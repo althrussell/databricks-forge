@@ -89,6 +89,7 @@ export default function RunsPage() {
                 <TableHead>UC Metadata</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Progress</TableHead>
+                <TableHead>Activity</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -120,6 +121,9 @@ export default function RunsPage() {
                         {run.progressPct}%
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
+                    {run.statusMessage ?? "\u2014"}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(run.createdAt).toLocaleDateString()}

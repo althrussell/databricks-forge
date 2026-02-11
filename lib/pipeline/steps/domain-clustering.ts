@@ -6,12 +6,14 @@
  */
 
 import { executeAIQuery, parseCSVResponse, parseJSONResponse } from "@/lib/ai/agent";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 
 const MIN_CASES_PER_DOMAIN = 3;
 
 export async function runDomainClustering(
-  ctx: PipelineContext
+  ctx: PipelineContext,
+  runId?: string
 ): Promise<UseCase[]> {
   const { run, useCases } = ctx;
   if (!run.businessContext) throw new Error("Business context not available");
@@ -21,6 +23,7 @@ export async function runDomainClustering(
   const updatedCases = [...useCases];
 
   // Step 5a: Assign domains
+  if (runId) await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
     await assignDomains(updatedCases, run.config.businessName, bc, run.config.aiModel);
   } catch (error) {
@@ -33,10 +36,12 @@ export async function runDomainClustering(
 
   // Step 5b: Assign subdomains per domain
   const domains = [...new Set(updatedCases.map((uc) => uc.domain))];
-  for (const domain of domains) {
+  for (let di = 0; di < domains.length; di++) {
+    const domain = domains[di];
     const domainCases = updatedCases.filter((uc) => uc.domain === domain);
     if (domainCases.length < 2) continue;
 
+    if (runId) await updateRunMessage(runId, `Assigning subdomains for domain: ${domain} (${di + 1}/${domains.length})...`);
     try {
       await assignSubdomains(domainCases, domain, run.config.businessName, bc, run.config.aiModel);
     } catch (error) {
@@ -51,14 +56,27 @@ export async function runDomainClustering(
   }
 
   // Step 5c: Merge small domains
+  const smallDomainCount = Object.entries(
+    updatedCases.reduce<Record<string, number>>((acc, uc) => {
+      acc[uc.domain] = (acc[uc.domain] ?? 0) + 1;
+      return acc;
+    }, {})
+  ).filter(([, count]) => count < MIN_CASES_PER_DOMAIN).length;
+
+  if (smallDomainCount > 0 && runId) {
+    await updateRunMessage(runId, `Merging ${smallDomainCount} small domains...`);
+  }
   try {
     await mergeSmallDomains(updatedCases, run.config.aiModel);
   } catch (error) {
     console.warn("[domain-clustering] Domain merge failed:", error);
   }
 
+  const finalDomainCount = [...new Set(updatedCases.map((uc) => uc.domain))].length;
+  if (runId) await updateRunMessage(runId, `Organised into ${finalDomainCount} domains`);
+
   console.log(
-    `[domain-clustering] Assigned ${[...new Set(updatedCases.map((uc) => uc.domain))].length} domains`
+    `[domain-clustering] Assigned ${finalDomainCount} domains`
   );
 
   return updatedCases;

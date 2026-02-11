@@ -6,9 +6,10 @@
  */
 
 import { executeAIQuery, parseCSVResponse } from "@/lib/ai/agent";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 
-export async function runScoring(ctx: PipelineContext): Promise<UseCase[]> {
+export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, useCases } = ctx;
   if (!run.businessContext) throw new Error("Business context not available");
   if (useCases.length === 0) return [];
@@ -19,8 +20,10 @@ export async function runScoring(ctx: PipelineContext): Promise<UseCase[]> {
   // Step 6a: Score per domain
   const domains = [...new Set(scored.map((uc) => uc.domain))];
   const bcRecord = bc as unknown as Record<string, string>;
-  for (const domain of domains) {
+  for (let di = 0; di < domains.length; di++) {
+    const domain = domains[di];
     const domainCases = scored.filter((uc) => uc.domain === domain);
+    if (runId) await updateRunMessage(runId, `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`);
     try {
       await scoreDomain(domainCases, bcRecord, run.config.aiModel);
     } catch (error) {
@@ -36,16 +39,23 @@ export async function runScoring(ctx: PipelineContext): Promise<UseCase[]> {
   }
 
   // Step 6b: Deduplicate per domain
+  if (runId) await updateRunMessage(runId, `Deduplicating: reviewing ${scored.length} use cases...`);
+  let removedCount = 0;
   for (const domain of domains) {
     const domainCases = scored.filter((uc) => uc.domain === domain);
     if (domainCases.length <= 2) continue;
 
     try {
       const toRemove = await deduplicateDomain(domainCases, run.config.aiModel);
+      removedCount += toRemove.size;
       scored = scored.filter((uc) => !toRemove.has(uc.useCaseNo));
     } catch (error) {
       console.warn(`[scoring] Dedup failed for domain ${domain}:`, error);
     }
+  }
+
+  if (runId && removedCount > 0) {
+    await updateRunMessage(runId, `Deduplication: removed ${removedCount} near-duplicates`);
   }
 
   // Step 6c: Sort by overall score and re-number with domain prefix
@@ -65,6 +75,9 @@ export async function runScoring(ctx: PipelineContext): Promise<UseCase[]> {
   if (scored.length > MAX_USE_CASES) {
     scored = scored.slice(0, MAX_USE_CASES);
   }
+
+  const finalDomains = [...new Set(scored.map((uc) => uc.domain))].length;
+  if (runId) await updateRunMessage(runId, `Final: ${scored.length} use cases across ${finalDomains} domains`);
 
   console.log(
     `[scoring] Final: ${scored.length} use cases across ${domains.length} domains`

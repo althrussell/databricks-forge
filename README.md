@@ -19,6 +19,7 @@ Databricks Inspire AI is a web application deployed as a [Databricks App](https:
 - Automatically clusters use cases into **business domains and subdomains**
 - Deduplicates and ranks results so the highest-value opportunities surface first
 - Supports **20+ languages** for generated documentation
+- **Real-time status messages** during pipeline execution (e.g. "Filtering tables (batch 2 of 5)...")
 - **Privacy-first**: reads only metadata (table/column names and schemas) -- never your actual row data
 
 ---
@@ -96,7 +97,7 @@ The "Discover Usecases" pipeline runs 6 steps sequentially. The frontend polls f
 | 5 | **Domain Clustering** | Assigns domains and subdomains via `ai_query`, merges small domains | 80% |
 | 6 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via `ai_query` | 100% |
 
-Each step updates its status in Lakebase, so the UI can show a live progress stepper even though the pipeline runs asynchronously on the server.
+Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
 
 ---
 
@@ -128,6 +129,18 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO databrick
 -- Future tables in the schema (so Prisma can create tables)
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO databricks_inspire;
+
+-- Allow Prisma to run DDL (CREATE TABLE, ALTER TABLE, etc.)
+GRANT CREATE ON SCHEMA public TO databricks_inspire;
+```
+
+After running `prisma db push` for the first time (which creates the tables as *your* user), transfer ownership so the app role can run future migrations:
+
+```sql
+ALTER TABLE inspire_runs OWNER TO databricks_inspire;
+ALTER TABLE inspire_use_cases OWNER TO databricks_inspire;
+ALTER TABLE inspire_metadata_cache OWNER TO databricks_inspire;
+ALTER TABLE inspire_exports OWNER TO databricks_inspire;
 ```
 
 > **Note:** Using a native Postgres password (rather than OAuth tokens) is recommended for application roles. Native passwords don't expire hourly and are simpler to manage. See [Lakebase authentication docs](https://docs.databricks.com/aws/en/oltp/projects/authentication) for details.
@@ -137,7 +150,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO databricks_inspire;
 Your `DATABASE_URL` follows the standard Postgres format:
 
 ```
-postgresql://<role>:<password>@<host>/<database>?sslmode=require
+postgresql://<role>:<password>@<host>/<database>?sslmode=verify-full
 ```
 
 You'll have **two** endpoints:
@@ -151,10 +164,10 @@ Example:
 
 ```
 # Pooler (for the app)
-postgresql://databricks_inspire:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=require
+postgresql://databricks_inspire:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
 
 # Direct (for migrations)
-postgresql://databricks_inspire:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=require
+postgresql://databricks_inspire:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
 ```
 
 ### 4. Store the connection string as a Databricks secret
@@ -167,7 +180,7 @@ databricks secrets create-scope inspire-secrets
 
 # Store the pooler connection string
 databricks secrets put-secret inspire-secrets DATABASE_URL \
-  --string-value "postgresql://databricks_inspire:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=require"
+  --string-value "postgresql://databricks_inspire:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
 ```
 
 ### 5. Add the secret as an App resource
@@ -197,7 +210,7 @@ Using the **direct** endpoint (not the pooler), create the tables:
 
 ```bash
 # Set the direct URL for migrations
-DATABASE_URL="postgresql://databricks_inspire:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=require" \
+DATABASE_URL="postgresql://databricks_inspire:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full" \
   npx prisma db push
 ```
 
@@ -233,7 +246,7 @@ Create a `.env` file:
 
 ```env
 # Lakebase connection (pooler endpoint)
-DATABASE_URL="postgresql://databricks_inspire:<password>@ep-xxx-pooler.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=require"
+DATABASE_URL="postgresql://databricks_inspire:<password>@ep-xxx-pooler.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
 
 # Databricks workspace (for SQL Warehouse + ai_query)
 DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
@@ -297,11 +310,12 @@ databricks apps deploy --app-name databricks-inspire
 ```
 
 The platform will:
-1. Build the container from the `Dockerfile`
-2. Run `prisma db push --skip-generate` on startup (syncs schema automatically)
-3. Bind the SQL Warehouse and inject credentials
-4. Inject `DATABASE_URL` from the secret
-5. Start the Next.js server
+1. Build the container from the `Dockerfile` (includes `prisma generate`)
+2. Bind the SQL Warehouse and inject credentials
+3. Inject `DATABASE_URL` from the secret
+4. Start the Next.js production server (`npx next start -p 8000`)
+
+> **Note:** Schema migrations are **not** run at startup. Push schema changes manually before deploying (see [step 6 under Lakebase setup](#6-push-the-schema)).
 
 ### 3. Access the app
 
@@ -385,7 +399,7 @@ These map to the form fields on the `/configure` page:
 | **Business Priorities** | No | Increase Revenue | Multi-select from 10 predefined priorities |
 | **Strategic Goals** | No | Auto-generated | Custom goals for scoring alignment |
 | **Business Domains** | No | Auto-detected | Focus domains (e.g. "Risk, Finance, Marketing") |
-| **AI Model** | No | databricks-claude-sonnet-4-5 | Model Serving endpoint for `ai_query()` calls |
+| **AI Model** | No | databricks-claude-sonnet-4-5 | Model Serving endpoint for `ai_query()` calls (also supports `databricks-claude-opus-4-6`) |
 | **Languages** | No | English | Target languages for generated documentation |
 
 ---
@@ -396,7 +410,7 @@ All app state is stored in four tables in the Lakebase `public` schema, managed 
 
 | Table | Purpose |
 | --- | --- |
-| `inspire_runs` | Pipeline execution records (config, status, progress, business context) |
+| `inspire_runs` | Pipeline execution records (config, status, progress, status message, business context) |
 | `inspire_use_cases` | Generated use cases (name, scores, domain, SQL, tables involved) |
 | `inspire_metadata_cache` | Cached UC metadata snapshots |
 | `inspire_exports` | Export history |
