@@ -17,5 +17,3 @@ env:
     valueFrom: sql-warehouse
   - name: DATABASE_URL
     valueFrom: db-secret
-  - name: LAKEBASE_CATALOG
-    value: main
