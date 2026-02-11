@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Database,
@@ -14,6 +15,7 @@ import {
   X,
   RefreshCw,
   AlertCircle,
+  Search,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,7 @@ export function CatalogBrowser({
   const [catalogs, setCatalogs] = useState<CatalogNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   // ── Fetch catalogs ─────────────────────────────────────────────────────
   const fetchCatalogs = useCallback(async () => {
@@ -122,6 +125,21 @@ export function CatalogBrowser({
     }
   };
 
+  // ── Search filter ───────────────────────────────────────────────────────
+  const searchLower = search.toLowerCase();
+
+  const filteredCatalogs = useMemo(() => {
+    if (!searchLower) return catalogs;
+    return catalogs.filter((c) => {
+      // Match on catalog name
+      if (c.name.toLowerCase().includes(searchLower)) return true;
+      // Match on any loaded schema name
+      if (c.schemas.some((s) => s.toLowerCase().includes(searchLower)))
+        return true;
+      return false;
+    });
+  }, [catalogs, searchLower]);
+
   // ── Selection helpers ──────────────────────────────────────────────────
   const isSelected = (source: string) => selectedSources.includes(source);
 
@@ -192,15 +210,22 @@ export function CatalogBrowser({
       {/* Tree browser */}
       <div className="rounded-md border">
         {/* Header */}
-        <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            Browse Unity Catalog
-          </span>
+        <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search catalogs and schemas..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-7 pl-7 text-xs"
+            />
+          </div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 gap-1 text-xs"
+            className="h-7 shrink-0 gap-1 text-xs"
             onClick={fetchCatalogs}
           >
             <RefreshCw className="h-3 w-3" />
@@ -211,20 +236,28 @@ export function CatalogBrowser({
         {/* Tree */}
         <div className="h-[280px] overflow-y-auto">
           <div className="p-1">
-            {catalogs.map((catalog) => (
-              <CatalogRow
-                key={catalog.name}
-                catalog={catalog}
-                onToggle={() => toggleCatalog(catalog.name)}
-                isSelected={isSelected}
-                isCoveredByCatalog={isCoveredByCatalog(catalog.name)}
-                onAddCatalog={() => addSource(catalog.name)}
-                onAddSchema={(schema) =>
-                  addSource(`${catalog.name}.${schema}`)
-                }
-                onRemove={removeSource}
-              />
-            ))}
+            {filteredCatalogs.length === 0 && search ? (
+              <div className="flex flex-col items-center gap-1 py-8 text-center text-xs text-muted-foreground">
+                <Search className="h-4 w-4" />
+                No catalogs or schemas match &ldquo;{search}&rdquo;
+              </div>
+            ) : (
+              filteredCatalogs.map((catalog) => (
+                <CatalogRow
+                  key={catalog.name}
+                  catalog={catalog}
+                  onToggle={() => toggleCatalog(catalog.name)}
+                  isSelected={isSelected}
+                  isCoveredByCatalog={isCoveredByCatalog(catalog.name)}
+                  onAddCatalog={() => addSource(catalog.name)}
+                  onAddSchema={(schema) =>
+                    addSource(`${catalog.name}.${schema}`)
+                  }
+                  onRemove={removeSource}
+                  searchFilter={searchLower}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -272,6 +305,7 @@ function CatalogRow({
   onAddCatalog,
   onAddSchema,
   onRemove,
+  searchFilter,
 }: {
   catalog: CatalogNode;
   onToggle: () => void;
@@ -280,8 +314,17 @@ function CatalogRow({
   onAddCatalog: () => void;
   onAddSchema: (schema: string) => void;
   onRemove: (source: string) => void;
+  searchFilter?: string;
 }) {
   const catalogSelected = isSelected(catalog.name);
+
+  // When searching, filter schemas and auto-expand if there are matches
+  const hasSearch = !!searchFilter;
+  const catalogNameMatches = hasSearch && catalog.name.toLowerCase().includes(searchFilter);
+  const filteredSchemas = hasSearch && !catalogNameMatches
+    ? catalog.schemas.filter((s) => s.toLowerCase().includes(searchFilter))
+    : catalog.schemas;
+  const showExpanded = catalog.expanded || (hasSearch && filteredSchemas.length > 0 && catalog.schemas.length > 0);
 
   return (
     <div>
@@ -292,7 +335,7 @@ function CatalogRow({
           onClick={onToggle}
           className="flex shrink-0 items-center gap-1"
         >
-          {catalog.expanded ? (
+          {showExpanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           ) : (
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -305,7 +348,7 @@ function CatalogRow({
           onClick={onToggle}
           className="flex-1 text-left text-sm font-medium"
         >
-          {catalog.name}
+          <HighlightMatch text={catalog.name} query={searchFilter} />
         </button>
 
         {catalogSelected ? (
@@ -334,7 +377,7 @@ function CatalogRow({
       </div>
 
       {/* Schemas */}
-      {catalog.expanded && (
+      {showExpanded && (
         <div className="ml-5 border-l pl-2">
           {catalog.loading && (
             <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
@@ -358,7 +401,7 @@ function CatalogRow({
               </div>
             )}
 
-          {catalog.schemas.map((schema) => {
+          {filteredSchemas.map((schema) => {
             const schemaPath = `${catalog.name}.${schema}`;
             const schemaSelected = isSelected(schemaPath);
             const covered = isCoveredByCatalog;
@@ -372,7 +415,7 @@ function CatalogRow({
                 <span
                   className={`flex-1 text-sm ${covered ? "text-muted-foreground" : ""}`}
                 >
-                  {schema}
+                  <HighlightMatch text={schema} query={searchFilter} />
                   {covered && !schemaSelected && (
                     <span className="ml-1.5 text-[10px] text-muted-foreground/60">
                       (included via catalog)
@@ -409,5 +452,32 @@ function CatalogRow({
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Highlight matching text
+// ---------------------------------------------------------------------------
+
+function HighlightMatch({
+  text,
+  query,
+}: {
+  text: string;
+  query?: string;
+}) {
+  if (!query) return <>{text}</>;
+
+  const idx = text.toLowerCase().indexOf(query);
+  if (idx === -1) return <>{text}</>;
+
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded-sm bg-yellow-200/60 px-0.5 dark:bg-yellow-500/30">
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </>
   );
 }
