@@ -9,9 +9,8 @@
 # And add a Secret resource in the App UI with the connection string.
 
 command:
-  - "bash"
-  - "-c"
-  - "npx prisma db push --skip-generate && node .next/standalone/server.js"
+  - "node"
+  - ".next/standalone/server.js"
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
