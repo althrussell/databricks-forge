@@ -22,6 +22,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Keyboard } from "lucide-react";
+import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
   SUPPORTED_LANGUAGES,
@@ -42,8 +44,15 @@ export function ConfigForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [businessName, setBusinessName] = useState("");
-  const [ucMetadata, setUcMetadata] = useState("");
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualInput, setManualInput] = useState("");
   const [businessDomains, setBusinessDomains] = useState("");
+
+  // Derive ucMetadata from browser selection or manual input
+  const ucMetadata = manualMode
+    ? manualInput.trim()
+    : selectedSources.join(", ");
   const [selectedPriorities, setSelectedPriorities] = useState<
     BusinessPriority[]
   >(["Increase Revenue"]);
@@ -76,8 +85,8 @@ export function ConfigForm() {
       toast.error("Business Name is required");
       return;
     }
-    if (!ucMetadata.trim()) {
-      toast.error("UC Metadata path is required");
+    if (!ucMetadata) {
+      toast.error("Select at least one catalog or schema from Unity Catalog");
       return;
     }
 
@@ -90,7 +99,7 @@ export function ConfigForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           businessName: businessName.trim(),
-          ucMetadata: ucMetadata.trim(),
+          ucMetadata,
           businessDomains: businessDomains.trim(),
           businessPriorities: selectedPriorities,
           strategicGoals: strategicGoals.trim(),
@@ -153,18 +162,46 @@ export function ConfigForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="ucMetadata">UC Metadata</Label>
-            <Input
-              id="ucMetadata"
-              placeholder="e.g. main.finance or catalog1, catalog2"
-              value={ucMetadata}
-              onChange={(e) => setUcMetadata(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Unity Catalog path: catalog, catalog.schema, or comma-separated
-              list
-            </p>
+            <Label>UC Metadata Sources</Label>
+            {manualMode ? (
+              <>
+                <Input
+                  id="ucMetadata"
+                  placeholder="e.g. main.finance or catalog1, catalog2"
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Comma-separated list: catalog, catalog.schema, or mix
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setManualMode(false)}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <Keyboard className="h-3 w-3" />
+                  Switch to catalog browser
+                </button>
+              </>
+            ) : (
+              <>
+                <CatalogBrowser
+                  selectedSources={selectedSources}
+                  onSelectionChange={setSelectedSources}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualMode(true);
+                    setManualInput(selectedSources.join(", "));
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  <Keyboard className="h-3 w-3" />
+                  Or type manually
+                </button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
