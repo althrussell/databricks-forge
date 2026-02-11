@@ -26,6 +26,24 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import {
+  BrainCircuit,
+  BarChart3,
+  FileText,
+  Lightbulb,
+  TrendingUp,
+  Cpu,
+  Users,
+  UserCheck,
+  Database,
+  Code2,
+  Layers,
+  Tag,
+  Target,
+  Gauge,
+  Zap,
+  Trophy,
+} from "lucide-react";
 import type { UseCase } from "@/lib/domain/types";
 
 interface UseCaseTableProps {
@@ -156,10 +174,10 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                 filtered.map((uc) => (
                   <TableRow
                     key={uc.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="cursor-pointer transition-colors hover:bg-row-hover"
                     onClick={() => setSelectedUseCase(uc)}
                   >
-                    <TableCell className="font-mono text-xs">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {uc.useCaseNo}
                     </TableCell>
                     <TableCell className="max-w-[300px]">
@@ -169,22 +187,14 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                       </p>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          uc.type === "AI"
-                            ? "border-purple-300 text-purple-700"
-                            : "border-teal-300 text-teal-700"
-                        }
-                      >
-                        {uc.type}
-                      </Badge>
+                      <TypeBadge type={uc.type} />
                     </TableCell>
                     <TableCell>
-                      <div>
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-sm">{uc.domain}</span>
                         {uc.subdomain && (
-                          <span className="ml-1 text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             / {uc.subdomain}
                           </span>
                         )}
@@ -218,100 +228,143 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
         open={!!selectedUseCase}
         onOpenChange={(open) => !open && setSelectedUseCase(null)}
       >
-        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           {selectedUseCase && (
             <>
-              <SheetHeader>
-                <SheetTitle>{selectedUseCase.name}</SheetTitle>
+              <SheetHeader className="pb-2">
+                <SheetTitle className="text-lg leading-snug">
+                  {selectedUseCase.name}
+                </SheetTitle>
               </SheetHeader>
-              <div className="mt-6 space-y-4">
-                <div className="flex gap-2">
-                  <Badge variant="outline">{selectedUseCase.type}</Badge>
-                  <Badge variant="secondary">{selectedUseCase.domain}</Badge>
-                  {selectedUseCase.subdomain && (
-                    <Badge variant="secondary">
-                      {selectedUseCase.subdomain}
-                    </Badge>
-                  )}
-                </div>
 
-                <Section title="Statement">
+              {/* Tags row */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <TypeBadge type={selectedUseCase.type} />
+                <Badge variant="secondary" className="gap-1">
+                  <Layers className="h-3 w-3" />
+                  {selectedUseCase.domain}
+                </Badge>
+                {selectedUseCase.subdomain && (
+                  <Badge variant="secondary" className="gap-1">
+                    <Tag className="h-3 w-3" />
+                    {selectedUseCase.subdomain}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="mt-6 space-y-5">
+                {/* Statement */}
+                <DetailSection
+                  icon={<FileText className="h-4 w-4 text-blue-500" />}
+                  title="Statement"
+                >
                   {selectedUseCase.statement}
-                </Section>
-                <Section title="Solution">
+                </DetailSection>
+
+                {/* Solution */}
+                <DetailSection
+                  icon={<Lightbulb className="h-4 w-4 text-amber-500" />}
+                  title="Solution"
+                >
                   {selectedUseCase.solution}
-                </Section>
-                <Section title="Business Value">
+                </DetailSection>
+
+                {/* Business Value */}
+                <DetailSection
+                  icon={<TrendingUp className="h-4 w-4 text-green-500" />}
+                  title="Business Value"
+                >
                   {selectedUseCase.businessValue}
-                </Section>
+                </DetailSection>
 
                 <Separator />
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium text-muted-foreground">
-                      Technique
-                    </p>
-                    <p>{selectedUseCase.analyticsTechnique}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-muted-foreground">
-                      Beneficiary
-                    </p>
-                    <p>{selectedUseCase.beneficiary}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-muted-foreground">
-                      Sponsor
-                    </p>
-                    <p>{selectedUseCase.sponsor}</p>
-                  </div>
+                {/* Metadata grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <MetaField
+                    icon={<Cpu className="h-3.5 w-3.5 text-violet-500" />}
+                    label="Technique"
+                    value={selectedUseCase.analyticsTechnique}
+                  />
+                  <MetaField
+                    icon={<Users className="h-3.5 w-3.5 text-sky-500" />}
+                    label="Beneficiary"
+                    value={selectedUseCase.beneficiary}
+                  />
+                  <MetaField
+                    icon={<UserCheck className="h-3.5 w-3.5 text-emerald-500" />}
+                    label="Sponsor"
+                    value={selectedUseCase.sponsor}
+                  />
                 </div>
 
                 <Separator />
 
-                <div className="grid grid-cols-4 gap-3 text-center text-sm">
-                  <ScoreCard
-                    label="Priority"
-                    score={selectedUseCase.priorityScore}
-                  />
-                  <ScoreCard
-                    label="Feasibility"
-                    score={selectedUseCase.feasibilityScore}
-                  />
-                  <ScoreCard
-                    label="Impact"
-                    score={selectedUseCase.impactScore}
-                  />
-                  <ScoreCard
-                    label="Overall"
-                    score={selectedUseCase.overallScore}
-                  />
+                {/* Scores */}
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Scoring
+                  </p>
+                  <div className="grid grid-cols-4 gap-3">
+                    <ScoreCard
+                      icon={<Target className="h-4 w-4" />}
+                      label="Priority"
+                      score={selectedUseCase.priorityScore}
+                    />
+                    <ScoreCard
+                      icon={<Gauge className="h-4 w-4" />}
+                      label="Feasibility"
+                      score={selectedUseCase.feasibilityScore}
+                    />
+                    <ScoreCard
+                      icon={<Zap className="h-4 w-4" />}
+                      label="Impact"
+                      score={selectedUseCase.impactScore}
+                    />
+                    <ScoreCard
+                      icon={<Trophy className="h-4 w-4" />}
+                      label="Overall"
+                      score={selectedUseCase.overallScore}
+                    />
+                  </div>
                 </div>
 
+                {/* Tables Involved */}
                 {selectedUseCase.tablesInvolved.length > 0 && (
                   <>
                     <Separator />
-                    <Section title="Tables Involved">
-                      <ul className="space-y-1">
+                    <DetailSection
+                      icon={<Database className="h-4 w-4 text-orange-500" />}
+                      title="Tables Involved"
+                    >
+                      <div className="mt-1 flex flex-wrap gap-1.5">
                         {selectedUseCase.tablesInvolved.map((t) => (
-                          <li key={t} className="font-mono text-xs">
+                          <Badge
+                            key={t}
+                            variant="outline"
+                            className="gap-1 font-mono text-[11px] font-normal"
+                          >
+                            <Database className="h-2.5 w-2.5 text-muted-foreground" />
                             {t}
-                          </li>
+                          </Badge>
                         ))}
-                      </ul>
-                    </Section>
+                      </div>
+                    </DetailSection>
                   </>
                 )}
 
+                {/* SQL Code */}
                 {selectedUseCase.sqlCode && (
                   <>
                     <Separator />
-                    <Section title="SQL Code">
-                      <pre className="overflow-x-auto rounded bg-muted p-3 text-xs">
+                    <DetailSection
+                      icon={<Code2 className="h-4 w-4 text-pink-500" />}
+                      title="SQL Code"
+                    >
+                      <pre className="mt-1 overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed">
                         {selectedUseCase.sqlCode}
                       </pre>
-                    </Section>
+                    </DetailSection>
                   </>
                 )}
               </div>
@@ -323,17 +376,63 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
   );
 }
 
-function Section({
+// ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
+
+function TypeBadge({ type }: { type: string }) {
+  if (type === "AI") {
+    return (
+      <Badge variant="outline" className="gap-1 border-violet-300 bg-violet-50 text-violet-700">
+        <BrainCircuit className="h-3 w-3" />
+        AI
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="gap-1 border-teal-300 bg-teal-50 text-teal-700">
+      <BarChart3 className="h-3 w-3" />
+      Statistical
+    </Badge>
+  );
+}
+
+function DetailSection({
+  icon,
   title,
   children,
 }: {
+  icon: React.ReactNode;
   title: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <p className="mb-1 text-sm font-medium text-muted-foreground">{title}</p>
-      <div className="text-sm">{children}</div>
+      <div className="mb-1.5 flex items-center gap-2">
+        {icon}
+        <p className="text-sm font-semibold">{title}</p>
+      </div>
+      <div className="pl-6 text-sm leading-relaxed text-foreground/90">{children}</div>
+    </div>
+  );
+}
+
+function MetaField({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-md border bg-muted/30 px-3 py-2.5">
+      <div className="mb-0.5 flex items-center gap-1.5">
+        {icon}
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      </div>
+      <p className="text-sm">{value}</p>
     </div>
   );
 }
@@ -342,25 +441,42 @@ function ScoreBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100);
   const color =
     score >= 0.7
-      ? "text-green-700 bg-green-100"
+      ? "text-green-700 bg-green-50 border-green-200"
       : score >= 0.4
-        ? "text-yellow-700 bg-yellow-100"
-        : "text-red-700 bg-red-100";
+        ? "text-amber-700 bg-amber-50 border-amber-200"
+        : "text-red-700 bg-red-50 border-red-200";
 
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${color}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${color}`}
     >
       {pct}%
     </span>
   );
 }
 
-function ScoreCard({ label, score }: { label: string; score: number }) {
+function ScoreCard({
+  icon,
+  label,
+  score,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  score: number;
+}) {
+  const pct = Math.round(score * 100);
+  const colorClasses =
+    score >= 0.7
+      ? "border-green-200 bg-green-50/50 text-green-700"
+      : score >= 0.4
+        ? "border-amber-200 bg-amber-50/50 text-amber-700"
+        : "border-red-200 bg-red-50/50 text-red-700";
+
   return (
-    <div className="rounded-md border p-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-lg font-bold">{(score * 100).toFixed(0)}%</p>
+    <div className={`flex flex-col items-center gap-1 rounded-lg border p-3 ${colorClasses}`}>
+      <div className="opacity-60">{icon}</div>
+      <p className="text-xl font-bold">{pct}%</p>
+      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</p>
     </div>
   );
 }
