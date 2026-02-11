@@ -6,6 +6,7 @@
  */
 
 import { executeAIQuery, parseCSVResponse } from "@/lib/ai/agent";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import type { PipelineContext, TableInfo } from "@/lib/domain/types";
 
 const BATCH_SIZE = 100; // tables per ai_query call
@@ -23,7 +24,8 @@ function buildTablesMarkdown(tables: TableInfo[]): string {
 }
 
 export async function runTableFiltering(
-  ctx: PipelineContext
+  ctx: PipelineContext,
+  runId?: string
 ): Promise<string[]> {
   const { run, metadata } = ctx;
   if (!metadata) throw new Error("Metadata not available for table filtering");
@@ -33,26 +35,32 @@ export async function runTableFiltering(
 
   // If very few tables, skip filtering -- include all
   if (tables.length <= 5) {
+    if (runId) await updateRunMessage(runId, `Skipping filter — only ${tables.length} tables, including all`);
     return tables.map((t) => t.fqn);
   }
 
   const businessTables: string[] = [];
+  const totalBatches = Math.ceil(tables.length / BATCH_SIZE);
 
   // Process in batches
   for (let i = 0; i < tables.length; i += BATCH_SIZE) {
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     const batch = tables.slice(i, i + BATCH_SIZE);
+    if (runId) await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
     try {
       const filtered = await filterBatch(batch, run.config.businessName, run.businessContext, run.config.aiModel);
       businessTables.push(...filtered);
     } catch (error) {
       // Fail-open: include all tables from failed batch
       console.warn(
-        `[table-filtering] Batch ${i / BATCH_SIZE + 1} failed, including all tables:`,
+        `[table-filtering] Batch ${batchNum} failed, including all tables:`,
         error
       );
       businessTables.push(...batch.map((t) => t.fqn));
     }
   }
+
+  if (runId) await updateRunMessage(runId, `Identified ${businessTables.length} business-relevant tables out of ${tables.length}`);
 
   console.log(
     `[table-filtering] ${businessTables.length}/${tables.length} tables classified as business-relevant`

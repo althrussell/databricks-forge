@@ -6,6 +6,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 
 const DEFAULT_CONTEXT: BusinessContext = {
@@ -19,11 +20,13 @@ const DEFAULT_CONTEXT: BusinessContext = {
 };
 
 export async function runBusinessContext(
-  ctx: PipelineContext
+  ctx: PipelineContext,
+  runId?: string
 ): Promise<BusinessContext> {
   const { config } = ctx.run;
 
   try {
+    if (runId) await updateRunMessage(runId, `Researching business context for ${config.businessName}...`);
     const result = await executeAIQuery({
       promptKey: "BUSINESS_CONTEXT_WORKER_PROMPT",
       variables: {
@@ -57,6 +60,8 @@ export async function runBusinessContext(
       ),
       additionalContext: String(parsed.additional_context ?? ""),
     };
+
+    if (runId) await updateRunMessage(runId, `Business context generated: ${context.industries}`);
 
     // Merge user overrides
     if (config.strategicGoals) {

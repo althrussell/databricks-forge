@@ -95,6 +95,7 @@ export interface PipelineRun {
   status: RunStatus;
   currentStep: PipelineStep | null;
   progressPct: number;
+  statusMessage: string | null;
   businessContext: BusinessContext | null;
   errorMessage: string | null;
   createdAt: string; // ISO timestamp

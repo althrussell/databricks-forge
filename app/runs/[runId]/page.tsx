@@ -128,9 +128,11 @@ export default function RunDetailPage({
           <CardHeader>
             <CardTitle className="text-lg">Pipeline Progress</CardTitle>
             <CardDescription>
-              {run.currentStep
-                ? `Currently: ${run.currentStep}`
-                : "Waiting to start..."}
+              {run.statusMessage
+                ? run.statusMessage
+                : run.currentStep
+                  ? `Currently: ${run.currentStep}`
+                  : "Waiting to start..."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -144,6 +146,7 @@ export default function RunDetailPage({
               currentStep={run.currentStep as PipelineStep}
               progressPct={run.progressPct}
               status={run.status}
+              statusMessage={run.statusMessage ?? undefined}
             />
           </CardContent>
         </Card>

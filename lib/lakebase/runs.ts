@@ -42,6 +42,7 @@ function dbRowToRun(row: {
   status: string;
   currentStep: string | null;
   progressPct: number;
+  statusMessage: string | null;
   businessContext: string | null;
   errorMessage: string | null;
   createdAt: Date;
@@ -64,6 +65,7 @@ function dbRowToRun(row: {
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
     progressPct: row.progressPct,
+    statusMessage: row.statusMessage ?? null,
     businessContext: parseJSON<BusinessContext | null>(row.businessContext, null),
     errorMessage: row.errorMessage ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -123,7 +125,8 @@ export async function updateRunStatus(
   status: RunStatus,
   currentStep: PipelineStep | null,
   progressPct: number,
-  errorMessage?: string
+  errorMessage?: string,
+  statusMessage?: string
 ): Promise<void> {
   const prisma = await getPrisma();
 
@@ -137,10 +140,31 @@ export async function updateRunStatus(
     data.errorMessage = errorMessage;
   }
 
+  if (statusMessage !== undefined) {
+    data.statusMessage = statusMessage;
+  }
+
   if (status === "completed" || status === "failed") {
     data.completedAt = new Date();
   }
 
+  await prisma.inspireRun.update({ where: { runId }, data });
+}
+
+/**
+ * Lightweight helper that updates just statusMessage (and optionally progressPct).
+ * Called frequently from pipeline steps to report granular progress.
+ */
+export async function updateRunMessage(
+  runId: string,
+  statusMessage: string,
+  progressPct?: number
+): Promise<void> {
+  const prisma = await getPrisma();
+  const data: Record<string, unknown> = { statusMessage };
+  if (progressPct !== undefined) {
+    data.progressPct = progressPct;
+  }
   await prisma.inspireRun.update({ where: { runId }, data });
 }
 

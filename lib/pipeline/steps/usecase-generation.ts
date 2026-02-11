@@ -11,6 +11,7 @@ import {
   generateStatisticalFunctionsSummary,
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import type { PipelineContext, UseCase, UseCaseType } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
@@ -24,7 +25,8 @@ const MAX_CONCURRENT_BATCHES = 3;
 const CSV_COLUMNS = 11;
 
 export async function runUsecaseGeneration(
-  ctx: PipelineContext
+  ctx: PipelineContext,
+  runId?: string
 ): Promise<UseCase[]> {
   const { run, metadata, filteredTables } = ctx;
   if (!metadata) throw new Error("Metadata not available");
@@ -52,7 +54,11 @@ export async function runUsecaseGeneration(
   const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
 
   // Process batches with controlled concurrency
+  let batchGroupIdx = 0;
   for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
+    batchGroupIdx++;
+    const totalGroups = Math.ceil(batches.length / MAX_CONCURRENT_BATCHES);
+    if (runId) await updateRunMessage(runId, `Generating AI & statistical use cases (batch group ${batchGroupIdx} of ${totalGroups})...`);
     const concurrentBatches = batches.slice(i, i + MAX_CONCURRENT_BATCHES);
 
     const batchPromises = concurrentBatches.flatMap((batch) => {
@@ -117,6 +123,8 @@ export async function runUsecaseGeneration(
   allUseCases.forEach((uc, idx) => {
     uc.useCaseNo = idx + 1;
   });
+
+  if (runId) await updateRunMessage(runId, `Generated ${allUseCases.length} raw use cases from ${tables.length} tables`);
 
   console.log(
     `[usecase-generation] Generated ${allUseCases.length} use cases`

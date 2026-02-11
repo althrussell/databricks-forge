@@ -11,6 +11,7 @@ import {
   listForeignKeys,
   buildSchemaMarkdown,
 } from "@/lib/queries/metadata";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import type {
   MetadataSnapshot,
   PipelineContext,
@@ -42,7 +43,8 @@ function parseUCMetadata(
 }
 
 export async function runMetadataExtraction(
-  ctx: PipelineContext
+  ctx: PipelineContext,
+  runId?: string
 ): Promise<MetadataSnapshot> {
   const { config } = ctx.run;
   const scopes = parseUCMetadata(config.ucMetadata);
@@ -51,11 +53,15 @@ export async function runMetadataExtraction(
   const allColumns: ColumnInfo[] = [];
   const allFKs: ForeignKey[] = [];
 
-  for (const scope of scopes) {
+  for (let si = 0; si < scopes.length; si++) {
+    const scope = scopes[si];
+    const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
     try {
+      if (runId) await updateRunMessage(runId, `Scanning catalog ${scopeLabel}... (${si + 1}/${scopes.length})`);
       const tables = await listTables(scope.catalog, scope.schema);
       allTables.push(...tables);
 
+      if (runId) await updateRunMessage(runId, `Extracting columns for ${tables.length} tables in ${scopeLabel}...`);
       const columns = await listColumns(scope.catalog, scope.schema);
       allColumns.push(...columns);
 
@@ -63,10 +69,14 @@ export async function runMetadataExtraction(
       allFKs.push(...fks);
     } catch (error) {
       console.warn(
-        `[metadata-extraction] Failed to extract metadata for ${scope.catalog}${scope.schema ? "." + scope.schema : ""}:`,
+        `[metadata-extraction] Failed to extract metadata for ${scopeLabel}:`,
         error
       );
     }
+  }
+
+  if (runId && allTables.length > 0) {
+    await updateRunMessage(runId, `Found ${allTables.length} tables across ${scopes.length} scope(s), ${allColumns.length} columns`);
   }
 
   if (allTables.length === 0) {

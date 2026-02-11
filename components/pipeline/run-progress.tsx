@@ -16,12 +16,14 @@ interface RunProgressProps {
   currentStep: PipelineStep | null;
   progressPct: number;
   status: RunStatus;
+  statusMessage?: string;
 }
 
 export function RunProgress({
   currentStep,
   progressPct,
   status,
+  statusMessage,
 }: RunProgressProps) {
   const currentIdx = currentStep
     ? STEPS.findIndex((s) => s.key === currentStep)
@@ -72,6 +74,11 @@ export function RunProgress({
               >
                 {step.label}
               </p>
+              {isActive && statusMessage && (
+                <p className="mt-0.5 text-xs text-muted-foreground animate-pulse">
+                  {statusMessage}
+                </p>
+              )}
             </div>
           </div>
         );
