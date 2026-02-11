@@ -21,8 +21,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Keyboard } from "lucide-react";
+import { Keyboard, X, Plus } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
@@ -30,6 +31,23 @@ import {
   type BusinessPriority,
   type SupportedLanguage,
 } from "@/lib/domain/types";
+
+const SUGGESTED_DOMAINS = [
+  "Finance",
+  "Risk & Compliance",
+  "Marketing",
+  "Sales",
+  "Operations",
+  "Supply Chain",
+  "Human Resources",
+  "Customer Experience",
+  "Healthcare",
+  "Manufacturing",
+  "Retail",
+  "Insurance",
+  "Cybersecurity",
+  "Sustainability",
+];
 
 const AI_MODELS = [
   "databricks-claude-sonnet-4-5",
@@ -47,7 +65,8 @@ export function ConfigForm() {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [manualMode, setManualMode] = useState(false);
   const [manualInput, setManualInput] = useState("");
-  const [businessDomains, setBusinessDomains] = useState("");
+  const [businessDomains, setBusinessDomains] = useState<string[]>([]);
+  const [domainInput, setDomainInput] = useState("");
 
   // Derive ucMetadata from browser selection or manual input
   const ucMetadata = manualMode
@@ -100,7 +119,7 @@ export function ConfigForm() {
         body: JSON.stringify({
           businessName: businessName.trim(),
           ucMetadata,
-          businessDomains: businessDomains.trim(),
+          businessDomains: businessDomains.join(", "),
           businessPriorities: selectedPriorities,
           strategicGoals: strategicGoals.trim(),
           aiModel,
@@ -241,18 +260,97 @@ export function ConfigForm() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="businessDomains">
-              Business Domains (optional)
-            </Label>
-            <Input
-              id="businessDomains"
-              placeholder="e.g. Risk, Finance, Marketing"
-              value={businessDomains}
-              onChange={(e) => setBusinessDomains(e.target.value)}
-            />
+          <div className="space-y-3">
+            <Label>Business Domains (optional)</Label>
+
+            {/* Selected domains */}
+            {businessDomains.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {businessDomains.map((domain) => (
+                  <Badge
+                    key={domain}
+                    variant="secondary"
+                    className="gap-1 pr-1"
+                  >
+                    {domain}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBusinessDomains((prev) =>
+                          prev.filter((d) => d !== domain)
+                        )
+                      }
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Quick-add suggestions */}
+            <div>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                Quick add:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SUGGESTED_DOMAINS.filter(
+                  (d) => !businessDomains.includes(d)
+                ).map((domain) => (
+                  <button
+                    key={domain}
+                    type="button"
+                    onClick={() =>
+                      setBusinessDomains((prev) => [...prev, domain])
+                    }
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {domain}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom domain input */}
+            <div className="flex gap-2">
+              <Input
+                id="businessDomains"
+                placeholder="Add a custom domain..."
+                value={domainInput}
+                onChange={(e) => setDomainInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && domainInput.trim()) {
+                    e.preventDefault();
+                    const val = domainInput.trim();
+                    if (!businessDomains.includes(val)) {
+                      setBusinessDomains((prev) => [...prev, val]);
+                    }
+                    setDomainInput("");
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!domainInput.trim()}
+                onClick={() => {
+                  const val = domainInput.trim();
+                  if (val && !businessDomains.includes(val)) {
+                    setBusinessDomains((prev) => [...prev, val]);
+                  }
+                  setDomainInput("");
+                }}
+              >
+                Add
+              </Button>
+            </div>
+
             <p className="text-xs text-muted-foreground">
-              Focus domains -- leave blank for auto-detection
+              Leave empty for AI auto-detection
             </p>
           </div>
 
