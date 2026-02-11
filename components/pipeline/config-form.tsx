@@ -31,6 +31,7 @@ import {
 
 const AI_MODELS = [
   "databricks-claude-sonnet-4-5",
+  "databricks-claude-opus-4-6",
   "databricks-gpt-oss-120b",
   "databricks-meta-llama-3.3-70b-instruct",
   "databricks-dbrx-instruct",
