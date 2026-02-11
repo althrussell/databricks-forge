@@ -3,13 +3,10 @@
 #
 # Required app resources (configure in Databricks App UI):
 #   1. SQL Warehouse — resource key: "sql-warehouse"
-#   2. Secret — resource key: "db-secret" (Databricks secret scope containing DATABASE_URL)
 #
-# To set up the secret:
-#   databricks secrets create-scope inspire-secrets
-#   databricks secrets put-secret inspire-secrets DATABASE_URL --string-value "postgresql://..."
-#   Then add a Secret resource in the App UI with scope "inspire-secrets", key "DATABASE_URL",
-#   and resource key "db-secret".
+# For production, replace the DATABASE_URL value with a secret reference:
+#   valueFrom: db-secret
+# And add a Secret resource in the App UI with the connection string.
 
 command:
   - "bash"
@@ -20,6 +17,6 @@ env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
   - name: DATABASE_URL
-    valueFrom: db-secret
+    value: "postgresql://databricks_inspire:npg_lT3MW5OKudfE@ep-curly-silence-d1wsggbw-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=require"
   - name: LAKEBASE_CATALOG
     value: main
