@@ -1,0 +1,105 @@
+// Databricks Inspire AI — Prisma Schema
+//
+// Connects to Lakebase Autoscaling (Postgres-compatible).
+// Tables store pipeline run state, discovered use cases, and export history.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Runs
+// ---------------------------------------------------------------------------
+
+model InspireRun {
+  runId              String    @id @map("run_id")
+  businessName       String    @map("business_name")
+  ucMetadata         String    @map("uc_metadata")
+  operation          String    @default("Discover Usecases")
+  businessPriorities String?   @map("business_priorities")
+  strategicGoals     String?   @map("strategic_goals")
+  businessDomains    String?   @map("business_domains")
+  aiModel            String?   @default("databricks-claude-sonnet-4-5") @map("ai_model")
+  languages          String?   @default("[\"English\"]")
+  generationOptions  String?   @default("[\"SQL Code\"]") @map("generation_options")
+  generationPath     String?   @default("./inspire_gen/") @map("generation_path")
+  status             String    @default("pending")
+  currentStep        String?   @map("current_step")
+  progressPct        Int       @default(0) @map("progress_pct")
+  businessContext    String?   @map("business_context")
+  errorMessage       String?   @map("error_message")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  completedAt        DateTime? @map("completed_at")
+
+  useCases InspireUseCase[]
+  exports  InspireExport[]
+
+  @@map("inspire_runs")
+}
+
+// ---------------------------------------------------------------------------
+// Use Cases
+// ---------------------------------------------------------------------------
+
+model InspireUseCase {
+  id                 String  @id
+  runId              String  @map("run_id")
+  useCaseNo          Int?    @map("use_case_no")
+  name               String?
+  type               String?
+  analyticsTechnique String? @map("analytics_technique")
+  statement          String?
+  solution           String?
+  businessValue      String? @map("business_value")
+  beneficiary        String?
+  sponsor            String?
+  domain             String?
+  subdomain          String?
+  tablesInvolved     String? @map("tables_involved")
+  priorityScore      Float?  @map("priority_score")
+  feasibilityScore   Float?  @map("feasibility_score")
+  impactScore        Float?  @map("impact_score")
+  overallScore       Float?  @map("overall_score")
+  sqlCode            String? @map("sql_code")
+  sqlStatus          String? @map("sql_status")
+
+  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@map("inspire_use_cases")
+}
+
+// ---------------------------------------------------------------------------
+// Metadata Cache
+// ---------------------------------------------------------------------------
+
+model InspireMetadataCache {
+  cacheKey     String   @id @map("cache_key")
+  ucPath       String?  @map("uc_path")
+  metadataJson String?  @map("metadata_json")
+  tableCount   Int?     @map("table_count")
+  columnCount  Int?     @map("column_count")
+  cachedAt     DateTime @default(now()) @map("cached_at")
+
+  @@map("inspire_metadata_cache")
+}
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+model InspireExport {
+  exportId  String   @id @map("export_id")
+  runId     String   @map("run_id")
+  format    String
+  filePath  String?  @map("file_path")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@map("inspire_exports")
+}

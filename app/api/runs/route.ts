@@ -8,10 +8,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { createRun, listRuns } from "@/lib/lakebase/runs";
+import { ensureMigrated } from "@/lib/lakebase/schema";
 import type { PipelineRunConfig } from "@/lib/domain/types";
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureMigrated();
     const body = await request.json();
 
     // Validate required fields
@@ -54,6 +56,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") ?? "50", 10);
     const offset = parseInt(searchParams.get("offset") ?? "0", 10);
 
+    await ensureMigrated();
     const runs = await listRuns(limit, offset);
 
     return NextResponse.json({ runs });

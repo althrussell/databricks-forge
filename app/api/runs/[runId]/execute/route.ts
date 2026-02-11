@@ -7,12 +7,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRunById } from "@/lib/lakebase/runs";
 import { startPipeline } from "@/lib/pipeline/engine";
+import { ensureMigrated } from "@/lib/lakebase/schema";
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ runId: string }> }
 ) {
   try {
+    await ensureMigrated();
     const { runId } = await params;
     const run = await getRunById(runId);
 

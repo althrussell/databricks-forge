@@ -1,58 +1,66 @@
 /**
- * CRUD operations for the inspire_use_cases Lakebase table.
+ * CRUD operations for use cases — backed by Lakebase (Prisma).
  */
 
-import { executeSQL, executeSQLMapped, type SqlColumn } from "@/lib/dbx/sql";
-import { LAKEBASE_SCHEMA } from "./schema";
+import { getPrisma } from "@/lib/prisma";
 import type { UseCase, UseCaseType } from "@/lib/domain/types";
 
-const TABLE = `${LAKEBASE_SCHEMA}.inspire_use_cases`;
-
 // ---------------------------------------------------------------------------
-// Helpers
+// Mappers
 // ---------------------------------------------------------------------------
 
-function escapeSQL(value: string): string {
-  return value.replace(/'/g, "''");
+function parseTablesInvolved(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return raw.split(",").map((s) => s.trim());
+  }
 }
 
-function rowToUseCase(row: string[], columns: SqlColumn[]): UseCase {
-  const col = (name: string) => {
-    const idx = columns.findIndex((c) => c.name === name);
-    return idx >= 0 ? row[idx] : null;
-  };
-
-  let tablesInvolved: string[] = [];
-  const tiRaw = col("tables_involved");
-  if (tiRaw) {
-    try {
-      tablesInvolved = JSON.parse(tiRaw);
-    } catch {
-      tablesInvolved = tiRaw.split(",").map((s) => s.trim());
-    }
-  }
-
+function dbRowToUseCase(row: {
+  id: string;
+  runId: string;
+  useCaseNo: number | null;
+  name: string | null;
+  type: string | null;
+  analyticsTechnique: string | null;
+  statement: string | null;
+  solution: string | null;
+  businessValue: string | null;
+  beneficiary: string | null;
+  sponsor: string | null;
+  domain: string | null;
+  subdomain: string | null;
+  tablesInvolved: string | null;
+  priorityScore: number | null;
+  feasibilityScore: number | null;
+  impactScore: number | null;
+  overallScore: number | null;
+  sqlCode: string | null;
+  sqlStatus: string | null;
+}): UseCase {
   return {
-    id: col("id") ?? "",
-    runId: col("run_id") ?? "",
-    useCaseNo: parseInt(col("use_case_no") ?? "0", 10),
-    name: col("name") ?? "",
-    type: (col("type") as UseCaseType) ?? "AI",
-    analyticsTechnique: col("analytics_technique") ?? "",
-    statement: col("statement") ?? "",
-    solution: col("solution") ?? "",
-    businessValue: col("business_value") ?? "",
-    beneficiary: col("beneficiary") ?? "",
-    sponsor: col("sponsor") ?? "",
-    domain: col("domain") ?? "",
-    subdomain: col("subdomain") ?? "",
-    tablesInvolved,
-    priorityScore: parseFloat(col("priority_score") ?? "0"),
-    feasibilityScore: parseFloat(col("feasibility_score") ?? "0"),
-    impactScore: parseFloat(col("impact_score") ?? "0"),
-    overallScore: parseFloat(col("overall_score") ?? "0"),
-    sqlCode: col("sql_code") ?? null,
-    sqlStatus: col("sql_status") ?? null,
+    id: row.id,
+    runId: row.runId,
+    useCaseNo: row.useCaseNo ?? 0,
+    name: row.name ?? "",
+    type: (row.type as UseCaseType) ?? "AI",
+    analyticsTechnique: row.analyticsTechnique ?? "",
+    statement: row.statement ?? "",
+    solution: row.solution ?? "",
+    businessValue: row.businessValue ?? "",
+    beneficiary: row.beneficiary ?? "",
+    sponsor: row.sponsor ?? "",
+    domain: row.domain ?? "",
+    subdomain: row.subdomain ?? "",
+    tablesInvolved: parseTablesInvolved(row.tablesInvolved),
+    priorityScore: row.priorityScore ?? 0,
+    feasibilityScore: row.feasibilityScore ?? 0,
+    impactScore: row.impactScore ?? 0,
+    overallScore: row.overallScore ?? 0,
+    sqlCode: row.sqlCode ?? null,
+    sqlStatus: row.sqlStatus ?? null,
   };
 }
 
@@ -62,67 +70,50 @@ function rowToUseCase(row: string[], columns: SqlColumn[]): UseCase {
 
 /**
  * Insert a batch of use cases for a given run.
- * Uses multi-row INSERT for efficiency.
  */
 export async function insertUseCases(useCases: UseCase[]): Promise<void> {
   if (useCases.length === 0) return;
 
-  // Batch in groups of 50 to stay within SQL size limits
-  const BATCH_SIZE = 50;
-  for (let i = 0; i < useCases.length; i += BATCH_SIZE) {
-    const batch = useCases.slice(i, i + BATCH_SIZE);
+  const prisma = await getPrisma();
 
-    const values = batch
-      .map(
-        (uc) => `(
-          '${escapeSQL(uc.id)}',
-          '${escapeSQL(uc.runId)}',
-          ${uc.useCaseNo},
-          '${escapeSQL(uc.name)}',
-          '${escapeSQL(uc.type)}',
-          '${escapeSQL(uc.analyticsTechnique)}',
-          '${escapeSQL(uc.statement)}',
-          '${escapeSQL(uc.solution)}',
-          '${escapeSQL(uc.businessValue)}',
-          '${escapeSQL(uc.beneficiary)}',
-          '${escapeSQL(uc.sponsor)}',
-          '${escapeSQL(uc.domain)}',
-          '${escapeSQL(uc.subdomain)}',
-          '${escapeSQL(JSON.stringify(uc.tablesInvolved))}',
-          ${uc.priorityScore},
-          ${uc.feasibilityScore},
-          ${uc.impactScore},
-          ${uc.overallScore},
-          ${uc.sqlCode ? `'${escapeSQL(uc.sqlCode)}'` : "NULL"},
-          ${uc.sqlStatus ? `'${escapeSQL(uc.sqlStatus)}'` : "NULL"}
-        )`
-      )
-      .join(",\n");
-
-    const sql = `
-      INSERT INTO ${TABLE}
-        (id, run_id, use_case_no, name, type, analytics_technique,
-         statement, solution, business_value, beneficiary, sponsor,
-         domain, subdomain, tables_involved,
-         priority_score, feasibility_score, impact_score, overall_score,
-         sql_code, sql_status)
-      VALUES ${values}
-    `;
-
-    await executeSQL(sql);
-  }
+  // Prisma createMany for efficient batch inserts
+  await prisma.inspireUseCase.createMany({
+    data: useCases.map((uc) => ({
+      id: uc.id,
+      runId: uc.runId,
+      useCaseNo: uc.useCaseNo,
+      name: uc.name,
+      type: uc.type,
+      analyticsTechnique: uc.analyticsTechnique,
+      statement: uc.statement,
+      solution: uc.solution,
+      businessValue: uc.businessValue,
+      beneficiary: uc.beneficiary,
+      sponsor: uc.sponsor,
+      domain: uc.domain,
+      subdomain: uc.subdomain,
+      tablesInvolved: JSON.stringify(uc.tablesInvolved),
+      priorityScore: uc.priorityScore,
+      feasibilityScore: uc.feasibilityScore,
+      impactScore: uc.impactScore,
+      overallScore: uc.overallScore,
+      sqlCode: uc.sqlCode,
+      sqlStatus: uc.sqlStatus,
+    })),
+    skipDuplicates: true,
+  });
 }
 
 /**
  * Get all use cases for a run, ordered by overall_score descending.
  */
 export async function getUseCasesByRunId(runId: string): Promise<UseCase[]> {
-  const sql = `
-    SELECT * FROM ${TABLE}
-    WHERE run_id = '${escapeSQL(runId)}'
-    ORDER BY overall_score DESC, use_case_no ASC
-  `;
-  return executeSQLMapped(sql, rowToUseCase);
+  const prisma = await getPrisma();
+  const rows = await prisma.inspireUseCase.findMany({
+    where: { runId },
+    orderBy: [{ overallScore: "desc" }, { useCaseNo: "asc" }],
+  });
+  return rows.map(dbRowToUseCase);
 }
 
 /**
@@ -132,31 +123,32 @@ export async function getUseCasesByDomain(
   runId: string,
   domain: string
 ): Promise<UseCase[]> {
-  const sql = `
-    SELECT * FROM ${TABLE}
-    WHERE run_id = '${escapeSQL(runId)}' AND domain = '${escapeSQL(domain)}'
-    ORDER BY overall_score DESC
-  `;
-  return executeSQLMapped(sql, rowToUseCase);
+  const prisma = await getPrisma();
+  const rows = await prisma.inspireUseCase.findMany({
+    where: { runId, domain },
+    orderBy: { overallScore: "desc" },
+  });
+  return rows.map(dbRowToUseCase);
 }
 
 /**
  * Get distinct domains for a run.
  */
 export async function getDomainsForRun(runId: string): Promise<string[]> {
-  const sql = `
-    SELECT DISTINCT domain FROM ${TABLE}
-    WHERE run_id = '${escapeSQL(runId)}'
-    ORDER BY domain
-  `;
-  const result = await executeSQL(sql);
-  return result.rows.map((r) => r[0]);
+  const prisma = await getPrisma();
+  const results = await prisma.inspireUseCase.findMany({
+    where: { runId },
+    select: { domain: true },
+    distinct: ["domain"],
+    orderBy: { domain: "asc" },
+  });
+  return results.map((r: { domain: string | null }) => r.domain ?? "").filter(Boolean);
 }
 
 /**
  * Delete all use cases for a run (used when re-running).
  */
 export async function deleteUseCasesForRun(runId: string): Promise<void> {
-  const sql = `DELETE FROM ${TABLE} WHERE run_id = '${escapeSQL(runId)}'`;
-  await executeSQL(sql);
+  const prisma = await getPrisma();
+  await prisma.inspireUseCase.deleteMany({ where: { runId } });
 }
