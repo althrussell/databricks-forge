@@ -1,0 +1,19 @@
+bundle:
+  name: databricks-inspire
+
+apps:
+  databricks-inspire:
+    name: "Databricks Inspire AI"
+    description: "Discover AI-powered use cases from Unity Catalog metadata"
+    source_code_path: .
+
+    resources:
+      - name: sql-warehouse
+        type: sql_warehouse
+        description: "SQL Warehouse for query execution, ai_query, and Lakebase"
+
+    env:
+      - name: DATABRICKS_WAREHOUSE_ID
+        value_from:
+          resource: sql-warehouse
+          key: id
