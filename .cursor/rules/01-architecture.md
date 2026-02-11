@@ -1,0 +1,21 @@
+# Architecture Rules
+
+- Use a "ports and adapters" style:
+  - /lib/dbx (Databricks SQL client, Workspace API)
+  - /lib/queries (SQL text + row-to-type mappers)
+  - /lib/domain (types + scoring logic)
+  - /lib/ai (prompt template building + ai_query execution)
+  - /lib/pipeline (pipeline engine + step modules)
+  - /lib/lakebase (Lakebase table schema + CRUD)
+  - /lib/export (Excel, PDF, PPTX, notebook generators)
+- No raw SQL scattered in components or API routes.
+- Create typed DTOs for:
+  - PipelineRun
+  - UseCase
+  - BusinessContext
+  - MetadataSnapshot
+  - ExportRecord
+  - PipelineStep (enum)
+- Prefer server-side data fetching for all pages.
+- Pipeline steps must be independent modules that accept typed inputs and return typed outputs.
+- All Databricks calls happen server-side in API routes or pipeline steps -- never in client components.
