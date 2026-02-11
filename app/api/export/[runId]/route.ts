@@ -13,6 +13,7 @@ import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { generateExcel } from "@/lib/export/excel";
 import { generatePptx } from "@/lib/export/pptx";
 import { generateNotebooks } from "@/lib/export/notebooks";
+import { ensureMigrated } from "@/lib/lakebase/schema";
 import type { ExportFormat } from "@/lib/domain/types";
 
 export async function GET(
@@ -20,6 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ runId: string }> }
 ) {
   try {
+    await ensureMigrated();
     const { runId } = await params;
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") as ExportFormat | null;

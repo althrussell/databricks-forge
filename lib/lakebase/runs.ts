@@ -1,91 +1,73 @@
 /**
- * CRUD operations for the inspire_runs Lakebase table.
+ * CRUD operations for pipeline runs — backed by Lakebase (Prisma).
  */
 
-import { executeSQL, executeSQLMapped, type SqlColumn } from "@/lib/dbx/sql";
-import { LAKEBASE_SCHEMA } from "./schema";
+import { getPrisma } from "@/lib/prisma";
 import type {
   PipelineRun,
   PipelineRunConfig,
   PipelineStep,
   RunStatus,
   BusinessContext,
+  BusinessPriority,
+  GenerationOption,
+  SupportedLanguage,
 } from "@/lib/domain/types";
 
-const TABLE = `${LAKEBASE_SCHEMA}.inspire_runs`;
-
 // ---------------------------------------------------------------------------
-// Helpers
+// Mappers
 // ---------------------------------------------------------------------------
 
-function escapeSQL(value: string): string {
-  return value.replace(/'/g, "''");
+function parseJSON<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-function rowToRun(row: string[], columns: SqlColumn[]): PipelineRun {
-  const col = (name: string) => {
-    const idx = columns.findIndex((c) => c.name === name);
-    return idx >= 0 ? row[idx] : null;
-  };
-
-  const parsePriorities = (val: string | null) => {
-    if (!val) return [];
-    try {
-      return JSON.parse(val);
-    } catch {
-      return val.split(",").map((s) => s.trim());
-    }
-  };
-
-  const parseLanguages = (val: string | null) => {
-    if (!val) return ["English"];
-    try {
-      return JSON.parse(val);
-    } catch {
-      return [val];
-    }
-  };
-
-  const parseGenerationOptions = (val: string | null) => {
-    if (!val) return ["SQL Code"];
-    try {
-      return JSON.parse(val);
-    } catch {
-      return [val];
-    }
-  };
-
-  let businessContext: BusinessContext | null = null;
-  const bcRaw = col("business_context");
-  if (bcRaw) {
-    try {
-      businessContext = JSON.parse(bcRaw);
-    } catch {
-      businessContext = null;
-    }
-  }
-
+function dbRowToRun(row: {
+  runId: string;
+  businessName: string;
+  ucMetadata: string;
+  operation: string;
+  businessPriorities: string | null;
+  strategicGoals: string | null;
+  businessDomains: string | null;
+  aiModel: string | null;
+  languages: string | null;
+  generationOptions: string | null;
+  generationPath: string | null;
+  status: string;
+  currentStep: string | null;
+  progressPct: number;
+  businessContext: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+}): PipelineRun {
   return {
-    runId: col("run_id") ?? "",
+    runId: row.runId,
     config: {
-      businessName: col("business_name") ?? "",
-      ucMetadata: col("uc_metadata") ?? "",
-      operation: (col("operation") as PipelineRunConfig["operation"]) ?? "Discover Usecases",
-      businessDomains: col("business_domains") ?? "",
-      businessPriorities: parsePriorities(col("business_priorities")),
-      strategicGoals: col("strategic_goals") ?? "",
-      generationOptions: parseGenerationOptions(col("generation_options")),
-      generationPath: col("generation_path") ?? "./inspire_gen/",
-      languages: parseLanguages(col("languages")),
-      aiModel: col("ai_model") ?? "databricks-claude-sonnet-4-5",
+      businessName: row.businessName,
+      ucMetadata: row.ucMetadata,
+      operation: row.operation as PipelineRunConfig["operation"],
+      businessDomains: row.businessDomains ?? "",
+      businessPriorities: parseJSON<BusinessPriority[]>(row.businessPriorities, []),
+      strategicGoals: row.strategicGoals ?? "",
+      generationOptions: parseJSON<GenerationOption[]>(row.generationOptions, ["SQL Code"]),
+      generationPath: row.generationPath ?? "./inspire_gen/",
+      languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
+      aiModel: row.aiModel ?? "databricks-claude-sonnet-4-5",
     },
-    status: (col("status") as RunStatus) ?? "pending",
-    currentStep: (col("current_step") as PipelineStep) ?? null,
-    progressPct: parseInt(col("progress_pct") ?? "0", 10),
-    businessContext,
-    errorMessage: col("error_message") ?? null,
-    createdAt: col("created_at") ?? new Date().toISOString(),
-    completedAt: col("completed_at") ?? null,
+    status: row.status as RunStatus,
+    currentStep: (row.currentStep as PipelineStep) ?? null,
+    progressPct: row.progressPct,
+    businessContext: parseJSON<BusinessContext | null>(row.businessContext, null),
+    errorMessage: row.errorMessage ?? null,
+    createdAt: row.createdAt.toISOString(),
+    completedAt: row.completedAt?.toISOString() ?? null,
   };
 }
 
@@ -97,45 +79,43 @@ export async function createRun(
   runId: string,
   config: PipelineRunConfig
 ): Promise<void> {
-  const sql = `
-    INSERT INTO ${TABLE}
-      (run_id, business_name, uc_metadata, operation, business_priorities,
-       strategic_goals, business_domains, ai_model, languages,
-       generation_options, generation_path, status, progress_pct)
-    VALUES
-      ('${escapeSQL(runId)}',
-       '${escapeSQL(config.businessName)}',
-       '${escapeSQL(config.ucMetadata)}',
-       '${escapeSQL(config.operation)}',
-       '${escapeSQL(JSON.stringify(config.businessPriorities))}',
-       '${escapeSQL(config.strategicGoals)}',
-       '${escapeSQL(config.businessDomains)}',
-       '${escapeSQL(config.aiModel)}',
-       '${escapeSQL(JSON.stringify(config.languages))}',
-       '${escapeSQL(JSON.stringify(config.generationOptions))}',
-       '${escapeSQL(config.generationPath)}',
-       'pending',
-       0)
-  `;
-  await executeSQL(sql);
+  const prisma = await getPrisma();
+  await prisma.inspireRun.create({
+    data: {
+      runId,
+      businessName: config.businessName,
+      ucMetadata: config.ucMetadata,
+      operation: config.operation,
+      businessPriorities: JSON.stringify(config.businessPriorities),
+      strategicGoals: config.strategicGoals,
+      businessDomains: config.businessDomains,
+      aiModel: config.aiModel,
+      languages: JSON.stringify(config.languages),
+      generationOptions: JSON.stringify(config.generationOptions),
+      generationPath: config.generationPath,
+      status: "pending",
+      progressPct: 0,
+    },
+  });
 }
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
-  const sql = `SELECT * FROM ${TABLE} WHERE run_id = '${escapeSQL(runId)}'`;
-  const rows = await executeSQLMapped(sql, rowToRun);
-  return rows.length > 0 ? rows[0] : null;
+  const prisma = await getPrisma();
+  const row = await prisma.inspireRun.findUnique({ where: { runId } });
+  return row ? dbRowToRun(row) : null;
 }
 
 export async function listRuns(
   limit = 50,
   offset = 0
 ): Promise<PipelineRun[]> {
-  const sql = `
-    SELECT * FROM ${TABLE}
-    ORDER BY created_at DESC
-    LIMIT ${limit} OFFSET ${offset}
-  `;
-  return executeSQLMapped(sql, rowToRun);
+  const prisma = await getPrisma();
+  const rows = await prisma.inspireRun.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    skip: offset,
+  });
+  return rows.map(dbRowToRun);
 }
 
 export async function updateRunStatus(
@@ -145,36 +125,32 @@ export async function updateRunStatus(
   progressPct: number,
   errorMessage?: string
 ): Promise<void> {
-  const parts: string[] = [
-    `status = '${escapeSQL(status)}'`,
-    `current_step = ${currentStep ? `'${escapeSQL(currentStep)}'` : "NULL"}`,
-    `progress_pct = ${progressPct}`,
-  ];
+  const prisma = await getPrisma();
+
+  const data: Record<string, unknown> = {
+    status,
+    currentStep: currentStep ?? null,
+    progressPct,
+  };
 
   if (errorMessage !== undefined) {
-    parts.push(`error_message = '${escapeSQL(errorMessage)}'`);
+    data.errorMessage = errorMessage;
   }
 
   if (status === "completed" || status === "failed") {
-    parts.push(`completed_at = current_timestamp()`);
+    data.completedAt = new Date();
   }
 
-  const sql = `
-    UPDATE ${TABLE}
-    SET ${parts.join(", ")}
-    WHERE run_id = '${escapeSQL(runId)}'
-  `;
-  await executeSQL(sql);
+  await prisma.inspireRun.update({ where: { runId }, data });
 }
 
 export async function updateRunBusinessContext(
   runId: string,
   context: BusinessContext
 ): Promise<void> {
-  const sql = `
-    UPDATE ${TABLE}
-    SET business_context = '${escapeSQL(JSON.stringify(context))}'
-    WHERE run_id = '${escapeSQL(runId)}'
-  `;
-  await executeSQL(sql);
+  const prisma = await getPrisma();
+  await prisma.inspireRun.update({
+    where: { runId },
+    data: { businessContext: JSON.stringify(context) },
+  });
 }
