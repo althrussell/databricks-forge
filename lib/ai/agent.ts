@@ -19,7 +19,11 @@ export interface AIQueryOptions {
   variables: Record<string, string>;
   /** The AI model endpoint to use */
   modelEndpoint: string;
-  /** Maximum tokens for the response */
+  /**
+   * Maximum tokens for the response.
+   * @deprecated ai_query() no longer accepts maxTokens as a parameter.
+   * Kept for interface compatibility but ignored.
+   */
   maxTokens?: number;
 }
 
@@ -36,12 +40,14 @@ export interface AIQueryResult {
 
 /**
  * Execute an ai_query() call via SQL and return the raw LLM response.
+ *
+ * Syntax: SELECT ai_query(endpoint, request)
+ * See: https://docs.databricks.com/sql/language-manual/functions/ai_query
  */
 export async function executeAIQuery(
   options: AIQueryOptions
 ): Promise<AIQueryResult> {
   const prompt = formatPrompt(options.promptKey, options.variables);
-  const maxTokens = options.maxTokens ?? 4096;
 
   // Escape the prompt for SQL string literal
   const escapedPrompt = prompt.replace(/'/g, "''");
@@ -49,8 +55,7 @@ export async function executeAIQuery(
   const sql = `
     SELECT ai_query(
       '${options.modelEndpoint}',
-      '${escapedPrompt}',
-      maxTokens => ${maxTokens}
+      '${escapedPrompt}'
     ) AS response
   `;
 
