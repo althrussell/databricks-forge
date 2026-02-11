@@ -12,6 +12,7 @@ import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { generateExcel } from "@/lib/export/excel";
 import { generatePptx } from "@/lib/export/pptx";
+import { generatePdf } from "@/lib/export/pdf";
 import { generateNotebooks } from "@/lib/export/notebooks";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import type { ExportFormat } from "@/lib/domain/types";
@@ -71,18 +72,13 @@ export async function GET(
         });
       }
       case "pdf": {
-        // PDF generation is complex -- return a simple JSON catalog for now
-        // TODO: Implement full PDF with @react-pdf/renderer
-        return NextResponse.json({
-          message: "PDF export not yet implemented. Use Excel or PPTX.",
-          useCases: useCases.map((uc) => ({
-            id: uc.id,
-            name: uc.name,
-            domain: uc.domain,
-            statement: uc.statement,
-            solution: uc.solution,
-            overallScore: uc.overallScore,
-          })),
+        const pdfBuffer = await generatePdf(run, useCases);
+        return new NextResponse(new Uint8Array(pdfBuffer), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="inspire_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.pdf"`,
+          },
         });
       }
       case "notebooks": {
