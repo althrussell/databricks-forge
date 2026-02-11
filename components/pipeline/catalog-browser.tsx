@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Database,
@@ -210,7 +209,7 @@ export function CatalogBrowser({
         </div>
 
         {/* Tree */}
-        <ScrollArea className="max-h-[280px]">
+        <div className="h-[280px] overflow-y-auto">
           <div className="p-1">
             {catalogs.map((catalog) => (
               <CatalogRow
@@ -227,7 +226,7 @@ export function CatalogBrowser({
               />
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Selected sources pills */}
