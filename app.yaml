@@ -9,8 +9,11 @@
 # And add a Secret resource in the App UI with the connection string.
 
 command:
-  - "node"
-  - ".next/standalone/server.js"
+  - "npx"
+  - "next"
+  - "start"
+  - "-p"
+  - "8000"
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
