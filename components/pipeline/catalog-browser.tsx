@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Database,
   Layers,
+  TableProperties,
   ChevronRight,
   ChevronDown,
   Plus,
@@ -22,12 +23,27 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+interface TableNode {
+  name: string;
+  fqn: string;
+  comment: string | null;
+  tableType: string;
+}
+
+interface SchemaNode {
+  name: string;
+  expanded: boolean;
+  loading: boolean;
+  error: string | null;
+  tables: TableNode[];
+}
+
 interface CatalogNode {
   name: string;
   expanded: boolean;
   loading: boolean;
   error: string | null;
-  schemas: string[];
+  schemas: SchemaNode[];
 }
 
 interface CatalogBrowserProps {
@@ -82,18 +98,13 @@ export function CatalogBrowser({
     setCatalogs((prev) =>
       prev.map((c) => {
         if (c.name !== catalogName) return c;
-        // If already has schemas, just toggle
-        if (c.schemas.length > 0) {
-          return { ...c, expanded: !c.expanded };
-        }
-        // Need to fetch schemas
+        if (c.schemas.length > 0) return { ...c, expanded: !c.expanded };
         return { ...c, expanded: true, loading: true, error: null };
       })
     );
 
-    // Check if we need to fetch
     const cat = catalogs.find((c) => c.name === catalogName);
-    if (cat && cat.schemas.length > 0) return; // already loaded
+    if (cat && cat.schemas.length > 0) return;
 
     try {
       const res = await fetch(
@@ -101,11 +112,21 @@ export function CatalogBrowser({
       );
       if (!res.ok) throw new Error("Failed to fetch schemas");
       const data = await res.json();
-      const schemas: string[] = data.schemas ?? [];
+      const schemaNames: string[] = data.schemas ?? [];
       setCatalogs((prev) =>
         prev.map((c) =>
           c.name === catalogName
-            ? { ...c, schemas, loading: false }
+            ? {
+                ...c,
+                loading: false,
+                schemas: schemaNames.map((s) => ({
+                  name: s,
+                  expanded: false,
+                  loading: false,
+                  error: null,
+                  tables: [],
+                })),
+              }
             : c
         )
       );
@@ -125,16 +146,74 @@ export function CatalogBrowser({
     }
   };
 
+  // ── Expand / collapse a schema (fetch tables) ─────────────────────────
+  const toggleSchema = async (catalogName: string, schemaName: string) => {
+    const updateSchema = (
+      updater: (s: SchemaNode) => SchemaNode
+    ) => {
+      setCatalogs((prev) =>
+        prev.map((c) =>
+          c.name === catalogName
+            ? {
+                ...c,
+                schemas: c.schemas.map((s) =>
+                  s.name === schemaName ? updater(s) : s
+                ),
+              }
+            : c
+        )
+      );
+    };
+
+    const cat = catalogs.find((c) => c.name === catalogName);
+    const sch = cat?.schemas.find((s) => s.name === schemaName);
+
+    if (sch && sch.tables.length > 0) {
+      updateSchema((s) => ({ ...s, expanded: !s.expanded }));
+      return;
+    }
+
+    updateSchema((s) => ({ ...s, expanded: true, loading: true, error: null }));
+
+    try {
+      const res = await fetch(
+        `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch tables");
+      const data = await res.json();
+      const tables: TableNode[] = (data.tables ?? []).map(
+        (t: { tableName: string; fqn: string; comment: string | null; tableType: string }) => ({
+          name: t.tableName,
+          fqn: t.fqn,
+          comment: t.comment,
+          tableType: t.tableType,
+        })
+      );
+      updateSchema((s) => ({ ...s, loading: false, tables }));
+    } catch (err) {
+      updateSchema((s) => ({
+        ...s,
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to load tables",
+      }));
+    }
+  };
+
   // ── Search filter ───────────────────────────────────────────────────────
   const searchLower = search.toLowerCase();
 
   const filteredCatalogs = useMemo(() => {
     if (!searchLower) return catalogs;
     return catalogs.filter((c) => {
-      // Match on catalog name
       if (c.name.toLowerCase().includes(searchLower)) return true;
-      // Match on any loaded schema name
-      if (c.schemas.some((s) => s.toLowerCase().includes(searchLower)))
+      if (
+        c.schemas.some((s) => {
+          if (s.name.toLowerCase().includes(searchLower)) return true;
+          if (s.tables.some((t) => t.name.toLowerCase().includes(searchLower)))
+            return true;
+          return false;
+        })
+      )
         return true;
       return false;
     });
@@ -153,13 +232,22 @@ export function CatalogBrowser({
     onSelectionChange(selectedSources.filter((s) => s !== source));
   };
 
-  // Check if a catalog-level source supersedes a schema-level one
-  const isCoveredByCatalog = (catalogName: string) =>
-    isSelected(catalogName);
+  /** Check if a parent scope already covers this path */
+  const isCoveredBy = (path: string) => {
+    const parts = path.split(".");
+    // catalog.schema.table → check catalog and catalog.schema
+    if (parts.length === 3) {
+      return isSelected(parts[0]) || isSelected(`${parts[0]}.${parts[1]}`);
+    }
+    // catalog.schema → check catalog
+    if (parts.length === 2) {
+      return isSelected(parts[0]);
+    }
+    return false;
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────
 
-  // Top-level loading
   if (loading) {
     return (
       <div className="space-y-2 rounded-md border p-4">
@@ -174,7 +262,6 @@ export function CatalogBrowser({
     );
   }
 
-  // Top-level error
   if (error) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-6 text-center">
@@ -188,14 +275,12 @@ export function CatalogBrowser({
     );
   }
 
-  // Empty
   if (catalogs.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-md border border-dashed p-6 text-center">
         <Database className="h-5 w-5 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          No catalogs found. Check your SQL Warehouse connection and
-          permissions.
+          No catalogs found. Check your SQL Warehouse connection and permissions.
         </p>
         <Button variant="outline" size="sm" onClick={fetchCatalogs}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -215,7 +300,7 @@ export function CatalogBrowser({
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search catalogs and schemas..."
+              placeholder="Search catalogs, schemas, and tables..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-7 pl-7 text-xs"
@@ -234,25 +319,25 @@ export function CatalogBrowser({
         </div>
 
         {/* Tree */}
-        <div className="h-[280px] overflow-y-auto">
+        <div className="h-[300px] overflow-y-auto">
           <div className="p-1">
             {filteredCatalogs.length === 0 && search ? (
               <div className="flex flex-col items-center gap-1 py-8 text-center text-xs text-muted-foreground">
                 <Search className="h-4 w-4" />
-                No catalogs or schemas match &ldquo;{search}&rdquo;
+                No results match &ldquo;{search}&rdquo;
               </div>
             ) : (
               filteredCatalogs.map((catalog) => (
                 <CatalogRow
                   key={catalog.name}
                   catalog={catalog}
-                  onToggle={() => toggleCatalog(catalog.name)}
-                  isSelected={isSelected}
-                  isCoveredByCatalog={isCoveredByCatalog(catalog.name)}
-                  onAddCatalog={() => addSource(catalog.name)}
-                  onAddSchema={(schema) =>
-                    addSource(`${catalog.name}.${schema}`)
+                  onToggleCatalog={() => toggleCatalog(catalog.name)}
+                  onToggleSchema={(schema) =>
+                    toggleSchema(catalog.name, schema)
                   }
+                  isSelected={isSelected}
+                  isCoveredBy={isCoveredBy}
+                  onAdd={addSource}
                   onRemove={removeSource}
                   searchFilter={searchLower}
                 />
@@ -269,23 +354,28 @@ export function CatalogBrowser({
             Selected sources ({selectedSources.length})
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {selectedSources.map((source) => (
-              <Badge
-                key={source}
-                variant="secondary"
-                className="gap-1 pr-1"
-              >
-                <Database className="h-3 w-3 text-muted-foreground" />
-                {source}
-                <button
-                  type="button"
-                  onClick={() => removeSource(source)}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
+            {selectedSources.map((source) => {
+              const depth = source.split(".").length;
+              const Icon =
+                depth === 1
+                  ? Database
+                  : depth === 2
+                    ? Layers
+                    : TableProperties;
+              return (
+                <Badge key={source} variant="secondary" className="gap-1 pr-1">
+                  <Icon className="h-3 w-3 text-muted-foreground" />
+                  {source}
+                  <button
+                    type="button"
+                    onClick={() => removeSource(source)}
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
           </div>
         </div>
       )}
@@ -294,37 +384,47 @@ export function CatalogBrowser({
 }
 
 // ---------------------------------------------------------------------------
-// Catalog row (expand/collapse + schema children)
+// Catalog row (expand/collapse + schema + table children)
 // ---------------------------------------------------------------------------
 
 function CatalogRow({
   catalog,
-  onToggle,
+  onToggleCatalog,
+  onToggleSchema,
   isSelected,
-  isCoveredByCatalog,
-  onAddCatalog,
-  onAddSchema,
+  isCoveredBy,
+  onAdd,
   onRemove,
   searchFilter,
 }: {
   catalog: CatalogNode;
-  onToggle: () => void;
+  onToggleCatalog: () => void;
+  onToggleSchema: (schema: string) => void;
   isSelected: (source: string) => boolean;
-  isCoveredByCatalog: boolean;
-  onAddCatalog: () => void;
-  onAddSchema: (schema: string) => void;
+  isCoveredBy: (path: string) => boolean;
+  onAdd: (source: string) => void;
   onRemove: (source: string) => void;
   searchFilter?: string;
 }) {
   const catalogSelected = isSelected(catalog.name);
-
-  // When searching, filter schemas and auto-expand if there are matches
   const hasSearch = !!searchFilter;
-  const catalogNameMatches = hasSearch && catalog.name.toLowerCase().includes(searchFilter);
-  const filteredSchemas = hasSearch && !catalogNameMatches
-    ? catalog.schemas.filter((s) => s.toLowerCase().includes(searchFilter))
-    : catalog.schemas;
-  const showExpanded = catalog.expanded || (hasSearch && filteredSchemas.length > 0 && catalog.schemas.length > 0);
+  const catalogNameMatches =
+    hasSearch && catalog.name.toLowerCase().includes(searchFilter);
+
+  // Filter schemas when searching
+  const filteredSchemas = useMemo(() => {
+    if (!hasSearch || catalogNameMatches) return catalog.schemas;
+    return catalog.schemas.filter((s) => {
+      if (s.name.toLowerCase().includes(searchFilter)) return true;
+      if (s.tables.some((t) => t.name.toLowerCase().includes(searchFilter)))
+        return true;
+      return false;
+    });
+  }, [catalog.schemas, hasSearch, catalogNameMatches, searchFilter]);
+
+  const showExpanded =
+    catalog.expanded ||
+    (hasSearch && filteredSchemas.length > 0 && catalog.schemas.length > 0);
 
   return (
     <div>
@@ -332,7 +432,7 @@ function CatalogRow({
       <div className="group flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-muted/50">
         <button
           type="button"
-          onClick={onToggle}
+          onClick={onToggleCatalog}
           className="flex shrink-0 items-center gap-1"
         >
           {showExpanded ? (
@@ -345,7 +445,7 @@ function CatalogRow({
 
         <button
           type="button"
-          onClick={onToggle}
+          onClick={onToggleCatalog}
           className="flex-1 text-left text-sm font-medium"
         >
           <HighlightMatch text={catalog.name} query={searchFilter} />
@@ -368,7 +468,7 @@ function CatalogRow({
             variant="ghost"
             size="sm"
             className="h-6 gap-1 px-2 text-xs opacity-0 group-hover:opacity-100"
-            onClick={onAddCatalog}
+            onClick={() => onAdd(catalog.name)}
           >
             <Plus className="h-3 w-3" />
             Add all
@@ -401,49 +501,190 @@ function CatalogRow({
               </div>
             )}
 
-          {filteredSchemas.map((schema) => {
-            const schemaPath = `${catalog.name}.${schema}`;
-            const schemaSelected = isSelected(schemaPath);
-            const covered = isCoveredByCatalog;
+          {filteredSchemas.map((schema) => (
+            <SchemaRow
+              key={schema.name}
+              schema={schema}
+              catalogName={catalog.name}
+              onToggle={() => onToggleSchema(schema.name)}
+              isSelected={isSelected}
+              isCoveredBy={isCoveredBy}
+              onAdd={onAdd}
+              onRemove={onRemove}
+              searchFilter={searchFilter}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Schema row (expand/collapse + table children)
+// ---------------------------------------------------------------------------
+
+function SchemaRow({
+  schema,
+  catalogName,
+  onToggle,
+  isSelected,
+  isCoveredBy,
+  onAdd,
+  onRemove,
+  searchFilter,
+}: {
+  schema: SchemaNode;
+  catalogName: string;
+  onToggle: () => void;
+  isSelected: (source: string) => boolean;
+  isCoveredBy: (path: string) => boolean;
+  onAdd: (source: string) => void;
+  onRemove: (source: string) => void;
+  searchFilter?: string;
+}) {
+  const schemaPath = `${catalogName}.${schema.name}`;
+  const schemaSelected = isSelected(schemaPath);
+  const covered = isCoveredBy(schemaPath);
+
+  const hasSearch = !!searchFilter;
+  const schemaNameMatches =
+    hasSearch && schema.name.toLowerCase().includes(searchFilter);
+
+  // Filter tables when searching
+  const filteredTables = useMemo(() => {
+    if (!hasSearch || schemaNameMatches) return schema.tables;
+    return schema.tables.filter((t) =>
+      t.name.toLowerCase().includes(searchFilter)
+    );
+  }, [schema.tables, hasSearch, schemaNameMatches, searchFilter]);
+
+  const showExpanded =
+    schema.expanded ||
+    (hasSearch && filteredTables.length > 0 && schema.tables.length > 0);
+
+  return (
+    <div>
+      {/* Schema level */}
+      <div className="group/schema flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/50">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex shrink-0 items-center gap-1"
+        >
+          {showExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+          <Layers className="h-3.5 w-3.5 text-blue-500" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`flex-1 text-left text-sm ${covered && !schemaSelected ? "text-muted-foreground" : ""}`}
+        >
+          <HighlightMatch text={schema.name} query={searchFilter} />
+          {covered && !schemaSelected && (
+            <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+              (included via catalog)
+            </span>
+          )}
+        </button>
+
+        {schemaSelected ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 gap-1 px-1.5 text-[11px] text-green-600"
+            onClick={() => onRemove(schemaPath)}
+          >
+            <Check className="h-2.5 w-2.5" />
+            Added
+          </Button>
+        ) : covered ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 gap-1 px-1.5 text-[11px] opacity-0 group-hover/schema:opacity-100"
+            onClick={() => onAdd(schemaPath)}
+          >
+            <Plus className="h-2.5 w-2.5" />
+            Add
+          </Button>
+        )}
+      </div>
+
+      {/* Tables */}
+      {showExpanded && (
+        <div className="ml-5 border-l pl-2">
+          {schema.loading && (
+            <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Loading tables...
+            </div>
+          )}
+
+          {schema.error && (
+            <div className="flex items-center gap-2 px-2 py-1 text-xs text-destructive">
+              <AlertCircle className="h-3 w-3" />
+              {schema.error}
+            </div>
+          )}
+
+          {!schema.loading && !schema.error && schema.tables.length === 0 && (
+            <div className="px-2 py-1 text-xs text-muted-foreground">
+              No tables found
+            </div>
+          )}
+
+          {filteredTables.map((table) => {
+            const tablePath = table.fqn;
+            const tableSelected = isSelected(tablePath);
+            const tableCovered = isCoveredBy(tablePath);
 
             return (
               <div
-                key={schema}
-                className="group/schema flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/50"
+                key={table.name}
+                className="group/table flex items-center gap-1 rounded-md px-2 py-0.5 hover:bg-muted/50"
               >
-                <Layers className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                <TableProperties className="h-3 w-3 shrink-0 text-emerald-500" />
                 <span
-                  className={`flex-1 text-sm ${covered ? "text-muted-foreground" : ""}`}
+                  className={`flex-1 truncate text-xs ${tableCovered && !tableSelected ? "text-muted-foreground" : ""}`}
+                  title={table.comment ?? table.fqn}
                 >
-                  <HighlightMatch text={schema} query={searchFilter} />
-                  {covered && !schemaSelected && (
-                    <span className="ml-1.5 text-[10px] text-muted-foreground/60">
-                      (included via catalog)
+                  <HighlightMatch text={table.name} query={searchFilter} />
+                  {table.comment && (
+                    <span className="ml-1 text-[10px] text-muted-foreground/60">
+                      {table.comment.length > 40
+                        ? table.comment.slice(0, 40) + "..."
+                        : table.comment}
                     </span>
                   )}
                 </span>
 
-                {schemaSelected ? (
+                {tableSelected ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-5 gap-1 px-1.5 text-[11px] text-green-600"
-                    onClick={() => onRemove(schemaPath)}
+                    className="h-4 gap-0.5 px-1 text-[10px] text-green-600"
+                    onClick={() => onRemove(tablePath)}
                   >
                     <Check className="h-2.5 w-2.5" />
-                    Added
                   </Button>
-                ) : covered ? null : (
+                ) : tableCovered ? null : (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-5 gap-1 px-1.5 text-[11px] opacity-0 group-hover/schema:opacity-100"
-                    onClick={() => onAddSchema(schema)}
+                    className="h-4 gap-0.5 px-1 text-[10px] opacity-0 group-hover/table:opacity-100"
+                    onClick={() => onAdd(tablePath)}
                   >
                     <Plus className="h-2.5 w-2.5" />
-                    Add
                   </Button>
                 )}
               </div>
