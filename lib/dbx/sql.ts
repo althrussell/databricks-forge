@@ -89,9 +89,10 @@ export async function executeSQL(
   if (catalog) body.catalog = catalog;
   if (schema) body.schema = schema;
 
+  const headers = await getHeaders();
   const response = await fetch(url, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -143,8 +144,9 @@ export async function executeSQL(
   if (result.result?.next_chunk_internal_link) {
     let nextLink: string | undefined = result.result.next_chunk_internal_link;
     while (nextLink) {
+      const chunkHeaders = await getHeaders();
       const chunkResp: Response = await fetch(`${config.host}${nextLink}`, {
-        headers: getHeaders(),
+        headers: chunkHeaders,
       });
       if (!chunkResp.ok) break;
       const chunk: { data_array?: string[][]; next_chunk_internal_link?: string } = await chunkResp.json();
@@ -197,9 +199,10 @@ async function pollStatement(
 ): Promise<StatementResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/sql/statements/${statementId}`;
+  const headers = await getHeaders();
   const response = await fetch(url, {
     method: "GET",
-    headers: getHeaders(),
+    headers,
   });
   if (!response.ok) {
     const text = await response.text();

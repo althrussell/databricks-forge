@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   title: "Databricks Inspire AI",
   description:
     "Discover AI-powered use cases from your Unity Catalog metadata",
+  icons: {
+    icon: "/databricks-icon.svg",
+  },
 };
 
 export default function RootLayout({

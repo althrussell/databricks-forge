@@ -1,0 +1,10 @@
+# Databricks Apps configuration
+# Maps app resources to environment variables consumed by the Next.js backend.
+
+command:
+  - "node"
+  - ".next/standalone/server.js"
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse

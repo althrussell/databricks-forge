@@ -50,9 +50,10 @@ export async function importNotebook(
     format: options.format ?? "SOURCE",
   };
 
+  const headers = await getHeaders();
   const response = await fetch(url, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -71,9 +72,10 @@ export async function mkdirs(path: string): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/mkdirs`;
 
+  const headers = await getHeaders();
   const response = await fetch(url, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify({ path }),
   });
 
@@ -95,9 +97,10 @@ export async function deleteWorkspaceObject(
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/delete`;
 
+  const headers = await getHeaders();
   const response = await fetch(url, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify({ path, recursive }),
   });
 

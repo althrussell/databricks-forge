@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,14 +12,23 @@ import {
 export default function DashboardPage() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Databricks Inspire AI
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          Transform your Unity Catalog metadata into actionable, AI-generated
-          use cases.
-        </p>
+      <div className="flex items-center gap-3">
+        <Image
+          src="/databricks-icon.svg"
+          alt="Databricks"
+          width={36}
+          height={38}
+          className="shrink-0"
+        />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Databricks Inspire AI
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Transform your Unity Catalog metadata into actionable, AI-generated
+            use cases.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
