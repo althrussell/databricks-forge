@@ -36,7 +36,7 @@ export default function RootLayout({
         <div className="flex min-h-screen">
           <SidebarNav />
           <main className="flex-1 overflow-auto">
-            <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>
+            <div className="w-full px-6 py-8">{children}</div>
           </main>
         </div>
         <Toaster />

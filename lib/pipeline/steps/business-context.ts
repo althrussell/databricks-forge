@@ -19,6 +19,53 @@ const DEFAULT_CONTEXT: BusinessContext = {
   additionalContext: "",
 };
 
+/**
+ * Safely convert any value to a human-readable string.
+ *
+ * The LLM may return strings, arrays, or nested objects for business context
+ * fields. `String()` on an object produces "[object Object]", so we need to
+ * handle arrays and objects explicitly.
+ */
+function toReadableString(value: unknown, fallback: string): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "string") return value || fallback;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  // Array of primitives or objects
+  if (Array.isArray(value)) {
+    const items = value.map((item) => {
+      if (typeof item === "string") return item;
+      if (typeof item === "object" && item !== null) {
+        // Object with a "name", "goal", "title", "description", or "label" key
+        const obj = item as Record<string, unknown>;
+        const label =
+          obj.name ?? obj.goal ?? obj.title ?? obj.label ?? obj.description;
+        if (typeof label === "string") return label;
+        // Fallback: join all values
+        return Object.values(obj)
+          .filter((v) => typeof v === "string" || typeof v === "number")
+          .join(" – ");
+      }
+      return String(item);
+    });
+    return items.filter(Boolean).join("; ") || fallback;
+  }
+
+  // Plain object -- try common shapes, then join values
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const desc = obj.description ?? obj.summary ?? obj.text ?? obj.name;
+    if (typeof desc === "string") return desc;
+    // Join all string/number values
+    const parts = Object.entries(obj)
+      .filter(([, v]) => typeof v === "string" || typeof v === "number")
+      .map(([k, v]) => `${k}: ${v}`);
+    return parts.join("; ") || fallback;
+  }
+
+  return fallback;
+}
+
 export async function runBusinessContext(
   ctx: PipelineContext,
   runId?: string
@@ -44,21 +91,25 @@ export async function runBusinessContext(
     );
 
     const context: BusinessContext = {
-      industries: String(parsed.industries ?? DEFAULT_CONTEXT.industries),
-      strategicGoals: String(
-        parsed.strategic_goals ?? DEFAULT_CONTEXT.strategicGoals
+      industries: toReadableString(parsed.industries, DEFAULT_CONTEXT.industries),
+      strategicGoals: toReadableString(
+        parsed.strategic_goals,
+        DEFAULT_CONTEXT.strategicGoals
       ),
-      businessPriorities: String(
-        parsed.business_priorities ?? config.businessPriorities.join(", ")
+      businessPriorities: toReadableString(
+        parsed.business_priorities,
+        config.businessPriorities.join(", ")
       ),
-      strategicInitiative: String(
-        parsed.strategic_initiative ?? DEFAULT_CONTEXT.strategicInitiative
+      strategicInitiative: toReadableString(
+        parsed.strategic_initiative,
+        DEFAULT_CONTEXT.strategicInitiative
       ),
-      valueChain: String(parsed.value_chain ?? DEFAULT_CONTEXT.valueChain),
-      revenueModel: String(
-        parsed.revenue_model ?? DEFAULT_CONTEXT.revenueModel
+      valueChain: toReadableString(parsed.value_chain, DEFAULT_CONTEXT.valueChain),
+      revenueModel: toReadableString(
+        parsed.revenue_model,
+        DEFAULT_CONTEXT.revenueModel
       ),
-      additionalContext: String(parsed.additional_context ?? ""),
+      additionalContext: toReadableString(parsed.additional_context, ""),
     };
 
     if (runId) await updateRunMessage(runId, `Business context generated: ${context.industries}`);
