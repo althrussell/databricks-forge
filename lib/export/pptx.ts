@@ -288,82 +288,110 @@ export async function generatePptx(
   addFooter(titleSlide, "dark");
 
   // =====================================================================
-  // 2. EXECUTIVE SUMMARY
+  // 2. EXECUTIVE SUMMARY (paginated across multiple slides when long)
   // =====================================================================
-  const execSlide = pptx.addSlide();
 
-  // Brand accent bar on left
-  addAccentBar(execSlide, DB_RED, 0, 0.8, 0.1, 3.0);
-
-  execSlide.addText("Executive Summary", {
-    x: CONTENT_MARGIN,
-    y: 0.3,
-    w: CONTENT_W,
-    fontSize: 36,
-    bold: true,
-    color: DB_DARK,
-    fontFace: "Calibri",
-  });
-  addRedSeparator(execSlide, CONTENT_MARGIN, 0.95, 4);
-
-  // Narrative bullets from business context + stats
+  // Collect all summary bullets
   const bc = run.businessContext;
-  const summaryBullets: Array<{ text: string; options?: PptxGenJS.TextPropsOptions }> = [];
+  const summaryBullets: Array<{ text: string; options: PptxGenJS.TextPropsOptions }> = [];
+
+  const bulletOpts: PptxGenJS.TextPropsOptions = {
+    fontSize: 14,
+    color: TEXT_COLOR,
+    bullet: true,
+    breakLine: true,
+  };
 
   if (bc) {
     if (bc.industries) {
-      summaryBullets.push({
-        text: `Industry: ${bc.industries}`,
-        options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
-      });
+      summaryBullets.push({ text: `Industry: ${bc.industries}`, options: { ...bulletOpts } });
     }
     if (bc.strategicGoals) {
-      summaryBullets.push({
-        text: `Strategic Goals: ${bc.strategicGoals}`,
-        options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
-      });
+      summaryBullets.push({ text: `Strategic Goals: ${bc.strategicGoals}`, options: { ...bulletOpts } });
     }
     if (bc.valueChain) {
-      summaryBullets.push({
-        text: `Value Chain: ${bc.valueChain}`,
-        options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
-      });
+      summaryBullets.push({ text: `Value Chain: ${bc.valueChain}`, options: { ...bulletOpts } });
     }
     if (bc.revenueModel) {
-      summaryBullets.push({
-        text: `Revenue Model: ${bc.revenueModel}`,
-        options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
-      });
+      summaryBullets.push({ text: `Revenue Model: ${bc.revenueModel}`, options: { ...bulletOpts } });
     }
   }
 
   summaryBullets.push({
     text: `${useCases.length} use cases discovered across ${domainStats.length} domains`,
-    options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
+    options: { ...bulletOpts },
   });
   summaryBullets.push({
     text: `${aiCount} AI use cases, ${statsCount} Statistical use cases`,
-    options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
+    options: { ...bulletOpts },
   });
   summaryBullets.push({
     text: `Average overall score: ${avgScore}%`,
-    options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
+    options: { ...bulletOpts },
   });
   summaryBullets.push({
     text: `Business Priorities: ${run.config.businessPriorities.join(", ")}`,
-    options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
+    options: { ...bulletOpts },
   });
 
-  execSlide.addText(summaryBullets, {
-    x: CONTENT_MARGIN + 0.3,
-    y: 1.2,
-    w: CONTENT_W - 0.6,
-    h: 4.5,
-    valign: "top",
-    fontFace: "Calibri",
-  });
+  // Paginate bullets across slides based on estimated text height
+  const EXEC_CONTENT_Y = 1.2;
+  const EXEC_MAX_Y = 6.7;
+  const EXEC_AVAILABLE_H = EXEC_MAX_Y - EXEC_CONTENT_Y;
+  const EXEC_CONTENT_W = CONTENT_W - 0.6;
+  const CHARS_PER_LINE_EXEC = 110; // approx chars per line at font 14 in content width
+  const LINE_HEIGHT_EXEC = 0.22; // approx line height at font 14
+  const BULLET_GAP = 0.12;
 
-  addFooter(execSlide);
+  function estimateBulletH(text: string): number {
+    const lines = Math.ceil(text.length / CHARS_PER_LINE_EXEC);
+    return Math.max(LINE_HEIGHT_EXEC, lines * LINE_HEIGHT_EXEC) + BULLET_GAP;
+  }
+
+  const execPages: Array<typeof summaryBullets> = [];
+  let currentPage: typeof summaryBullets = [];
+  let currentH = 0;
+
+  for (const bullet of summaryBullets) {
+    const h = estimateBulletH(bullet.text);
+    if (currentH + h > EXEC_AVAILABLE_H && currentPage.length > 0) {
+      execPages.push(currentPage);
+      currentPage = [];
+      currentH = 0;
+    }
+    currentPage.push(bullet);
+    currentH += h;
+  }
+  if (currentPage.length > 0) execPages.push(currentPage);
+
+  for (let ep = 0; ep < execPages.length; ep++) {
+    const execSlide = pptx.addSlide();
+
+    addAccentBar(execSlide, DB_RED, 0, 0.8, 0.1, 3.0);
+
+    const pageLabel = execPages.length > 1 ? ` (${ep + 1}/${execPages.length})` : "";
+    execSlide.addText(`Executive Summary${pageLabel}`, {
+      x: CONTENT_MARGIN,
+      y: 0.3,
+      w: CONTENT_W,
+      fontSize: 36,
+      bold: true,
+      color: DB_DARK,
+      fontFace: "Calibri",
+    });
+    addRedSeparator(execSlide, CONTENT_MARGIN, 0.95, 4);
+
+    execSlide.addText(execPages[ep], {
+      x: CONTENT_MARGIN + 0.3,
+      y: EXEC_CONTENT_Y,
+      w: EXEC_CONTENT_W,
+      h: EXEC_AVAILABLE_H,
+      valign: "top",
+      fontFace: "Calibri",
+    });
+
+    addFooter(execSlide);
+  }
 
   // =====================================================================
   // 3. TABLE OF CONTENTS (paginated)
