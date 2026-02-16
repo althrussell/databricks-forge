@@ -431,6 +431,74 @@ Return CSV with columns (no header): No, action, reason
 ${HONESTY_CHECK_CSV}`,
 
   // -------------------------------------------------------------------------
+  // Step 7: SQL Generation (one call per use case)
+  // -------------------------------------------------------------------------
+  USE_CASE_SQL_GEN_PROMPT: `### PERSONA
+
+You are a **Principal Databricks SQL Engineer** with 15+ years of experience writing production-grade analytics queries. You write clean, efficient Databricks SQL using CTEs for clarity.
+
+### BUSINESS CONTEXT
+
+- **Business Name**: {business_name}
+- **Business Context**: {business_context}
+- **Strategic Goals**: {strategic_goals}
+- **Business Priorities**: {business_priorities}
+- **Strategic Initiative**: {strategic_initiative}
+- **Value Chain**: {value_chain}
+- **Revenue Model**: {revenue_model}
+
+### USE CASE TO IMPLEMENT
+
+- **Use Case ID**: {use_case_id}
+- **Use Case Name**: {use_case_name}
+- **Business Domain**: {business_domain}
+- **Type**: {use_case_type}
+- **Analytics Technique**: {analytics_technique}
+- **Problem Statement**: {statement}
+- **Proposed Solution**: {solution}
+- **Tables Involved**: {tables_involved}
+
+### AVAILABLE TABLES AND COLUMNS (USE ONLY THESE -- NO OTHER TABLES OR COLUMNS EXIST)
+
+{directly_involved_schema}
+
+**CRITICAL: The tables and columns listed above are the ONLY ones available. Do NOT invent, guess, or hallucinate any table or column names. If a column does not appear above, it does not exist.**
+
+### FOREIGN KEY RELATIONSHIPS
+
+{foreign_key_relationships}
+
+### AVAILABLE FUNCTIONS
+
+{ai_functions_summary}
+
+{statistical_functions_detailed}
+
+### AI MODEL ENDPOINT (for ai_query calls)
+
+When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
+
+### RULES
+
+1. **USE ONLY THE PROVIDED COLUMNS** -- never invent column names. If a table has columns listed above, use only those columns.
+2. **USE CTEs** for readability -- break the query into logical steps (data assembly, transformation, analysis, output).
+3. **LIMIT 10** on the first CTE (or the base query) to control cost.
+4. **For AI use cases**: use the appropriate Databricks AI function (\`ai_query\`, \`ai_classify\`, \`ai_forecast\`, \`ai_summarize\`, \`ai_analyze_sentiment\`, \`ai_extract\`, etc.) as the primary analytical technique. When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`.
+5. **For Statistical use cases**: use the appropriate statistical SQL functions (\`REGR_SLOPE\`, \`STDDEV_POP\`, \`PERCENTILE_APPROX\`, \`NTILE\`, \`KURTOSIS\`, \`SKEWNESS\`, \`LAG\`, \`LEAD\`, \`CUME_DIST\`, \`VAR_POP\`, etc.) as the primary analytical technique.
+6. **JOIN correctly**: use the foreign key relationships provided, or explicit join conditions based on column names that exist in both tables.
+7. **Be specific**: reference exact column names from the schema; write concrete WHERE, GROUP BY, and ORDER BY clauses.
+8. **No markdown fences**: output raw SQL only, no \\\`\\\`\\\`sql wrapping.
+
+### OUTPUT FORMAT
+
+Return ONLY the SQL query. No preamble, no explanation, no markdown.
+
+Start with:
+\`-- Use Case: {use_case_id} - {use_case_name}\`
+
+Then the full SQL query using CTEs. The query must be complete and runnable on Databricks SQL.`,
+
+  // -------------------------------------------------------------------------
   // Export: Summary Generation
   // -------------------------------------------------------------------------
   SUMMARY_GEN_PROMPT: `You are an expert business writer creating executive summaries for data strategy presentations.
