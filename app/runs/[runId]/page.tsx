@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, useRef, useCallback, use } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,35 +29,50 @@ export default function RunDetailPage({
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const fetchingRef = useRef(false);
 
-  useEffect(() => {
-    fetchRun();
+  const fetchRun = useCallback(async () => {
+    // Guard against overlapping fetches
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
 
-    // Poll while running
-    const interval = setInterval(() => {
-      if (run?.status === "running" || run?.status === "pending") {
-        fetchRun();
-      }
-    }, 3000);
+    // Cancel any in-flight request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId, run?.status]);
-
-  async function fetchRun() {
     try {
-      const res = await fetch(`/api/runs/${runId}`);
+      const res = await fetch(`/api/runs/${runId}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error("Run not found");
       const data = await res.json();
       setRun(data.run);
       if (data.useCases) setUseCases(data.useCases);
       setError(null);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load run");
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }
+  }, [runId]);
+
+  useEffect(() => {
+    fetchRun();
+    return () => abortRef.current?.abort();
+  }, [fetchRun]);
+
+  // Poll only when run is active
+  useEffect(() => {
+    const isActive = run?.status === "running" || run?.status === "pending";
+    if (!isActive) return;
+
+    const interval = setInterval(fetchRun, 3000);
+    return () => clearInterval(interval);
+  }, [run?.status, fetchRun]);
 
   if (loading) {
     return (

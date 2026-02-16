@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-import { SidebarNav } from "@/components/pipeline/sidebar-nav";
+import { SidebarNav, MobileNav } from "@/components/pipeline/sidebar-nav";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -39,7 +39,8 @@ export default function RootLayout({
           <div className="flex min-h-screen">
             <SidebarNav />
             <div className="flex flex-1 flex-col overflow-auto">
-              <header className="flex h-12 shrink-0 items-center justify-end border-b bg-background/80 px-6 backdrop-blur">
+              <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:justify-end md:px-6">
+                <MobileNav />
                 <ThemeToggle />
               </header>
               <main className="flex-1">

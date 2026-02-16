@@ -5,6 +5,7 @@
  */
 
 import { getConfig, getAppHeaders } from "./client";
+import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,11 +52,11 @@ export async function importNotebook(
   };
 
   const headers = await getAppHeaders();
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const response = await fetchWithTimeout(
+    url,
+    { method: "POST", headers, body: JSON.stringify(body) },
+    TIMEOUTS.WORKSPACE
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -73,11 +74,11 @@ export async function mkdirs(path: string): Promise<void> {
   const url = `${config.host}/api/2.0/workspace/mkdirs`;
 
   const headers = await getAppHeaders();
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ path }),
-  });
+  const response = await fetchWithTimeout(
+    url,
+    { method: "POST", headers, body: JSON.stringify({ path }) },
+    TIMEOUTS.WORKSPACE
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -98,11 +99,11 @@ export async function deleteWorkspaceObject(
   const url = `${config.host}/api/2.0/workspace/delete`;
 
   const headers = await getAppHeaders();
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ path, recursive }),
-  });
+  const response = await fetchWithTimeout(
+    url,
+    { method: "POST", headers, body: JSON.stringify({ path, recursive }) },
+    TIMEOUTS.WORKSPACE
+  );
 
   if (!response.ok) {
     const text = await response.text();

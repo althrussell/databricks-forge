@@ -3,6 +3,7 @@
  */
 
 import { getPrisma } from "@/lib/prisma";
+import packageJson from "@/package.json";
 import type {
   PipelineRun,
   PipelineRunConfig,
@@ -11,8 +12,10 @@ import type {
   BusinessContext,
   BusinessPriority,
   GenerationOption,
+  StepLogEntry,
   SupportedLanguage,
 } from "@/lib/domain/types";
+import { PROMPT_VERSIONS } from "@/lib/ai/templates";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -48,6 +51,7 @@ function dbRowToRun(row: {
   createdAt: Date;
   completedAt: Date | null;
 }): PipelineRun {
+  const genOpts = parseGenerationOptions(row.generationOptions);
   return {
     runId: row.runId,
     config: {
@@ -57,7 +61,8 @@ function dbRowToRun(row: {
       businessDomains: row.businessDomains ?? "",
       businessPriorities: parseJSON<BusinessPriority[]>(row.businessPriorities, []),
       strategicGoals: row.strategicGoals ?? "",
-      ...parseGenerationOptions(row.generationOptions),
+      generationOptions: genOpts.generationOptions,
+      sampleRowsPerTable: genOpts.sampleRowsPerTable,
       generationPath: row.generationPath ?? "./inspire_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
@@ -68,6 +73,9 @@ function dbRowToRun(row: {
     statusMessage: row.statusMessage ?? null,
     businessContext: parseJSON<BusinessContext | null>(row.businessContext, null),
     errorMessage: row.errorMessage ?? null,
+    appVersion: genOpts.appVersion,
+    promptVersions: genOpts.promptVersions,
+    stepLog: genOpts.stepLog,
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
   };
@@ -84,28 +92,40 @@ function dbRowToRun(row: {
 function parseGenerationOptions(raw: string | null): {
   generationOptions: GenerationOption[];
   sampleRowsPerTable: number;
+  appVersion: string | null;
+  promptVersions: Record<string, string> | null;
+  stepLog: StepLogEntry[];
 } {
-  if (!raw) return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0 };
+  if (!raw) return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0, appVersion: null, promptVersions: null, stepLog: [] };
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return { generationOptions: parsed, sampleRowsPerTable: 0 };
+      return { generationOptions: parsed, sampleRowsPerTable: 0, appVersion: null, promptVersions: null, stepLog: [] };
     }
     if (typeof parsed === "object" && parsed !== null) {
       return {
         generationOptions: parsed.options ?? ["SQL Code"],
         sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
+        appVersion: parsed.appVersion ?? null,
+        promptVersions: parsed.promptVersions ?? null,
+        stepLog: Array.isArray(parsed.stepLog) ? parsed.stepLog : [],
       };
     }
   } catch { /* fall through */ }
-  return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0 };
+  return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0, appVersion: null, promptVersions: null, stepLog: [] };
 }
 
 function serializeGenerationOptions(
   options: GenerationOption[],
   sampleRowsPerTable: number
 ): string {
-  return JSON.stringify({ options, sampleRowsPerTable });
+  return JSON.stringify({
+    options,
+    sampleRowsPerTable,
+    appVersion: packageJson.version,
+    promptVersions: PROMPT_VERSIONS,
+    stepLog: [],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -223,5 +243,45 @@ export async function updateRunBusinessContext(
   await prisma.inspireRun.update({
     where: { runId },
     data: { businessContext: JSON.stringify(context) },
+  });
+}
+
+/**
+ * Append or update a step log entry in the generationOptions JSON.
+ * Reads the current value, merges the entry, and writes back atomically.
+ */
+export async function updateRunStepLog(
+  runId: string,
+  entry: StepLogEntry
+): Promise<void> {
+  const prisma = await getPrisma();
+  const row = await prisma.inspireRun.findUnique({
+    where: { runId },
+    select: { generationOptions: true },
+  });
+
+  let genOpts: Record<string, unknown> = {};
+  try {
+    genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
+    if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
+  } catch { /* fall through */ }
+
+  const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog)
+    ? genOpts.stepLog
+    : [];
+
+  // Upsert: replace existing entry for the same step, or append
+  const existingIdx = stepLog.findIndex((e) => e.step === entry.step);
+  if (existingIdx >= 0) {
+    stepLog[existingIdx] = { ...stepLog[existingIdx], ...entry };
+  } else {
+    stepLog.push(entry);
+  }
+
+  genOpts.stepLog = stepLog;
+
+  await prisma.inspireRun.update({
+    where: { runId },
+    data: { generationOptions: JSON.stringify(genOpts) },
   });
 }

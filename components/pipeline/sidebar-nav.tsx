@@ -1,9 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Menu } from "lucide-react";
+import { VersionBadge } from "@/components/version-badge";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
@@ -12,11 +22,40 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-export function SidebarNav() {
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-64 border-r bg-muted/30 md:block">
+    <nav className="space-y-1 p-4">
+      {navItems.map((item) => {
+        const isActive =
+          item.href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              isActive
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function SidebarNav() {
+  return (
+    <aside className="hidden w-64 border-r bg-muted/30 md:flex md:flex-col">
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2.5 font-semibold">
           <Image
@@ -29,30 +68,46 @@ export function SidebarNav() {
           <span>Inspire AI</span>
         </Link>
       </div>
-      <nav className="space-y-1 p-4">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <NavLinks />
+      <div className="mt-auto border-t">
+        <VersionBadge />
+      </div>
     </aside>
+  );
+}
+
+export function MobileNav() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="md:hidden">
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Toggle navigation</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-64 p-0">
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <div className="flex h-16 items-center border-b px-6">
+          <Link
+            href="/"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 font-semibold"
+          >
+            <Image
+              src="/databricks-icon.svg"
+              alt="Databricks"
+              width={22}
+              height={23}
+              className="shrink-0"
+            />
+            <span>Inspire AI</span>
+          </Link>
+        </div>
+        <NavLinks onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -131,4 +186,3 @@ function SettingsIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-

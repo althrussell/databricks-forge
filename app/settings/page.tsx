@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import { Shield, Database } from "lucide-react";
@@ -36,7 +37,17 @@ export default function SettingsPage() {
     toast.success("Settings saved");
   };
 
-  if (!loaded) return null;
+  if (!loaded) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-2 h-5 w-96" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

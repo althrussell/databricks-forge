@@ -7,6 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { logger } from "@/lib/logger";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 
 const DEFAULT_CONTEXT: BusinessContext = {
@@ -86,9 +87,19 @@ export async function runBusinessContext(
       maxTokens: 4096,
     });
 
-    const parsed = parseJSONResponse<Record<string, unknown>>(
-      result.rawResponse
-    );
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = parseJSONResponse<Record<string, unknown>>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse business context JSON, using defaults", {
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      return {
+        ...DEFAULT_CONTEXT,
+        businessPriorities: config.businessPriorities.join(", "),
+        strategicGoals: config.strategicGoals || DEFAULT_CONTEXT.strategicGoals,
+      };
+    }
 
     const context: BusinessContext = {
       industries: toReadableString(parsed.industries, DEFAULT_CONTEXT.industries),
@@ -124,7 +135,9 @@ export async function runBusinessContext(
 
     return context;
   } catch (error) {
-    console.error("[business-context] ai_query failed, using defaults:", error);
+    logger.error("Business context ai_query failed, using defaults", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       ...DEFAULT_CONTEXT,
       businessPriorities: config.businessPriorities.join(", "),

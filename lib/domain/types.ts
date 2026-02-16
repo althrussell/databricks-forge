@@ -91,6 +91,17 @@ export interface PipelineRunConfig {
   sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for SQL gen
 }
 
+/** Per-step timing and metadata logged during pipeline execution. */
+export interface StepLogEntry {
+  step: PipelineStep;
+  startedAt: string; // ISO timestamp
+  completedAt?: string; // ISO timestamp
+  durationMs?: number;
+  error?: string;
+  honestyScores?: Record<string, number>; // promptKey -> score
+  itemCount?: number; // items produced/processed in this step
+}
+
 export interface PipelineRun {
   runId: string;
   config: PipelineRunConfig;
@@ -100,6 +111,9 @@ export interface PipelineRun {
   statusMessage: string | null;
   businessContext: BusinessContext | null;
   errorMessage: string | null;
+  appVersion: string | null;
+  promptVersions: Record<string, string> | null; // promptKey -> SHA-256 hash
+  stepLog: StepLogEntry[];
   createdAt: string; // ISO timestamp
   completedAt: string | null;
 }

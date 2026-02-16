@@ -12,6 +12,7 @@ import {
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { logger } from "@/lib/logger";
 import type { PipelineContext, UseCase, UseCaseType } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
@@ -46,14 +47,17 @@ export async function runUsecaseGeneration(
     batches.push(tables.slice(i, i + MAX_TABLES_PER_BATCH));
   }
 
-  console.log(
-    `[usecase-generation] Processing ${tables.length} tables in ${batches.length} batches`
-  );
+  logger.info("Use case generation starting", { tableCount: tables.length, batchCount: batches.length });
 
   const allUseCases: UseCase[] = [];
   const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
 
-  // Process batches with controlled concurrency
+  // Build focus areas instruction from config if business domains provided
+  const focusAreasInstruction = run.config.businessDomains
+    ? `**FOCUS AREAS**: Focus your use cases on these business areas: ${run.config.businessDomains}. At least 60% of generated use cases should directly address these domains.`
+    : "";
+
+  // Process batches with controlled concurrency and cross-batch feedback
   let batchGroupIdx = 0;
   for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
     batchGroupIdx++;
@@ -61,11 +65,18 @@ export async function runUsecaseGeneration(
     if (runId) await updateRunMessage(runId, `Generating AI & statistical use cases (batch group ${batchGroupIdx} of ${totalGroups})...`);
     const concurrentBatches = batches.slice(i, i + MAX_CONCURRENT_BATCHES);
 
+    // Build cross-batch feedback: list of already-generated use case names
+    const previousFeedback = buildPreviousUseCasesFeedback(allUseCases);
+
     const batchPromises = concurrentBatches.flatMap((batch) => {
       const batchColumns = columns.filter((c) =>
         batch.some((t) => t.fqn === c.tableFqn)
       );
       const schemaMarkdown = buildSchemaMarkdown(batch, batchColumns);
+
+      // Quantity guidance: 8-15 per batch, scaled by table count
+      const tableCount = batch.length;
+      const targetCount = Math.max(8, Math.min(15, tableCount));
 
       const baseVars: Record<string, string> = {
         business_context: JSON.stringify(bc),
@@ -75,10 +86,11 @@ export async function runUsecaseGeneration(
         value_chain: bc.valueChain,
         revenue_model: bc.revenueModel,
         additional_context_section: bc.additionalContext || "None provided.",
-        focus_areas_instruction: "",
+        focus_areas_instruction: focusAreasInstruction,
         schema_markdown: schemaMarkdown,
         foreign_key_relationships: fkMarkdown,
-        previous_use_cases_feedback: "None -- this is the first pass.",
+        previous_use_cases_feedback: previousFeedback,
+        target_use_case_count: String(targetCount),
       };
 
       // Generate both AI and Stats use cases per batch
@@ -114,7 +126,7 @@ export async function runUsecaseGeneration(
       if (result.status === "fulfilled") {
         allUseCases.push(...result.value);
       } else {
-        console.warn("[usecase-generation] Batch failed:", result.reason);
+        logger.warn("Use case generation batch failed", { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
       }
     }
   }
@@ -126,11 +138,26 @@ export async function runUsecaseGeneration(
 
   if (runId) await updateRunMessage(runId, `Generated ${allUseCases.length} raw use cases from ${tables.length} tables`);
 
-  console.log(
-    `[usecase-generation] Generated ${allUseCases.length} use cases`
-  );
+  logger.info("Use case generation complete", { useCaseCount: allUseCases.length });
 
   return allUseCases;
+}
+
+/**
+ * Build a feedback string listing previously generated use case names so
+ * subsequent batches avoid duplicating them.
+ */
+function buildPreviousUseCasesFeedback(existing: UseCase[]): string {
+  if (existing.length === 0) {
+    return "None -- this is the first batch.";
+  }
+
+  const names = existing.map((uc) => uc.name).filter(Boolean);
+  return (
+    `The following ${names.length} use cases have ALREADY been generated. ` +
+    `Do NOT generate similar or overlapping use cases:\n` +
+    names.map((n) => `- ${n}`).join("\n")
+  );
 }
 
 async function generateBatch(
@@ -147,7 +174,16 @@ async function generateBatch(
     maxTokens: 8192,
   });
 
-  const rows = parseCSVResponse(result.rawResponse, CSV_COLUMNS);
+  let rows: string[][];
+  try {
+    rows = parseCSVResponse(result.rawResponse, CSV_COLUMNS);
+  } catch (parseErr) {
+    logger.warn("Failed to parse use case generation CSV", {
+      promptKey,
+      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+    });
+    return [];
+  }
 
   return rows.map((row) => {
     const tablesStr = row[9] ?? "";

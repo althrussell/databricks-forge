@@ -6,14 +6,16 @@
  */
 
 import { PipelineStep } from "@/lib/domain/types";
-import type { PipelineContext, PipelineRun, UseCase } from "@/lib/domain/types";
+import type { PipelineContext, PipelineRun, UseCase, StepLogEntry } from "@/lib/domain/types";
+import { logger } from "@/lib/logger";
 import {
   updateRunStatus,
   updateRunBusinessContext,
   updateRunMessage,
+  updateRunStepLog,
   getRunById,
 } from "@/lib/lakebase/runs";
-import { insertUseCases, deleteUseCasesForRun } from "@/lib/lakebase/usecases";
+// insertUseCases/deleteUseCasesForRun are now handled inline via $transaction
 import { runBusinessContext } from "./steps/business-context";
 import { runMetadataExtraction } from "./steps/metadata-extraction";
 import { runTableFiltering } from "./steps/table-filtering";
@@ -63,79 +65,150 @@ export async function startPipeline(runId: string): Promise<void> {
     useCases: [],
   };
 
+  /** Helper: record step start/end timing in the run's stepLog. */
+  async function logStep(
+    step: PipelineStep,
+    fn: () => Promise<void>
+  ): Promise<void> {
+    const startedAt = new Date().toISOString();
+    try {
+      await fn();
+      const completedAt = new Date().toISOString();
+      const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+      await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
+    } catch (err) {
+      const completedAt = new Date().toISOString();
+      const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs, error: errorMsg });
+      throw err;
+    }
+  }
+
   try {
     // Mark as running
     await updateRunStatus(runId, "running", STEPS[0].step, 0, undefined, "Initialising pipeline...");
     ctx.run = { ...ctx.run, status: "running" };
 
     // Step 1: Business Context
-    await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 5, undefined, `Generating business context for ${ctx.run.config.businessName}...`);
-    console.log(`[engine] Step 1: ${STEPS[0].label}`);
-    const businessContext = await runBusinessContext(ctx, runId);
-    ctx.run = { ...ctx.run, businessContext };
-    await updateRunBusinessContext(runId, businessContext);
-    await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 10, undefined, "Business context generated");
+    await logStep(PipelineStep.BusinessContext, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 5, undefined, `Generating business context for ${ctx.run.config.businessName}...`);
+      logger.info(`Step 1: ${STEPS[0].label}`, { runId, step: "business-context" });
+      const businessContext = await runBusinessContext(ctx, runId);
+      ctx.run = { ...ctx.run, businessContext };
+      await updateRunBusinessContext(runId, businessContext);
+      await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 10, undefined, "Business context generated");
+    });
 
     // Step 2: Metadata Extraction
-    await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
-    console.log(`[engine] Step 2: ${STEPS[1].label}`);
-    ctx.metadata = await runMetadataExtraction(ctx, runId);
-    await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 20, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
+    await logStep(PipelineStep.MetadataExtraction, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
+      logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
+      ctx.metadata = await runMetadataExtraction(ctx, runId);
+      await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 20, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
+    });
 
     // Step 3: Table Filtering
-    await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 22, undefined, `Filtering ${ctx.metadata.tableCount} tables for business relevance...`);
-    console.log(`[engine] Step 3: ${STEPS[2].label}`);
-    ctx.filteredTables = await runTableFiltering(ctx, runId);
-    await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 30, undefined, `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata.tableCount}`);
+    await logStep(PipelineStep.TableFiltering, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 22, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
+      logger.info(`Step 3: ${STEPS[2].label}`, { runId, step: "table-filtering" });
+      ctx.filteredTables = await runTableFiltering(ctx, runId);
+      await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 30, undefined, `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`);
+    });
 
     // Step 4: Use Case Generation
-    await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
-    console.log(`[engine] Step 4: ${STEPS[3].label}`);
-    ctx.useCases = await runUsecaseGeneration(ctx, runId);
-    await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} raw use cases`);
+    await logStep(PipelineStep.UsecaseGeneration, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
+      logger.info(`Step 4: ${STEPS[3].label}`, { runId, step: "usecase-generation" });
+      ctx.useCases = await runUsecaseGeneration(ctx, runId);
+      await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} raw use cases`);
+    });
 
     // Step 5: Domain Clustering
-    await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
-    console.log(`[engine] Step 5: ${STEPS[4].label}`);
-    ctx.useCases = await runDomainClustering(ctx, runId);
-    const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-    await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 55, undefined, `Organised use cases into ${domainCount} domains`);
+    await logStep(PipelineStep.DomainClustering, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
+      logger.info(`Step 5: ${STEPS[4].label}`, { runId, step: "domain-clustering" });
+      ctx.useCases = await runDomainClustering(ctx, runId);
+      const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
+      await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 55, undefined, `Organised use cases into ${domainCount} domains`);
+    });
 
     // Step 6: Scoring & Deduplication
-    const preScoringCount = ctx.useCases.length;
-    await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${preScoringCount} use cases...`);
-    console.log(`[engine] Step 6: ${STEPS[5].label}`);
-    ctx.useCases = await runScoring(ctx, runId);
-    await updateRunStatus(runId, "running", PipelineStep.Scoring, 65, undefined, `Scored ${ctx.useCases.length} use cases`);
+    await logStep(PipelineStep.Scoring, async () => {
+      const preScoringCount = ctx.useCases.length;
+      await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${preScoringCount} use cases...`);
+      logger.info(`Step 6: ${STEPS[5].label}`, { runId, step: "scoring" });
+      ctx.useCases = await runScoring(ctx, runId);
+      await updateRunStatus(runId, "running", PipelineStep.Scoring, 65, undefined, `Scored ${ctx.useCases.length} use cases`);
+    });
 
     // Step 7: SQL Generation
-    await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
-    console.log(`[engine] Step 7: ${STEPS[6].label}`);
-    ctx.useCases = await runSqlGeneration(ctx, runId);
-    const sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
-    await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 95, undefined, `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`);
+    let sqlOk = 0;
+    await logStep(PipelineStep.SqlGeneration, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
+      logger.info(`Step 7: ${STEPS[6].label}`, { runId, step: "sql-generation" });
+      ctx.useCases = await runSqlGeneration(ctx, runId);
+      sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
+      await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 95, undefined, `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`);
+    });
 
-    // Persist use cases
-    console.log(`[engine] Persisting ${ctx.useCases.length} use cases`);
-    await deleteUseCasesForRun(runId); // clean up any prior run
-    await insertUseCases(ctx.useCases);
+    // Persist use cases atomically (delete old + insert new in a transaction)
+    logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
+    const prisma = await (await import("@/lib/prisma")).getPrisma();
+    await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+      await tx.inspireUseCase.deleteMany({ where: { runId } });
+      if (ctx.useCases.length > 0) {
+        await tx.inspireUseCase.createMany({
+          data: ctx.useCases.map((uc) => ({
+            id: uc.id,
+            runId: uc.runId,
+            useCaseNo: uc.useCaseNo,
+            name: uc.name,
+            type: uc.type,
+            analyticsTechnique: uc.analyticsTechnique,
+            statement: uc.statement,
+            solution: uc.solution,
+            businessValue: uc.businessValue,
+            beneficiary: uc.beneficiary,
+            sponsor: uc.sponsor,
+            domain: uc.domain,
+            subdomain: uc.subdomain,
+            tablesInvolved: JSON.stringify(uc.tablesInvolved),
+            priorityScore: uc.priorityScore,
+            feasibilityScore: uc.feasibilityScore,
+            impactScore: uc.impactScore,
+            overallScore: uc.overallScore,
+            sqlCode: uc.sqlCode,
+            sqlStatus: uc.sqlStatus,
+          })),
+        });
+      }
+    });
 
     // Mark as completed
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
     await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
-    console.log(`[engine] Pipeline completed: ${ctx.useCases.length} use cases, ${sqlOk} with SQL`);
+    logger.info(`Pipeline completed`, { runId, useCaseCount: ctx.useCases.length, sqlOk });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown pipeline error";
-    console.error(`[engine] Pipeline failed: ${message}`);
-    await updateRunStatus(
-      runId,
-      "failed",
-      ctx.run.currentStep,
-      ctx.run.progressPct,
-      message,
-      `Pipeline failed: ${message}`
-    );
+    logger.error(`Pipeline failed`, { runId, error: message });
+    try {
+      await updateRunStatus(
+        runId,
+        "failed",
+        ctx.run.currentStep,
+        ctx.run.progressPct,
+        message,
+        `Pipeline failed: ${message}`
+      );
+    } catch (statusError) {
+      logger.error("Failed to update run status after pipeline failure", {
+        runId,
+        originalError: message,
+        statusError: statusError instanceof Error ? statusError.message : String(statusError),
+      });
+    }
   }
 }
 

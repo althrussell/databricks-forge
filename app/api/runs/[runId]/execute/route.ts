@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRunById } from "@/lib/lakebase/runs";
 import { startPipeline } from "@/lib/pipeline/engine";
 import { ensureMigrated } from "@/lib/lakebase/schema";
+import { isValidUUID } from "@/lib/validation";
 
 export async function POST(
   _request: NextRequest,
@@ -16,6 +17,11 @@ export async function POST(
   try {
     await ensureMigrated();
     const { runId } = await params;
+
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
+    }
+
     const run = await getRunById(runId);
 
     if (!run) {

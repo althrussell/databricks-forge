@@ -7,6 +7,8 @@
  * IMPORTANT: When modifying prompts, always update docs/PROMPTS.md in parallel.
  */
 
+import { createHash } from "crypto";
+
 // ---------------------------------------------------------------------------
 // Honesty check appendices
 // ---------------------------------------------------------------------------
@@ -22,13 +24,9 @@ Include these fields:
 - "honesty_justification": A brief explanation of your confidence score
 `;
 
-const HONESTY_CHECK_CSV = `
-
-### HONESTY CHECK (MANDATORY)
-Add TWO additional columns to your CSV output:
-- honesty_score: A number between 0.0 and 1.0 reflecting your confidence
-- honesty_justification: A brief explanation of your confidence score
-`;
+// HONESTY_CHECK_CSV removed -- added noise to CSV parsing (extra columns
+// confused the ±2 tolerance) and was never acted upon. Quality is now
+// validated via output structure checks instead.
 
 // ---------------------------------------------------------------------------
 // Templates
@@ -96,7 +94,7 @@ Return CSV with columns: table_fqn, classification, reason
 - reason should be a brief explanation (< 50 words)
 
 Do NOT include headers. One row per table.
-${HONESTY_CHECK_CSV}`,
+`,
 
   // -------------------------------------------------------------------------
   // Step 4: Use Case Generation
@@ -123,7 +121,7 @@ You are a highly experienced **Principal Enterprise Data Architect** and an indu
 
 ### 1. CORE TASK
 
-Generate unique, actionable business use cases from the provided database schema. Each use case must:
+Generate **{target_use_case_count}** unique, actionable business use cases from the provided database schema. Each use case must:
 - Address a specific business need
 - Be implementable with the available data
 - Use appropriate analytical techniques
@@ -145,9 +143,17 @@ Generate unique, actionable business use cases from the provided database schema
 
 {foreign_key_relationships}
 
-### 5. PREVIOUS FEEDBACK
+### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
+
+### 6. ANTI-PATTERNS -- DO NOT GENERATE USE CASES LIKE THESE
+
+- "Analyze data for insights" -- too vague, no specific metric or outcome
+- "Improve operations with AI" -- no concrete technique or table reference
+- "Monitor business performance" -- generic dashboard request, not an analytics use case
+- "Use AI to optimize processes" -- no specific process, data, or measurable target
+- Every use case MUST name specific tables, specific metrics, and specific business outcomes. If you cannot tie a use case to a concrete table and measurable result, do not include it.
 
 ### OUTPUT FORMAT
 
@@ -165,7 +171,7 @@ No, Name, type, Analytics Technique, Statement, Solution, Business Value, Benefi
 - **Sponsor**: Executive sponsor (C-level or VP)
 - **Tables Involved**: Comma-separated FQNs of tables used
 - **Technical Design**: SQL approach overview (2-3 sentences)
-${HONESTY_CHECK_CSV}`,
+`,
 
   AI_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
 
@@ -193,7 +199,7 @@ You are a highly experienced **Principal Enterprise Data Architect** and **AI/ML
 
 ### 1. CORE TASK
 
-Generate unique, actionable AI-powered business use cases from the provided database schema. Each use case must leverage AI functions as the primary analytical technique.
+Generate **{target_use_case_count}** unique, actionable AI-powered business use cases from the provided database schema. Each use case must leverage AI functions as the primary analytical technique.
 
 {focus_areas_instruction}
 
@@ -209,9 +215,17 @@ Generate unique, actionable AI-powered business use cases from the provided data
 
 {foreign_key_relationships}
 
-### 5. PREVIOUS FEEDBACK
+### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
+
+### 6. ANTI-PATTERNS -- DO NOT GENERATE USE CASES LIKE THESE
+
+- "Analyze data for insights" -- too vague, no specific metric or outcome
+- "Improve operations with AI" -- no concrete technique or table reference
+- "Monitor business performance" -- generic dashboard request, not an analytics use case
+- "Use AI to optimize processes" -- no specific process, data, or measurable target
+- Every use case MUST name specific tables, specific metrics, and specific business outcomes. If you cannot tie a use case to a concrete table and measurable result, do not include it.
 
 ### OUTPUT FORMAT
 
@@ -220,7 +234,7 @@ No, Name, type, Analytics Technique, Statement, Solution, Business Value, Benefi
 
 - **type**: Must be "AI" for all use cases in this batch
 - All other columns follow the same format as the base prompt
-${HONESTY_CHECK_CSV}`,
+`,
 
   STATS_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
 
@@ -242,7 +256,7 @@ You are a highly experienced **Principal Enterprise Data Architect** and **Fraud
 
 ### 1. CORE TASK
 
-Generate unique, actionable statistics-focused business use cases from the provided database schema. Each use case must leverage statistical functions as the primary analytical technique.
+Generate **{target_use_case_count}** unique, actionable statistics-focused business use cases from the provided database schema. Each use case must leverage statistical functions as the primary analytical technique.
 
 {focus_areas_instruction}
 
@@ -258,9 +272,17 @@ Generate unique, actionable statistics-focused business use cases from the provi
 
 {foreign_key_relationships}
 
-### 5. PREVIOUS FEEDBACK
+### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
+
+### 6. ANTI-PATTERNS -- DO NOT GENERATE USE CASES LIKE THESE
+
+- "Analyze data for insights" -- too vague, no specific metric or outcome
+- "Improve operations with statistical analysis" -- no concrete technique or table reference
+- "Monitor business performance" -- generic dashboard request, not an analytics use case
+- "Detect anomalies in data" -- which data? what kind of anomaly? what action on detection?
+- Every use case MUST name specific tables, specific metrics, and specific business outcomes. If you cannot tie a use case to a concrete table and measurable result, do not include it.
 
 ### OUTPUT FORMAT
 
@@ -269,7 +291,7 @@ No, Name, type, Analytics Technique, Statement, Solution, Business Value, Benefi
 
 - **type**: Must be "Statistical" for all use cases in this batch
 - All other columns follow the same format as the base prompt
-${HONESTY_CHECK_CSV}`,
+`,
 
   // -------------------------------------------------------------------------
   // Step 5: Domain Clustering
@@ -304,12 +326,16 @@ ${HONESTY_CHECK_CSV}`,
 
 ### OUTPUT FORMAT
 
-Return CSV with columns (no header): No, Domain
-- No: The use case number (must match input)
-- Domain: Single-word domain name
+Return a JSON array of objects. Each object has exactly two fields:
+- "no": The use case number (integer, must match input)
+- "domain": Single-word domain name (string)
+
+Example: [{"no": 1, "domain": "Finance"}, {"no": 2, "domain": "Marketing"}]
+
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.
 
 Output language: {output_language}
-${HONESTY_CHECK_CSV}`,
+`,
 
   SUBDOMAIN_DETECTOR_PROMPT: `You are an expert business analyst specializing in subdomain taxonomy design within business domains.
 
@@ -336,12 +362,16 @@ ${HONESTY_CHECK_CSV}`,
 
 ### OUTPUT FORMAT
 
-Return CSV with columns (no header): No, Subdomain
-- No: The use case number (must match input)
-- Subdomain: Exactly two-word subdomain name
+Return a JSON array of objects. Each object has exactly two fields:
+- "no": The use case number (integer, must match input)
+- "subdomain": Exactly two-word subdomain name (string)
+
+Example: [{"no": 1, "subdomain": "Revenue Optimization"}, {"no": 2, "subdomain": "Cost Control"}]
+
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.
 
 Output language: {output_language}
-${HONESTY_CHECK_CSV}`,
+`,
 
   DOMAINS_MERGER_PROMPT: `You are an expert at merging small business domains into related larger ones.
 
@@ -401,9 +431,16 @@ Score each use case on these dimensions (0.0 to 1.0):
 
 ### OUTPUT FORMAT
 
-Return CSV with columns (no header): No, priority_score, feasibility_score, impact_score, overall_score
-- No: The use case number (must match input)
-- All scores are decimals between 0.0 and 1.0`,
+Return a JSON array of objects. Each object has exactly five fields:
+- "no": The use case number (integer, must match input)
+- "priority_score": decimal between 0.0 and 1.0
+- "feasibility_score": decimal between 0.0 and 1.0
+- "impact_score": decimal between 0.0 and 1.0
+- "overall_score": decimal between 0.0 and 1.0
+
+Example: [{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.72}]
+
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`,
 
   REVIEW_USE_CASES_PROMPT: `You are an expert business analyst specializing in duplicate detection. Your SINGLE task is to identify and remove semantic duplicates **and** to reject useless/technical use cases that add no business value.
 
@@ -424,11 +461,74 @@ Return CSV with columns (no header): No, priority_score, feasibility_score, impa
 
 ### OUTPUT FORMAT
 
-Return CSV with columns (no header): No, action, reason
-- No: The use case number (must match input)
-- action: "keep" or "remove"
-- reason: Brief explanation (< 30 words)
-${HONESTY_CHECK_CSV}`,
+Return a JSON array of objects. Each object has exactly three fields:
+- "no": The use case number (integer, must match input)
+- "action": "keep" or "remove"
+- "reason": Brief explanation (< 30 words)
+
+Example: [{"no": 1, "action": "keep", "reason": "Unique concept"}, {"no": 2, "action": "remove", "reason": "Duplicate of #1"}]
+
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.
+`,
+
+  GLOBAL_SCORE_CALIBRATION_PROMPT: `# Persona
+
+You are the **Chief Investment Officer & Strategic Value Architect**. You are re-calibrating scores across ALL domains to ensure consistency.
+
+# Context
+
+**Business Context:** {business_context}
+**Strategic Goals:** {strategic_goals}
+
+# Task
+
+Below are the top-scoring use cases from EACH domain. Scores were assigned per-domain, which may have caused drift -- a 0.8 in one domain might be equivalent to a 0.6 in another.
+
+Re-score ALL of them on a single, consistent global scale. Be harsh: only truly exceptional cross-domain use cases should retain 0.8+. Most should land in 0.3-0.7.
+
+**Use Cases to Recalibrate:**
+{use_case_markdown}
+
+### OUTPUT FORMAT
+
+Return a JSON array of objects. Each object has exactly two fields:
+- "no": The use case number (integer, must match input)
+- "overall_score": Recalibrated overall score (decimal 0.0 to 1.0)
+
+Example: [{"no": 1, "overall_score": 0.72}, {"no": 2, "overall_score": 0.55}]
+
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`,
+
+  CROSS_DOMAIN_DEDUP_PROMPT: `You are an expert business analyst specializing in cross-domain duplicate detection.
+
+**TASK**: Identify semantically duplicate use cases that exist across DIFFERENT domains.
+
+Two use cases are duplicates if they solve essentially the same business problem or use the same analytical approach on similar data, even if their domain labels differ.
+
+Examples of cross-domain duplicates:
+- "Customer Lifetime Value Prediction" in Finance and "Customer Value Forecasting" in Marketing
+- "Demand Forecasting" in Supply Chain and "Sales Volume Prediction" in Sales
+- "Employee Attrition Risk" in HR and "Workforce Churn Analysis" in Operations
+
+**USE CASES (from all domains):**
+{use_case_markdown}
+
+### RULES
+- Only flag TRUE semantic duplicates (same core concept, same data, same outcome)
+- When duplicates span domains, keep the one with the higher overall score
+- If scores are equal, keep the one in the more relevant domain
+
+### OUTPUT FORMAT
+
+Return a JSON array of objects. Each object has exactly three fields:
+- "no": The use case number to REMOVE (integer)
+- "duplicate_of": The use case number it duplicates (integer -- the one to KEEP)
+- "reason": Brief explanation (< 30 words)
+
+Example: [{"no": 5, "duplicate_of": 12, "reason": "Same churn prediction concept, #12 has higher score"}]
+
+Return an empty array [] if no cross-domain duplicates found.
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`,
 
   // -------------------------------------------------------------------------
   // Step 7: SQL Generation (one call per use case)
@@ -484,7 +584,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 
 1. **USE ONLY THE PROVIDED COLUMNS** -- never invent column names. If a table has columns listed above, use only those columns.
 2. **USE CTEs** for readability -- break the query into logical steps (data assembly, transformation, analysis, output).
-3. **LIMIT 10** on the first CTE (or the base query) to control cost.
+3. **LIMIT 10** on the **FINAL SELECT** statement (not intermediate CTEs) to control output size while preserving analytical accuracy in intermediate calculations.
 4. **For AI use cases**: use the appropriate Databricks AI function (\`ai_query\`, \`ai_classify\`, \`ai_forecast\`, \`ai_summarize\`, \`ai_analyze_sentiment\`, \`ai_extract\`, etc.) as the primary analytical technique. When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`.
 5. **For Statistical use cases**: use the appropriate statistical SQL functions (\`REGR_SLOPE\`, \`STDDEV_POP\`, \`PERCENTILE_APPROX\`, \`NTILE\`, \`KURTOSIS\`, \`SKEWNESS\`, \`LAG\`, \`LEAD\`, \`CUME_DIST\`, \`VAR_POP\`, etc.) as the primary analytical technique.
 6. **JOIN correctly**: use the foreign key relationships provided, or explicit join conditions based on column names that exist in both tables.
@@ -499,6 +599,67 @@ Start with:
 \`-- Use Case: {use_case_id} - {use_case_name}\`
 
 Then the full SQL query using CTEs. The query must be complete and runnable on Databricks SQL.`,
+
+  // -------------------------------------------------------------------------
+  // Step 7b: SQL Fix/Retry (fixes execution errors in generated SQL)
+  // -------------------------------------------------------------------------
+  USE_CASE_SQL_FIX_PROMPT: `### PERSONA
+
+You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugging SQL queries. Your task is to fix SQL ERRORS (both syntax and runtime errors) in the provided SQL query.
+
+### CRITICAL RULES
+
+1. **FIX ERRORS ONLY** -- Do NOT change the business logic or query structure
+2. **PRESERVE ALL LOGIC** -- Keep all CTEs, joins, AI functions, and business logic exactly as intended
+3. **DO NOT OPTIMIZE** -- Do not restructure or optimize the query
+4. **DO NOT ADD FEATURES** -- Do not add new columns, CTEs, or logic
+5. **ONLY FIX** what the validation/execution error indicates is broken
+6. **RUNTIME ERRORS** -- If error is from query execution (not syntax), fix the runtime issue (e.g., window function issues, unresolved columns, type mismatches)
+
+### USE CASE CONTEXT
+
+- **Use Case ID**: {use_case_id}
+- **Use Case Name**: {use_case_name}
+
+### AVAILABLE TABLES AND COLUMNS
+
+{directly_involved_schema}
+
+### FOREIGN KEY RELATIONSHIPS
+
+{foreign_key_relationships}
+
+### ORIGINAL SQL QUERY (WITH ERROR)
+
+\`\`\`sql
+{original_sql}
+\`\`\`
+
+### EXECUTION/VALIDATION ERROR
+
+\`\`\`
+{error_message}
+\`\`\`
+
+### YOUR TASK
+
+1. Analyse the error message carefully (could be syntax OR runtime error)
+2. Identify the EXACT error and root cause
+3. Fix ONLY the error -- do NOT change anything else
+4. Return the corrected SQL query
+
+### COMMON FIXES
+
+- **COALESCE text defaults**: Wrap text defaults in single quotes: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
+- **Column not found**: Check the schema above for the correct column name
+- **Type mismatch**: Cast columns to the correct type
+- **Window function errors**: Check PARTITION BY and ORDER BY clauses
+- **Ambiguous column**: Qualify with table alias
+
+### OUTPUT FORMAT
+
+Return ONLY the corrected SQL query. No preamble, no explanation, no markdown fences.
+Start with: \`-- Use Case: {use_case_id} - {use_case_name} (fixed)\``,
 
   // -------------------------------------------------------------------------
   // Export: Summary Generation
@@ -518,10 +679,14 @@ Then the full SQL query using CTEs. The query must be complete and runnable on D
 
 ### OUTPUT FORMAT
 
-Return CSV with columns (no header): section, title, summary
-- section: "executive" or the domain name
-- title: Section title
-- summary: The summary text
+Return a JSON array of objects. Each object has exactly three fields:
+- "section": "executive" or the domain name (string)
+- "title": Section title (string)
+- "summary": The summary text (string)
+
+Example: [{"section": "executive", "title": "Executive Summary", "summary": "The analysis reveals..."}, {"section": "Finance", "title": "Financial Analytics", "summary": "..."}]
+
+Return ONLY the JSON array. No preamble, no markdown fences, no explanation.
 
 Output language: {output_language}`,
 
@@ -544,7 +709,57 @@ Output language: {output_language}`,
 export type PromptKey = keyof typeof PROMPT_TEMPLATES;
 
 /**
+ * Content-addressable version fingerprint for each prompt template.
+ * Computed as truncated SHA-256 hash of the template text, so any edit
+ * to a template automatically produces a new version identifier.
+ *
+ * Stored with each pipeline run for full reproducibility.
+ */
+export const PROMPT_VERSIONS: Record<PromptKey, string> = Object.fromEntries(
+  Object.entries(PROMPT_TEMPLATES).map(([key, tmpl]) => [
+    key,
+    createHash("sha256").update(tmpl).digest("hex").slice(0, 8),
+  ])
+) as Record<PromptKey, string>;
+
+/**
+ * Variables that contain user-supplied free text and should be wrapped
+ * with delimiter markers to reduce prompt injection risk.
+ * These variables flow directly from user input (settings page, run config).
+ */
+const USER_INPUT_VARIABLES = new Set([
+  "business_name",
+  "name",
+  "industry",
+  "industries",
+  "business_context",
+  "strategic_goals",
+  "business_priorities",
+  "strategic_initiative",
+  "value_chain",
+  "revenue_model",
+  "additional_context_section",
+  "focus_areas_instruction",
+  "business_domains",
+]);
+
+/**
+ * Wrap user-supplied text with delimiter markers to reduce prompt injection.
+ * Strips any existing delimiter markers from the text, then wraps it in a
+ * clearly delineated block that the LLM can distinguish from instructions.
+ */
+function sanitiseUserInput(value: string): string {
+  // Strip any attempt to close our delimiters
+  const cleaned = value
+    .replace(/---BEGIN USER DATA---/g, "")
+    .replace(/---END USER DATA---/g, "");
+  return `---BEGIN USER DATA---\n${cleaned}\n---END USER DATA---`;
+}
+
+/**
  * Load and format a prompt template by replacing {placeholder} variables.
+ *
+ * User-supplied variables are wrapped with delimiter markers for safety.
  */
 export function formatPrompt(
   key: PromptKey,
@@ -553,9 +768,12 @@ export function formatPrompt(
   let prompt: string = PROMPT_TEMPLATES[key];
 
   for (const [varName, value] of Object.entries(variables)) {
+    const safeValue = USER_INPUT_VARIABLES.has(varName)
+      ? sanitiseUserInput(value)
+      : value;
     prompt = prompt.replace(
       new RegExp(`\\{${varName}\\}`, "g"),
-      value
+      safeValue
     );
   }
 

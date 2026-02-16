@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRunById, deleteRun } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { ensureMigrated } from "@/lib/lakebase/schema";
+import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
@@ -17,6 +18,11 @@ export async function GET(
   try {
     await ensureMigrated();
     const { runId } = await params;
+
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
+    }
+
     const run = await getRunById(runId);
 
     if (!run) {
@@ -46,6 +52,11 @@ export async function DELETE(
   try {
     await ensureMigrated();
     const { runId } = await params;
+
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
+    }
+
     const run = await getRunById(runId);
 
     if (!run) {

@@ -9,7 +9,7 @@ Databricks Inspire AI is a web application deployed as a [Databricks App](https:
 ## What It Does
 
 1. **Configure** -- enter your business name, select Unity Catalog scope, and set priorities.
-2. **Discover** -- a 6-step AI pipeline extracts metadata, generates use cases, clusters them into business domains, and scores them on ROI, feasibility, and strategic alignment.
+2. **Discover** -- a 7-step AI pipeline extracts metadata, generates use cases, clusters them into business domains, scores them, and generates runnable SQL. See [INSPIRE_ANALYSIS.md](INSPIRE_ANALYSIS.md) for the full breakdown.
 3. **Export** -- download results as Excel, PowerPoint, or PDF, or deploy SQL notebooks directly to your workspace.
 
 ### Key Features
@@ -20,7 +20,7 @@ Databricks Inspire AI is a web application deployed as a [Databricks App](https:
 - Deduplicates and ranks results so the highest-value opportunities surface first
 - Supports **20+ languages** for generated documentation
 - **Real-time status messages** during pipeline execution (e.g. "Filtering tables (batch 2 of 5)...")
-- **Privacy-first**: reads only metadata (table/column names and schemas) -- never your actual row data
+- **Privacy-first**: reads only metadata by default (table/column names and schemas). Optional [data sampling](INSPIRE_ANALYSIS.md#data-sampling) can be enabled for improved SQL accuracy
 
 ---
 
@@ -86,18 +86,21 @@ databricks-inspire/
 
 ## Pipeline Steps
 
-The "Discover Usecases" pipeline runs 6 steps sequentially. The frontend polls for progress in real time.
+The "Discover Usecases" pipeline runs 7 steps sequentially. The frontend polls for progress in real time.
 
 | Step | Name | What it does | Progress |
 | --- | --- | --- | --- |
-| 1 | **Business Context** | Generates strategic goals, value chain, and revenue model via `ai_query` | 15% |
-| 2 | **Metadata Extraction** | Queries `information_schema` for tables, columns, and foreign keys | 30% |
-| 3 | **Table Filtering** | Classifies tables as business-relevant vs technical via `ai_query` | 45% |
-| 4 | **Use Case Generation** | Generates AI and statistical use cases in parallel batches via `ai_query` | 65% |
-| 5 | **Domain Clustering** | Assigns domains and subdomains via `ai_query`, merges small domains | 80% |
-| 6 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via `ai_query` | 100% |
+| 1 | **Business Context** | Generates strategic goals, value chain, and revenue model via `ai_query` | 10% |
+| 2 | **Metadata Extraction** | Queries `information_schema` for tables, columns, and foreign keys | 20% |
+| 3 | **Table Filtering** | Classifies tables as business-relevant vs technical via `ai_query` | 30% |
+| 4 | **Use Case Generation** | Generates AI and statistical use cases in parallel batches via `ai_query` | 45% |
+| 5 | **Domain Clustering** | Assigns domains and subdomains via `ai_query`, merges small domains | 55% |
+| 6 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via `ai_query` | 65% |
+| 7 | **SQL Generation** | Generates runnable Databricks SQL per use case via `ai_query` | 95% |
 
 Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
+
+> For the full analysis methodology, scoring formulas, prompt engineering details, and data flow diagrams, see [INSPIRE_ANALYSIS.md](INSPIRE_ANALYSIS.md).
 
 ---
 
@@ -383,7 +386,7 @@ All API routes are server-side only. The frontend calls them via `fetch()`.
 | --- | --- | --- |
 | **Excel** | exceljs | 3-sheet workbook: Summary, Use Cases (filterable), Domains |
 | **PowerPoint** | pptxgenjs | Title slide, executive summary, domain breakdown, top 10 use cases |
-| **PDF** | (planned) | Structured JSON catalog; full PDF rendering via `@react-pdf/renderer` coming soon |
+| **PDF** | pdfkit | Databricks-branded A4 landscape report with cover page, executive summary, domain breakdown, and individual use case pages |
 | **Notebooks** | Workspace REST API | One SQL notebook per use case, organised by domain, deployed to your workspace |
 
 ---
@@ -399,7 +402,7 @@ These map to the form fields on the `/configure` page:
 | **Business Priorities** | No | Increase Revenue | Multi-select from 10 predefined priorities |
 | **Strategic Goals** | No | Auto-generated | Custom goals for scoring alignment |
 | **Business Domains** | No | Auto-detected | Focus domains (e.g. "Risk, Finance, Marketing") |
-| **AI Model** | No | databricks-claude-sonnet-4-5 | Model Serving endpoint for `ai_query()` calls (also supports `databricks-claude-opus-4-6`) |
+| **AI Model** | No | databricks-claude-opus-4-6 | Model Serving endpoint for `ai_query()` calls |
 | **Languages** | No | English | Target languages for generated documentation |
 
 ---
@@ -473,7 +476,9 @@ npx shadcn@latest add <component-name>
 
 ## Privacy
 
-Inspire reads **metadata only** -- schema names, table names, column names, data types, and comments. It does **not** access, query, or sample your actual data rows. All LLM prompts contain only structural metadata.
+By default, Inspire reads **metadata only** -- schema names, table names, column names, data types, and comments. All LLM prompts contain only structural metadata.
+
+When **Data Sampling** is enabled in Settings, the app reads a configurable number of rows (5-50) per table during SQL generation. Sampled data is sent to the AI model to improve SQL accuracy but is **not persisted** -- it exists only in memory during the generation step. See [INSPIRE_ANALYSIS.md - Privacy Model](INSPIRE_ANALYSIS.md#privacy-model) for the full breakdown.
 
 ---
 
@@ -481,6 +486,7 @@ Inspire reads **metadata only** -- schema names, table names, column names, data
 
 | Document | Description |
 | --- | --- |
+| [INSPIRE_ANALYSIS.md](INSPIRE_ANALYSIS.md) | **Comprehensive analysis guide** -- pipeline logic, scoring methodology, prompt engineering, data flow diagrams |
 | [AGENTS.md](AGENTS.md) | AI agent guidance (folder contract, domain types, constraints) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and Lakebase schema |
 | [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
