@@ -495,7 +495,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                 )}
               </SheetHeader>
 
-              <div className="mt-6 space-y-5">
+              <div className="mt-6 space-y-5 px-4">
                 {/* Stats */}
                 <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
                   <StatBadge label="Tables" value={detailRec.tableCount} />
