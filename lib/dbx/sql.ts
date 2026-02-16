@@ -63,26 +63,52 @@ export interface SqlResult {
 const POLL_INTERVAL_MS = 1_000;
 const MAX_POLL_ATTEMPTS = 600; // 10 minutes max
 
+export interface ExecuteSQLOptions {
+  /**
+   * Server-side wait_timeout for the Statement Execution API.
+   * Controls how long the server holds the connection trying to return
+   * results inline before falling back to async polling.
+   *
+   * Set to "0s" for long-running queries (e.g. ai_query) so the server
+   * returns immediately with a statement_id and we poll for results.
+   *
+   * Default: "50s" (good for regular SQL that usually completes quickly).
+   */
+  waitTimeout?: string;
+  /**
+   * Client-side fetch timeout (ms) for the initial statement submission.
+   * Must be greater than `waitTimeout` to avoid aborting before the server responds.
+   *
+   * Default: TIMEOUTS.SQL_SUBMIT (60s).
+   */
+  submitTimeoutMs?: number;
+}
+
 /**
  * Execute a SQL statement and return all result rows.
  *
  * @param sql       The SQL statement to execute
  * @param catalog   Optional catalog context
  * @param schema    Optional schema context
+ * @param options   Optional execution options (timeouts)
  * @returns         Typed result with column metadata and row data
  */
 export async function executeSQL(
   sql: string,
   catalog?: string,
-  schema?: string
+  schema?: string,
+  options?: ExecuteSQLOptions
 ): Promise<SqlResult> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/sql/statements/`;
 
+  const waitTimeout = options?.waitTimeout ?? "50s";
+  const submitTimeoutMs = options?.submitTimeoutMs ?? TIMEOUTS.SQL_SUBMIT;
+
   const body: Record<string, unknown> = {
     warehouse_id: config.warehouseId,
     statement: sql,
-    wait_timeout: "50s",
+    wait_timeout: waitTimeout,
     on_wait_timeout: "CONTINUE",
     disposition: "INLINE",
     format: "JSON_ARRAY",
@@ -94,7 +120,7 @@ export async function executeSQL(
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify(body) },
-    TIMEOUTS.SQL_SUBMIT
+    submitTimeoutMs
   );
 
   if (!response.ok) {

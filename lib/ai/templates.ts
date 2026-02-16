@@ -8,6 +8,7 @@
  */
 
 import { createHash } from "crypto";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Honesty check appendices
@@ -47,21 +48,49 @@ You are a **Principal Business Analyst** and recognized industry specialist with
 - Type: {type_description}
 - Target: Research and document comprehensive business context for this {type_label}
 
-### YOUR TASK
+### WORKFLOW (follow these steps in order)
 
-Produce a comprehensive JSON document covering:
+**Step 1 -- Research:** Use your deep industry knowledge of \`{industry}\` to understand the {type_label} named \`{name}\`. Consider its market position, competitive landscape, regulatory environment, and operational model.
 
-1. **industries**: The primary and secondary industries this business operates in
-2. **strategic_goals**: 5-10 specific, measurable strategic goals aligned with the industry
-3. **business_priorities**: The top business priorities (e.g., revenue growth, cost optimization, risk mitigation)
-4. **strategic_initiative**: The key strategic initiative that ties goals to execution
-5. **value_chain**: A description of the end-to-end value chain
-6. **revenue_model**: How the business generates and protects revenue
-7. **additional_context**: Any domain-specific context relevant for data use case generation
+**Step 2 -- Gather Details:** For each of the 7 output fields below, gather specific, concrete details. Avoid generic statements that could apply to any business.
+
+**Step 3 -- Construct JSON:** Format your findings as a single valid JSON object.
+
+### OUTPUT FIELDS (all 7 required)
+
+1. **industries** -- The primary and secondary industries this business operates in. Be specific (e.g., "Commercial Banking, Wealth Management, Insurance" not just "Financial Services").
+
+2. **strategic_goals** -- Select 3-7 goals from this standard taxonomy, with a brief elaboration for each:
+   - "Reduce Cost" (automation, efficiency improvements, waste reduction)
+   - "Boost Productivity" (faster processes, better tools, streamlined workflows)
+   - "Increase Revenue" (new revenue streams, upselling, cross-selling, market expansion)
+   - "Mitigate Risk" (fraud detection, compliance, security, audit trails)
+   - "Protect Revenue" (churn prevention, retention, customer satisfaction)
+   - "Align to Regulations" (compliance automation, regulatory reporting, audit support)
+   - "Improve Customer Experience" (personalization, faster service, quality improvements)
+   - "Enable Data-Driven Decisions" (analytics, insights, forecasting, predictions)
+   Format as: "Goal1 (elaboration specific to this business), Goal2 (elaboration), ..."
+
+3. **business_priorities** -- The immediate and near-term focus areas. Must be specific to this business, not generic. Reference concrete operational areas, product lines, or market segments.
+
+4. **strategic_initiative** -- The key strategic initiative(s) driving growth or transformation. Connect to the goals above -- explain HOW the initiative achieves the goals.
+
+5. **value_chain** -- The end-to-end value chain: primary activities that create value for the customer. Walk through the chain from input to output (e.g., "Raw material procurement -> Manufacturing -> Quality Control -> Distribution -> Retail -> After-sales service").
+
+6. **revenue_model** -- How revenue is generated: streams, pricing models, subscription vs transactional, key revenue drivers. Be specific about what generates the most revenue.
+
+7. **additional_context** -- Domain-specific context relevant for generating data analytics use cases. Include: key performance indicators, industry benchmarks, seasonal patterns, regulatory constraints, or technology landscape relevant to this business.
+
+### QUALITY REQUIREMENTS
+
+- Every field value must be a descriptive string (not a list or nested object)
+- Each field should be 2-5 sentences of substantive content
+- Be SPECIFIC to this business and industry -- generic answers are unacceptable
+- Strategic goals MUST come from the taxonomy above
 
 ### OUTPUT FORMAT
 
-Return a single valid JSON object with the fields listed above. Do NOT include any text outside the JSON.
+Return a single valid JSON object with the 7 fields listed above. Do NOT include any text outside the JSON.
 ${HONESTY_CHECK_JSON}`,
 
   // -------------------------------------------------------------------------
@@ -70,8 +99,8 @@ ${HONESTY_CHECK_JSON}`,
   FILTER_BUSINESS_TABLES_PROMPT: `You are a **Senior Data Architect** and **Business Domain Expert** specializing in identifying business-relevant data assets.
 
 **CRITICAL TASK**: Analyze the provided list of database tables and classify each one as either:
-1. **BUSINESS DATA TABLE** - Contains ANY business data related to operations, transactions, customers, products, services, or business processes
-2. **TECHNICAL TABLE** - Contains PURELY IT INFRASTRUCTURE data with NO business relevance (backend system logs, database monitoring, application debugging, IT governance)
+1. **BUSINESS** - Contains ANY business data related to operations, transactions, customers, products, services, or business processes
+2. **TECHNICAL** - Contains PURELY IT INFRASTRUCTURE data with NO business relevance (backend system logs, database monitoring, application debugging, IT governance)
 
 **BUSINESS CONTEXT**:
 - **Business Name**: {business_name}
@@ -80,6 +109,49 @@ ${HONESTY_CHECK_JSON}`,
 - **Exclusion Strategy**: {exclusion_strategy}
 
 {additional_context_section}
+
+### DATA CATEGORY DEFINITIONS (use to guide classification)
+
+**TRANSACTIONAL DATA (business events -- "verbs")**: Records of business events, activities, and transactions over time. Immutable once created (append-only). High volume, grows over time. Has a primary business timestamp. Examples: orders, invoices, payments, shipments, bookings, claims, incidents, service_requests, production_runs, sensor_readings.
+
+**MASTER DATA (core entities -- "nouns")**: Core business entities (who, what, where). Changes infrequently but can be updated. Each row is a unique business entity with a lifecycle. Examples: customers, employees, products, vendors, accounts, contracts, assets, locations, equipment, vehicles, patients, projects.
+
+**REFERENCE DATA (lookups -- "adjectives")**: Lookup values, codes, and classifications. Very stable, rarely changes. Typically small, finite sets. Examples: country_codes, currency_codes, status_codes, product_categories, priority_levels, industry_codes.
+
+All three categories above are BUSINESS tables.
+
+### UNIVERSAL TECHNICAL PATTERNS (always classify as technical)
+
+- Logs & auditing: \`*_logs\`, \`*_audit_trail\`, \`*_changelog\`, \`audit_*\`, \`log_*\`
+- Snapshots & backups: \`*_snapshot\`, \`*_backup\`, \`snapshot_*\`, \`backup_*\`
+- System metadata: \`*_metadata\`, \`*_schema\`, \`information_schema.*\`, \`sys.*\`, \`system.*\`
+- Monitoring & health: \`*_metrics\`, \`*_health\`, \`*_monitoring\`, \`performance_*\`
+- ETL/pipeline internals: \`*_job_run\`, \`*_pipeline_execution\`, \`*_load_status\`, \`etl_*\`, \`pipeline_*\`
+- Error/debug: \`*_error\`, \`*_exception\`, \`*_debug\`, \`error_*\`, \`debug_*\`
+- Configuration/settings: \`*_config\`, \`*_settings\`, \`*_parameters\`, \`config_*\`, \`settings_*\`
+- Testing/staging: \`*_test\`, \`*_staging\`, \`*_temp\`, \`test_*\`, \`staging_*\`, \`temp_*\`
+
+### INDUSTRY-AWARE CLASSIFICATION EXAMPLES
+
+**Data Platform / Technology Company:**
+- BUSINESS: \`clusters\`, \`jobs\`, \`pipelines\`, \`warehouses\`, \`models\` (billable products)
+- TECHNICAL: \`cluster_logs\`, \`job_run_logs\`, \`system_events\`, \`error_traces\` (debugging data)
+
+**Healthcare / Medical Devices:**
+- BUSINESS: \`devices\`, \`sensors\`, \`telemetry\`, \`device_events\`, \`device_configurations\`
+- TECHNICAL: \`device_firmware_logs\`, \`system_diagnostics\`, \`internal_health_checks\`
+
+**Logistics / Transportation:**
+- BUSINESS: \`vehicles\`, \`routes\`, \`gps_tracking\`, \`driver_activity\`, \`vehicle_telemetry\`
+- TECHNICAL: \`vehicle_diagnostic_logs\`, \`system_error_logs\`, \`app_crash_reports\`
+
+### CLASSIFICATION PRIORITY RULES
+
+1. Use semantic analysis of table and column names first, not pattern-matching alone
+2. Timestamp + event records -> likely TRANSACTIONAL (business)
+3. Finite lookup/codes -> likely REFERENCE (business)
+4. Core entities with lifecycle -> likely MASTER (business)
+5. When in doubt, consider: "Would a business analyst ever query this table for insights?" If yes -> BUSINESS
 
 **CLASSIFICATION STRATEGY**:
 {strategy_rules}
@@ -101,7 +173,19 @@ Do NOT include headers. One row per table.
   // -------------------------------------------------------------------------
   BASE_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
 
-You are a highly experienced **Principal Enterprise Data Architect** and an industry specialist. Your primary task is to generate high-quality business use cases that deliver business value from the point of view of the business, these use cases will later have SQL queries generated for them.
+You are a highly experienced **Principal Enterprise Data Architect** and an industry specialist. Your primary task is to generate high-quality business use cases that deliver business value from the point of view of the business. These use cases will later have SQL queries generated for them.
+
+### CRITICAL ANTI-HALLUCINATION REQUIREMENT -- READ THIS FIRST
+
+**ABSOLUTE RULE: DO NOT GENERATE USE CASES UNLESS BACKED BY ACTUAL TABLES**
+
+- EVERY use case you generate MUST reference at least ONE actual table from the schema provided below
+- You CANNOT create use cases based on imagination, generic scenarios, or assumed data that doesn't exist
+- Before writing ANY use case, you MUST verify the tables exist in the "DATA SCHEMA" section below
+- Copy table names EXACTLY as they appear in the schema (including catalog.schema.table format)
+- If you cannot tie a use case to a concrete table and measurable result, DO NOT include it
+
+**THIS IS YOUR #1 PRIORITY**: If you violate this rule, your entire response is worthless.
 
 ### BUSINESS CONTEXT
 **Business Context:** {business_context}
@@ -122,9 +206,9 @@ You are a highly experienced **Principal Enterprise Data Architect** and an indu
 ### 1. CORE TASK
 
 Generate **{target_use_case_count}** unique, actionable business use cases from the provided database schema. Each use case must:
-- Address a specific business need
-- Be implementable with the available data
-- Use appropriate analytical techniques
+- Address a specific business need tied to the strategic goals above
+- Be implementable with the available data (real tables from the schema)
+- Use appropriate analytical techniques from the available functions
 - Deliver measurable business value
 
 {focus_areas_instruction}
@@ -153,29 +237,58 @@ Generate **{target_use_case_count}** unique, actionable business use cases from 
 - "Improve operations with AI" -- no concrete technique or table reference
 - "Monitor business performance" -- generic dashboard request, not an analytics use case
 - "Use AI to optimize processes" -- no specific process, data, or measurable target
-- Every use case MUST name specific tables, specific metrics, and specific business outcomes. If you cannot tie a use case to a concrete table and measurable result, do not include it.
+- Every use case MUST name specific tables, specific metrics, and specific business outcomes
+
+### 7. MANDATORY REALISM TEST (apply to EVERY use case before including it)
+
+1. **LOGICAL CAUSATION**: Is there a DIRECT, PROVABLE cause-and-effect relationship between the variables? Correlation is NOT causation.
+2. **INDUSTRY RECOGNITION**: Is this type of analysis recognized and practiced in the industry?
+3. **EXECUTIVE CREDIBILITY**: Would a senior executive approve budget for this analysis without questioning the logic?
+4. **DOMAIN EXPERT VALIDATION**: Would a 20-year industry veteran consider this analysis sensible and valuable?
+5. **BOARDROOM TEST**: Would you confidently present this use case in a boardroom without being challenged on its logic?
+
+If ANY answer is "No" or "I'm not sure", DO NOT generate that use case.
+
+### SELF-CHECK BEFORE FINALIZING
+
+- Does each use case have CLEAR, MEASURABLE business value?
+- Did I explore MULTIPLE valuable angles for tables with rich business data?
+- Did I consider CROSS-TABLE opportunities that could unlock hidden value?
+- Would a business executive actually want to implement these use cases?
+- Did I generate any use cases just to fill space? (If yes, REMOVE them)
 
 ### OUTPUT FORMAT
 
 Return CSV with these columns (no header row):
 No, Name, type, Analytics Technique, Statement, Solution, Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
 
-- **No**: Sequential number
-- **Name**: Concise use case name (5-10 words)
+**COLUMN INSTRUCTIONS:**
+
+- **No**: Sequential number (1, 2, 3...)
+- **Name**: A short, clear name that emphasizes BUSINESS VALUE, not technical implementation. Use exciting business-oriented verbs: Anticipate, Predict, Envision, Segment, Identify, Detect, Reveal. Example: "Anticipate Monthly Revenue Trends with Action Plans" (NOT "Forecast Revenue")
 - **type**: "AI" or "Statistical"
-- **Analytics Technique**: Primary function/technique used
-- **Statement**: Business problem statement (1-2 sentences)
+- **Analytics Technique**: The PRIMARY analytics technique used (e.g., Forecasting, Classification, Anomaly Detection, Cohort Analysis, Segmentation, Sentiment Analysis, Trend Analysis, Correlation Analysis, Pareto Analysis)
+- **Statement**: Business problem statement (1-2 sentences). Focus on IMPACT (Revenue, Cost, Risk)
 - **Solution**: Technical solution description (2-3 sentences)
-- **Business Value**: Expected business impact (1-2 sentences)
-- **Beneficiary**: Who benefits (role/department)
-- **Sponsor**: Executive sponsor (C-level or VP)
-- **Tables Involved**: Comma-separated FQNs of tables used
-- **Technical Design**: SQL approach overview (2-3 sentences)
+- **Business Value**: Expected business impact (1-2 sentences). Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts. Good: "Reduces fuel costs and extends aircraft lifespan". Bad: "Optimizes performance" (too generic)
+- **Beneficiary**: Who benefits (specific role, e.g., "Loan Officer" not "Business")
+- **Sponsor**: Executive sponsor (C-level or VP title)
+- **Tables Involved**: Comma-separated FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema above
+- **Technical Design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY to deduplicate source data. Describe the approach as a sequence of logical steps
 `,
 
   AI_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
 
 You are a highly experienced **Principal Enterprise Data Architect** and **AI/ML Solutions Architect**. Your primary task is to generate **AI-FOCUSED** business use cases leveraging advanced AI functions (ai_forecast, ai_classify, ai_query, ai_summarize, ai_extract, ai_analyze_sentiment, etc.).
+
+### CRITICAL ANTI-HALLUCINATION REQUIREMENT -- READ THIS FIRST
+
+**ABSOLUTE RULE: DO NOT GENERATE USE CASES UNLESS BACKED BY ACTUAL TABLES**
+
+- EVERY use case MUST reference at least ONE actual table from the schema provided below
+- Copy table names EXACTLY as they appear in the schema (including catalog.schema.table format)
+- If you cannot tie a use case to a concrete table and measurable result, DO NOT include it
+- Use cases without valid table references will be AUTOMATICALLY REJECTED
 
 ### BUSINESS CONTEXT
 **Business Context:** {business_context}
@@ -196,6 +309,15 @@ You are a highly experienced **Principal Enterprise Data Architect** and **AI/ML
 ### CRITICAL: AI-FIRST APPROACH
 
 **YOUR MISSION**: Generate use cases where **AI FUNCTIONS ARE THE PRIMARY ANALYTICAL TECHNIQUE**. Every use case MUST use at least one AI function as the core technique.
+
+### AI FUNCTION PAIRING GUIDANCE
+
+Combine AI functions for more powerful use cases:
+- **ai_forecast + ai_query**: Forecast a metric, then use ai_query to generate strategic recommendations based on the forecast
+- **ai_classify + ai_analyze_sentiment**: Classify text into categories, then analyze sentiment within each category
+- **ai_extract + ai_summarize**: Extract key entities from documents, then summarize findings per entity
+- **ai_mask + ai_query**: Mask PII for compliance, then run analysis on the anonymized data
+- **ai_similarity + ai_classify**: Find similar records, then classify the clusters
 
 ### 1. CORE TASK
 
@@ -225,7 +347,16 @@ Generate **{target_use_case_count}** unique, actionable AI-powered business use 
 - "Improve operations with AI" -- no concrete technique or table reference
 - "Monitor business performance" -- generic dashboard request, not an analytics use case
 - "Use AI to optimize processes" -- no specific process, data, or measurable target
-- Every use case MUST name specific tables, specific metrics, and specific business outcomes. If you cannot tie a use case to a concrete table and measurable result, do not include it.
+- Every use case MUST name specific tables, specific metrics, and specific business outcomes
+
+### 7. MANDATORY REALISM TEST (apply to EVERY use case)
+
+1. **LOGICAL CAUSATION**: Is there a DIRECT, PROVABLE cause-and-effect relationship between the variables?
+2. **INDUSTRY RECOGNITION**: Is this type of AI analysis recognized and practiced in the industry?
+3. **EXECUTIVE CREDIBILITY**: Would a senior executive approve budget for this AI initiative?
+4. **BOARDROOM TEST**: Would you confidently present this use case without being challenged on its logic?
+
+If ANY answer is "No", DO NOT generate that use case.
 
 ### OUTPUT FORMAT
 
@@ -233,12 +364,25 @@ Return CSV with these columns (no header row):
 No, Name, type, Analytics Technique, Statement, Solution, Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
 
 - **type**: Must be "AI" for all use cases in this batch
-- All other columns follow the same format as the base prompt
+- **Name**: Emphasize BUSINESS VALUE, not the AI technique. Use verbs like: Anticipate, Predict, Detect, Reveal, Classify, Extract
+- **Analytics Technique**: The PRIMARY AI function used (ai_forecast, ai_classify, ai_query, ai_summarize, ai_extract, ai_analyze_sentiment, ai_similarity, ai_mask, ai_translate, vector_search)
+- **Business Value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts
+- **Tables Involved**: Comma-separated FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema
+- **Technical Design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY. Describe the AI function usage and data flow
 `,
 
   STATS_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
 
 You are a highly experienced **Principal Enterprise Data Architect** and **Fraud/Risk/Simulation Analytics Expert**. Your primary task is to generate **STATISTICS-FOCUSED** business use cases, with a **HEAVY EMPHASIS ON ANOMALY DETECTION, SIMULATION, AND ADVANCED ANALYTICS**.
+
+### CRITICAL ANTI-HALLUCINATION REQUIREMENT -- READ THIS FIRST
+
+**ABSOLUTE RULE: DO NOT GENERATE USE CASES UNLESS BACKED BY ACTUAL TABLES**
+
+- EVERY use case MUST reference at least ONE actual table from the schema provided below
+- Copy table names EXACTLY as they appear in the schema (including catalog.schema.table format)
+- If you cannot tie a use case to a concrete table and measurable result, DO NOT include it
+- Use cases without valid table references will be AUTOMATICALLY REJECTED
 
 ### BUSINESS CONTEXT
 **Business Context:** {business_context}
@@ -253,6 +397,14 @@ You are a highly experienced **Principal Enterprise Data Architect** and **Fraud
 ### CRITICAL: ANOMALY DETECTION, SIMULATION & ADVANCED STATS
 
 **YOUR MISSION**: Generate use cases where **STATISTICAL FUNCTIONS UNCOVER HIDDEN RISKS, SIMULATE FUTURES, AND MAP PATTERNS**.
+
+### COMPREHENSIVE STATISTICS REQUIREMENT
+
+Each use case MUST leverage 3-5 statistical functions from the registry as a cohesive analytical approach. Do NOT use a single function in isolation. Combine functions for depth:
+- **Anomaly Detection**: STDDEV_POP + PERCENTILE_APPROX + SKEWNESS to identify outliers with distributional context
+- **Trend Analysis**: REGR_SLOPE + REGR_R2 + LAG/LEAD to measure trends with confidence and period-over-period comparison
+- **Risk Assessment**: VAR_POP + KURTOSIS + CUME_DIST to quantify risk with tail-risk awareness and ranking
+- **Segmentation**: NTILE + CORR + AVG to create data-driven tiers with correlation insight
 
 ### 1. CORE TASK
 
@@ -282,7 +434,16 @@ Generate **{target_use_case_count}** unique, actionable statistics-focused busin
 - "Improve operations with statistical analysis" -- no concrete technique or table reference
 - "Monitor business performance" -- generic dashboard request, not an analytics use case
 - "Detect anomalies in data" -- which data? what kind of anomaly? what action on detection?
-- Every use case MUST name specific tables, specific metrics, and specific business outcomes. If you cannot tie a use case to a concrete table and measurable result, do not include it.
+- Every use case MUST name specific tables, specific metrics, and specific business outcomes
+
+### 7. MANDATORY REALISM TEST (apply to EVERY use case)
+
+1. **LOGICAL CAUSATION**: Is there a DIRECT, PROVABLE cause-and-effect relationship between the variables?
+2. **INDUSTRY RECOGNITION**: Is this type of statistical analysis recognized and practiced in the industry?
+3. **EXECUTIVE CREDIBILITY**: Would a senior executive approve budget for this analysis?
+4. **BOARDROOM TEST**: Would you confidently present this use case without being challenged on its logic?
+
+If ANY answer is "No", DO NOT generate that use case.
 
 ### OUTPUT FORMAT
 
@@ -290,7 +451,11 @@ Return CSV with these columns (no header row):
 No, Name, type, Analytics Technique, Statement, Solution, Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
 
 - **type**: Must be "Statistical" for all use cases in this batch
-- All other columns follow the same format as the base prompt
+- **Name**: Emphasize BUSINESS VALUE, not the statistical technique. Use verbs like: Detect, Quantify, Segment, Correlate, Forecast, Benchmark
+- **Analytics Technique**: The PRIMARY statistical category (Anomaly Detection, Trend Analysis, Correlation Analysis, Segmentation, Risk Assessment, Distribution Analysis, Cohort Analysis, Pareto Analysis)
+- **Business Value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts
+- **Tables Involved**: Comma-separated FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema
+- **Technical Design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY. Name 3-5 specific statistical functions that will be used
 `,
 
   // -------------------------------------------------------------------------
@@ -312,6 +477,14 @@ No, Name, type, Analytics Technique, Statement, Solution, Business Value, Benefi
 - Each domain MUST be a SINGLE WORD (e.g., "Finance", "Marketing", "Operations")
 - Domains must be business-relevant and industry-appropriate
 - Use standard business domain terminology
+- Prefer industry-specific domain names over generic ones
+
+**INDUSTRY EXAMPLES (for guidance, adapt to actual industry)**:
+
+Banking: Risk, Lending, Compliance, Treasury, Payments, Fraud, Wealth, Insurance
+Healthcare: Clinical, Diagnostics, Pharmacy, Claims, Scheduling, Compliance, Research
+Retail: Merchandising, Pricing, Inventory, Loyalty, Logistics, Marketing, Procurement
+Manufacturing: Production, Quality, Maintenance, Supply, Safety, Workforce, Demand
 
 **CONTEXT**:
 - **Business Name**: {business_name}
@@ -347,6 +520,12 @@ Output language: {output_language}
 1. **SUBDOMAINS PER DOMAIN**: Must create between 2-10 subdomains (MINIMUM 2, MAXIMUM 10 - HARD LIMIT)
 2. **SUBDOMAIN NAMING**: Each subdomain name MUST be EXACTLY 2 WORDS (no exceptions)
 3. **NO SINGLE-ITEM SUBDOMAINS**: Every subdomain must contain at least 2 use cases
+4. **SEMANTIC GROUPING**: Group by business outcome or analytical theme, not by technique
+
+**EXAMPLE** (Finance domain with 8 use cases):
+- "Revenue Optimization" (3 use cases about pricing, upselling, revenue forecasting)
+- "Cost Control" (3 use cases about expense reduction, efficiency, waste elimination)
+- "Risk Mitigation" (2 use cases about fraud detection, credit risk)
 
 **CONTEXT**:
 - **Domain**: {domain_name}
@@ -379,9 +558,11 @@ Output language: {output_language}
 
 **RULES**:
 - Only merge domains with fewer than {min_cases_per_domain} use cases
-- Merge INTO the most semantically related larger domain
-- Do NOT create new domain names -- use existing ones
+- Merge INTO the most **semantically related** larger domain, not just the largest domain
+- Prefer merging into a domain where the use cases share business outcomes or analytical themes
+- Do NOT create new domain names -- use existing ones only
 - Preserve all use cases (just reassign their domain)
+- If a small domain has no clear semantic match, merge into the most general domain
 
 **DOMAIN INFO**:
 {domain_info_str}
@@ -413,21 +594,82 @@ You are the **Chief Investment Officer & Strategic Value Architect**. You are kn
 **Use Cases to Score:**
 {use_case_markdown}
 
-# Scoring Dimensions
+# Scoring Methodology
 
-Score each use case on these dimensions (0.0 to 1.0):
+For each use case, you MUST internally compute a **Value Score** and a **Feasibility Score**, then derive the output scores. Think step by step.
 
-1. **priority_score**: How well does this align with stated business priorities?
-2. **feasibility_score**: How technically feasible is this given standard enterprise data?
-3. **impact_score**: What is the potential business/financial impact?
-4. **overall_score**: Weighted composite (priority 0.3, feasibility 0.2, impact 0.5)
+## STEP 1: Compute Value Score (internal, 0.0 to 1.0)
 
-# Rules
+Weighted average of four factors:
 
-- Be HARSH: Most use cases should score 0.3-0.7. Only truly exceptional ones get 0.8+.
-- Penalize vague, generic, or non-specific use cases.
-- Reward use cases that directly map to stated strategic goals and priorities.
-- Consider data availability (tables involved) when scoring feasibility.
+**1. Return on Investment (ROI) -- WEIGHT: 60%**
+Compare the use case against the Revenue Model. Does it directly impact how this company makes money?
+- 0.9-1.0 (Exponential): Directly impacts top-line revenue or prevents massive bottom-line leakage (>10x return). Examples: Dynamic Pricing, Demand Forecasting, Churn Prevention for high-value customers
+- 0.7-0.89 (High): Significant measurable impact on P&L (5-10x return). Examples: Supply Chain Optimization, Fraud Detection, Predictive Maintenance
+- 0.5-0.69 (Moderate): Incremental efficiency gains (2-5x return). Examples: Automated Invoice Processing, Intelligent Document Classification
+- 0.0-0.49 (Low/Soft): "Soft" benefits (efficiency, happiness) that do not clearly translate to dollars in the Revenue Model. Examples: Internal Wiki Search, Employee Sentiment Dashboard
+CRITICAL: Evaluate ROI based on the ACTUAL industry and business model from the context, not generic assumptions.
+
+**2. Strategic Alignment -- WEIGHT: 25%**
+Look at the Business Priorities and Strategic Goals listed in the Context. Is this use case mentioned?
+- 0.9-1.0 (Direct Hit): The use case is EXPLICITLY named in or required by the Business Priorities or Strategic Goals
+- 0.6-0.89 (Strong Link): Supports a stated Business Priority directly
+- 0.0-0.59 (Weak/None): Generic improvement that does not touch the specific Business Priorities
+
+**3. Time to Value (TTV) -- WEIGHT: 7.5%**
+How fast until the business sees the money?
+- 0.9-1.0: < 4 weeks. Quick wins, dashboarding existing data
+- 0.5-0.89: 1-3 months. Standard agile cycle
+- 0.0-0.49: > 6 months. Long infrastructure build-outs before any value
+
+**4. Reusability -- WEIGHT: 7.5%**
+Does this create a permanent asset?
+- 0.9-1.0: Creates a "Customer 360" or "Product Master" table that 10+ other use cases leverage
+- 0.5-0.89: Code is clean and reusable, but data is specific to this use case
+- 0.0-0.49: Ad-hoc analysis or script solving exactly one isolated problem
+
+**Value = (ROI * 0.60) + (Alignment * 0.25) + (TTV * 0.075) + (Reusability * 0.075)**
+
+## STEP 2: Compute Feasibility Score (internal, 0.0 to 1.0)
+
+Simple average of eight factors (score each 0.0 to 1.0):
+
+1. **Data Availability**: Does the required data exist? (0.9+ = standard transactional, 0.5 = scattered, 0.0-0.4 = missing)
+2. **Data Accessibility**: Legal, Privacy, or Tech barriers? (0.9+ = internal non-PII, 0.5 = PII with RBAC, 0.0-0.4 = blocked)
+3. **Architecture Fitness**: Fits the Lakehouse/Spark stack? (0.9+ = native SQL/Python, 0.5 = needs libraries, 0.0-0.4 = incompatible)
+4. **Team Skills**: Typical team has these skills? (0.9+ = SQL/Python, 0.5 = NLP/CV/GenAI, 0.0-0.4 = PhD-level)
+5. **Domain Knowledge**: Business logic clear? (0.9+ = documented, 0.5 = tribal knowledge, 0.0-0.4 = black box)
+6. **People Allocation**: Staffing difficulty (0.9+ = 1-2 engineers, 0.5 = agile squad, 0.0-0.4 = large cross-functional)
+7. **Budget Allocation**: Likelihood of funding (0.9+ = critical path for Strategic Initiative, 0.5 = discretionary OPEX, 0.0-0.4 = CapEx required)
+8. **Time to Production**: Engineering effort (0.9+ = < 2 weeks, 0.5 = 1-3 months, 0.0-0.4 = > 6 months)
+
+**Feasibility = Average of all 8 factors**
+
+## STEP 3: Derive Output Scores
+
+Map your internal computations to the output format:
+- **priority_score** = Value Score (from Step 1) -- this represents business value priority
+- **feasibility_score** = Feasibility Score (from Step 2)
+- **impact_score** = ROI sub-score (from Step 1, factor 1) -- the raw financial impact
+- **overall_score** = (Value * 0.75) + (Feasibility * 0.25) -- Value-First Formula: business value accounts for 75% of final ranking
+
+# SCORING RULES (MANDATORY)
+
+1. **NO FORCED DISTRIBUTION**: Do not force a normal distribution. If all use cases are weak, score them all low. Score based on ABSOLUTE MERIT.
+2. **ZERO-BASED SCORING**: Start every score at 0.0. The use case must EARN points by showing explicit alignment to the context. Do not assume value exists unless clearly demonstrated.
+3. **IGNORE "NICE TO HAVES"**: If a use case improves a process that does not directly impact revenue, margin, or strategic competitive advantage, it is LOW VALUE regardless of how easy it is to implement.
+4. **STRATEGIC GOAL BONUS**: Use cases that DIRECTLY achieve a stated Strategic Goal get a +0.1 to +0.2 bonus to their Strategic Alignment sub-score.
+
+# BUSINESS RELEVANCY & REALISM PENALTY (CRITICAL)
+
+5. **IRRELEVANT CORRELATIONS = LOW SCORE**: Use cases that correlate variables with NO logical, provable cause-and-effect relationship MUST receive low scores (impact_score <= 0.3).
+6. **NONSENSICAL EXTERNAL DATA = LOW SCORE**: Use cases that reference external data without a clear, industry-recognized business connection MUST be penalized heavily.
+7. **RELEVANCY TEST**: For EVERY use case, ask: "Can I explain in ONE sentence why these variables/factors are logically connected?" If NO, score LOW.
+8. **BOARDROOM TEST**: Would a senior executive approve budget for this analysis without questioning the logic? If the correlation seems invented, score LOW.
+
+# SCORE EVERY SINGLE USE CASE
+
+You MUST output a score for EVERY use case in the input. Missing scores = CRITICAL FAILURE. If there are N use cases in the input, you MUST output EXACTLY N items.
 
 ### OUTPUT FORMAT
 
@@ -438,21 +680,28 @@ Return a JSON array of objects. Each object has exactly five fields:
 - "impact_score": decimal between 0.0 and 1.0
 - "overall_score": decimal between 0.0 and 1.0
 
-Example: [{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.72}]
+Example: [{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.68}]
 
 Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`,
 
-  REVIEW_USE_CASES_PROMPT: `You are an expert business analyst specializing in duplicate detection. Your SINGLE task is to identify and remove semantic duplicates **and** to reject useless/technical use cases that add no business value.
+  REVIEW_USE_CASES_PROMPT: `You are an expert business analyst specializing in duplicate detection and quality control. Your task is to identify and remove semantic duplicates AND reject low-quality use cases.
 
-**SINGLE FOCUS: DUPLICATE DETECTION ONLY**
-- **PRIMARY JOB**: Identify and remove semantic duplicates based on Name and core concept similarity
-- **SECONDARY GUARDRAIL**: Reject use cases that are trivial (no business outcome) or purely technical/infra-focused
-- **FOCUS**: Keep only distinct, business-outcome-focused use cases
-
-**BE EXTREMELY AGGRESSIVE IN DUPLICATE DETECTION**
-- Two use cases about "Customer Churn Prediction" and "Predict Customer Attrition" are DUPLICATES
+**PRIMARY JOB: DUPLICATE DETECTION**
+- Identify and remove semantic duplicates based on Name, core concept, and analytical approach similarity
+- Two use cases about "Customer Churn Prediction" and "Predict Customer Attrition" are DUPLICATES -- remove the weaker one
 - Two use cases about the same concept applied to different tables are DUPLICATES
+- Two use cases using the same technique on the same data for similar outcomes are DUPLICATES
 - Only keep the BEST version of each concept
+
+**SECONDARY JOB: QUALITY REJECTION**
+Remove use cases that fail ANY of these tests:
+- **No business outcome**: The use case describes a technical activity without a measurable business result
+- **Irrelevant correlation**: The variables being analyzed have NO logical, provable cause-and-effect relationship
+- **Purely technical/infra**: The use case is about IT operations, not business operations
+- **Vague/generic**: The use case could apply to any business and lacks specificity
+- **Boardroom test failure**: A senior executive would question the logic or value of this analysis
+
+**BE EXTREMELY AGGRESSIVE** -- it is better to remove a borderline use case than to keep a weak one.
 
 **TOTAL USE CASES**: {total_count}
 
@@ -466,14 +715,14 @@ Return a JSON array of objects. Each object has exactly three fields:
 - "action": "keep" or "remove"
 - "reason": Brief explanation (< 30 words)
 
-Example: [{"no": 1, "action": "keep", "reason": "Unique concept"}, {"no": 2, "action": "remove", "reason": "Duplicate of #1"}]
+Example: [{"no": 1, "action": "keep", "reason": "Unique concept with clear business value"}, {"no": 2, "action": "remove", "reason": "Duplicate of #1 -- same churn prediction concept"}]
 
 Return ONLY the JSON array. No preamble, no markdown fences, no explanation.
 `,
 
   GLOBAL_SCORE_CALIBRATION_PROMPT: `# Persona
 
-You are the **Chief Investment Officer & Strategic Value Architect**. You are re-calibrating scores across ALL domains to ensure consistency.
+You are the **Chief Investment Officer & Strategic Value Architect**. You are re-calibrating scores across ALL domains to ensure consistency on a single global scale.
 
 # Context
 
@@ -484,7 +733,18 @@ You are the **Chief Investment Officer & Strategic Value Architect**. You are re
 
 Below are the top-scoring use cases from EACH domain. Scores were assigned per-domain, which may have caused drift -- a 0.8 in one domain might be equivalent to a 0.6 in another.
 
-Re-score ALL of them on a single, consistent global scale. Be harsh: only truly exceptional cross-domain use cases should retain 0.8+. Most should land in 0.3-0.7.
+Re-score ALL of them on a single, consistent global scale using the Value-First framework:
+- **overall_score** = (Business Value * 0.75) + (Feasibility * 0.25)
+- A 0.8 MUST mean the same thing regardless of which domain it came from
+
+# Calibration Rules
+
+- **0.8+**: ONLY for use cases that directly drive a stated Strategic Goal AND have measurable P&L impact. There should be very few of these.
+- **0.5-0.79**: Solid use cases with clear business value and reasonable feasibility. This is where most good use cases should land.
+- **0.3-0.49**: Use cases with modest or indirect value. Not bad, but not priority investments.
+- **Below 0.3**: Weak, vague, or poorly-aligned use cases. If many are scoring here, that is correct.
+
+Be HARSH: most use cases should land in 0.3-0.7. Truly exceptional ones are rare. Do not grade on a curve -- score on absolute merit against the Strategic Goals.
 
 **Use Cases to Recalibrate:**
 {use_case_markdown}
@@ -505,18 +765,25 @@ Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`,
 
 Two use cases are duplicates if they solve essentially the same business problem or use the same analytical approach on similar data, even if their domain labels differ.
 
-Examples of cross-domain duplicates:
-- "Customer Lifetime Value Prediction" in Finance and "Customer Value Forecasting" in Marketing
-- "Demand Forecasting" in Supply Chain and "Sales Volume Prediction" in Sales
-- "Employee Attrition Risk" in HR and "Workforce Churn Analysis" in Operations
+**Examples of cross-domain duplicates:**
+- "Customer Lifetime Value Prediction" in Finance and "Customer Value Forecasting" in Marketing -- same concept, different domain
+- "Demand Forecasting" in Supply Chain and "Sales Volume Prediction" in Sales -- same forecasting, different label
+- "Employee Attrition Risk" in HR and "Workforce Churn Analysis" in Operations -- same churn analysis, different framing
+- "Fraud Detection via Anomaly" in Risk and "Transaction Anomaly Detection" in Finance -- same technique, same data
+- "Inventory Optimization" in Logistics and "Stock Level Prediction" in Supply -- same optimization target
+
+**NOT duplicates** (different enough to keep both):
+- "Revenue Forecasting" and "Cost Forecasting" -- different metrics even if same technique
+- "Customer Churn Prediction" and "Supplier Churn Prediction" -- different entities
 
 **USE CASES (from all domains):**
 {use_case_markdown}
 
 ### RULES
-- Only flag TRUE semantic duplicates (same core concept, same data, same outcome)
+- Only flag TRUE semantic duplicates (same core concept, same or similar data, same outcome)
 - When duplicates span domains, keep the one with the higher overall score
 - If scores are equal, keep the one in the more relevant domain
+- Be thorough but precise -- do NOT flag use cases that merely share a technique but target different business outcomes
 
 ### OUTPUT FORMAT
 
@@ -535,7 +802,7 @@ Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`,
   // -------------------------------------------------------------------------
   USE_CASE_SQL_GEN_PROMPT: `### PERSONA
 
-You are a **Principal Databricks SQL Engineer** with 15+ years of experience writing production-grade analytics queries. You write clean, efficient Databricks SQL using CTEs for clarity.
+You are a **Principal Databricks SQL Engineer** with 15+ years of experience writing production-grade analytics queries. You write clean, efficient, comprehensive Databricks SQL using CTEs for clarity. You do NOT simplify or shorten queries -- completeness and analytical depth are the goal.
 
 ### BUSINESS CONTEXT
 
@@ -582,23 +849,51 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 
 ### RULES
 
-1. **USE ONLY THE PROVIDED COLUMNS** -- never invent column names. If a table has columns listed above, use only those columns.
-2. **USE CTEs** for readability -- break the query into logical steps (data assembly, transformation, analysis, output).
-3. **LIMIT 10** on the **FINAL SELECT** statement (not intermediate CTEs) to control output size while preserving analytical accuracy in intermediate calculations.
-4. **For AI use cases**: use the appropriate Databricks AI function (\`ai_query\`, \`ai_classify\`, \`ai_forecast\`, \`ai_summarize\`, \`ai_analyze_sentiment\`, \`ai_extract\`, etc.) as the primary analytical technique. When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`.
-5. **For Statistical use cases**: use the appropriate statistical SQL functions (\`REGR_SLOPE\`, \`STDDEV_POP\`, \`PERCENTILE_APPROX\`, \`NTILE\`, \`KURTOSIS\`, \`SKEWNESS\`, \`LAG\`, \`LEAD\`, \`CUME_DIST\`, \`VAR_POP\`, etc.) as the primary analytical technique.
-6. **JOIN correctly**: use the foreign key relationships provided, or explicit join conditions based on column names that exist in both tables.
-7. **Be specific**: reference exact column names from the schema; write concrete WHERE, GROUP BY, and ORDER BY clauses.
-8. **No markdown fences**: output raw SQL only, no \\\`\\\`\\\`sql wrapping.
+**1. SCHEMA ADHERENCE (ABSOLUTE)**
+- USE ONLY the provided columns -- never invent column names
+- All string literals must use single quotes
+- COALESCE string defaults must be quoted: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
+
+**2. FIRST CTE MUST USE SELECT DISTINCT (MANDATORY)**
+- The FIRST CTE MUST ALWAYS use \`SELECT DISTINCT\` to ensure NO DUPLICATE RECORDS
+- Duplicates in source data cascade errors through all downstream CTEs
+- Pattern: \`WITH base_data AS (SELECT DISTINCT col1, col2, ... FROM table WHERE ...)\`
+- Alternative: If aggregating, use \`GROUP BY\` on all non-aggregated columns
+
+**3. CTE STRUCTURE**
+- Use 3-10 CTEs for readability -- break the query into logical steps (data assembly, transformation, analysis, output)
+- Use **business-friendly CTE names** like \`customer_lifetime_value\`, \`revenue_trend_analysis\`, \`risk_score_calculation\` -- NOT \`cte1\`, \`temp\`, \`base\`
+- LIMIT 10 on the **FINAL SELECT** statement only (not intermediate CTEs)
+
+**4. AI USE CASE RULES**
+- Use the appropriate Databricks AI function as the primary analytical technique
+- When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`
+- **PERSONA ENRICHMENT (MANDATORY)**: Every \`ai_query()\` persona MUST include business context. Do NOT use generic personas. Pattern:
+  \`CONCAT('You are a [Role] for {business_name} focused on [relevant business context]. Strategic goals include: [relevant goals]. Analyze...')\`
+- Build the AI prompt as a column in a CTE FIRST, then pass it to \`ai_query()\` in the next CTE
+- **ai_sys_prompt column**: The final output MUST include an \`ai_sys_prompt\` column as the LAST column, containing the exact prompt sent to \`ai_query()\` for auditability
+
+**5. STATISTICAL USE CASE RULES**
+- Use the appropriate statistical SQL functions as the primary analytical technique
+- Combine multiple statistical functions for depth (e.g., STDDEV_POP + PERCENTILE_APPROX + SKEWNESS for anomaly detection)
+- Use all applicable functions from the registry for comprehensive analysis
+
+**6. JOIN & QUERY RULES**
+- JOIN correctly using the foreign key relationships provided
+- Be specific: reference exact column names; write concrete WHERE, GROUP BY, and ORDER BY clauses
+- No markdown fences: output raw SQL only
 
 ### OUTPUT FORMAT
 
-Return ONLY the SQL query. No preamble, no explanation, no markdown.
+Return ONLY the SQL query. No preamble, no explanation, no markdown fences.
 
 Start with:
 \`-- Use Case: {use_case_id} - {use_case_name}\`
 
-Then the full SQL query using CTEs. The query must be complete and runnable on Databricks SQL.`,
+Then the full SQL query using CTEs. The query must be complete and runnable on Databricks SQL.
+
+End with:
+\`--END OF GENERATED SQL\``,
 
   // -------------------------------------------------------------------------
   // Step 7b: SQL Fix/Retry (fixes execution errors in generated SQL)
@@ -615,6 +910,8 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 4. **DO NOT ADD FEATURES** -- Do not add new columns, CTEs, or logic
 5. **ONLY FIX** what the validation/execution error indicates is broken
 6. **RUNTIME ERRORS** -- If error is from query execution (not syntax), fix the runtime issue (e.g., window function issues, unresolved columns, type mismatches)
+7. **PRESERVE ai_sys_prompt** -- If the original query includes an \`ai_sys_prompt\` column, keep it as the last column in the final output
+8. **PRESERVE END MARKER** -- If the original query ends with \`--END OF GENERATED SQL\`, keep it
 
 ### USE CASE CONTEXT
 
@@ -651,10 +948,12 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 ### COMMON FIXES
 
 - **COALESCE text defaults**: Wrap text defaults in single quotes: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
-- **Column not found**: Check the schema above for the correct column name
-- **Type mismatch**: Cast columns to the correct type
-- **Window function errors**: Check PARTITION BY and ORDER BY clauses
-- **Ambiguous column**: Qualify with table alias
+- **Column not found**: Check the schema above for the correct column name; use the exact spelling
+- **Type mismatch**: Cast columns to the correct type (e.g., \`CAST(col AS STRING)\`)
+- **Window function errors**: Check PARTITION BY and ORDER BY clauses; ensure the window is valid
+- **Ambiguous column**: Qualify with table alias (e.g., \`t1.col\` not just \`col\`)
+- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct
+- **AI_FORECAST errors**: Ensure \`time_col\`, \`value_col\`, \`group_col\` are string literals (quoted), not column references
 
 ### OUTPUT FORMAT
 
@@ -775,6 +1074,18 @@ export function formatPrompt(
       new RegExp(`\\{${varName}\\}`, "g"),
       safeValue
     );
+  }
+
+  // Warn on any remaining {placeholder} patterns that were not substituted.
+  // This catches missing variables at runtime instead of silently sending
+  // unresolved placeholders to the LLM.
+  const remaining = prompt.match(/\{[a-z_]+\}/g);
+  if (remaining) {
+    const unique = [...new Set(remaining)];
+    logger.warn("Unresolved placeholders in prompt template", {
+      promptKey: key,
+      unresolvedPlaceholders: unique,
+    });
   }
 
   return prompt;
