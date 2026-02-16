@@ -13,6 +13,7 @@ import {
   listTrackedGenieSpaces,
   trackGenieSpaceCreated,
 } from "@/lib/lakebase/genie-spaces";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -79,6 +80,13 @@ export async function POST(request: NextRequest) {
       title
     );
 
+    logger.info("Genie space created successfully", {
+      spaceId: result.space_id,
+      runId,
+      domain,
+      title,
+    });
+
     return NextResponse.json({
       spaceId: result.space_id,
       title: result.title,
@@ -86,6 +94,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Genie space creation failed", {
+      error: message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
