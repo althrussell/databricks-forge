@@ -155,6 +155,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
     setDeploying(true);
     let successCount = 0;
     let failCount = 0;
+    const failReasons: string[] = [];
     const BATCH_SIZE = 3;
 
     for (let i = 0; i < toDeploy.length; i += BATCH_SIZE) {
@@ -187,7 +188,12 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
 
       for (const r of results) {
         if (r.status === "fulfilled") successCount++;
-        else failCount++;
+        else {
+          failCount++;
+          failReasons.push(
+            r.reason instanceof Error ? r.reason.message : String(r.reason)
+          );
+        }
       }
     }
 
@@ -201,8 +207,12 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
         `Successfully deployed ${successCount} Genie space${successCount !== 1 ? "s" : ""}`
       );
     } else {
-      toast.warning(
-        `Deployed ${successCount}, failed ${failCount} Genie space${failCount !== 1 ? "s" : ""}`
+      const reasons = failReasons.length > 0
+        ? `: ${failReasons.join("; ")}`
+        : "";
+      toast.error(
+        `Deployed ${successCount}, failed ${failCount} Genie space${failCount !== 1 ? "s" : ""}${reasons}`,
+        { duration: 10000 }
       );
     }
   }
