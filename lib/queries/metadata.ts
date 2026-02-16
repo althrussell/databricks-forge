@@ -55,14 +55,17 @@ function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
 /**
  * List catalogs the current user can actually query.
  *
- * Strategy (in priority order):
- *   1. Query `system.information_schema.catalogs` — returns only catalogs
- *      the caller has USE CATALOG on (single query, no noisy errors).
- *   2. Fallback: `SHOW CATALOGS` + parallel permission probes — filters
- *      out catalogs where `information_schema` is inaccessible.
+ * Two-phase approach:
+ *   1. Build a candidate list (from `system.information_schema.catalogs` if
+ *      accessible, otherwise `SHOW CATALOGS`).
+ *   2. **Always** probe each candidate with a lightweight query to confirm
+ *      the user truly has USE CATALOG. The candidate list may include
+ *      catalogs the user can see (BROWSE) but not query.
  */
 export async function listCatalogs(): Promise<string[]> {
-  // --- Strategy 1: system information_schema (preferred, single query) ---
+  let candidates: string[];
+
+  // Phase 1: build candidate list
   try {
     const result = await executeSQL(`
       SELECT catalog_name
@@ -70,17 +73,20 @@ export async function listCatalogs(): Promise<string[]> {
       WHERE catalog_name NOT IN ('system', '__databricks_internal')
       ORDER BY catalog_name
     `);
-    return result.rows.map((r) => r[0]);
+    candidates = result.rows.map((r) => r[0]);
   } catch {
-    // system catalog may not be accessible — fall through to strategy 2
+    // system catalog not accessible — fall back to SHOW CATALOGS
+    const result = await executeSQL("SHOW CATALOGS");
+    candidates = result.rows
+      .map((r) => r[0])
+      .filter((c) => c !== "system" && c !== "__databricks_internal");
   }
 
-  // --- Strategy 2: SHOW CATALOGS + per-catalog probe ---
-  const result = await executeSQL("SHOW CATALOGS");
-  const allCatalogs = result.rows.map((r) => r[0]);
+  if (candidates.length === 0) return [];
 
+  // Phase 2: probe each candidate to verify USE CATALOG permission
   const probes = await Promise.allSettled(
-    allCatalogs.map(async (catalog) => {
+    candidates.map(async (catalog) => {
       await executeSQL(
         `SELECT 1 FROM \`${catalog}\`.information_schema.schemata LIMIT 1`
       );
@@ -96,17 +102,27 @@ export async function listCatalogs(): Promise<string[]> {
 }
 
 /**
- * List schemas in a catalog.
+ * List schemas in a catalog. Returns an empty array if the user lacks
+ * USE CATALOG permission (instead of throwing).
  */
 export async function listSchemas(catalog: string): Promise<string[]> {
   const sql = `
     SELECT schema_name
-    FROM ${catalog}.information_schema.schemata
+    FROM \`${catalog}\`.information_schema.schemata
     WHERE schema_name NOT IN ('information_schema', 'default')
     ORDER BY schema_name
   `;
-  const result = await executeSQL(sql);
-  return result.rows.map((r) => r[0]);
+  try {
+    const result = await executeSQL(sql);
+    return result.rows.map((r) => r[0]);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("USE CATALOG")) {
+      console.warn(`[metadata] No permission on catalog ${catalog}, returning empty`);
+      return [];
+    }
+    throw error;
+  }
 }
 
 /**

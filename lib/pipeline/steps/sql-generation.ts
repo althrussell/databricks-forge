@@ -9,6 +9,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
+import { executeSQL } from "@/lib/dbx/sql";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
@@ -90,8 +91,11 @@ export async function runSqlGeneration(
   const aiFunctionsSummary = generateAIFunctionsSummary();
   const statisticalFunctionsSummary = generateStatisticalFunctionsSummary();
 
+  const sampleRows = run.config.sampleRowsPerTable ?? 0;
+
   console.log(
-    `[sql-generation] Generating SQL for ${totalUseCases} use cases across ${sortedDomains.length} domains`
+    `[sql-generation] Generating SQL for ${totalUseCases} use cases across ${sortedDomains.length} domains` +
+      (sampleRows > 0 ? ` (sampling ${sampleRows} rows/table)` : "")
   );
 
   for (const [domain, domainCases] of sortedDomains) {
@@ -116,7 +120,8 @@ export async function runSqlGeneration(
             columnsByTable,
             tableByFqn,
             metadata.foreignKeys,
-            run.config.aiModel
+            run.config.aiModel,
+            sampleRows
           )
         )
       );
@@ -173,7 +178,8 @@ async function generateSqlForUseCase(
   columnsByTable: Map<string, ColumnInfo[]>,
   tableByFqn: Map<string, TableInfo>,
   allForeignKeys: ForeignKey[],
-  aiModel: string
+  aiModel: string,
+  sampleRowsPerTable: number
 ): Promise<string | null> {
   // Resolve table schemas for this use case's involved tables
   const involvedTables: TableInfo[] = [];
@@ -214,6 +220,12 @@ async function generateSqlForUseCase(
   );
   const fkMarkdown = buildForeignKeyMarkdown(relevantFKs);
 
+  // Fetch sample data if enabled
+  let sampleDataSection = "";
+  if (sampleRowsPerTable > 0 && uc.tablesInvolved.length > 0) {
+    sampleDataSection = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable);
+  }
+
   // Build the per-use-case prompt variables
   const variables: Record<string, string> = {
     ...businessVars,
@@ -227,6 +239,7 @@ async function generateSqlForUseCase(
     tables_involved: uc.tablesInvolved.join(", "),
     directly_involved_schema: schemaMarkdown,
     foreign_key_relationships: fkMarkdown,
+    sample_data_section: sampleDataSection,
     ai_functions_summary:
       uc.type === "AI" ? aiFunctionsSummary : "",
     statistical_functions_detailed:
@@ -247,6 +260,61 @@ async function generateSqlForUseCase(
   }
 
   return sql;
+}
+
+// ---------------------------------------------------------------------------
+// Sample data fetching
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch sample rows from each table and format as markdown tables for
+ * prompt injection. Helps the LLM understand actual data values, formats,
+ * and cardinality to write more precise SQL.
+ */
+async function fetchSampleData(
+  tableFqns: string[],
+  rowLimit: number
+): Promise<string> {
+  const sections: string[] = [
+    "### SAMPLE DATA (real rows from the tables -- use this to understand data formats, values, and join keys)\n",
+  ];
+
+  const results = await Promise.allSettled(
+    tableFqns.map(async (fqn) => {
+      const cleanFqn = fqn.replace(/`/g, "");
+      const result = await executeSQL(
+        `SELECT * FROM \`${cleanFqn.split(".").join("\`.\`")}\` LIMIT ${rowLimit}`
+      );
+
+      if (!result.columns || result.columns.length === 0 || result.rows.length === 0) {
+        return { fqn: cleanFqn, markdown: `**${cleanFqn}**: (empty table)\n` };
+      }
+
+      const colNames = result.columns.map((c) => c.name);
+      const header = `| ${colNames.join(" | ")} |`;
+      const separator = `| ${colNames.map(() => "---").join(" | ")} |`;
+      const rows = result.rows.map((row) => {
+        const cells = row.map((val) => {
+          if (val === null || val === undefined) return "NULL";
+          const s = String(val);
+          // Truncate long values to keep the prompt compact
+          return s.length > 60 ? s.substring(0, 57) + "..." : s;
+        });
+        return `| ${cells.join(" | ")} |`;
+      });
+
+      const markdown = `**${cleanFqn}** (${result.rows.length} sample rows):\n${header}\n${separator}\n${rows.join("\n")}\n`;
+      return { fqn: cleanFqn, markdown };
+    })
+  );
+
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      sections.push(r.value.markdown);
+    }
+  }
+
+  return sections.length > 1 ? sections.join("\n") : "";
 }
 
 // ---------------------------------------------------------------------------

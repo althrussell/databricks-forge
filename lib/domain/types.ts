@@ -88,6 +88,7 @@ export interface PipelineRunConfig {
   generationPath: string;
   languages: SupportedLanguage[];
   aiModel: string;
+  sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for SQL gen
 }
 
 export interface PipelineRun {

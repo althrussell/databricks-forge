@@ -468,6 +468,8 @@ You are a **Principal Databricks SQL Engineer** with 15+ years of experience wri
 
 {foreign_key_relationships}
 
+{sample_data_section}
+
 ### AVAILABLE FUNCTIONS
 
 {ai_functions_summary}
