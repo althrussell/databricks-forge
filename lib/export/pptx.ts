@@ -363,19 +363,6 @@ export async function generatePptx(
     fontFace: "Calibri",
   });
 
-  // Disclaimer
-  execSlide.addText(
-    "Disclaimer: This analysis is based on Unity Catalog metadata only. No actual data was accessed or read during this process.",
-    {
-      x: CONTENT_MARGIN,
-      y: 6.0,
-      w: CONTENT_W,
-      fontSize: 11,
-      italic: true,
-      color: MID_GRAY,
-      fontFace: "Calibri",
-    }
-  );
   addFooter(execSlide);
 
   // =====================================================================
@@ -447,20 +434,23 @@ export async function generatePptx(
 
     addRedSeparator(divSlide, 1.5, 2.0, 3);
 
+    const domainFontSize = domain.length > 40 ? 30 : domain.length > 25 ? 36 : 44;
     divSlide.addText(domain, {
       x: 1.5,
       y: 2.3,
       w: 10,
-      fontSize: 44,
+      h: 1.2,
+      fontSize: domainFontSize,
       bold: true,
       color: WHITE,
       fontFace: "Calibri",
+      wrap: true,
     });
     divSlide.addText(`${cases.length} Use Cases`, {
       x: 1.5,
-      y: 3.5,
+      y: 3.6,
       w: 10,
-      fontSize: 32,
+      fontSize: 28,
       color: DB_RED,
       fontFace: "Calibri",
     });
@@ -470,16 +460,19 @@ export async function generatePptx(
     const sumSlide = pptx.addSlide();
     addAccentBar(sumSlide, DB_RED, 0, 0.8, 0.1, 3.0);
 
+    const sumFontSize = domain.length > 40 ? 24 : domain.length > 25 ? 28 : 32;
     sumSlide.addText(domain, {
       x: CONTENT_MARGIN,
       y: 0.3,
       w: CONTENT_W,
-      fontSize: 36,
+      h: 0.7,
+      fontSize: sumFontSize,
       bold: true,
       color: DB_DARK,
       fontFace: "Calibri",
+      wrap: true,
     });
-    addRedSeparator(sumSlide, CONTENT_MARGIN, 0.95, 4);
+    addRedSeparator(sumSlide, CONTENT_MARGIN, 1.05, 4);
 
     const bullets = buildDomainSummary(domain, cases);
     const bulletTexts = bullets.map((b) => ({
@@ -506,21 +499,30 @@ export async function generatePptx(
     // ── 4c. Individual Use Case Slides ────────────────────────────────
     for (const uc of cases) {
       const ucSlide = pptx.addSlide();
-      addAccentBar(ucSlide, DB_RED, 0, 0.8, 0.1, 5.5);
+      addAccentBar(ucSlide, DB_RED, 0, 0.4, 0.1, 6.0);
 
-      // Title
-      ucSlide.addText(`${uc.id}: ${uc.name}`, {
+      // Title — shrink font for long names so they fit
+      const titleText = `${uc.id}: ${uc.name}`;
+      const titleLen = titleText.length;
+      const titleFontSize = titleLen > 80 ? 18 : titleLen > 55 ? 20 : 22;
+      const titleH = titleLen > 80 ? 0.8 : titleLen > 55 ? 0.65 : 0.5;
+
+      ucSlide.addText(titleText, {
         x: CONTENT_MARGIN,
         y: 0.2,
         w: CONTENT_W,
-        fontSize: 28,
+        h: titleH,
+        fontSize: titleFontSize,
         bold: true,
         color: DB_DARK,
         fontFace: "Calibri",
+        valign: "top",
+        wrap: true,
       });
 
       // Red separator under title
-      addRedSeparator(ucSlide, CONTENT_MARGIN, 0.78, 5);
+      const sepY = 0.2 + titleH + 0.05;
+      addRedSeparator(ucSlide, CONTENT_MARGIN, sepY, 5);
 
       // Subtitle line: Subdomain | Type | Technique
       const subtitleParts = [
@@ -530,17 +532,17 @@ export async function generatePptx(
       ].filter(Boolean);
       ucSlide.addText(subtitleParts.join("  |  "), {
         x: CONTENT_MARGIN,
-        y: 0.9,
+        y: sepY + 0.08,
         w: CONTENT_W,
-        fontSize: 16,
+        fontSize: 13,
         bold: true,
         color: DB_RED,
         fontFace: "Calibri",
       });
 
       // Detail fields
-      let yPos = 1.4;
-      const lineH = 0.18; // height per line of text approx
+      let yPos = sepY + 0.45;
+      const lineH = 0.18;
       const fieldGap = 0.08;
 
       const fields: Array<{ label: string; value: string }> = [
@@ -561,9 +563,9 @@ export async function generatePptx(
       for (const field of fields) {
         if (!field.value) continue;
 
-        // Estimate height: ~90 chars per line at font 14
-        const estLines = Math.ceil(field.value.length / 90);
-        const fieldH = Math.max(0.35, estLines * lineH + 0.15);
+        // Estimate height: ~100 chars per line at font 12
+        const estLines = Math.ceil(field.value.length / 100);
+        const fieldH = Math.max(0.3, estLines * lineH + 0.12);
 
         // Don't overflow the slide
         if (yPos + fieldH > 6.3) break;
@@ -574,14 +576,14 @@ export async function generatePptx(
               text: `${field.label}: `,
               options: {
                 bold: true,
-                fontSize: 14,
+                fontSize: 12,
                 color: DB_DARK,
               },
             },
             {
               text: field.value,
               options: {
-                fontSize: 14,
+                fontSize: 12,
                 color: TEXT_COLOR,
               },
             },
