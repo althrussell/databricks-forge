@@ -133,6 +133,9 @@ export async function startPipeline(runId: string): Promise<void> {
       // Link the metadata snapshot to this run for auditing
       if (ctx.metadata.cacheKey) {
         await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
+        // Persist the full snapshot for later use (e.g. Genie recommendations)
+        const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
+        await saveMetadataSnapshot(ctx.metadata);
       }
       await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 20, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
     });

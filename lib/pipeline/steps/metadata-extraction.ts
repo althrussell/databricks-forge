@@ -9,11 +9,13 @@ import {
   listTables,
   listColumns,
   listForeignKeys,
+  listMetricViews,
   buildSchemaMarkdown,
 } from "@/lib/queries/metadata";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import type {
   MetadataSnapshot,
+  MetricViewInfo,
   PipelineContext,
   TableInfo,
   ColumnInfo,
@@ -52,6 +54,7 @@ export async function runMetadataExtraction(
   const allTables: TableInfo[] = [];
   const allColumns: ColumnInfo[] = [];
   const allFKs: ForeignKey[] = [];
+  const allMetricViews: MetricViewInfo[] = [];
 
   for (let si = 0; si < scopes.length; si++) {
     const scope = scopes[si];
@@ -67,6 +70,9 @@ export async function runMetadataExtraction(
 
       const fks = await listForeignKeys(scope.catalog, scope.schema);
       allFKs.push(...fks);
+
+      const mvs = await listMetricViews(scope.catalog, scope.schema);
+      allMetricViews.push(...mvs);
     } catch (error) {
       console.warn(
         `[metadata-extraction] Failed to extract metadata for ${scopeLabel}:`,
@@ -93,6 +99,7 @@ export async function runMetadataExtraction(
     tables: allTables,
     columns: allColumns,
     foreignKeys: allFKs,
+    metricViews: allMetricViews,
     schemaMarkdown,
     tableCount: allTables.length,
     columnCount: allColumns.length,
@@ -100,7 +107,7 @@ export async function runMetadataExtraction(
   };
 
   console.log(
-    `[metadata-extraction] Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns`
+    `[metadata-extraction] Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns, ${allMetricViews.length} metric views`
   );
 
   return snapshot;

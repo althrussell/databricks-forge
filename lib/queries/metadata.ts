@@ -7,7 +7,7 @@
 
 import { executeSQLMapped, executeSQL, type SqlColumn } from "@/lib/dbx/sql";
 import { validateIdentifier } from "@/lib/validation";
-import type { TableInfo, ColumnInfo, ForeignKey } from "@/lib/domain/types";
+import type { TableInfo, ColumnInfo, ForeignKey, MetricViewInfo } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
 // Row Mappers
@@ -223,6 +223,47 @@ export async function listForeignKeys(
   } catch {
     // FK information_schema views may not be available
     console.warn("Foreign key query failed, returning empty array");
+    return [];
+  }
+}
+
+/**
+ * Attempt to discover Unity Catalog metric views in a catalog.
+ * Falls back to empty array if the table_type is not recognised or the query fails.
+ */
+export async function listMetricViews(
+  catalog: string,
+  schema?: string
+): Promise<MetricViewInfo[]> {
+  try {
+    const safeCatalog = validateIdentifier(catalog, "catalog");
+    let sql = `
+      SELECT table_catalog, table_schema, table_name, comment
+      FROM \`${safeCatalog}\`.information_schema.tables
+      WHERE table_type = 'METRIC_VIEW'
+        AND table_schema NOT IN ('information_schema', 'default')
+    `;
+    if (schema) {
+      const safeSchema = validateIdentifier(schema, "schema");
+      sql += ` AND table_schema = '${safeSchema}'`;
+    }
+    sql += ` ORDER BY table_schema, table_name`;
+
+    const result = await executeSQL(sql);
+    return result.rows.map((row) => {
+      const cat = row[0] ?? "";
+      const sch = row[1] ?? "";
+      const name = row[2] ?? "";
+      return {
+        catalog: cat,
+        schema: sch,
+        name,
+        fqn: `${cat}.${sch}.${name}`,
+        comment: row[3] ?? null,
+      };
+    });
+  } catch {
+    // Metric views may not be available in this workspace
     return [];
   }
 }

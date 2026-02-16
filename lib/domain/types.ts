@@ -194,12 +194,21 @@ export interface ForeignKey {
   referencedColumnName: string;
 }
 
+export interface MetricViewInfo {
+  catalog: string;
+  schema: string;
+  name: string;
+  fqn: string; // catalog.schema.metric_view
+  comment: string | null;
+}
+
 export interface MetadataSnapshot {
   cacheKey: string;
   ucPath: string;
   tables: TableInfo[];
   columns: ColumnInfo[];
   foreignKeys: ForeignKey[];
+  metricViews: MetricViewInfo[];
   schemaMarkdown: string;
   tableCount: number;
   columnCount: number;
