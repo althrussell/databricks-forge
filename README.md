@@ -1,5 +1,7 @@
 # Databricks Inspire AI
 
+> **IMPORTANT: This is NOT a Databricks product.** This project was built by the Databricks Field Engineering team as an internal accelerator. It is provided as-is under the Apache 2.0 license with no warranty, no official support, and no liability. **Status: Alpha** -- see [NOTICE](NOTICE) for full disclaimer.
+
 **Transform your Unity Catalog metadata into actionable, AI-generated use cases.**
 
 Databricks Inspire AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via `ai_query()`) to discover, score, and export data-driven use cases -- without ever reading your actual data.
@@ -495,6 +497,36 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 
 ---
 
+## Disclaimer
+
+**This project is NOT an official Databricks product, feature, or service.** It was developed by the Databricks Field Engineering team as an internal accelerator and is shared as-is for informational and experimental purposes.
+
+- **Status**: Alpha -- incomplete, likely contains bugs, may change or be discontinued without notice
+- **No warranty**: Provided "AS IS" without warranties of any kind
+- **No support**: No official support, SLAs, or maintenance commitments from Databricks
+- **No liability**: Databricks and its contributors accept no liability for any damages or consequences arising from use
+- **Not reviewed**: This software has NOT been reviewed or approved by Databricks product, security, or legal teams for production use
+
+**Use at your own risk.** You are solely responsible for evaluating fitness for your use case, testing, and ensuring compliance with your organisation's policies. See [NOTICE](NOTICE) for full details.
+
+---
+
 ## License
 
-Private. Internal use only.
+Licensed under the [Apache License 2.0](LICENSE).
+
+```
+Copyright 2024-2026 Databricks, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
