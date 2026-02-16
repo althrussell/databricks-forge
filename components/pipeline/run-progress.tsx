@@ -4,12 +4,13 @@ import { cn } from "@/lib/utils";
 import { PipelineStep, type RunStatus } from "@/lib/domain/types";
 
 const STEPS = [
-  { key: PipelineStep.BusinessContext, label: "Business Context", pct: 15 },
-  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 30 },
-  { key: PipelineStep.TableFiltering, label: "Table Filtering", pct: 45 },
-  { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 65 },
-  { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 80 },
-  { key: PipelineStep.Scoring, label: "Scoring & Dedup", pct: 100 },
+  { key: PipelineStep.BusinessContext, label: "Business Context", pct: 10 },
+  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 20 },
+  { key: PipelineStep.TableFiltering, label: "Table Filtering", pct: 30 },
+  { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 45 },
+  { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 55 },
+  { key: PipelineStep.Scoring, label: "Scoring & Dedup", pct: 65 },
+  { key: PipelineStep.SqlGeneration, label: "SQL Generation", pct: 95 },
 ];
 
 interface RunProgressProps {

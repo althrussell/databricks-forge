@@ -94,6 +94,17 @@ export async function runSqlGeneration(
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 
+  // Progress interpolation: SQL generation spans 67% → 95% of overall pipeline
+  const PROGRESS_START = 67;
+  const PROGRESS_END = 95;
+  const progressPerUseCase = totalUseCases > 0
+    ? (PROGRESS_END - PROGRESS_START) / totalUseCases
+    : 0;
+
+  function currentProgress(): number {
+    return Math.round(PROGRESS_START + completed * progressPerUseCase);
+  }
+
   logger.info("SQL generation starting", {
     useCaseCount: totalUseCases,
     domainCount: sortedDomains.length,
@@ -104,7 +115,8 @@ export async function runSqlGeneration(
     if (runId) {
       await updateRunMessage(
         runId,
-        `Generating SQL for domain "${domain}" (${domainCases.length} use cases, ${completed}/${totalUseCases} done)...`
+        `Generating SQL for domain "${domain}" (${domainCases.length} use cases, ${completed}/${totalUseCases} done)...`,
+        currentProgress()
       );
     }
 
@@ -153,7 +165,8 @@ export async function runSqlGeneration(
       if (runId) {
         await updateRunMessage(
           runId,
-          `SQL generation: ${completed}/${totalUseCases} complete (${failed} failed)`
+          `SQL generation: ${completed}/${totalUseCases} complete (${failed} failed)`,
+          currentProgress()
         );
       }
     }
