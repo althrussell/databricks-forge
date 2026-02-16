@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -23,14 +23,11 @@ import { loadSettings, saveSettings } from "@/lib/settings";
 import { Shield, Database } from "lucide-react";
 
 export default function SettingsPage() {
-  const [sampleRowsPerTable, setSampleRowsPerTable] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const s = loadSettings();
-    setSampleRowsPerTable(s.sampleRowsPerTable);
-    setLoaded(true);
-  }, []);
+  const [sampleRowsPerTable, setSampleRowsPerTable] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    return loadSettings().sampleRowsPerTable;
+  });
+  const loaded = typeof window !== "undefined";
 
   const handleSave = () => {
     saveSettings({ sampleRowsPerTable });
