@@ -90,6 +90,8 @@ export default function RunDetailPage({
   const abortRef = useRef<AbortController | null>(null);
   const fetchingRef = useRef(false);
 
+  const [activeTab, setActiveTab] = useState("overview");
+
   // Prompt logs state
   const [promptLogs, setPromptLogs] = useState<PromptLogEntry[]>([]);
   const [promptStats, setPromptStats] = useState<PromptLogStats | null>(null);
@@ -189,7 +191,6 @@ export default function RunDetailPage({
     failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   };
 
-  const [activeTab, setActiveTab] = useState("overview");
   const isCompleted = run.status === "completed";
   const isActive = run.status === "running" || run.status === "pending";
   const domainStats = isCompleted ? computeDomainStats(useCases) : [];
