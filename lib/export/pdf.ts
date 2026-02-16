@@ -40,6 +40,34 @@ const MARGIN = 50;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 
 // ---------------------------------------------------------------------------
+// Databricks logo — SVG path from public/databricks-icon.svg
+// viewBox: 0 0 40.1 42, fill: DB_RED
+// ---------------------------------------------------------------------------
+
+const DB_LOGO_PATH =
+  "M40.1,31.1v-7.4l-0.8-0.5L20.1,33.7l-18.2-10l0-4.3l18.2,9.9l20.1-10.9v-7.3l-0.8-0.5L20.1,21.2L2.6,11.6L20.1,2l14.1,7.7l1.1-0.6V8.3L20.1,0L0,10.9V12L20.1,23l18.2-10v4.4l-18.2,10L0.8,16.8L0,17.3v7.4l20.1,10.9l18.2-9.9v4.3l-18.2,10L0.8,29.5L0,30v1.1L20.1,42L40.1,31.1z";
+const DB_LOGO_VB_W = 40.1;
+const DB_LOGO_VB_H = 42;
+
+/** Draw the Databricks logo at given position and height */
+function drawLogo(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  height: number,
+  color: string = DB_RED
+): void {
+  const scale = height / DB_LOGO_VB_H;
+  doc
+    .save()
+    .translate(x, y)
+    .scale(scale)
+    .path(DB_LOGO_PATH)
+    .fill(color);
+  doc.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -49,11 +77,13 @@ function today(): string {
 
 /** Add branded footer to a page (light or dark variant) */
 function addFooter(doc: PDFKit.PDFDocument, variant: "light" | "dark" = "light"): void {
+  const logoColor = variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR;
+  drawLogo(doc, MARGIN, PAGE_H - 38, 14, logoColor);
   doc
     .fontSize(9)
     .fillColor(variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR)
-    .text(`Databricks Inspire AI  |  ${today()}`, MARGIN, PAGE_H - 35, {
-      width: CONTENT_W,
+    .text(`Databricks Inspire AI  |  ${today()}`, MARGIN + 20, PAGE_H - 35, {
+      width: CONTENT_W - 20,
       align: "right",
     });
 }
@@ -275,12 +305,8 @@ export async function generatePdf(
     // Brand geometric shapes (right half)
     addBrandShapes(doc, { x: PAGE_W * 0.48, y: 40, w: PAGE_W * 0.48, h: PAGE_H * 0.75 });
 
-    // "databricks" logo text (top-left)
-    doc
-      .fontSize(14)
-      .fillColor(WHITE)
-      .font("Helvetica-Bold")
-      .text("databricks", MARGIN, MARGIN);
+    // Databricks logo (top-left)
+    drawLogo(doc, MARGIN, MARGIN, 28);
 
     // Main title
     doc
