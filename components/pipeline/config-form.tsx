@@ -244,12 +244,16 @@ export function ConfigForm() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Selecting an industry enriches the AI with curated high-value use
-              cases, KPIs, and strategic context from Databricks outcome maps.
-              {industry && (
-                <span className="ml-1 text-primary">
-                  Industry context will be injected into prompts.
+              {industry ? (
+                <span className="text-primary">
+                  Industry context will be injected into prompts with curated
+                  use cases, KPIs, and strategic context.
                 </span>
+              ) : (
+                <>
+                  If left empty, the system will auto-detect the best matching
+                  industry from the business context generated in Step 1.
+                </>
               )}
             </p>
           </div>

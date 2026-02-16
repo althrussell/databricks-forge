@@ -13,8 +13,11 @@ import {
   updateRunBusinessContext,
   updateRunStepLog,
   updateRunMetadataCacheKey,
+  updateRunIndustry,
+  updateRunMessage,
   getRunById,
 } from "@/lib/lakebase/runs";
+import { detectIndustryFromContext } from "@/lib/domain/industry-outcomes-server";
 // insertUseCases/deleteUseCasesForRun are now handled inline via $transaction
 import { runBusinessContext } from "./steps/business-context";
 import { runMetadataExtraction } from "./steps/metadata-extraction";
@@ -99,6 +102,28 @@ export async function startPipeline(runId: string): Promise<void> {
       await updateRunBusinessContext(runId, businessContext);
       await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 10, undefined, "Business context generated");
     });
+
+    // Auto-detect industry outcome map if not manually selected
+    const detectedIndustries = ctx.run.businessContext?.industries;
+    if (!ctx.run.config.industry && detectedIndustries) {
+      const detected = await detectIndustryFromContext(detectedIndustries);
+      if (detected) {
+        ctx.run = {
+          ...ctx.run,
+          config: { ...ctx.run.config, industry: detected },
+        };
+        await updateRunIndustry(runId, detected, true);
+        logger.info("Auto-detected industry outcome map", {
+          runId,
+          detected,
+          from: detectedIndustries,
+        });
+        await updateRunMessage(
+          runId,
+          `Auto-detected industry: ${detected}`
+        );
+      }
+    }
 
     // Step 2: Metadata Extraction
     await logStep(PipelineStep.MetadataExtraction, async () => {

@@ -115,6 +115,7 @@ export interface PipelineRun {
   appVersion: string | null;
   promptVersions: Record<string, string> | null; // promptKey -> SHA-256 hash
   stepLog: StepLogEntry[];
+  industryAutoDetected: boolean; // true when the industry was set by auto-detection, not user
   createdBy: string | null; // email of the user who created this run
   createdAt: string; // ISO timestamp
   completedAt: string | null;
