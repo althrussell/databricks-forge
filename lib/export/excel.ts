@@ -16,9 +16,7 @@ import { computeDomainStats } from "@/lib/domain/scoring";
 // ---------------------------------------------------------------------------
 
 const DATABRICKS_BLUE = "FF003366";
-const DATABRICKS_ORANGE = "FFFF6900";
 const WHITE = "FFFFFFFF";
-const LIGHT_BLUE_BG = "FFE8EFF5";
 const LIGHT_GRAY_BG = "FFF9FAFB";
 const TEXT_DARK = "FF333333";
 const BORDER_COLOR = "FFD1D5DB";

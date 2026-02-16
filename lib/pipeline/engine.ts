@@ -6,12 +6,11 @@
  */
 
 import { PipelineStep } from "@/lib/domain/types";
-import type { PipelineContext, PipelineRun, UseCase, StepLogEntry } from "@/lib/domain/types";
+import type { PipelineContext } from "@/lib/domain/types";
 import { logger } from "@/lib/logger";
 import {
   updateRunStatus,
   updateRunBusinessContext,
-  updateRunMessage,
   updateRunStepLog,
   getRunById,
 } from "@/lib/lakebase/runs";
@@ -55,7 +54,7 @@ const STEPS: StepDef[] = [
  * Progress is tracked in Lakebase so the frontend can poll.
  */
 export async function startPipeline(runId: string): Promise<void> {
-  let run = await getRunById(runId);
+  const run = await getRunById(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
 
   const ctx: PipelineContext = {
