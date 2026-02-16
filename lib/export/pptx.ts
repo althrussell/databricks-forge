@@ -14,24 +14,46 @@
  */
 
 import PptxGenJS from "pptxgenjs";
+import fs from "fs";
+import path from "path";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import { groupByDomain, computeDomainStats } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
-// Brand constants
+// Databricks logo — loaded once from public/databricks-icon.svg as base64 PNG
+// pptxgenjs needs the image as a base64 data URI.
 // ---------------------------------------------------------------------------
 
-const DATABRICKS_BLUE = "003366";
-const DATABRICKS_ORANGE = "FF6900";
-const TEXT_COLOR = "333333";
-const LIGHT_GRAY = "FAFAFA";
-const WHITE = "FFFFFF";
-const FOOTER_COLOR = "888888";
-const BORDER_COLOR = "D1D5DB";
+let _logoBase64: string | null = null;
 
-const TEAL_ACCENT = "00BCD4";
-const PURPLE_ACCENT = "9C27B0";
-const GREEN_ACCENT = "4CAF50";
+function getLogoBase64(): string | null {
+  if (_logoBase64 !== null) return _logoBase64;
+  try {
+    const svgPath = path.join(process.cwd(), "public", "databricks-icon.svg");
+    const svgContent = fs.readFileSync(svgPath, "utf-8");
+    _logoBase64 = `data:image/svg+xml;base64,${Buffer.from(svgContent).toString("base64")}`;
+    return _logoBase64;
+  } catch {
+    _logoBase64 = "";
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Official Databricks brand constants (hex without # for pptxgenjs)
+// ---------------------------------------------------------------------------
+
+const DB_DARK = "1B3139"; // Brand Dark — dark teal-charcoal
+const DB_RED = "FF3621"; // Databricks Red — primary accent
+const TEXT_COLOR = "2D3E50"; // Charcoal for body text on light slides
+const TEXT_LIGHT = "BECBD2"; // De-saturated light text on dark slides
+const WARM_WHITE = "FAFAFA";
+const WHITE = "FFFFFF";
+const FOOTER_COLOR = "8899A6";
+const BORDER_COLOR = "D1D5DB";
+const MID_GRAY = "5E6E7D";
+const SCORE_GREEN = "2EA44F";
+const SCORE_AMBER = "E8912D";
 
 // Slide dimensions (widescreen 13.33 x 7.5 in)
 const SLIDE_W = 13.33;
@@ -46,14 +68,21 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-/** Add branded footer to a slide */
-function addFooter(slide: PptxGenJS.Slide): void {
+/** Add branded footer with logo to a slide */
+function addFooter(
+  slide: PptxGenJS.Slide,
+  variant: "light" | "dark" = "light"
+): void {
+  const logo = getLogoBase64();
+  if (logo) {
+    slide.addImage({ data: logo, x: CONTENT_MARGIN, y: 6.98, w: 0.25, h: 0.26 });
+  }
   slide.addText(`Databricks Inspire AI  |  ${today()}`, {
-    x: CONTENT_MARGIN,
+    x: CONTENT_MARGIN + 0.35,
     y: 7.0,
-    w: CONTENT_W,
+    w: CONTENT_W - 0.35,
     fontSize: 10,
-    color: FOOTER_COLOR,
+    color: variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR,
     align: "right",
   });
 }
@@ -76,44 +105,41 @@ function addAccentBar(
   });
 }
 
-/** Add decorative circles to the title slide */
-function addTitleSlideShapes(slide: PptxGenJS.Slide): void {
-  // Large ovals
+/** Add red separator line across a slide */
+function addRedSeparator(
+  slide: PptxGenJS.Slide,
+  x: number,
+  y: number,
+  w: number
+): void {
+  slide.addShape("rect", { x, y, w, h: 0.04, fill: { color: DB_RED } });
+}
+
+/** Add subtle geometric brand shapes to dark slides */
+function addBrandShapes(slide: PptxGenJS.Slide): void {
+  // Top-right subtle circle
   slide.addShape("ellipse", {
-    x: 11.0,
-    y: 0.4,
-    w: 1.6,
-    h: 1.6,
-    fill: { color: TEAL_ACCENT, transparency: 60 },
+    x: 11.3,
+    y: -0.3,
+    w: 2.5,
+    h: 2.5,
+    fill: { color: WHITE, transparency: 92 },
   });
+  // Bottom-left subtle circle
   slide.addShape("ellipse", {
-    x: 0.4,
-    y: 5.5,
+    x: -0.5,
+    y: 5.8,
     w: 2.0,
     h: 2.0,
-    fill: { color: PURPLE_ACCENT, transparency: 60 },
+    fill: { color: WHITE, transparency: 92 },
   });
+  // Small red accent dot
   slide.addShape("ellipse", {
-    x: 11.8,
-    y: 6.3,
-    w: 1.2,
-    h: 1.2,
-    fill: { color: GREEN_ACCENT, transparency: 60 },
-  });
-  // Small accent circles
-  slide.addShape("ellipse", {
-    x: 1.2,
-    y: 1.2,
+    x: 12.0,
+    y: 6.5,
     w: 0.6,
     h: 0.6,
-    fill: { color: DATABRICKS_ORANGE, transparency: 40 },
-  });
-  slide.addShape("ellipse", {
-    x: 11.4,
-    y: 3.2,
-    w: 0.8,
-    h: 0.8,
-    fill: { color: TEAL_ACCENT, transparency: 40 },
+    fill: { color: DB_RED, transparency: 50 },
   });
 }
 
@@ -156,7 +182,7 @@ function headerCell(text: string): PptxGenJS.TableCell {
     options: {
       bold: true,
       color: WHITE,
-      fill: { color: DATABRICKS_BLUE },
+      fill: { color: DB_DARK },
       fontSize: 14,
       align: "left",
       valign: "middle",
@@ -209,12 +235,21 @@ export async function generatePptx(
   // 1. TITLE SLIDE
   // =====================================================================
   const titleSlide = pptx.addSlide();
-  titleSlide.background = { color: DATABRICKS_BLUE };
-  addTitleSlideShapes(titleSlide);
+  titleSlide.background = { color: DB_DARK };
+  addBrandShapes(titleSlide);
+
+  // Databricks logo (top-left)
+  const logo = getLogoBase64();
+  if (logo) {
+    titleSlide.addImage({ data: logo, x: 0.6, y: 0.5, w: 0.55, h: 0.58 });
+  }
+
+  // Red separator above the title
+  addRedSeparator(titleSlide, 1.5, 1.3, 3.5);
 
   titleSlide.addText("Databricks Inspire AI", {
     x: 1.5,
-    y: 1.5,
+    y: 1.6,
     w: 10,
     fontSize: 44,
     bold: true,
@@ -223,19 +258,23 @@ export async function generatePptx(
   });
   titleSlide.addText("Strategic AI Use Case Discovery", {
     x: 1.5,
-    y: 2.5,
+    y: 2.6,
     w: 10,
     fontSize: 24,
-    color: LIGHT_GRAY,
+    color: TEXT_LIGHT,
     fontFace: "Calibri",
   });
+
+  // Red separator above the business name
+  addRedSeparator(titleSlide, 1.5, 3.6, 2.5);
+
   titleSlide.addText(`For ${run.config.businessName}`, {
     x: 1.5,
-    y: 3.8,
+    y: 3.9,
     w: 10,
     fontSize: 32,
     bold: true,
-    color: DATABRICKS_ORANGE,
+    color: DB_RED,
     fontFace: "Calibri",
   });
   titleSlide.addText(today(), {
@@ -243,18 +282,18 @@ export async function generatePptx(
     y: 5.2,
     w: 10,
     fontSize: 20,
-    color: LIGHT_GRAY,
+    color: TEXT_LIGHT,
     fontFace: "Calibri",
   });
+  addFooter(titleSlide, "dark");
 
   // =====================================================================
   // 2. EXECUTIVE SUMMARY
   // =====================================================================
   const execSlide = pptx.addSlide();
 
-  // Accent bars on left
-  addAccentBar(execSlide, DATABRICKS_ORANGE, 0, 0.8, 0.12, 2.5);
-  addAccentBar(execSlide, TEAL_ACCENT, 0, 3.4, 0.1, 2.0);
+  // Brand accent bar on left
+  addAccentBar(execSlide, DB_RED, 0, 0.8, 0.1, 3.0);
 
   execSlide.addText("Executive Summary", {
     x: CONTENT_MARGIN,
@@ -262,9 +301,10 @@ export async function generatePptx(
     w: CONTENT_W,
     fontSize: 36,
     bold: true,
-    color: DATABRICKS_BLUE,
+    color: DB_DARK,
     fontFace: "Calibri",
   });
+  addRedSeparator(execSlide, CONTENT_MARGIN, 0.95, 4);
 
   // Narrative bullets from business context + stats
   const bc = run.businessContext;
@@ -332,7 +372,7 @@ export async function generatePptx(
       w: CONTENT_W,
       fontSize: 11,
       italic: true,
-      color: FOOTER_COLOR,
+      color: MID_GRAY,
       fontFace: "Calibri",
     }
   );
@@ -347,10 +387,8 @@ export async function generatePptx(
   for (let page = 0; page < tocPages; page++) {
     const tocSlide = pptx.addSlide();
 
-    // Accent bars
-    addAccentBar(tocSlide, DATABRICKS_ORANGE, 0, 0.8, 0.08, 1.5);
-    addAccentBar(tocSlide, TEAL_ACCENT, 0, 2.4, 0.08, 1.2);
-    addAccentBar(tocSlide, PURPLE_ACCENT, 0, 3.7, 0.08, 1.0);
+    // Brand accent bar
+    addAccentBar(tocSlide, DB_RED, 0, 0.8, 0.1, 3.0);
 
     const pageLabel = tocPages > 1 ? ` (${page + 1}/${tocPages})` : "";
     tocSlide.addText(`Table of Contents${pageLabel}`, {
@@ -359,9 +397,10 @@ export async function generatePptx(
       w: CONTENT_W,
       fontSize: 36,
       bold: true,
-      color: DATABRICKS_BLUE,
+      color: DB_DARK,
       fontFace: "Calibri",
     });
+    addRedSeparator(tocSlide, CONTENT_MARGIN, 0.95, 4);
 
     const pageStats = domainStats.slice(
       page * ROWS_PER_TOC,
@@ -403,15 +442,18 @@ export async function generatePptx(
 
     // ── 4a. Domain Divider ────────────────────────────────────────────
     const divSlide = pptx.addSlide();
-    divSlide.background = { color: DATABRICKS_BLUE };
+    divSlide.background = { color: DB_DARK };
+    addBrandShapes(divSlide);
+
+    addRedSeparator(divSlide, 1.5, 2.0, 3);
 
     divSlide.addText(domain, {
       x: 1.5,
-      y: 2.2,
+      y: 2.3,
       w: 10,
       fontSize: 44,
       bold: true,
-      color: DATABRICKS_ORANGE,
+      color: WHITE,
       fontFace: "Calibri",
     });
     divSlide.addText(`${cases.length} Use Cases`, {
@@ -419,29 +461,14 @@ export async function generatePptx(
       y: 3.5,
       w: 10,
       fontSize: 32,
-      color: WHITE,
+      color: DB_RED,
       fontFace: "Calibri",
     });
-
-    // Small decorative shapes
-    divSlide.addShape("ellipse", {
-      x: 11.5,
-      y: 0.5,
-      w: 1.2,
-      h: 1.2,
-      fill: { color: TEAL_ACCENT, transparency: 50 },
-    });
-    divSlide.addShape("ellipse", {
-      x: 0.5,
-      y: 6.0,
-      w: 0.8,
-      h: 0.8,
-      fill: { color: PURPLE_ACCENT, transparency: 50 },
-    });
+    addFooter(divSlide, "dark");
 
     // ── 4b. Domain Summary ────────────────────────────────────────────
     const sumSlide = pptx.addSlide();
-    addAccentBar(sumSlide, DATABRICKS_ORANGE, 0, 0.8, 0.12, 4.0);
+    addAccentBar(sumSlide, DB_RED, 0, 0.8, 0.1, 3.0);
 
     sumSlide.addText(domain, {
       x: CONTENT_MARGIN,
@@ -449,9 +476,10 @@ export async function generatePptx(
       w: CONTENT_W,
       fontSize: 36,
       bold: true,
-      color: DATABRICKS_BLUE,
+      color: DB_DARK,
       fontFace: "Calibri",
     });
+    addRedSeparator(sumSlide, CONTENT_MARGIN, 0.95, 4);
 
     const bullets = buildDomainSummary(domain, cases);
     const bulletTexts = bullets.map((b) => ({
@@ -478,7 +506,7 @@ export async function generatePptx(
     // ── 4c. Individual Use Case Slides ────────────────────────────────
     for (const uc of cases) {
       const ucSlide = pptx.addSlide();
-      addAccentBar(ucSlide, DATABRICKS_ORANGE, 0, 0.8, 0.12, 5.5);
+      addAccentBar(ucSlide, DB_RED, 0, 0.8, 0.1, 5.5);
 
       // Title
       ucSlide.addText(`${uc.id}: ${uc.name}`, {
@@ -487,9 +515,12 @@ export async function generatePptx(
         w: CONTENT_W,
         fontSize: 28,
         bold: true,
-        color: DATABRICKS_BLUE,
+        color: DB_DARK,
         fontFace: "Calibri",
       });
+
+      // Red separator under title
+      addRedSeparator(ucSlide, CONTENT_MARGIN, 0.78, 5);
 
       // Subtitle line: Subdomain | Type | Technique
       const subtitleParts = [
@@ -499,11 +530,11 @@ export async function generatePptx(
       ].filter(Boolean);
       ucSlide.addText(subtitleParts.join("  |  "), {
         x: CONTENT_MARGIN,
-        y: 0.85,
+        y: 0.9,
         w: CONTENT_W,
         fontSize: 16,
         bold: true,
-        color: DATABRICKS_ORANGE,
+        color: DB_RED,
         fontFace: "Calibri",
       });
 
@@ -544,7 +575,7 @@ export async function generatePptx(
               options: {
                 bold: true,
                 fontSize: 14,
-                color: DATABRICKS_BLUE,
+                color: DB_DARK,
               },
             },
             {
@@ -571,6 +602,16 @@ export async function generatePptx(
       // Score bar at bottom
       const scoreY = Math.max(yPos + 0.1, 6.0);
       if (scoreY < 6.8) {
+        // Background strip for scores
+        ucSlide.addShape("rect", {
+          x: CONTENT_MARGIN + 0.2,
+          y: scoreY - 0.05,
+          w: CONTENT_W - 0.4,
+          h: 0.4,
+          fill: { color: WARM_WHITE },
+          rectRadius: 0.05,
+        });
+
         const scores = [
           { label: "Priority", value: Math.round(uc.priorityScore * 100) },
           {
@@ -581,17 +622,29 @@ export async function generatePptx(
           { label: "Overall", value: Math.round(uc.overallScore * 100) },
         ];
 
-        const scoreText = scores
-          .map((s) => `${s.label}: ${s.value}%`)
-          .join("    |    ");
+        const scoreSegments: PptxGenJS.TextProps[] = [];
+        scores.forEach((s, i) => {
+          const scoreColor = s.value >= 70 ? SCORE_GREEN : s.value >= 40 ? SCORE_AMBER : DB_RED;
+          scoreSegments.push({
+            text: `${s.label}: `,
+            options: { bold: true, fontSize: 13, color: DB_DARK },
+          });
+          scoreSegments.push({
+            text: `${s.value}%`,
+            options: { bold: true, fontSize: 13, color: scoreColor },
+          });
+          if (i < scores.length - 1) {
+            scoreSegments.push({
+              text: "    |    ",
+              options: { fontSize: 13, color: MID_GRAY },
+            });
+          }
+        });
 
-        ucSlide.addText(scoreText, {
+        ucSlide.addText(scoreSegments, {
           x: CONTENT_MARGIN + 0.3,
           y: scoreY,
           w: CONTENT_W - 0.6,
-          fontSize: 13,
-          bold: true,
-          color: DATABRICKS_BLUE,
           fontFace: "Calibri",
         });
       }
