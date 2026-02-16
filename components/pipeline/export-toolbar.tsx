@@ -7,9 +7,10 @@ import { toast } from "sonner";
 interface ExportToolbarProps {
   runId: string;
   businessName: string;
+  onGenieClick?: () => void;
 }
 
-export function ExportToolbar({ runId, businessName }: ExportToolbarProps) {
+export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolbarProps) {
   const [exporting, setExporting] = useState<string | null>(null);
 
   const handleExport = async (format: string) => {
@@ -83,6 +84,16 @@ export function ExportToolbar({ runId, businessName }: ExportToolbarProps) {
       >
         {exporting === "pdf" ? "Exporting..." : "PDF"}
       </Button>
+      {onGenieClick && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!!exporting}
+          onClick={onGenieClick}
+        >
+          Deploy Genie
+        </Button>
+      )}
       <Button
         size="sm"
         disabled={!!exporting}

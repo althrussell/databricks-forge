@@ -20,7 +20,6 @@ const navItems = [
   { href: "/configure", label: "New Discovery", icon: PlusIcon },
   { href: "/runs", label: "Runs", icon: ListIcon },
   { href: "/runs/compare", label: "Compare", icon: CompareIcon },
-  { href: "/genie", label: "Genie Spaces", icon: GenieIcon },
   { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -207,26 +206,6 @@ function OutcomeMapIcon({ className }: { className?: string }) {
       <path d="M12 2 2 7l10 5 10-5-10-5Z" />
       <path d="m2 17 10 5 10-5" />
       <path d="m2 12 10 5 10-5" />
-    </svg>
-  );
-}
-
-function GenieIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 2a7 7 0 0 1 7 7c0 3-1.5 5-4 6.5V18H9v-2.5C6.5 14 5 12 5 9a7 7 0 0 1 7-7z" />
-      <path d="M9 22h6" />
-      <path d="M10 18v4" />
-      <path d="M14 18v4" />
     </svg>
   );
 }

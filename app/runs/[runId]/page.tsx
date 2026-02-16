@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RunProgress } from "@/components/pipeline/run-progress";
 import { UseCaseTable } from "@/components/pipeline/use-case-table";
 import { ExportToolbar } from "@/components/pipeline/export-toolbar";
+import { GenieSpacesTab } from "@/components/pipeline/genie-spaces-tab";
 import { ScoreDistributionChart } from "@/components/charts/score-distribution-chart";
 import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
 import { TypeSplitChart } from "@/components/charts/type-split-chart";
@@ -188,6 +189,7 @@ export default function RunDetailPage({
     failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   };
 
+  const [activeTab, setActiveTab] = useState("overview");
   const isCompleted = run.status === "completed";
   const isActive = run.status === "running" || run.status === "pending";
   const domainStats = isCompleted ? computeDomainStats(useCases) : [];
@@ -301,12 +303,15 @@ export default function RunDetailPage({
             />
           </div>
 
-          <Tabs defaultValue="overview">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="usecases">
                 Use Cases ({useCases.length})
               </TabsTrigger>
+              {useCases.length > 0 && (
+                <TabsTrigger value="genie">Genie Spaces</TabsTrigger>
+              )}
               <TabsTrigger
                 value="observability"
                 onClick={() => fetchPromptLogs()}
@@ -412,6 +417,7 @@ export default function RunDetailPage({
                   <ExportToolbar
                     runId={run.runId}
                     businessName={run.config.businessName}
+                    onGenieClick={() => setActiveTab("genie")}
                   />
                 </CardHeader>
               </Card>
@@ -431,6 +437,13 @@ export default function RunDetailPage({
                 </Card>
               )}
             </TabsContent>
+
+            {/* Genie Spaces Tab */}
+            {useCases.length > 0 && (
+              <TabsContent value="genie" className="pt-4">
+                <GenieSpacesTab runId={run.runId} />
+              </TabsContent>
+            )}
 
             {/* AI Observability Tab */}
             <TabsContent value="observability" className="space-y-6 pt-4">
