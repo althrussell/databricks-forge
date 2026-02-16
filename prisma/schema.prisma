@@ -41,10 +41,11 @@ model InspireRun {
   filteredTablesJson String?   @map("filtered_tables_json")
   metadataCacheKey   String?   @map("metadata_cache_key")
 
-  useCases    InspireUseCase[]
-  exports     InspireExport[]
-  promptLogs  InspirePromptLog[]
-  genieSpaces InspireGenieSpace[]
+  useCases             InspireUseCase[]
+  exports              InspireExport[]
+  promptLogs           InspirePromptLog[]
+  genieRecommendations InspireGenieRecommendation[]
+  genieSpaces          InspireGenieSpace[]
 
   @@map("inspire_runs")
 }
@@ -158,6 +159,37 @@ model InspireOutcomeMap {
 
   @@index([createdAt])
   @@map("inspire_outcome_maps")
+}
+
+// ---------------------------------------------------------------------------
+// Genie Space Recommendations (generated in pipeline)
+// ---------------------------------------------------------------------------
+
+model InspireGenieRecommendation {
+  id              String   @id @map("recommendation_id")
+  runId           String   @map("run_id")
+  domain          String
+  subdomains      String?                              // JSON array
+  title           String
+  description     String
+  tableCount      Int      @default(0) @map("table_count")
+  metricViewCount Int      @default(0) @map("metric_view_count")
+  useCaseCount    Int      @default(0) @map("use_case_count")
+  sqlExampleCount Int      @default(0) @map("sql_example_count")
+  joinCount       Int      @default(0) @map("join_count")
+  measureCount    Int      @default(0) @map("measure_count")
+  filterCount     Int      @default(0) @map("filter_count")
+  dimensionCount  Int      @default(0) @map("dimension_count")
+  tables          String?                              // JSON array of FQNs
+  metricViews     String?  @map("metric_views")        // JSON array of FQNs
+  serializedSpace String   @map("serialized_space")    // JSON for Genie API
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, domain])
+  @@index([runId])
+  @@map("inspire_genie_recommendations")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
 /**
  * API: /api/runs/[runId]/genie-recommendations
  *
- * GET -- Generate Genie Space recommendations for a completed pipeline run.
- *        Loads the run's use cases and cached metadata, then runs the
- *        recommendation engine to produce one recommendation per domain.
+ * GET -- Return Genie Space recommendations for a completed pipeline run.
+ *        Reads from Lakebase (persisted during pipeline step 8).
+ *        Falls back to on-demand generation for runs that pre-date the
+ *        pipeline step (backward compatibility).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +12,7 @@ import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { listTrackedGenieSpaces } from "@/lib/lakebase/genie-spaces";
+import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { generateGenieRecommendations } from "@/lib/genie/recommend";
 
 export async function GET(
@@ -32,34 +34,33 @@ export async function GET(
       );
     }
 
-    // Load use cases
-    const useCases = await getUseCasesByRunId(runId);
-    if (useCases.length === 0) {
-      return NextResponse.json(
-        { error: "No use cases found for this run." },
-        { status: 404 }
-      );
-    }
+    // Try to load persisted recommendations (generated in pipeline step 8)
+    let recommendations = await getGenieRecommendationsByRunId(runId);
 
-    // Load cached metadata
-    const metadata = await loadMetadataForRun(runId);
-    if (!metadata) {
-      return NextResponse.json(
-        {
-          error:
-            "Metadata snapshot not found for this run. " +
-            "This may be a run from before metadata caching was enabled.",
-        },
-        { status: 404 }
-      );
-    }
+    // Fallback: on-demand generation for runs that pre-date the pipeline step
+    if (recommendations.length === 0) {
+      const useCases = await getUseCasesByRunId(runId);
+      if (useCases.length === 0) {
+        return NextResponse.json(
+          { error: "No use cases found for this run." },
+          { status: 404 }
+        );
+      }
 
-    // Generate recommendations
-    const recommendations = generateGenieRecommendations(
-      run,
-      useCases,
-      metadata
-    );
+      const metadata = await loadMetadataForRun(runId);
+      if (!metadata) {
+        return NextResponse.json(
+          {
+            error:
+              "Metadata snapshot not found for this run. " +
+              "This may be a run from before metadata caching was enabled.",
+          },
+          { status: 404 }
+        );
+      }
+
+      recommendations = generateGenieRecommendations(run, useCases, metadata);
+    }
 
     // Load tracking status for this run
     const tracked = await listTrackedGenieSpaces(runId);

@@ -10,7 +10,8 @@ const STEPS = [
   { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 45 },
   { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 55 },
   { key: PipelineStep.Scoring, label: "Scoring & Dedup", pct: 65 },
-  { key: PipelineStep.SqlGeneration, label: "SQL Generation", pct: 95 },
+  { key: PipelineStep.SqlGeneration, label: "SQL Generation", pct: 85 },
+  { key: PipelineStep.GenieRecommendations, label: "Genie Spaces", pct: 98 },
 ];
 
 interface RunProgressProps {

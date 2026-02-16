@@ -17,6 +17,7 @@ export enum PipelineStep {
   DomainClustering = "domain-clustering",
   Scoring = "scoring",
   SqlGeneration = "sql-generation",
+  GenieRecommendations = "genie-recommendations",
 }
 
 export type RunStatus = "pending" | "running" | "completed" | "failed";

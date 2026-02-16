@@ -26,6 +26,7 @@ import { runUsecaseGeneration } from "./steps/usecase-generation";
 import { runDomainClustering } from "./steps/domain-clustering";
 import { runScoring } from "./steps/scoring";
 import { runSqlGeneration } from "./steps/sql-generation";
+import { runGenieRecommendations } from "./steps/genie-recommendations";
 
 // ---------------------------------------------------------------------------
 // Step definitions with progress percentages
@@ -44,7 +45,8 @@ const STEPS: StepDef[] = [
   { step: PipelineStep.UsecaseGeneration, progressPct: 45, label: "Generating use cases" },
   { step: PipelineStep.DomainClustering, progressPct: 55, label: "Clustering domains" },
   { step: PipelineStep.Scoring, progressPct: 65, label: "Scoring use cases" },
-  { step: PipelineStep.SqlGeneration, progressPct: 100, label: "Generating SQL" },
+  { step: PipelineStep.SqlGeneration, progressPct: 85, label: "Generating SQL" },
+  { step: PipelineStep.GenieRecommendations, progressPct: 100, label: "Building Genie Spaces" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -181,7 +183,7 @@ export async function startPipeline(runId: string): Promise<void> {
       logger.info(`Step 7: ${STEPS[6].label}`, { runId, step: "sql-generation" });
       ctx.useCases = await runSqlGeneration(ctx, runId);
       sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
-      await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 95, undefined, `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`);
+      await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 85, undefined, `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`);
     });
 
     // Persist use cases atomically (delete old + insert new in a transaction)
@@ -217,10 +219,19 @@ export async function startPipeline(runId: string): Promise<void> {
       }
     });
 
+    // Step 8: Genie Space Recommendations
+    let genieCount = 0;
+    await logStep(PipelineStep.GenieRecommendations, async () => {
+      await updateRunStatus(runId, "running", PipelineStep.GenieRecommendations, 90, undefined, `Building Genie Space recommendations from ${ctx.useCases.length} use cases...`);
+      logger.info(`Step 8: ${STEPS[7].label}`, { runId, step: "genie-recommendations" });
+      genieCount = await runGenieRecommendations(ctx, runId);
+      await updateRunStatus(runId, "running", PipelineStep.GenieRecommendations, 98, undefined, `Built ${genieCount} Genie Space recommendations`);
+    });
+
     // Mark as completed
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-    await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
-    logger.info(`Pipeline completed`, { runId, useCaseCount: ctx.useCases.length, sqlOk });
+    await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL, ${genieCount} Genie spaces)`);
+    logger.info(`Pipeline completed`, { runId, useCaseCount: ctx.useCases.length, sqlOk, genieCount });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown pipeline error";

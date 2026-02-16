@@ -237,6 +237,37 @@ export default function RunDetailPage({
         </Button>
       </div>
 
+      {/* Industry Outcome Map Banner */}
+      {run.config.industry && (() => {
+        const outcome = getIndustryOutcome(run.config.industry);
+        return outcome ? (
+          <div className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950/30">
+            <Target className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-violet-900 dark:text-violet-200">
+                Matched Industry Outcome Map: <span className="font-semibold">{outcome.name}</span>
+              </p>
+              <p className="text-xs text-violet-700 dark:text-violet-400">
+                {run.industryAutoDetected
+                  ? "Automatically detected from business context"
+                  : "Manually selected during configuration"}
+                {" \u2022 "}
+                {outcome.objectives.length} strategic objective{outcome.objectives.length !== 1 ? "s" : ""}
+                {" \u2022 "}
+                {outcome.objectives.reduce((sum, o) => sum + o.priorities.length, 0)} priorities
+                {" \u2022 "}
+                {outcome.objectives.reduce((sum, o) => sum + o.priorities.reduce((s, p) => s + p.useCases.length, 0), 0)} reference use cases
+              </p>
+            </div>
+            {run.industryAutoDetected && (
+              <Badge variant="outline" className="shrink-0 border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-400">
+                auto-detected
+              </Badge>
+            )}
+          </div>
+        ) : null;
+      })()}
+
       {/* Progress (running/pending) */}
       {isActive && (
         <Card>
