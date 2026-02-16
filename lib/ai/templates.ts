@@ -849,10 +849,13 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 
 ### RULES
 
-**1. SCHEMA ADHERENCE (ABSOLUTE)**
-- USE ONLY the provided columns -- never invent column names
+**1. SCHEMA ADHERENCE (ABSOLUTE -- ZERO TOLERANCE)**
+- USE ONLY columns that appear in the "AVAILABLE TABLES AND COLUMNS" section above
+- If a column is NOT listed above, it DOES NOT EXIST -- do NOT invent, guess, or hallucinate column names
+- Before writing any column reference, VERIFY it exists in the schema above
 - All string literals must use single quotes
 - COALESCE string defaults must be quoted: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
+- CTE-computed columns (aliases you define with AS) are fine to reference in subsequent CTEs, but source table columns MUST come from the schema
 
 **2. FIRST CTE MUST USE SELECT DISTINCT (MANDATORY)**
 - The FIRST CTE MUST ALWAYS use \`SELECT DISTINCT\` to ensure NO DUPLICATE RECORDS
@@ -860,10 +863,11 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - Pattern: \`WITH base_data AS (SELECT DISTINCT col1, col2, ... FROM table WHERE ...)\`
 - Alternative: If aggregating, use \`GROUP BY\` on all non-aggregated columns
 
-**3. CTE STRUCTURE**
-- Use 3-10 CTEs for readability -- break the query into logical steps (data assembly, transformation, analysis, output)
+**3. CTE STRUCTURE & QUERY LENGTH**
+- Use 3-7 CTEs for readability -- break the query into logical steps (data assembly, transformation, analysis, output)
 - Use **business-friendly CTE names** like \`customer_lifetime_value\`, \`revenue_trend_analysis\`, \`risk_score_calculation\` -- NOT \`cte1\`, \`temp\`, \`base\`
 - LIMIT 10 on the **FINAL SELECT** statement only (not intermediate CTEs)
+- **CRITICAL LENGTH CONSTRAINT**: Keep the total query UNDER 120 lines of SQL. Be concise -- depth of analysis is important but do NOT pad the query with redundant calculations, excessive comments, or repeated patterns. If the analysis requires many similar calculations, pick the 3-5 most impactful ones rather than exhaustively computing every possible metric
 
 **4. AI USE CASE RULES**
 - Use the appropriate Databricks AI function as the primary analytical technique
@@ -875,8 +879,8 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 
 **5. STATISTICAL USE CASE RULES**
 - Use the appropriate statistical SQL functions as the primary analytical technique
-- Combine multiple statistical functions for depth (e.g., STDDEV_POP + PERCENTILE_APPROX + SKEWNESS for anomaly detection)
-- Use all applicable functions from the registry for comprehensive analysis
+- Combine 3-5 statistical functions for depth (e.g., STDDEV_POP + PERCENTILE_APPROX + SKEWNESS for anomaly detection)
+- Focus on the most analytically valuable functions rather than exhaustively applying every function in the registry
 
 **6. JOIN & QUERY RULES**
 - JOIN correctly using the foreign key relationships provided
@@ -948,12 +952,13 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 ### COMMON FIXES
 
 - **COALESCE text defaults**: Wrap text defaults in single quotes: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
-- **Column not found**: Check the schema above for the correct column name; use the exact spelling
+- **Column not found**: Check the schema above for the correct column name; use the EXACT spelling. If the column does not exist in the schema, REMOVE the reference -- do NOT guess or invent a substitute column name
 - **Type mismatch**: Cast columns to the correct type (e.g., \`CAST(col AS STRING)\`)
 - **Window function errors**: Check PARTITION BY and ORDER BY clauses; ensure the window is valid
 - **Ambiguous column**: Qualify with table alias (e.g., \`t1.col\` not just \`col\`)
 - **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct
 - **AI_FORECAST errors**: Ensure \`time_col\`, \`value_col\`, \`group_col\` are string literals (quoted), not column references
+- **Truncated SQL / syntax error at end of input**: The original query was too long and got cut off. SIMPLIFY the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total
 
 ### OUTPUT FORMAT
 

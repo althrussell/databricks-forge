@@ -56,50 +56,63 @@ function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
 /**
  * List catalogs the current user can actually query.
  *
- * Two-phase approach:
- *   1. Build a candidate list (from `system.information_schema.catalogs` if
- *      accessible, otherwise `SHOW CATALOGS`).
- *   2. **Always** probe each candidate with a lightweight query to confirm
- *      the user truly has USE CATALOG. The candidate list may include
- *      catalogs the user can see (BROWSE) but not query.
+ * Preferred approach: a single query against `system.information_schema.schemata`
+ * returns only catalogs where the user has USE CATALOG (schemas are not visible
+ * without it), avoiding the old N+1 per-catalog probe pattern.
+ *
+ * Fallback: `SHOW CATALOGS` + per-catalog probes with short timeouts and
+ * limited concurrency.
  */
 export async function listCatalogs(): Promise<string[]> {
-  let candidates: string[];
-
-  // Phase 1: build candidate list
+  // ── Fast path: single query via system.information_schema ──────────
   try {
     const result = await executeSQL(`
-      SELECT catalog_name
-      FROM system.information_schema.catalogs
+      SELECT DISTINCT catalog_name
+      FROM system.information_schema.schemata
       WHERE catalog_name NOT IN ('system', '__databricks_internal')
       ORDER BY catalog_name
     `);
-    candidates = result.rows.map((r) => r[0]);
+    return result.rows.map((r) => r[0]);
   } catch {
-    // system catalog not accessible — fall back to SHOW CATALOGS
+    // system.information_schema not accessible — fall through to probe approach
+  }
+
+  // ── Fallback: SHOW CATALOGS + lightweight per-catalog probes ───────
+  let candidates: string[];
+  try {
     const result = await executeSQL("SHOW CATALOGS");
     candidates = result.rows
       .map((r) => r[0])
       .filter((c) => c !== "system" && c !== "__databricks_internal");
+  } catch {
+    return [];
   }
 
   if (candidates.length === 0) return [];
 
-  // Phase 2: probe each candidate to verify USE CATALOG permission
-  const probes = await Promise.allSettled(
-    candidates.map(async (catalog) => {
-      await executeSQL(
-        `SELECT 1 FROM \`${catalog}\`.information_schema.schemata LIMIT 1`
-      );
-      return catalog;
-    })
-  );
+  // Probe in batches to avoid overwhelming the warehouse with N parallel requests
+  const PROBE_CONCURRENCY = 5;
+  const accessible: string[] = [];
 
-  return probes
-    .filter(
-      (r): r is PromiseFulfilledResult<string> => r.status === "fulfilled"
-    )
-    .map((r) => r.value);
+  for (let i = 0; i < candidates.length; i += PROBE_CONCURRENCY) {
+    const batch = candidates.slice(i, i + PROBE_CONCURRENCY);
+    const probes = await Promise.allSettled(
+      batch.map(async (catalog) => {
+        await executeSQL(
+          `SELECT 1 FROM \`${catalog}\`.information_schema.schemata LIMIT 1`,
+          undefined,
+          undefined,
+          { waitTimeout: "10s" }
+        );
+        return catalog;
+      })
+    );
+    for (const probe of probes) {
+      if (probe.status === "fulfilled") accessible.push(probe.value);
+    }
+  }
+
+  return accessible;
 }
 
 /**

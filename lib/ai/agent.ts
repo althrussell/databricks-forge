@@ -34,7 +34,8 @@ export interface AIQueryOptions {
   temperature?: number;
   /**
    * Maximum tokens for the response. Passed to modelParameters.
-   * Defaults to 8192.
+   * When omitted, no max_tokens constraint is sent — the model uses its
+   * own default, which avoids mid-response truncation.
    */
   maxTokens?: number;
   /**
@@ -119,7 +120,7 @@ export async function executeAIQuery(
 ): Promise<AIQueryResult> {
   const maxRetries = options.retries ?? 2;
   const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
-  const maxTokens = options.maxTokens ?? 8192;
+  const maxTokens = options.maxTokens; // undefined = no limit (model default)
 
   let lastError: Error | null = null;
 
@@ -178,7 +179,7 @@ function isNonRetryableError(error: Error): boolean {
 async function executeAIQueryOnce(
   options: AIQueryOptions,
   temperature: number,
-  maxTokens: number
+  maxTokens: number | undefined
 ): Promise<AIQueryResult> {
   const prompt = formatPrompt(options.promptKey, options.variables);
   const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
@@ -186,14 +187,16 @@ async function executeAIQueryOnce(
   // Escape the prompt for SQL string literal (single quotes and backslashes)
   const escapedPrompt = prompt.replace(/\\/g, "\\\\").replace(/'/g, "''");
 
+  // Build modelParameters -- only include max_tokens when explicitly set
+  const modelParams = maxTokens
+    ? `named_struct('temperature', ${temperature.toFixed(2)}, 'max_tokens', ${maxTokens})`
+    : `named_struct('temperature', ${temperature.toFixed(2)})`;
+
   const sql = `
     SELECT ai_query(
       '${options.modelEndpoint}',
       '${escapedPrompt}',
-      modelParameters => named_struct(
-        'temperature', ${temperature.toFixed(2)},
-        'max_tokens', ${maxTokens}
-      )
+      modelParameters => ${modelParams}
     ) AS response
   `;
 
@@ -205,7 +208,7 @@ async function executeAIQueryOnce(
     model: options.modelEndpoint,
     promptChars: prompt.length,
     temperature,
-    maxTokens,
+    ...(maxTokens !== undefined && { maxTokens }),
   });
 
   // ai_query() calls can take 1-3+ minutes for LLM inference.

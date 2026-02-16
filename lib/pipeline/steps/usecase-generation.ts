@@ -171,7 +171,6 @@ async function generateBatch(
     promptKey,
     variables,
     modelEndpoint: aiModel,
-    maxTokens: 8192,
   });
 
   let rows: string[][];
