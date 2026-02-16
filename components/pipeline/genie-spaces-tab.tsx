@@ -477,7 +477,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
           if (!open) setDetailDomain(null);
         }}
       >
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl md:max-w-2xl">
+        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           {detailRec && detailParsed && (
             <>
               <SheetHeader>
