@@ -168,6 +168,15 @@ export async function updateRunMessage(
   await prisma.inspireRun.update({ where: { runId }, data });
 }
 
+/**
+ * Delete a pipeline run and all associated data (use cases, exports).
+ * Cascade deletes are handled by the database schema.
+ */
+export async function deleteRun(runId: string): Promise<void> {
+  const prisma = await getPrisma();
+  await prisma.inspireRun.delete({ where: { runId } });
+}
+
 export async function updateRunBusinessContext(
   runId: string,
   context: BusinessContext

@@ -12,8 +12,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -46,6 +59,20 @@ export default function RunsPage() {
       setError(err instanceof Error ? err.message : "Failed to load runs");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDelete(runId: string, businessName: string) {
+    try {
+      const res = await fetch(`/api/runs/${runId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to delete run");
+      }
+      setRuns((prev) => prev.filter((r) => r.runId !== runId));
+      toast.success(`Deleted run for "${businessName}"`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete run");
     }
   }
 
@@ -129,9 +156,46 @@ export default function RunsPage() {
                     {new Date(run.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/runs/${run.runId}`}>View</Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/runs/${run.runId}`}>View</Link>
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-destructive"
+                            disabled={run.status === "running"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete this run?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete the pipeline run for{" "}
+                              <strong>{run.config.businessName}</strong> and all
+                              associated use cases and exports. This action
+                              cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() =>
+                                handleDelete(run.runId, run.config.businessName)
+                              }
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
