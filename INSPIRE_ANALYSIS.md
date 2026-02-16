@@ -8,6 +8,7 @@
 
 - [Overview](#overview)
 - [Architecture Diagram](#architecture-diagram)
+- [Industry Outcome Maps](#industry-outcome-maps)
 - [Pipeline Flow](#pipeline-flow)
 - [Step 1: Business Context Generation](#step-1-business-context-generation)
 - [Step 2: Metadata Extraction](#step-2-metadata-extraction)
@@ -38,6 +39,8 @@ Databricks Inspire AI discovers data-driven use cases from Unity Catalog metadat
 6. Scores, deduplicates, and ranks every use case
 7. Generates runnable SQL for each use case
 
+When an **Industry Outcome Map** is selected, steps 1, 4, and 6 are enriched with curated strategic context, reference use cases, and KPIs from that industry's playbook. The app ships with 10 built-in maps and supports ingesting custom maps via the Outcome Map Ingestor (see [Industry Outcome Maps](#industry-outcome-maps)).
+
 All LLM calls use Databricks `ai_query()` executed via the SQL Statement Execution API against a SQL Warehouse. **No data rows are read by default** -- only structural metadata (see [Privacy Model](#privacy-model)).
 
 ---
@@ -57,14 +60,20 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 │       │          ┌────┴────┐       ┌────────┴────────┐                 │
 │       │          │Lakebase │       │  7 Pipeline Steps │                 │
 │       │          │ (Prisma)│       └────────┬────────┘                 │
-│       │          └─────────┘                │                          │
-│       │                              ┌──────┴──────┐                   │
-│       │                              │             │                   │
-│  ┌────┴────┐                   ┌─────┴──┐   ┌─────┴──────┐            │
-│  │ Exports │                   │ai_query│   │information_ │            │
-│  │Excel/PDF│                   │  (LLM) │   │  schema     │            │
-│  │PPTX/SQL │                   │        │   │  (metadata) │            │
-│  └─────────┘                   └────────┘   └────────────┘            │
+│       │          └────┬────┘                │                          │
+│       │               │              ┌──────┴──────┐                   │
+│       │     ┌─────────┤              │             │                   │
+│       │     │         │        ┌─────┴──┐   ┌─────┴──────┐            │
+│  ┌────┴────┐│  ┌──────┴──┐    │ai_query│   │information_ │            │
+│  │ Exports ││  │ Outcome │    │  (LLM) │   │  schema     │            │
+│  │Excel/PDF││  │  Maps   │    │        │   │  (metadata) │            │
+│  │PPTX/SQL ││  │(custom) │    └────────┘   └────────────┘            │
+│  └─────────┘│  └─────────┘                                            │
+│             │                                                          │
+│  ┌──────────┴────────────┐                                            │
+│  │ Industry Outcome Maps │  10 built-in + user-uploaded custom maps   │
+│  │ (prompt enrichment)   │  Injected into Steps 1, 4, 6              │
+│  └───────────────────────┘                                            │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -80,17 +89,117 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 
 ---
 
+## Industry Outcome Maps
+
+**Files:** `lib/domain/industry-outcomes.ts` (built-in data + types), `lib/domain/industry-outcomes-server.ts` (async DB-aware functions), `lib/domain/outcome-map-parser.ts` (AI parser), `lib/lakebase/outcome-maps.ts` (persistence)
+
+**Purpose:** Provide curated strategic knowledge -- objectives, priorities, reference use cases, KPIs, and personas -- for specific industries. This knowledge enriches the LLM prompts so generated use cases are strategically aligned with real industry playbooks.
+
+### How it works
+
+When a user selects an industry during run configuration, the outcome map is injected into three pipeline steps:
+
+| Step | What's injected | Template variable | Effect |
+| --- | --- | --- | --- |
+| **Step 1** (Business Context) | Industry narrative: objectives, why-change context | `{industry_context}` | LLM generates business context informed by industry-specific challenges and strategic priorities |
+| **Step 4** (Use Case Generation) | Reference use cases with descriptions | `{industry_reference_use_cases}` | LLM uses proven industry use cases as inspiration, grounded in the customer's actual schema |
+| **Step 6** (Scoring) | Industry-specific KPIs | `{industry_kpis}` | LLM aligns scores with industry-recognised value drivers |
+
+### Built-in maps (10 industries)
+
+| ID | Industry | Sub-verticals |
+| --- | --- | --- |
+| `banking` | Banking & Payments | Retail Banking, Commercial Banking, Wealth Management, Payments, Capital Markets |
+| `insurance` | Insurance | Life & Annuity, Property & Casualty, Health Insurance, Reinsurance |
+| `hls` | Health & Life Sciences | Healthcare Providers, Pharma & Biotech, MedTech, Payers |
+| `rcg` | Retail & Consumer Goods | Retail, Consumer Goods, Travel & Hospitality |
+| `manufacturing` | Manufacturing & Automotive | Automotive, Semiconductors, Industrial Machinery, Chemicals |
+| `energy-utilities` | Energy & Utilities | Oil & Gas, Electricity Generation, T&D, Mining |
+| `communications` | Communications | Telco, Cable, Satellite, IoT |
+| `media-advertising` | Media & Advertising | Streaming, Publishing, Ad Tech |
+| `digital-natives` | Digital Natives | SaaS, Fintech, E-commerce, Marketplace |
+| `games` | Gaming | Console/PC, Mobile, Live Service |
+
+### Outcome Map Ingestor
+
+**Page:** `/outcomes/ingest`
+
+Users can upload custom industry outcome maps in markdown format. The ingestor workflow:
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────┐
+│  1. Upload   │────▶│  2. AI Parse │────▶│  3. Review   │────▶│  4. Save │
+│  .md file or │     │  PARSE_      │     │  & Edit      │     │  to      │
+│  paste text  │     │  OUTCOME_MAP │     │  (inline)    │     │  Lakebase│
+└──────────────┘     └──────────────┘     └──────────────┘     └──────────┘
+```
+
+1. **Upload** -- drag-and-drop a `.md` file or paste markdown content
+2. **AI Parse** -- the `PARSE_OUTCOME_MAP` prompt template sends the markdown to the LLM, which extracts structured JSON matching the `IndustryOutcome` type
+3. **Review & Edit** -- the user sees the extracted objectives, priorities, use cases, KPIs, and personas with inline editing to fix any parsing errors
+4. **Save** -- the parsed outcome map is persisted to the `inspire_outcome_maps` Lakebase table and immediately available in the industry dropdown and pipeline prompts
+
+### Data structure (`IndustryOutcome`)
+
+```
+IndustryOutcome
+  ├── id: string                    (e.g. "banking")
+  ├── name: string                  (e.g. "Banking & Payments")
+  ├── subVerticals: string[]
+  ├── suggestedDomains: string[]    (auto-populated into config form)
+  ├── suggestedPriorities: string[] (auto-populated into config form)
+  └── objectives: IndustryObjective[]
+        ├── name: string            (e.g. "Drive Growth")
+        ├── whyChange: string       (narrative context)
+        └── priorities: StrategicPriority[]
+              ├── name: string      (e.g. "Hyper Personalization")
+              ├── useCases: ReferenceUseCase[]
+              │     ├── name
+              │     ├── description
+              │     └── businessValue (optional)
+              ├── kpis: string[]
+              └── personas: string[]
+```
+
+### Dynamic registry
+
+At runtime, the system merges built-in and custom outcome maps:
+
+- **Client components** (config form, outcomes browser) fetch from `/api/outcome-maps/registry`
+- **Server-side pipeline steps** use `getIndustryOutcomeAsync()` from `industry-outcomes-server.ts`
+- Custom maps with the same ID as a built-in map override the built-in version
+- If the database is unavailable, the system falls back to built-in maps only
+
+### Lakebase table
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `outcome_map_id` | TEXT PK | UUID |
+| `industry_id` | TEXT UNIQUE | Kebab-case ID (e.g. "pharma-custom") |
+| `name` | TEXT | Display name |
+| `raw_markdown` | TEXT | Original uploaded markdown |
+| `parsed_json` | TEXT | Serialised `IndustryOutcome` JSON |
+| `use_case_count` | INT | Total reference use cases extracted |
+| `created_by` | TEXT | User who uploaded |
+| `created_at` | TIMESTAMP | Creation time |
+| `updated_at` | TIMESTAMP | Last modification |
+
+---
+
 ## Pipeline Flow
 
 ```
 ┌─────────────────┐
-│  User Config     │  Business name, UC scope, priorities, AI model
+│  User Config     │  Business name, UC scope, priorities, AI model, industry
 └────────┬────────┘
          ▼
-┌─────────────────┐
-│ 1. Business     │  LLM generates strategic context: goals, value chain,
-│    Context      │  revenue model, industry classification
-│    (5-10%)      │  ──▶ BusinessContext JSON
+┌─────────────────┐    ┌─────────────────┐
+│ 1. Business     │◀───│ Industry Outcome │  {industry_context} injected
+│    Context      │    │ Map (optional)   │  when industry is selected
+│    (5-10%)      │    └─────────────────┘
+│                 │  LLM generates strategic context: goals, value chain,
+│                 │  revenue model, industry classification
+│                 │  ──▶ BusinessContext JSON
 └────────┬────────┘
          ▼
 ┌─────────────────┐
@@ -112,6 +221,7 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 │  (parallel)     │────▶│ Stats batch │  anomaly detection, simulation, etc.
 └────────┬────────┘     └─────────────┘
          │  ◀── 20 tables/batch, 3 concurrent batches
+         │  ◀── {industry_reference_use_cases} injected when industry selected
          ▼
 ┌─────────────────┐
 │ 5. Domain       │  1. Assign domains (target: total/10, min 3, max 25)
@@ -123,6 +233,7 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 │ 6. Scoring &    │  LLM scores: priority (0.3), feasibility (0.2), impact (0.5)
 │    Dedup        │  LLM deduplicates overlapping use cases
 │    (55-65%)     │  Sort by overall score, cap at 200, re-number with domain prefix
+│                 │  ◀── {industry_kpis} injected when industry selected
 └────────┬────────┘
          ▼
 ┌─────────────────┐
@@ -151,9 +262,10 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 
 **How it works:**
 1. A single `ai_query()` call with the `BUSINESS_CONTEXT_WORKER_PROMPT` template
-2. The LLM acts as a "Principal Business Analyst" and returns structured JSON
-3. User-supplied overrides (strategic goals, business domains) take precedence over LLM output
-4. On failure, returns safe defaults with user overrides preserved
+2. If an industry is selected, `{industry_context}` is injected into the prompt with objectives, why-change narratives, and sub-vertical context from the outcome map
+3. The LLM acts as a "Principal Business Analyst" and returns structured JSON
+4. User-supplied overrides (strategic goals, business domains) take precedence over LLM output
+5. On failure, returns safe defaults with user overrides preserved
 
 **Output structure (`BusinessContext`):**
 
@@ -244,7 +356,9 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 
 **Purpose:** Generate concrete, actionable use cases from the filtered metadata.
 
-This is the core creative step. The engine generates two categories of use cases in parallel:
+This is the core creative step. The engine generates two categories of use cases in parallel.
+
+When an industry is selected, both the AI and Statistical prompts receive `{industry_reference_use_cases}` -- a curated list of proven use cases from the industry outcome map. The LLM uses these as strategic inspiration but grounds every generated use case in the actual table schemas provided. Reference use cases are not copied verbatim.
 
 ### Parallel generation strategy
 
@@ -351,6 +465,8 @@ Domains with < 3 use cases ──▶ LLM suggests merge target
 **File:** `lib/pipeline/steps/scoring.ts`
 
 **Purpose:** Score every use case on three dimensions, remove duplicates, and rank.
+
+When an industry is selected, the scoring prompt receives `{industry_kpis}` -- a list of industry-specific KPIs and personas mapped to each strategic priority. Use cases that directly address these KPIs receive higher strategic alignment scores from the LLM.
 
 ### Scoring process
 
@@ -568,6 +684,7 @@ PERSONA → CONTEXT → TASK → RULES → OUTPUT FORMAT → HONESTY CHECK
 | `SCORE_USE_CASES_PROMPT` | Chief Investment Officer | Score priority/feasibility/impact | CSV |
 | `REVIEW_USE_CASES_PROMPT` | Quality Analyst | Identify duplicates and low-value items | CSV |
 | `USE_CASE_SQL_GEN_PROMPT` | Principal SQL Engineer | Generate runnable Databricks SQL | Raw SQL |
+| `PARSE_OUTCOME_MAP` | Data Extraction Expert | Parse markdown outcome map into structured JSON | JSON (`IndustryOutcome`) |
 
 ### Variable injection
 
@@ -583,6 +700,10 @@ All prompts use `{placeholder}` syntax. Common variables:
 | `{statistical_functions_summary}` | Function registry | Step 4 (Stats), Step 7 (Stats) |
 | `{use_cases_csv}` | Previous step output | Steps 5-6 |
 | `{sample_data_section}` | Optional row samples | Step 7 |
+| `{industry_context}` | Industry outcome map | Step 1 (when industry selected) |
+| `{industry_reference_use_cases}` | Industry outcome map | Step 4 (when industry selected) |
+| `{industry_kpis}` | Industry outcome map | Step 6 (when industry selected) |
+| `{markdown_content}` | Uploaded markdown file | `PARSE_OUTCOME_MAP` (ingestor) |
 
 ### Honesty checks
 
@@ -768,9 +889,11 @@ User Input                    Pipeline                         Output
 
 Business Name    ──┐
 UC Scope         ──┤
-Priorities       ──┼──▶  BusinessContext (LLM)
-Strategic Goals  ──┤          │
-AI Model         ──┘          ▼
+Priorities       ──┤
+Strategic Goals  ──┼──▶  BusinessContext (LLM)
+AI Model         ──┤       + {industry_context}
+Industry (opt)   ──┘          │
+                              ▼
                         MetadataSnapshot (SQL)
                               │
                               ▼
@@ -781,6 +904,7 @@ AI Model         ──┘          ▼
                      │                 │
                   AI Use Cases    Stats Use Cases
                   (LLM, parallel) (LLM, parallel)
+                  + {industry_reference_use_cases}
                      │                 │
                      └────────┬────────┘
                               │
@@ -791,6 +915,7 @@ AI Model         ──┘          ▼
                               │
                               ▼
                         Scoring (LLM, per domain)
+                        + {industry_kpis}
                         Deduplication (LLM, per domain)
                         Sort + Cap + Re-number
                               │
