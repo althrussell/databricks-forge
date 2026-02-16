@@ -9,6 +9,7 @@
 
 import { getConfig, getAppHeaders } from "./client";
 import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
+import { mkdirs } from "./workspace";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
 
 // ---------------------------------------------------------------------------
@@ -80,12 +81,17 @@ export async function createGenieSpace(opts: {
   const url = `${config.host}/api/2.0/genie/spaces`;
   const headers = await getAppHeaders();
 
+  const parentPath = opts.parentPath ?? "/Shared/Inspire Genie Spaces/";
+
+  // Ensure the parent folder exists in the workspace
+  await mkdirs(parentPath);
+
   const body = {
     title: opts.title,
     description: opts.description,
     serialized_space: opts.serializedSpace,
     warehouse_id: opts.warehouseId,
-    parent_path: opts.parentPath ?? "/Shared/Inspire Genie Spaces/",
+    parent_path: parentPath,
   };
 
   const response = await fetchWithTimeout(
