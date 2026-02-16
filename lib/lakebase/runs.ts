@@ -39,6 +39,7 @@ function dbRowToRun(row: {
   languages: string | null;
   generationOptions: string | null;
   generationPath: string | null;
+  sampleRowsPerTable: number | null;
   status: string;
   currentStep: string | null;
   progressPct: number;
@@ -61,6 +62,7 @@ function dbRowToRun(row: {
       generationPath: row.generationPath ?? "./inspire_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-sonnet-4-5",
+      sampleRowsPerTable: row.sampleRowsPerTable ?? 0,
     },
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
@@ -95,6 +97,7 @@ export async function createRun(
       languages: JSON.stringify(config.languages),
       generationOptions: JSON.stringify(config.generationOptions),
       generationPath: config.generationPath,
+      sampleRowsPerTable: config.sampleRowsPerTable,
       status: "pending",
       progressPct: 0,
     },

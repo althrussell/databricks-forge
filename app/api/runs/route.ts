@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       generationPath: body.generationPath ?? "./inspire_gen/",
       languages: body.languages ?? ["English"],
       aiModel: body.aiModel ?? "databricks-claude-sonnet-4-5",
+      sampleRowsPerTable: Math.min(Math.max(parseInt(body.sampleRowsPerTable ?? "0", 10) || 0, 0), 50),
     };
 
     await createRun(runId, config);

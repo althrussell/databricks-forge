@@ -54,7 +54,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="text-lg">Run Pipeline</CardTitle>
             <CardDescription>
-              AI analyses your metadata in 6 steps
+              AI analyses your metadata in 7 steps
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -65,6 +65,7 @@ export default function DashboardPage() {
               <li>4. Generate use cases</li>
               <li>5. Cluster into domains</li>
               <li>6. Score and deduplicate</li>
+              <li>7. Generate SQL per use case</li>
             </ol>
             <Button variant="outline" asChild>
               <Link href="/runs">View Runs</Link>
@@ -95,13 +96,19 @@ export default function DashboardPage() {
 
       <Card className="border-dashed">
         <CardHeader>
-          <CardTitle className="text-lg">Privacy</CardTitle>
+          <CardTitle className="text-lg">Privacy &amp; Data Access</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            Inspire reads <strong>metadata only</strong> -- schema names, table
-            names, and column names. It does{" "}
-            <strong>not</strong> access or sample your actual data.
+            By default, Inspire reads <strong>metadata only</strong> -- schema
+            names, table names, and column names. No row-level data is accessed.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            If you enable <strong>Data Sampling</strong> in the advanced
+            configuration, Inspire will read a small number of sample rows per
+            table (configurable: 5-50) to help the LLM generate more accurate
+            SQL. Sampled data is sent to the configured AI model endpoint and is
+            not stored.
           </p>
         </CardContent>
       </Card>
