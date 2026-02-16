@@ -8,12 +8,18 @@
 export interface AppSettings {
   /** Number of sample rows to fetch per table for SQL generation (0 = disabled) */
   sampleRowsPerTable: number;
+  /** Default export format */
+  defaultExportFormat: string;
+  /** Default notebook deployment path */
+  notebookPath: string;
 }
 
 const STORAGE_KEY = "inspire-ai-settings";
 
 const DEFAULTS: AppSettings = {
   sampleRowsPerTable: 0,
+  defaultExportFormat: "excel",
+  notebookPath: "./inspire_gen/",
 };
 
 export function loadSettings(): AppSettings {
@@ -27,6 +33,14 @@ export function loadSettings(): AppSettings {
         typeof parsed.sampleRowsPerTable === "number"
           ? parsed.sampleRowsPerTable
           : DEFAULTS.sampleRowsPerTable,
+      defaultExportFormat:
+        typeof parsed.defaultExportFormat === "string"
+          ? parsed.defaultExportFormat
+          : DEFAULTS.defaultExportFormat,
+      notebookPath:
+        typeof parsed.notebookPath === "string"
+          ? parsed.notebookPath
+          : DEFAULTS.notebookPath,
     };
   } catch {
     return { ...DEFAULTS };

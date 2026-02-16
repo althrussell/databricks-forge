@@ -1,0 +1,87 @@
+"use client";
+
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface StepDurationChartProps {
+  steps: { step: string; durationMs?: number }[];
+  title?: string;
+}
+
+const STEP_LABELS: Record<string, string> = {
+  "business-context": "Business Context",
+  "metadata-extraction": "Metadata",
+  "table-filtering": "Table Filtering",
+  "usecase-generation": "Use Cases",
+  "domain-clustering": "Domains",
+  scoring: "Scoring",
+  "sql-generation": "SQL Gen",
+};
+
+export function StepDurationChart({
+  steps,
+  title = "Pipeline Step Durations",
+}: StepDurationChartProps) {
+  const data = steps
+    .filter((s) => s.durationMs != null)
+    .map((s) => ({
+      name: STEP_LABELS[s.step] ?? s.step,
+      seconds: Math.round((s.durationMs ?? 0) / 1000),
+    }));
+
+  if (data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis
+              type="number"
+              tick={{ fontSize: 11 }}
+              className="fill-muted-foreground"
+              unit="s"
+            />
+            <YAxis
+              dataKey="name"
+              type="category"
+              tick={{ fontSize: 11 }}
+              className="fill-muted-foreground"
+              width={90}
+            />
+            <Tooltip
+              formatter={(value) => [`${value}s`, "Duration"]}
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                borderColor: "hsl(var(--border))",
+                borderRadius: "var(--radius)",
+                fontSize: 12,
+              }}
+            />
+            <Bar
+              dataKey="seconds"
+              fill="var(--color-chart-2)"
+              radius={[0, 4, 4, 0]}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}

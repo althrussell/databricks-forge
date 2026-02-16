@@ -37,8 +37,13 @@ model InspireRun {
   createdAt          DateTime  @default(now()) @map("created_at")
   completedAt        DateTime? @map("completed_at")
 
-  useCases InspireUseCase[]
-  exports  InspireExport[]
+  createdBy          String?   @map("created_by")
+  filteredTablesJson String?   @map("filtered_tables_json")
+  metadataCacheKey   String?   @map("metadata_cache_key")
+
+  useCases   InspireUseCase[]
+  exports    InspireExport[]
+  promptLogs InspirePromptLog[]
 
   @@map("inspire_runs")
 }
@@ -76,6 +81,50 @@ model InspireUseCase {
 }
 
 // ---------------------------------------------------------------------------
+// Prompt Audit Log
+// ---------------------------------------------------------------------------
+
+model InspirePromptLog {
+  logId          String   @id @map("log_id")
+  runId          String   @map("run_id")
+  step           String
+  promptKey      String   @map("prompt_key")
+  promptVersion  String   @map("prompt_version")
+  model          String
+  temperature    Float
+  renderedPrompt String   @map("rendered_prompt")
+  rawResponse    String?  @map("raw_response")
+  honestyScore   Float?   @map("honesty_score")
+  durationMs     Int?     @map("duration_ms")
+  success        Boolean  @default(true)
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([runId, step])
+  @@map("inspire_prompt_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Activity Log
+// ---------------------------------------------------------------------------
+
+model InspireActivityLog {
+  activityId String   @id @map("activity_id")
+  userId     String?  @map("user_id")
+  action     String                              // created_run, deleted_run, exported, started_pipeline, completed, failed
+  resourceId String?  @map("resource_id")        // runId or exportId
+  metadata   String?                             // JSON metadata
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([resourceId])
+  @@map("inspire_activity_log")
+}
+
+// ---------------------------------------------------------------------------
 // Metadata Cache
 // ---------------------------------------------------------------------------
 
@@ -89,6 +138,25 @@ model InspireMetadataCache {
 
   @@index([cachedAt])
   @@map("inspire_metadata_cache")
+}
+
+// ---------------------------------------------------------------------------
+// Custom Outcome Maps
+// ---------------------------------------------------------------------------
+
+model InspireOutcomeMap {
+  id           String   @id @map("outcome_map_id")
+  industryId   String   @unique @map("industry_id")
+  name         String
+  rawMarkdown  String   @map("raw_markdown")
+  parsedJson   String   @map("parsed_json")
+  useCaseCount Int      @default(0) @map("use_case_count")
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("inspire_outcome_maps")
 }
 
 // ---------------------------------------------------------------------------

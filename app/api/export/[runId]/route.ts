@@ -16,6 +16,8 @@ import { generatePdf } from "@/lib/export/pdf";
 import { generateNotebooks } from "@/lib/export/notebooks";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { getConfig, getCurrentUserEmail } from "@/lib/dbx/client";
+import { insertExportRecord } from "@/lib/lakebase/exports";
+import { logActivity } from "@/lib/lakebase/activity-log";
 import type { ExportFormat } from "@/lib/domain/types";
 
 export async function GET(
@@ -49,9 +51,13 @@ export async function GET(
 
     const useCases = await getUseCasesByRunId(runId);
 
+    const userEmail = await getCurrentUserEmail();
+
     switch (format) {
       case "excel": {
         const buffer = await generateExcel(run, useCases);
+        insertExportRecord(runId, "excel");
+        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "excel", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(buffer), {
           status: 200,
           headers: {
@@ -63,6 +69,8 @@ export async function GET(
       }
       case "pptx": {
         const buffer = await generatePptx(run, useCases);
+        insertExportRecord(runId, "pptx");
+        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pptx", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(buffer), {
           status: 200,
           headers: {
@@ -74,6 +82,8 @@ export async function GET(
       }
       case "pdf": {
         const pdfBuffer = await generatePdf(run, useCases);
+        insertExportRecord(runId, "pdf");
+        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pdf", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(pdfBuffer), {
           status: 200,
           headers: {
@@ -83,10 +93,11 @@ export async function GET(
         });
       }
       case "notebooks": {
-        const userEmail = await getCurrentUserEmail();
         const result = await generateNotebooks(run, useCases, userEmail);
         const { host } = getConfig();
         const workspaceUrl = `${host}/#workspace${result.path}`;
+        insertExportRecord(runId, "notebooks", result.path);
+        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "notebooks", businessName: run.config.businessName, path: result.path } });
         return NextResponse.json({ ...result, url: workspaceUrl });
       }
       default:

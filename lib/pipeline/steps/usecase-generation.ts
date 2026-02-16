@@ -11,6 +11,7 @@ import {
   generateStatisticalFunctionsSummary,
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
+import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { PipelineContext, UseCase, UseCaseType } from "@/lib/domain/types";
@@ -57,6 +58,11 @@ export async function runUsecaseGeneration(
     ? `**FOCUS AREAS**: Focus your use cases on these business areas: ${run.config.businessDomains}. At least 60% of generated use cases should directly address these domains.`
     : "";
 
+  // Build industry reference use cases for prompt injection
+  const industryReferenceUseCases = run.config.industry
+    ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
+    : "";
+
   // Process batches with controlled concurrency and cross-batch feedback
   let batchGroupIdx = 0;
   for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
@@ -87,6 +93,7 @@ export async function runUsecaseGeneration(
         revenue_model: bc.revenueModel,
         additional_context_section: bc.additionalContext || "None provided.",
         focus_areas_instruction: focusAreasInstruction,
+        industry_reference_use_cases: industryReferenceUseCases,
         schema_markdown: schemaMarkdown,
         foreign_key_relationships: fkMarkdown,
         previous_use_cases_feedback: previousFeedback,
@@ -104,7 +111,8 @@ export async function runUsecaseGeneration(
           },
           "AI",
           run.runId,
-          run.config.aiModel
+          run.config.aiModel,
+          runId
         ),
         generateBatch(
           "STATS_USE_CASE_GEN_PROMPT",
@@ -116,7 +124,8 @@ export async function runUsecaseGeneration(
           },
           "Statistical",
           run.runId,
-          run.config.aiModel
+          run.config.aiModel,
+          runId
         ),
       ];
     });
@@ -164,13 +173,16 @@ async function generateBatch(
   promptKey: "AI_USE_CASE_GEN_PROMPT" | "STATS_USE_CASE_GEN_PROMPT",
   variables: Record<string, string>,
   type: UseCaseType,
-  runId: string,
-  aiModel: string
+  useCaseRunId: string,
+  aiModel: string,
+  logRunId?: string
 ): Promise<UseCase[]> {
   const result = await executeAIQuery({
     promptKey,
     variables,
     modelEndpoint: aiModel,
+    runId: logRunId,
+    step: "usecase-generation",
   });
 
   let rows: string[][];
@@ -193,7 +205,7 @@ async function generateBatch(
 
     return {
       id: uuidv4(),
-      runId,
+      runId: useCaseRunId,
       useCaseNo: parseInt(row[0] ?? "0", 10),
       name: row[1] ?? "",
       type: (row[2]?.trim() as UseCaseType) || type,

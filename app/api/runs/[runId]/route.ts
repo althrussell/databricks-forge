@@ -10,6 +10,8 @@ import { getRunById, deleteRun } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
+import { getCurrentUserEmail } from "@/lib/dbx/client";
+import { logActivity } from "@/lib/lakebase/activity-log";
 
 export async function GET(
   _request: NextRequest,
@@ -71,6 +73,13 @@ export async function DELETE(
     }
 
     await deleteRun(runId);
+
+    const userEmail = await getCurrentUserEmail();
+    logActivity("deleted_run", {
+      userId: userEmail,
+      resourceId: runId,
+      metadata: { businessName: run.config.businessName },
+    });
 
     return NextResponse.json({ deleted: true, runId });
   } catch (error) {

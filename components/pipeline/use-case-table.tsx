@@ -26,6 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 import {
   BrainCircuit,
   BarChart3,
@@ -43,7 +44,10 @@ import {
   Gauge,
   Zap,
   Trophy,
+  Copy,
+  Link2,
 } from "lucide-react";
+import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
 import type { UseCase } from "@/lib/domain/types";
 
 interface UseCaseTableProps {
@@ -98,6 +102,20 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
     return result;
   }, [useCases, search, domainFilter, typeFilter, sortBy]);
 
+  // Find related use cases (sharing tables)
+  const relatedUseCases = useMemo(() => {
+    if (!selectedUseCase) return [];
+    const selectedTables = new Set(selectedUseCase.tablesInvolved);
+    if (selectedTables.size === 0) return [];
+    return useCases
+      .filter(
+        (uc) =>
+          uc.id !== selectedUseCase.id &&
+          uc.tablesInvolved.some((t) => selectedTables.has(t))
+      )
+      .slice(0, 5);
+  }, [selectedUseCase, useCases]);
+
   return (
     <>
       <div className="space-y-4">
@@ -132,7 +150,10 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
               <SelectItem value="Statistical">Statistical</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+          <Select
+            value={sortBy}
+            onValueChange={(v) => setSortBy(v as typeof sortBy)}
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
@@ -253,18 +274,60 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
               </div>
 
               <div className="mt-6 space-y-5">
-                {/* Statement */}
+                {/* Score Radar Chart */}
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Score Profile
+                  </p>
+                  <ScoreRadarChart
+                    priority={selectedUseCase.priorityScore}
+                    feasibility={selectedUseCase.feasibilityScore}
+                    impact={selectedUseCase.impactScore}
+                    overall={selectedUseCase.overallScore}
+                    size={180}
+                  />
+                </div>
+
+                {/* Scores Grid */}
+                <div className="grid grid-cols-4 gap-3">
+                  <ScoreCard
+                    icon={<Target className="h-4 w-4" />}
+                    label="Priority"
+                    score={selectedUseCase.priorityScore}
+                  />
+                  <ScoreCard
+                    icon={<Gauge className="h-4 w-4" />}
+                    label="Feasibility"
+                    score={selectedUseCase.feasibilityScore}
+                  />
+                  <ScoreCard
+                    icon={<Zap className="h-4 w-4" />}
+                    label="Impact"
+                    score={selectedUseCase.impactScore}
+                  />
+                  <ScoreCard
+                    icon={<Trophy className="h-4 w-4" />}
+                    label="Overall"
+                    score={selectedUseCase.overallScore}
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Statement with copy */}
                 <DetailSection
                   icon={<FileText className="h-4 w-4 text-blue-500" />}
                   title="Statement"
+                  copyText={selectedUseCase.statement}
                 >
                   {selectedUseCase.statement}
                 </DetailSection>
 
-                {/* Solution */}
+                {/* Solution with copy */}
                 <DetailSection
                   icon={<Lightbulb className="h-4 w-4 text-amber-500" />}
                   title="Solution"
+                  copyText={selectedUseCase.solution}
                 >
                   {selectedUseCase.solution}
                 </DetailSection>
@@ -273,6 +336,7 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                 <DetailSection
                   icon={<TrendingUp className="h-4 w-4 text-green-500" />}
                   title="Business Value"
+                  copyText={selectedUseCase.businessValue}
                 >
                   {selectedUseCase.businessValue}
                 </DetailSection>
@@ -292,41 +356,12 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                     value={selectedUseCase.beneficiary}
                   />
                   <MetaField
-                    icon={<UserCheck className="h-3.5 w-3.5 text-emerald-500" />}
+                    icon={
+                      <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
+                    }
                     label="Sponsor"
                     value={selectedUseCase.sponsor}
                   />
-                </div>
-
-                <Separator />
-
-                {/* Scores */}
-                <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Scoring
-                  </p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <ScoreCard
-                      icon={<Target className="h-4 w-4" />}
-                      label="Priority"
-                      score={selectedUseCase.priorityScore}
-                    />
-                    <ScoreCard
-                      icon={<Gauge className="h-4 w-4" />}
-                      label="Feasibility"
-                      score={selectedUseCase.feasibilityScore}
-                    />
-                    <ScoreCard
-                      icon={<Zap className="h-4 w-4" />}
-                      label="Impact"
-                      score={selectedUseCase.impactScore}
-                    />
-                    <ScoreCard
-                      icon={<Trophy className="h-4 w-4" />}
-                      label="Overall"
-                      score={selectedUseCase.overallScore}
-                    />
-                  </div>
                 </div>
 
                 {/* Tables Involved */}
@@ -334,7 +369,9 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                   <>
                     <Separator />
                     <DetailSection
-                      icon={<Database className="h-4 w-4 text-orange-500" />}
+                      icon={
+                        <Database className="h-4 w-4 text-orange-500" />
+                      }
                       title="Tables Involved"
                     >
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -353,18 +390,70 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                   </>
                 )}
 
-                {/* SQL Code */}
+                {/* SQL Code with syntax highlighting and copy */}
                 {selectedUseCase.sqlCode && (
                   <>
                     <Separator />
-                    <DetailSection
-                      icon={<Code2 className="h-4 w-4 text-pink-500" />}
-                      title="SQL Code"
-                    >
-                      <pre className="mt-1 overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed">
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Code2 className="h-4 w-4 text-pink-500" />
+                          <p className="text-sm font-semibold">SQL Code</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              selectedUseCase.sqlCode!
+                            );
+                            toast.success("SQL copied to clipboard");
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copy SQL
+                        </Button>
+                      </div>
+                      <pre className="overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed">
                         {selectedUseCase.sqlCode}
                       </pre>
-                    </DetailSection>
+                    </div>
+                  </>
+                )}
+
+                {/* Related Use Cases */}
+                {relatedUseCases.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
+                        <Link2 className="h-4 w-4 text-indigo-500" />
+                        <p className="text-sm font-semibold">
+                          Related Use Cases
+                        </p>
+                      </div>
+                      <p className="mb-3 text-xs text-muted-foreground">
+                        Other use cases sharing the same tables
+                      </p>
+                      <div className="space-y-2">
+                        {relatedUseCases.map((uc) => (
+                          <button
+                            key={uc.id}
+                            className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-muted/50"
+                            onClick={() => setSelectedUseCase(uc)}
+                          >
+                            <div>
+                              <p className="text-sm font-medium">{uc.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {uc.domain}
+                              </p>
+                            </div>
+                            <ScoreBadge score={uc.overallScore} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
@@ -383,14 +472,20 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
 function TypeBadge({ type }: { type: string }) {
   if (type === "AI") {
     return (
-      <Badge variant="outline" className="gap-1 border-violet-300 bg-violet-50 text-violet-700">
+      <Badge
+        variant="outline"
+        className="gap-1 border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+      >
         <BrainCircuit className="h-3 w-3" />
         AI
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="gap-1 border-teal-300 bg-teal-50 text-teal-700">
+    <Badge
+      variant="outline"
+      className="gap-1 border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
+    >
       <BarChart3 className="h-3 w-3" />
       Statistical
     </Badge>
@@ -401,18 +496,38 @@ function DetailSection({
   icon,
   title,
   children,
+  copyText,
 }: {
   icon: React.ReactNode;
   title: string;
   children: React.ReactNode;
+  copyText?: string;
 }) {
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-2">
-        {icon}
-        <p className="text-sm font-semibold">{title}</p>
+      <div className="mb-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <p className="text-sm font-semibold">{title}</p>
+        </div>
+        {copyText && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => {
+              navigator.clipboard.writeText(copyText);
+              toast.success(`${title} copied to clipboard`);
+            }}
+          >
+            <Copy className="h-3 w-3" />
+            Copy
+          </Button>
+        )}
       </div>
-      <div className="pl-6 text-sm leading-relaxed text-foreground/90">{children}</div>
+      <div className="pl-6 text-sm leading-relaxed text-foreground/90">
+        {children}
+      </div>
     </div>
   );
 }
@@ -441,10 +556,10 @@ function ScoreBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100);
   const color =
     score >= 0.7
-      ? "text-green-700 bg-green-50 border-green-200"
+      ? "text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/30 dark:border-green-800"
       : score >= 0.4
-        ? "text-amber-700 bg-amber-50 border-amber-200"
-        : "text-red-700 bg-red-50 border-red-200";
+        ? "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:border-amber-800"
+        : "text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-900/30 dark:border-red-800";
 
   return (
     <span
@@ -467,16 +582,20 @@ function ScoreCard({
   const pct = Math.round(score * 100);
   const colorClasses =
     score >= 0.7
-      ? "border-green-200 bg-green-50/50 text-green-700"
+      ? "border-green-200 bg-green-50/50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400"
       : score >= 0.4
-        ? "border-amber-200 bg-amber-50/50 text-amber-700"
-        : "border-red-200 bg-red-50/50 text-red-700";
+        ? "border-amber-200 bg-amber-50/50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+        : "border-red-200 bg-red-50/50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400";
 
   return (
-    <div className={`flex flex-col items-center gap-1 rounded-lg border p-3 ${colorClasses}`}>
+    <div
+      className={`flex flex-col items-center gap-1 rounded-lg border p-3 ${colorClasses}`}
+    >
       <div className="opacity-60">{icon}</div>
       <p className="text-xl font-bold">{pct}%</p>
-      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</p>
+      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">
+        {label}
+      </p>
     </div>
   );
 }

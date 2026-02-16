@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -17,21 +18,79 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { loadSettings, saveSettings } from "@/lib/settings";
-import { Shield, Database } from "lucide-react";
+import {
+  Shield,
+  Database,
+  User,
+  Globe,
+  Trash2,
+  Save,
+  FileText,
+  FolderOpen,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
   const [sampleRowsPerTable, setSampleRowsPerTable] = useState(() => {
     if (typeof window === "undefined") return 0;
     return loadSettings().sampleRowsPerTable;
   });
+  const [defaultExportFormat, setDefaultExportFormat] = useState(() => {
+    if (typeof window === "undefined") return "excel";
+    return loadSettings().defaultExportFormat ?? "excel";
+  });
+  const [notebookPath, setNotebookPath] = useState(() => {
+    if (typeof window === "undefined") return "./inspire_gen/";
+    return loadSettings().notebookPath ?? "./inspire_gen/";
+  });
+
+  // Profile info from API
+  const [profile, setProfile] = useState<{
+    email: string | null;
+    host: string | null;
+  } | null>(null);
+
   const loaded = typeof window !== "undefined";
 
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((data) => {
+        setProfile({
+          email: data.userEmail ?? null,
+          host: data.host ?? null,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath });
     toast.success("Settings saved");
+  };
+
+  const handleClearLocalData = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("inspire-ai-settings");
+      setSampleRowsPerTable(0);
+      setDefaultExportFormat("excel");
+      setNotebookPath("./inspire_gen/");
+      toast.success("Local settings cleared");
+    }
   };
 
   if (!loaded) {
@@ -51,10 +110,40 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-muted-foreground">
-          Configure application-wide defaults. These apply to every new
-          discovery run.
+          Configure application-wide defaults and preferences.
         </p>
       </div>
+
+      {/* Profile */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Profile
+          </CardTitle>
+          <CardDescription>
+            Your workspace identity and connection information
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">User Email</Label>
+              <p className="mt-0.5 text-sm font-medium">
+                {profile?.email ?? "Not available (local dev)"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">
+                Databricks Workspace
+              </Label>
+              <p className="mt-0.5 text-sm font-medium font-mono">
+                {profile?.host ?? "Not connected"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Data Sampling */}
       <Card>
@@ -100,8 +189,7 @@ export default function SettingsPage() {
                   When data sampling is enabled, Inspire AI reads a small number
                   of rows from each table involved in a use case. This data is
                   sent to the AI model alongside the schema to improve SQL
-                  accuracy. Sampled data is <strong>not</strong> persisted -- it
-                  is used only during the generation step and discarded.
+                  accuracy. Sampled data is <strong>not</strong> persisted.
                 </p>
               </div>
             </div>
@@ -109,9 +197,109 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Export Preferences */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Export Preferences
+          </CardTitle>
+          <CardDescription>
+            Default settings for exporting discovery results
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="defaultExport">Default export format</Label>
+              <Select
+                value={defaultExportFormat}
+                onValueChange={setDefaultExportFormat}
+              >
+                <SelectTrigger id="defaultExport" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="excel">Excel (.xlsx)</SelectItem>
+                  <SelectItem value="pdf">PDF</SelectItem>
+                  <SelectItem value="pptx">PowerPoint (.pptx)</SelectItem>
+                  <SelectItem value="notebooks">
+                    Databricks Notebooks
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notebookPath">
+                Notebook deployment path
+              </Label>
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="notebookPath"
+                  value={notebookPath}
+                  onChange={(e) => setNotebookPath(e.target.value)}
+                  placeholder="./inspire_gen/"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5" />
+            Data Management
+          </CardTitle>
+          <CardDescription>
+            Manage local settings and cached data
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">
+                Clear local settings
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Reset all preferences to their defaults. This does not affect
+                pipeline runs or use cases stored in Lakebase.
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Clear
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear local settings?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will reset all preferences (data sampling, export
+                    format, notebook path) to their defaults. Pipeline runs and
+                    data are not affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearLocalData}>
+                    Clear Settings
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Save */}
       <div className="flex justify-end">
         <Button onClick={handleSave} size="lg">
+          <Save className="mr-2 h-4 w-4" />
           Save Settings
         </Button>
       </div>

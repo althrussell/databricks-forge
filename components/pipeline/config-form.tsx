@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Keyboard, X, Plus } from "lucide-react";
+import { Keyboard, X, Plus, Building2 } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
@@ -32,6 +32,7 @@ import {
   type SupportedLanguage,
 } from "@/lib/domain/types";
 import { loadSettings } from "@/lib/settings";
+import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
 
 const SUGGESTED_DOMAINS = [
   "Finance",
@@ -63,11 +64,43 @@ export function ConfigForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [businessName, setBusinessName] = useState("");
+  const [industry, setIndustry] = useState("");
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [manualMode, setManualMode] = useState(false);
   const [manualInput, setManualInput] = useState("");
   const [businessDomains, setBusinessDomains] = useState<string[]>([]);
   const [domainInput, setDomainInput] = useState("");
+
+  const { getOptions: getIndustryOptions, getOutcome: getIndustryOutcome } =
+    useIndustryOutcomes();
+  const industryOptions = getIndustryOptions();
+
+  const handleIndustryChange = (value: string) => {
+    const newIndustry = value === "__none__" ? "" : value;
+    setIndustry(newIndustry);
+
+    if (newIndustry) {
+      const outcome = getIndustryOutcome(newIndustry);
+      if (outcome) {
+        // Auto-suggest domains from the industry outcome map
+        if (businessDomains.length === 0) {
+          setBusinessDomains(outcome.suggestedDomains);
+        }
+        // Auto-suggest priorities from the industry outcome map
+        if (
+          selectedPriorities.length <= 1 &&
+          selectedPriorities[0] === "Increase Revenue"
+        ) {
+          const mapped = outcome.suggestedPriorities.filter((p) =>
+            (BUSINESS_PRIORITIES as readonly string[]).includes(p)
+          ) as BusinessPriority[];
+          if (mapped.length > 0) {
+            setSelectedPriorities(mapped);
+          }
+        }
+      }
+    }
+  };
 
   // Derive ucMetadata from browser selection or manual input
   const ucMetadata = manualMode
@@ -123,6 +156,7 @@ export function ConfigForm() {
         body: JSON.stringify({
           businessName: businessName.trim(),
           ucMetadata,
+          industry,
           businessDomains: businessDomains.join(", "),
           businessPriorities: selectedPriorities,
           strategicGoals: strategicGoals.trim(),
@@ -167,7 +201,9 @@ export function ConfigForm() {
         <CardHeader>
           <CardTitle>Required Configuration</CardTitle>
           <CardDescription>
-            These fields are needed to start a discovery run
+            These fields are needed to start a discovery run. The AI uses your
+            business name to generate industry context and tailor use case
+            recommendations.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -181,7 +217,40 @@ export function ConfigForm() {
               required
             />
             <p className="text-xs text-muted-foreground">
-              Your organisation or project name
+              Your organisation or project name -- the AI derives industry
+              context, value chain, and revenue model from this.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="industry">Industry (optional)</Label>
+            <Select
+              value={industry || "__none__"}
+              onValueChange={handleIndustryChange}
+            >
+              <SelectTrigger id="industry">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Select an industry..." />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Not specified</SelectItem>
+                {industryOptions.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>
+                    {opt.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Selecting an industry enriches the AI with curated high-value use
+              cases, KPIs, and strategic context from Databricks outcome maps.
+              {industry && (
+                <span className="ml-1 text-primary">
+                  Industry context will be injected into prompts.
+                </span>
+              )}
             </p>
           </div>
 
@@ -235,7 +304,9 @@ export function ConfigForm() {
         <CardHeader>
           <CardTitle>Business Priorities</CardTitle>
           <CardDescription>
-            Select the priorities that matter most to your organisation
+            Select the priorities that matter most to your organisation. These
+            directly influence how use cases are scored -- higher weight is given
+            to use cases aligned with your selected priorities.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -261,7 +332,9 @@ export function ConfigForm() {
         <CardHeader>
           <CardTitle>Advanced Configuration</CardTitle>
           <CardDescription>
-            Optional settings -- defaults are auto-detected
+            Optional settings -- defaults are auto-detected by the AI. Only
+            override these if you want to constrain the analysis to specific
+            business domains or use a particular AI model.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
