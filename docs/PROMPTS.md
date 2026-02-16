@@ -28,13 +28,47 @@
 
 ---
 
+## Per-Prompt Temperature Configuration
+
+Temperatures are configured per-prompt in `lib/ai/agent.ts` via the
+`PROMPT_TEMPERATURES` map, ported from the reference notebook's
+`TECHNICAL_CONTEXT`:
+
+| Prompt | Temperature | Rationale |
+|--------|-------------|-----------|
+| BUSINESS_CONTEXT_WORKER_PROMPT | 0.3 | Semi-structured reasoning |
+| FILTER_BUSINESS_TABLES_PROMPT | 0.2 | Deterministic classification |
+| BASE_USE_CASE_GEN_PROMPT | 0.7 | Creative generation |
+| AI_USE_CASE_GEN_PROMPT | 0.8 | Maximum creative diversity |
+| STATS_USE_CASE_GEN_PROMPT | 0.7 | Creative generation |
+| DOMAIN_FINDER_PROMPT | 0.5 | Semi-structured taxonomy |
+| SUBDOMAIN_DETECTOR_PROMPT | 0.4 | Semi-structured taxonomy |
+| DOMAINS_MERGER_PROMPT | 0.4 | Semi-structured merging |
+| SCORE_USE_CASES_PROMPT | 0.2 | Deterministic scoring |
+| REVIEW_USE_CASES_PROMPT | 0.3 | Deterministic dedup |
+| GLOBAL_SCORE_CALIBRATION_PROMPT | 0.2 | Deterministic calibration |
+| CROSS_DOMAIN_DEDUP_PROMPT | 0.3 | Deterministic dedup |
+| USE_CASE_SQL_GEN_PROMPT | 0.1 | Precise SQL generation |
+| USE_CASE_SQL_FIX_PROMPT | 0.1 | Precise SQL fixing |
+| SUMMARY_GEN_PROMPT | 0.5 | Semi-creative writing |
+| KEYWORDS_TRANSLATE_PROMPT | 0.2 | Deterministic translation |
+| USE_CASE_TRANSLATE_PROMPT | 0.3 | Semi-deterministic translation |
+
+---
+
 ## Template Details
 
 ### 1. BUSINESS_CONTEXT_WORKER_PROMPT
 
-**Step:** business-context  
+**Step:** business-context
 **Purpose:** Extracts business context, strategic goals, priorities, value chain,
 and revenue model from an industry/business name.
+
+**Key features:**
+- 3-step chain-of-thought workflow (Research → Gather → Construct)
+- Constrained strategic goals taxonomy (8 standard goals, pick 3-7)
+- Per-field quality guidance (length, specificity, tone)
+- Honesty score self-assessment
 
 **Input variables:**
 - `{industry}` — detected or user-supplied industry
@@ -47,7 +81,7 @@ and revenue model from an industry/business name.
 {
   "honesty_score": 0.85,
   "industries": "...",
-  "strategic_goals": "...",
+  "strategic_goals": "Reduce Cost (elaboration), Increase Revenue (elaboration), ...",
   "business_priorities": "...",
   "strategic_initiative": "...",
   "value_chain": "...",
@@ -60,8 +94,14 @@ and revenue model from an industry/business name.
 
 ### 2. FILTER_BUSINESS_TABLES_PROMPT
 
-**Step:** table-filtering  
+**Step:** table-filtering
 **Purpose:** Classifies tables as business-relevant vs technical/system tables.
+
+**Key features:**
+- Data category definitions (Transactional, Master, Reference) to guide classification
+- Universal technical patterns list (`*_logs`, `*_audit_trail`, `*_snapshot`, etc.)
+- 3 industry-specific few-shot examples (Data Platform, Healthcare, Logistics)
+- Classification priority rules (semantic analysis first)
 
 **Input variables:**
 - `{business_name}` — organisation name
@@ -79,8 +119,14 @@ and revenue model from an industry/business name.
 
 ### 3. BASE_USE_CASE_GEN_PROMPT
 
-**Step:** usecase-generation (base template)  
+**Step:** usecase-generation (base template)
 **Purpose:** Base prompt for use case generation; extended by AI and Stats prompts.
+
+**Key features:**
+- **Critical anti-hallucination block** — every use case must reference real tables from the schema
+- **Mandatory 5-point realism test** — logical causation, industry recognition, executive credibility, domain expert validation, boardroom test
+- **Improved column instructions** — business-oriented naming (Anticipate, Predict, Detect), no specific percentages in Business Value, SELECT DISTINCT in Technical Design
+- **Self-validation checklist** — verify before finalizing
 
 **Input variables:**
 - `{business_context}`, `{strategic_goals}`, `{business_priorities}`
@@ -97,13 +143,18 @@ and revenue model from an industry/business name.
 
 ### 4. AI_USE_CASE_GEN_PROMPT
 
-**Step:** usecase-generation  
+**Step:** usecase-generation
 **Purpose:** Generates AI-focused use cases leveraging ai_forecast, ai_classify,
 ai_query, ai_summarize, ai_extract, etc.
 
+**Key features (in addition to base):**
+- Anti-hallucination block
+- AI function pairing guidance (e.g., ai_forecast + ai_query, ai_classify + ai_analyze_sentiment)
+- Realism test
+- Analytics Technique must be a specific AI function name
+
 **Input variables:** Same as BASE_USE_CASE_GEN_PROMPT with:
 - `{ai_functions_summary}` — summary of available AI functions
-- `{statistical_functions_detailed}` — (empty for this prompt)
 
 **Expected output:** Same CSV format as BASE_USE_CASE_GEN_PROMPT.
 
@@ -111,13 +162,18 @@ ai_query, ai_summarize, ai_extract, etc.
 
 ### 5. STATS_USE_CASE_GEN_PROMPT
 
-**Step:** usecase-generation  
+**Step:** usecase-generation
 **Purpose:** Generates statistics-focused use cases (anomaly detection,
 simulation, geospatial, trend analysis, etc.)
 
+**Key features (in addition to base):**
+- Anti-hallucination block
+- Comprehensive statistics requirement (3-5 statistical functions per use case)
+- Function combination guidance (e.g., STDDEV_POP + PERCENTILE_APPROX + SKEWNESS for anomaly detection)
+- Realism test
+
 **Input variables:** Same as BASE_USE_CASE_GEN_PROMPT with:
 - `{statistical_functions_detailed}` — detailed statistical functions reference
-- `{ai_functions_summary}` — (empty for this prompt)
 
 **Expected output:** Same CSV format as BASE_USE_CASE_GEN_PROMPT.
 
@@ -125,8 +181,13 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 6. DOMAIN_FINDER_PROMPT
 
-**Step:** domain-clustering  
+**Step:** domain-clustering
 **Purpose:** Assigns use cases to 3-25 business domains (one-word names).
+
+**Key features:**
+- Anti-consolidation rule with formula (target = use_cases / 10)
+- Industry-specific domain name examples (Banking, Healthcare, Retail, Manufacturing)
+- Retry with previous violations
 
 **Input variables:**
 - `{business_name}`, `{industries}`, `{business_context}`
@@ -143,8 +204,14 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 7. SUBDOMAIN_DETECTOR_PROMPT
 
-**Step:** domain-clustering  
+**Step:** domain-clustering
 **Purpose:** Assigns 2-10 subdomains within a single domain.
+
+**Key features:**
+- 2-word naming rule (mandatory)
+- Semantic grouping by business outcome, not technique
+- Example showing domain-to-subdomain mapping
+- No single-item subdomains
 
 **Input variables:**
 - `{domain_name}` — the parent domain
@@ -162,8 +229,12 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 8. DOMAINS_MERGER_PROMPT
 
-**Step:** domain-clustering  
+**Step:** domain-clustering
 **Purpose:** Merges small domains (below minimum threshold) into larger ones.
+
+**Key features:**
+- Semantic overlap preference (not just largest domain)
+- Honesty score self-assessment
 
 **Input variables:**
 - `{min_cases_per_domain}` — minimum use cases per domain
@@ -178,8 +249,22 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 9. SCORE_USE_CASES_PROMPT
 
-**Step:** scoring  
+**Step:** scoring
 **Purpose:** Scores use cases on priority, feasibility, impact, and overall dimensions.
+
+**Key features (major upgrade):**
+- **Value Score rubric (4 weighted factors):**
+  - ROI (60%) — 5-level ladder with concrete examples
+  - Strategic Alignment (25%) — direct hit / strong link / weak definitions
+  - Time to Value (7.5%) — weeks / months / years ladder
+  - Reusability (7.5%) — platform asset / modular / one-off
+- **Feasibility Score rubric (8 factors, simple average):**
+  - Data Availability, Data Accessibility, Architecture Fitness, Team Skills
+  - Domain Knowledge, People Allocation, Budget Allocation, Time to Production
+- **Value-First Formula:** overall_score = (Value × 0.75) + (Feasibility × 0.25)
+- **Scoring rules:** No forced distribution, zero-based scoring, strategic goal bonus
+- **Business relevancy penalties:** Irrelevant correlations, nonsensical external data, boardroom test
+- **Chain-of-thought:** LLM computes sub-factors internally, outputs final 4 scores
 
 **Input variables:**
 - `{business_context}`, `{strategic_goals}`, `{business_priorities}`
@@ -188,15 +273,19 @@ simulation, geospatial, trend analysis, etc.)
 
 **Expected output:** JSON array:
 ```json
-[{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.72}]
+[{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.68}]
 ```
 
 ---
 
 ### 10. REVIEW_USE_CASES_PROMPT
 
-**Step:** scoring (per-domain deduplication)  
-**Purpose:** Detects duplicate and low-value use cases for removal.
+**Step:** scoring (per-domain deduplication)
+**Purpose:** Detects duplicate and low-quality use cases for removal.
+
+**Key features:**
+- Aggressive semantic duplicate detection with examples
+- Quality rejection criteria: no business outcome, irrelevant correlation, purely technical, vague/generic, boardroom test failure
 
 **Input variables:**
 - `{total_count}` — total use case count
@@ -211,8 +300,13 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 11. GLOBAL_SCORE_CALIBRATION_PROMPT
 
-**Step:** scoring (global calibration)  
+**Step:** scoring (global calibration)
 **Purpose:** Re-calibrates scores across all domains for consistency on a single global scale.
+
+**Key features:**
+- References Value-First framework (Value × 0.75 + Feasibility × 0.25)
+- Explicit score ladder (0.8+ = exceptional, 0.5-0.79 = solid, 0.3-0.49 = modest, <0.3 = weak)
+- Absolute merit scoring, no curve
 
 **Input variables:**
 - `{business_context}`, `{strategic_goals}`
@@ -227,8 +321,13 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 12. CROSS_DOMAIN_DEDUP_PROMPT
 
-**Step:** scoring (cross-domain deduplication)  
+**Step:** scoring (cross-domain deduplication)
 **Purpose:** Identifies semantically duplicate use cases across different domains.
+
+**Key features:**
+- 5 examples of cross-domain duplicates
+- "NOT duplicates" examples to prevent over-flagging
+- Score-based retention rules
 
 **Input variables:**
 - `{use_case_markdown}` — all use cases with domain and score
@@ -242,8 +341,16 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 13. USE_CASE_SQL_GEN_PROMPT
 
-**Step:** sql-generation  
+**Step:** sql-generation
 **Purpose:** Generates production-grade Databricks SQL for a single use case.
+
+**Key features (major upgrade):**
+- **SELECT DISTINCT first-CTE rule** — mandatory deduplication before analysis
+- **Persona enrichment for ai_query** — every AI persona must include business_name, context, goals, priorities
+- **ai_sys_prompt column** — mandatory last column capturing the exact prompt for auditability
+- **Business-friendly CTE names** — descriptive names like `customer_lifetime_value`, not `cte1`
+- **End marker** — `--END OF GENERATED SQL`
+- Comprehensive AI function and statistical function usage rules
 
 **Input variables:**
 - `{business_name}`, `{business_context}`, `{strategic_goals}`
@@ -254,14 +361,19 @@ simulation, geospatial, trend analysis, etc.)
 - `{sample_data_section}`, `{ai_functions_summary}`, `{statistical_functions_detailed}`
 - `{sql_model_serving}` — model endpoint for ai_query calls
 
-**Expected output:** Raw SQL (no markdown fences).
+**Expected output:** Raw SQL (no markdown fences), starting with `-- Use Case:` comment, ending with `--END OF GENERATED SQL`.
 
 ---
 
 ### 14. USE_CASE_SQL_FIX_PROMPT
 
-**Step:** sql-generation (fix/retry)  
+**Step:** sql-generation (fix/retry)
 **Purpose:** Fixes SQL that failed execution by incorporating the error message.
+
+**Key features:**
+- Fix-only philosophy (no logic changes, no optimization, no new features)
+- Preserves ai_sys_prompt column and end marker if present
+- Extended common fixes list (ai_query errors, AI_FORECAST errors)
 
 **Input variables:**
 - `{use_case_name}`, `{use_case_id}`
@@ -276,7 +388,7 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 15. SUMMARY_GEN_PROMPT
 
-**Step:** export (PDF/PPTX generation) — **not yet wired**  
+**Step:** export (PDF/PPTX generation) — **not yet wired**
 **Purpose:** Generates executive and domain summaries for documents.
 
 **Input variables:**
@@ -288,7 +400,7 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 16. KEYWORDS_TRANSLATE_PROMPT
 
-**Step:** export (multi-language) — **not yet wired**  
+**Step:** export (multi-language) — **not yet wired**
 **Purpose:** Translates JSON keyword values into a target language.
 
 **Input variables:**
@@ -300,7 +412,7 @@ simulation, geospatial, trend analysis, etc.)
 
 ### 17. USE_CASE_TRANSLATE_PROMPT
 
-**Step:** export (multi-language) — **not yet wired**  
+**Step:** export (multi-language) — **not yet wired**
 **Purpose:** Translates use case data into a target language.
 
 **Input variables:**
@@ -352,7 +464,9 @@ Used in statistical use case generation prompts:
 
 ---
 
-## Versioning
+## Infrastructure
+
+### Versioning
 
 Prompt templates are version-tracked via content-addressable SHA-256 hashes
 computed at startup. The `PROMPT_VERSIONS` map in `lib/ai/templates.ts`
@@ -361,3 +475,15 @@ hash of the template content.
 
 These hashes are stored with each pipeline run (in `generationOptions.promptVersions`)
 so that any change to a prompt template is automatically traceable to specific runs.
+
+### Prompt Injection Protection
+
+User-supplied variables (listed in `USER_INPUT_VARIABLES`) are wrapped with
+`---BEGIN USER DATA---` / `---END USER DATA---` delimiters by the
+`sanitiseUserInput()` function before injection into templates.
+
+### Variable Validation
+
+The `formatPrompt()` function logs a warning if any `{placeholder}` patterns
+remain after variable substitution, catching missing variables at runtime
+instead of silently sending unresolved placeholders to the LLM.

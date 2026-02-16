@@ -10,7 +10,7 @@
  * - Automatic retry with exponential backoff (configurable)
  */
 
-import { executeSQL } from "@/lib/dbx/sql";
+import { executeSQL, type ExecuteSQLOptions } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import { formatPrompt, PROMPT_VERSIONS, type PromptKey } from "./templates";
 
@@ -38,7 +38,7 @@ export interface AIQueryOptions {
    */
   maxTokens?: number;
   /**
-   * Number of retry attempts on failure (default: 1).
+   * Number of retry attempts on failure (default: 2).
    * Set to 0 for no retries.
    */
   retries?: number;
@@ -63,19 +63,42 @@ export interface AIQueryResult {
 }
 
 // ---------------------------------------------------------------------------
-// Default temperatures by prompt type
+// Per-prompt temperature configuration
 // ---------------------------------------------------------------------------
+// Ported from the reference notebook's TECHNICAL_CONTEXT.
+// Low temps (0.1-0.2) for structured/deterministic output (scoring, SQL, classification).
+// Medium temps (0.3-0.5) for semi-structured reasoning (business context, domains, dedup).
+// Higher temps (0.7-0.8) for creative generation (use case ideation).
 
-const CREATIVE_PROMPTS: Set<PromptKey> = new Set([
-  "BUSINESS_CONTEXT_WORKER_PROMPT",
-  "AI_USE_CASE_GEN_PROMPT",
-  "STATS_USE_CASE_GEN_PROMPT",
-  "BASE_USE_CASE_GEN_PROMPT",
-  "SUMMARY_GEN_PROMPT",
-]);
+const PROMPT_TEMPERATURES: Partial<Record<PromptKey, number>> = {
+  // Phase 1: Initialization
+  BUSINESS_CONTEXT_WORKER_PROMPT: 0.3,
+  // Phase 2: Table Filtering
+  FILTER_BUSINESS_TABLES_PROMPT: 0.2,
+  // Phase 3: Use Case Generation (creative -- needs diversity)
+  BASE_USE_CASE_GEN_PROMPT: 0.7,
+  AI_USE_CASE_GEN_PROMPT: 0.8,
+  STATS_USE_CASE_GEN_PROMPT: 0.7,
+  // Phase 4: Domain Clustering
+  DOMAIN_FINDER_PROMPT: 0.5,
+  SUBDOMAIN_DETECTOR_PROMPT: 0.4,
+  DOMAINS_MERGER_PROMPT: 0.4,
+  // Phase 5: Scoring & Deduplication (deterministic)
+  SCORE_USE_CASES_PROMPT: 0.2,
+  REVIEW_USE_CASES_PROMPT: 0.3,
+  GLOBAL_SCORE_CALIBRATION_PROMPT: 0.2,
+  CROSS_DOMAIN_DEDUP_PROMPT: 0.3,
+  // Phase 6: SQL Generation (precise)
+  USE_CASE_SQL_GEN_PROMPT: 0.1,
+  USE_CASE_SQL_FIX_PROMPT: 0.1,
+  // Phase 7: Export & Translation
+  SUMMARY_GEN_PROMPT: 0.5,
+  KEYWORDS_TRANSLATE_PROMPT: 0.2,
+  USE_CASE_TRANSLATE_PROMPT: 0.3,
+};
 
 function getDefaultTemperature(promptKey: PromptKey): number {
-  return CREATIVE_PROMPTS.has(promptKey) ? 0.5 : 0.2;
+  return PROMPT_TEMPERATURES[promptKey] ?? 0.3;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +117,7 @@ function getDefaultTemperature(promptKey: PromptKey): number {
 export async function executeAIQuery(
   options: AIQueryOptions
 ): Promise<AIQueryResult> {
-  const maxRetries = options.retries ?? 1;
+  const maxRetries = options.retries ?? 2;
   const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
   const maxTokens = options.maxTokens ?? 8192;
 
@@ -185,7 +208,15 @@ async function executeAIQueryOnce(
     maxTokens,
   });
 
-  const result = await executeSQL(sql);
+  // ai_query() calls can take 1-3+ minutes for LLM inference.
+  // Set waitTimeout to "0s" so the server returns immediately with a
+  // statement_id, then the poll loop in executeSQL handles the wait.
+  const sqlOptions: ExecuteSQLOptions = {
+    waitTimeout: "0s",
+    submitTimeoutMs: 30_000,
+  };
+
+  const result = await executeSQL(sql, undefined, undefined, sqlOptions);
 
   if (result.rows.length === 0 || !result.rows[0][0]) {
     throw new Error(`ai_query returned no response for ${options.promptKey}`);

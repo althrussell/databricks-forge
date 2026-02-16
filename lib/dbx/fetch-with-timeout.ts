@@ -43,8 +43,8 @@ export async function fetchWithTimeout(
 export const TIMEOUTS = {
   /** OAuth token exchange */
   AUTH: 15_000,
-  /** SQL statement submission */
-  SQL_SUBMIT: 30_000,
+  /** SQL statement submission (must exceed server-side wait_timeout of 50s) */
+  SQL_SUBMIT: 60_000,
   /** SQL statement polling */
   SQL_POLL: 15_000,
   /** SQL chunk fetching */
