@@ -84,7 +84,6 @@ export async function runBusinessContext(
         type_label: "business organisation",
       },
       modelEndpoint: config.aiModel,
-      maxTokens: 4096,
     });
 
     let parsed: Record<string, unknown>;

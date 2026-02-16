@@ -246,12 +246,26 @@ async function generateSqlForUseCase(
     promptKey: "USE_CASE_SQL_GEN_PROMPT",
     variables,
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   const sql = cleanSqlResponse(result.rawResponse);
 
   if (!sql || sql.length < 20) {
+    return null;
+  }
+
+  // Detect truncated SQL (LLM ran out of tokens mid-query)
+  if (isTruncatedSql(sql)) {
+    logger.warn("SQL appears truncated (output token limit hit), attempting fix", { useCaseId: uc.id });
+    const fixedSql = await attemptSqlFix(
+      uc,
+      sql,
+      "SQL query is truncated / incomplete — syntax error at end of input. The original query was too long. Simplify the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total.",
+      schemaMarkdown,
+      fkMarkdown,
+      aiModel
+    );
+    if (fixedSql) return fixedSql;
     return null;
   }
 
@@ -322,7 +336,6 @@ async function attemptSqlFix(
       },
       modelEndpoint: aiModel,
       temperature: 0.1,
-      maxTokens: 4096,
       retries: 0,
     });
 
@@ -505,6 +518,35 @@ function validateSqlOutput(
 // ---------------------------------------------------------------------------
 // Response cleaning
 // ---------------------------------------------------------------------------
+
+/**
+ * Detect if the SQL output was truncated due to hitting the LLM's output
+ * token limit. Truncated SQL typically ends mid-expression without a
+ * complete final statement.
+ */
+function isTruncatedSql(sql: string): boolean {
+  const trimmed = sql.trimEnd();
+
+  // If the SQL ends with the expected end marker, it's complete
+  if (trimmed.endsWith("--END OF GENERATED SQL")) return false;
+
+  // If it ends with a semicolon (optionally followed by a comment), it's complete
+  if (/;\s*(--[^\n]*)?$/.test(trimmed)) return false;
+
+  // If it ends with LIMIT N, it's likely complete (just missing semicolon)
+  if (/LIMIT\s+\d+\s*$/i.test(trimmed)) return false;
+
+  // If it ends mid-expression (after a comma, operator, or incomplete keyword),
+  // it's likely truncated
+  if (/[,(+\-*/=<>]\s*$/.test(trimmed)) return true;
+  if (/\b(AND|OR|ON|FROM|JOIN|WHERE|SELECT|GROUP|ORDER|HAVING|BY|AS|CASE|WHEN|THEN)\s*$/i.test(trimmed)) return true;
+
+  // If the query is very long (200+ lines) and doesn't end cleanly, likely truncated
+  const lineCount = trimmed.split("\n").length;
+  if (lineCount > 150 && !/\)\s*$/.test(trimmed)) return true;
+
+  return false;
+}
 
 /**
  * Strip markdown fences, preamble text, and JSON wrappers that the LLM

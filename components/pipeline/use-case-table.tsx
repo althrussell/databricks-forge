@@ -171,14 +171,14 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((uc) => (
+                filtered.map((uc, idx) => (
                   <TableRow
                     key={uc.id}
                     className="cursor-pointer transition-colors hover:bg-row-hover"
                     onClick={() => setSelectedUseCase(uc)}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {uc.useCaseNo}
+                      {idx + 1}
                     </TableCell>
                     <TableCell className="max-w-[300px]">
                       <p className="truncate font-medium">{uc.name}</p>

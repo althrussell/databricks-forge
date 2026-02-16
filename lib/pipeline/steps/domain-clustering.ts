@@ -107,7 +107,6 @@ async function assignDomains(
       output_language: "English",
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rawItems: unknown[];
@@ -160,7 +159,6 @@ async function assignSubdomains(
       output_language: "English",
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rawItems: unknown[];
@@ -240,7 +238,6 @@ async function mergeSmallDomains(
         domain_info_str: domainInfoStr,
       },
       modelEndpoint: aiModel,
-      maxTokens: 2048,
     });
 
     let mergeMap: Record<string, string>;

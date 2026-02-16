@@ -91,7 +91,6 @@ async function filterBatch(
       tables_markdown: buildTablesMarkdown(tables),
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rows: string[][];

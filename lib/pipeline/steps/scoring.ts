@@ -143,7 +143,6 @@ async function scoreDomain(
       use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rawItems: unknown[];
@@ -207,7 +206,6 @@ async function deduplicateDomain(
       use_case_markdown: `| No | Name | Type | Statement |\n|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rawItems: unknown[];
@@ -278,7 +276,6 @@ async function calibrateScoresGlobally(
       use_case_markdown: `| No | Domain | Name | Type | Statement | Current Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rawItems: unknown[];
@@ -330,7 +327,6 @@ async function deduplicateCrossDomain(
       use_case_markdown: `| No | Domain | Name | Type | Statement | Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
-    maxTokens: 4096,
   });
 
   let rawItems: unknown[];
