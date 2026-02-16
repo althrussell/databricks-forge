@@ -28,7 +28,6 @@ model InspireRun {
   languages          String?   @default("[\"English\"]")
   generationOptions  String?   @default("[\"SQL Code\"]") @map("generation_options")
   generationPath     String?   @default("./inspire_gen/") @map("generation_path")
-  sampleRowsPerTable Int?      @default(0) @map("sample_rows_per_table")
   status             String    @default("pending")
   currentStep        String?   @map("current_step")
   progressPct        Int       @default(0) @map("progress_pct")

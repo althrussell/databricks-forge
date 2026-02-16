@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       generationOptions: body.generationOptions ?? ["SQL Code"],
       generationPath: body.generationPath ?? "./inspire_gen/",
       languages: body.languages ?? ["English"],
-      aiModel: body.aiModel ?? "databricks-claude-sonnet-4-5",
+      aiModel: body.aiModel ?? "databricks-claude-opus-4-6",
       sampleRowsPerTable: Math.min(Math.max(parseInt(body.sampleRowsPerTable ?? "0", 10) || 0, 0), 50),
     };
 
