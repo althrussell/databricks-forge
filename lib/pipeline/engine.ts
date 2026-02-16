@@ -12,6 +12,7 @@ import {
   updateRunStatus,
   updateRunBusinessContext,
   updateRunStepLog,
+  updateRunMetadataCacheKey,
   getRunById,
 } from "@/lib/lakebase/runs";
 // insertUseCases/deleteUseCasesForRun are now handled inline via $transaction
@@ -104,6 +105,10 @@ export async function startPipeline(runId: string): Promise<void> {
       await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
       logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
       ctx.metadata = await runMetadataExtraction(ctx, runId);
+      // Link the metadata snapshot to this run for auditing
+      if (ctx.metadata.cacheKey) {
+        await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
+      }
       await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 20, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
     });
 

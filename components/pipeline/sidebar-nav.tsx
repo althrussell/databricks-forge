@@ -19,6 +19,8 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
   { href: "/configure", label: "New Discovery", icon: PlusIcon },
   { href: "/runs", label: "Runs", icon: ListIcon },
+  { href: "/runs/compare", label: "Compare", icon: CompareIcon },
+  { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -165,6 +167,45 @@ function ListIcon({ className }: { className?: string }) {
       <rect width="7" height="7" x="14" y="3" rx="1" />
       <rect width="7" height="7" x="14" y="14" rx="1" />
       <rect width="7" height="7" x="3" y="14" rx="1" />
+    </svg>
+  );
+}
+
+function CompareIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M16 3h5v5" />
+      <path d="M8 3H3v5" />
+      <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
+      <path d="m15 9 6-6" />
+    </svg>
+  );
+}
+
+function OutcomeMapIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+      <path d="m2 17 10 5 10-5" />
+      <path d="m2 12 10 5 10-5" />
     </svg>
   );
 }

@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { executeSQL } from "@/lib/dbx/sql";
+import { getCurrentUserEmail, getConfig } from "@/lib/dbx/client";
 import packageJson from "@/package.json";
 
 interface HealthCheck {
@@ -53,12 +54,23 @@ export async function GET() {
         ? "degraded"
         : "unhealthy";
 
-  const health: HealthCheck = {
+  let userEmail: string | null = null;
+  let host: string | null = null;
+  try {
+    userEmail = await getCurrentUserEmail();
+    host = getConfig().host;
+  } catch {
+    // Non-critical
+  }
+
+  const health: HealthCheck & { userEmail?: string | null; host?: string | null } = {
     status: overallStatus,
     version: packageJson.version,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     timestamp: new Date().toISOString(),
     checks: { database, warehouse },
+    userEmail,
+    host,
   };
 
   const httpStatus = overallStatus === "unhealthy" ? 503 : 200;

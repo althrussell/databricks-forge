@@ -7,6 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes";
 import { logger } from "@/lib/logger";
 import {
   ScoreItemSchema,
@@ -25,6 +26,11 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   const bc = run.businessContext;
   let scored = [...useCases];
 
+  // Build industry KPIs for scoring enrichment
+  const industryKpis = run.config.industry
+    ? await buildIndustryKPIsPrompt(run.config.industry)
+    : "";
+
   // Step 6a: Score per domain
   const domains = [...new Set(scored.map((uc) => uc.domain))];
   const bcRecord = bc as unknown as Record<string, string>;
@@ -33,7 +39,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     const domainCases = scored.filter((uc) => uc.domain === domain);
     if (runId) await updateRunMessage(runId, `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`);
     try {
-      await scoreDomain(domainCases, bcRecord, run.config.aiModel);
+      await scoreDomain(domainCases, bcRecord, run.config.aiModel, industryKpis, runId);
     } catch (error) {
       logger.warn("Scoring failed for domain", { domain, error: error instanceof Error ? error.message : String(error) });
       // Assign default scores
@@ -54,7 +60,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     if (domainCases.length <= 2) continue;
 
     try {
-      const toRemove = await deduplicateDomain(domainCases, run.config.aiModel);
+      const toRemove = await deduplicateDomain(domainCases, run.config.aiModel, runId);
       removedCount += toRemove.size;
       scored = scored.filter((uc) => !toRemove.has(uc.useCaseNo));
     } catch (error) {
@@ -70,7 +76,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   if (scored.length > 5) {
     if (runId) await updateRunMessage(runId, `Cross-domain dedup: reviewing ${scored.length} use cases...`);
     try {
-      const crossDomainRemoved = await deduplicateCrossDomain(scored, run.config.aiModel);
+      const crossDomainRemoved = await deduplicateCrossDomain(scored, run.config.aiModel, runId);
       if (crossDomainRemoved.size > 0) {
         scored = scored.filter((uc) => !crossDomainRemoved.has(uc.useCaseNo));
         if (runId) {
@@ -87,7 +93,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   if (scored.length > 10) {
     if (runId) await updateRunMessage(runId, `Calibrating scores across ${domains.length} domains...`);
     try {
-      await calibrateScoresGlobally(scored, bc as unknown as Record<string, string>, run.config.aiModel);
+      await calibrateScoresGlobally(scored, bc as unknown as Record<string, string>, run.config.aiModel, runId);
     } catch (error) {
       logger.warn("Global calibration failed", { error: error instanceof Error ? error.message : String(error) });
     }
@@ -122,7 +128,9 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
 async function scoreDomain(
   domainCases: UseCase[],
   businessContext: Record<string, string>,
-  aiModel: string
+  aiModel: string,
+  industryKpis: string = "",
+  runId?: string
 ): Promise<void> {
   const useCaseMarkdown = domainCases
     .map(
@@ -140,9 +148,12 @@ async function scoreDomain(
       strategic_initiative: businessContext.strategicInitiative ?? "",
       value_chain: businessContext.valueChain ?? "",
       revenue_model: businessContext.revenueModel ?? "",
+      industry_kpis: industryKpis,
       use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "scoring",
   });
 
   let rawItems: unknown[];
@@ -190,7 +201,8 @@ async function scoreDomain(
 
 async function deduplicateDomain(
   domainCases: UseCase[],
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<Set<number>> {
   const useCaseMarkdown = domainCases
     .map(
@@ -206,6 +218,8 @@ async function deduplicateDomain(
       use_case_markdown: `| No | Name | Type | Statement |\n|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "scoring",
   });
 
   let rawItems: unknown[];
@@ -243,7 +257,8 @@ function clampScore(value: number): number {
 async function calibrateScoresGlobally(
   useCases: UseCase[],
   businessContext: Record<string, string>,
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<void> {
   const domains = [...new Set(useCases.map((uc) => uc.domain))];
   const candidates: UseCase[] = [];
@@ -276,6 +291,8 @@ async function calibrateScoresGlobally(
       use_case_markdown: `| No | Domain | Name | Type | Statement | Current Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "scoring",
   });
 
   let rawItems: unknown[];
@@ -312,7 +329,8 @@ async function calibrateScoresGlobally(
 
 async function deduplicateCrossDomain(
   useCases: UseCase[],
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<Set<number>> {
   const useCaseMarkdown = useCases
     .map(
@@ -327,6 +345,8 @@ async function deduplicateCrossDomain(
       use_case_markdown: `| No | Domain | Name | Type | Statement | Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "scoring",
   });
 
   let rawItems: unknown[];

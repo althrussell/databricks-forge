@@ -7,6 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes";
 import { logger } from "@/lib/logger";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 
@@ -75,6 +76,11 @@ export async function runBusinessContext(
 
   try {
     if (runId) await updateRunMessage(runId, `Researching business context for ${config.businessName}...`);
+    // Inject industry context from outcome maps when an industry is selected
+    const industryContext = config.industry
+      ? await buildIndustryContextPrompt(config.industry)
+      : "";
+
     const result = await executeAIQuery({
       promptKey: "BUSINESS_CONTEXT_WORKER_PROMPT",
       variables: {
@@ -82,8 +88,11 @@ export async function runBusinessContext(
         name: config.businessName,
         type_description: "Full business context research",
         type_label: "business organisation",
+        industry_context: industryContext,
       },
       modelEndpoint: config.aiModel,
+      runId,
+      step: "business-context",
     });
 
     let parsed: Record<string, unknown>;

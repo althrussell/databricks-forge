@@ -6,9 +6,16 @@
  */
 
 import { executeAIQuery, parseCSVResponse } from "@/lib/ai/agent";
-import { updateRunMessage } from "@/lib/lakebase/runs";
+import { updateRunMessage, updateRunFilteredTables } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { PipelineContext, TableInfo } from "@/lib/domain/types";
+
+/** Classification record for a table — stored as audit trail in Lakebase. */
+export interface TableClassification {
+  fqn: string;
+  classification: string;
+  reason: string;
+}
 
 const BATCH_SIZE = 100; // tables per ai_query call
 
@@ -41,6 +48,7 @@ export async function runTableFiltering(
   }
 
   const businessTables: string[] = [];
+  const allClassifications: TableClassification[] = [];
   const totalBatches = Math.ceil(tables.length / BATCH_SIZE);
 
   // Process in batches
@@ -49,8 +57,9 @@ export async function runTableFiltering(
     const batch = tables.slice(i, i + BATCH_SIZE);
     if (runId) await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
     try {
-      const filtered = await filterBatch(batch, run.config.businessName, run.businessContext, run.config.aiModel);
-      businessTables.push(...filtered);
+      const { filteredFqns, classifications } = await filterBatch(batch, run.config.businessName, run.businessContext, run.config.aiModel, runId);
+      businessTables.push(...filteredFqns);
+      allClassifications.push(...classifications);
     } catch (error) {
       // Fail-open: include all tables from failed batch
       logger.warn("Table filtering batch failed, including all tables", {
@@ -58,6 +67,20 @@ export async function runTableFiltering(
         error: error instanceof Error ? error.message : String(error),
       });
       businessTables.push(...batch.map((t) => t.fqn));
+      allClassifications.push(
+        ...batch.map((t) => ({ fqn: t.fqn, classification: "business", reason: "batch failed — included by default" }))
+      );
+    }
+  }
+
+  // Persist the full classification data for auditing
+  if (runId && allClassifications.length > 0) {
+    try {
+      await updateRunFilteredTables(runId, allClassifications);
+    } catch (error) {
+      logger.warn("Failed to persist table classifications", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -75,8 +98,9 @@ async function filterBatch(
   tables: TableInfo[],
   businessName: string,
   businessContext: { industries: string },
-  aiModel: string
-): Promise<string[]> {
+  aiModel: string,
+  runId?: string
+): Promise<{ filteredFqns: string[]; classifications: TableClassification[] }> {
   const result = await executeAIQuery({
     promptKey: "FILTER_BUSINESS_TABLES_PROMPT",
     variables: {
@@ -91,6 +115,8 @@ async function filterBatch(
       tables_markdown: buildTablesMarkdown(tables),
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "table-filtering",
   });
 
   let rows: string[][];
@@ -100,23 +126,37 @@ async function filterBatch(
     logger.warn("Failed to parse table filtering CSV, including all tables", {
       error: parseErr instanceof Error ? parseErr.message : String(parseErr),
     });
-    return tables.map((t) => t.fqn);
+    const allFqns = tables.map((t) => t.fqn);
+    return {
+      filteredFqns: allFqns,
+      classifications: allFqns.map((fqn) => ({ fqn, classification: "business", reason: "parse failed — included by default" })),
+    };
   }
 
   const businessFQNs: string[] = [];
+  const classifications: TableClassification[] = [];
 
   for (const row of rows) {
     const fqn = row[0]?.trim();
     const classification = row[1]?.trim().toLowerCase();
-    if (fqn && classification === "business") {
-      businessFQNs.push(fqn);
+    const reason = row[2]?.trim() ?? "";
+    if (fqn) {
+      classifications.push({ fqn, classification: classification || "unknown", reason });
+      if (classification === "business") {
+        businessFQNs.push(fqn);
+      }
     }
   }
 
   // If the model classified nothing as business, include all (fail-open)
   if (businessFQNs.length === 0) {
-    return tables.map((t) => t.fqn);
+    return {
+      filteredFqns: tables.map((t) => t.fqn),
+      classifications: classifications.length > 0
+        ? classifications
+        : tables.map((t) => ({ fqn: t.fqn, classification: "business", reason: "no business tables found — included all by default" })),
+    };
   }
 
-  return businessFQNs;
+  return { filteredFqns: businessFQNs, classifications };
 }

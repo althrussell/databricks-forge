@@ -10,6 +10,8 @@ import { v4 as uuidv4 } from "uuid";
 import { createRun, listRuns } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { safeParseBody, CreateRunSchema } from "@/lib/validation";
+import { getCurrentUserEmail } from "@/lib/dbx/client";
+import { logActivity } from "@/lib/lakebase/activity-log";
 import type {
   PipelineRunConfig,
   Operation,
@@ -41,9 +43,18 @@ export async function POST(request: NextRequest) {
       languages: (body.languages ?? ["English"]) as SupportedLanguage[],
       aiModel: body.aiModel ?? "databricks-claude-opus-4-6",
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,
+      industry: body.industry ?? "",
     };
 
-    await createRun(runId, config);
+    const userEmail = await getCurrentUserEmail();
+    await createRun(runId, config, userEmail);
+
+    // Fire-and-forget activity log
+    logActivity("created_run", {
+      userId: userEmail,
+      resourceId: runId,
+      metadata: { businessName: config.businessName },
+    });
 
     return NextResponse.json({ runId }, { status: 201 });
   } catch (error) {

@@ -31,7 +31,7 @@ export async function runDomainClustering(
   // Step 5a: Assign domains
   if (runId) await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
-    await assignDomains(updatedCases, run.config.businessName, bc, run.config.aiModel);
+    await assignDomains(updatedCases, run.config.businessName, bc, run.config.aiModel, runId);
   } catch (error) {
     logger.error("Domain assignment failed", { error: error instanceof Error ? error.message : String(error) });
     // Fallback: assign all to "General"
@@ -49,7 +49,7 @@ export async function runDomainClustering(
 
     if (runId) await updateRunMessage(runId, `Assigning subdomains for domain: ${domain} (${di + 1}/${domains.length})...`);
     try {
-      await assignSubdomains(domainCases, domain, run.config.businessName, bc, run.config.aiModel);
+      await assignSubdomains(domainCases, domain, run.config.businessName, bc, run.config.aiModel, runId);
     } catch (error) {
       logger.warn("Subdomain assignment failed", { domain, error: error instanceof Error ? error.message : String(error) });
       domainCases.forEach((uc) => {
@@ -70,7 +70,7 @@ export async function runDomainClustering(
     await updateRunMessage(runId, `Merging ${smallDomainCount} small domains...`);
   }
   try {
-    await mergeSmallDomains(updatedCases, run.config.aiModel);
+    await mergeSmallDomains(updatedCases, run.config.aiModel, runId);
   } catch (error) {
     logger.warn("Domain merge failed", { error: error instanceof Error ? error.message : String(error) });
   }
@@ -87,7 +87,8 @@ async function assignDomains(
   useCases: UseCase[],
   businessName: string,
   businessContext: { industries: string },
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<void> {
   const useCasesCsv = useCases
     .map(
@@ -107,6 +108,8 @@ async function assignDomains(
       output_language: "English",
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "domain-clustering",
   });
 
   let rawItems: unknown[];
@@ -138,7 +141,8 @@ async function assignSubdomains(
   domainName: string,
   businessName: string,
   businessContext: { industries: string },
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<void> {
   const useCasesCsv = domainCases
     .map(
@@ -159,6 +163,8 @@ async function assignSubdomains(
       output_language: "English",
     },
     modelEndpoint: aiModel,
+    runId,
+    step: "domain-clustering",
   });
 
   let rawItems: unknown[];
@@ -213,7 +219,8 @@ async function assignSubdomains(
 
 async function mergeSmallDomains(
   useCases: UseCase[],
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<void> {
   const domainCounts: Record<string, number> = {};
   for (const uc of useCases) {
@@ -238,6 +245,8 @@ async function mergeSmallDomains(
         domain_info_str: domainInfoStr,
       },
       modelEndpoint: aiModel,
+      runId,
+      step: "domain-clustering",
     });
 
     let mergeMap: Record<string, string>;

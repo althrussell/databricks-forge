@@ -89,6 +89,7 @@ export interface PipelineRunConfig {
   languages: SupportedLanguage[];
   aiModel: string;
   sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for SQL gen
+  industry: string; // industry outcome map id, empty = not selected
 }
 
 /** Per-step timing and metadata logged during pipeline execution. */
@@ -114,6 +115,7 @@ export interface PipelineRun {
   appVersion: string | null;
   promptVersions: Record<string, string> | null; // promptKey -> SHA-256 hash
   stepLog: StepLogEntry[];
+  createdBy: string | null; // email of the user who created this run
   createdAt: string; // ISO timestamp
   completedAt: string | null;
 }

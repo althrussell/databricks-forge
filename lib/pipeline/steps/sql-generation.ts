@@ -135,7 +135,8 @@ export async function runSqlGeneration(
             tableByFqn,
             metadata.foreignKeys,
             run.config.aiModel,
-            sampleRows
+            sampleRows,
+            runId
           )
         )
       );
@@ -190,7 +191,8 @@ async function generateSqlForUseCase(
   tableByFqn: Map<string, TableInfo>,
   allForeignKeys: ForeignKey[],
   aiModel: string,
-  sampleRowsPerTable: number
+  sampleRowsPerTable: number,
+  runId?: string
 ): Promise<string | null> {
   // Resolve table schemas for this use case's involved tables
   const involvedTables: TableInfo[] = [];
@@ -259,6 +261,8 @@ async function generateSqlForUseCase(
     promptKey: "USE_CASE_SQL_GEN_PROMPT",
     variables,
     modelEndpoint: aiModel,
+    runId,
+    step: "sql-generation",
   });
 
   const sql = cleanSqlResponse(result.rawResponse);
@@ -276,7 +280,8 @@ async function generateSqlForUseCase(
       "SQL query is truncated / incomplete — syntax error at end of input. The original query was too long. Simplify the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total.",
       schemaMarkdown,
       fkMarkdown,
-      aiModel
+      aiModel,
+      runId
     );
     if (fixedSql) return fixedSql;
     return null;
@@ -298,7 +303,8 @@ async function generateSqlForUseCase(
       executionError,
       schemaMarkdown,
       fkMarkdown,
-      aiModel
+      aiModel,
+      runId
     );
     if (fixedSql) {
       return fixedSql;
@@ -334,7 +340,8 @@ async function attemptSqlFix(
   errorMessage: string,
   schemaMarkdown: string,
   fkMarkdown: string,
-  aiModel: string
+  aiModel: string,
+  runId?: string
 ): Promise<string | null> {
   try {
     const result = await executeAIQuery({
@@ -350,6 +357,8 @@ async function attemptSqlFix(
       modelEndpoint: aiModel,
       temperature: 0.1,
       retries: 0,
+      runId,
+      step: "sql-generation",
     });
 
     const fixedSql = cleanSqlResponse(result.rawResponse);

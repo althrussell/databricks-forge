@@ -10,8 +10,10 @@
  * - Automatic retry with exponential backoff (configurable)
  */
 
+import { randomUUID } from "crypto";
 import { executeSQL, type ExecuteSQLOptions } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
+import { insertPromptLog } from "@/lib/lakebase/prompt-logs";
 import { formatPrompt, PROMPT_VERSIONS, type PromptKey } from "./templates";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,16 @@ export interface AIQueryOptions {
    * Set to 0 for no retries.
    */
   retries?: number;
+  /**
+   * Pipeline run ID. When set, the call is logged to InspirePromptLog
+   * for auditing and debugging.
+   */
+  runId?: string;
+  /**
+   * Pipeline step context (e.g. "business-context", "sql-generation").
+   * Logged alongside runId for per-step filtering.
+   */
+  step?: string;
 }
 
 /**
@@ -121,6 +133,13 @@ export async function executeAIQuery(
   const maxRetries = options.retries ?? 2;
   const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
   const maxTokens = options.maxTokens; // undefined = no limit (model default)
+  const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
+
+  // Pre-render the prompt once for logging (executeAIQueryOnce also renders it,
+  // but we need it here to log on both success and failure paths)
+  const renderedPrompt = options.runId
+    ? formatPrompt(options.promptKey, options.variables)
+    : "";
 
   let lastError: Error | null = null;
 
@@ -137,7 +156,28 @@ export async function executeAIQuery(
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
-      return await executeAIQueryOnce(options, temperature, maxTokens);
+      const result = await executeAIQueryOnce(options, temperature, maxTokens);
+
+      // Fire-and-forget: log successful call
+      if (options.runId) {
+        insertPromptLog({
+          logId: randomUUID(),
+          runId: options.runId,
+          step: options.step ?? options.promptKey,
+          promptKey: options.promptKey,
+          promptVersion,
+          model: options.modelEndpoint,
+          temperature,
+          renderedPrompt,
+          rawResponse: result.rawResponse,
+          honestyScore: result.honestyScore,
+          durationMs: result.durationMs,
+          success: true,
+          errorMessage: null,
+        });
+      }
+
+      return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       logger.warn("ai_query attempt failed", {
@@ -152,6 +192,25 @@ export async function executeAIQuery(
         break;
       }
     }
+  }
+
+  // Fire-and-forget: log failed call (after all retries exhausted)
+  if (options.runId && lastError) {
+    insertPromptLog({
+      logId: randomUUID(),
+      runId: options.runId,
+      step: options.step ?? options.promptKey,
+      promptKey: options.promptKey,
+      promptVersion,
+      model: options.modelEndpoint,
+      temperature,
+      renderedPrompt,
+      rawResponse: null,
+      honestyScore: null,
+      durationMs: null,
+      success: false,
+      errorMessage: lastError.message,
+    });
   }
 
   throw lastError ?? new Error(`ai_query failed for ${options.promptKey}`);

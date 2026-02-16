@@ -16,6 +16,7 @@ import type {
   SupportedLanguage,
 } from "@/lib/domain/types";
 import { PROMPT_VERSIONS } from "@/lib/ai/templates";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -48,6 +49,7 @@ function dbRowToRun(row: {
   statusMessage: string | null;
   businessContext: string | null;
   errorMessage: string | null;
+  createdBy: string | null;
   createdAt: Date;
   completedAt: Date | null;
 }): PipelineRun {
@@ -63,6 +65,7 @@ function dbRowToRun(row: {
       strategicGoals: row.strategicGoals ?? "",
       generationOptions: genOpts.generationOptions,
       sampleRowsPerTable: genOpts.sampleRowsPerTable,
+      industry: genOpts.industry,
       generationPath: row.generationPath ?? "./inspire_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
@@ -76,6 +79,7 @@ function dbRowToRun(row: {
     appVersion: genOpts.appVersion,
     promptVersions: genOpts.promptVersions,
     stepLog: genOpts.stepLog,
+    createdBy: row.createdBy ?? null,
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
   };
@@ -92,36 +96,41 @@ function dbRowToRun(row: {
 function parseGenerationOptions(raw: string | null): {
   generationOptions: GenerationOption[];
   sampleRowsPerTable: number;
+  industry: string;
   appVersion: string | null;
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  if (!raw) return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0, appVersion: null, promptVersions: null, stepLog: [] };
+  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return { generationOptions: parsed, sampleRowsPerTable: 0, appVersion: null, promptVersions: null, stepLog: [] };
+      return { ...defaults, generationOptions: parsed };
     }
     if (typeof parsed === "object" && parsed !== null) {
       return {
         generationOptions: parsed.options ?? ["SQL Code"],
         sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
+        industry: parsed.industry ?? "",
         appVersion: parsed.appVersion ?? null,
         promptVersions: parsed.promptVersions ?? null,
         stepLog: Array.isArray(parsed.stepLog) ? parsed.stepLog : [],
       };
     }
   } catch { /* fall through */ }
-  return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0, appVersion: null, promptVersions: null, stepLog: [] };
+  return defaults;
 }
 
 function serializeGenerationOptions(
   options: GenerationOption[],
-  sampleRowsPerTable: number
+  sampleRowsPerTable: number,
+  industry: string = ""
 ): string {
   return JSON.stringify({
     options,
     sampleRowsPerTable,
+    industry,
     appVersion: packageJson.version,
     promptVersions: PROMPT_VERSIONS,
     stepLog: [],
@@ -134,7 +143,8 @@ function serializeGenerationOptions(
 
 export async function createRun(
   runId: string,
-  config: PipelineRunConfig
+  config: PipelineRunConfig,
+  createdBy?: string | null
 ): Promise<void> {
   const prisma = await getPrisma();
   await prisma.inspireRun.create({
@@ -150,9 +160,11 @@ export async function createRun(
       languages: JSON.stringify(config.languages),
       generationOptions: serializeGenerationOptions(
         config.generationOptions,
-        config.sampleRowsPerTable
+        config.sampleRowsPerTable,
+        config.industry
       ),
       generationPath: config.generationPath,
+      createdBy: createdBy ?? null,
       status: "pending",
       progressPct: 0,
     },
@@ -243,6 +255,36 @@ export async function updateRunBusinessContext(
   await prisma.inspireRun.update({
     where: { runId },
     data: { businessContext: JSON.stringify(context) },
+  });
+}
+
+/**
+ * Persist the table filtering classification results on the run.
+ * Stores the full [{fqn, classification, reason}] array as JSON.
+ */
+export async function updateRunFilteredTables(
+  runId: string,
+  classifications: Array<{ fqn: string; classification: string; reason: string }>
+): Promise<void> {
+  const prisma = await getPrisma();
+  await prisma.inspireRun.update({
+    where: { runId },
+    data: { filteredTablesJson: JSON.stringify(classifications) },
+  });
+}
+
+/**
+ * Link a metadata cache key to a run so we know which cached metadata
+ * snapshot was used for this run's analysis.
+ */
+export async function updateRunMetadataCacheKey(
+  runId: string,
+  cacheKey: string
+): Promise<void> {
+  const prisma = await getPrisma();
+  await prisma.inspireRun.update({
+    where: { runId },
+    data: { metadataCacheKey: cacheKey },
   });
 }
 

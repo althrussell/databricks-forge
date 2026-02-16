@@ -84,6 +84,7 @@ export const CreateRunSchema = z.object({
       const n = typeof v === "number" ? v : parseInt(String(v ?? "0"), 10);
       return Math.min(Math.max(isNaN(n) ? 0 : n, 0), 50);
     }),
+  industry: z.string().max(100).optional().default(""),
 });
 
 export type CreateRunInput = z.infer<typeof CreateRunSchema>;

@@ -88,6 +88,8 @@ You are a **Principal Business Analyst** and recognized industry specialist with
 - Be SPECIFIC to this business and industry -- generic answers are unacceptable
 - Strategic goals MUST come from the taxonomy above
 
+{industry_context}
+
 ### OUTPUT FORMAT
 
 Return a single valid JSON object with the 7 fields listed above. Do NOT include any text outside the JSON.
@@ -325,6 +327,8 @@ Generate **{target_use_case_count}** unique, actionable AI-powered business use 
 
 {focus_areas_instruction}
 
+{industry_reference_use_cases}
+
 ### 2. AVAILABLE AI FUNCTIONS
 
 {ai_functions_summary}
@@ -411,6 +415,8 @@ Each use case MUST leverage 3-5 statistical functions from the registry as a coh
 Generate **{target_use_case_count}** unique, actionable statistics-focused business use cases from the provided database schema. Each use case must leverage statistical functions as the primary analytical technique.
 
 {focus_areas_instruction}
+
+{industry_reference_use_cases}
 
 ### 2. AVAILABLE STATISTICAL FUNCTIONS
 
@@ -670,6 +676,8 @@ Map your internal computations to the output format:
 # SCORE EVERY SINGLE USE CASE
 
 You MUST output a score for EVERY use case in the input. Missing scores = CRITICAL FAILURE. If there are N use cases in the input, you MUST output EXACTLY N items.
+
+{industry_kpis}
 
 ### OUTPUT FORMAT
 
@@ -1004,6 +1012,46 @@ Output language: {output_language}`,
   USE_CASE_TRANSLATE_PROMPT: `Translate the following use case data into {target_language}. Keep field names in English. Return valid JSON only.
 
 {json_payload}`,
+
+  // -------------------------------------------------------------------------
+  // Outcome Map Parsing
+  // -------------------------------------------------------------------------
+  PARSE_OUTCOME_MAP: `You are an expert at extracting structured data from industry outcome map documents.
+
+Your task is to parse the following markdown document into a structured JSON format representing an industry outcome map.
+
+### INPUT DOCUMENT
+
+{markdown_content}
+
+### EXTRACTION RULES
+
+1. **Industry Identity**: Extract the industry name, a short kebab-case id, and any sub-verticals mentioned.
+2. **Objectives**: Identify the major strategic objectives (e.g., "Drive Growth", "Protect the Firm", "Optimize Operations"). These are the top-level groupings.
+3. **Strategic Priorities**: Within each objective, identify strategic priorities (e.g., "Hyper Personalization", "Risk Management").
+4. **Use Cases**: Within each priority, extract the core use cases with their name and description. If business value is mentioned, include it.
+5. **KPIs**: Extract Key Objectives / KPIs for each priority. These are measurable metrics.
+6. **Personas**: Extract Key Personas for each priority. These are job titles.
+7. **Why Change**: For each objective, extract the "Why Change" or "Why Now" narrative as a concise summary (2-3 sentences).
+8. **Suggested Domains**: Infer 4-6 suggested business domains based on the content.
+9. **Suggested Priorities**: Infer 4-5 suggested business priorities from: "Increase Revenue", "Reduce Cost", "Mitigate Risk", "Enhance Experience", "Optimize Operations", "Drive Innovation", "Achieve ESG", "Protect Revenue".
+
+### IMPORTANT
+
+- Extract REAL content from the document. Do NOT invent or hallucinate content.
+- If a section is missing (e.g., no KPIs listed), use an empty array.
+- Combine "Why Change" and "Why Now" narratives into a single concise whyChange string per objective.
+- Use cases should have clear, actionable names and descriptions.
+- The id should be a short, unique kebab-case identifier (e.g., "banking", "energy-utilities", "digital-natives").
+- Skip TODO placeholders, empty sections, and navigation/table-of-contents entries.
+
+### OUTPUT FORMAT
+
+Return a single valid JSON object matching this TypeScript interface:
+
+{"id": string, "name": string, "subVerticals": string[], "suggestedDomains": string[], "suggestedPriorities": string[], "objectives": [{"name": string, "whyChange": string, "priorities": [{"name": string, "useCases": [{"name": string, "description": string, "businessValue": string | undefined}], "kpis": string[], "personas": string[]}]}]}
+
+Return ONLY the JSON object. No markdown fences, no preamble, no explanation.`,
 } as const;
 
 // ---------------------------------------------------------------------------
