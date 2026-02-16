@@ -1,15 +1,20 @@
 /**
  * Databricks client configuration.
  *
- * Supports two authentication modes:
- *   1. **Databricks Apps (production)**: Uses OAuth M2M via DATABRICKS_CLIENT_ID
- *      and DATABRICKS_CLIENT_SECRET injected at runtime. Tokens are automatically
- *      refreshed before expiry.
+ * Supports three authentication modes (checked in priority order):
+ *   1. **User authorization (on-behalf-of-user)**: When deployed as a
+ *      Databricks App with user-auth scopes, the platform injects the
+ *      user's access token in the `x-forwarded-access-token` header.
+ *      This lets UC permissions follow the logged-in user.
  *   2. **Local development**: Uses a PAT via DATABRICKS_TOKEN in .env.local.
+ *   3. **App authorization (service principal)**: Falls back to OAuth M2M via
+ *      DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET injected at runtime.
  *
  * The SQL Warehouse ID is read from DATABRICKS_WAREHOUSE_ID, which is mapped
  * from the app's sql-warehouse resource binding via app.yaml.
  */
+
+import { headers as nextHeaders } from "next/headers";
 
 export interface DatabricksConfig {
   host: string; // always includes https://
@@ -77,19 +82,45 @@ export function getConfig(): DatabricksConfig {
 // ---------------------------------------------------------------------------
 
 /**
+ * Try to read the user's access token from the Databricks Apps proxy header.
+ *
+ * When user authorization is enabled, the proxy injects the logged-in user's
+ * OAuth token in `x-forwarded-access-token`.  This only works inside a
+ * Next.js request context (API routes / server components); outside of that
+ * (e.g. pipeline background work) it returns null.
+ */
+async function getUserToken(): Promise<string | null> {
+  try {
+    const hdrs = await nextHeaders();
+    const token = hdrs.get("x-forwarded-access-token");
+    return token || null;
+  } catch {
+    // headers() throws when called outside a request context
+    return null;
+  }
+}
+
+/**
  * Obtain a Bearer token.
  *
- * - In Databricks Apps: exchanges CLIENT_ID / CLIENT_SECRET for a short-lived
- *   OAuth token via the workspace's OIDC endpoint.
- * - Locally: returns the PAT from DATABRICKS_TOKEN.
+ * Priority order:
+ *   1. User authorization – `x-forwarded-access-token` header from the
+ *      Databricks Apps proxy (runs queries as the logged-in user).
+ *   2. PAT – `DATABRICKS_TOKEN` env var (local development).
+ *   3. OAuth M2M – `DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET`
+ *      (service principal, for background tasks or when user auth is off).
  */
 async function getBearerToken(): Promise<string> {
-  // 1. PAT token (local dev)
+  // 1. User authorization (on-behalf-of-user, Databricks Apps)
+  const userToken = await getUserToken();
+  if (userToken) return userToken;
+
+  // 2. PAT token (local dev)
   const pat =
     process.env.DATABRICKS_TOKEN ?? process.env.DATABRICKS_API_TOKEN;
   if (pat) return pat;
 
-  // 2. OAuth M2M (Databricks Apps)
+  // 3. OAuth M2M (Databricks Apps — service principal fallback)
   const clientId = process.env.DATABRICKS_CLIENT_ID;
   const clientSecret = process.env.DATABRICKS_CLIENT_SECRET;
 

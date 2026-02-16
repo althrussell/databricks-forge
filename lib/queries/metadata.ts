@@ -53,14 +53,29 @@ function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
 // ---------------------------------------------------------------------------
 
 /**
- * List catalogs the current user can actually query (has USE CATALOG).
+ * List catalogs the current user can actually query.
  *
- * SHOW CATALOGS returns catalogs the user has *any* privilege on (including
- * BROWSE), but querying information_schema requires USE CATALOG.  We probe
- * each catalog in parallel with a lightweight query and keep only the ones
- * that succeed.
+ * Strategy (in priority order):
+ *   1. Query `system.information_schema.catalogs` — returns only catalogs
+ *      the caller has USE CATALOG on (single query, no noisy errors).
+ *   2. Fallback: `SHOW CATALOGS` + parallel permission probes — filters
+ *      out catalogs where `information_schema` is inaccessible.
  */
 export async function listCatalogs(): Promise<string[]> {
+  // --- Strategy 1: system information_schema (preferred, single query) ---
+  try {
+    const result = await executeSQL(`
+      SELECT catalog_name
+      FROM system.information_schema.catalogs
+      WHERE catalog_name NOT IN ('system', '__databricks_internal')
+      ORDER BY catalog_name
+    `);
+    return result.rows.map((r) => r[0]);
+  } catch {
+    // system catalog may not be accessible — fall through to strategy 2
+  }
+
+  // --- Strategy 2: SHOW CATALOGS + per-catalog probe ---
   const result = await executeSQL("SHOW CATALOGS");
   const allCatalogs = result.rows.map((r) => r[0]);
 
