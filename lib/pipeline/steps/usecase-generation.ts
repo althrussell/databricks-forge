@@ -11,7 +11,7 @@ import {
   generateStatisticalFunctionsSummary,
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
-import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes";
+import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { PipelineContext, UseCase, UseCaseType } from "@/lib/domain/types";

@@ -7,7 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes";
+import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 

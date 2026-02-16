@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes";
+import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
 
 export async function GET() {
   try {

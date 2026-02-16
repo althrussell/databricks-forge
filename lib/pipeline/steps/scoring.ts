@@ -7,7 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes";
+import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
 import {
   ScoreItemSchema,
