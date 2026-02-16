@@ -39,7 +39,7 @@ Databricks Inspire AI discovers data-driven use cases from Unity Catalog metadat
 6. Scores, deduplicates, and ranks every use case
 7. Generates runnable SQL for each use case
 
-When an **Industry Outcome Map** is selected, steps 1, 4, and 6 are enriched with curated strategic context, reference use cases, and KPIs from that industry's playbook. The app ships with 10 built-in maps and supports ingesting custom maps via the Outcome Map Ingestor (see [Industry Outcome Maps](#industry-outcome-maps)).
+When an **Industry Outcome Map** is active, steps 1, 4, and 6 are enriched with curated strategic context, reference use cases, and KPIs from that industry's playbook. The user can select an industry manually, or **the system will auto-detect the best matching industry** from the business context generated in Step 1. The app ships with 10 built-in maps and supports ingesting custom maps via the Outcome Map Ingestor (see [Industry Outcome Maps](#industry-outcome-maps)).
 
 All LLM calls use Databricks `ai_query()` executed via the SQL Statement Execution API against a SQL Warehouse. **No data rows are read by default** -- only structural metadata (see [Privacy Model](#privacy-model)).
 
@@ -91,19 +91,26 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 
 ## Industry Outcome Maps
 
-**Files:** `lib/domain/industry-outcomes.ts` (built-in data + types), `lib/domain/industry-outcomes-server.ts` (async DB-aware functions), `lib/domain/outcome-map-parser.ts` (AI parser), `lib/lakebase/outcome-maps.ts` (persistence)
+**Files:** `lib/domain/industry-outcomes.ts` (built-in data + types), `lib/domain/industry-outcomes-server.ts` (async DB-aware functions + auto-detection), `lib/domain/outcome-map-parser.ts` (AI parser), `lib/lakebase/outcome-maps.ts` (persistence)
 
 **Purpose:** Provide curated strategic knowledge -- objectives, priorities, reference use cases, KPIs, and personas -- for specific industries. This knowledge enriches the LLM prompts so generated use cases are strategically aligned with real industry playbooks.
 
 ### How it works
 
-When a user selects an industry during run configuration, the outcome map is injected into three pipeline steps:
+An industry outcome map can be activated in two ways:
+
+1. **Manual selection** -- the user picks an industry from the config form dropdown before starting a run.
+2. **Auto-detection** -- if the user leaves the industry field empty, the pipeline engine automatically matches the LLM-generated `businessContext.industries` string (from Step 1) against all available outcome maps using keyword matching on industry names and sub-verticals. If a confident match is found, the industry is set on the run and persisted to Lakebase. Manual selection always takes precedence.
+
+Once an industry is active (whether manual or auto-detected), the outcome map is injected into three pipeline steps:
 
 | Step | What's injected | Template variable | Effect |
 | --- | --- | --- | --- |
 | **Step 1** (Business Context) | Industry narrative: objectives, why-change context | `{industry_context}` | LLM generates business context informed by industry-specific challenges and strategic priorities |
 | **Step 4** (Use Case Generation) | Reference use cases with descriptions | `{industry_reference_use_cases}` | LLM uses proven industry use cases as inspiration, grounded in the customer's actual schema |
 | **Step 6** (Scoring) | Industry-specific KPIs | `{industry_kpis}` | LLM aligns scores with industry-recognised value drivers |
+
+> **Note:** When auto-detection is used, the run detail page displays an "auto-detected" badge next to the industry name so the user can see it was not manually chosen.
 
 ### Built-in maps (10 industries)
 
@@ -203,6 +210,13 @@ At runtime, the system merges built-in and custom outcome maps:
 └────────┬────────┘
          ▼
 ┌─────────────────┐
+│ AUTO-DETECT     │  If industry not manually selected:
+│ INDUSTRY        │  Match businessContext.industries against all outcome maps
+│                 │  using keyword matching on names + sub-verticals.
+│                 │  If match found → set config.industry, persist to Lakebase
+└────────┬────────┘
+         ▼
+┌─────────────────┐
 │ 2. Metadata     │  SQL queries against information_schema:
 │    Extraction   │  tables, columns, foreign keys, comments
 │    (10-20%)     │  ──▶ MetadataSnapshot (schema markdown)
@@ -262,10 +276,11 @@ At runtime, the system merges built-in and custom outcome maps:
 
 **How it works:**
 1. A single `ai_query()` call with the `BUSINESS_CONTEXT_WORKER_PROMPT` template
-2. If an industry is selected, `{industry_context}` is injected into the prompt with objectives, why-change narratives, and sub-vertical context from the outcome map
+2. If an industry is selected (manually), `{industry_context}` is injected into the prompt with objectives, why-change narratives, and sub-vertical context from the outcome map
 3. The LLM acts as a "Principal Business Analyst" and returns structured JSON
 4. User-supplied overrides (strategic goals, business domains) take precedence over LLM output
 5. On failure, returns safe defaults with user overrides preserved
+6. **After Step 1 completes**, if no industry was manually selected, the engine runs **auto-detection**: it matches `businessContext.industries` against all outcome maps (built-in + custom) using keyword scoring on industry names and sub-verticals. If a match scores above the confidence threshold, `config.industry` is set on the run and persisted to Lakebase with an `industryAutoDetected` flag. This ensures that Steps 4 and 6 can still benefit from industry enrichment even when the user didn't manually choose one.
 
 **Output structure (`BusinessContext`):**
 

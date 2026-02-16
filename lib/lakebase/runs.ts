@@ -79,6 +79,7 @@ function dbRowToRun(row: {
     appVersion: genOpts.appVersion,
     promptVersions: genOpts.promptVersions,
     stepLog: genOpts.stepLog,
+    industryAutoDetected: genOpts.industryAutoDetected,
     createdBy: row.createdBy ?? null,
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -97,11 +98,12 @@ function parseGenerationOptions(raw: string | null): {
   generationOptions: GenerationOption[];
   sampleRowsPerTable: number;
   industry: string;
+  industryAutoDetected: boolean;
   appVersion: string | null;
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
@@ -113,6 +115,7 @@ function parseGenerationOptions(raw: string | null): {
         generationOptions: parsed.options ?? ["SQL Code"],
         sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
         industry: parsed.industry ?? "",
+        industryAutoDetected: parsed.industryAutoDetected === true,
         appVersion: parsed.appVersion ?? null,
         promptVersions: parsed.promptVersions ?? null,
         stepLog: Array.isArray(parsed.stepLog) ? parsed.stepLog : [],
@@ -285,6 +288,39 @@ export async function updateRunMetadataCacheKey(
   await prisma.inspireRun.update({
     where: { runId },
     data: { metadataCacheKey: cacheKey },
+  });
+}
+
+/**
+ * Update the industry field inside the generationOptions JSON.
+ * Used by the pipeline engine when auto-detecting the industry outcome map
+ * after Step 1 (Business Context) completes.
+ *
+ * @param autoDetected - true when set by auto-detection (vs manual user selection)
+ */
+export async function updateRunIndustry(
+  runId: string,
+  industry: string,
+  autoDetected: boolean = false
+): Promise<void> {
+  const prisma = await getPrisma();
+  const row = await prisma.inspireRun.findUnique({
+    where: { runId },
+    select: { generationOptions: true },
+  });
+
+  let genOpts: Record<string, unknown> = {};
+  try {
+    genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
+    if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
+  } catch { /* fall through */ }
+
+  genOpts.industry = industry;
+  genOpts.industryAutoDetected = autoDetected;
+
+  await prisma.inspireRun.update({
+    where: { runId },
+    data: { generationOptions: JSON.stringify(genOpts) },
   });
 }
 

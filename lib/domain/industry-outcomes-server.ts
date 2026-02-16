@@ -64,6 +64,94 @@ export async function getIndustryOutcomeAsync(
 }
 
 // ---------------------------------------------------------------------------
+// Auto-detection -- match LLM-generated industries string to an outcome map
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt to match a free-text industries description (from BusinessContext)
+ * against available outcome maps using keyword matching.
+ *
+ * Returns the `id` of the best-matching outcome map, or `null` if no
+ * confident match is found. Used by the pipeline engine to auto-select
+ * an industry when the user hasn't chosen one manually.
+ */
+export async function detectIndustryFromContext(
+  industriesStr: string
+): Promise<string | null> {
+  if (!industriesStr.trim()) return null;
+
+  const outcomes = await getAllIndustryOutcomes();
+
+  // Tokenise the input into lowercase keywords (split on commas, &, /, spaces)
+  const inputTokens = industriesStr
+    .toLowerCase()
+    .split(/[,&/]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 1);
+
+  // Also build a flat lowercase string for substring matching
+  const inputLower = industriesStr.toLowerCase();
+
+  let bestId: string | null = null;
+  let bestScore = 0;
+
+  for (const outcome of outcomes) {
+    let score = 0;
+
+    // Build keyword phrases to check against the input
+    const nameLower = outcome.name.toLowerCase();
+    const nameWords = nameLower
+      .split(/[\s&/,]+/)
+      .filter((w) => w.length > 2);
+    const subVerticals = (outcome.subVerticals ?? []).map((sv) =>
+      sv.toLowerCase()
+    );
+
+    // 1. Exact name match (strongest signal)
+    if (inputLower.includes(nameLower)) {
+      score += 10;
+    }
+
+    // 2. Name keyword hits (e.g. "banking" appears in input)
+    for (const word of nameWords) {
+      if (inputLower.includes(word)) {
+        score += 3;
+      }
+    }
+
+    // 3. Sub-vertical matches (e.g. "Commercial Banking" in input)
+    for (const sv of subVerticals) {
+      if (inputLower.includes(sv)) {
+        score += 5;
+      }
+      // Also check if input tokens partially match sub-verticals
+      for (const token of inputTokens) {
+        if (
+          sv.includes(token.trim()) &&
+          token.trim().length > 3
+        ) {
+          score += 2;
+        }
+      }
+    }
+
+    // 4. ID match (e.g. input contains "insurance" and id is "insurance")
+    if (inputLower.includes(outcome.id.replace(/-/g, " "))) {
+      score += 4;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = outcome.id;
+    }
+  }
+
+  // Require a minimum confidence score to avoid false positives
+  // A score of 3+ means at least one strong keyword match
+  return bestScore >= 3 ? bestId : null;
+}
+
+// ---------------------------------------------------------------------------
 // Prompt Building Helpers (async, server-only)
 // ---------------------------------------------------------------------------
 

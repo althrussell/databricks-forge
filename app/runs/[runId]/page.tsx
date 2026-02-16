@@ -339,6 +339,11 @@ export default function RunDetailPage({
                           ? getIndustryOutcome(run.config.industry)?.name ?? run.config.industry
                           : "Not specified"
                       }
+                      badge={
+                        run.config.industry && run.industryAutoDetected
+                          ? "auto-detected"
+                          : undefined
+                      }
                     />
                     <ConfigField
                       label="Languages"
@@ -468,11 +473,26 @@ function SummaryCard({ title, value }: { title: string; value: string }) {
   );
 }
 
-function ConfigField({ label, value }: { label: string; value: string }) {
+function ConfigField({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: string;
+  badge?: string;
+}) {
   return (
     <div>
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm">{value}</p>
+      <p className="mt-0.5 text-sm">
+        {value}
+        {badge && (
+          <span className="ml-1.5 inline-block rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            {badge}
+          </span>
+        )}
+      </p>
     </div>
   );
 }
