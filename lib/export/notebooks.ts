@@ -1,18 +1,26 @@
 /**
- * Notebook deployment -- generates SQL notebooks and deploys them
- * to the Databricks workspace via the Workspace REST API.
+ * Notebook deployment -- generates Jupyter (.ipynb) notebooks and deploys
+ * them to the Databricks workspace via the Workspace REST API.
  *
- * Each use case gets its own notebook containing:
- * - Documentation header (name, domain, statement, solution, value)
- * - SQL code (if generated) or a scaffold template with table references
- * - Score summary
+ * Structure matches the reference notebook (databricks_inspire_v34):
  *
- * Notebooks are organised by domain in the workspace.
+ *   - One notebook per domain, containing all use cases for that domain
+ *   - Markdown cells for documentation (title, disclaimer, summary tables,
+ *     per-use-case details tables)
+ *   - Runnable SQL code cells (never commented out)
+ *   - An index notebook at the root
+ *
+ * Notebooks are imported in JUPYTER format so Databricks renders markdown
+ * and code cells natively.
  */
 
 import { importNotebook, mkdirs } from "@/lib/dbx/workspace";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import { groupByDomain } from "@/lib/domain/scoring";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface NotebookDeployResult {
   count: number;
@@ -24,66 +32,127 @@ interface NotebookDeployResult {
   skipped: number;
 }
 
+interface JupyterCell {
+  cell_type: "markdown" | "code";
+  metadata: Record<string, unknown>;
+  source: string[];
+  execution_count?: number | null;
+  outputs?: unknown[];
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function uuid(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+function cellMeta(): Record<string, unknown> {
+  return {
+    "application/vnd.databricks.v1+cell": { nuid: uuid() },
+  };
+}
+
+function mdCell(source: string[]): JupyterCell {
+  return { cell_type: "markdown", metadata: cellMeta(), source };
+}
+
+function sqlCell(source: string[]): JupyterCell {
+  return {
+    cell_type: "code",
+    execution_count: 0,
+    outputs: [],
+    metadata: cellMeta(),
+    source,
+  };
+}
+
+function safeStr(val: string | null | undefined): string {
+  if (!val || !val.trim()) return "N/A";
+  return val;
+}
+
+function timestamp(): string {
+  return new Date().toISOString().replace("T", " ").substring(0, 19);
+}
+
+function today(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function sanitizeName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+// ---------------------------------------------------------------------------
+// Main export function
+// ---------------------------------------------------------------------------
+
 /**
- * Generate and deploy SQL notebooks for each use case.
- * Organised by domain in the workspace.
+ * Generate and deploy Jupyter notebooks for each domain.
+ *
+ * When a user email is provided (via user authorization), notebooks are
+ * placed in the user's home folder: `/Users/<email>/inspire_gen/<biz>/`.
+ * Otherwise falls back to the shared workspace path.
  */
 export async function generateNotebooks(
   run: PipelineRun,
-  useCases: UseCase[]
+  useCases: UseCase[],
+  userEmail?: string | null
 ): Promise<NotebookDeployResult> {
   const bizSlug = run.config.businessName.replace(/\s+/g, "_");
-  const basePath = run.config.generationPath.replace(
-    /^\.?\/?/,
-    `/Workspace/inspire_gen/${bizSlug}/`
-  );
+  const root = userEmail
+    ? `/Users/${userEmail}/inspire_gen`
+    : `/Shared/inspire_gen`;
+  const basePath = `${root}/${bizSlug}/`;
 
-  // Create base directory
   await mkdirs(basePath);
 
-  // Deploy an index notebook at root
-  const indexContent = generateIndexNotebook(run, useCases);
+  // Deploy index notebook
+  const indexContent = buildIndexNotebook(run, useCases);
   try {
     await importNotebook({
       path: `${basePath}_Index`,
       language: "SQL",
       content: indexContent,
       overwrite: true,
+      format: "JUPYTER",
     });
   } catch (error) {
     console.warn("[notebooks] Failed to deploy index notebook:", error);
   }
 
+  // Deploy one notebook per domain
   const grouped = groupByDomain(useCases);
   const deployed: Array<{ name: string; path: string }> = [];
   let skipped = 0;
 
-  for (const [domain, cases] of Object.entries(grouped)) {
-    const domainSlug = domain.replace(/[^a-zA-Z0-9]/g, "_");
-    const domainPath = `${basePath}${domainSlug}`;
-    await mkdirs(domainPath);
+  const sortedDomains = Object.entries(grouped).sort(
+    ([, a], [, b]) => a.length - b.length
+  );
 
-    for (const uc of cases) {
-      const notebookName = `UC${String(uc.useCaseNo).padStart(3, "0")}_${uc.name.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 50)}`;
-      const notebookPath = `${domainPath}/${notebookName}`;
+  for (const [domain, cases] of sortedDomains) {
+    const notebookName = sanitizeName(domain);
+    const notebookPath = `${basePath}${notebookName}`;
 
-      const content = generateUseCaseNotebook(run, uc);
+    const content = buildDomainNotebook(run, domain, cases);
 
-      try {
-        await importNotebook({
-          path: notebookPath,
-          language: "SQL",
-          content,
-          overwrite: true,
-        });
-        deployed.push({ name: notebookName, path: notebookPath });
-      } catch (error) {
-        console.warn(
-          `[notebooks] Failed to deploy ${notebookName}:`,
-          error
-        );
-        skipped++;
-      }
+    try {
+      await importNotebook({
+        path: notebookPath,
+        language: "SQL",
+        content: content,
+        overwrite: true,
+        format: "JUPYTER",
+      });
+      deployed.push({ name: notebookName, path: notebookPath });
+    } catch (error) {
+      console.warn(`[notebooks] Failed to deploy ${notebookName}:`, error);
+      skipped++;
     }
   }
 
@@ -99,10 +168,7 @@ export async function generateNotebooks(
 // Index notebook
 // ---------------------------------------------------------------------------
 
-function generateIndexNotebook(
-  run: PipelineRun,
-  useCases: UseCase[]
-): string {
+function buildIndexNotebook(run: PipelineRun, useCases: UseCase[]): string {
   const domains = [...new Set(useCases.map((uc) => uc.domain))].sort();
   const aiCount = useCases.filter((uc) => uc.type === "AI").length;
   const statsCount = useCases.length - aiCount;
@@ -114,229 +180,313 @@ function generateIndexNotebook(
       )
     : 0;
 
-  const domainList = domains
+  const domainRows = domains
     .map((d) => {
       const count = useCases.filter((uc) => uc.domain === d).length;
-      return `-- MAGIC | ${d} | ${count} |`;
+      return `| ${d} | ${count} |\n`;
     })
-    .join("\n");
+    .join("");
 
-  return `-- Databricks notebook source
--- MAGIC %md
--- MAGIC # Databricks Inspire AI — Use Case Catalog
--- MAGIC
--- MAGIC **Business:** ${run.config.businessName}
--- MAGIC
--- MAGIC **Generated:** ${new Date().toISOString().split("T")[0]}
--- MAGIC
--- MAGIC ---
--- MAGIC
--- MAGIC ## Summary
--- MAGIC
--- MAGIC | Metric | Value |
--- MAGIC |--------|-------|
--- MAGIC | Total Use Cases | ${useCases.length} |
--- MAGIC | AI Use Cases | ${aiCount} |
--- MAGIC | Statistical Use Cases | ${statsCount} |
--- MAGIC | Business Domains | ${domains.length} |
--- MAGIC | Average Score | ${avgScore}% |
--- MAGIC
--- MAGIC ## Domains
--- MAGIC
--- MAGIC | Domain | Use Cases |
--- MAGIC |--------|-----------|
-${domainList}
--- MAGIC
--- MAGIC ## Business Priorities
--- MAGIC
--- MAGIC ${run.config.businessPriorities.map((p) => `- ${p}`).join("\n-- MAGIC ")}
--- MAGIC
--- MAGIC ---
--- MAGIC
--- MAGIC > Each domain folder contains individual SQL notebooks for every use case.
--- MAGIC > Notebooks with generated SQL are ready to run. Scaffold notebooks contain
--- MAGIC > table references and a template to help you build the query.
--- MAGIC
--- MAGIC *Generated by Databricks Inspire AI*
-`;
+  const priorityList = run.config.businessPriorities
+    .map((p) => `- ${p}\n`)
+    .join("");
+
+  const cells: JupyterCell[] = [
+    mdCell([
+      `# Databricks Inspire AI — Use Case Catalog\n\n`,
+      `**Business:** ${run.config.businessName}\n\n`,
+      `**Generated:** ${today()}\n\n`,
+      `---\n`,
+    ]),
+    mdCell([
+      `## Summary\n\n`,
+      `| Metric | Value |\n`,
+      `|--------|-------|\n`,
+      `| Total Use Cases | ${useCases.length} |\n`,
+      `| AI Use Cases | ${aiCount} |\n`,
+      `| Statistical Use Cases | ${statsCount} |\n`,
+      `| Business Domains | ${domains.length} |\n`,
+      `| Average Score | ${avgScore}% |\n\n`,
+      `## Domains\n\n`,
+      `| Domain | Use Cases |\n`,
+      `|--------|----------|\n`,
+      domainRows,
+      `\n## Business Priorities\n\n`,
+      priorityList,
+      `\n---\n\n`,
+      `> Each domain notebook contains all use cases for that domain with runnable SQL.\n\n`,
+      `*Generated by Databricks Inspire AI*\n`,
+    ]),
+  ];
+
+  return JSON.stringify(buildJupyterNotebook("_Index", cells), null, 2);
 }
 
 // ---------------------------------------------------------------------------
-// Per-use-case notebook
+// Domain notebook (one per domain, contains all use cases)
 // ---------------------------------------------------------------------------
 
-function generateUseCaseNotebook(
+function buildDomainNotebook(
   run: PipelineRun,
-  uc: UseCase
+  domain: string,
+  useCases: UseCase[]
 ): string {
-  const header = `-- Databricks notebook source
--- MAGIC %md
--- MAGIC # ${uc.useCaseNo}. ${uc.name}
--- MAGIC
--- MAGIC **Domain:** ${uc.domain} / ${uc.subdomain}
--- MAGIC
--- MAGIC **Type:** ${uc.type} | **Technique:** ${uc.analyticsTechnique}
--- MAGIC
--- MAGIC ---
--- MAGIC
--- MAGIC ## Business Statement
--- MAGIC
--- MAGIC ${wrapMagic(uc.statement)}
--- MAGIC
--- MAGIC ## Solution
--- MAGIC
--- MAGIC ${wrapMagic(uc.solution)}
--- MAGIC
--- MAGIC ## Business Value
--- MAGIC
--- MAGIC ${wrapMagic(uc.businessValue)}
--- MAGIC
--- MAGIC ---
--- MAGIC
--- MAGIC **Beneficiary:** ${uc.beneficiary} | **Sponsor:** ${uc.sponsor}
--- MAGIC
--- MAGIC **Score:** ${Math.round(uc.overallScore * 100)}% (Priority: ${Math.round(uc.priorityScore * 100)}%, Feasibility: ${Math.round(uc.feasibilityScore * 100)}%, Impact: ${Math.round(uc.impactScore * 100)}%)
--- MAGIC
--- MAGIC **Tables:** ${uc.tablesInvolved.join(", ") || "N/A"}
--- MAGIC
--- MAGIC ---
+  const cells: JupyterCell[] = [];
 
--- COMMAND ----------
-`;
+  // ── Title cell ──────────────────────────────────────────────────────
+  cells.push(
+    mdCell([
+      `# Databricks Inspire AI\n\n`,
+      `## For ${run.config.businessName}: ${domain}\n\n`,
+    ])
+  );
 
-  if (uc.sqlCode) {
-    // Use case has generated SQL
-    return `${header}
--- Generated by Databricks Inspire AI for ${run.config.businessName}
--- Tables: ${uc.tablesInvolved.join(", ")}
+  // ── Disclaimer cell ─────────────────────────────────────────────────
+  cells.push(
+    mdCell([
+      `*Generated by Databricks Inspire AI on ${timestamp()}*\n\n`,
+      `**Disclaimer:** All SQL queries are examples and must be validated `,
+      `for syntax and safety by a qualified engineer before being used in `,
+      `any production environment. Databricks is not liable for any issues `,
+      `arising from the use of this code.\n\n`,
+      `---\n`,
+    ])
+  );
 
-${uc.sqlCode}
-`;
+  // ── Summary tables grouped by subdomain ─────────────────────────────
+  const bySubdomain = new Map<string, UseCase[]>();
+  for (const uc of useCases) {
+    const sub = uc.subdomain || "General";
+    if (!bySubdomain.has(sub)) bySubdomain.set(sub, []);
+    bySubdomain.get(sub)!.push(uc);
   }
 
-  // No SQL yet — generate a scaffold template
-  return `${header}
--- ============================================================================
--- SQL Scaffold for: ${uc.name}
--- Generated by Databricks Inspire AI for ${run.config.businessName}
--- ============================================================================
---
--- This notebook contains a scaffold SQL template based on the use case
--- definition. Modify and extend the query to implement the full solution.
---
--- Tables referenced by this use case:
-${uc.tablesInvolved.map((t) => `--   • ${t}`).join("\n") || "--   (no specific tables identified)"}
--- ============================================================================
+  let firstSection = true;
+  for (const [subdomain, subCases] of [...bySubdomain.entries()].sort()) {
+    const sorted = [...subCases].sort((a, b) => a.useCaseNo - b.useCaseNo);
+    const headerLines: string[] = [];
 
--- COMMAND ----------
+    if (firstSection) {
+      headerLines.push(`## Use Case Summaries\n\n`);
+      firstSection = false;
+    }
+    headerLines.push(`### ${subdomain}\n\n`);
+    headerLines.push(`| ID | Name | Score | Business Value |\n`);
+    headerLines.push(`|---|---|---|---|\n`);
+    for (const uc of sorted) {
+      headerLines.push(
+        `| ${uc.id} | ${uc.name} | ${Math.round(uc.overallScore * 100)}% | ${safeStr(uc.businessValue).substring(0, 80)} |\n`
+      );
+    }
+    cells.push(mdCell(headerLines));
+  }
 
--- Step 1: Explore the source tables
-${generateExploreQueries(uc.tablesInvolved)}
+  // ── Disclaimer bar ──────────────────────────────────────────────────
+  cells.push(
+    mdCell([
+      `<div style="background-color:#FFF3CD; color:#664D03; border: 1px solid #FFECB5; padding:10px; border-radius:5px; margin-top:10px;">`,
+      `<b>Disclaimer:</b> All SQL is AI-generated and must be reviewed before production use.</div>\n`,
+    ])
+  );
 
--- COMMAND ----------
+  // ── Section header ──────────────────────────────────────────────────
+  cells.push(mdCell([`<hr>\n\n# Detailed Use Cases\n`]));
 
--- Step 2: Base data selection (start building your analysis here)
-${generateScaffoldSQL(run, uc)}
-`;
+  // ── Per-use-case cells (details markdown + runnable SQL code) ───────
+  const sortedCases = [...useCases].sort((a, b) => a.useCaseNo - b.useCaseNo);
+
+  for (const uc of sortedCases) {
+    // Details markdown cell (property table)
+    cells.push(
+      mdCell([
+        `### ${uc.id}: ${uc.name}\n\n`,
+        `| Aspect | Description |\n`,
+        `|---|---|\n`,
+        `| **Subdomain** | ${safeStr(uc.subdomain)} |\n`,
+        `| **Type** | ${safeStr(uc.type)} |\n`,
+        `| **Analytics Technique** | ${safeStr(uc.analyticsTechnique)} |\n`,
+        `| **Score** | ${Math.round(uc.overallScore * 100)}% (Priority: ${Math.round(uc.priorityScore * 100)}%, Feasibility: ${Math.round(uc.feasibilityScore * 100)}%, Impact: ${Math.round(uc.impactScore * 100)}%) |\n`,
+        `| **Statement** | ${safeStr(uc.statement)} |\n`,
+        `| **Solution** | ${safeStr(uc.solution)} |\n`,
+        `| **Business Value** | ${safeStr(uc.businessValue)} |\n`,
+        `| **Beneficiary** | ${safeStr(uc.beneficiary)} |\n`,
+        `| **Sponsor** | ${safeStr(uc.sponsor)} |\n`,
+        `| **Tables Involved** | ${uc.tablesInvolved.join(", ") || "N/A"} |\n`,
+      ])
+    );
+
+    // SQL code cell (runnable)
+    const sqlSource = buildSqlCell(run, uc);
+    cells.push(sqlCell(sqlSource));
+  }
+
+  const notebookName = sanitizeName(domain);
+  return JSON.stringify(buildJupyterNotebook(notebookName, cells), null, 2);
 }
 
 // ---------------------------------------------------------------------------
-// Scaffold SQL generation
+// SQL cell builder — always produces runnable SQL
 // ---------------------------------------------------------------------------
 
-/** Generate DESCRIBE + SELECT previews for each table */
-function generateExploreQueries(tables: string[]): string {
-  if (tables.length === 0) {
-    return "-- No specific tables identified. Add your source tables below.\n-- DESCRIBE your_catalog.your_schema.your_table;";
+function buildSqlCell(run: PipelineRun, uc: UseCase): string[] {
+  const lines: string[] = [];
+
+  // Inspire header (used by reference notebook for regeneration tracking)
+  lines.push(`--Use Case: ${uc.id} - ${uc.name}\n`);
+  lines.push(`--generate_sample_result:No\n`);
+  lines.push(`--regenerate_sql:No\n`);
+  lines.push(`\n`);
+
+  if (uc.sqlCode && uc.sqlCode.trim().length >= 20) {
+    // Use the AI-generated SQL directly (runnable)
+    const sqlLines = stripDuplicateHeader(uc.sqlCode);
+    lines.push(sqlLines + "\n");
+  } else {
+    // Generate runnable scaffold SQL (not commented out)
+    lines.push(...buildRunnableScaffold(run, uc));
   }
 
-  return tables
-    .map(
-      (t) => `-- Preview: ${t}
--- DESCRIBE TABLE ${t};
--- SELECT * FROM ${t} LIMIT 10;`
-    )
-    .join("\n\n");
+  return lines;
 }
 
-/** Generate a scaffold CTE-based SQL template */
-function generateScaffoldSQL(run: PipelineRun, uc: UseCase): string {
+/**
+ * Strip duplicate header lines that the LLM may have inserted
+ * (our Inspire header already contains the use case info).
+ */
+function stripDuplicateHeader(sql: string): string {
+  const lines = sql.split("\n");
+  const cleaned: string[] = [];
+  let skippingHeader = true;
+
+  for (const line of lines) {
+    const stripped = line.trim().toLowerCase();
+    if (
+      skippingHeader &&
+      (stripped.startsWith("-- use case") ||
+        stripped.startsWith("--use case"))
+    ) {
+      continue;
+    }
+    if (
+      skippingHeader &&
+      stripped.startsWith("--") &&
+      !stripped.startsWith("-- step") &&
+      !stripped.startsWith("--step") &&
+      stripped.length > 2 &&
+      !["with", "select", "cte", "step"].some((kw) => stripped.includes(kw))
+    ) {
+      continue;
+    }
+    skippingHeader = false;
+    cleaned.push(line);
+  }
+
+  return cleaned.join("\n");
+}
+
+/**
+ * Build runnable (not commented) scaffold SQL when no AI-generated SQL exists.
+ * Generates a CTE that SELECTs from the referenced tables so the user has
+ * a working starting point they can run immediately.
+ */
+function buildRunnableScaffold(run: PipelineRun, uc: UseCase): string[] {
   const tables = uc.tablesInvolved;
-  const modelEndpoint = run.config.aiModel;
+  const lines: string[] = [];
 
   if (tables.length === 0) {
-    return `-- TODO: Add your source tables and build the analysis query
--- WITH base_data AS (
---   SELECT DISTINCT *
---   FROM your_catalog.your_schema.your_table
---   LIMIT 100
--- )
--- SELECT * FROM base_data;`;
+    lines.push(`-- No specific tables identified for this use case.\n`);
+    lines.push(`-- Add your source tables below and build the analysis.\n\n`);
+    lines.push(`SELECT 'TODO: Add source tables for: ${uc.name}' AS next_step;\n`);
+    return lines;
   }
 
+  // Explore section: DESCRIBE + preview for each table
+  for (const t of tables) {
+    lines.push(`-- Explore: ${t}\n`);
+    lines.push(`DESCRIBE TABLE ${t};\n\n`);
+  }
+
+  lines.push(`-- Preview source data\n`);
   const primaryTable = tables[0];
-  const additionalJoins = tables
-    .slice(1)
-    .map(
-      (t, i) =>
-        `--   LEFT JOIN ${t} t${i + 2}\n--     ON t1.id = t${i + 2}.id  -- TODO: Set correct join keys`
-    )
-    .join("\n");
+  lines.push(`SELECT * FROM ${primaryTable} LIMIT 10;\n`);
 
-  const joinSection =
-    additionalJoins.length > 0
-      ? `\n${additionalJoins}`
-      : "";
+  // CTE-based analysis scaffold
+  lines.push(`\n`);
+  lines.push(`-- Analysis scaffold for: ${uc.name}\n`);
+  lines.push(`WITH base_data AS (\n`);
+  lines.push(`  SELECT *\n`);
+  lines.push(`  FROM ${primaryTable} t1\n`);
 
-  const aiSection =
-    uc.type === "AI"
-      ? `
--- Step 3: AI enrichment (${uc.analyticsTechnique})
--- ai_enriched AS (
---   SELECT
---     *,
---     ai_query(
---       '${modelEndpoint}',
---       CONCAT(
---         'You are a ${uc.subdomain} specialist for ${run.config.businessName}. ',
---         'Analyze the following data and provide insights: ',
---         -- TODO: Build your prompt using column values
---         ''
---       ),
---       modelParameters => named_struct('temperature', 0.4)
---     ) AS ai_insights
---   FROM base_data
--- ),
+  for (let i = 1; i < tables.length; i++) {
+    lines.push(
+      `  LEFT JOIN ${tables[i]} t${i + 1}\n`
+    );
+    lines.push(
+      `    ON t1.id = t${i + 1}.id  -- TODO: set correct join keys\n`
+    );
+  }
 
-`
-      : "";
+  lines.push(`  LIMIT 1000\n`);
+  lines.push(`)\n`);
 
-  return `WITH base_data AS (
-  SELECT DISTINCT
-    *
-    -- TODO: Select specific columns relevant to: ${uc.name}
-  FROM ${primaryTable} t1${joinSection}
-  -- WHERE 1=1
-  --   AND ... -- TODO: Add business-relevant filters
-  LIMIT 100
-)
+  if (uc.type === "AI") {
+    const modelEndpoint = run.config.aiModel;
+    lines.push(`\n`);
+    lines.push(`-- AI enrichment (${uc.analyticsTechnique})\n`);
+    lines.push(`, ai_enriched AS (\n`);
+    lines.push(`  SELECT\n`);
+    lines.push(`    *,\n`);
+    lines.push(`    ai_query(\n`);
+    lines.push(`      '${modelEndpoint}',\n`);
+    lines.push(
+      `      CONCAT('You are a ${uc.subdomain} specialist for ${run.config.businessName}. ',\n`
+    );
+    lines.push(
+      `             'Analyze the following data and provide insights.'),\n`
+    );
+    lines.push(
+      `      modelParameters => named_struct('temperature', 0.4)\n`
+    );
+    lines.push(`    ) AS ai_insights\n`);
+    lines.push(`  FROM base_data\n`);
+    lines.push(`)\n`);
+    lines.push(`\n`);
+    lines.push(`SELECT * FROM ai_enriched;\n`);
+  } else {
+    lines.push(`\n`);
+    lines.push(`SELECT * FROM base_data;\n`);
+  }
 
-${aiSection}-- Final output
-SELECT * FROM base_data;
-
--- TODO: Implement the full analysis for:
--- "${uc.statement}"
---
--- Solution approach:
--- "${uc.solution}"`;
+  return lines;
 }
 
 // ---------------------------------------------------------------------------
-// Text helpers
+// Jupyter notebook builder
 // ---------------------------------------------------------------------------
 
-/** Wrap long text for MAGIC markdown (handle line breaks) */
-function wrapMagic(text: string): string {
-  if (!text) return "N/A";
-  return text.replace(/\n/g, "\n-- MAGIC ");
+function buildJupyterNotebook(
+  name: string,
+  cells: JupyterCell[]
+): Record<string, unknown> {
+  return {
+    cells,
+    metadata: {
+      "application/vnd.databricks.v1+notebook": {
+        computePreferences: null,
+        dashboards: [],
+        environmentMetadata: {
+          base_environment: "",
+          environment_version: "4",
+        },
+        inputWidgetPreferences: null,
+        language: "sql",
+        notebookMetadata: { pythonIndentUnit: 2 },
+        notebookName: name,
+        widgets: {},
+      },
+      language_info: { name: "sql" },
+    },
+    nbformat: 4,
+    nbformat_minor: 0,
+  };
 }

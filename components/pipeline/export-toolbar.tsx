@@ -19,7 +19,15 @@ export function ExportToolbar({ runId, businessName }: ExportToolbarProps) {
         const res = await fetch(`/api/export/${runId}?format=notebooks`);
         if (!res.ok) throw new Error("Export failed");
         const data = await res.json();
-        toast.success(`Deployed ${data.count ?? 0} notebooks to workspace`);
+        toast.success(`Deployed ${data.count ?? 0} notebooks to workspace`, {
+          duration: 10000,
+          action: data.url
+            ? {
+                label: "Open in Workspace",
+                onClick: () => window.open(data.url, "_blank"),
+              }
+            : undefined,
+        });
         return;
       }
 
