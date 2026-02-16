@@ -18,21 +18,20 @@ import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import { groupByDomain, computeDomainStats } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
-// Brand constants (hex for PDFKit)
+// Official Databricks brand constants (hex for PDFKit)
 // ---------------------------------------------------------------------------
 
-const DATABRICKS_BLUE = "#003366";
-const DATABRICKS_ORANGE = "#FF6900";
-const TEXT_COLOR = "#333333";
-const LIGHT_GRAY = "#FAFAFA";
+const DB_DARK = "#1B3139"; // Brand Dark — dark teal-charcoal
+const DB_RED = "#FF3621"; // Databricks Red — primary accent
 const WHITE = "#FFFFFF";
-const FOOTER_COLOR = "#888888";
+const WARM_WHITE = "#FAFAFA";
+const TEXT_COLOR = "#2D3E50"; // Charcoal for body text on light pages
+const TEXT_LIGHT = "#BECBD2"; // De-saturated light text on dark pages
+const FOOTER_COLOR = "#8899A6";
 const BORDER_COLOR = "#D1D5DB";
-const MID_GRAY = "#666666";
-
-const TEAL_ACCENT = "#00BCD4";
-const PURPLE_ACCENT = "#9C27B0";
-const GREEN_ACCENT = "#4CAF50";
+const MID_GRAY = "#5E6E7D";
+const SCORE_GREEN = "#2EA44F";
+const SCORE_AMBER = "#E8912D";
 
 // Page dimensions (A4 landscape for a presentation-style feel)
 const PAGE_W = 842; // A4 landscape width in points
@@ -48,21 +47,11 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-/** Convert hex to RGB array for PDFKit opacity drawing */
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.substring(0, 2), 16),
-    parseInt(h.substring(2, 4), 16),
-    parseInt(h.substring(4, 6), 16),
-  ];
-}
-
-/** Add branded footer to a page */
-function addFooter(doc: PDFKit.PDFDocument): void {
+/** Add branded footer to a page (light or dark variant) */
+function addFooter(doc: PDFKit.PDFDocument, variant: "light" | "dark" = "light"): void {
   doc
     .fontSize(9)
-    .fillColor(FOOTER_COLOR)
+    .fillColor(variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR)
     .text(`Databricks Inspire AI  |  ${today()}`, MARGIN, PAGE_H - 35, {
       width: CONTENT_W,
       align: "right",
@@ -81,16 +70,52 @@ function addAccentBar(
   doc.save().rect(x, y, w, h).fill(color).restore();
 }
 
-/** Draw a decorative circle with transparency */
-function addCircle(
+/** Draw a red separator line (brand element from official template) */
+function addRedSeparator(
   doc: PDFKit.PDFDocument,
-  cx: number,
-  cy: number,
-  r: number,
-  color: string,
-  opacity: number
+  x: number,
+  y: number,
+  w: number
 ): void {
-  doc.save().opacity(opacity).circle(cx, cy, r).fill(color).restore();
+  doc
+    .save()
+    .moveTo(x, y)
+    .lineTo(x + w, y)
+    .lineWidth(3)
+    .strokeColor(DB_RED)
+    .stroke()
+    .restore();
+}
+
+/** Draw Databricks brand geometric shapes (circle, square, triangle) */
+function addBrandShapes(
+  doc: PDFKit.PDFDocument,
+  region: { x: number; y: number; w: number; h: number },
+  opacity: number = 0.9
+): void {
+  const { x, y, w, h } = region;
+  doc.save().opacity(opacity);
+
+  // Large red circle (top-right area)
+  doc.circle(x + w * 0.55, y + h * 0.35, w * 0.22).fill(DB_RED);
+
+  // Red square (bottom-left of shape group)
+  const sqSize = w * 0.28;
+  doc.rect(x + w * 0.08, y + h * 0.55, sqSize, sqSize).fill(DB_RED);
+
+  // Red triangle (bottom-right)
+  const triBase = w * 0.32;
+  const triCx = x + w * 0.72;
+  const triCy = y + h * 0.85;
+  doc
+    .polygon(
+      [triCx, triCy - triBase * 0.75],
+      [triCx - triBase / 2, triCy + triBase * 0.25],
+      [triCx + triBase / 2, triCy + triBase * 0.25]
+    )
+    .fill(DB_RED);
+
+  doc.restore();
 }
 
 /** Build domain summary bullet points from data (no AI call) */
@@ -146,7 +171,7 @@ function drawTable(
   const tableW = colWidths.reduce((a, b) => a + b, 0);
 
   // Header
-  doc.save().rect(x, y, tableW, headerH).fill(DATABRICKS_BLUE).restore();
+  doc.save().rect(x, y, tableW, headerH).fill(DB_DARK).restore();
 
   let cx = x;
   for (let i = 0; i < headers.length; i++) {
@@ -170,7 +195,7 @@ function drawTable(
       doc
         .save()
         .rect(x, ry, tableW, rowH)
-        .fill(LIGHT_GRAY)
+        .fill(WARM_WHITE)
         .restore();
     }
     // Bottom border
@@ -241,72 +266,85 @@ export async function generatePdf(
       : 0;
 
     // ===================================================================
-    // 1. COVER PAGE
+    // 1. COVER PAGE — matches official Databricks brand template
     // ===================================================================
-    // Blue background
-    doc.save().rect(0, 0, PAGE_W, PAGE_H).fill(DATABRICKS_BLUE).restore();
 
-    // Decorative circles
-    addCircle(doc, PAGE_W - 100, 60, 55, TEAL_ACCENT, 0.4);
-    addCircle(doc, 80, PAGE_H - 90, 70, PURPLE_ACCENT, 0.4);
-    addCircle(doc, PAGE_W - 60, PAGE_H - 50, 40, GREEN_ACCENT, 0.4);
-    addCircle(doc, 100, 100, 22, DATABRICKS_ORANGE, 0.5);
-    addCircle(doc, PAGE_W - 80, 250, 28, TEAL_ACCENT, 0.35);
+    // Dark charcoal background
+    doc.save().rect(0, 0, PAGE_W, PAGE_H).fill(DB_DARK).restore();
 
-    // Title text
+    // Brand geometric shapes (right half)
+    addBrandShapes(doc, { x: PAGE_W * 0.48, y: 40, w: PAGE_W * 0.48, h: PAGE_H * 0.75 });
+
+    // "databricks" logo text (top-left)
     doc
-      .fontSize(40)
+      .fontSize(14)
       .fillColor(WHITE)
       .font("Helvetica-Bold")
-      .text("Databricks Inspire AI", MARGIN + 60, 140, { width: CONTENT_W });
+      .text("databricks", MARGIN, MARGIN);
 
+    // Main title
     doc
-      .fontSize(20)
-      .fillColor(LIGHT_GRAY)
-      .font("Helvetica")
-      .text("Strategic AI Use Case Discovery", MARGIN + 60, 200, {
-        width: CONTENT_W,
-      });
-
-    doc
-      .fontSize(28)
-      .fillColor(DATABRICKS_ORANGE)
+      .fontSize(38)
+      .fillColor(WHITE)
       .font("Helvetica-Bold")
-      .text(`For ${run.config.businessName}`, MARGIN + 60, 280, {
-        width: CONTENT_W,
+      .text("Databricks Inspire AI", MARGIN, 130, {
+        width: PAGE_W * 0.48,
       });
 
+    // Subtitle
+    doc
+      .fontSize(18)
+      .fillColor(TEXT_LIGHT)
+      .font("Helvetica")
+      .text("Strategic AI Use Case Discovery", MARGIN, 220, {
+        width: PAGE_W * 0.48,
+      });
+
+    // Red separator line
+    addRedSeparator(doc, MARGIN, 310, 60);
+
+    // Business name
     doc
       .fontSize(16)
-      .fillColor(LIGHT_GRAY)
-      .font("Helvetica")
-      .text(today(), MARGIN + 60, 370, { width: CONTENT_W });
+      .fillColor(WHITE)
+      .font("Helvetica-Bold")
+      .text(run.config.businessName, MARGIN, 325, { width: PAGE_W * 0.48 });
 
+    // Date and stats
     doc
       .fontSize(12)
-      .fillColor(LIGHT_GRAY)
+      .fillColor(TEXT_LIGHT)
+      .font("Helvetica")
+      .text(today(), MARGIN, 355, { width: PAGE_W * 0.48 });
+
+    doc
+      .fontSize(11)
+      .fillColor(TEXT_LIGHT)
       .font("Helvetica")
       .text(
         `${useCases.length} use cases  |  ${domainStats.length} domains`,
-        MARGIN + 60,
-        400,
-        { width: CONTENT_W }
+        MARGIN,
+        375,
+        { width: PAGE_W * 0.48 }
       );
+
+    addFooter(doc, "dark");
 
     // ===================================================================
     // 2. EXECUTIVE SUMMARY
     // ===================================================================
     doc.addPage();
 
-    // Accent bars
-    addAccentBar(doc, DATABRICKS_ORANGE, 0, 60, 8, 180);
-    addAccentBar(doc, TEAL_ACCENT, 0, 250, 6, 140);
+    // Red accent bar
+    addAccentBar(doc, DB_RED, 0, 55, 6, 200);
 
     doc
       .fontSize(30)
-      .fillColor(DATABRICKS_BLUE)
+      .fillColor(DB_DARK)
       .font("Helvetica-Bold")
       .text("Executive Summary", MARGIN, MARGIN, { width: CONTENT_W });
+
+    addRedSeparator(doc, MARGIN, MARGIN + 42, 50);
 
     let yPos = MARGIN + 50;
 
@@ -368,19 +406,19 @@ export async function generatePdf(
     for (let page = 0; page < tocPages; page++) {
       doc.addPage();
 
-      // Accent bars
-      addAccentBar(doc, DATABRICKS_ORANGE, 0, 60, 6, 100);
-      addAccentBar(doc, TEAL_ACCENT, 0, 170, 6, 80);
-      addAccentBar(doc, PURPLE_ACCENT, 0, 260, 6, 60);
+      // Red accent bar
+      addAccentBar(doc, DB_RED, 0, 55, 6, 160);
 
       const pageLabel = tocPages > 1 ? ` (${page + 1}/${tocPages})` : "";
       doc
         .fontSize(30)
-        .fillColor(DATABRICKS_BLUE)
+        .fillColor(DB_DARK)
         .font("Helvetica-Bold")
         .text(`Table of Contents${pageLabel}`, MARGIN, MARGIN, {
           width: CONTENT_W,
         });
+
+      addRedSeparator(doc, MARGIN, MARGIN + 42, 50);
 
       const pageStats = domainStats.slice(
         page * ROWS_PER_TOC,
@@ -414,41 +452,53 @@ export async function generatePdf(
 
       // ── 4a. Domain Divider ────────────────────────────────────────
       doc.addPage();
-      doc.save().rect(0, 0, PAGE_W, PAGE_H).fill(DATABRICKS_BLUE).restore();
+      doc.save().rect(0, 0, PAGE_W, PAGE_H).fill(DB_DARK).restore();
 
-      // Decorative shapes
-      addCircle(doc, PAGE_W - 80, 60, 40, TEAL_ACCENT, 0.45);
-      addCircle(doc, 60, PAGE_H - 70, 30, PURPLE_ACCENT, 0.45);
+      // Red accent bar on left
+      addAccentBar(doc, DB_RED, 0, 0, 6, PAGE_H);
+
+      doc
+        .fontSize(12)
+        .fillColor(TEXT_LIGHT)
+        .font("Helvetica")
+        .text("databricks", MARGIN + 10, MARGIN);
+
+      // Red separator before domain title
+      addRedSeparator(doc, MARGIN + 10, 170, 50);
 
       doc
         .fontSize(38)
-        .fillColor(DATABRICKS_ORANGE)
+        .fillColor(WHITE)
         .font("Helvetica-Bold")
-        .text(domain, MARGIN + 50, 180, { width: CONTENT_W - 50 });
+        .text(domain, MARGIN + 10, 185, { width: CONTENT_W - 20 });
 
       doc
-        .fontSize(26)
-        .fillColor(WHITE)
+        .fontSize(20)
+        .fillColor(TEXT_LIGHT)
         .font("Helvetica")
-        .text(`${cases.length} Use Cases`, MARGIN + 50, 240, {
-          width: CONTENT_W - 50,
+        .text(`${cases.length} Use Cases`, MARGIN + 10, doc.y + 12, {
+          width: CONTENT_W - 20,
         });
+
+      addFooter(doc, "dark");
 
       // ── 4b. Domain Summary ────────────────────────────────────────
       doc.addPage();
-      addAccentBar(doc, DATABRICKS_ORANGE, 0, 60, 8, 280);
+      addAccentBar(doc, DB_RED, 0, 55, 6, 300);
 
       doc
         .fontSize(28)
-        .fillColor(DATABRICKS_BLUE)
+        .fillColor(DB_DARK)
         .font("Helvetica-Bold")
         .text(domain, MARGIN, MARGIN, { width: CONTENT_W });
 
       doc
         .fontSize(14)
-        .fillColor(DATABRICKS_ORANGE)
+        .fillColor(DB_RED)
         .font("Helvetica")
         .text("Domain Summary", MARGIN, MARGIN + 38, { width: CONTENT_W });
+
+      addRedSeparator(doc, MARGIN, MARGIN + 58, 40);
 
       const bullets = buildDomainSummary(domain, cases);
       yPos = MARGIN + 70;
@@ -501,7 +551,7 @@ export async function generatePdf(
 
         doc
           .fontSize(20)
-          .fillColor(DATABRICKS_BLUE)
+          .fillColor(DB_RED)
           .font("Helvetica-Bold")
           .text(statsData[i].value, bx + 10, yPos + 10, {
             width: statBoxW - 20,
@@ -523,12 +573,12 @@ export async function generatePdf(
       // ── 4c. Individual Use Case Pages ─────────────────────────────
       for (const uc of cases) {
         doc.addPage();
-        addAccentBar(doc, DATABRICKS_ORANGE, 0, 55, 8, 400);
+        addAccentBar(doc, DB_RED, 0, 55, 6, 400);
 
         // Title
         doc
           .fontSize(22)
-          .fillColor(DATABRICKS_BLUE)
+          .fillColor(DB_DARK)
           .font("Helvetica-Bold")
           .text(`${uc.id}: ${uc.name}`, MARGIN, MARGIN - 5, {
             width: CONTENT_W,
@@ -542,7 +592,7 @@ export async function generatePdf(
         ].filter(Boolean);
         doc
           .fontSize(12)
-          .fillColor(DATABRICKS_ORANGE)
+          .fillColor(DB_RED)
           .font("Helvetica-Bold")
           .text(subtitleParts.join("  |  "), MARGIN, doc.y + 6, {
             width: CONTENT_W,
@@ -573,7 +623,7 @@ export async function generatePdf(
           // Label
           doc
             .fontSize(11)
-            .fillColor(DATABRICKS_BLUE)
+            .fillColor(DB_DARK)
             .font("Helvetica-Bold")
             .text(`${field.label}:`, MARGIN + 15, yPos, {
               width: CONTENT_W - 30,
@@ -600,7 +650,7 @@ export async function generatePdf(
           doc
             .save()
             .roundedRect(MARGIN + 15, scoreBarY - 5, CONTENT_W - 30, 30, 3)
-            .fill("#EBF0F5")
+            .fill("#E8EDF1")
             .restore();
 
           const scores = [
@@ -621,10 +671,10 @@ export async function generatePdf(
             const sx = MARGIN + 15 + i * scoreBlockW;
             const scoreColor =
               scores[i].value >= 70
-                ? GREEN_ACCENT
+                ? SCORE_GREEN
                 : scores[i].value >= 40
-                  ? DATABRICKS_ORANGE
-                  : "#E53935";
+                  ? SCORE_AMBER
+                  : DB_RED;
 
             doc
               .fontSize(10)

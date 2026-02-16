@@ -4,7 +4,7 @@
  * Used for creating/importing notebooks into the Databricks workspace.
  */
 
-import { getConfig, getHeaders } from "./client";
+import { getConfig, getAppHeaders } from "./client";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,7 +50,7 @@ export async function importNotebook(
     format: options.format ?? "SOURCE",
   };
 
-  const headers = await getHeaders();
+  const headers = await getAppHeaders();
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -72,7 +72,7 @@ export async function mkdirs(path: string): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/mkdirs`;
 
-  const headers = await getHeaders();
+  const headers = await getAppHeaders();
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -97,7 +97,7 @@ export async function deleteWorkspaceObject(
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/delete`;
 
-  const headers = await getHeaders();
+  const headers = await getAppHeaders();
   const response = await fetch(url, {
     method: "POST",
     headers,

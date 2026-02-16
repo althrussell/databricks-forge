@@ -170,8 +170,10 @@ async function getBearerToken(): Promise<string> {
 }
 
 /**
- * Returns standard headers for Databricks REST API calls.
- * Handles both PAT and OAuth M2M authentication.
+ * Returns headers using user authorization when available.
+ *
+ * Use for APIs where user-scoped OAuth scopes exist (e.g. `sql`,
+ * `catalog.*`). Falls back to SP / PAT when outside a request context.
  */
 export async function getHeaders(): Promise<Record<string, string>> {
   const token = await getBearerToken();
@@ -179,4 +181,78 @@ export async function getHeaders(): Promise<Record<string, string>> {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
+}
+
+/**
+ * Returns headers using app authorization (service principal) only.
+ *
+ * Use for APIs whose scopes are NOT available in user authorization
+ * (e.g. Workspace REST API — requires `workspace` scope which is not
+ * exposed in the Databricks Apps user-auth scope picker).
+ */
+export async function getAppHeaders(): Promise<Record<string, string>> {
+  const token = await getAppBearerToken();
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+/**
+ * Obtain a Bearer token using only app-level credentials (PAT or SP).
+ * Deliberately skips the user's forwarded token.
+ */
+async function getAppBearerToken(): Promise<string> {
+  // 1. PAT token (local dev)
+  const pat =
+    process.env.DATABRICKS_TOKEN ?? process.env.DATABRICKS_API_TOKEN;
+  if (pat) return pat;
+
+  // 2. OAuth M2M (Databricks Apps — service principal)
+  const clientId = process.env.DATABRICKS_CLIENT_ID;
+  const clientSecret = process.env.DATABRICKS_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "No app-level credentials found. " +
+        "Set DATABRICKS_TOKEN for local dev, or deploy as a Databricks App " +
+        "(which injects DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET)."
+    );
+  }
+
+  // Reuse cached SP token if still valid
+  if (_oauthToken && Date.now() < _oauthToken.expiresAt - 60_000) {
+    return _oauthToken.accessToken;
+  }
+
+  const { host } = getConfig();
+  const tokenUrl = `${host}/oidc/v1/token`;
+
+  const resp = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      scope: "all-apis",
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(
+      `OAuth token exchange failed (${resp.status}): ${text}`
+    );
+  }
+
+  const data: { access_token: string; expires_in: number } = await resp.json();
+
+  _oauthToken = {
+    accessToken: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1_000,
+  };
+
+  return _oauthToken.accessToken;
 }
