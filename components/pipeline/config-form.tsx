@@ -31,6 +31,7 @@ import {
   type BusinessPriority,
   type SupportedLanguage,
 } from "@/lib/domain/types";
+import { loadSettings } from "@/lib/settings";
 
 const SUGGESTED_DOMAINS = [
   "Finance",
@@ -50,8 +51,8 @@ const SUGGESTED_DOMAINS = [
 ];
 
 const AI_MODELS = [
-  "databricks-claude-sonnet-4-5",
   "databricks-claude-opus-4-6",
+  "databricks-claude-sonnet-4-5",
   "databricks-gpt-oss-120b",
   "databricks-meta-llama-3.3-70b-instruct",
   "databricks-dbrx-instruct",
@@ -80,7 +81,6 @@ export function ConfigForm() {
   const [selectedLanguages, setSelectedLanguages] = useState<
     SupportedLanguage[]
   >(["English"]);
-  const [sampleRowsPerTable, setSampleRowsPerTable] = useState(0);
 
   const togglePriority = (priority: BusinessPriority) => {
     setSelectedPriorities((prev) =>
@@ -113,6 +113,9 @@ export function ConfigForm() {
     setIsSubmitting(true);
 
     try {
+      // Read app-wide settings (configured in Settings page)
+      const appSettings = loadSettings();
+
       // Create the run
       const createRes = await fetch("/api/runs", {
         method: "POST",
@@ -125,7 +128,7 @@ export function ConfigForm() {
           strategicGoals: strategicGoals.trim(),
           aiModel,
           languages: selectedLanguages,
-          sampleRowsPerTable,
+          sampleRowsPerTable: appSettings.sampleRowsPerTable,
         }),
       });
 
@@ -386,30 +389,6 @@ export function ConfigForm() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sampleRows">Data Sampling for SQL Generation</Label>
-            <Select
-              value={String(sampleRowsPerTable)}
-              onValueChange={(v) => setSampleRowsPerTable(parseInt(v, 10))}
-            >
-              <SelectTrigger id="sampleRows">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Disabled (metadata only)</SelectItem>
-                <SelectItem value="5">5 rows per table</SelectItem>
-                <SelectItem value="10">10 rows per table</SelectItem>
-                <SelectItem value="25">25 rows per table</SelectItem>
-                <SelectItem value="50">50 rows per table</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Sample real data to improve SQL accuracy. When enabled, the LLM
-              sees sample rows alongside the schema to write more precise
-              queries. This reads row-level data from your tables.
-            </p>
           </div>
 
           <div className="space-y-2">

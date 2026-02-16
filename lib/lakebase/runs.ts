@@ -39,7 +39,6 @@ function dbRowToRun(row: {
   languages: string | null;
   generationOptions: string | null;
   generationPath: string | null;
-  sampleRowsPerTable: number | null;
   status: string;
   currentStep: string | null;
   progressPct: number;
@@ -58,11 +57,10 @@ function dbRowToRun(row: {
       businessDomains: row.businessDomains ?? "",
       businessPriorities: parseJSON<BusinessPriority[]>(row.businessPriorities, []),
       strategicGoals: row.strategicGoals ?? "",
-      generationOptions: parseJSON<GenerationOption[]>(row.generationOptions, ["SQL Code"]),
+      ...parseGenerationOptions(row.generationOptions),
       generationPath: row.generationPath ?? "./inspire_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
-      aiModel: row.aiModel ?? "databricks-claude-sonnet-4-5",
-      sampleRowsPerTable: row.sampleRowsPerTable ?? 0,
+      aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
     },
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
@@ -73,6 +71,41 @@ function dbRowToRun(row: {
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Generation options -- packs sampleRowsPerTable alongside the options array
+// into a single JSON field to avoid schema changes.
+//
+// New format: {"options":["SQL Code"],"sampleRowsPerTable":10}
+// Old format: ["SQL Code"]  (backward-compatible, sampleRowsPerTable = 0)
+// ---------------------------------------------------------------------------
+
+function parseGenerationOptions(raw: string | null): {
+  generationOptions: GenerationOption[];
+  sampleRowsPerTable: number;
+} {
+  if (!raw) return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0 };
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return { generationOptions: parsed, sampleRowsPerTable: 0 };
+    }
+    if (typeof parsed === "object" && parsed !== null) {
+      return {
+        generationOptions: parsed.options ?? ["SQL Code"],
+        sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
+      };
+    }
+  } catch { /* fall through */ }
+  return { generationOptions: ["SQL Code"], sampleRowsPerTable: 0 };
+}
+
+function serializeGenerationOptions(
+  options: GenerationOption[],
+  sampleRowsPerTable: number
+): string {
+  return JSON.stringify({ options, sampleRowsPerTable });
 }
 
 // ---------------------------------------------------------------------------
@@ -95,9 +128,11 @@ export async function createRun(
       businessDomains: config.businessDomains,
       aiModel: config.aiModel,
       languages: JSON.stringify(config.languages),
-      generationOptions: JSON.stringify(config.generationOptions),
+      generationOptions: serializeGenerationOptions(
+        config.generationOptions,
+        config.sampleRowsPerTable
+      ),
       generationPath: config.generationPath,
-      sampleRowsPerTable: config.sampleRowsPerTable,
       status: "pending",
       progressPct: 0,
     },
