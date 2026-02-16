@@ -7,6 +7,7 @@
 
 import { executeAIQuery, parseCSVResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { logger } from "@/lib/logger";
 import type { PipelineContext, TableInfo } from "@/lib/domain/types";
 
 const BATCH_SIZE = 100; // tables per ai_query call
@@ -52,19 +53,20 @@ export async function runTableFiltering(
       businessTables.push(...filtered);
     } catch (error) {
       // Fail-open: include all tables from failed batch
-      console.warn(
-        `[table-filtering] Batch ${batchNum} failed, including all tables:`,
-        error
-      );
+      logger.warn("Table filtering batch failed, including all tables", {
+        batch: batchNum,
+        error: error instanceof Error ? error.message : String(error),
+      });
       businessTables.push(...batch.map((t) => t.fqn));
     }
   }
 
   if (runId) await updateRunMessage(runId, `Identified ${businessTables.length} business-relevant tables out of ${tables.length}`);
 
-  console.log(
-    `[table-filtering] ${businessTables.length}/${tables.length} tables classified as business-relevant`
-  );
+  logger.info("Table filtering complete", {
+    businessTables: businessTables.length,
+    totalTables: tables.length,
+  });
 
   return businessTables;
 }
@@ -92,8 +94,16 @@ async function filterBatch(
     maxTokens: 4096,
   });
 
-  // CSV: table_fqn, classification, reason
-  const rows = parseCSVResponse(result.rawResponse, 3);
+  let rows: string[][];
+  try {
+    rows = parseCSVResponse(result.rawResponse, 3);
+  } catch (parseErr) {
+    logger.warn("Failed to parse table filtering CSV, including all tables", {
+      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+    });
+    return tables.map((t) => t.fqn);
+  }
+
   const businessFQNs: string[] = [];
 
   for (const row of rows) {

@@ -19,6 +19,7 @@ import {
   buildForeignKeyMarkdown,
 } from "@/lib/queries/metadata";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { logger } from "@/lib/logger";
 import { groupByDomain } from "@/lib/domain/scoring";
 import type {
   PipelineContext,
@@ -93,10 +94,11 @@ export async function runSqlGeneration(
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 
-  console.log(
-    `[sql-generation] Generating SQL for ${totalUseCases} use cases across ${sortedDomains.length} domains` +
-      (sampleRows > 0 ? ` (sampling ${sampleRows} rows/table)` : "")
-  );
+  logger.info("SQL generation starting", {
+    useCaseCount: totalUseCases,
+    domainCount: sortedDomains.length,
+    sampleRows,
+  });
 
   for (const [domain, domainCases] of sortedDomains) {
     if (runId) {
@@ -140,9 +142,7 @@ export async function runSqlGeneration(
                 ? result.reason.message
                 : String(result.reason)
               : "empty response";
-          console.warn(
-            `[sql-generation] Failed for ${uc.id} (${uc.name}): ${reason}`
-          );
+          logger.warn("SQL generation failed for use case", { useCaseId: uc.id, name: uc.name, reason });
           uc.sqlCode = null;
           uc.sqlStatus = "failed";
           failed++;
@@ -159,9 +159,7 @@ export async function runSqlGeneration(
     }
   }
 
-  console.log(
-    `[sql-generation] Completed: ${completed - failed} generated, ${failed} failed`
-  );
+  logger.info("SQL generation complete", { generated: completed - failed, failed });
 
   return useCases;
 }
@@ -198,9 +196,7 @@ async function generateSqlForUseCase(
   // If we have no schema info at all, we can still try (the LLM may use table
   // names alone), but log a warning
   if (involvedColumns.length === 0) {
-    console.warn(
-      `[sql-generation] No column metadata for ${uc.id} (tables: ${uc.tablesInvolved.join(", ")})`
-    );
+    logger.warn("No column metadata for use case", { useCaseId: uc.id, tables: uc.tablesInvolved });
   }
 
   // Build schema markdown scoped to this use case's tables
@@ -259,7 +255,98 @@ async function generateSqlForUseCase(
     return null;
   }
 
+  // Lightweight structure validation
+  const validation = validateSqlOutput(sql, uc.tablesInvolved, involvedColumns);
+  if (!validation.valid) {
+    logger.warn("SQL validation warning", { useCaseId: uc.id, warnings: validation.warnings });
+  }
+
+  // Attempt to execute the SQL to catch runtime errors; if it fails, try fix prompt
+  const executionError = await trySqlExecution(sql);
+  if (executionError) {
+    logger.info("SQL execution failed, attempting fix", { useCaseId: uc.id, error: executionError });
+    const fixedSql = await attemptSqlFix(
+      uc,
+      sql,
+      executionError,
+      schemaMarkdown,
+      fkMarkdown,
+      aiModel
+    );
+    if (fixedSql) {
+      return fixedSql;
+    }
+    // Return the original SQL even if fix failed -- it may still be useful
+    logger.warn("SQL fix failed, returning original SQL", { useCaseId: uc.id });
+  }
+
   return sql;
+}
+
+/**
+ * Try executing the generated SQL with EXPLAIN to check for syntax/semantic
+ * errors without actually running the full query.
+ * Returns the error message on failure, or null on success.
+ */
+async function trySqlExecution(sql: string): Promise<string | null> {
+  try {
+    // Use EXPLAIN to validate without executing (avoids side effects and long queries)
+    await executeSQL(`EXPLAIN ${sql}`);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/**
+ * Send the failing SQL through the USE_CASE_SQL_FIX_PROMPT to attempt a fix.
+ */
+async function attemptSqlFix(
+  uc: UseCase,
+  originalSql: string,
+  errorMessage: string,
+  schemaMarkdown: string,
+  fkMarkdown: string,
+  aiModel: string
+): Promise<string | null> {
+  try {
+    const result = await executeAIQuery({
+      promptKey: "USE_CASE_SQL_FIX_PROMPT",
+      variables: {
+        use_case_id: uc.id,
+        use_case_name: uc.name,
+        directly_involved_schema: schemaMarkdown,
+        foreign_key_relationships: fkMarkdown,
+        original_sql: originalSql,
+        error_message: errorMessage,
+      },
+      modelEndpoint: aiModel,
+      temperature: 0.1,
+      maxTokens: 4096,
+      retries: 0,
+    });
+
+    const fixedSql = cleanSqlResponse(result.rawResponse);
+    if (!fixedSql || fixedSql.length < 20) {
+      return null;
+    }
+
+    // Verify the fix actually works
+    const fixError = await trySqlExecution(fixedSql);
+    if (fixError) {
+      logger.warn("Fixed SQL still fails EXPLAIN", { useCaseId: uc.id, error: fixError });
+      return null;
+    }
+
+    logger.info("SQL fix successful", { useCaseId: uc.id });
+    return fixedSql;
+  } catch (error) {
+    logger.warn("SQL fix prompt failed", {
+      useCaseId: uc.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +402,104 @@ async function fetchSampleData(
   }
 
   return sections.length > 1 ? sections.join("\n") : "";
+}
+
+// ---------------------------------------------------------------------------
+// SQL output validation
+// ---------------------------------------------------------------------------
+
+interface SqlValidationResult {
+  valid: boolean;
+  warnings: string[];
+}
+
+/**
+ * Lightweight structural validation of generated SQL.
+ * Checks that the SQL starts with a recognized keyword, references at least
+ * one of the expected tables, and doesn't reference columns that don't exist
+ * in the schema.
+ */
+function validateSqlOutput(
+  sql: string,
+  tablesInvolved: string[],
+  columns: ColumnInfo[]
+): SqlValidationResult {
+  const warnings: string[] = [];
+  const upperSql = sql.toUpperCase();
+  const normalizedSql = sql.replace(/`/g, "");
+
+  // Check 1: SQL starts with a recognized keyword
+  const startsValid = /^(--|WITH\b|SELECT\b|CREATE\b)/i.test(sql.trim());
+  if (!startsValid) {
+    warnings.push("SQL does not start with --, WITH, SELECT, or CREATE");
+  }
+
+  // Check 2: At least one expected table is referenced
+  if (tablesInvolved.length > 0) {
+    const hasTableRef = tablesInvolved.some((fqn) => {
+      const cleanFqn = fqn.replace(/`/g, "");
+      const parts = cleanFqn.split(".");
+      const tableName = parts[parts.length - 1];
+      return (
+        normalizedSql.includes(cleanFqn) ||
+        upperSql.includes(tableName.toUpperCase())
+      );
+    });
+    if (!hasTableRef) {
+      warnings.push(
+        `SQL does not reference any expected table: ${tablesInvolved.join(", ")}`
+      );
+    }
+  }
+
+  // Check 3: Look for obviously invented columns (column names in SQL
+  // that don't match any known column from the schema). Only check if
+  // we have schema info.
+  if (columns.length > 0) {
+    const knownColumns = new Set(
+      columns.map((c) => c.columnName.toLowerCase())
+    );
+    // Add common SQL keywords/aliases that aren't column names
+    const sqlKeywords = new Set([
+      "select", "from", "where", "and", "or", "not", "in", "is", "null",
+      "as", "on", "join", "left", "right", "inner", "outer", "full", "cross",
+      "group", "by", "order", "having", "limit", "offset", "union", "all",
+      "with", "case", "when", "then", "else", "end", "between", "like",
+      "exists", "distinct", "count", "sum", "avg", "min", "max", "over",
+      "partition", "row_number", "rank", "dense_rank", "ntile", "lead", "lag",
+      "first_value", "last_value", "coalesce", "cast", "concat", "substring",
+      "trim", "upper", "lower", "date", "timestamp", "int", "string", "float",
+      "double", "boolean", "decimal", "bigint", "array", "map", "struct",
+      "true", "false", "asc", "desc", "insert", "into", "values", "update",
+      "set", "delete", "create", "table", "view", "temp", "temporary",
+      "if", "replace", "drop", "alter", "add", "column", "named_struct",
+      "ai_query", "ai_classify", "ai_forecast", "ai_summarize",
+      "ai_analyze_sentiment", "ai_extract", "temperature", "max_tokens",
+      "modelparameters", "response", "result",
+    ]);
+
+    // Extract identifiers after dots (likely column references): table.column
+    const dotColPattern = /\.([a-z_][a-z0-9_]*)/gi;
+    let match;
+    const unknownCols: string[] = [];
+    while ((match = dotColPattern.exec(normalizedSql)) !== null) {
+      const colName = match[1].toLowerCase();
+      if (!knownColumns.has(colName) && !sqlKeywords.has(colName)) {
+        unknownCols.push(match[1]);
+      }
+    }
+    // Only warn if there are multiple unknown columns (single mismatches may be aliases)
+    if (unknownCols.length > 3) {
+      warnings.push(
+        `SQL may reference unknown columns: ${[...new Set(unknownCols)].slice(0, 5).join(", ")}`
+      );
+    }
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+  };
 }
 
 // ---------------------------------------------------------------------------

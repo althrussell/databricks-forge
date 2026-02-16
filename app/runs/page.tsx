@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,27 +40,47 @@ export default function RunsPage() {
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const fetchingRef = useRef(false);
 
-  useEffect(() => {
-    fetchRuns();
-    // Refresh every 5 seconds to catch running pipelines
-    const interval = setInterval(fetchRuns, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const fetchRuns = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
 
-  async function fetchRuns() {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const res = await fetch("/api/runs");
+      const res = await fetch("/api/runs", { signal: controller.signal });
       if (!res.ok) throw new Error("Failed to fetch runs");
       const data = await res.json();
       setRuns(data.runs);
       setError(null);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load runs");
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    fetchRuns();
+    return () => abortRef.current?.abort();
+  }, [fetchRuns]);
+
+  // Only poll when there are active runs
+  useEffect(() => {
+    const hasActiveRuns = runs.some(
+      (r) => r.status === "running" || r.status === "pending"
+    );
+    if (!hasActiveRuns) return;
+
+    const interval = setInterval(fetchRuns, 5000);
+    return () => clearInterval(interval);
+  }, [runs, fetchRuns]);
 
   async function handleDelete(runId: string, businessName: string) {
     try {

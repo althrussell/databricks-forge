@@ -6,6 +6,7 @@
  */
 
 import { executeSQLMapped, executeSQL, type SqlColumn } from "@/lib/dbx/sql";
+import { validateIdentifier } from "@/lib/validation";
 import type { TableInfo, ColumnInfo, ForeignKey } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
@@ -106,9 +107,10 @@ export async function listCatalogs(): Promise<string[]> {
  * USE CATALOG permission (instead of throwing).
  */
 export async function listSchemas(catalog: string): Promise<string[]> {
+  const safeCatalog = validateIdentifier(catalog, "catalog");
   const sql = `
     SELECT schema_name
-    FROM \`${catalog}\`.information_schema.schemata
+    FROM \`${safeCatalog}\`.information_schema.schemata
     WHERE schema_name NOT IN ('information_schema', 'default')
     ORDER BY schema_name
   `;
@@ -132,13 +134,15 @@ export async function listTables(
   catalog: string,
   schema?: string
 ): Promise<TableInfo[]> {
+  const safeCatalog = validateIdentifier(catalog, "catalog");
   let sql = `
     SELECT table_catalog, table_schema, table_name, table_type, comment
-    FROM ${catalog}.information_schema.tables
+    FROM \`${safeCatalog}\`.information_schema.tables
     WHERE table_schema NOT IN ('information_schema', 'default')
   `;
   if (schema) {
-    sql += ` AND table_schema = '${schema.replace(/'/g, "''")}'`;
+    const safeSchema = validateIdentifier(schema, "schema");
+    sql += ` AND table_schema = '${safeSchema}'`;
   }
   sql += ` ORDER BY table_schema, table_name`;
   return executeSQLMapped(sql, rowToTable);
@@ -151,14 +155,16 @@ export async function listColumns(
   catalog: string,
   schema?: string
 ): Promise<ColumnInfo[]> {
+  const safeCatalog = validateIdentifier(catalog, "catalog");
   let sql = `
     SELECT table_catalog, table_schema, table_name,
            column_name, data_type, ordinal_position, is_nullable, comment
-    FROM ${catalog}.information_schema.columns
+    FROM \`${safeCatalog}\`.information_schema.columns
     WHERE table_schema NOT IN ('information_schema', 'default')
   `;
   if (schema) {
-    sql += ` AND table_schema = '${schema.replace(/'/g, "''")}'`;
+    const safeSchema = validateIdentifier(schema, "schema");
+    sql += ` AND table_schema = '${safeSchema}'`;
   }
   sql += ` ORDER BY table_schema, table_name, ordinal_position`;
   return executeSQLMapped(sql, rowToColumn);
@@ -173,6 +179,7 @@ export async function listForeignKeys(
   schema?: string
 ): Promise<ForeignKey[]> {
   try {
+    const safeCatalog = validateIdentifier(catalog, "catalog");
     let sql = `
       SELECT
         tc.constraint_name,
@@ -180,15 +187,16 @@ export async function listForeignKeys(
         kcu.column_name,
         ccu.table_catalog || '.' || ccu.table_schema || '.' || ccu.table_name AS referenced_table_fqn,
         ccu.column_name AS referenced_column_name
-      FROM ${catalog}.information_schema.table_constraints tc
-      JOIN ${catalog}.information_schema.key_column_usage kcu
+      FROM \`${safeCatalog}\`.information_schema.table_constraints tc
+      JOIN \`${safeCatalog}\`.information_schema.key_column_usage kcu
         ON tc.constraint_name = kcu.constraint_name
-      JOIN ${catalog}.information_schema.constraint_column_usage ccu
+      JOIN \`${safeCatalog}\`.information_schema.constraint_column_usage ccu
         ON tc.constraint_name = ccu.constraint_name
       WHERE tc.constraint_type = 'FOREIGN KEY'
     `;
     if (schema) {
-      sql += ` AND kcu.table_schema = '${schema.replace(/'/g, "''")}'`;
+      const safeSchema = validateIdentifier(schema, "schema");
+      sql += ` AND kcu.table_schema = '${safeSchema}'`;
     }
 
     const result = await executeSQL(sql);

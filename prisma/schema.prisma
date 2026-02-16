@@ -71,6 +71,7 @@ model InspireUseCase {
 
   run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
+  @@index([runId])
   @@map("inspire_use_cases")
 }
 
@@ -86,6 +87,7 @@ model InspireMetadataCache {
   columnCount  Int?     @map("column_count")
   cachedAt     DateTime @default(now()) @map("cached_at")
 
+  @@index([cachedAt])
   @@map("inspire_metadata_cache")
 }
 
@@ -102,5 +104,6 @@ model InspireExport {
 
   run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
+  @@index([runId])
   @@map("inspire_exports")
 }

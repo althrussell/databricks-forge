@@ -8,6 +8,7 @@
  */
 
 import { getConfig, getHeaders } from "./client";
+import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,11 +91,11 @@ export async function executeSQL(
   if (schema) body.schema = schema;
 
   const headers = await getHeaders();
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const response = await fetchWithTimeout(
+    url,
+    { method: "POST", headers, body: JSON.stringify(body) },
+    TIMEOUTS.SQL_SUBMIT
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -145,9 +146,11 @@ export async function executeSQL(
     let nextLink: string | undefined = result.result.next_chunk_internal_link;
     while (nextLink) {
       const chunkHeaders = await getHeaders();
-      const chunkResp: Response = await fetch(`${config.host}${nextLink}`, {
-        headers: chunkHeaders,
-      });
+      const chunkResp: Response = await fetchWithTimeout(
+        `${config.host}${nextLink}`,
+        { headers: chunkHeaders },
+        TIMEOUTS.SQL_CHUNK
+      );
       if (!chunkResp.ok) break;
       const chunk: { data_array?: string[][]; next_chunk_internal_link?: string } = await chunkResp.json();
       if (chunk.data_array) {
@@ -200,10 +203,11 @@ async function pollStatement(
   const config = getConfig();
   const url = `${config.host}/api/2.0/sql/statements/${statementId}`;
   const headers = await getHeaders();
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-  });
+  const response = await fetchWithTimeout(
+    url,
+    { method: "GET", headers },
+    TIMEOUTS.SQL_POLL
+  );
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Poll error (${response.status}): ${text}`);

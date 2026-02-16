@@ -5,8 +5,14 @@
  * Optionally merges small domains.
  */
 
-import { executeAIQuery, parseCSVResponse, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage } from "@/lib/lakebase/runs";
+import { logger } from "@/lib/logger";
+import {
+  DomainAssignmentSchema,
+  SubdomainAssignmentSchema,
+  validateLLMArray,
+} from "@/lib/validation";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 
 const MIN_CASES_PER_DOMAIN = 3;
@@ -27,7 +33,7 @@ export async function runDomainClustering(
   try {
     await assignDomains(updatedCases, run.config.businessName, bc, run.config.aiModel);
   } catch (error) {
-    console.error("[domain-clustering] Domain assignment failed:", error);
+    logger.error("Domain assignment failed", { error: error instanceof Error ? error.message : String(error) });
     // Fallback: assign all to "General"
     updatedCases.forEach((uc) => {
       uc.domain = "General";
@@ -45,10 +51,7 @@ export async function runDomainClustering(
     try {
       await assignSubdomains(domainCases, domain, run.config.businessName, bc, run.config.aiModel);
     } catch (error) {
-      console.warn(
-        `[domain-clustering] Subdomain assignment failed for ${domain}:`,
-        error
-      );
+      logger.warn("Subdomain assignment failed", { domain, error: error instanceof Error ? error.message : String(error) });
       domainCases.forEach((uc) => {
         uc.subdomain = "General";
       });
@@ -69,15 +72,13 @@ export async function runDomainClustering(
   try {
     await mergeSmallDomains(updatedCases, run.config.aiModel);
   } catch (error) {
-    console.warn("[domain-clustering] Domain merge failed:", error);
+    logger.warn("Domain merge failed", { error: error instanceof Error ? error.message : String(error) });
   }
 
   const finalDomainCount = [...new Set(updatedCases.map((uc) => uc.domain))].length;
   if (runId) await updateRunMessage(runId, `Organised into ${finalDomainCount} domains`);
 
-  console.log(
-    `[domain-clustering] Assigned ${finalDomainCount} domains`
-  );
+  logger.info("Domain clustering complete", { domainCount: finalDomainCount });
 
   return updatedCases;
 }
@@ -109,14 +110,22 @@ async function assignDomains(
     maxTokens: 4096,
   });
 
-  // CSV: No, Domain
-  const rows = parseCSVResponse(result.rawResponse, 2);
+  let rawItems: unknown[];
+  try {
+    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+  } catch (parseErr) {
+    logger.warn("Failed to parse domain assignment JSON", {
+      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+    });
+    useCases.forEach((uc) => { uc.domain = "General"; });
+    return;
+  }
+
+  const items = validateLLMArray(rawItems, DomainAssignmentSchema, "assignDomains");
   const domainMap = new Map<number, string>();
-  for (const row of rows) {
-    const no = parseInt(row[0], 10);
-    const domain = row[1]?.trim();
-    if (!isNaN(no) && domain) {
-      domainMap.set(no, domain);
+  for (const item of items) {
+    if (!isNaN(item.no) && item.domain) {
+      domainMap.set(item.no, item.domain.trim());
     }
   }
 
@@ -154,14 +163,48 @@ async function assignSubdomains(
     maxTokens: 4096,
   });
 
-  // CSV: No, Subdomain
-  const rows = parseCSVResponse(result.rawResponse, 2);
+  let rawItems: unknown[];
+  try {
+    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+  } catch (parseErr) {
+    logger.warn("Failed to parse subdomain assignment JSON", {
+      domain: domainName,
+      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+    });
+    domainCases.forEach((uc) => { uc.subdomain = "General"; });
+    return;
+  }
+
+  const items = validateLLMArray(rawItems, SubdomainAssignmentSchema, "assignSubdomains");
   const subdomainMap = new Map<number, string>();
-  for (const row of rows) {
-    const no = parseInt(row[0], 10);
-    const subdomain = row[1]?.trim();
-    if (!isNaN(no) && subdomain) {
-      subdomainMap.set(no, subdomain);
+  for (const item of items) {
+    if (!isNaN(item.no) && item.subdomain) {
+      subdomainMap.set(item.no, item.subdomain.trim());
+    }
+  }
+
+  // Post-processing: merge single-item subdomains into nearest sibling
+  const subdomainCounts = new Map<string, number>();
+  for (const sd of subdomainMap.values()) {
+    subdomainCounts.set(sd, (subdomainCounts.get(sd) ?? 0) + 1);
+  }
+
+  const singleItemSubdomains = new Set(
+    [...subdomainCounts.entries()]
+      .filter(([, count]) => count < 2)
+      .map(([name]) => name)
+  );
+
+  if (singleItemSubdomains.size > 0) {
+    // Find the largest subdomain as the merge target
+    const largestSubdomain = [...subdomainCounts.entries()]
+      .filter(([name]) => !singleItemSubdomains.has(name))
+      .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "General";
+
+    for (const [no, sd] of subdomainMap.entries()) {
+      if (singleItemSubdomains.has(sd)) {
+        subdomainMap.set(no, largestSubdomain);
+      }
     }
   }
 
@@ -200,9 +243,15 @@ async function mergeSmallDomains(
       maxTokens: 2048,
     });
 
-    const mergeMap = parseJSONResponse<Record<string, string>>(
-      result.rawResponse
-    );
+    let mergeMap: Record<string, string>;
+    try {
+      mergeMap = parseJSONResponse<Record<string, string>>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse domain merge JSON", {
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      return;
+    }
 
     for (const uc of useCases) {
       if (mergeMap[uc.domain]) {
@@ -210,6 +259,6 @@ async function mergeSmallDomains(
       }
     }
   } catch (error) {
-    console.warn("[domain-clustering] Merge parsing failed:", error);
+    logger.warn("Domain merge failed", { error: error instanceof Error ? error.message : String(error) });
   }
 }

@@ -3,10 +3,16 @@
  *
  * All LLM interactions go through Databricks ai_query() SQL function.
  * This module builds the SQL, executes it, and parses the response.
+ *
+ * Features:
+ * - Temperature control via modelParameters (low for structured output,
+ *   moderate for creative generation)
+ * - Automatic retry with exponential backoff (configurable)
  */
 
 import { executeSQL } from "@/lib/dbx/sql";
-import { formatPrompt, type PromptKey } from "./templates";
+import { logger } from "@/lib/logger";
+import { formatPrompt, PROMPT_VERSIONS, type PromptKey } from "./templates";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,18 +26,56 @@ export interface AIQueryOptions {
   /** The AI model endpoint to use */
   modelEndpoint: string;
   /**
-   * Maximum tokens for the response.
-   * @deprecated ai_query() no longer accepts maxTokens as a parameter.
-   * Kept for interface compatibility but ignored.
+   * Temperature for the LLM (0.0 - 1.0).
+   * Low (0.1-0.3): scoring, classification, SQL generation, dedup.
+   * Moderate (0.5-0.7): use case generation, business context.
+   * Defaults based on prompt type if not provided.
+   */
+  temperature?: number;
+  /**
+   * Maximum tokens for the response. Passed to modelParameters.
+   * Defaults to 8192.
    */
   maxTokens?: number;
+  /**
+   * Number of retry attempts on failure (default: 1).
+   * Set to 0 for no retries.
+   */
+  retries?: number;
 }
+
+/**
+ * Honesty score threshold below which a warning is logged.
+ * Scores are 0.0-1.0. Responses below this threshold may indicate the LLM
+ * is uncertain about its output quality.
+ */
+const LOW_HONESTY_THRESHOLD = 0.3;
 
 export interface AIQueryResult {
   /** Raw response text from the LLM */
   rawResponse: string;
-  /** Extracted honesty score (if present) */
+  /** Extracted honesty score (if present, 0.0-1.0) */
   honestyScore: number | null;
+  /** The prompt template version hash used for this call */
+  promptVersion: string;
+  /** Duration of the LLM call in milliseconds */
+  durationMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// Default temperatures by prompt type
+// ---------------------------------------------------------------------------
+
+const CREATIVE_PROMPTS: Set<PromptKey> = new Set([
+  "BUSINESS_CONTEXT_WORKER_PROMPT",
+  "AI_USE_CASE_GEN_PROMPT",
+  "STATS_USE_CASE_GEN_PROMPT",
+  "BASE_USE_CASE_GEN_PROMPT",
+  "SUMMARY_GEN_PROMPT",
+]);
+
+function getDefaultTemperature(promptKey: PromptKey): number {
+  return CREATIVE_PROMPTS.has(promptKey) ? 0.5 : 0.2;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,27 +85,105 @@ export interface AIQueryResult {
 /**
  * Execute an ai_query() call via SQL and return the raw LLM response.
  *
- * Syntax: SELECT ai_query(endpoint, request)
+ * Uses modelParameters for temperature and max_tokens control.
+ * Retries on transient failures with exponential backoff.
+ *
+ * Syntax: SELECT ai_query(endpoint, request, modelParameters => ...)
  * See: https://docs.databricks.com/sql/language-manual/functions/ai_query
  */
 export async function executeAIQuery(
   options: AIQueryOptions
 ): Promise<AIQueryResult> {
-  const prompt = formatPrompt(options.promptKey, options.variables);
+  const maxRetries = options.retries ?? 1;
+  const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
+  const maxTokens = options.maxTokens ?? 8192;
 
-  // Escape the prompt for SQL string literal
-  const escapedPrompt = prompt.replace(/'/g, "''");
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+        logger.info("ai_query retrying", {
+          promptKey: options.promptKey,
+          attempt,
+          maxRetries,
+          backoffMs,
+        });
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+
+      return await executeAIQueryOnce(options, temperature, maxTokens);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      logger.warn("ai_query attempt failed", {
+        promptKey: options.promptKey,
+        attempt: attempt + 1,
+        maxRetries,
+        error: lastError.message,
+      });
+
+      // Don't retry on client errors (4xx) -- these are non-retryable
+      if (isNonRetryableError(lastError)) {
+        break;
+      }
+    }
+  }
+
+  throw lastError ?? new Error(`ai_query failed for ${options.promptKey}`);
+}
+
+/**
+ * Check if an error is non-retryable (4xx client errors).
+ * Only retry on 5xx, timeouts, and network errors.
+ */
+function isNonRetryableError(error: Error): boolean {
+  const msg = error.message;
+  // Match HTTP 4xx status codes in error messages
+  const httpStatusMatch = msg.match(/\((\d{3})\)/);
+  if (httpStatusMatch) {
+    const status = parseInt(httpStatusMatch[1], 10);
+    if (status >= 400 && status < 500) return true;
+  }
+  // Check for specific non-retryable error patterns
+  if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("SQLSTATE: 42")) {
+    return true;
+  }
+  return false;
+}
+
+async function executeAIQueryOnce(
+  options: AIQueryOptions,
+  temperature: number,
+  maxTokens: number
+): Promise<AIQueryResult> {
+  const prompt = formatPrompt(options.promptKey, options.variables);
+  const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
+
+  // Escape the prompt for SQL string literal (single quotes and backslashes)
+  const escapedPrompt = prompt.replace(/\\/g, "\\\\").replace(/'/g, "''");
 
   const sql = `
     SELECT ai_query(
       '${options.modelEndpoint}',
-      '${escapedPrompt}'
+      '${escapedPrompt}',
+      modelParameters => named_struct(
+        'temperature', ${temperature.toFixed(2)},
+        'max_tokens', ${maxTokens}
+      )
     ) AS response
   `;
 
-  console.log(
-    `[ai_query] Executing prompt: ${options.promptKey} (${prompt.length} chars)`
-  );
+  const startTime = Date.now();
+
+  logger.info("ai_query executing", {
+    promptKey: options.promptKey,
+    promptVersion,
+    model: options.modelEndpoint,
+    promptChars: prompt.length,
+    temperature,
+    maxTokens,
+  });
 
   const result = await executeSQL(sql);
 
@@ -70,14 +192,29 @@ export async function executeAIQuery(
   }
 
   const rawResponse = result.rows[0][0];
-
-  console.log(
-    `[ai_query] Response received: ${options.promptKey} (${rawResponse.length} chars)`
-  );
+  const durationMs = Date.now() - startTime;
 
   const honestyScore = extractHonestyScore(rawResponse);
 
-  return { rawResponse, honestyScore };
+  logger.info("ai_query response received", {
+    promptKey: options.promptKey,
+    promptVersion,
+    model: options.modelEndpoint,
+    responseChars: rawResponse.length,
+    durationMs,
+    honestyScore,
+  });
+
+  // Warn on low honesty scores
+  if (honestyScore !== null && honestyScore < LOW_HONESTY_THRESHOLD) {
+    logger.warn("Low honesty score — LLM may be uncertain about output quality", {
+      promptKey: options.promptKey,
+      honestyScore,
+      threshold: LOW_HONESTY_THRESHOLD,
+    });
+  }
+
+  return { rawResponse, honestyScore, promptVersion, durationMs };
 }
 
 // ---------------------------------------------------------------------------

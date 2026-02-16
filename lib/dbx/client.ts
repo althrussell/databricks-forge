@@ -15,6 +15,7 @@
  */
 
 import { headers as nextHeaders } from "next/headers";
+import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 
 export interface DatabricksConfig {
   host: string; // always includes https://
@@ -140,17 +141,21 @@ async function getBearerToken(): Promise<string> {
   const { host } = getConfig();
   const tokenUrl = `${host}/oidc/v1/token`;
 
-  const resp = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+  const resp = await fetchWithTimeout(
+    tokenUrl,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        scope: "all-apis",
+      }),
     },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      scope: "all-apis",
-    }),
-  });
+    TIMEOUTS.AUTH
+  );
 
   if (!resp.ok) {
     const text = await resp.text();
@@ -245,17 +250,21 @@ async function getAppBearerToken(): Promise<string> {
   const { host } = getConfig();
   const tokenUrl = `${host}/oidc/v1/token`;
 
-  const resp = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+  const resp = await fetchWithTimeout(
+    tokenUrl,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        scope: "all-apis",
+      }),
     },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      scope: "all-apis",
-    }),
-  });
+    TIMEOUTS.AUTH
+  );
 
   if (!resp.ok) {
     const text = await resp.text();

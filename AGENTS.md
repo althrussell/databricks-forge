@@ -14,13 +14,13 @@ PowerPoint, or deployed as SQL notebooks.
 
 | Layer          | Technology                                           |
 | -------------- | ---------------------------------------------------- |
-| Frontend       | Next.js 15 App Router, React 19, shadcn/ui, Tailwind CSS 4 |
+| Frontend       | Next.js 16 App Router, React 19, shadcn/ui, Tailwind CSS 4 |
 | Language       | TypeScript (strict)                                  |
 | SQL Execution  | Databricks SQL Statement Execution API via SQL Warehouse |
 | LLM Calls      | `ai_query()` SQL function on Databricks Model Serving |
 | Persistence    | Lakebase (Unity Catalog managed tables)              |
 | Deployment     | Databricks Apps (auto-auth via env vars)             |
-| Export         | exceljs, @react-pdf/renderer, pptxgenjs, Workspace REST API |
+| Export         | exceljs, pdfkit, pptxgenjs, Workspace REST API       |
 
 ## Deployment Model
 
@@ -76,9 +76,22 @@ The core pipeline runs these steps sequentially:
 3. **table-filtering** -- Classify tables as business vs technical via `ai_query`
 4. **usecase-generation** -- Generate use cases in parallel batches via `ai_query`
 5. **domain-clustering** -- Assign domains and subdomains via `ai_query`
-6. **scoring** -- Score, deduplicate, and rank use cases via `ai_query`
+6. **scoring** -- Score, deduplicate (per-domain + cross-domain), calibrate, and rank use cases via `ai_query`
+7. **sql-generation** -- Generate bespoke SQL for each use case via `ai_query`
 
 Each step updates progress in Lakebase. The frontend polls for status.
+
+## Infrastructure
+
+| Concern            | Implementation                                              |
+| ------------------ | ----------------------------------------------------------- |
+| Logging            | `lib/logger.ts` -- structured JSON in prod, formatted in dev |
+| Validation         | `lib/validation.ts` -- Zod schemas, SQL identifier safety   |
+| Fetch timeouts     | `lib/dbx/fetch-with-timeout.ts` -- AbortController wrappers |
+| Error boundaries   | `app/error.tsx`, `app/global-error.tsx`, `app/not-found.tsx` |
+| Health check       | `GET /api/health` -- DB + warehouse connectivity            |
+| Security headers   | Via `next.config.ts` `headers()` function                   |
+| Versioning         | `package.json` version in `/api/health`, sidebar, run metadata |
 
 ## Key Constraints
 
@@ -94,5 +107,8 @@ Each step updates progress in Lakebase. The frontend polls for status.
 - Unit tests for prompt template building (snapshot tests)
 - Unit tests for use case scoring logic
 - Unit tests for SQL query mappers (row-to-type)
+- Unit tests for input validation (identifiers, UUIDs, Zod schemas)
 - Integration test stubs for each pipeline step
-- CI: lint + typecheck + tests
+- CI: lint + typecheck + tests (GitHub Actions at `.github/workflows/ci.yml`)
+- Test runner: Vitest (`npm test` / `npm run test:watch`)
+- Type checking: `npm run typecheck`
