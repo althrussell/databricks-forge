@@ -53,11 +53,31 @@ function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
 // ---------------------------------------------------------------------------
 
 /**
- * List all catalogs the current user has access to.
+ * List catalogs the current user can actually query (has USE CATALOG).
+ *
+ * SHOW CATALOGS returns catalogs the user has *any* privilege on (including
+ * BROWSE), but querying information_schema requires USE CATALOG.  We probe
+ * each catalog in parallel with a lightweight query and keep only the ones
+ * that succeed.
  */
 export async function listCatalogs(): Promise<string[]> {
   const result = await executeSQL("SHOW CATALOGS");
-  return result.rows.map((r) => r[0]);
+  const allCatalogs = result.rows.map((r) => r[0]);
+
+  const probes = await Promise.allSettled(
+    allCatalogs.map(async (catalog) => {
+      await executeSQL(
+        `SELECT 1 FROM \`${catalog}\`.information_schema.schemata LIMIT 1`
+      );
+      return catalog;
+    })
+  );
+
+  return probes
+    .filter(
+      (r): r is PromiseFulfilledResult<string> => r.status === "fulfilled"
+    )
+    .map((r) => r.value);
 }
 
 /**
