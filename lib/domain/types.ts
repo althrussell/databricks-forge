@@ -16,6 +16,7 @@ export enum PipelineStep {
   UsecaseGeneration = "usecase-generation",
   DomainClustering = "domain-clustering",
   Scoring = "scoring",
+  SqlGeneration = "sql-generation",
 }
 
 export type RunStatus = "pending" | "running" | "completed" | "failed";

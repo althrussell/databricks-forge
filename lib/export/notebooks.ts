@@ -315,8 +315,17 @@ function buildDomainNotebook(
       ])
     );
 
-    // SQL code cell (runnable)
-    const sqlSource = buildSqlCell(run, uc);
+    // Explore cell (DESCRIBE tables — separate cell so it runs independently)
+    if (uc.tablesInvolved.length > 0) {
+      const exploreLines: string[] = [];
+      for (const t of uc.tablesInvolved) {
+        exploreLines.push(`DESCRIBE TABLE ${t};\n`);
+      }
+      cells.push(sqlCell(exploreLines));
+    }
+
+    // SQL code cell (LLM-generated analysis)
+    const sqlSource = buildSqlCell(uc);
     cells.push(sqlCell(sqlSource));
   }
 
@@ -325,25 +334,32 @@ function buildDomainNotebook(
 }
 
 // ---------------------------------------------------------------------------
-// SQL cell builder — always produces runnable SQL
+// SQL cell builder — uses LLM-generated SQL from the pipeline
 // ---------------------------------------------------------------------------
 
-function buildSqlCell(run: PipelineRun, uc: UseCase): string[] {
+function buildSqlCell(uc: UseCase): string[] {
   const lines: string[] = [];
 
   // Inspire header (used by reference notebook for regeneration tracking)
-  lines.push(`--Use Case: ${uc.id} - ${uc.name}\n`);
-  lines.push(`--generate_sample_result:No\n`);
-  lines.push(`--regenerate_sql:No\n`);
+  lines.push(`-- Use Case: ${uc.id} - ${uc.name}\n`);
+  lines.push(`-- generate_sample_result:No\n`);
+  lines.push(`-- regenerate_sql:No\n`);
   lines.push(`\n`);
 
   if (uc.sqlCode && uc.sqlCode.trim().length >= 20) {
-    // Use the AI-generated SQL directly (runnable)
-    const sqlLines = stripDuplicateHeader(uc.sqlCode);
-    lines.push(sqlLines + "\n");
+    // Use the LLM-generated SQL from the pipeline's sql-generation step.
+    // Strip any duplicate header the LLM may have included.
+    const sql = stripDuplicateHeader(uc.sqlCode);
+    lines.push(sql + "\n");
   } else {
-    // Generate runnable scaffold SQL (not commented out)
-    lines.push(...buildRunnableScaffold(run, uc));
+    // SQL generation failed or was skipped for this use case
+    lines.push(`-- SQL generation ${uc.sqlStatus === "failed" ? "failed" : "pending"} for this use case.\n`);
+    lines.push(`-- Re-run the pipeline or use "Re-generate SQL" to generate SQL.\n\n`);
+    if (uc.tablesInvolved.length > 0) {
+      lines.push(`SELECT * FROM ${uc.tablesInvolved[0]} LIMIT 10;\n`);
+    } else {
+      lines.push(`SELECT 'No tables specified for this use case' AS info;\n`);
+    }
   }
 
   return lines;
@@ -351,7 +367,8 @@ function buildSqlCell(run: PipelineRun, uc: UseCase): string[] {
 
 /**
  * Strip duplicate header lines that the LLM may have inserted
- * (our Inspire header already contains the use case info).
+ * (the prompt asks the LLM to start with "-- Use Case: ..." which we
+ * already add ourselves).
  */
 function stripDuplicateHeader(sql: string): string {
   const lines = sql.split("\n");
@@ -362,8 +379,7 @@ function stripDuplicateHeader(sql: string): string {
     const stripped = line.trim().toLowerCase();
     if (
       skippingHeader &&
-      (stripped.startsWith("-- use case") ||
-        stripped.startsWith("--use case"))
+      (stripped.startsWith("-- use case") || stripped.startsWith("--use case"))
     ) {
       continue;
     }
@@ -371,7 +387,6 @@ function stripDuplicateHeader(sql: string): string {
       skippingHeader &&
       stripped.startsWith("--") &&
       !stripped.startsWith("-- step") &&
-      !stripped.startsWith("--step") &&
       stripped.length > 2 &&
       !["with", "select", "cte", "step"].some((kw) => stripped.includes(kw))
     ) {
@@ -382,82 +397,6 @@ function stripDuplicateHeader(sql: string): string {
   }
 
   return cleaned.join("\n");
-}
-
-/**
- * Build runnable (not commented) scaffold SQL when no AI-generated SQL exists.
- * Generates a CTE that SELECTs from the referenced tables so the user has
- * a working starting point they can run immediately.
- */
-function buildRunnableScaffold(run: PipelineRun, uc: UseCase): string[] {
-  const tables = uc.tablesInvolved;
-  const lines: string[] = [];
-
-  if (tables.length === 0) {
-    lines.push(`-- No specific tables identified for this use case.\n`);
-    lines.push(`-- Add your source tables below and build the analysis.\n\n`);
-    lines.push(`SELECT 'TODO: Add source tables for: ${uc.name}' AS next_step;\n`);
-    return lines;
-  }
-
-  // Explore section: DESCRIBE + preview for each table
-  for (const t of tables) {
-    lines.push(`-- Explore: ${t}\n`);
-    lines.push(`DESCRIBE TABLE ${t};\n\n`);
-  }
-
-  lines.push(`-- Preview source data\n`);
-  const primaryTable = tables[0];
-  lines.push(`SELECT * FROM ${primaryTable} LIMIT 10;\n`);
-
-  // CTE-based analysis scaffold
-  lines.push(`\n`);
-  lines.push(`-- Analysis scaffold for: ${uc.name}\n`);
-  lines.push(`WITH base_data AS (\n`);
-  lines.push(`  SELECT *\n`);
-  lines.push(`  FROM ${primaryTable} t1\n`);
-
-  for (let i = 1; i < tables.length; i++) {
-    lines.push(
-      `  LEFT JOIN ${tables[i]} t${i + 1}\n`
-    );
-    lines.push(
-      `    ON t1.id = t${i + 1}.id  -- TODO: set correct join keys\n`
-    );
-  }
-
-  lines.push(`  LIMIT 1000\n`);
-  lines.push(`)\n`);
-
-  if (uc.type === "AI") {
-    const modelEndpoint = run.config.aiModel;
-    lines.push(`\n`);
-    lines.push(`-- AI enrichment (${uc.analyticsTechnique})\n`);
-    lines.push(`, ai_enriched AS (\n`);
-    lines.push(`  SELECT\n`);
-    lines.push(`    *,\n`);
-    lines.push(`    ai_query(\n`);
-    lines.push(`      '${modelEndpoint}',\n`);
-    lines.push(
-      `      CONCAT('You are a ${uc.subdomain} specialist for ${run.config.businessName}. ',\n`
-    );
-    lines.push(
-      `             'Analyze the following data and provide insights.'),\n`
-    );
-    lines.push(
-      `      modelParameters => named_struct('temperature', 0.4)\n`
-    );
-    lines.push(`    ) AS ai_insights\n`);
-    lines.push(`  FROM base_data\n`);
-    lines.push(`)\n`);
-    lines.push(`\n`);
-    lines.push(`SELECT * FROM ai_enriched;\n`);
-  } else {
-    lines.push(`\n`);
-    lines.push(`SELECT * FROM base_data;\n`);
-  }
-
-  return lines;
 }
 
 // ---------------------------------------------------------------------------
