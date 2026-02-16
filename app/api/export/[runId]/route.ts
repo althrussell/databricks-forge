@@ -15,6 +15,7 @@ import { generatePptx } from "@/lib/export/pptx";
 import { generatePdf } from "@/lib/export/pdf";
 import { generateNotebooks } from "@/lib/export/notebooks";
 import { ensureMigrated } from "@/lib/lakebase/schema";
+import { getConfig, getCurrentUserEmail } from "@/lib/dbx/client";
 import type { ExportFormat } from "@/lib/domain/types";
 
 export async function GET(
@@ -82,8 +83,11 @@ export async function GET(
         });
       }
       case "notebooks": {
-        const result = await generateNotebooks(run, useCases);
-        return NextResponse.json(result);
+        const userEmail = await getCurrentUserEmail();
+        const result = await generateNotebooks(run, useCases, userEmail);
+        const { host } = getConfig();
+        const workspaceUrl = `${host}/#workspace${result.path}`;
+        return NextResponse.json({ ...result, url: workspaceUrl });
       }
       default:
         return NextResponse.json(

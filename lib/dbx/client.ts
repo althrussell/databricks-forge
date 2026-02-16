@@ -170,6 +170,23 @@ async function getBearerToken(): Promise<string> {
 }
 
 /**
+ * Get the current user's email from the Databricks Apps proxy headers.
+ * Returns null when outside a request context or when user auth is off.
+ */
+export async function getCurrentUserEmail(): Promise<string | null> {
+  try {
+    const hdrs = await nextHeaders();
+    return (
+      hdrs.get("x-forwarded-email") ??
+      hdrs.get("x-forwarded-preferred-username") ??
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Returns headers using user authorization when available.
  *
  * Use for APIs where user-scoped OAuth scopes exist (e.g. `sql`,
