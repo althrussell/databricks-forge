@@ -11,6 +11,8 @@ import {
   listForeignKeys,
   fetchTableComments,
   mergeTableComments,
+  fetchTableTypes,
+  mergeTableTypes,
 } from "@/lib/queries/metadata";
 import {
   enrichTablesInBatches,
@@ -68,6 +70,8 @@ export async function runStandaloneEnrichment(
       const tables = await listTables(scope.catalog, scope.schema);
       const tableComments = await fetchTableComments(scope.catalog, scope.schema);
       mergeTableComments(tables, tableComments);
+      const tableTypes = await fetchTableTypes(scope.catalog, scope.schema);
+      mergeTableTypes(tables, tableTypes);
       allTables.push(...tables);
       const columns = await listColumns(scope.catalog, scope.schema);
       allColumns.push(...columns);
@@ -86,13 +90,19 @@ export async function runStandaloneEnrichment(
     return;
   }
 
+  // Build a lookup of tableType from the original table list
+  const tableTypeLookup = new Map<string, string>();
+  for (const t of allTables) {
+    tableTypeLookup.set(t.fqn, t.tableType);
+  }
+
   // Phase 2: Lineage walk
   const seedFqns = allTables.map((t) => t.fqn);
   const lineageGraph = await walkLineage(seedFqns);
 
   const expandedTables = [
-    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const })),
-    ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const })),
+    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE" })),
+    ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE" })),
   ];
 
   // Phase 3: Enrichment

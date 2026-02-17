@@ -81,6 +81,10 @@ export async function describeDetail(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("EXPECT_TABLE_NOT_VIEW") || msg.includes("is a view")) {
+      logger.debug("[metadata-detail] Skipping DESCRIBE DETAIL for view", { tableFqn });
+      return null;
+    }
     if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("does not exist") || msg.includes("(403)") || msg.includes("(404)")) {
       logger.warn("[metadata-detail] Permission denied for DESCRIBE DETAIL", { tableFqn });
       return null;
@@ -88,6 +92,47 @@ export async function describeDetail(
     logger.error("[metadata-detail] DESCRIBE DETAIL failed", { tableFqn, error: msg });
     return null;
   }
+}
+
+/**
+ * Create a minimal TableDetail for a table/view where DESCRIBE DETAIL returned null.
+ * Ensures views and inaccessible tables still appear in the estate.
+ */
+export function createFallbackDetail(
+  fqn: string,
+  discoveredVia: "selected" | "lineage",
+  tableType = "VIEW"
+): TableDetail {
+  const [catalog, schema, tableName] = splitFqn(fqn);
+  return {
+    catalog,
+    schema,
+    tableName,
+    fqn,
+    tableType,
+    comment: null,
+    sizeInBytes: null,
+    numFiles: null,
+    format: null,
+    partitionColumns: [],
+    clusteringColumns: [],
+    location: null,
+    owner: null,
+    provider: null,
+    isManaged: true,
+    deltaMinReaderVersion: null,
+    deltaMinWriterVersion: null,
+    createdAt: null,
+    lastModified: null,
+    tableProperties: {},
+    discoveredVia,
+    dataDomain: null,
+    dataSubdomain: null,
+    dataTier: null,
+    generatedDescription: null,
+    sensitivityLevel: null,
+    governancePriority: null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -350,12 +395,15 @@ export interface EnrichmentResult {
  * Enrich tables in parallel batches. Runs DESCRIBE DETAIL, DESCRIBE HISTORY,
  * and SHOW TBLPROPERTIES for each table.
  *
- * @param tables - array of { fqn, discoveredVia }
+ * When DESCRIBE DETAIL returns null (views, permission denied), a fallback
+ * TableDetail is created so the table still appears in the estate.
+ *
+ * @param tables - array of { fqn, discoveredVia, tableType? }
  * @param concurrency - how many tables to process in parallel (default 5)
  * @param onProgress - optional callback for progress updates
  */
 export async function enrichTablesInBatches(
-  tables: Array<{ fqn: string; discoveredVia: "selected" | "lineage" }>,
+  tables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType?: string }>,
   concurrency = 5,
   onProgress?: (completed: number, total: number) => void
 ): Promise<Map<string, EnrichmentResult>> {
@@ -373,12 +421,19 @@ export async function enrichTablesInBatches(
           getTableProperties(t.fqn),
         ]);
 
-        // Merge properties into detail if both exist
-        if (detail && properties) {
-          detail.tableProperties = properties;
+        // If DESCRIBE DETAIL returned null (view or inaccessible), create a fallback
+        const effectiveDetail = detail ?? createFallbackDetail(
+          t.fqn,
+          t.discoveredVia,
+          t.tableType ?? "VIEW"
+        );
+
+        // Merge properties into detail
+        if (properties && Object.keys(properties).length > 0) {
+          effectiveDetail.tableProperties = properties;
         }
 
-        return { fqn: t.fqn, detail, history, properties };
+        return { fqn: t.fqn, detail: effectiveDetail, history, properties };
       })
     );
 

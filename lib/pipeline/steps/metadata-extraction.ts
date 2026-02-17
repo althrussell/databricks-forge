@@ -20,6 +20,8 @@ import {
   listMetricViews,
   fetchTableComments,
   mergeTableComments,
+  fetchTableTypes,
+  mergeTableTypes,
   buildSchemaMarkdown,
 } from "@/lib/queries/metadata";
 import {
@@ -98,6 +100,10 @@ export async function runMetadataExtraction(
       // Fetch table descriptions from information_schema.tables
       const tableComments = await fetchTableComments(scope.catalog, scope.schema);
       mergeTableComments(tables, tableComments);
+
+      // Fetch actual table types (TABLE, VIEW, etc.) from information_schema
+      const tableTypes = await fetchTableTypes(scope.catalog, scope.schema);
+      mergeTableTypes(tables, tableTypes);
 
       if (runId) await updateRunMessage(runId, `Extracting columns for ${tables.length} tables in ${scopeLabel}...`);
       const columns = await listColumns(scope.catalog, scope.schema);
@@ -182,6 +188,12 @@ async function runEnrichmentPass(
   const scanId = uuidv4();
   const startTime = Date.now();
 
+  // Build a lookup of tableType from the original table list
+  const tableTypeLookup = new Map<string, string>();
+  for (const t of allTables) {
+    tableTypeLookup.set(t.fqn, t.tableType);
+  }
+
   // Step 1: Lineage walk
   if (runId) await updateRunMessage(runId, "Walking lineage to discover related tables...");
   const seedFqns = allTables.map((t) => t.fqn);
@@ -190,8 +202,8 @@ async function runEnrichmentPass(
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;
   const expandedTables = [
-    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const })),
-    ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const })),
+    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE" })),
+    ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE" })),
   ];
 
   logger.info("[metadata-extraction] Lineage expanded scope", {

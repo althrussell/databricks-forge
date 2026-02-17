@@ -320,6 +320,69 @@ export function mergeTableComments(
 }
 
 /**
+ * Fetch table types from information_schema.tables.
+ *
+ * Returns a Map of FQN -> table_type (TABLE, VIEW, MATERIALIZED_VIEW, etc.).
+ * This is critical because `SHOW TABLES` does not distinguish views from tables.
+ */
+export async function fetchTableTypes(
+  catalog: string,
+  schema?: string
+): Promise<Map<string, string>> {
+  const types = new Map<string, string>();
+  try {
+    const safeCatalog = validateIdentifier(catalog, "catalog");
+    let sql = `
+      SELECT table_catalog, table_schema, table_name, table_type
+      FROM \`${safeCatalog}\`.information_schema.tables
+      WHERE table_schema NOT IN ('information_schema', 'default')
+    `;
+    if (schema) {
+      const safeSchema = validateIdentifier(schema, "schema");
+      sql += ` AND table_schema = '${safeSchema}'`;
+    }
+
+    const result = await executeSQL(sql);
+    for (const row of result.rows) {
+      const cat = row[0] ?? "";
+      const sch = row[1] ?? "";
+      const tbl = row[2] ?? "";
+      const typ = row[3] ?? "TABLE";
+      types.set(`${cat}.${sch}.${tbl}`, typ);
+    }
+
+    logger.info("[metadata] Fetched table types", {
+      catalog,
+      schema: schema ?? "(all)",
+      total: types.size,
+      views: Array.from(types.values()).filter((t) => t === "VIEW").length,
+    });
+  } catch (error) {
+    logger.warn("[metadata] Failed to fetch table types, continuing without", {
+      catalog,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return types;
+}
+
+/**
+ * Merge table types into a list of TableInfo objects in-place.
+ * Updates the `tableType` field from the default "TABLE" to the actual type.
+ */
+export function mergeTableTypes(
+  tables: TableInfo[],
+  types: Map<string, string>
+): void {
+  for (const table of tables) {
+    const type = types.get(table.fqn);
+    if (type) {
+      table.tableType = type;
+    }
+  }
+}
+
+/**
  * List columns for tables in a catalog.schema scope.
  */
 export async function listColumns(
