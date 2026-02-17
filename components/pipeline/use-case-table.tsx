@@ -58,9 +58,14 @@ import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
 import type { UseCase } from "@/lib/domain/types";
 
+interface UpdateResult {
+  ok: boolean;
+  error?: string;
+}
+
 interface UseCaseTableProps {
   useCases: UseCase[];
-  onUpdate?: (updated: UseCase) => Promise<boolean> | void;
+  onUpdate?: (updated: UseCase) => Promise<UpdateResult> | void;
 }
 
 export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
@@ -171,8 +176,8 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
       userOverallScore: adjOverall,
     };
     const result = await onUpdate(updated);
-    if (result === false) {
-      toast.error("Failed to save score adjustments");
+    if (result && !result.ok) {
+      toast.error(result.error ?? "Failed to save score adjustments");
       return;
     }
     setSelectedUseCase(updated);
@@ -191,8 +196,8 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
       userOverallScore: null,
     };
     const result = await onUpdate(updated);
-    if (result === false) {
-      toast.error("Failed to reset scores");
+    if (result && !result.ok) {
+      toast.error(result.error ?? "Failed to reset scores");
       return;
     }
     setSelectedUseCase(updated);
@@ -396,8 +401,8 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                               .filter(Boolean),
                           };
                           const result = await onUpdate(updated);
-                          if (result === false) {
-                            toast.error("Failed to update use case");
+                          if (result && !result.ok) {
+                            toast.error(result.error ?? "Failed to update use case");
                             return;
                           }
                           setSelectedUseCase(updated);

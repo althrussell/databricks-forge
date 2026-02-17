@@ -25,7 +25,34 @@ export async function PATCH(
     const body = await request.json();
     const prisma = await getPrisma();
 
-    const updateData: Record<string, unknown> = {};
+    // Verify the use case exists and belongs to the run
+    const existing = await prisma.forgeUseCase.findFirst({
+      where: { id: usecaseId, runId },
+      select: {
+        id: true,
+        priorityScore: true,
+        feasibilityScore: true,
+        impactScore: true,
+        userPriorityScore: true,
+        userFeasibilityScore: true,
+        userImpactScore: true,
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Use case not found" }, { status: 404 });
+    }
+
+    // Build typed update payload
+    const updateData: {
+      name?: string;
+      statement?: string;
+      tablesInvolved?: string;
+      userPriorityScore?: number | null;
+      userFeasibilityScore?: number | null;
+      userImpactScore?: number | null;
+      userOverallScore?: number | null;
+    } = {};
 
     // Text field edits
     if (typeof body.name === "string" && body.name.trim()) {
@@ -39,67 +66,51 @@ export async function PATCH(
     }
 
     // User-adjusted scores (0-1 range, or null to reset)
-    const scoreFields = [
-      "userPriorityScore",
-      "userFeasibilityScore",
-      "userImpactScore",
-      "userOverallScore",
-    ] as const;
-
-    for (const field of scoreFields) {
-      if (field in body) {
-        const val = body[field];
-        if (val === null) {
-          updateData[field] = null;
-        } else if (typeof val === "number" && val >= 0 && val <= 1) {
-          updateData[field] = Number(val.toFixed(3));
-        }
-      }
-    }
-
-    // If user adjusted dimension scores but not overall, auto-compute user overall
     if (body.resetScores === true) {
       updateData.userPriorityScore = null;
       updateData.userFeasibilityScore = null;
       updateData.userImpactScore = null;
       updateData.userOverallScore = null;
-    } else if (
-      ("userPriorityScore" in body ||
-        "userFeasibilityScore" in body ||
-        "userImpactScore" in body) &&
-      !("userOverallScore" in body) &&
-      body.resetScores !== true
-    ) {
-      // Fetch current use case to get system scores as fallbacks
-      const current = await prisma.forgeUseCase.findUnique({
-        where: { id: usecaseId, runId },
-        select: {
-          priorityScore: true,
-          feasibilityScore: true,
-          impactScore: true,
-          userPriorityScore: true,
-          userFeasibilityScore: true,
-          userImpactScore: true,
-        },
-      });
-      if (current) {
+    } else {
+      const scoreFields = [
+        "userPriorityScore",
+        "userFeasibilityScore",
+        "userImpactScore",
+        "userOverallScore",
+      ] as const;
+
+      for (const field of scoreFields) {
+        if (field in body) {
+          const val = body[field];
+          if (val === null) {
+            updateData[field] = null;
+          } else if (typeof val === "number" && val >= 0 && val <= 1) {
+            updateData[field] = Number(val.toFixed(3));
+          }
+        }
+      }
+
+      // Auto-compute overall if dimension scores changed but overall wasn't sent
+      if (
+        ("userPriorityScore" in body ||
+          "userFeasibilityScore" in body ||
+          "userImpactScore" in body) &&
+        !("userOverallScore" in body)
+      ) {
         const p =
-          (updateData.userPriorityScore as number | null) ??
-          body.userPriorityScore ??
-          current.userPriorityScore ??
-          current.priorityScore ??
+          updateData.userPriorityScore ??
+          existing.userPriorityScore ??
+          existing.priorityScore ??
           0;
         const f =
-          (updateData.userFeasibilityScore as number | null) ??
-          body.userFeasibilityScore ??
-          current.userFeasibilityScore ??
-          current.feasibilityScore ??
+          updateData.userFeasibilityScore ??
+          existing.userFeasibilityScore ??
+          existing.feasibilityScore ??
           0;
         const i =
-          (updateData.userImpactScore as number | null) ??
-          body.userImpactScore ??
-          current.userImpactScore ??
-          current.impactScore ??
+          updateData.userImpactScore ??
+          existing.userImpactScore ??
+          existing.impactScore ??
           0;
         updateData.userOverallScore = computeOverallScore(p, f, i);
       }
@@ -110,7 +121,7 @@ export async function PATCH(
     }
 
     await prisma.forgeUseCase.update({
-      where: { id: usecaseId, runId },
+      where: { id: usecaseId },
       data: updateData,
     });
 
@@ -118,11 +129,10 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    logger.error("[api/runs/usecases] PATCH failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/runs/usecases] PATCH failed", { error: msg });
     return NextResponse.json(
-      { error: "Failed to update use case" },
+      { error: `Failed to update use case: ${msg}` },
       { status: 500 }
     );
   }
