@@ -78,24 +78,6 @@ export async function ensureWarehouseReady(): Promise<WarehouseStatus> {
 // Row Mappers
 // ---------------------------------------------------------------------------
 
-function rowToTable(row: string[], columns: SqlColumn[]): TableInfo {
-  const col = (name: string) => {
-    const idx = columns.findIndex((c) => c.name === name);
-    return idx >= 0 ? row[idx] : null;
-  };
-  const catalog = col("table_catalog") ?? "";
-  const schema = col("table_schema") ?? "";
-  const tableName = col("table_name") ?? "";
-  return {
-    catalog,
-    schema,
-    tableName,
-    fqn: `${catalog}.${schema}.${tableName}`,
-    tableType: col("table_type") ?? "MANAGED",
-    comment: col("comment") ?? null,
-  };
-}
-
 function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
   const col = (name: string) => {
     const idx = columns.findIndex((c) => c.name === name);
@@ -119,115 +101,61 @@ function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
 // ---------------------------------------------------------------------------
 
 /**
- * List catalogs the current user can actually query.
+ * List catalogs visible to the current user via `SHOW CATALOGS`.
  *
- * Preferred approach: a single query against `system.information_schema.schemata`
- * returns only catalogs where the user has USE CATALOG (schemas are not visible
- * without it), avoiding the old N+1 per-catalog probe pattern.
+ * Returns everything the user has BROWSE or higher on. Permission to
+ * actually query schemas/tables is verified lazily when the user drills
+ * in -- `listSchemas` will surface a clear error if access is denied.
  *
- * Fallback: `SHOW CATALOGS` + per-catalog probes with short timeouts and
- * limited concurrency.
- *
- * Wrapped in retry logic to survive warehouse cold starts. Throws
- * `MetadataError` with a descriptive code when unrecoverable.
+ * Wrapped in retry logic to survive warehouse cold starts.
  */
 export async function listCatalogs(): Promise<string[]> {
-  return withRetry(() => listCatalogsOnce(), {
-    maxRetries: 2,
-    initialBackoffMs: 3_000,
-    maxBackoffMs: 10_000,
-    label: "listCatalogs",
-  });
-}
-
-async function listCatalogsOnce(): Promise<string[]> {
-  // ── Fast path: single query via system.information_schema ──────────
-  // Returns catalogs the user can see. Permission to USE each catalog
-  // is verified lazily when the user expands it (listSchemas throws
-  // MetadataError with INSUFFICIENT_PERMISSIONS if access is denied).
-  try {
-    const result = await executeSQL(`
-      SELECT DISTINCT catalog_name
-      FROM system.information_schema.schemata
-      WHERE catalog_name NOT IN ('system', '__databricks_internal')
-      ORDER BY catalog_name
-    `);
-    return result.rows.map((r) => r[0]);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (
-      !msg.includes("INSUFFICIENT_PERMISSIONS") &&
-      !msg.includes("USE CATALOG") &&
-      !msg.includes("does not exist")
-    ) {
-      console.warn(
-        "[listCatalogs] Fast path failed (non-permission error), trying fallback:",
-        msg
-      );
+  return withRetry(
+    async () => {
+      const result = await executeSQL("SHOW CATALOGS");
+      return result.rows
+        .map((r) => r[0])
+        .filter((c) => c !== "system" && c !== "__databricks_internal");
+    },
+    {
+      maxRetries: 2,
+      initialBackoffMs: 3_000,
+      maxBackoffMs: 10_000,
+      label: "listCatalogs",
     }
-  }
-
-  // ── Fallback: SHOW CATALOGS ───────────────────────────────────────
-  try {
-    const result = await executeSQL("SHOW CATALOGS");
-    return result.rows
-      .map((r) => r[0])
-      .filter((c) => c !== "system" && c !== "__databricks_internal");
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (
-      msg.includes("INSUFFICIENT_PERMISSIONS") ||
-      msg.includes("USE CATALOG")
-    ) {
-      throw new MetadataError(
-        "You don't have permission to list catalogs. Contact your workspace admin.",
-        "INSUFFICIENT_PERMISSIONS"
-      );
-    }
-    throw err;
-  }
+  );
 }
 
 /**
- * List schemas in a catalog. Throws `MetadataError` with
- * `INSUFFICIENT_PERMISSIONS` if the user lacks USE CATALOG permission.
+ * List schemas in a catalog via `SHOW SCHEMAS IN catalog`.
  *
+ * Filters out `information_schema` and `default`.
  * Wrapped in retry logic to survive transient warehouse errors.
  */
 export async function listSchemas(catalog: string): Promise<string[]> {
-  return withRetry(() => listSchemasOnce(catalog), {
-    maxRetries: 1,
-    initialBackoffMs: 2_000,
-    maxBackoffMs: 5_000,
-    label: "listSchemas",
-  });
-}
-
-async function listSchemasOnce(catalog: string): Promise<string[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
-  const sql = `
-    SELECT schema_name
-    FROM \`${safeCatalog}\`.information_schema.schemata
-    WHERE schema_name NOT IN ('information_schema', 'default')
-    ORDER BY schema_name
-  `;
-  try {
-    const result = await executeSQL(sql);
-    return result.rows.map((r) => r[0]);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("USE CATALOG")) {
-      throw new MetadataError(
-        `Insufficient permissions on catalog "${catalog}". Grant USE CATALOG to access schemas.`,
-        "INSUFFICIENT_PERMISSIONS"
-      );
+  return withRetry(
+    async () => {
+      const result = await executeSQL(`SHOW SCHEMAS IN \`${safeCatalog}\``);
+      return result.rows
+        .map((r) => r[0])
+        .filter((s) => s !== "information_schema" && s !== "default");
+    },
+    {
+      maxRetries: 1,
+      initialBackoffMs: 2_000,
+      maxBackoffMs: 5_000,
+      label: "listSchemas",
     }
-    throw error;
-  }
+  );
 }
 
 /**
- * List tables in a catalog.schema scope.
+ * List tables in a catalog.schema scope via `SHOW TABLES`.
+ *
+ * When `schema` is provided, runs a single `SHOW TABLES IN catalog.schema`.
+ * When omitted (pipeline bulk mode), lists schemas first then shows tables
+ * for each one.
  *
  * Wrapped in retry logic to survive transient warehouse errors.
  */
@@ -235,30 +163,57 @@ export async function listTables(
   catalog: string,
   schema?: string
 ): Promise<TableInfo[]> {
-  return withRetry(() => listTablesOnce(catalog, schema), {
-    maxRetries: 1,
-    initialBackoffMs: 2_000,
-    maxBackoffMs: 5_000,
-    label: "listTables",
-  });
-}
-
-async function listTablesOnce(
-  catalog: string,
-  schema?: string
-): Promise<TableInfo[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
-  let sql = `
-    SELECT table_catalog, table_schema, table_name, table_type, comment
-    FROM \`${safeCatalog}\`.information_schema.tables
-    WHERE table_schema NOT IN ('information_schema', 'default')
-  `;
+
   if (schema) {
     const safeSchema = validateIdentifier(schema, "schema");
-    sql += ` AND table_schema = '${safeSchema}'`;
+    return withRetry(
+      () => showTablesInSchema(safeCatalog, safeSchema),
+      {
+        maxRetries: 1,
+        initialBackoffMs: 2_000,
+        maxBackoffMs: 5_000,
+        label: "listTables",
+      }
+    );
   }
-  sql += ` ORDER BY table_schema, table_name`;
-  return executeSQLMapped(sql, rowToTable);
+
+  // No schema specified -- list all schemas and show tables for each
+  const schemas = await listSchemas(catalog);
+  const allTables: TableInfo[] = [];
+  for (const sch of schemas) {
+    try {
+      const tables = await showTablesInSchema(safeCatalog, sch);
+      allTables.push(...tables);
+    } catch {
+      // Skip schemas we can't list tables for (permission, etc.)
+    }
+  }
+  return allTables;
+}
+
+/**
+ * Run `SHOW TABLES IN catalog.schema` and map to TableInfo[].
+ */
+async function showTablesInSchema(
+  catalog: string,
+  schema: string
+): Promise<TableInfo[]> {
+  const result = await executeSQL(
+    `SHOW TABLES IN \`${catalog}\`.\`${schema}\``
+  );
+  return result.rows.map((row) => {
+    const schemaName = row[0] ?? schema;
+    const tableName = row[1] ?? "";
+    return {
+      catalog,
+      schema: schemaName,
+      tableName,
+      fqn: `${catalog}.${schemaName}.${tableName}`,
+      tableType: "TABLE",
+      comment: null,
+    };
+  });
 }
 
 /**
