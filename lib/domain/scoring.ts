@@ -32,12 +32,27 @@ export function getScoreTier(score: number): ScoreTier {
 }
 
 /**
+ * Return the effective scores for a use case: user-adjusted if present,
+ * otherwise the original system scores.
+ */
+export function effectiveScores(uc: UseCase) {
+  return {
+    priority: uc.userPriorityScore ?? uc.priorityScore,
+    feasibility: uc.userFeasibilityScore ?? uc.feasibilityScore,
+    impact: uc.userImpactScore ?? uc.impactScore,
+    overall: uc.userOverallScore ?? uc.overallScore,
+  };
+}
+
+/**
  * Sort use cases by overall score descending, then by domain.
  */
 export function rankUseCases(useCases: UseCase[]): UseCase[] {
   return [...useCases].sort((a, b) => {
-    if (b.overallScore !== a.overallScore) {
-      return b.overallScore - a.overallScore;
+    const aScore = effectiveScores(a).overall;
+    const bScore = effectiveScores(b).overall;
+    if (bScore !== aScore) {
+      return bScore - aScore;
     }
     return a.domain.localeCompare(b.domain);
   });
@@ -78,10 +93,10 @@ export function computeDomainStats(useCases: UseCase[]): DomainStats[] {
       count: cases.length,
       avgScore: Number(
         (
-          cases.reduce((sum, uc) => sum + uc.overallScore, 0) / cases.length
+          cases.reduce((sum, uc) => sum + effectiveScores(uc).overall, 0) / cases.length
         ).toFixed(3)
       ),
-      topScore: Math.max(...cases.map((uc) => uc.overallScore)),
+      topScore: Math.max(...cases.map((uc) => effectiveScores(uc).overall)),
       aiCount: cases.filter((uc) => uc.type === "AI").length,
       statsCount: cases.filter((uc) => uc.type === "Statistical").length,
     }))

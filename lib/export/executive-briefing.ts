@@ -17,7 +17,7 @@ import path from "path";
 import type { UseCase } from "@/lib/domain/types";
 import { computeDataMaturity, type DataMaturityScore } from "@/lib/domain/data-maturity";
 import { computeFeatureAdoption, type FeatureAdoptionSummary } from "@/lib/domain/feature-adoption";
-import { computeDomainStats, computeSchemaCoverage } from "@/lib/domain/scoring";
+import { computeDomainStats, computeSchemaCoverage, effectiveScores } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
 // Brand constants (same as pptx.ts)
@@ -219,7 +219,7 @@ export async function generateExecutiveBriefing(
     useCaseCount: discovery?.useCases.length,
     tablesCoveredByUseCases: discovery ? new Set(discovery.useCases.flatMap((uc) => uc.tablesInvolved)).size : undefined,
     avgUseCaseScore: discovery && discovery.useCases.length > 0
-      ? discovery.useCases.reduce((s, uc) => s + uc.overallScore, 0) / discovery.useCases.length
+      ? discovery.useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / discovery.useCases.length
       : undefined,
     aiUseCaseCount: discovery?.useCases.filter((uc) => uc.type === "AI").length,
     statisticalUseCaseCount: discovery?.useCases.filter((uc) => uc.type === "Statistical").length,
@@ -404,7 +404,7 @@ export async function generateExecutiveBriefing(
 
     const domainStats = computeDomainStats(discovery.useCases);
     const aiCount = discovery.useCases.filter((uc) => uc.type === "AI").length;
-    const avgScore = Math.round((discovery.useCases.reduce((s, uc) => s + uc.overallScore, 0) / discovery.useCases.length) * 100);
+    const avgScore = Math.round((discovery.useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / discovery.useCases.length) * 100);
 
     ucSlide.addText(
       `${discovery.useCases.length} use cases discovered across ${domainStats.length} domains (${aiCount} AI, ${discovery.useCases.length - aiCount} Statistical) — avg score ${avgScore}%`,
@@ -412,7 +412,7 @@ export async function generateExecutiveBriefing(
     );
 
     // Top 8 use cases table
-    const topUc = [...discovery.useCases].sort((a, b) => b.overallScore - a.overallScore).slice(0, 8);
+    const topUc = [...discovery.useCases].sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall).slice(0, 8);
     const ucRows: PptxGenJS.TableCell[][] = [
       [headerCell("#"), headerCell("Use Case"), headerCell("Domain"), headerCell("Type"), headerCell("Score")],
     ];
@@ -422,7 +422,7 @@ export async function generateExecutiveBriefing(
         bodyCell(uc.name),
         bodyCell(uc.domain),
         bodyCell(uc.type),
-        bodyCell(`${Math.round(uc.overallScore * 100)}%`, { color: scoreColor(uc.overallScore * 100), bold: true }),
+        bodyCell(`${Math.round(effectiveScores(uc).overall * 100)}%`, { color: scoreColor(effectiveScores(uc).overall * 100), bold: true }),
       ]);
     });
     ucSlide.addTable(ucRows, {

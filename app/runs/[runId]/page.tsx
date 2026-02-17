@@ -49,7 +49,7 @@ import type {
   BusinessContext,
   StepLogEntry,
 } from "@/lib/domain/types";
-import { computeDomainStats } from "@/lib/domain/scoring";
+import { computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
 import {
   type IndustryOutcome,
   type StrategicPriority,
@@ -357,7 +357,7 @@ export default function RunDetailPage({
               title="Avg Score"
               value={
                 useCases.length > 0
-                  ? `${Math.round((useCases.reduce((s, uc) => s + uc.overallScore, 0) / useCases.length) * 100)}%`
+                  ? `${Math.round((useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / useCases.length) * 100)}%`
                   : "N/A"
               }
             />
@@ -461,7 +461,7 @@ export default function RunDetailPage({
               {useCases.length > 0 && (
                 <div className="grid gap-6 md:grid-cols-3">
                   <ScoreDistributionChart
-                    scores={useCases.map((uc) => uc.overallScore)}
+                    scores={useCases.map((uc) => effectiveScores(uc).overall)}
                     title="Score Distribution"
                   />
                   <DomainBreakdownChart

@@ -15,7 +15,7 @@
 
 import PDFDocument from "pdfkit";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
-import { groupByDomain, computeDomainStats } from "@/lib/domain/scoring";
+import { groupByDomain, computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
 // Official Databricks brand constants (hex for PDFKit)
@@ -152,9 +152,9 @@ function buildDomainSummary(domain: string, cases: UseCase[]): string[] {
   const aiCount = cases.filter((c) => c.type === "AI").length;
   const statsCount = cases.length - aiCount;
   const avgScore = Math.round(
-    (cases.reduce((s, c) => s + c.overallScore, 0) / cases.length) * 100
+    (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100
   );
-  const top = [...cases].sort((a, b) => b.overallScore - a.overallScore)[0];
+  const top = [...cases].sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall)[0];
   const subdomains = [
     ...new Set(cases.map((c) => c.subdomain).filter(Boolean)),
   ];
@@ -172,7 +172,7 @@ function buildDomainSummary(domain: string, cases: UseCase[]): string[] {
   bullets.push(`Average score: ${avgScore}%`);
   if (top) {
     bullets.push(
-      `Highest-scoring: ${top.name} (${Math.round(top.overallScore * 100)}%)`
+      `Highest-scoring: ${top.name} (${Math.round(effectiveScores(top).overall * 100)}%)`
     );
   }
   if (techniques.length > 0) {
@@ -288,7 +288,7 @@ export async function generatePdf(
     const statsCount = useCases.length - aiCount;
     const avgScore = useCases.length
       ? Math.round(
-          (useCases.reduce((s, uc) => s + uc.overallScore, 0) /
+          (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
             useCases.length) *
             100
         )
@@ -471,7 +471,7 @@ export async function generatePdf(
     // ===================================================================
     for (const domain of domainOrder) {
       const cases = (domainGroups[domain] ?? []).sort(
-        (a, b) => b.overallScore - a.overallScore
+        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
       );
       if (cases.length === 0) continue;
 
@@ -553,13 +553,13 @@ export async function generatePdf(
         {
           label: "Avg Score",
           value: `${Math.round(
-            (cases.reduce((s, c) => s + c.overallScore, 0) / cases.length) * 100
+            (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100
           )}%`,
         },
         {
           label: "Top Score",
           value: `${Math.round(
-            Math.max(...cases.map((c) => c.overallScore)) * 100
+            Math.max(...cases.map((c) => effectiveScores(c).overall)) * 100
           )}%`,
         },
       ];
