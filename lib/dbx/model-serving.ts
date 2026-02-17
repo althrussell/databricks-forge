@@ -9,7 +9,8 @@
  *   - System/user message separation for better prompt hygiene
  *   - Streaming support (SSE) for long-running generations
  *
- * Auth reuses the existing getHeaders() from client.ts.
+ * Auth uses getAppHeaders() (service principal / PAT) since model-serving
+ * scopes are not available in user authorization tokens.
  *
  * Endpoint: POST {host}/serving-endpoints/{endpoint}/invocations
  * OpenAI-compatible chat completions format.
@@ -17,7 +18,7 @@
  * Docs: https://docs.databricks.com/en/machine-learning/model-serving/score-foundation-models.html
  */
 
-import { getConfig, getHeaders } from "./client";
+import { getConfig, getAppHeaders } from "./client";
 import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 import { logger } from "@/lib/logger";
 
@@ -101,7 +102,7 @@ export async function chatCompletion(
   const { host } = getConfig();
   const url = `${host}/serving-endpoints/${options.endpoint}/invocations`;
 
-  const headers = await getHeaders();
+  const headers = await getAppHeaders();
   const body: Record<string, unknown> = {
     messages: options.messages,
     temperature: options.temperature ?? 0.3,
@@ -155,7 +156,7 @@ export async function chatCompletionStream(
   const { host } = getConfig();
   const url = `${host}/serving-endpoints/${options.endpoint}/invocations`;
 
-  const headers = await getHeaders();
+  const headers = await getAppHeaders();
   const body: Record<string, unknown> = {
     messages: options.messages,
     temperature: options.temperature ?? 0.3,
