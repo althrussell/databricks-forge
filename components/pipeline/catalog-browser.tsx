@@ -886,21 +886,17 @@ function SchemaRow({
   const schemaSelected = isSelected(schemaPath);
   const covered = isCoveredBy(schemaPath);
 
+  // Derive table list inline (no useMemo to rule out caching issues)
   const hasSearch = !!searchFilter;
-  const schemaNameMatches =
-    hasSearch && schema.name.toLowerCase().includes(searchFilter);
+  const tablesToShow =
+    !hasSearch || schema.name.toLowerCase().includes(searchFilter ?? "")
+      ? schema.tables
+      : schema.tables.filter((t) =>
+          t.name.toLowerCase().includes(searchFilter ?? "")
+        );
 
-  // Filter tables when searching
-  const filteredTables = useMemo(() => {
-    if (!hasSearch || schemaNameMatches) return schema.tables;
-    return schema.tables.filter((t) =>
-      t.name.toLowerCase().includes(searchFilter)
-    );
-  }, [schema.tables, hasSearch, schemaNameMatches, searchFilter]);
-
-  const showExpanded =
-    schema.expanded ||
-    (hasSearch && filteredTables.length > 0 && schema.tables.length > 0);
+  // Show expanded section when schema is expanded OR tables were loaded
+  const isOpen = schema.expanded || schema.tables.length > 0;
 
   return (
     <div>
@@ -911,7 +907,7 @@ function SchemaRow({
           onClick={onToggle}
           className="flex shrink-0 items-center gap-1"
         >
-          {showExpanded ? (
+          {isOpen ? (
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
@@ -925,6 +921,11 @@ function SchemaRow({
           className={`flex-1 text-left text-sm ${covered && !schemaSelected ? "text-muted-foreground" : ""}`}
         >
           <HighlightMatch text={schema.name} query={searchFilter} />
+          {schema.tables.length > 0 && (
+            <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+              ({schema.tables.length})
+            </span>
+          )}
           {covered && !schemaSelected && (
             <span className="ml-1.5 text-[10px] text-muted-foreground/60">
               (included via catalog)
@@ -972,15 +973,9 @@ function SchemaRow({
         )}
       </div>
 
-      {/* Tables */}
-      {showExpanded && (
+      {/* Tables section -- shown when schema is open */}
+      {isOpen && (
         <div className="ml-5 border-l pl-2">
-          {/* Debug: visible table count */}
-          {!schema.loading && schema.tables.length > 0 && (
-            <div className="px-2 py-0.5 text-[10px] text-muted-foreground/50">
-              {schema.tables.length} table(s) | filtered: {filteredTables.length}
-            </div>
-          )}
           {schema.loading && (
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
               <RefreshCw className="h-3 w-3 animate-spin" />
@@ -1015,30 +1010,24 @@ function SchemaRow({
             </div>
           )}
 
-          {filteredTables.map((table, idx) => {
-            const tablePath = table.fqn;
+          {tablesToShow.map((table, idx) => {
+            const tablePath = `${catalogName}.${schema.name}.${table.name}`;
             const tableSelected = isSelected(tablePath);
             const tableCovered = isCoveredBy(tablePath);
-            const displayName = table.name || table.fqn.split(".").pop() || `table-${idx}`;
+            const displayName =
+              table.name || table.fqn.split(".").pop() || `table-${idx}`;
 
             return (
               <div
-                key={table.fqn || `${idx}`}
-                className="group/table flex items-center gap-1 rounded-md px-2 py-0.5 hover:bg-muted/50"
+                key={`${catalogName}.${schema.name}.${displayName}.${idx}`}
+                className="group/table flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted/50"
               >
-                <TableProperties className="h-3 w-3 shrink-0 text-emerald-500" />
+                <TableProperties className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                 <span
                   className={`flex-1 truncate text-xs ${tableCovered && !tableSelected ? "text-muted-foreground" : ""}`}
-                  title={table.comment ?? table.fqn}
+                  title={table.fqn}
                 >
-                  <HighlightMatch text={displayName} query={searchFilter} />
-                  {table.comment && (
-                    <span className="ml-1 text-[10px] text-muted-foreground/60">
-                      {table.comment.length > 40
-                        ? table.comment.slice(0, 40) + "..."
-                        : table.comment}
-                    </span>
-                  )}
+                  {displayName}
                 </span>
 
                 {tableSelected ? (
@@ -1046,20 +1035,22 @@ function SchemaRow({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-4 gap-0.5 px-1 text-[10px] text-green-600"
+                    className="h-5 gap-0.5 px-1.5 text-[10px] text-green-600"
                     onClick={() => onRemove(tablePath)}
                   >
                     <Check className="h-2.5 w-2.5" />
+                    Added
                   </Button>
                 ) : tableCovered ? null : (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-4 gap-0.5 px-1 text-[10px] opacity-0 group-hover/table:opacity-100"
+                    className="h-5 gap-0.5 px-1.5 text-[10px] opacity-0 group-hover/table:opacity-100"
                     onClick={() => onAdd(tablePath)}
                   >
                     <Plus className="h-2.5 w-2.5" />
+                    Add
                   </Button>
                 )}
               </div>
