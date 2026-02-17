@@ -96,7 +96,7 @@ export async function describeDetail(
 
 /**
  * Run DESCRIBE HISTORY and aggregate into TableHistorySummary.
- * Returns null on permission errors.
+ * Returns null on permission errors or for views (which don't support history).
  */
 export async function describeHistory(
   tableFqn: string,
@@ -192,6 +192,10 @@ export async function describeHistory(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("EXPECT_TABLE_NOT_VIEW") || msg.includes("is a view")) {
+      logger.debug("[metadata-detail] Skipping DESCRIBE HISTORY for view", { tableFqn });
+      return null;
+    }
     if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("(403)")) {
       logger.warn("[metadata-detail] Permission denied for DESCRIBE HISTORY", { tableFqn });
       return null;

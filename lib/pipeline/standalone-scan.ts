@@ -9,6 +9,8 @@ import {
   listTables,
   listColumns,
   listForeignKeys,
+  fetchTableComments,
+  mergeTableComments,
 } from "@/lib/queries/metadata";
 import {
   enrichTablesInBatches,
@@ -64,6 +66,8 @@ export async function runStandaloneEnrichment(
   for (const scope of scopes) {
     try {
       const tables = await listTables(scope.catalog, scope.schema);
+      const tableComments = await fetchTableComments(scope.catalog, scope.schema);
+      mergeTableComments(tables, tableComments);
       allTables.push(...tables);
       const columns = await listColumns(scope.catalog, scope.schema);
       allColumns.push(...columns);
@@ -93,6 +97,18 @@ export async function runStandaloneEnrichment(
 
   // Phase 3: Enrichment
   const enrichmentResults = await enrichTablesInBatches(expandedTables, 5);
+
+  // Merge table comments into enrichment details
+  const commentLookup = new Map<string, string>();
+  for (const t of allTables) {
+    if (t.comment) commentLookup.set(t.fqn, t.comment);
+  }
+  for (const [fqn, result] of enrichmentResults) {
+    if (result.detail && !result.detail.comment) {
+      const comment = commentLookup.get(fqn);
+      if (comment) result.detail.comment = comment;
+    }
+  }
 
   // Phase 4: Tags
   const allTableTags = [];

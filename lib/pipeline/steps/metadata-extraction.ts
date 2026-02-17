@@ -18,6 +18,8 @@ import {
   listColumns,
   listForeignKeys,
   listMetricViews,
+  fetchTableComments,
+  mergeTableComments,
   buildSchemaMarkdown,
 } from "@/lib/queries/metadata";
 import {
@@ -92,6 +94,10 @@ export async function runMetadataExtraction(
       if (runId) await updateRunMessage(runId, `Scanning catalog ${scopeLabel}... (${si + 1}/${scopes.length})`);
       const tables = await listTables(scope.catalog, scope.schema);
       allTables.push(...tables);
+
+      // Fetch table descriptions from information_schema.tables
+      const tableComments = await fetchTableComments(scope.catalog, scope.schema);
+      mergeTableComments(tables, tableComments);
 
       if (runId) await updateRunMessage(runId, `Extracting columns for ${tables.length} tables in ${scopeLabel}...`);
       const columns = await listColumns(scope.catalog, scope.schema);
@@ -215,6 +221,18 @@ async function runEnrichmentPass(
     allTableTags.push(...tTags);
     const cTags = await getColumnTags(scope.catalog, scope.schema);
     allColumnTags.push(...cTags);
+  }
+
+  // Merge table comments from information_schema into enrichment details
+  const commentLookup = new Map<string, string>();
+  for (const t of allTables) {
+    if (t.comment) commentLookup.set(t.fqn, t.comment);
+  }
+  for (const [fqn, result] of enrichmentResults) {
+    if (result.detail && !result.detail.comment) {
+      const comment = commentLookup.get(fqn);
+      if (comment) result.detail.comment = comment;
+    }
   }
 
   // Step 4: Health scoring
