@@ -130,6 +130,9 @@ export async function listCatalogs(): Promise<string[]> {
 /**
  * List schemas in a catalog via `SHOW SCHEMAS IN catalog`.
  *
+ * Uses explicit `IN` syntax so the catalog target is in the SQL itself
+ * rather than relying on Statement Execution API context params.
+ *
  * Filters out `information_schema` and `default`.
  * Wrapped in retry logic to survive transient warehouse errors.
  */
@@ -137,7 +140,10 @@ export async function listSchemas(catalog: string): Promise<string[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
   return withRetry(
     async () => {
-      const result = await executeSQL("SHOW SCHEMAS", safeCatalog);
+      const result = await executeSQL(
+        `SHOW SCHEMAS IN \`${safeCatalog}\``
+      );
+      logger.info("[metadata] SHOW SCHEMAS", { catalog: safeCatalog, rowCount: result.rows.length });
       return result.rows
         .map((r) => r[0])
         .filter((s) => s !== "information_schema" && s !== "default");
@@ -194,49 +200,54 @@ export async function listTables(
 }
 
 /**
- * Run `SHOW TABLES` with catalog/schema context and map to TableInfo[].
+ * Run `SHOW TABLES IN catalog.schema` and map to TableInfo[].
  *
- * Uses the Statement Execution API's `catalog` and `schema` context params
- * instead of `SHOW TABLES IN catalog.schema` syntax, which is more
- * reliable across Databricks environments.
+ * Uses explicit `IN` syntax so the full catalog.schema target is baked
+ * into the SQL rather than relying on Statement Execution API context
+ * params (which may not apply to SHOW commands in all environments).
  */
 async function showTablesInSchema(
   catalog: string,
   schema: string
 ): Promise<TableInfo[]> {
-  const result = await executeSQL("SHOW TABLES", catalog, schema);
+  const sql = `SHOW TABLES IN \`${catalog}\`.\`${schema}\``;
+  const result = await executeSQL(sql);
 
   // Log column layout for diagnostics
   const colNames = result.columns.map((c) => c.name);
-  logger.info("[metadata] SHOW TABLES columns", { catalog, schema, colNames, rowCount: result.rows.length });
-  if (result.rows.length > 0) {
-    logger.info("[metadata] SHOW TABLES first row", { row: result.rows[0] });
-  }
+  logger.info("[metadata] SHOW TABLES", {
+    catalog,
+    schema,
+    sql,
+    colNames,
+    rowCount: result.rows.length,
+    firstRow: result.rows[0] ?? null,
+  });
 
   // Find column positions by name (SHOW TABLES returns: database, tableName, isTemporary)
-  const dbIdx = result.columns.findIndex(
-    (c) => c.name.toLowerCase() === "database" || c.name.toLowerCase() === "namespace"
-  );
   const nameIdx = result.columns.findIndex(
-    (c) => c.name.toLowerCase() === "tablename" || c.name.toLowerCase() === "table_name"
+    (c) =>
+      c.name.toLowerCase() === "tablename" ||
+      c.name.toLowerCase() === "table_name"
   );
 
-  // If column-name lookup fails, fall back to positional: col 1 for table name
+  // Fall back to positional index 1 if column name not found
   const effectiveNameIdx = nameIdx >= 0 ? nameIdx : 1;
-  const effectiveDbIdx = dbIdx >= 0 ? dbIdx : 0;
 
   if (nameIdx < 0) {
-    logger.warn("[metadata] Could not find tableName column by name, falling back to positional index 1", { colNames });
+    logger.warn(
+      "[metadata] Could not find tableName column by name, falling back to positional index 1",
+      { colNames }
+    );
   }
 
   return result.rows.map((row) => {
-    const schemaName = row[effectiveDbIdx] ?? schema;
     const tableName = row[effectiveNameIdx] ?? "";
     return {
       catalog,
-      schema: schemaName,
+      schema,
       tableName,
-      fqn: `${catalog}.${schemaName}.${tableName}`,
+      fqn: `${catalog}.${schema}.${tableName}`,
       tableType: "TABLE",
       comment: null,
     };
