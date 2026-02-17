@@ -255,6 +255,71 @@ async function showTablesInSchema(
 }
 
 /**
+ * Fetch table comments (descriptions) from information_schema.tables.
+ *
+ * Returns a Map of FQN -> comment for all tables that have a non-null comment.
+ * Gracefully returns an empty map on permission or query errors.
+ */
+export async function fetchTableComments(
+  catalog: string,
+  schema?: string
+): Promise<Map<string, string>> {
+  const comments = new Map<string, string>();
+  try {
+    const safeCatalog = validateIdentifier(catalog, "catalog");
+    let sql = `
+      SELECT table_catalog, table_schema, table_name, comment
+      FROM \`${safeCatalog}\`.information_schema.tables
+      WHERE table_schema NOT IN ('information_schema', 'default')
+        AND comment IS NOT NULL
+        AND comment != ''
+    `;
+    if (schema) {
+      const safeSchema = validateIdentifier(schema, "schema");
+      sql += ` AND table_schema = '${safeSchema}'`;
+    }
+
+    const result = await executeSQL(sql);
+    for (const row of result.rows) {
+      const cat = row[0] ?? "";
+      const sch = row[1] ?? "";
+      const tbl = row[2] ?? "";
+      const cmt = row[3] ?? "";
+      if (cmt) {
+        comments.set(`${cat}.${sch}.${tbl}`, cmt);
+      }
+    }
+
+    logger.info("[metadata] Fetched table comments", {
+      catalog,
+      schema: schema ?? "(all)",
+      tablesWithComments: comments.size,
+    });
+  } catch (error) {
+    logger.warn("[metadata] Failed to fetch table comments, continuing without", {
+      catalog,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return comments;
+}
+
+/**
+ * Merge table comments into a list of TableInfo objects in-place.
+ */
+export function mergeTableComments(
+  tables: TableInfo[],
+  comments: Map<string, string>
+): void {
+  for (const table of tables) {
+    const comment = comments.get(table.fqn);
+    if (comment) {
+      table.comment = comment;
+    }
+  }
+}
+
+/**
  * List columns for tables in a catalog.schema scope.
  */
 export async function listColumns(
