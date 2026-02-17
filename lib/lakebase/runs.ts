@@ -68,7 +68,7 @@ function dbRowToRun(row: {
       industry: genOpts.industry,
       generationPath: row.generationPath ?? "./forge_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
-      aiModel: row.aiModel ?? process.env.DATABRICKS_SERVING_ENDPOINT ?? "unknown",
+      aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
     },
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
