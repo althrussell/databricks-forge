@@ -67,17 +67,17 @@ export function ScoreRadarChart({
     <ResponsiveContainer width="100%" height={size}>
       <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
         <PolarGrid
-          stroke="hsl(var(--border))"
+          stroke="var(--color-border)"
           strokeOpacity={0.5}
         />
         <PolarAngleAxis
           dataKey="metric"
-          tick={{ fontSize: 12, fontWeight: 600, fill: "hsl(var(--foreground))" }}
+          tick={{ fontSize: 12, fontWeight: 600, fill: "var(--color-foreground)" }}
         />
         <PolarRadiusAxis
           angle={90}
           domain={[0, 100]}
-          tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+          tick={{ fontSize: 9, fill: "var(--color-muted-foreground)" }}
           tickCount={5}
           axisLine={false}
         />
@@ -106,8 +106,8 @@ export function ScoreRadarChart({
         )}
         <Tooltip
           contentStyle={{
-            backgroundColor: "hsl(var(--card))",
-            borderColor: "hsl(var(--border))",
+            backgroundColor: "var(--color-card)",
+            borderColor: "var(--color-border)",
             borderRadius: "var(--radius)",
             fontSize: 12,
           }}
