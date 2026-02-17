@@ -84,6 +84,7 @@ interface AggregateStats {
 
 interface TableDetailRow {
   tableFqn: string;
+  tableType: string | null;
   dataDomain: string | null;
   dataSubdomain: string | null;
   dataTier: string | null;
@@ -95,11 +96,20 @@ interface TableDetailRow {
   comment: string | null;
   generatedDescription: string | null;
   sensitivityLevel: string | null;
+  governancePriority: string | null;
   discoveredVia: string;
+}
+
+interface InsightRow {
+  insightType: string;
+  tableFqn: string | null;
+  payloadJson: string;
+  severity: string;
 }
 
 interface AggregateData {
   details: TableDetailRow[];
+  insights: InsightRow[];
   stats: AggregateStats;
 }
 
@@ -495,6 +505,8 @@ export default function EstatePage() {
             {viewMode === "aggregate" && aggregate ? (
               <AggregateSummary
                 stats={aggregate.stats}
+                details={aggregate.details}
+                insights={aggregate.insights ?? []}
                 humanSize={humanSize}
                 timeAgo={timeAgo}
                 onViewScan={loadSingleScan}
@@ -669,11 +681,15 @@ export default function EstatePage() {
 
 function AggregateSummary({
   stats,
+  details,
+  insights,
   humanSize,
   timeAgo,
   onViewScan,
 }: {
   stats: AggregateStats;
+  details: TableDetailRow[];
+  insights: InsightRow[];
   humanSize: (bytes: string | number | null) => string;
   timeAgo: (iso: string) => string;
   onViewScan: (scanId: string) => void;
@@ -682,6 +698,14 @@ function AggregateSummary({
 
   return (
     <div className="space-y-4">
+      {/* Executive Summary */}
+      <ExecutiveSummary
+        stats={stats}
+        details={details}
+        insights={insights}
+        humanSize={humanSize}
+      />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           title="Tables"
@@ -861,6 +885,173 @@ function SingleScanSummary({
         </p>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Executive Summary
+// ---------------------------------------------------------------------------
+
+function ExecutiveSummary({
+  stats,
+  details,
+  insights,
+  humanSize,
+}: {
+  stats: AggregateStats;
+  details: TableDetailRow[];
+  insights: InsightRow[];
+  humanSize: (bytes: string | number | null) => string;
+}) {
+  // Derive signals from the data
+  const tables = details.length;
+  const views = details.filter((d) => d.tableType === "VIEW").length;
+  const baseTables = tables - views;
+  const domains = new Set(details.map((d) => d.dataDomain).filter(Boolean));
+  const domainList = Array.from(domains).sort();
+
+  const tiers = { bronze: 0, silver: 0, gold: 0, unclassified: 0 };
+  for (const d of details) {
+    if (d.dataTier === "bronze") tiers.bronze++;
+    else if (d.dataTier === "silver") tiers.silver++;
+    else if (d.dataTier === "gold") tiers.gold++;
+    else tiers.unclassified++;
+  }
+
+  const piiTables = details.filter(
+    (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted"
+  );
+  const noOwner = details.filter((d) => !d.owner);
+  const noDescription = details.filter((d) => !d.comment && !d.generatedDescription);
+  const govCritical = details.filter((d) => d.governancePriority === "critical" || d.governancePriority === "high");
+
+  const redundancies = insights.filter((i) => i.insightType === "redundancy");
+  const implicitRels = insights.filter((i) => i.insightType === "implicit_relationship");
+  const dataProducts = insights.filter((i) => i.insightType === "data_product");
+  const govGaps = insights.filter((i) => i.insightType === "governance_gap");
+
+  // Build narrative paragraphs
+  const findings: Array<{ label: string; body: string; severity: "info" | "warn" | "critical" }> = [];
+
+  // Estate composition
+  findings.push({
+    label: "Estate Composition",
+    body: `Your data estate comprises ${tables} objects (${baseTables} tables, ${views} views) totalling ${humanSize(stats.totalSizeBytes)}, organised across ${domainList.length} business domain${domainList.length !== 1 ? "s" : ""}${domainList.length > 0 ? ` (${domainList.slice(0, 5).join(", ")}${domainList.length > 5 ? ` and ${domainList.length - 5} more` : ""})` : ""}. The Medallion architecture breakdown is: ${tiers.bronze} bronze, ${tiers.silver} silver, ${tiers.gold} gold${tiers.unclassified > 0 ? `, ${tiers.unclassified} unclassified` : ""}.`,
+    severity: "info",
+  });
+
+  // PII / Sensitivity
+  if (piiTables.length > 0) {
+    const piiDomains = new Set(piiTables.map((d) => d.dataDomain).filter(Boolean));
+    findings.push({
+      label: "Sensitive Data Detected",
+      body: `${piiTables.length} table${piiTables.length !== 1 ? "s" : ""} contain${piiTables.length === 1 ? "s" : ""} personally identifiable information (PII) or restricted data, spanning ${piiDomains.size} domain${piiDomains.size !== 1 ? "s" : ""}. These require access controls, encryption-at-rest review, and compliance tagging (GDPR, HIPAA, PCI-DSS as applicable). Unmanaged PII is a regulatory and reputational risk.`,
+      severity: "critical",
+    });
+  }
+
+  // Governance gaps
+  if (govCritical.length > 0) {
+    findings.push({
+      label: "Governance Gaps",
+      body: `${govCritical.length} table${govCritical.length !== 1 ? "s have" : " has"} critical or high governance gaps. ${noOwner.length} table${noOwner.length !== 1 ? "s lack" : " lacks"} an owner, and ${noDescription.length} have no documentation (neither human-authored nor auto-generated). Without clear ownership and documentation, troubleshooting, compliance audits, and onboarding new team members become significantly harder.`,
+      severity: "warn",
+    });
+  } else if (noOwner.length > 0 || noDescription.length > 0) {
+    findings.push({
+      label: "Documentation & Ownership",
+      body: `${noOwner.length > 0 ? `${noOwner.length} table${noOwner.length !== 1 ? "s" : ""} ${noOwner.length !== 1 ? "have" : "has"} no owner assigned. ` : ""}${noDescription.length > 0 ? `${noDescription.length} table${noDescription.length !== 1 ? "s" : ""} ${noDescription.length !== 1 ? "have" : "has"} no description. ` : ""}Proper metadata hygiene reduces incident response time and supports data mesh adoption.`,
+      severity: "warn",
+    });
+  }
+
+  // Redundancy
+  if (redundancies.length > 0) {
+    findings.push({
+      label: "Redundancy Detected",
+      body: `${redundancies.length} pair${redundancies.length !== 1 ? "s" : ""} of tables appear to contain overlapping or duplicate data. Redundant copies increase storage cost, create inconsistency risk when one copy is updated but not the other, and confuse consumers about which is the "source of truth."`,
+      severity: "warn",
+    });
+  }
+
+  // Implicit relationships
+  if (implicitRels.length > 0) {
+    findings.push({
+      label: "Undocumented Relationships",
+      body: `${implicitRels.length} implicit relationship${implicitRels.length !== 1 ? "s were" : " was"} discovered from column naming patterns but ${implicitRels.length !== 1 ? "are" : "is"} not declared as formal foreign keys. Formalising these in Unity Catalog improves query optimiser performance, makes lineage tracking more reliable, and helps analysts understand how data connects.`,
+      severity: "info",
+    });
+  }
+
+  // Data products
+  if (dataProducts.length > 0) {
+    findings.push({
+      label: "Data Products Identified",
+      body: `${dataProducts.length} logical data product${dataProducts.length !== 1 ? "s were" : " was"} identified — coherent groups of tables that serve a specific business function. Formalising these as named data products with SLAs and ownership accelerates self-service analytics and supports data mesh principles.`,
+      severity: "info",
+    });
+  }
+
+  // Views insight
+  if (views > 0) {
+    findings.push({
+      label: "Views in the Estate",
+      body: `${views} view${views !== 1 ? "s" : ""} ${views !== 1 ? "were" : "was"} found alongside base tables. Views are included in lineage tracking and domain classification. They often represent curated access layers or business-friendly abstractions — if they map to gold-tier data products, they should be documented and governed as first-class assets.`,
+      severity: "info",
+    });
+  }
+
+  // Overall gov score
+  if (stats.avgGovernanceScore > 0) {
+    const score = stats.avgGovernanceScore;
+    const verdict = score >= 70 ? "healthy" : score >= 40 ? "needs attention" : "at risk";
+    findings.push({
+      label: "Overall Governance Score",
+      body: `The average governance score across the estate is ${score.toFixed(0)}/100 (${verdict}). This score factors in documentation coverage, ownership assignment, sensitivity labelling, access controls, maintenance hygiene, and tagging completeness.${score < 70 ? " Prioritise the tables flagged as critical or high to raise the score." : ""}`,
+      severity: score >= 70 ? "info" : score >= 40 ? "warn" : "critical",
+    });
+  }
+
+  if (findings.length === 0) return null;
+
+  const severityIcon = (sev: string) => {
+    if (sev === "critical") return <ShieldAlert className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />;
+    if (sev === "warn") return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+    return <BarChart3 className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+  };
+
+  // Count gov gap insights for severity breakdown
+  const critCount = govGaps.filter((g) => g.severity === "critical").length;
+  const highCount = govGaps.filter((g) => g.severity === "high").length;
+
+  return (
+    <Card className="border-primary/20 bg-primary/[0.02]">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <FileSpreadsheet className="h-5 w-5 text-primary" />
+          Executive Summary — Why This Matters
+        </CardTitle>
+        <CardDescription>
+          Automated analysis of your data estate.{" "}
+          {critCount + highCount > 0
+            ? `${critCount + highCount} finding${critCount + highCount !== 1 ? "s" : ""} require${critCount + highCount === 1 ? "s" : ""} attention.`
+            : "No critical findings."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {findings.map((f, idx) => (
+            <div key={idx} className="flex gap-3">
+              {severityIcon(f.severity)}
+              <div>
+                <p className="text-sm font-semibold">{f.label}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
