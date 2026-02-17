@@ -10,18 +10,14 @@ import { v4 as uuidv4 } from "uuid";
 import { listEnvironmentScans } from "@/lib/lakebase/environment-scans";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { logger } from "@/lib/logger";
+import { toJsonSafe } from "@/lib/json-safe";
 
 export async function GET() {
   try {
     await ensureMigrated();
     const scans = await listEnvironmentScans(50, 0);
 
-    return NextResponse.json({
-      scans: scans.map((s) => ({
-        ...s,
-        totalSizeBytes: s.totalSizeBytes.toString(),
-      })),
-    });
+    return NextResponse.json({ scans: toJsonSafe(scans) });
   } catch (error) {
     logger.error("[api/environment-scan] GET failed", {
       error: error instanceof Error ? error.message : String(error),

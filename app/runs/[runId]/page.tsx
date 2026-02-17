@@ -517,27 +517,48 @@ export default function RunDetailPage({
               {useCases.length > 0 ? (
                 <UseCaseTable
                   useCases={useCases}
-                  onUpdate={async (updated) => {
+                  onUpdate={async (updated): Promise<boolean> => {
                     try {
-                      const isScoreReset =
-                        updated.userPriorityScore === null &&
-                        updated.userFeasibilityScore === null &&
-                        updated.userImpactScore === null &&
-                        updated.userOverallScore === null;
+                      const original = useCases.find((uc) => uc.id === updated.id);
+                      const payload: Record<string, unknown> = {};
 
-                      const payload: Record<string, unknown> = {
-                        name: updated.name,
-                        statement: updated.statement,
-                        tablesInvolved: updated.tablesInvolved,
-                      };
+                      // Only send text fields that actually changed
+                      if (updated.name !== original?.name) payload.name = updated.name;
+                      if (updated.statement !== original?.statement) payload.statement = updated.statement;
+                      if (JSON.stringify(updated.tablesInvolved) !== JSON.stringify(original?.tablesInvolved)) {
+                        payload.tablesInvolved = updated.tablesInvolved;
+                      }
 
-                      if (isScoreReset) {
-                        payload.resetScores = true;
-                      } else {
-                        if (updated.userPriorityScore != null) payload.userPriorityScore = updated.userPriorityScore;
-                        if (updated.userFeasibilityScore != null) payload.userFeasibilityScore = updated.userFeasibilityScore;
-                        if (updated.userImpactScore != null) payload.userImpactScore = updated.userImpactScore;
-                        if (updated.userOverallScore != null) payload.userOverallScore = updated.userOverallScore;
+                      // Detect score changes by comparing updated vs original
+                      const scoresChanged =
+                        updated.userPriorityScore !== original?.userPriorityScore ||
+                        updated.userFeasibilityScore !== original?.userFeasibilityScore ||
+                        updated.userImpactScore !== original?.userImpactScore ||
+                        updated.userOverallScore !== original?.userOverallScore;
+
+                      if (scoresChanged) {
+                        const isScoreReset =
+                          updated.userPriorityScore === null &&
+                          updated.userFeasibilityScore === null &&
+                          updated.userImpactScore === null &&
+                          updated.userOverallScore === null;
+
+                        if (isScoreReset) {
+                          payload.resetScores = true;
+                        } else {
+                          payload.userPriorityScore = updated.userPriorityScore;
+                          payload.userFeasibilityScore = updated.userFeasibilityScore;
+                          payload.userImpactScore = updated.userImpactScore;
+                          payload.userOverallScore = updated.userOverallScore;
+                        }
+                      }
+
+                      if (Object.keys(payload).length === 0) {
+                        // Nothing actually changed
+                        setUseCases((prev) =>
+                          prev.map((uc) => (uc.id === updated.id ? updated : uc))
+                        );
+                        return true;
                       }
 
                       const res = await fetch(`/api/runs/${runId}/usecases/${updated.id}`, {
@@ -545,13 +566,18 @@ export default function RunDetailPage({
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(payload),
                       });
-                      if (res.ok) {
-                        setUseCases((prev) =>
-                          prev.map((uc) => (uc.id === updated.id ? updated : uc))
-                        );
+                      if (!res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        console.error("[onUpdate] PATCH failed", res.status, data);
+                        return false;
                       }
-                    } catch {
-                      // Handled by toast in the table component
+                      setUseCases((prev) =>
+                        prev.map((uc) => (uc.id === updated.id ? updated : uc))
+                      );
+                      return true;
+                    } catch (err) {
+                      console.error("[onUpdate] error", err);
+                      return false;
                     }
                   }}
                 />
