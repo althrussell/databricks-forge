@@ -394,6 +394,9 @@ async function attemptSqlFix(
  * Fetch sample rows from each table and format as markdown tables for
  * prompt injection. Helps the LLM understand actual data values, formats,
  * and cardinality to write more precise SQL.
+ *
+ * Gracefully falls back to metadata-only when the user lacks SELECT
+ * permission on a table -- the table is skipped and a warning is logged.
  */
 async function fetchSampleData(
   tableFqns: string[],
@@ -421,7 +424,6 @@ async function fetchSampleData(
         const cells = row.map((val) => {
           if (val === null || val === undefined) return "NULL";
           const s = String(val);
-          // Truncate long values to keep the prompt compact
           return s.length > 60 ? s.substring(0, 57) + "..." : s;
         });
         return `| ${cells.join(" | ")} |`;
@@ -432,10 +434,29 @@ async function fetchSampleData(
     })
   );
 
-  for (const r of results) {
+  let skippedCount = 0;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
     if (r.status === "fulfilled") {
       sections.push(r.value.markdown);
+    } else {
+      skippedCount++;
+      const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      const isPermission =
+        errMsg.includes("INSUFFICIENT_PERMISSIONS") ||
+        errMsg.includes("does not have SELECT") ||
+        errMsg.includes("ACCESS_DENIED");
+      logger.warn("Data sampling failed for table, falling back to metadata only", {
+        table: tableFqns[i],
+        reason: isPermission ? "insufficient SELECT permission" : errMsg,
+      });
     }
+  }
+
+  if (skippedCount > 0) {
+    logger.info(
+      `Data sampling: ${results.length - skippedCount}/${results.length} tables sampled, ${skippedCount} skipped (falling back to metadata only for those)`
+    );
   }
 
   return sections.length > 1 ? sections.join("\n") : "";
