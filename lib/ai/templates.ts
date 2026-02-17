@@ -161,13 +161,34 @@ All three categories above are BUSINESS tables.
 **TABLES TO CLASSIFY**:
 {tables_markdown}
 
+### WORKFLOW (follow these steps in order for EACH table)
+
+**Step 1 -- Identify**: Read the table name and any comment. Determine which schema and catalog it belongs to.
+
+**Step 2 -- Reason**: For each table, think about what data it likely contains based on:
+- The table name (semantic meaning, naming conventions)
+- The schema/catalog context (other tables nearby)
+- The industry context provided above
+- Which data category it belongs to (transactional, master, reference, or technical infrastructure)
+
+**Step 3 -- Decide**: Based on your reasoning, assign the classification. Apply the "business analyst test": would a data analyst or business user ever query this table for business insights? If yes, classify as BUSINESS.
+
+**Step 4 -- Record**: Include your reasoning in the "reason" field. This creates an audit trail for classification decisions.
+
 ### OUTPUT FORMAT
 
-Return CSV with columns: table_fqn, classification, reason
-- classification must be either "business" or "technical"
-- reason should be a brief explanation (< 50 words)
+Return a JSON array of objects. Each object has these fields:
+- "table_fqn": the fully-qualified table name (string)
+- "classification": either "business" or "technical" (string)
+- "reason": a brief explanation for the classification (< 50 words) (string)
 
-Do NOT include headers. One row per table.
+Example:
+[
+  {"table_fqn": "catalog.schema.orders", "classification": "business", "reason": "Core transactional table for customer orders"},
+  {"table_fqn": "catalog.schema.etl_logs", "classification": "technical", "reason": "ETL pipeline execution logs with no business data"}
+]
+
+Return ONLY the JSON array. Do NOT include any text outside the JSON.
 `,
 
   // -------------------------------------------------------------------------
@@ -261,22 +282,21 @@ If ANY answer is "No" or "I'm not sure", DO NOT generate that use case.
 
 ### OUTPUT FORMAT
 
-Return CSV with these columns (no header row):
-No, Name, type, Analytics Technique, Statement, Solution, Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
+Return a JSON array of objects. Each object has these fields:
 
-**COLUMN INSTRUCTIONS:**
+- **no**: Sequential number (1, 2, 3...) (number)
+- **name**: A short, clear name that emphasizes BUSINESS VALUE, not technical implementation. Use exciting business-oriented verbs: Anticipate, Predict, Envision, Segment, Identify, Detect, Reveal. Example: "Anticipate Monthly Revenue Trends with Action Plans" (NOT "Forecast Revenue") (string)
+- **type**: "AI" or "Statistical" (string)
+- **analytics_technique**: The PRIMARY analytics technique used (e.g., Forecasting, Classification, Anomaly Detection, Cohort Analysis, Segmentation, Sentiment Analysis, Trend Analysis, Correlation Analysis, Pareto Analysis) (string)
+- **statement**: Business problem statement (1-2 sentences). Focus on IMPACT (Revenue, Cost, Risk) (string)
+- **solution**: Technical solution description (2-3 sentences) (string)
+- **business_value**: Expected business impact (1-2 sentences). Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts. Good: "Reduces fuel costs and extends aircraft lifespan". Bad: "Optimizes performance" (too generic) (string)
+- **beneficiary**: Who benefits (specific role, e.g., "Loan Officer" not "Business") (string)
+- **sponsor**: Executive sponsor (C-level or VP title) (string)
+- **tables_involved**: Array of FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema above (string[])
+- **technical_design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY to deduplicate source data. Describe the approach as a sequence of logical steps (string)
 
-- **No**: Sequential number (1, 2, 3...)
-- **Name**: A short, clear name that emphasizes BUSINESS VALUE, not technical implementation. Use exciting business-oriented verbs: Anticipate, Predict, Envision, Segment, Identify, Detect, Reveal. Example: "Anticipate Monthly Revenue Trends with Action Plans" (NOT "Forecast Revenue")
-- **type**: "AI" or "Statistical"
-- **Analytics Technique**: The PRIMARY analytics technique used (e.g., Forecasting, Classification, Anomaly Detection, Cohort Analysis, Segmentation, Sentiment Analysis, Trend Analysis, Correlation Analysis, Pareto Analysis)
-- **Statement**: Business problem statement (1-2 sentences). Focus on IMPACT (Revenue, Cost, Risk)
-- **Solution**: Technical solution description (2-3 sentences)
-- **Business Value**: Expected business impact (1-2 sentences). Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts. Good: "Reduces fuel costs and extends aircraft lifespan". Bad: "Optimizes performance" (too generic)
-- **Beneficiary**: Who benefits (specific role, e.g., "Loan Officer" not "Business")
-- **Sponsor**: Executive sponsor (C-level or VP title)
-- **Tables Involved**: Comma-separated FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema above
-- **Technical Design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY to deduplicate source data. Describe the approach as a sequence of logical steps
+Return ONLY the JSON array. Do NOT include any text outside the JSON.
 `,
 
   AI_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
@@ -364,15 +384,21 @@ If ANY answer is "No", DO NOT generate that use case.
 
 ### OUTPUT FORMAT
 
-Return CSV with these columns (no header row):
-No, Name, type, Analytics Technique, Statement, Solution, Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
+Return a JSON array of objects with these fields:
 
-- **type**: Must be "AI" for all use cases in this batch
-- **Name**: Emphasize BUSINESS VALUE, not the AI technique. Use verbs like: Anticipate, Predict, Detect, Reveal, Classify, Extract
-- **Analytics Technique**: The PRIMARY AI function used (ai_forecast, ai_classify, ai_query, ai_summarize, ai_extract, ai_analyze_sentiment, ai_similarity, ai_mask, ai_translate, vector_search)
-- **Business Value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts
-- **Tables Involved**: Comma-separated FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema
-- **Technical Design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY. Describe the AI function usage and data flow
+- **no**: Sequential number (number)
+- **name**: Emphasize BUSINESS VALUE, not the AI technique. Use verbs like: Anticipate, Predict, Detect, Reveal, Classify, Extract (string)
+- **type**: Must be "AI" for all use cases in this batch (string)
+- **analytics_technique**: The PRIMARY AI function used (ai_forecast, ai_classify, ai_query, ai_summarize, ai_extract, ai_analyze_sentiment, ai_similarity, ai_mask, ai_translate, vector_search) (string)
+- **statement**: Business problem statement (1-2 sentences). Focus on IMPACT (string)
+- **solution**: Technical solution description (2-3 sentences) (string)
+- **business_value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts (string)
+- **beneficiary**: Who benefits (specific role) (string)
+- **sponsor**: Executive sponsor (C-level or VP title) (string)
+- **tables_involved**: Array of FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema (string[])
+- **technical_design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY. Describe the AI function usage and data flow (string)
+
+Return ONLY the JSON array. Do NOT include any text outside the JSON.
 `,
 
   STATS_USE_CASE_GEN_PROMPT: `### 0. PERSONA ACTIVATION
@@ -453,15 +479,21 @@ If ANY answer is "No", DO NOT generate that use case.
 
 ### OUTPUT FORMAT
 
-Return CSV with these columns (no header row):
-No, Name, type, Analytics Technique, Statement, Solution, Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
+Return a JSON array of objects with these fields:
 
-- **type**: Must be "Statistical" for all use cases in this batch
-- **Name**: Emphasize BUSINESS VALUE, not the statistical technique. Use verbs like: Detect, Quantify, Segment, Correlate, Forecast, Benchmark
-- **Analytics Technique**: The PRIMARY statistical category (Anomaly Detection, Trend Analysis, Correlation Analysis, Segmentation, Risk Assessment, Distribution Analysis, Cohort Analysis, Pareto Analysis)
-- **Business Value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts
-- **Tables Involved**: Comma-separated FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema
-- **Technical Design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY. Name 3-5 specific statistical functions that will be used
+- **no**: Sequential number (number)
+- **name**: Emphasize BUSINESS VALUE, not the statistical technique. Use verbs like: Detect, Quantify, Segment, Correlate, Forecast, Benchmark (string)
+- **type**: Must be "Statistical" for all use cases in this batch (string)
+- **analytics_technique**: The PRIMARY statistical category (Anomaly Detection, Trend Analysis, Correlation Analysis, Segmentation, Risk Assessment, Distribution Analysis, Cohort Analysis, Pareto Analysis) (string)
+- **statement**: Business problem statement (1-2 sentences). Focus on IMPACT (string)
+- **solution**: Technical solution description (2-3 sentences) (string)
+- **business_value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts (string)
+- **beneficiary**: Who benefits (specific role) (string)
+- **sponsor**: Executive sponsor (C-level or VP title) (string)
+- **tables_involved**: Array of FULLY-QUALIFIED table names (catalog.schema.table). MUST exist in the schema (string[])
+- **technical_design**: SQL approach overview (2-3 sentences). First CTE MUST use SELECT DISTINCT or GROUP BY. Name 3-5 specific statistical functions that will be used (string)
+
+Return ONLY the JSON array. Do NOT include any text outside the JSON.
 `,
 
   // -------------------------------------------------------------------------
@@ -672,6 +704,18 @@ Map your internal computations to the output format:
 6. **NONSENSICAL EXTERNAL DATA = LOW SCORE**: Use cases that reference external data without a clear, industry-recognized business connection MUST be penalized heavily.
 7. **RELEVANCY TEST**: For EVERY use case, ask: "Can I explain in ONE sentence why these variables/factors are logically connected?" If NO, score LOW.
 8. **BOARDROOM TEST**: Would a senior executive approve budget for this analysis without questioning the logic? If the correlation seems invented, score LOW.
+
+# CHAIN-OF-THOUGHT WORKFLOW (follow this for EACH use case)
+
+For each use case, before assigning scores, briefly think through:
+
+1. **Revenue Impact Assessment**: How does this use case connect to the Revenue Model? Is the link direct (pricing, sales) or indirect (efficiency, retention)?
+2. **Strategic Fit Check**: Is this use case explicitly mentioned in, or required by, the Strategic Goals or Business Priorities?
+3. **Feasibility Gut Check**: Given the data that likely exists in the referenced tables, how realistic is the implementation?
+4. **Boardroom Presentation Test**: Would you stake your reputation on presenting this to the board? What would they challenge?
+5. **Score Assignment**: Based on your reasoning, compute the value and feasibility scores using the formulas above.
+
+This internal reasoning produces more accurate, calibrated scores. You do NOT need to output your reasoning -- only the final scores.
 
 # SCORE EVERY SINGLE USE CASE
 

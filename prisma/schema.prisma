@@ -87,20 +87,23 @@ model InspireUseCase {
 // ---------------------------------------------------------------------------
 
 model InspirePromptLog {
-  logId          String   @id @map("log_id")
-  runId          String   @map("run_id")
-  step           String
-  promptKey      String   @map("prompt_key")
-  promptVersion  String   @map("prompt_version")
-  model          String
-  temperature    Float
-  renderedPrompt String   @map("rendered_prompt")
-  rawResponse    String?  @map("raw_response")
-  honestyScore   Float?   @map("honesty_score")
-  durationMs     Int?     @map("duration_ms")
-  success        Boolean  @default(true)
-  errorMessage   String?  @map("error_message")
-  createdAt      DateTime @default(now()) @map("created_at")
+  logId            String   @id @map("log_id")
+  runId            String   @map("run_id")
+  step             String
+  promptKey        String   @map("prompt_key")
+  promptVersion    String   @map("prompt_version")
+  model            String
+  temperature      Float
+  renderedPrompt   String   @map("rendered_prompt")
+  rawResponse      String?  @map("raw_response")
+  honestyScore     Float?   @map("honesty_score")
+  durationMs       Int?     @map("duration_ms")
+  promptTokens     Int?     @map("prompt_tokens")
+  completionTokens Int?     @map("completion_tokens")
+  totalTokens      Int?     @map("total_tokens")
+  success          Boolean  @default(true)
+  errorMessage     String?  @map("error_message")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 

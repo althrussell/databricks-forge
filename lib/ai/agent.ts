@@ -1,17 +1,31 @@
 /**
- * AI Agent -- wrapper for executing ai_query() calls via SQL Warehouse.
+ * AI Agent -- wrapper for executing LLM calls via Databricks Model Serving.
  *
- * All LLM interactions go through Databricks ai_query() SQL function.
- * This module builds the SQL, executes it, and parses the response.
+ * All LLM interactions go through the Foundation Model API (FMAPI) using
+ * the OpenAI-compatible chat completions endpoint. This replaces the
+ * previous ai_query() SQL path, giving:
+ *   - Lower latency (no SQL warehouse overhead or polling)
+ *   - Structured output via JSON mode (response_format)
+ *   - Token usage metrics for cost tracking
+ *   - System/user message separation
+ *   - Optional streaming for long-running generations
  *
  * Features:
- * - Temperature control via modelParameters (low for structured output,
+ * - Temperature control per prompt type (low for structured output,
  *   moderate for creative generation)
  * - Automatic retry with exponential backoff (configurable)
+ * - Optional JSON mode for structured responses
  */
 
 import { randomUUID } from "crypto";
-import { executeSQL, type ExecuteSQLOptions } from "@/lib/dbx/sql";
+import {
+  chatCompletion,
+  chatCompletionStream,
+  ModelServingError,
+  type ChatMessage,
+  type StreamCallback,
+  type TokenUsage,
+} from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import { insertPromptLog } from "@/lib/lakebase/prompt-logs";
 import { formatPrompt, PROMPT_VERSIONS, type PromptKey } from "./templates";
@@ -35,7 +49,7 @@ export interface AIQueryOptions {
    */
   temperature?: number;
   /**
-   * Maximum tokens for the response. Passed to modelParameters.
+   * Maximum tokens for the response.
    * When omitted, no max_tokens constraint is sent — the model uses its
    * own default, which avoids mid-response truncation.
    */
@@ -55,6 +69,18 @@ export interface AIQueryOptions {
    * Logged alongside runId for per-step filtering.
    */
   step?: string;
+  /**
+   * When set to "json_object", instructs the model to return valid JSON.
+   * The prompt must also mention JSON in its output format instructions.
+   * Eliminates the need for markdown fence stripping and bracket-finding.
+   */
+  responseFormat?: "text" | "json_object";
+  /**
+   * Optional system message to prepend. When provided, the prompt template
+   * content is sent as the "user" message and this becomes the "system"
+   * message. Enables better persona/instruction separation.
+   */
+  systemMessage?: string;
 }
 
 /**
@@ -73,7 +99,12 @@ export interface AIQueryResult {
   promptVersion: string;
   /** Duration of the LLM call in milliseconds */
   durationMs: number;
+  /** Token usage statistics (prompt, completion, total). Null if unavailable. */
+  tokenUsage: TokenUsage | null;
 }
+
+// Re-export TokenUsage for consumers
+export type { TokenUsage } from "@/lib/dbx/model-serving";
 
 // ---------------------------------------------------------------------------
 // Per-prompt temperature configuration
@@ -119,20 +150,21 @@ function getDefaultTemperature(promptKey: PromptKey): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Execute an ai_query() call via SQL and return the raw LLM response.
+ * Execute an LLM call via Databricks Model Serving (FMAPI) and return
+ * the raw response.
  *
- * Uses modelParameters for temperature and max_tokens control.
+ * Uses the chat completions endpoint with system/user message separation.
  * Retries on transient failures with exponential backoff.
  *
- * Syntax: SELECT ai_query(endpoint, request, modelParameters => ...)
- * See: https://docs.databricks.com/sql/language-manual/functions/ai_query
+ * Endpoint: POST /serving-endpoints/{endpoint}/invocations
+ * Docs: https://docs.databricks.com/en/machine-learning/model-serving/score-foundation-models.html
  */
 export async function executeAIQuery(
   options: AIQueryOptions
 ): Promise<AIQueryResult> {
   const maxRetries = options.retries ?? 2;
   const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
-  const maxTokens = options.maxTokens; // undefined = no limit (model default)
+  const maxTokens = options.maxTokens;
   const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
 
   // Pre-render the prompt once for logging (executeAIQueryOnce also renders it,
@@ -147,7 +179,7 @@ export async function executeAIQuery(
     try {
       if (attempt > 0) {
         const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
-        logger.info("ai_query retrying", {
+        logger.info("FMAPI retrying", {
           promptKey: options.promptKey,
           attempt,
           maxRetries,
@@ -172,6 +204,7 @@ export async function executeAIQuery(
           rawResponse: result.rawResponse,
           honestyScore: result.honestyScore,
           durationMs: result.durationMs,
+          tokenUsage: result.tokenUsage,
           success: true,
           errorMessage: null,
         });
@@ -180,7 +213,7 @@ export async function executeAIQuery(
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      logger.warn("ai_query attempt failed", {
+      logger.warn("FMAPI attempt failed", {
         promptKey: options.promptKey,
         attempt: attempt + 1,
         maxRetries,
@@ -208,12 +241,13 @@ export async function executeAIQuery(
       rawResponse: null,
       honestyScore: null,
       durationMs: null,
+      tokenUsage: null,
       success: false,
       errorMessage: lastError.message,
     });
   }
 
-  throw lastError ?? new Error(`ai_query failed for ${options.promptKey}`);
+  throw lastError ?? new Error(`FMAPI call failed for ${options.promptKey}`);
 }
 
 /**
@@ -221,6 +255,11 @@ export async function executeAIQuery(
  * Only retry on 5xx, timeouts, and network errors.
  */
 function isNonRetryableError(error: Error): boolean {
+  // Direct status code check for ModelServingError
+  if (error instanceof ModelServingError) {
+    return error.statusCode >= 400 && error.statusCode < 500;
+  }
+
   const msg = error.message;
   // Match HTTP 4xx status codes in error messages
   const httpStatusMatch = msg.match(/\((\d{3})\)/);
@@ -229,12 +268,19 @@ function isNonRetryableError(error: Error): boolean {
     if (status >= 400 && status < 500) return true;
   }
   // Check for specific non-retryable error patterns
-  if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("SQLSTATE: 42")) {
+  if (msg.includes("INSUFFICIENT_PERMISSIONS")) {
     return true;
   }
   return false;
 }
 
+/**
+ * Execute a single LLM call via the Databricks Model Serving chat
+ * completions endpoint.
+ *
+ * Builds messages in the system/user format, sends via FMAPI, and
+ * extracts the response content along with token usage metrics.
+ */
 async function executeAIQueryOnce(
   options: AIQueryOptions,
   temperature: number,
@@ -243,59 +289,57 @@ async function executeAIQueryOnce(
   const prompt = formatPrompt(options.promptKey, options.variables);
   const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
 
-  // Escape the prompt for SQL string literal (single quotes and backslashes)
-  const escapedPrompt = prompt.replace(/\\/g, "\\\\").replace(/'/g, "''");
+  // Build chat messages with system/user separation
+  const messages: ChatMessage[] = [];
 
-  // Build modelParameters -- only include max_tokens when explicitly set
-  const modelParams = maxTokens
-    ? `named_struct('temperature', ${temperature.toFixed(2)}, 'max_tokens', ${maxTokens})`
-    : `named_struct('temperature', ${temperature.toFixed(2)})`;
+  if (options.systemMessage) {
+    messages.push({ role: "system", content: options.systemMessage });
+  }
 
-  const sql = `
-    SELECT ai_query(
-      '${options.modelEndpoint}',
-      '${escapedPrompt}',
-      modelParameters => ${modelParams}
-    ) AS response
-  `;
+  messages.push({ role: "user", content: prompt });
 
   const startTime = Date.now();
 
-  logger.info("ai_query executing", {
+  logger.info("FMAPI executing", {
     promptKey: options.promptKey,
     promptVersion,
     model: options.modelEndpoint,
     promptChars: prompt.length,
     temperature,
+    responseFormat: options.responseFormat ?? "text",
     ...(maxTokens !== undefined && { maxTokens }),
   });
 
-  // ai_query() calls can take 1-3+ minutes for LLM inference.
-  // Set waitTimeout to "0s" so the server returns immediately with a
-  // statement_id, then the poll loop in executeSQL handles the wait.
-  const sqlOptions: ExecuteSQLOptions = {
-    waitTimeout: "0s",
-    submitTimeoutMs: 30_000,
-  };
+  const response = await chatCompletion({
+    endpoint: options.modelEndpoint,
+    messages,
+    temperature,
+    maxTokens,
+    responseFormat: options.responseFormat,
+  });
 
-  const result = await executeSQL(sql, undefined, undefined, sqlOptions);
-
-  if (result.rows.length === 0 || !result.rows[0][0]) {
-    throw new Error(`ai_query returned no response for ${options.promptKey}`);
-  }
-
-  const rawResponse = result.rows[0][0];
+  const rawResponse = response.content;
   const durationMs = Date.now() - startTime;
+
+  if (!rawResponse) {
+    throw new Error(`FMAPI returned empty response for ${options.promptKey}`);
+  }
 
   const honestyScore = extractHonestyScore(rawResponse);
 
-  logger.info("ai_query response received", {
+  logger.info("FMAPI response received", {
     promptKey: options.promptKey,
     promptVersion,
-    model: options.modelEndpoint,
+    model: response.model || options.modelEndpoint,
     responseChars: rawResponse.length,
     durationMs,
     honestyScore,
+    finishReason: response.finishReason,
+    ...(response.usage && {
+      promptTokens: response.usage.promptTokens,
+      completionTokens: response.usage.completionTokens,
+      totalTokens: response.usage.totalTokens,
+    }),
   });
 
   // Warn on low honesty scores
@@ -307,7 +351,123 @@ async function executeAIQueryOnce(
     });
   }
 
-  return { rawResponse, honestyScore, promptVersion, durationMs };
+  // Warn if the response was truncated (finish_reason: "length")
+  if (response.finishReason === "length") {
+    logger.warn("FMAPI response truncated (hit token limit)", {
+      promptKey: options.promptKey,
+      completionTokens: response.usage?.completionTokens,
+    });
+  }
+
+  return {
+    rawResponse,
+    honestyScore,
+    promptVersion,
+    durationMs,
+    tokenUsage: response.usage,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Streaming Execution
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute an LLM call with SSE streaming via Databricks Model Serving.
+ *
+ * Similar to executeAIQuery but streams the response, calling `onChunk`
+ * for each content delta. Useful for long-running generations (e.g. SQL)
+ * where incremental progress is valuable.
+ *
+ * Does NOT retry -- streaming calls are typically for single attempts.
+ * The caller should handle failures and fall back to non-streaming if needed.
+ */
+export async function executeAIQueryStream(
+  options: AIQueryOptions,
+  onChunk?: StreamCallback
+): Promise<AIQueryResult> {
+  const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
+  const maxTokens = options.maxTokens;
+  const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
+  const prompt = formatPrompt(options.promptKey, options.variables);
+
+  const messages: ChatMessage[] = [];
+  if (options.systemMessage) {
+    messages.push({ role: "system", content: options.systemMessage });
+  }
+  messages.push({ role: "user", content: prompt });
+
+  const startTime = Date.now();
+
+  logger.info("FMAPI streaming executing", {
+    promptKey: options.promptKey,
+    promptVersion,
+    model: options.modelEndpoint,
+    promptChars: prompt.length,
+    temperature,
+  });
+
+  const response = await chatCompletionStream(
+    {
+      endpoint: options.modelEndpoint,
+      messages,
+      temperature,
+      maxTokens,
+      responseFormat: options.responseFormat,
+    },
+    onChunk
+  );
+
+  const rawResponse = response.content;
+  const durationMs = Date.now() - startTime;
+
+  if (!rawResponse) {
+    throw new Error(`FMAPI streaming returned empty response for ${options.promptKey}`);
+  }
+
+  const honestyScore = extractHonestyScore(rawResponse);
+
+  logger.info("FMAPI streaming response complete", {
+    promptKey: options.promptKey,
+    promptVersion,
+    model: response.model || options.modelEndpoint,
+    responseChars: rawResponse.length,
+    durationMs,
+    finishReason: response.finishReason,
+    ...(response.usage && {
+      promptTokens: response.usage.promptTokens,
+      completionTokens: response.usage.completionTokens,
+      totalTokens: response.usage.totalTokens,
+    }),
+  });
+
+  // Log to prompt audit trail
+  if (options.runId) {
+    insertPromptLog({
+      logId: randomUUID(),
+      runId: options.runId,
+      step: options.step ?? options.promptKey,
+      promptKey: options.promptKey,
+      promptVersion,
+      model: options.modelEndpoint,
+      temperature,
+      renderedPrompt: prompt,
+      rawResponse,
+      honestyScore,
+      durationMs,
+      tokenUsage: response.usage,
+      success: true,
+      errorMessage: null,
+    });
+  }
+
+  return {
+    rawResponse,
+    honestyScore,
+    promptVersion,
+    durationMs,
+    tokenUsage: response.usage,
+  };
 }
 
 // ---------------------------------------------------------------------------

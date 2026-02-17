@@ -108,6 +108,7 @@ async function assignDomains(
       output_language: "English",
     },
     modelEndpoint: aiModel,
+    responseFormat: "json_object",
     runId,
     step: "domain-clustering",
   });
@@ -163,6 +164,7 @@ async function assignSubdomains(
       output_language: "English",
     },
     modelEndpoint: aiModel,
+    responseFormat: "json_object",
     runId,
     step: "domain-clustering",
   });
@@ -245,6 +247,7 @@ async function mergeSmallDomains(
         domain_info_str: domainInfoStr,
       },
       modelEndpoint: aiModel,
+      responseFormat: "json_object",
       runId,
       step: "domain-clustering",
     });

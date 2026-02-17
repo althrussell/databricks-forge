@@ -4,7 +4,7 @@
 
 **Transform your Unity Catalog metadata into actionable, AI-generated use cases.**
 
-Databricks Inspire AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via `ai_query()`) to discover, score, and export data-driven use cases -- without ever reading your actual data.
+Databricks Inspire AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
 
 ---
 
@@ -33,7 +33,7 @@ Databricks Inspire AI is a web application deployed as a [Databricks App](https:
 | Frontend | Next.js 16 (App Router), React 19, shadcn/ui, Tailwind CSS 4 |
 | Language | TypeScript (strict) |
 | SQL Execution | Databricks SQL Statement Execution API via SQL Warehouse |
-| LLM | `ai_query()` SQL function on Databricks Model Serving |
+| LLM | Databricks Model Serving REST API (OpenAI-compatible chat completions) |
 | Persistence | [Lakebase Autoscaling](https://docs.databricks.com/aws/en/oltp/projects/authentication) (Postgres-compatible) via Prisma ORM |
 | Deployment | Databricks Apps (automatic OAuth, resource bindings) |
 | Export | exceljs, pptxgenjs, Workspace REST API |
@@ -72,7 +72,7 @@ databricks-inspire/
     dbx/                        # Databricks SQL client + Workspace API
     queries/                    # SQL text + row mappers
     domain/                     # TypeScript types + scoring
-    ai/                         # Prompt templates + ai_query wrapper
+    ai/                         # Prompt templates + Model Serving client
     pipeline/                   # Engine + 6 step modules
     lakebase/                   # Prisma-based CRUD for runs + use cases
     export/                     # Excel, PPTX, PDF, notebook generators
@@ -92,13 +92,13 @@ The "Discover Usecases" pipeline runs 7 steps sequentially. The frontend polls f
 
 | Step | Name | What it does | Progress |
 | --- | --- | --- | --- |
-| 1 | **Business Context** | Generates strategic goals, value chain, and revenue model via `ai_query` | 10% |
+| 1 | **Business Context** | Generates strategic goals, value chain, and revenue model via Model Serving | 10% |
 | 2 | **Metadata Extraction** | Queries `information_schema` for tables, columns, and foreign keys | 20% |
-| 3 | **Table Filtering** | Classifies tables as business-relevant vs technical via `ai_query` | 30% |
-| 4 | **Use Case Generation** | Generates AI and statistical use cases in parallel batches via `ai_query` | 45% |
-| 5 | **Domain Clustering** | Assigns domains and subdomains via `ai_query`, merges small domains | 55% |
-| 6 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via `ai_query` | 65% |
-| 7 | **SQL Generation** | Generates runnable Databricks SQL per use case via `ai_query` | 95% |
+| 3 | **Table Filtering** | Classifies tables as business-relevant vs technical via Model Serving (JSON mode) | 30% |
+| 4 | **Use Case Generation** | Generates AI and statistical use cases in parallel batches via Model Serving (JSON mode) | 45% |
+| 5 | **Domain Clustering** | Assigns domains and subdomains via Model Serving, merges small domains | 55% |
+| 6 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via Model Serving | 65% |
+| 7 | **SQL Generation** | Generates runnable Databricks SQL per use case via Model Serving (streaming) | 95% |
 
 Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
 
@@ -233,7 +233,7 @@ This creates four tables: `inspire_runs`, `inspire_use_cases`, `inspire_metadata
 - A **Databricks workspace** with:
   - A running **SQL Warehouse** (Serverless or Pro)
   - Access to **Unity Catalog** metadata you want to analyse
-  - A **Model Serving endpoint** that supports `ai_query()` (e.g. `databricks-claude-sonnet-4-5`)
+  - A **Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
 - A **Databricks Personal Access Token (PAT)**
 - A **Lakebase Autoscaling** project (see [Lakebase setup](#lakebase-autoscaling-setup) above)
 
@@ -253,7 +253,7 @@ Create a `.env` file:
 # Lakebase connection (pooler endpoint)
 DATABASE_URL="postgresql://databricks_inspire:<password>@ep-xxx-pooler.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
 
-# Databricks workspace (for SQL Warehouse + ai_query)
+# Databricks workspace (for SQL Warehouse + Model Serving)
 DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 DATABRICKS_TOKEN=dapi_your_personal_access_token
 DATABRICKS_WAREHOUSE_ID=abc123def456
@@ -404,7 +404,7 @@ These map to the form fields on the `/configure` page:
 | **Business Priorities** | No | Increase Revenue | Multi-select from 10 predefined priorities |
 | **Strategic Goals** | No | Auto-generated | Custom goals for scoring alignment |
 | **Business Domains** | No | Auto-detected | Focus domains (e.g. "Risk, Finance, Marketing") |
-| **AI Model** | No | databricks-claude-opus-4-6 | Model Serving endpoint for `ai_query()` calls |
+| **AI Model** | No | databricks-claude-opus-4-6 | Model Serving endpoint for LLM calls (chat completions) |
 | **Languages** | No | English | Target languages for generated documentation |
 
 ---

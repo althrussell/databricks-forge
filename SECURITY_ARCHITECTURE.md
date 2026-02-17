@@ -66,7 +66,7 @@ graph LR
   API --> Engine
   Engine -->|SQL Statement API| Warehouse
   Warehouse -->|information_schema| UC
-  Warehouse -->|ai_query| ModelServing
+  Engine -->|Chat Completions API| ModelServing
   Engine -->|Prisma| Lakebase
   Engine -->|Notebook export| Workspace
 ```
@@ -95,7 +95,7 @@ graph TB
   AppsProxy -->|x-forwarded-access-token| AppContainer
   AppContainer -->|Statement Execution API| SQLWarehouse
   AppContainer -->|Prisma TCP| LakebaseDB
-  SQLWarehouse -->|ai_query| ModelEndpoint
+  AppContainer -->|Chat Completions API| ModelEndpoint
 ```
 
 | Property | Value |
@@ -187,7 +187,8 @@ expiry buffer. The cache is process-local and not shared across instances.
 
 | Destination | Protocol | Port | Purpose |
 |-------------|----------|------|---------|
-| SQL Warehouse | HTTPS | 443 | Metadata queries, `ai_query()`, SQL execution |
+| SQL Warehouse | HTTPS | 443 | Metadata queries, generated SQL execution |
+| Model Serving | HTTPS | 443 | LLM inference (chat completions API) |
 | Lakebase | TLS/TCP | 5432 | Pipeline run persistence (Prisma ORM) |
 | Workspace API | HTTPS | 443 | Notebook export only |
 | OIDC endpoint | HTTPS | 443 | OAuth M2M token exchange |
@@ -299,20 +300,19 @@ When `sampleRowsPerTable > 0` (configurable in Settings, range 0-50):
 
 ### LLM Execution Model
 
-All LLM calls are executed via the Databricks `ai_query()` SQL function,
-which runs on Databricks Model Serving. The application does **not** call
-external LLM APIs (OpenAI, Anthropic, etc.) directly. The model endpoint
-is workspace-internal.
+All LLM calls are executed via direct REST calls to the Databricks Model
+Serving chat completions API (`/serving-endpoints/{endpoint}/invocations`).
+The application does **not** call external LLM APIs (OpenAI, Anthropic, etc.)
+directly. The model endpoint is workspace-internal. The SQL Warehouse is used
+only for metadata queries and generated SQL execution -- not for LLM inference.
 
 ```mermaid
 sequenceDiagram
   participant App as Pipeline Engine
-  participant SQL as SQL Warehouse
   participant MS as Model Serving
-  App->>SQL: SELECT ai_query('endpoint', 'prompt', modelParameters)
-  SQL->>MS: Forward to model endpoint
-  MS-->>SQL: LLM response
-  SQL-->>App: Response as SQL result
+  App->>MS: POST /serving-endpoints/{endpoint}/invocations
+  Note right of App: Chat completions format (system + user messages)
+  MS-->>App: JSON response with content + token usage
 ```
 
 ### Prompt Injection Mitigations
@@ -322,9 +322,10 @@ sequenceDiagram
 | **Delimiter wrapping** | User-supplied text is wrapped in `---BEGIN USER DATA---` / `---END USER DATA---` markers before injection into prompts |
 | **Marker stripping** | Existing delimiter markers in user input are stripped to prevent delimiter escape attacks |
 | **User variable identification** | A whitelist (`USER_INPUT_VARIABLES`) identifies which template variables contain user input and require sanitisation |
-| **SQL string escaping** | Prompts are escaped for SQL embedding: backslashes (`\\` to `\\\\`) and single quotes (`'` to `''`) |
-| **Output validation** | LLM JSON/CSV outputs are parsed and validated with Zod schemas before use; malformed items are dropped |
-| **Structured output formats** | Prompts request specific output formats (JSON arrays, CSV) reducing free-text attack surface |
+| **System/user separation** | Prompts use chat completions format with separate system and user messages, providing structural isolation between instructions and user data |
+| **JSON mode** | Most pipeline steps use `response_format: json_object` which constrains LLM output to valid JSON, reducing attack surface |
+| **Output validation** | LLM JSON outputs are parsed and validated with Zod schemas before use; malformed items are dropped |
+| **Structured output formats** | Prompts request specific JSON array output formats, reducing free-text attack surface |
 
 ### Honesty Score Monitoring
 
@@ -337,7 +338,7 @@ adversarial or low-quality responses.
 
 - The model endpoint is configured per-run (`aiModel` field).
 - The endpoint must be a Databricks Model Serving endpoint accessible from
-  the bound SQL Warehouse.
+  the workspace.
 - Model selection is restricted to endpoints the service principal or user
   has `CAN QUERY` permissions on.
 

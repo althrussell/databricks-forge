@@ -41,7 +41,7 @@ Databricks Inspire AI discovers data-driven use cases from Unity Catalog metadat
 
 When an **Industry Outcome Map** is active, steps 1, 4, and 6 are enriched with curated strategic context, reference use cases, and KPIs from that industry's playbook. The user can select an industry manually, or **the system will auto-detect the best matching industry** from the business context generated in Step 1. The app ships with 10 built-in maps and supports ingesting custom maps via the Outcome Map Ingestor (see [Industry Outcome Maps](#industry-outcome-maps)).
 
-All LLM calls use Databricks `ai_query()` executed via the SQL Statement Execution API against a SQL Warehouse. **No data rows are read by default** -- only structural metadata (see [Privacy Model](#privacy-model)).
+All LLM calls use direct REST calls to Databricks Model Serving (chat completions API). The SQL Warehouse is used only for metadata queries and generated SQL execution. **No data rows are read by default** -- only structural metadata (see [Privacy Model](#privacy-model)).
 
 ---
 
@@ -64,9 +64,9 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 │       │               │              ┌──────┴──────┐                   │
 │       │     ┌─────────┤              │             │                   │
 │       │     │         │        ┌─────┴──┐   ┌─────┴──────┐            │
-│  ┌────┴────┐│  ┌──────┴──┐    │ai_query│   │information_ │            │
-│  │ Exports ││  │ Outcome │    │  (LLM) │   │  schema     │            │
-│  │Excel/PDF││  │  Maps   │    │        │   │  (metadata) │            │
+│  ┌────┴────┐│  ┌──────┴──┐    │ Model  │   │information_ │            │
+│  │ Exports ││  │ Outcome │    │Serving │   │  schema     │            │
+│  │Excel/PDF││  │  Maps   │    │ (LLM)  │   │  (metadata) │            │
 │  │PPTX/SQL ││  │(custom) │    └────────┘   └────────────┘            │
 │  └─────────┘│  └─────────┘                                            │
 │             │                                                          │
@@ -78,13 +78,13 @@ All LLM calls use Databricks `ai_query()` executed via the SQL Statement Executi
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                      ┌──────────────┴──────────────┐
-                     │    Databricks SQL Warehouse   │
-                     │  ┌─────────┐  ┌────────────┐ │
-                     │  │ai_query │  │information_ │ │
-                     │  │ (Model  │  │  schema     │ │
-                     │  │Serving) │  │  (Unity Cat)│ │
-                     │  └─────────┘  └────────────┘ │
-                     └───────────────────────────────┘
+          ┌──────────────┴──────────────┐  ┌──────────────────┐
+          │    Databricks SQL Warehouse   │  │  Model Serving   │
+          │  ┌────────────────────────┐   │  │  (Chat           │
+          │  │ information_schema     │   │  │   Completions)   │
+          │  │ (Unity Catalog)        │   │  │  Direct REST API │
+          │  └────────────────────────┘   │  └──────────────────┘
+          └───────────────────────────────┘
 ```
 
 ---
@@ -275,7 +275,7 @@ At runtime, the system merges built-in and custom outcome maps:
 **Purpose:** Generate a structured understanding of the customer's business before analysing their data.
 
 **How it works:**
-1. A single `ai_query()` call with the `BUSINESS_CONTEXT_WORKER_PROMPT` template
+1. A single Model Serving call with the `BUSINESS_CONTEXT_WORKER_PROMPT` template
 2. If an industry is selected (manually), `{industry_context}` is injected into the prompt with objectives, why-change narratives, and sub-vertical context from the outcome map
 3. The LLM acts as a "Principal Business Analyst" and returns structured JSON
 4. User-supplied overrides (strategic goals, business domains) take precedence over LLM output
@@ -553,10 +553,10 @@ Examples:
 Use cases grouped by domain
     │
     ├── Domain: Finance (10 use cases)
-    │   ├── Wave 1: [UC-1, UC-2, UC-3]  ──▶ 3 concurrent ai_query() calls
-    │   ├── Wave 2: [UC-4, UC-5, UC-6]  ──▶ 3 concurrent ai_query() calls
-    │   ├── Wave 3: [UC-7, UC-8, UC-9]  ──▶ 3 concurrent ai_query() calls
-    │   └── Wave 4: [UC-10]             ──▶ 1 ai_query() call
+    │   ├── Wave 1: [UC-1, UC-2, UC-3]  ──▶ 3 concurrent Model Serving calls
+    │   ├── Wave 2: [UC-4, UC-5, UC-6]  ──▶ 3 concurrent Model Serving calls
+    │   ├── Wave 3: [UC-7, UC-8, UC-9]  ──▶ 3 concurrent Model Serving calls
+    │   └── Wave 4: [UC-10]             ──▶ 1 Model Serving call (streaming)
     │
     ├── Domain: Marketing (7 use cases)
     │   └── ... (processed after Finance)
@@ -844,7 +844,7 @@ Each domain gets its own notebook:
 │       → NOT included in exports                                  │
 │                                                                  │
 │  LLM calls:                                                      │
-│    ✅ ai_query() via SQL Warehouse   (metadata + business context)│
+│    ✅ Model Serving REST API          (business context + prompts) │
 │    ❌ No direct model API calls      (all routed through SQL)    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -862,8 +862,8 @@ These values control pipeline behaviour and can be adjusted in the source code:
 | --- | --- | --- | --- |
 | Table filtering batch size | 100 | `table-filtering.ts` | Tables per LLM classification call |
 | Tables per use-case batch | 20 | `usecase-generation.ts` | Tables included in each generation prompt |
-| Max concurrent UC batches | 3 | `usecase-generation.ts` | Parallel `ai_query()` calls for generation |
-| Max concurrent SQL generations | 3 | `sql-generation.ts` | Parallel `ai_query()` calls for SQL |
+| Max concurrent UC batches | 3 | `usecase-generation.ts` | Parallel Model Serving calls for generation |
+| Max concurrent SQL generations | 3 | `sql-generation.ts` | Parallel Model Serving calls for SQL (streaming) |
 
 ### Clustering and scoring
 

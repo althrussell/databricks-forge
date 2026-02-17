@@ -54,7 +54,7 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 | Frontend | Next.js 16 App Router, React 19, shadcn/ui, Tailwind CSS 4 |
 | Language | TypeScript (strict mode) |
 | SQL Execution | Databricks SQL Statement Execution REST API |
-| LLM Calls | `ai_query()` SQL function via SQL Warehouse |
+| LLM Calls | Databricks Model Serving REST API (chat completions) |
 | Persistence | Lakebase (Unity Catalog managed tables) via Prisma 7 |
 | Deployment | Databricks Apps (auto-auth, injected env vars) |
 | Export | exceljs, pdfkit, pptxgenjs, Workspace REST API |
@@ -62,7 +62,7 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 **Key improvements:**
 - **Modular architecture** -- separated into `/lib/dbx`, `/lib/queries`, `/lib/domain`, `/lib/ai`, `/lib/pipeline`, `/lib/lakebase`, `/lib/export`
 - **Typed throughout** -- every data structure, API response, and LLM output has TypeScript types and Zod validation
-- **No Spark dependency** -- uses Databricks SQL Statement Execution API directly, enabling deployment as a lightweight web app
+- **No Spark dependency** -- uses Databricks SQL Statement Execution API for metadata and Model Serving REST API for LLM calls, enabling deployment as a lightweight web app
 - **Automatic deployment** -- runs as a Databricks App with zero manual cluster setup
 
 ---

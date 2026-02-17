@@ -50,6 +50,7 @@ export async function parseOutcomeMapWithAI(
       modelEndpoint: aiModel,
       temperature: 0.2,
       retries: 1,
+      responseFormat: "json_object",
       step: "outcome-map-parse",
     });
 

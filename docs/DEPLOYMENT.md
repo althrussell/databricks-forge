@@ -19,7 +19,7 @@ The app manifest declares:
 
 | Resource | Type | Purpose |
 |----------|------|---------|
-| SQL Warehouse | `sql_warehouse` | Execute SQL queries, ai_query() calls, and Lakebase operations |
+| SQL Warehouse | `sql_warehouse` | Execute metadata queries and generated SQL |
 
 The SQL Warehouse ID is injected via environment variables. Never hardcode it.
 

@@ -5,7 +5,7 @@
  * Each batch processes a subset of tables.
  */
 
-import { executeAIQuery, parseCSVResponse } from "@/lib/ai/agent";
+import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
@@ -20,11 +20,20 @@ import { v4 as uuidv4 } from "uuid";
 const MAX_TABLES_PER_BATCH = 20;
 const MAX_CONCURRENT_BATCHES = 3;
 
-/**
- * CSV columns: No, Name, type, Analytics Technique, Statement, Solution,
- * Business Value, Beneficiary, Sponsor, Tables Involved, Technical Design
- */
-const CSV_COLUMNS = 11;
+/** Shape of each use case object in the JSON array returned by the LLM. */
+interface UseCaseItem {
+  no?: number;
+  name?: string;
+  type?: string;
+  analytics_technique?: string;
+  statement?: string;
+  solution?: string;
+  business_value?: string;
+  beneficiary?: string;
+  sponsor?: string;
+  tables_involved?: string[] | string;
+  technical_design?: string;
+}
 
 export async function runUsecaseGeneration(
   ctx: PipelineContext,
@@ -181,49 +190,58 @@ async function generateBatch(
     promptKey,
     variables,
     modelEndpoint: aiModel,
+    responseFormat: "json_object",
     runId: logRunId,
     step: "usecase-generation",
   });
 
-  let rows: string[][];
+  let items: UseCaseItem[];
   try {
-    rows = parseCSVResponse(result.rawResponse, CSV_COLUMNS);
+    const parsed = parseJSONResponse<UseCaseItem[] | { use_cases: UseCaseItem[] }>(result.rawResponse);
+    // Handle both direct array and wrapped object responses
+    items = Array.isArray(parsed) ? parsed : (parsed.use_cases ?? []);
   } catch (parseErr) {
-    logger.warn("Failed to parse use case generation CSV", {
+    logger.warn("Failed to parse use case generation JSON", {
       promptKey,
       error: parseErr instanceof Error ? parseErr.message : String(parseErr),
     });
     return [];
   }
 
-  return rows.map((row) => {
-    const tablesStr = row[9] ?? "";
-    const tablesInvolved = tablesStr
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+  return items
+    .filter((item) => item.name)
+    .map((item) => {
+      // tables_involved can be an array (expected) or comma-separated string (fallback)
+      let tablesInvolved: string[];
+      if (Array.isArray(item.tables_involved)) {
+        tablesInvolved = item.tables_involved.map((t) => t.trim()).filter(Boolean);
+      } else if (typeof item.tables_involved === "string") {
+        tablesInvolved = item.tables_involved.split(",").map((t) => t.trim()).filter(Boolean);
+      } else {
+        tablesInvolved = [];
+      }
 
-    return {
-      id: uuidv4(),
-      runId: useCaseRunId,
-      useCaseNo: parseInt(row[0] ?? "0", 10),
-      name: row[1] ?? "",
-      type: (row[2]?.trim() as UseCaseType) || type,
-      analyticsTechnique: row[3] ?? "",
-      statement: row[4] ?? "",
-      solution: row[5] ?? "",
-      businessValue: row[6] ?? "",
-      beneficiary: row[7] ?? "",
-      sponsor: row[8] ?? "",
-      domain: "", // assigned in Step 5
-      subdomain: "", // assigned in Step 5
-      tablesInvolved,
-      priorityScore: 0, // scored in Step 6
-      feasibilityScore: 0,
-      impactScore: 0,
-      overallScore: 0,
-      sqlCode: null,
-      sqlStatus: null,
-    };
-  });
+      return {
+        id: uuidv4(),
+        runId: useCaseRunId,
+        useCaseNo: item.no ?? 0,
+        name: item.name ?? "",
+        type: ((item.type?.trim() as UseCaseType) || type),
+        analyticsTechnique: item.analytics_technique ?? "",
+        statement: item.statement ?? "",
+        solution: item.solution ?? "",
+        businessValue: item.business_value ?? "",
+        beneficiary: item.beneficiary ?? "",
+        sponsor: item.sponsor ?? "",
+        domain: "", // assigned in Step 5
+        subdomain: "", // assigned in Step 5
+        tablesInvolved,
+        priorityScore: 0, // scored in Step 6
+        feasibilityScore: 0,
+        impactScore: 0,
+        overallScore: 0,
+        sqlCode: null,
+        sqlStatus: null,
+      };
+    });
 }

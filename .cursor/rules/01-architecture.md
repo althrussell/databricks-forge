@@ -1,10 +1,10 @@
 # Architecture Rules
 
 - Use a "ports and adapters" style:
-  - /lib/dbx (Databricks SQL client, Workspace API)
+  - /lib/dbx (Databricks SQL client, Model Serving client, Workspace API)
   - /lib/queries (SQL text + row-to-type mappers)
   - /lib/domain (types + scoring logic)
-  - /lib/ai (prompt template building + ai_query execution)
+  - /lib/ai (prompt template building + Model Serving execution)
   - /lib/pipeline (pipeline engine + step modules)
   - /lib/lakebase (Lakebase table schema + CRUD)
   - /lib/export (Excel, PDF, PPTX, notebook generators)

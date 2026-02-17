@@ -51,4 +51,8 @@ export const TIMEOUTS = {
   SQL_CHUNK: 30_000,
   /** Workspace API calls */
   WORKSPACE: 30_000,
+  /** Model Serving inference (LLM calls can take 1-3+ min) */
+  MODEL_SERVING: 300_000,
+  /** Model Serving streaming inference (longer for incremental delivery) */
+  MODEL_SERVING_STREAM: 600_000,
 } as const;
