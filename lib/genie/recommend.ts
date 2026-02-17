@@ -174,6 +174,17 @@ function extractSqlSnippets(
 }
 
 // ---------------------------------------------------------------------------
+// Table FQN Validation
+// ---------------------------------------------------------------------------
+
+/** Matches a valid Unity Catalog FQN: catalog.schema.table (alphanumeric + underscores). */
+const TABLE_FQN_REGEX = /^[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*$/;
+
+function isValidTableFqn(identifier: string): boolean {
+  return TABLE_FQN_REGEX.test(identifier);
+}
+
+// ---------------------------------------------------------------------------
 // Recommendation Generator
 // ---------------------------------------------------------------------------
 
@@ -212,10 +223,12 @@ export function generateGenieRecommendations(
       (a, b) => b.overallScore - a.overallScore
     );
 
-    // 1. Collect tables
+    // 1. Collect tables (filter out invalid identifiers from LLM hallucinations)
     const tableSet = new Set<string>();
     for (const uc of sorted) {
-      for (const t of uc.tablesInvolved) tableSet.add(t);
+      for (const t of uc.tablesInvolved) {
+        if (isValidTableFqn(t)) tableSet.add(t);
+      }
     }
     const tables = Array.from(tableSet);
 
