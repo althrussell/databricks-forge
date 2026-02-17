@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,7 @@ const STATUS_STYLES: Record<string, string> = {
 const PAGE_SIZE = 15;
 
 export default function RunsPage() {
+  const router = useRouter();
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -273,14 +275,13 @@ export default function RunsPage() {
               </TableHeader>
               <TableBody>
                 {paginated.map((run) => (
-                  <TableRow key={run.runId}>
+                  <TableRow
+                    key={run.runId}
+                    className="cursor-pointer transition-colors hover:bg-row-hover"
+                    onClick={() => router.push(`/runs/${run.runId}`)}
+                  >
                     <TableCell className="font-medium">
-                      <Link
-                        href={`/runs/${run.runId}`}
-                        className="hover:underline"
-                      >
-                        {run.config.businessName}
-                      </Link>
+                      {run.config.businessName}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate font-mono text-xs">
                       {run.config.ucMetadata}
@@ -315,11 +316,8 @@ export default function RunsPage() {
                         minute: "2-digit",
                       })}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/runs/${run.runId}`}>View</Link>
-                        </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button

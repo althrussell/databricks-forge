@@ -53,8 +53,8 @@ export function TypeSplitChart({
             </Pie>
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                borderColor: "hsl(var(--border))",
+                backgroundColor: "var(--color-card)",
+                borderColor: "var(--color-border)",
                 borderRadius: "var(--radius)",
                 fontSize: 12,
               }}

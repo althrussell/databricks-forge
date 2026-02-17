@@ -48,8 +48,8 @@ export function ScoreDistributionChart({
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                borderColor: "hsl(var(--border))",
+                backgroundColor: "var(--color-card)",
+                borderColor: "var(--color-border)",
                 borderRadius: "var(--radius)",
                 fontSize: 12,
               }}
