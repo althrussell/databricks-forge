@@ -1,8 +1,8 @@
 /**
  * Pipeline Step 6: Scoring & Deduplication
  *
- * Scores each use case on multiple dimensions using ai_query, then
- * removes duplicates and low-value entries.
+ * Scores each use case on multiple dimensions using Model Serving (JSON mode),
+ * then removes duplicates and low-value entries.
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";

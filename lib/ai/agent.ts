@@ -475,7 +475,7 @@ export async function executeAIQueryStream(
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a CSV response from ai_query into rows of string arrays.
+ * Parse a CSV response from the LLM into rows of string arrays.
  * Handles quoted fields and malformed rows gracefully.
  */
 export function parseCSVResponse(
@@ -500,7 +500,7 @@ export function parseCSVResponse(
 }
 
 /**
- * Parse a JSON response from ai_query.
+ * Parse a JSON response from the LLM.
  */
 export function parseJSONResponse<T = Record<string, unknown>>(
   rawResponse: string

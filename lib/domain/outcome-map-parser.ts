@@ -1,7 +1,7 @@
 /**
  * Outcome Map Parser
  *
- * Uses ai_query() to extract structured IndustryOutcome data from raw
+ * Uses Model Serving to extract structured IndustryOutcome data from raw
  * markdown outcome map documents. The LLM handles the varied formatting
  * across different industry documents.
  */
@@ -24,7 +24,7 @@ export interface ParseResult {
 
 /**
  * Parse a raw markdown outcome map document into a structured IndustryOutcome
- * using AI (ai_query via SQL Warehouse).
+ * using AI (Model Serving chat completions API).
  *
  * @param markdown - Raw markdown content of the outcome map
  * @param aiModel  - AI model endpoint to use for parsing

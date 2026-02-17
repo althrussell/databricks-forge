@@ -69,7 +69,7 @@ export interface ExecuteSQLOptions {
    * Controls how long the server holds the connection trying to return
    * results inline before falling back to async polling.
    *
-   * Set to "0s" for long-running queries (e.g. ai_query) so the server
+   * Set to "0s" for long-running queries so the server
    * returns immediately with a statement_id and we poll for results.
    *
    * Default: "50s" (good for regular SQL that usually completes quickly).

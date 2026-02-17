@@ -1,8 +1,8 @@
 /**
  * Pipeline Step 7: SQL Generation
  *
- * Generates bespoke, runnable SQL for each use case by calling ai_query
- * with full business context, use case details, and actual table schemas.
+ * Generates bespoke, runnable SQL for each use case by calling Model Serving
+ * (streaming) with full business context, use case details, and actual table schemas.
  *
  * Processing order: domains sorted by size (smallest first), with controlled
  * concurrency within each domain. Matches the reference notebook approach.

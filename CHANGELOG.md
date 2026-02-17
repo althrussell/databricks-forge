@@ -5,6 +5,24 @@ All notable changes to Databricks Inspire AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-17
+
+### Changed
+
+- **LLM integration migrated to Model Serving REST API**: Replaced `ai_query()` SQL function with direct calls to Databricks Model Serving chat completions endpoint (`/serving-endpoints/{endpoint}/invocations`). This eliminates SQL Warehouse overhead for LLM inference, reducing latency and improving reliability.
+- **JSON mode for structured outputs**: Table filtering and use case generation now use `response_format: json_object` instead of CSV parsing, improving parse reliability and eliminating regex-based extraction.
+- **Streaming support for SQL generation**: Step 7 now uses SSE streaming via Model Serving, improving perceived latency for long SQL generation calls.
+- **Token usage tracking**: All LLM calls now capture prompt, completion, and total token counts from Model Serving responses and persist them in prompt logs for cost analysis.
+- **Chain-of-thought prompts**: Table filtering and scoring prompt templates now include explicit reasoning workflow sections, improving LLM decision quality.
+- **System/user message separation**: Prompts now use the chat completions format with separate system and user messages, providing better prompt hygiene and structural isolation.
+- Updated all documentation (AGENTS.md, README.md, SECURITY_ARCHITECTURE.md, INSPIRE_ANALYSIS.md, INSPIRE_V1_vs_V2.md, docs/ARCHITECTURE.md, docs/PIPELINE.md, docs/DEPLOYMENT.md) to reflect the new Model Serving architecture.
+- Updated Cursor rules (01-architecture, 04-ai-guardrails, 05-testing) for new architecture conventions.
+
+### Added
+
+- `lib/dbx/model-serving.ts` -- new Model Serving client with chat completions, streaming, token usage, and custom error handling.
+- `promptTokens`, `completionTokens`, `totalTokens` fields on `InspirePromptLog` Prisma model.
+
 ## [0.2.0] - 2026-02-16
 
 ### Added
