@@ -8,6 +8,7 @@
 import { executeSQLMapped, executeSQL, type SqlColumn } from "@/lib/dbx/sql";
 import { validateIdentifier } from "@/lib/validation";
 import { withRetry } from "@/lib/dbx/retry";
+import { logger } from "@/lib/logger";
 import type { TableInfo, ColumnInfo, ForeignKey, MetricViewInfo } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
@@ -136,7 +137,7 @@ export async function listSchemas(catalog: string): Promise<string[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
   return withRetry(
     async () => {
-      const result = await executeSQL(`SHOW SCHEMAS IN \`${safeCatalog}\``);
+      const result = await executeSQL("SHOW SCHEMAS", safeCatalog);
       return result.rows
         .map((r) => r[0])
         .filter((s) => s !== "information_schema" && s !== "default");
@@ -193,18 +194,44 @@ export async function listTables(
 }
 
 /**
- * Run `SHOW TABLES IN catalog.schema` and map to TableInfo[].
+ * Run `SHOW TABLES` with catalog/schema context and map to TableInfo[].
+ *
+ * Uses the Statement Execution API's `catalog` and `schema` context params
+ * instead of `SHOW TABLES IN catalog.schema` syntax, which is more
+ * reliable across Databricks environments.
  */
 async function showTablesInSchema(
   catalog: string,
   schema: string
 ): Promise<TableInfo[]> {
-  const result = await executeSQL(
-    `SHOW TABLES IN \`${catalog}\`.\`${schema}\``
+  const result = await executeSQL("SHOW TABLES", catalog, schema);
+
+  // Log column layout for diagnostics
+  const colNames = result.columns.map((c) => c.name);
+  logger.info("[metadata] SHOW TABLES columns", { catalog, schema, colNames, rowCount: result.rows.length });
+  if (result.rows.length > 0) {
+    logger.info("[metadata] SHOW TABLES first row", { row: result.rows[0] });
+  }
+
+  // Find column positions by name (SHOW TABLES returns: database, tableName, isTemporary)
+  const dbIdx = result.columns.findIndex(
+    (c) => c.name.toLowerCase() === "database" || c.name.toLowerCase() === "namespace"
   );
+  const nameIdx = result.columns.findIndex(
+    (c) => c.name.toLowerCase() === "tablename" || c.name.toLowerCase() === "table_name"
+  );
+
+  // If column-name lookup fails, fall back to positional: col 1 for table name
+  const effectiveNameIdx = nameIdx >= 0 ? nameIdx : 1;
+  const effectiveDbIdx = dbIdx >= 0 ? dbIdx : 0;
+
+  if (nameIdx < 0) {
+    logger.warn("[metadata] Could not find tableName column by name, falling back to positional index 1", { colNames });
+  }
+
   return result.rows.map((row) => {
-    const schemaName = row[0] ?? schema;
-    const tableName = row[1] ?? "";
+    const schemaName = row[effectiveDbIdx] ?? schema;
+    const tableName = row[effectiveNameIdx] ?? "";
     return {
       catalog,
       schema: schemaName,

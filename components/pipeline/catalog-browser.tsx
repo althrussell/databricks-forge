@@ -1006,14 +1006,15 @@ function SchemaRow({
             </div>
           )}
 
-          {filteredTables.map((table) => {
+          {filteredTables.map((table, idx) => {
             const tablePath = table.fqn;
             const tableSelected = isSelected(tablePath);
             const tableCovered = isCoveredBy(tablePath);
+            const displayName = table.name || table.fqn.split(".").pop() || `table-${idx}`;
 
             return (
               <div
-                key={table.name}
+                key={table.fqn || `${idx}`}
                 className="group/table flex items-center gap-1 rounded-md px-2 py-0.5 hover:bg-muted/50"
               >
                 <TableProperties className="h-3 w-3 shrink-0 text-emerald-500" />
@@ -1021,7 +1022,7 @@ function SchemaRow({
                   className={`flex-1 truncate text-xs ${tableCovered && !tableSelected ? "text-muted-foreground" : ""}`}
                   title={table.comment ?? table.fqn}
                 >
-                  <HighlightMatch text={table.name} query={searchFilter} />
+                  <HighlightMatch text={displayName} query={searchFilter} />
                   {table.comment && (
                     <span className="ml-1 text-[10px] text-muted-foreground/60">
                       {table.comment.length > 40
