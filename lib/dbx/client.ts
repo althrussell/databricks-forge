@@ -78,6 +78,27 @@ export function getConfig(): DatabricksConfig {
   return _config;
 }
 
+/**
+ * Returns the Model Serving endpoint name from the app resource binding.
+ *
+ * Read from `DATABRICKS_SERVING_ENDPOINT`, which is mapped from the
+ * `serving-endpoint` app resource in databricks.yml.
+ *
+ * Throws if the variable is not set (no fallback -- the resource must be
+ * bound in the app config or set in .env.local for local dev).
+ */
+export function getServingEndpoint(): string {
+  const endpoint = process.env.DATABRICKS_SERVING_ENDPOINT;
+  if (!endpoint) {
+    throw new Error(
+      "DATABRICKS_SERVING_ENDPOINT is not set. " +
+        "Ensure databricks.yml maps the serving-endpoint resource to this env var, " +
+        "or set it in .env.local for local development."
+    );
+  }
+  return endpoint;
+}
+
 // ---------------------------------------------------------------------------
 // Authentication
 // ---------------------------------------------------------------------------

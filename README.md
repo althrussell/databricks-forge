@@ -257,6 +257,7 @@ DATABASE_URL="postgresql://databricks_inspire:<password>@ep-xxx-pooler.database.
 DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 DATABRICKS_TOKEN=dapi_your_personal_access_token
 DATABRICKS_WAREHOUSE_ID=abc123def456
+DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5
 ```
 
 | Variable | Where to find it |
@@ -265,6 +266,7 @@ DATABRICKS_WAREHOUSE_ID=abc123def456
 | `DATABRICKS_HOST` | Your workspace URL |
 | `DATABRICKS_TOKEN` | User Settings > Developer > Access Tokens > Generate New Token |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouses > click your warehouse > Connection Details |
+| `DATABRICKS_SERVING_ENDPOINT` | The Model Serving endpoint name (e.g. `databricks-claude-sonnet-4-5`) |
 
 ### 3. Generate Prisma client and push schema
 
@@ -337,7 +339,8 @@ These are provided automatically by the Databricks Apps runtime:
 | `DATABRICKS_HOST` | Workspace URL (no `https://` prefix) |
 | `DATABRICKS_CLIENT_ID` | Service principal OAuth client ID |
 | `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret |
-| `DATABRICKS_WAREHOUSE_ID` | From `sql-warehouse` resource binding via `app.yaml` |
+| `DATABRICKS_WAREHOUSE_ID` | From `sql-warehouse` resource binding via `databricks.yml` |
+| `DATABRICKS_SERVING_ENDPOINT` | From `serving-endpoint` resource binding via `databricks.yml` |
 | `DATABASE_URL` | From `db-secret` resource binding via `app.yaml` |
 
 ---
@@ -356,6 +359,7 @@ docker run -p 3000:3000 \
   -e DATABRICKS_HOST=https://your-workspace.cloud.databricks.com \
   -e DATABRICKS_TOKEN=dapi_xxx \
   -e DATABRICKS_WAREHOUSE_ID=abc123 \
+  -e DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5 \
   databricks-inspire
 ```
 

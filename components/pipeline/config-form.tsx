@@ -51,13 +51,6 @@ const SUGGESTED_DOMAINS = [
   "Sustainability",
 ];
 
-const AI_MODELS = [
-  "databricks-claude-opus-4-6",
-  "databricks-claude-sonnet-4-5",
-  "databricks-gpt-oss-120b",
-  "databricks-meta-llama-3.3-70b-instruct",
-  "databricks-dbrx-instruct",
-];
 
 export function ConfigForm() {
   const router = useRouter();
@@ -110,7 +103,6 @@ export function ConfigForm() {
     BusinessPriority[]
   >(["Increase Revenue"]);
   const [strategicGoals, setStrategicGoals] = useState("");
-  const [aiModel, setAiModel] = useState(AI_MODELS[0]);
   const [selectedLanguages, setSelectedLanguages] = useState<
     SupportedLanguage[]
   >(["English"]);
@@ -160,7 +152,6 @@ export function ConfigForm() {
           businessDomains: businessDomains.join(", "),
           businessPriorities: selectedPriorities,
           strategicGoals: strategicGoals.trim(),
-          aiModel,
           languages: selectedLanguages,
           sampleRowsPerTable: appSettings.sampleRowsPerTable,
         }),
@@ -450,22 +441,6 @@ export function ConfigForm() {
             <p className="text-xs text-muted-foreground">
               Leave blank for AI-generated goals
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="aiModel">AI Model</Label>
-            <Select value={aiModel} onValueChange={setAiModel}>
-              <SelectTrigger id="aiModel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AI_MODELS.map((model) => (
-                  <SelectItem key={model} value={model}>
-                    {model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-2">

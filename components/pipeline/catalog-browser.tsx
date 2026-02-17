@@ -425,7 +425,6 @@ export function CatalogBrowser({
         throw new Error(errBody.error ?? "Failed to fetch tables");
       }
       const data = await res.json();
-      console.log("[CatalogBrowser] raw API response tables:", data.tables?.length, data.tables?.slice(0, 3));
       const tables: TableNode[] = (data.tables ?? []).map(
         (t: {
           tableName: string;
@@ -439,7 +438,6 @@ export function CatalogBrowser({
           tableType: t.tableType,
         })
       );
-      console.log("[CatalogBrowser] mapped tables:", tables.length, tables.slice(0, 3));
       updateSchema((s) => ({
         ...s,
         loading: false,
@@ -447,7 +445,6 @@ export function CatalogBrowser({
         tables,
       }));
     } catch (err) {
-      console.error("[CatalogBrowser] fetch tables error:", err);
       updateSchema((s) => ({
         ...s,
         loading: false,
