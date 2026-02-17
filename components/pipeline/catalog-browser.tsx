@@ -886,10 +886,15 @@ function SchemaRow({
   const schemaSelected = isSelected(schemaPath);
   const covered = isCoveredBy(schemaPath);
 
-  // Derive table list inline (no useMemo to rule out caching issues)
+  // Derive table list -- if the catalog or schema name already matches the
+  // search, show ALL tables (don't filter children by the parent's match).
   const hasSearch = !!searchFilter;
+  const catalogNameMatches =
+    hasSearch && catalogName.toLowerCase().includes(searchFilter ?? "");
+  const schemaNameMatches =
+    hasSearch && schema.name.toLowerCase().includes(searchFilter ?? "");
   const tablesToShow =
-    !hasSearch || schema.name.toLowerCase().includes(searchFilter ?? "")
+    !hasSearch || catalogNameMatches || schemaNameMatches
       ? schema.tables
       : schema.tables.filter((t) =>
           t.name.toLowerCase().includes(searchFilter ?? "")
