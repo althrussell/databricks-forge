@@ -517,7 +517,7 @@ export default function RunDetailPage({
               {useCases.length > 0 ? (
                 <UseCaseTable
                   useCases={useCases}
-                  onUpdate={async (updated): Promise<boolean> => {
+                  onUpdate={async (updated) => {
                     try {
                       const original = useCases.find((uc) => uc.id === updated.id);
                       const payload: Record<string, unknown> = {};
@@ -554,11 +554,10 @@ export default function RunDetailPage({
                       }
 
                       if (Object.keys(payload).length === 0) {
-                        // Nothing actually changed
                         setUseCases((prev) =>
                           prev.map((uc) => (uc.id === updated.id ? updated : uc))
                         );
-                        return true;
+                        return { ok: true };
                       }
 
                       const res = await fetch(`/api/runs/${runId}/usecases/${updated.id}`, {
@@ -568,16 +567,17 @@ export default function RunDetailPage({
                       });
                       if (!res.ok) {
                         const data = await res.json().catch(() => ({}));
+                        const msg = data?.error || `HTTP ${res.status}`;
                         console.error("[onUpdate] PATCH failed", res.status, data);
-                        return false;
+                        return { ok: false, error: msg };
                       }
                       setUseCases((prev) =>
                         prev.map((uc) => (uc.id === updated.id ? updated : uc))
                       );
-                      return true;
+                      return { ok: true };
                     } catch (err) {
                       console.error("[onUpdate] error", err);
-                      return false;
+                      return { ok: false, error: err instanceof Error ? err.message : "Network error" };
                     }
                   }}
                 />
