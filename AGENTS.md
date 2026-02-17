@@ -17,7 +17,7 @@ PowerPoint, or deployed as SQL notebooks.
 | Frontend       | Next.js 16 App Router, React 19, shadcn/ui, Tailwind CSS 4 |
 | Language       | TypeScript (strict)                                  |
 | SQL Execution  | Databricks SQL Statement Execution API via SQL Warehouse |
-| LLM Calls      | `ai_query()` SQL function on Databricks Model Serving |
+| LLM Calls      | Databricks Model Serving REST API (chat completions) |
 | Persistence    | Lakebase (Unity Catalog managed tables)              |
 | Deployment     | Databricks Apps (auto-auth via env vars)             |
 | Export         | exceljs, pdfkit, pptxgenjs, Workspace REST API       |
@@ -43,10 +43,10 @@ the authoritative source when porting logic to TypeScript.
 /app          Routes + UI (pages, layouts, API routes)
 /components   Shared UI components (shadcn primitives, pipeline-specific)
 /lib          Data, auth, config, scoring, AI, pipeline logic
-  /dbx        Databricks SQL client (SDK wrapper, SQL execution, Workspace API)
+  /dbx        Databricks SQL client, Model Serving client, Workspace API
   /queries    SQL text + row-to-type mappers
   /domain     TypeScript types + scoring logic
-  /ai         Prompt template building + ai_query execution
+  /ai         Prompt template building + Model Serving execution
   /pipeline   Pipeline engine + step modules
   /lakebase   Lakebase table schema + CRUD operations
   /export     Excel, PDF, PPTX, notebook generators
@@ -71,13 +71,13 @@ These are the core TypeScript types used throughout the app:
 
 The core pipeline runs these steps sequentially:
 
-1. **business-context** -- Generate business context via `ai_query` (goals, priorities, value chain)
+1. **business-context** -- Generate business context via Model Serving (goals, priorities, value chain)
 2. **metadata-extraction** -- Query `information_schema` for catalogs, schemas, tables, columns
-3. **table-filtering** -- Classify tables as business vs technical via `ai_query`
-4. **usecase-generation** -- Generate use cases in parallel batches via `ai_query`
-5. **domain-clustering** -- Assign domains and subdomains via `ai_query`
-6. **scoring** -- Score, deduplicate (per-domain + cross-domain), calibrate, and rank use cases via `ai_query`
-7. **sql-generation** -- Generate bespoke SQL for each use case via `ai_query`
+3. **table-filtering** -- Classify tables as business vs technical via Model Serving (JSON mode)
+4. **usecase-generation** -- Generate use cases in parallel batches via Model Serving (JSON mode)
+5. **domain-clustering** -- Assign domains and subdomains via Model Serving (JSON mode)
+6. **scoring** -- Score, deduplicate (per-domain + cross-domain), calibrate, and rank use cases via Model Serving (JSON mode)
+7. **sql-generation** -- Generate bespoke SQL for each use case via Model Serving (streaming)
 
 Each step updates progress in Lakebase. The frontend polls for status.
 

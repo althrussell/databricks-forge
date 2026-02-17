@@ -1,7 +1,7 @@
 /**
  * Pipeline Step 1: Business Context Generation
  *
- * Calls ai_query to generate a structured business context from the
+ * Calls Model Serving to generate a structured business context from the
  * organisation name and user-supplied configuration.
  */
 
@@ -91,6 +91,7 @@ export async function runBusinessContext(
         industry_context: industryContext,
       },
       modelEndpoint: config.aiModel,
+      responseFormat: "json_object",
       runId,
       step: "business-context",
     });
@@ -143,7 +144,7 @@ export async function runBusinessContext(
 
     return context;
   } catch (error) {
-    logger.error("Business context ai_query failed, using defaults", {
+    logger.error("Business context LLM call failed, using defaults", {
       error: error instanceof Error ? error.message : String(error),
     });
     return {

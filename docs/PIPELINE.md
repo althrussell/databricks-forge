@@ -8,7 +8,7 @@
 The pipeline runs 6 core steps sequentially. Each step:
 
 - Receives the current pipeline state (run config + accumulated results)
-- Executes SQL queries (metadata) and/or `ai_query()` calls (LLM)
+- Executes SQL queries (metadata) and/or Model Serving calls (LLM via chat completions API)
 - Writes results back to Lakebase
 - Updates `progress_pct` and `current_step` on the run record
 
@@ -44,7 +44,7 @@ and any user-supplied domains, priorities, or goals.
 - `strategic_goals` (optional, from config)
 
 **Process:**
-1. Call `ai_query()` with the business name to generate industry context
+1. Call Model Serving with the business name to generate industry context
 2. Parse the JSON response (wrapped in honesty scoring)
 3. Merge LLM-generated context with user-supplied overrides
 4. Store merged context on the run record (`business_context` column)
@@ -58,7 +58,7 @@ and any user-supplied domains, priorities, or goals.
 - `revenue_model` -- revenue model
 - `additional_context` -- any extra context
 
-**Error handling:** If ai_query fails, use a minimal default context built from
+**Error handling:** If the Model Serving call fails, use a minimal default context built from
 the business name and user-supplied priorities.
 
 ---
@@ -111,7 +111,7 @@ continue with accessible metadata. Fail the step only if zero tables are found.
 
 **Process:**
 1. Batch tables into groups (by schema or by count)
-2. For each batch, call `ai_query()` with table names + column summaries
+2. For each batch, call Model Serving with table names + column summaries
 3. Parse CSV response: each row is `table_fqn, classification, reason`
 4. Filter to keep only "business" tables
 5. Update the metadata snapshot with the filtered table list
@@ -171,8 +171,8 @@ that fail after retries.
 - Use cases from Step 4 (as CSV)
 
 **Process:**
-1. Call `ai_query()` with all use cases to assign domains
-2. For each domain, call `ai_query()` to assign subdomains
+1. Call Model Serving with all use cases to assign domains
+2. For each domain, call Model Serving to assign subdomains
 3. If any domain has fewer than the minimum cases, merge into related domains
 4. Update use case objects with domain/subdomain assignments
 
@@ -199,9 +199,9 @@ remove duplicates.
 - Domain-clustered use cases from Step 5
 
 **Process:**
-1. For each domain, call `ai_query()` with use cases to score them
+1. For each domain, call Model Serving with use cases to score them
 2. Parse CSV response: `use_case_no, priority_score, feasibility_score, impact_score, overall_score`
-3. For each domain, call `ai_query()` to review and remove duplicates
+3. For each domain, call Model Serving to review and remove duplicates
 4. Re-number use case IDs with domain prefix
 5. Sort by overall_score descending
 6. Apply volume filter if total exceeds threshold (50/100/200)

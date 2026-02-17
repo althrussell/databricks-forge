@@ -1,11 +1,12 @@
 /**
  * Pipeline Step 3: Table Filtering
  *
- * Classifies tables as business-relevant vs technical using ai_query.
- * Returns a filtered list of FQNs to include in use case generation.
+ * Classifies tables as business-relevant vs technical using Model Serving
+ * (JSON mode). Returns a filtered list of FQNs to include in use case
+ * generation.
  */
 
-import { executeAIQuery, parseCSVResponse } from "@/lib/ai/agent";
+import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage, updateRunFilteredTables } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { PipelineContext, TableInfo } from "@/lib/domain/types";
@@ -94,6 +95,13 @@ export async function runTableFiltering(
   return businessTables;
 }
 
+/** Shape of each item in the JSON array returned by the LLM. */
+interface TableClassificationItem {
+  table_fqn?: string;
+  classification?: string;
+  reason?: string;
+}
+
 async function filterBatch(
   tables: TableInfo[],
   businessName: string,
@@ -115,15 +123,18 @@ async function filterBatch(
       tables_markdown: buildTablesMarkdown(tables),
     },
     modelEndpoint: aiModel,
+    responseFormat: "json_object",
     runId,
     step: "table-filtering",
   });
 
-  let rows: string[][];
+  let items: TableClassificationItem[];
   try {
-    rows = parseCSVResponse(result.rawResponse, 3);
+    const parsed = parseJSONResponse<TableClassificationItem[] | { classifications: TableClassificationItem[] }>(result.rawResponse);
+    // Handle both direct array and wrapped object responses
+    items = Array.isArray(parsed) ? parsed : (parsed.classifications ?? []);
   } catch (parseErr) {
-    logger.warn("Failed to parse table filtering CSV, including all tables", {
+    logger.warn("Failed to parse table filtering JSON, including all tables", {
       error: parseErr instanceof Error ? parseErr.message : String(parseErr),
     });
     const allFqns = tables.map((t) => t.fqn);
@@ -136,10 +147,10 @@ async function filterBatch(
   const businessFQNs: string[] = [];
   const classifications: TableClassification[] = [];
 
-  for (const row of rows) {
-    const fqn = row[0]?.trim();
-    const classification = row[1]?.trim().toLowerCase();
-    const reason = row[2]?.trim() ?? "";
+  for (const item of items) {
+    const fqn = item.table_fqn?.trim();
+    const classification = item.classification?.trim().toLowerCase();
+    const reason = item.reason?.trim() ?? "";
     if (fqn) {
       classifications.push({ fqn, classification: classification || "unknown", reason });
       if (classification === "business") {

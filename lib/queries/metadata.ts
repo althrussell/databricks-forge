@@ -7,7 +7,72 @@
 
 import { executeSQLMapped, executeSQL, type SqlColumn } from "@/lib/dbx/sql";
 import { validateIdentifier } from "@/lib/validation";
+import { withRetry } from "@/lib/dbx/retry";
 import type { TableInfo, ColumnInfo, ForeignKey, MetricViewInfo } from "@/lib/domain/types";
+
+// ---------------------------------------------------------------------------
+// Error codes for structured error reporting
+// ---------------------------------------------------------------------------
+
+export type MetadataErrorCode =
+  | "WAREHOUSE_UNAVAILABLE"
+  | "INSUFFICIENT_PERMISSIONS"
+  | "NO_DATA";
+
+export class MetadataError extends Error {
+  constructor(
+    message: string,
+    public readonly code: MetadataErrorCode
+  ) {
+    super(message);
+    this.name = "MetadataError";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse readiness
+// ---------------------------------------------------------------------------
+
+export interface WarehouseStatus {
+  ready: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+/**
+ * Wake the SQL warehouse and verify it can execute queries.
+ *
+ * Uses `waitTimeout: "0s"` so the server returns immediately with a
+ * statement_id, and we poll -- this allows the warehouse up to 5 minutes
+ * to cold-start without hitting client-side fetch timeouts.
+ *
+ * Retries 3 times with backoff to handle transient failures.
+ */
+export async function ensureWarehouseReady(): Promise<WarehouseStatus> {
+  const start = Date.now();
+  try {
+    await withRetry(
+      () =>
+        executeSQL("SELECT 1", undefined, undefined, {
+          waitTimeout: "0s",
+          submitTimeoutMs: 30_000,
+        }),
+      {
+        maxRetries: 3,
+        initialBackoffMs: 5_000,
+        maxBackoffMs: 20_000,
+        label: "ensureWarehouseReady",
+      }
+    );
+    return { ready: true, latencyMs: Date.now() - start };
+  } catch (error) {
+    return {
+      ready: false,
+      latencyMs: Date.now() - start,
+      error: error instanceof Error ? error.message : "Warehouse unreachable",
+    };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Row Mappers
@@ -62,9 +127,22 @@ function rowToColumn(row: string[], columns: SqlColumn[]): ColumnInfo {
  *
  * Fallback: `SHOW CATALOGS` + per-catalog probes with short timeouts and
  * limited concurrency.
+ *
+ * Wrapped in retry logic to survive warehouse cold starts. Throws
+ * `MetadataError` with a descriptive code when unrecoverable.
  */
 export async function listCatalogs(): Promise<string[]> {
+  return withRetry(() => listCatalogsOnce(), {
+    maxRetries: 2,
+    initialBackoffMs: 3_000,
+    maxBackoffMs: 10_000,
+    label: "listCatalogs",
+  });
+}
+
+async function listCatalogsOnce(): Promise<string[]> {
   // ── Fast path: single query via system.information_schema ──────────
+  let fastPathError: unknown = null;
   try {
     const result = await executeSQL(`
       SELECT DISTINCT catalog_name
@@ -73,8 +151,23 @@ export async function listCatalogs(): Promise<string[]> {
       ORDER BY catalog_name
     `);
     return result.rows.map((r) => r[0]);
-  } catch {
-    // system.information_schema not accessible — fall through to probe approach
+  } catch (err) {
+    fastPathError = err;
+    const msg = err instanceof Error ? err.message : String(err);
+    // Permission error on system.information_schema is expected --
+    // fall through to the probe approach.
+    if (
+      !msg.includes("INSUFFICIENT_PERMISSIONS") &&
+      !msg.includes("USE CATALOG") &&
+      !msg.includes("does not exist")
+    ) {
+      // This might be a warehouse connectivity issue -- let it propagate
+      // so withRetry can handle it.
+      console.warn(
+        "[listCatalogs] Fast path failed (non-permission error), trying fallback:",
+        msg
+      );
+    }
   }
 
   // ── Fallback: SHOW CATALOGS + lightweight per-catalog probes ───────
@@ -84,8 +177,20 @@ export async function listCatalogs(): Promise<string[]> {
     candidates = result.rows
       .map((r) => r[0])
       .filter((c) => c !== "system" && c !== "__databricks_internal");
-  } catch {
-    return [];
+  } catch (err) {
+    // Both paths failed -- throw so retry logic can kick in
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("INSUFFICIENT_PERMISSIONS") ||
+      msg.includes("USE CATALOG")
+    ) {
+      throw new MetadataError(
+        "You don't have permission to list catalogs. Contact your workspace admin.",
+        "INSUFFICIENT_PERMISSIONS"
+      );
+    }
+    // Warehouse-level failure -- throw for retry
+    throw err;
   }
 
   if (candidates.length === 0) return [];

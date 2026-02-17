@@ -8,7 +8,7 @@
  * concurrency within each domain. Matches the reference notebook approach.
  */
 
-import { executeAIQuery } from "@/lib/ai/agent";
+import { executeAIQuery, executeAIQueryStream } from "@/lib/ai/agent";
 import { executeSQL } from "@/lib/dbx/sql";
 import {
   generateAIFunctionsSummary,
@@ -257,7 +257,9 @@ async function generateSqlForUseCase(
       uc.type === "Statistical" ? statisticalFunctionsSummary : "",
   };
 
-  const result = await executeAIQuery({
+  // Use streaming for SQL generation -- it's the longest-running LLM call
+  // and streaming reduces perceived latency by allowing early truncation detection
+  const result = await executeAIQueryStream({
     promptKey: "USE_CASE_SQL_GEN_PROMPT",
     variables,
     modelEndpoint: aiModel,

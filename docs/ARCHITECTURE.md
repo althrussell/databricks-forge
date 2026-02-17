@@ -36,9 +36,10 @@ business logic independent of transport details.
 
 ### `/lib/dbx/` -- Databricks Adapter
 
-- `client.ts` -- initialises the Databricks SDK from env vars
+- `client.ts` -- initialises the Databricks SDK from env vars, auth token management
 - `sql.ts` -- executes SQL via Statement Execution API, polls for results,
   maps rows to typed objects
+- `model-serving.ts` -- Model Serving REST client (chat completions, streaming)
 - `workspace.ts` -- creates/imports notebooks via Workspace REST API
 
 ### `/lib/queries/` -- SQL Text + Mappers
@@ -60,8 +61,9 @@ No raw SQL appears anywhere else in the codebase.
 
 - `templates.ts` -- all prompt templates (ported from the notebook)
 - `functions.ts` -- AI_FUNCTIONS and STATISTICAL_FUNCTIONS registries
-- `agent.ts` -- wrapper that builds `ai_query()` SQL calls, sends them via
-  `lib/dbx/sql.ts`, and parses LLM responses (CSV/JSON)
+- `agent.ts` -- wrapper that invokes Model Serving via `lib/dbx/model-serving.ts`
+  (chat completions API), parses LLM responses (JSON), handles retries and
+  token usage tracking. Supports JSON mode and streaming.
 
 ### `/lib/pipeline/` -- Pipeline Engine
 
