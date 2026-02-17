@@ -24,6 +24,7 @@ import { ScoreDistributionChart } from "@/components/charts/score-distribution-c
 import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
 import { TypeSplitChart } from "@/components/charts/type-split-chart";
 import { StepDurationChart } from "@/components/charts/step-duration-chart";
+import { ScoreRadarOverview } from "@/components/charts/score-radar-overview";
 import {
   Building2,
   Target,
@@ -48,7 +49,7 @@ import type {
   BusinessContext,
   StepLogEntry,
 } from "@/lib/domain/types";
-import { computeDomainStats, computeSchemaCoverage } from "@/lib/domain/scoring";
+import { computeDomainStats } from "@/lib/domain/scoring";
 import {
   type IndustryOutcome,
   type StrategicPriority,
@@ -362,6 +363,11 @@ export default function RunDetailPage({
             />
           </div>
 
+          {/* Score Landscape Radar -- all use cases at a glance */}
+          {useCases.length > 1 && (
+            <ScoreRadarOverview useCases={useCases} />
+          )}
+
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -513,14 +519,31 @@ export default function RunDetailPage({
                   useCases={useCases}
                   onUpdate={async (updated) => {
                     try {
+                      const isScoreReset =
+                        updated.userPriorityScore === null &&
+                        updated.userFeasibilityScore === null &&
+                        updated.userImpactScore === null &&
+                        updated.userOverallScore === null;
+
+                      const payload: Record<string, unknown> = {
+                        name: updated.name,
+                        statement: updated.statement,
+                        tablesInvolved: updated.tablesInvolved,
+                      };
+
+                      if (isScoreReset) {
+                        payload.resetScores = true;
+                      } else {
+                        if (updated.userPriorityScore != null) payload.userPriorityScore = updated.userPriorityScore;
+                        if (updated.userFeasibilityScore != null) payload.userFeasibilityScore = updated.userFeasibilityScore;
+                        if (updated.userImpactScore != null) payload.userImpactScore = updated.userImpactScore;
+                        if (updated.userOverallScore != null) payload.userOverallScore = updated.userOverallScore;
+                      }
+
                       const res = await fetch(`/api/runs/${runId}/usecases/${updated.id}`, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          name: updated.name,
-                          statement: updated.statement,
-                          tablesInvolved: updated.tablesInvolved,
-                        }),
+                        body: JSON.stringify(payload),
                       });
                       if (res.ok) {
                         setUseCases((prev) =>

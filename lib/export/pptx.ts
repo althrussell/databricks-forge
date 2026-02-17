@@ -642,14 +642,29 @@ export async function generatePptx(
           rectRadius: 0.05,
         });
 
+        const hasUserScores =
+          uc.userPriorityScore != null ||
+          uc.userFeasibilityScore != null ||
+          uc.userImpactScore != null ||
+          uc.userOverallScore != null;
+
         const scores = [
-          { label: "Priority", value: Math.round(uc.priorityScore * 100) },
           {
-            label: "Feasibility",
-            value: Math.round(uc.feasibilityScore * 100),
+            label: hasUserScores ? "Priority (adj)" : "Priority",
+            value: Math.round((hasUserScores ? (uc.userPriorityScore ?? uc.priorityScore) : uc.priorityScore) * 100),
           },
-          { label: "Impact", value: Math.round(uc.impactScore * 100) },
-          { label: "Overall", value: Math.round(uc.overallScore * 100) },
+          {
+            label: hasUserScores ? "Feasibility (adj)" : "Feasibility",
+            value: Math.round((hasUserScores ? (uc.userFeasibilityScore ?? uc.feasibilityScore) : uc.feasibilityScore) * 100),
+          },
+          {
+            label: hasUserScores ? "Impact (adj)" : "Impact",
+            value: Math.round((hasUserScores ? (uc.userImpactScore ?? uc.impactScore) : uc.impactScore) * 100),
+          },
+          {
+            label: hasUserScores ? "Overall (adj)" : "Overall",
+            value: Math.round((hasUserScores ? (uc.userOverallScore ?? uc.overallScore) : uc.overallScore) * 100),
+          },
         ];
 
         const scoreSegments: PptxGenJS.TextProps[] = [];

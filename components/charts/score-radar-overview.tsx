@@ -192,7 +192,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                 fontSize: 12,
                 maxWidth: 260,
               }}
-              formatter={(value: number) => [`${value}%`, undefined]}
+              formatter={(value) => [`${value ?? 0}%`, undefined]}
             />
             {displaySeries.length <= 8 && (
               <Legend

@@ -678,17 +678,33 @@ export async function generatePdf(
             .fill("#E8EDF1")
             .restore();
 
+          const hasUserScores =
+            uc.userPriorityScore != null ||
+            uc.userFeasibilityScore != null ||
+            uc.userImpactScore != null ||
+            uc.userOverallScore != null;
+
           const scores = [
             {
               label: "Priority",
-              value: Math.round(uc.priorityScore * 100),
+              value: Math.round((hasUserScores ? (uc.userPriorityScore ?? uc.priorityScore) : uc.priorityScore) * 100),
+              system: hasUserScores ? Math.round(uc.priorityScore * 100) : null,
             },
             {
               label: "Feasibility",
-              value: Math.round(uc.feasibilityScore * 100),
+              value: Math.round((hasUserScores ? (uc.userFeasibilityScore ?? uc.feasibilityScore) : uc.feasibilityScore) * 100),
+              system: hasUserScores ? Math.round(uc.feasibilityScore * 100) : null,
             },
-            { label: "Impact", value: Math.round(uc.impactScore * 100) },
-            { label: "Overall", value: Math.round(uc.overallScore * 100) },
+            {
+              label: "Impact",
+              value: Math.round((hasUserScores ? (uc.userImpactScore ?? uc.impactScore) : uc.impactScore) * 100),
+              system: hasUserScores ? Math.round(uc.impactScore * 100) : null,
+            },
+            {
+              label: "Overall",
+              value: Math.round((hasUserScores ? (uc.userOverallScore ?? uc.overallScore) : uc.overallScore) * 100),
+              system: hasUserScores ? Math.round(uc.overallScore * 100) : null,
+            },
           ];
 
           const scoreBlockW = (CONTENT_W - 30) / 4;

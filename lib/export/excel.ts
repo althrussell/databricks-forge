@@ -189,7 +189,16 @@ export async function generateExcel(
   // 2. USE CASES SHEET (full catalog)
   // =====================================================================
   const ucSheet = workbook.addWorksheet("Use Cases");
-  ucSheet.columns = [
+
+  const hasAnyUserScores = useCases.some(
+    (uc) =>
+      uc.userPriorityScore != null ||
+      uc.userFeasibilityScore != null ||
+      uc.userImpactScore != null ||
+      uc.userOverallScore != null
+  );
+
+  const baseColumns: Partial<ExcelJS.Column>[] = [
     { header: "No", key: "no", width: 7 },
     { header: "Name", key: "name", width: 38 },
     { header: "Type", key: "type", width: 12 },
@@ -203,18 +212,29 @@ export async function generateExcel(
     { header: "Sponsor", key: "sponsor", width: 18 },
     { header: "Tables Involved", key: "tables", width: 45 },
     { header: "SQL Code", key: "sql", width: 50 },
-    { header: "Priority", key: "priority", width: 11 },
-    { header: "Feasibility", key: "feasibility", width: 11 },
-    { header: "Impact", key: "impact", width: 11 },
-    { header: "Overall", key: "overall", width: 11 },
+    { header: "System Priority", key: "priority", width: 13 },
+    { header: "System Feasibility", key: "feasibility", width: 15 },
+    { header: "System Impact", key: "impact", width: 13 },
+    { header: "System Overall", key: "overall", width: 13 },
   ];
+
+  if (hasAnyUserScores) {
+    baseColumns.push(
+      { header: "User Priority", key: "userPriority", width: 13 },
+      { header: "User Feasibility", key: "userFeasibility", width: 15 },
+      { header: "User Impact", key: "userImpact", width: 13 },
+      { header: "User Overall", key: "userOverall", width: 13 },
+    );
+  }
+
+  ucSheet.columns = baseColumns;
 
   const sortedUseCases = [...useCases].sort(
     (a, b) => b.overallScore - a.overallScore
   );
 
   sortedUseCases.forEach((uc) => {
-    ucSheet.addRow({
+    const row: Record<string, unknown> = {
       no: uc.useCaseNo,
       name: uc.name,
       type: uc.type,
@@ -232,13 +252,23 @@ export async function generateExcel(
       feasibility: uc.feasibilityScore,
       impact: uc.impactScore,
       overall: uc.overallScore,
-    });
+    };
+
+    if (hasAnyUserScores) {
+      row.userPriority = uc.userPriorityScore ?? uc.priorityScore;
+      row.userFeasibility = uc.userFeasibilityScore ?? uc.feasibilityScore;
+      row.userImpact = uc.userImpactScore ?? uc.impactScore;
+      row.userOverall = uc.userOverallScore ?? uc.overallScore;
+    }
+
+    ucSheet.addRow(row);
   });
 
   styleHeaderRow(ucSheet);
   styleDataRows(ucSheet, 2, ucSheet.rowCount);
 
-  // Apply conditional score formatting (columns 14-17: Priority, Feasibility, Impact, Overall)
+  // Apply conditional score formatting to system score columns (14-17)
+  const totalCols = hasAnyUserScores ? 21 : 17;
   for (let r = 2; r <= ucSheet.rowCount; r++) {
     const row = ucSheet.getRow(r);
     for (let col = 14; col <= 17; col++) {
@@ -248,12 +278,22 @@ export async function generateExcel(
         styleScoreCell(cell, val);
       }
     }
+    // Apply conditional score formatting to user score columns (18-21) if present
+    if (hasAnyUserScores) {
+      for (let col = 18; col <= 21; col++) {
+        const cell = row.getCell(col);
+        const val = cell.value as number;
+        if (typeof val === "number") {
+          styleScoreCell(cell, val);
+        }
+      }
+    }
   }
 
   // Auto-filter on all columns
   ucSheet.autoFilter = {
     from: { row: 1, column: 1 },
-    to: { row: 1, column: 17 },
+    to: { row: 1, column: totalCols },
   };
 
   // Freeze header row + first two columns (No, Name)
