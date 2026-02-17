@@ -20,7 +20,7 @@ const navItems = [
   { href: "/configure", label: "New Discovery", icon: PlusIcon },
   { href: "/runs", label: "Runs", icon: ListIcon },
   { href: "/runs/compare", label: "Compare", icon: CompareIcon },
-  { href: "/environment", label: "Environment", icon: EnvironmentIcon },
+  { href: "/environment", label: "Estate", icon: EnvironmentIcon },
   { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
