@@ -1,4 +1,4 @@
-// Databricks Inspire AI — Prisma Schema
+// Databricks Forge AI — Prisma Schema
 //
 // Connects to Lakebase Autoscaling (Postgres-compatible).
 // Tables store pipeline run state, discovered use cases, and export history.
@@ -16,7 +16,7 @@ datasource db {
 // Pipeline Runs
 // ---------------------------------------------------------------------------
 
-model InspireRun {
+model ForgeRun {
   runId              String    @id @map("run_id")
   businessName       String    @map("business_name")
   ucMetadata         String    @map("uc_metadata")
@@ -27,7 +27,7 @@ model InspireRun {
   aiModel            String?   @default("databricks-claude-sonnet-4-5") @map("ai_model")
   languages          String?   @default("[\"English\"]")
   generationOptions  String?   @default("[\"SQL Code\"]") @map("generation_options")
-  generationPath     String?   @default("./inspire_gen/") @map("generation_path")
+  generationPath     String?   @default("./forge_gen/") @map("generation_path")
   status             String    @default("pending")
   currentStep        String?   @map("current_step")
   progressPct        Int       @default(0) @map("progress_pct")
@@ -41,20 +41,20 @@ model InspireRun {
   filteredTablesJson String?   @map("filtered_tables_json")
   metadataCacheKey   String?   @map("metadata_cache_key")
 
-  useCases             InspireUseCase[]
-  exports              InspireExport[]
-  promptLogs           InspirePromptLog[]
-  genieRecommendations InspireGenieRecommendation[]
-  genieSpaces          InspireGenieSpace[]
+  useCases             ForgeUseCase[]
+  exports              ForgeExport[]
+  promptLogs           ForgePromptLog[]
+  genieRecommendations ForgeGenieRecommendation[]
+  genieSpaces          ForgeGenieSpace[]
 
-  @@map("inspire_runs")
+  @@map("forge_runs")
 }
 
 // ---------------------------------------------------------------------------
 // Use Cases
 // ---------------------------------------------------------------------------
 
-model InspireUseCase {
+model ForgeUseCase {
   id                 String  @id
   runId              String  @map("run_id")
   useCaseNo          Int?    @map("use_case_no")
@@ -76,17 +76,17 @@ model InspireUseCase {
   sqlCode            String? @map("sql_code")
   sqlStatus          String? @map("sql_status")
 
-  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
   @@index([runId])
-  @@map("inspire_use_cases")
+  @@map("forge_use_cases")
 }
 
 // ---------------------------------------------------------------------------
 // Prompt Audit Log
 // ---------------------------------------------------------------------------
 
-model InspirePromptLog {
+model ForgePromptLog {
   logId            String   @id @map("log_id")
   runId            String   @map("run_id")
   step             String
@@ -105,18 +105,18 @@ model InspirePromptLog {
   errorMessage     String?  @map("error_message")
   createdAt        DateTime @default(now()) @map("created_at")
 
-  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
   @@index([runId])
   @@index([runId, step])
-  @@map("inspire_prompt_logs")
+  @@map("forge_prompt_logs")
 }
 
 // ---------------------------------------------------------------------------
 // Activity Log
 // ---------------------------------------------------------------------------
 
-model InspireActivityLog {
+model ForgeActivityLog {
   activityId String   @id @map("activity_id")
   userId     String?  @map("user_id")
   action     String                              // created_run, deleted_run, exported, started_pipeline, completed, failed
@@ -126,14 +126,14 @@ model InspireActivityLog {
 
   @@index([createdAt])
   @@index([resourceId])
-  @@map("inspire_activity_log")
+  @@map("forge_activity_log")
 }
 
 // ---------------------------------------------------------------------------
 // Metadata Cache
 // ---------------------------------------------------------------------------
 
-model InspireMetadataCache {
+model ForgeMetadataCache {
   cacheKey     String   @id @map("cache_key")
   ucPath       String?  @map("uc_path")
   metadataJson String?  @map("metadata_json")
@@ -142,14 +142,14 @@ model InspireMetadataCache {
   cachedAt     DateTime @default(now()) @map("cached_at")
 
   @@index([cachedAt])
-  @@map("inspire_metadata_cache")
+  @@map("forge_metadata_cache")
 }
 
 // ---------------------------------------------------------------------------
 // Custom Outcome Maps
 // ---------------------------------------------------------------------------
 
-model InspireOutcomeMap {
+model ForgeOutcomeMap {
   id           String   @id @map("outcome_map_id")
   industryId   String   @unique @map("industry_id")
   name         String
@@ -161,14 +161,14 @@ model InspireOutcomeMap {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@index([createdAt])
-  @@map("inspire_outcome_maps")
+  @@map("forge_outcome_maps")
 }
 
 // ---------------------------------------------------------------------------
 // Genie Space Recommendations (generated in pipeline)
 // ---------------------------------------------------------------------------
 
-model InspireGenieRecommendation {
+model ForgeGenieRecommendation {
   id              String   @id @map("recommendation_id")
   runId           String   @map("run_id")
   domain          String
@@ -188,18 +188,18 @@ model InspireGenieRecommendation {
   serializedSpace String   @map("serialized_space")    // JSON for Genie API
   createdAt       DateTime @default(now()) @map("created_at")
 
-  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
   @@unique([runId, domain])
   @@index([runId])
-  @@map("inspire_genie_recommendations")
+  @@map("forge_genie_recommendations")
 }
 
 // ---------------------------------------------------------------------------
 // Genie Spaces (tracking)
 // ---------------------------------------------------------------------------
 
-model InspireGenieSpace {
+model ForgeGenieSpace {
   id        String   @id @map("genie_tracking_id")
   spaceId   String   @map("space_id")
   runId     String   @map("run_id")
@@ -209,36 +209,36 @@ model InspireGenieSpace {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
-  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
   @@unique([runId, domain])
   @@index([runId])
   @@index([spaceId])
-  @@map("inspire_genie_spaces")
+  @@map("forge_genie_spaces")
 }
 
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
-model InspireExport {
+model ForgeExport {
   exportId  String   @id @map("export_id")
   runId     String   @map("run_id")
   format    String
   filePath  String?  @map("file_path")
   createdAt DateTime @default(now()) @map("created_at")
 
-  run InspireRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
   @@index([runId])
-  @@map("inspire_exports")
+  @@map("forge_exports")
 }
 
 // ---------------------------------------------------------------------------
 // Environment Scans
 // ---------------------------------------------------------------------------
 
-model InspireEnvironmentScan {
+model ForgeEnvironmentScan {
   scanId                String   @id @map("scan_id")
   runId                 String?  @map("run_id")
   ucPath                String   @map("uc_path")
@@ -260,17 +260,17 @@ model InspireEnvironmentScan {
   passResultsJson       String?  @map("pass_results_json")
   createdAt             DateTime @default(now()) @map("created_at")
 
-  details    InspireTableDetail[]
-  histories  InspireTableHistorySummary[]
-  lineage    InspireTableLineage[]
-  insights   InspireTableInsight[]
+  details    ForgeTableDetail[]
+  histories  ForgeTableHistorySummary[]
+  lineage    ForgeTableLineage[]
+  insights   ForgeTableInsight[]
 
   @@index([runId])
   @@index([createdAt])
-  @@map("inspire_environment_scans")
+  @@map("forge_environment_scans")
 }
 
-model InspireTableDetail {
+model ForgeTableDetail {
   id                    String   @id @default(uuid())
   scanId                String   @map("scan_id")
   tableFqn              String   @map("table_fqn")
@@ -306,16 +306,16 @@ model InspireTableDetail {
   governanceScore       Float?   @map("governance_score")
   discoveredVia         String   @default("selected") @map("discovered_via")
 
-  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+  scan ForgeEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
 
   @@index([scanId])
   @@index([tableFqn])
   @@index([dataDomain])
   @@index([sensitivityLevel])
-  @@map("inspire_table_details")
+  @@map("forge_table_details")
 }
 
-model InspireTableHistorySummary {
+model ForgeTableHistorySummary {
   id                   String   @id @default(uuid())
   scanId               String   @map("scan_id")
   tableFqn             String   @map("table_fqn")
@@ -335,14 +335,14 @@ model InspireTableHistorySummary {
   issuesJson           String?  @map("issues_json")
   recommendationsJson  String?  @map("recommendations_json")
 
-  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+  scan ForgeEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
 
   @@index([scanId])
   @@index([tableFqn])
-  @@map("inspire_table_history_summaries")
+  @@map("forge_table_history_summaries")
 }
 
-model InspireTableLineage {
+model ForgeTableLineage {
   id              String   @id @default(uuid())
   scanId          String   @map("scan_id")
   sourceTableFqn  String   @map("source_table_fqn")
@@ -353,15 +353,15 @@ model InspireTableLineage {
   lastEventTime   String?  @map("last_event_time")
   eventCount      Int      @default(1) @map("event_count")
 
-  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+  scan ForgeEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
 
   @@index([scanId])
   @@index([sourceTableFqn])
   @@index([targetTableFqn])
-  @@map("inspire_table_lineage")
+  @@map("forge_table_lineage")
 }
 
-model InspireTableInsight {
+model ForgeTableInsight {
   id          String   @id @default(uuid())
   scanId      String   @map("scan_id")
   insightType String   @map("insight_type")
@@ -370,10 +370,10 @@ model InspireTableInsight {
   severity    String   @default("info")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+  scan ForgeEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
 
   @@index([scanId])
   @@index([insightType])
   @@index([tableFqn])
-  @@map("inspire_table_insights")
+  @@map("forge_table_insights")
 }

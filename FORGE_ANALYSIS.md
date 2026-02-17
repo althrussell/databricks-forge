@@ -1,6 +1,6 @@
-# Inspire Analysis -- How the Discovery Engine Works
+# Forge Analysis -- How the Discovery Engine Works
 
-> A comprehensive guide to the analysis pipeline, scoring methodology, prompt engineering, and data flow behind Databricks Inspire AI.
+> A comprehensive guide to the analysis pipeline, scoring methodology, prompt engineering, and data flow behind Databricks Forge AI.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## Overview
 
-Databricks Inspire AI discovers data-driven use cases from Unity Catalog metadata using a 7-step LLM-powered pipeline. The engine:
+Databricks Forge AI discovers data-driven use cases from Unity Catalog metadata using a 7-step LLM-powered pipeline. The engine:
 
 1. Understands your business through AI-generated strategic context
 2. Scans Unity Catalog metadata (table names, columns, types, foreign keys)
@@ -144,7 +144,7 @@ Users can upload custom industry outcome maps in markdown format. The ingestor w
 1. **Upload** -- drag-and-drop a `.md` file or paste markdown content
 2. **AI Parse** -- the `PARSE_OUTCOME_MAP` prompt template sends the markdown to the LLM, which extracts structured JSON matching the `IndustryOutcome` type
 3. **Review & Edit** -- the user sees the extracted objectives, priorities, use cases, KPIs, and personas with inline editing to fix any parsing errors
-4. **Save** -- the parsed outcome map is persisted to the `inspire_outcome_maps` Lakebase table and immediately available in the industry dropdown and pipeline prompts
+4. **Save** -- the parsed outcome map is persisted to the `forge_outcome_maps` Lakebase table and immediately available in the industry dropdown and pipeline prompts
 
 ### Data structure (`IndustryOutcome`)
 
@@ -606,7 +606,7 @@ Each use case gets:
 overall = priority × 0.3 + feasibility × 0.2 + impact × 0.5
 ```
 
-Impact is weighted highest (0.5) because Inspire is designed to surface the most valuable opportunities. Feasibility is weighted lowest (0.2) because data availability can change -- a high-impact use case is worth pursuing even if it requires some data preparation.
+Impact is weighted highest (0.5) because Forge is designed to surface the most valuable opportunities. Feasibility is weighted lowest (0.2) because data availability can change -- a high-impact use case is worth pursuing even if it requires some data preparation.
 
 ### What the LLM evaluates for each dimension
 

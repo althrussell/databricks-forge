@@ -67,7 +67,7 @@ export function SidebarNav() {
             height={23}
             className="shrink-0"
           />
-          <span>Inspire AI</span>
+          <span>Forge AI</span>
         </Link>
       </div>
       <NavLinks />
@@ -104,7 +104,7 @@ export function MobileNav() {
               height={23}
               className="shrink-0"
             />
-            <span>Inspire AI</span>
+            <span>Forge AI</span>
           </Link>
         </div>
         <NavLinks onNavigate={() => setOpen(false)} />

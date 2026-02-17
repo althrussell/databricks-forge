@@ -44,7 +44,7 @@ export async function listTrackedGenieSpaces(
 ): Promise<TrackedGenieSpace[]> {
   const prisma = await getPrisma();
   const where = runId ? { runId } : {};
-  const rows = await prisma.inspireGenieSpace.findMany({
+  const rows = await prisma.forgeGenieSpace.findMany({
     where,
     orderBy: { createdAt: "desc" },
   });
@@ -56,7 +56,7 @@ export async function getTrackedBySpaceId(
   spaceId: string
 ): Promise<TrackedGenieSpace | null> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireGenieSpace.findFirst({
+  const row = await prisma.forgeGenieSpace.findFirst({
     where: { spaceId },
   });
   return row ? dbRowToTracked(row) : null;
@@ -68,7 +68,7 @@ export async function getTrackedByRunDomain(
   domain: string
 ): Promise<TrackedGenieSpace | null> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireGenieSpace.findUnique({
+  const row = await prisma.forgeGenieSpace.findUnique({
     where: { runId_domain: { runId, domain } },
   });
   return row ? dbRowToTracked(row) : null;
@@ -83,7 +83,7 @@ export async function trackGenieSpaceCreated(
   title: string
 ): Promise<TrackedGenieSpace> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireGenieSpace.upsert({
+  const row = await prisma.forgeGenieSpace.upsert({
     where: { runId_domain: { runId, domain } },
     create: { id, spaceId, runId, domain, title, status: "created" },
     update: { spaceId, title, status: "created" },
@@ -99,7 +99,7 @@ export async function trackGenieSpaceUpdated(
   const prisma = await getPrisma();
   const data: Record<string, unknown> = { status: "updated" };
   if (title) data.title = title;
-  await prisma.inspireGenieSpace.updateMany({
+  await prisma.forgeGenieSpace.updateMany({
     where: { spaceId },
     data,
   });
@@ -110,7 +110,7 @@ export async function trackGenieSpaceTrashed(
   spaceId: string
 ): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireGenieSpace.updateMany({
+  await prisma.forgeGenieSpace.updateMany({
     where: { spaceId },
     data: { status: "trashed" },
   });

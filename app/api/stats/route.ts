@@ -21,20 +21,20 @@ export async function GET() {
       allUseCases,
       recentRuns,
     ] = await Promise.all([
-      prisma.inspireRun.count(),
-      prisma.inspireRun.count({ where: { status: "completed" } }),
-      prisma.inspireRun.count({ where: { status: "failed" } }),
-      prisma.inspireRun.count({
+      prisma.forgeRun.count(),
+      prisma.forgeRun.count({ where: { status: "completed" } }),
+      prisma.forgeRun.count({ where: { status: "failed" } }),
+      prisma.forgeRun.count({
         where: { status: { in: ["running", "pending"] } },
       }),
-      prisma.inspireUseCase.findMany({
+      prisma.forgeUseCase.findMany({
         select: {
           domain: true,
           type: true,
           overallScore: true,
         },
       }),
-      prisma.inspireRun.findMany({
+      prisma.forgeRun.findMany({
         orderBy: { createdAt: "desc" },
         take: 5,
         select: {

@@ -81,7 +81,7 @@ function addFooter(doc: PDFKit.PDFDocument, variant: "light" | "dark" = "light")
   doc
     .fontSize(9)
     .fillColor(variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR)
-    .text(`Databricks Inspire AI  |  ${today()}`, MARGIN + 20, PAGE_H - 35, {
+    .text(`Databricks Forge AI  |  ${today()}`, MARGIN + 20, PAGE_H - 35, {
       width: CONTENT_W - 20,
       align: "right",
     });
@@ -272,7 +272,7 @@ export async function generatePdf(
       bufferPages: true,
       info: {
         Title: `${run.config.businessName} - Use Case Catalog`,
-        Author: "Databricks Inspire AI",
+        Author: "Databricks Forge AI",
         Subject: "AI Use Case Discovery Report",
       },
     });
@@ -312,7 +312,7 @@ export async function generatePdf(
       .fontSize(38)
       .fillColor(WHITE)
       .font("Helvetica-Bold")
-      .text("Databricks Inspire AI", MARGIN, 130, {
+      .text("Databricks Forge AI", MARGIN, 130, {
         width: PAGE_W * 0.48,
       });
 

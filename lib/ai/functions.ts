@@ -4,7 +4,7 @@
  * These registries are injected into use-case generation prompts to guide the
  * LLM on what Databricks SQL functions are available.
  *
- * Ported from docs/references/databricks_inspire_v34.ipynb
+ * Ported from docs/references/databricks_inspire_v34.ipynb (reference)
  */
 
 // ---------------------------------------------------------------------------

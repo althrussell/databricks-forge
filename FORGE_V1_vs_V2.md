@@ -1,4 +1,4 @@
-# Databricks Inspire AI: V1 (Notebook) vs V2 (Web Application)
+# Databricks Forge AI: V1 (Notebook) vs V2 (Web Application)
 
 > A comprehensive comparison between the original `databricks_inspire_v34.ipynb` notebook (V1) and the current Next.js web application (V2). This document highlights every net-new feature, prompt improvement, analysis enhancement, SQL upgrade, and architectural advancement.
 
@@ -42,7 +42,7 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 - Runs on a Databricks cluster via "Run All"
 - Configuration via Databricks widgets (text boxes, dropdowns)
 - State held in Python variables (lost on restart)
-- Output written to local workspace files (`./inspire_gen/`)
+- Output written to local workspace files (`./forge_gen/`)
 - PySpark for SQL execution, ThreadPoolExecutor for parallelism
 - Manual installation of dependencies (pptxgenjs, pdfkit, etc.)
 - No authentication layer -- inherits notebook user permissions
@@ -267,7 +267,7 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 **How industry data enriches the pipeline:**
 
 1. **Step 1 (Business Context)**: `{industry_context}` injects relevant industry background
-2. **Step 4 (Use Case Generation)**: `{industry_reference_use_cases}` provides curated examples to inspire higher-quality generation
+2. **Step 4 (Use Case Generation)**: `{industry_reference_use_cases}` provides curated examples to guide higher-quality generation
 3. **Step 6 (Scoring)**: `{industry_kpis}` provides industry-specific KPIs to calibrate scoring
 4. **Auto-detection**: `detectIndustryFromContext()` matches business context text against industry keywords
 
@@ -328,14 +328,14 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 
 | Table | Purpose |
 |-------|---------|
-| `inspire_runs` | Run config, status, progress %, business context, stepLog, generationOptions (JSON) |
-| `inspire_use_cases` | Use cases with scores, SQL, domain, subdomain -- linked to runs |
-| `inspire_exports` | Export records (format, path, timestamp) |
-| `inspire_prompt_logs` | Every LLM call logged: promptKey, version, model, temperature, rendered prompt, raw response, honesty score, duration, success/error |
-| `inspire_metadata_cache` | Metadata snapshots for reuse across runs |
-| `inspire_outcome_maps` | Custom industry outcome maps |
-| `inspire_genie_spaces` | Genie space tracking |
-| `inspire_activity_log` | Activity events (user actions, exports, run starts) |
+| `forge_runs` | Run config, status, progress %, business context, stepLog, generationOptions (JSON) |
+| `forge_use_cases` | Use cases with scores, SQL, domain, subdomain -- linked to runs |
+| `forge_exports` | Export records (format, path, timestamp) |
+| `forge_prompt_logs` | Every LLM call logged: promptKey, version, model, temperature, rendered prompt, raw response, honesty score, duration, success/error |
+| `forge_metadata_cache` | Metadata snapshots for reuse across runs |
+| `forge_outcome_maps` | Custom industry outcome maps |
+| `forge_genie_spaces` | Genie space tracking |
+| `forge_activity_log` | Activity events (user actions, exports, run starts) |
 
 **Key patterns**:
 - **Row mappers** -- `dbRowToRun()`, `dbRowToUseCase()` convert DB rows to typed domain objects
@@ -365,7 +365,7 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 | Structure | Flat list | **Domain-organised sections** -- cover page, executive summary, table of contents, per-domain dividers and summaries |
 | Notebooks | Python .py files | **Jupyter .ipynb format** -- markdown + SQL cells, deployed via Workspace REST API |
 | Export tracking | None | **Export records in Lakebase** -- every export logged with format, path, timestamp |
-| Notebook deployment | Direct file write | **User-scoped deployment** -- notebooks go to `/Users/<email>/inspire_gen/<run>/` using app-level auth |
+| Notebook deployment | Direct file write | **User-scoped deployment** -- notebooks go to `/Users/<email>/forge_gen/<run>/` using app-level auth |
 
 ---
 
@@ -421,7 +421,7 @@ V2 is a full-stack web application built with Next.js 16, React 19, TypeScript, 
 
 ### V2 (NET NEW)
 
-**Prompt Logging (`inspire_prompt_logs` table)**:
+**Prompt Logging (`forge_prompt_logs` table)**:
 Every LLM call is logged with:
 - `promptKey` -- which template was used
 - `promptVersion` -- content hash of the template

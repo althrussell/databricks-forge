@@ -16,7 +16,7 @@ export async function saveMetadataSnapshot(
   snapshot: MetadataSnapshot
 ): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireMetadataCache.upsert({
+  await prisma.forgeMetadataCache.upsert({
     where: { cacheKey: snapshot.cacheKey },
     create: {
       cacheKey: snapshot.cacheKey,
@@ -41,7 +41,7 @@ export async function loadMetadataSnapshot(
   cacheKey: string
 ): Promise<MetadataSnapshot | null> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireMetadataCache.findUnique({
+  const row = await prisma.forgeMetadataCache.findUnique({
     where: { cacheKey },
   });
 
@@ -66,7 +66,7 @@ export async function loadMetadataForRun(
   runId: string
 ): Promise<MetadataSnapshot | null> {
   const prisma = await getPrisma();
-  const run = await prisma.inspireRun.findUnique({
+  const run = await prisma.forgeRun.findUnique({
     where: { runId },
     select: { metadataCacheKey: true },
   });

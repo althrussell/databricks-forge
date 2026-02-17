@@ -38,7 +38,7 @@ The SQL Warehouse ID is injected via environment variables. Never hardcode it.
 2. Build the Next.js app: `npm run build`
 3. Deploy via Databricks CLI:
    ```bash
-   databricks apps deploy --app-name databricks-inspire
+   databricks apps deploy --app-name databricks-forge
    ```
 4. The platform builds the container and starts the app
 5. Access via the workspace Apps page or the app URL

@@ -60,7 +60,7 @@ export interface AIQueryOptions {
    */
   retries?: number;
   /**
-   * Pipeline run ID. When set, the call is logged to InspirePromptLog
+   * Pipeline run ID. When set, the call is logged to ForgePromptLog
    * for auditing and debugging.
    */
   runId?: string;

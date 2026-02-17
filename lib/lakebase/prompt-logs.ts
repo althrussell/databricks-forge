@@ -49,7 +49,7 @@ export interface PromptLogEntry {
 export async function insertPromptLog(entry: PromptLogEntry): Promise<void> {
   try {
     const prisma = await getPrisma();
-    await prisma.inspirePromptLog.create({
+    await prisma.forgePromptLog.create({
       data: {
         logId: entry.logId,
         runId: entry.runId,
@@ -87,7 +87,7 @@ export async function insertPromptLog(entry: PromptLogEntry): Promise<void> {
  */
 export async function getPromptLogsByRunId(runId: string): Promise<PromptLogEntry[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspirePromptLog.findMany({
+  const rows = await prisma.forgePromptLog.findMany({
     where: { runId },
     orderBy: { createdAt: "asc" },
   });
@@ -102,7 +102,7 @@ export async function getPromptLogsByStep(
   step: string
 ): Promise<PromptLogEntry[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspirePromptLog.findMany({
+  const rows = await prisma.forgePromptLog.findMany({
     where: { runId, step },
     orderBy: { createdAt: "asc" },
   });
@@ -123,7 +123,7 @@ export async function getPromptLogStats(runId: string): Promise<{
   totalTokens: number;
 }> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspirePromptLog.findMany({
+  const rows = await prisma.forgePromptLog.findMany({
     where: { runId },
     select: {
       success: true,

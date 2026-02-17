@@ -1,5 +1,5 @@
 /**
- * Core domain types for Databricks Inspire AI.
+ * Core domain types for Databricks Forge AI.
  *
  * These types are shared across the entire application: API routes,
  * pipeline steps, UI components, and persistence.

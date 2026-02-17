@@ -82,7 +82,7 @@ schemas, tables, and columns for the specified UC metadata path.
 4. Query `information_schema.columns` for column details
 5. Optionally query foreign key relationships
 6. Build schema markdown (table + column descriptions for prompts)
-7. Cache results in `inspire_metadata_cache`
+7. Cache results in `forge_metadata_cache`
 
 **Output:** `MetadataSnapshot` with:
 - `tables` -- list of table FQNs
@@ -205,7 +205,7 @@ remove duplicates.
 4. Re-number use case IDs with domain prefix
 5. Sort by overall_score descending
 6. Apply volume filter if total exceeds threshold (50/100/200)
-7. Persist final use cases to `inspire_use_cases` table
+7. Persist final use cases to `forge_use_cases` table
 
 **Output:** Scored, deduplicated, ranked use cases persisted in Lakebase.
 

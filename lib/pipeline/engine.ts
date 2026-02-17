@@ -190,9 +190,9 @@ export async function startPipeline(runId: string): Promise<void> {
     logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
     const prisma = await (await import("@/lib/prisma")).getPrisma();
     await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-      await tx.inspireUseCase.deleteMany({ where: { runId } });
+      await tx.forgeUseCase.deleteMany({ where: { runId } });
       if (ctx.useCases.length > 0) {
-        await tx.inspireUseCase.createMany({
+        await tx.forgeUseCase.createMany({
           data: ctx.useCases.map((uc) => ({
             id: uc.id,
             runId: uc.runId,

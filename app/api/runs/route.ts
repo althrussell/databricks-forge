@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       businessPriorities: (body.businessPriorities ?? ["Increase Revenue"]) as BusinessPriority[],
       strategicGoals: body.strategicGoals ?? "",
       generationOptions: (body.generationOptions ?? ["SQL Code"]) as GenerationOption[],
-      generationPath: body.generationPath ?? "./inspire_gen/",
+      generationPath: body.generationPath ?? "./forge_gen/",
       languages: (body.languages ?? ["English"]) as SupportedLanguage[],
       aiModel: getServingEndpoint(),
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,

@@ -1,17 +1,17 @@
-# Databricks Inspire AI
+# Databricks Forge AI
 
 > **IMPORTANT: This is NOT a Databricks product.** This project was built by the Databricks Field Engineering team as an internal accelerator. It is provided as-is under the Apache 2.0 license with no warranty, no official support, and no liability. **Status: Alpha** -- see [NOTICE](NOTICE) for full disclaimer.
 
 **Transform your Unity Catalog metadata into actionable, AI-generated use cases.**
 
-Databricks Inspire AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
+Databricks Forge AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
 
 ---
 
 ## What It Does
 
 1. **Configure** -- enter your business name, select Unity Catalog scope, and set priorities.
-2. **Discover** -- a 7-step AI pipeline extracts metadata, generates use cases, clusters them into business domains, scores them, and generates runnable SQL. See [INSPIRE_ANALYSIS.md](INSPIRE_ANALYSIS.md) for the full breakdown.
+2. **Discover** -- a 7-step AI pipeline extracts metadata, generates use cases, clusters them into business domains, scores them, and generates runnable SQL. See [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) for the full breakdown.
 3. **Export** -- download results as Excel, PowerPoint, or PDF, or deploy SQL notebooks directly to your workspace.
 
 ### Key Features
@@ -22,7 +22,7 @@ Databricks Inspire AI is a web application deployed as a [Databricks App](https:
 - Deduplicates and ranks results so the highest-value opportunities surface first
 - Supports **20+ languages** for generated documentation
 - **Real-time status messages** during pipeline execution (e.g. "Filtering tables (batch 2 of 5)...")
-- **Privacy-first**: reads only metadata by default (table/column names and schemas). Optional [data sampling](INSPIRE_ANALYSIS.md#data-sampling) can be enabled for improved SQL accuracy
+- **Privacy-first**: reads only metadata by default (table/column names and schemas). Optional [data sampling](FORGE_ANALYSIS.md#data-sampling) can be enabled for improved SQL accuracy
 
 ---
 
@@ -43,7 +43,7 @@ Databricks Inspire AI is a web application deployed as a [Databricks App](https:
 ## Project Structure
 
 ```
-databricks-inspire/
+databricks-forge/
   AGENTS.md                     # AI agent guidance
   app.yaml                      # Databricks App runtime config
   databricks.yml                # Databricks App manifest (bundles)
@@ -102,7 +102,7 @@ The "Discover Usecases" pipeline runs 7 steps sequentially. The frontend polls f
 
 Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
 
-> For the full analysis methodology, scoring formulas, prompt engineering details, and data flow diagrams, see [INSPIRE_ANALYSIS.md](INSPIRE_ANALYSIS.md).
+> For the full analysis methodology, scoring formulas, prompt engineering details, and data flow diagrams, see [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md).
 
 ---
 
@@ -120,32 +120,32 @@ Connect to your Lakebase database as the project owner (via the Lakebase UI SQL 
 
 ```sql
 -- Create the application role with a native Postgres password
-CREATE ROLE databricks_inspire WITH LOGIN PASSWORD 'your-secure-password';
+CREATE ROLE databricks_forge WITH LOGIN PASSWORD 'your-secure-password';
 
 -- Allow connecting to the database
-GRANT CONNECT ON DATABASE databricks_postgres TO databricks_inspire;
+GRANT CONNECT ON DATABASE databricks_postgres TO databricks_forge;
 
 -- Allow using the public schema
-GRANT USAGE ON SCHEMA public TO databricks_inspire;
+GRANT USAGE ON SCHEMA public TO databricks_forge;
 
 -- Table-level permissions
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO databricks_inspire;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO databricks_forge;
 
 -- Future tables in the schema (so Prisma can create tables)
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO databricks_inspire;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO databricks_forge;
 
 -- Allow Prisma to run DDL (CREATE TABLE, ALTER TABLE, etc.)
-GRANT CREATE ON SCHEMA public TO databricks_inspire;
+GRANT CREATE ON SCHEMA public TO databricks_forge;
 ```
 
 After running `prisma db push` for the first time (which creates the tables as *your* user), transfer ownership so the app role can run future migrations:
 
 ```sql
-ALTER TABLE inspire_runs OWNER TO databricks_inspire;
-ALTER TABLE inspire_use_cases OWNER TO databricks_inspire;
-ALTER TABLE inspire_metadata_cache OWNER TO databricks_inspire;
-ALTER TABLE inspire_exports OWNER TO databricks_inspire;
+ALTER TABLE forge_runs OWNER TO databricks_forge;
+ALTER TABLE forge_use_cases OWNER TO databricks_forge;
+ALTER TABLE forge_metadata_cache OWNER TO databricks_forge;
+ALTER TABLE forge_exports OWNER TO databricks_forge;
 ```
 
 > **Note:** Using a native Postgres password (rather than OAuth tokens) is recommended for application roles. Native passwords don't expire hourly and are simpler to manage. See [Lakebase authentication docs](https://docs.databricks.com/aws/en/oltp/projects/authentication) for details.
@@ -169,10 +169,10 @@ Example:
 
 ```
 # Pooler (for the app)
-postgresql://databricks_inspire:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
+postgresql://databricks_forge:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
 
 # Direct (for migrations)
-postgresql://databricks_inspire:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
+postgresql://databricks_forge:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
 ```
 
 ### 4. Store the connection string as a Databricks secret
@@ -181,11 +181,11 @@ The `DATABASE_URL` contains credentials and must not be committed to the repo. S
 
 ```bash
 # Create a secret scope for the app
-databricks secrets create-scope inspire-secrets
+databricks secrets create-scope forge-secrets
 
 # Store the pooler connection string
-databricks secrets put-secret inspire-secrets DATABASE_URL \
-  --string-value "postgresql://databricks_inspire:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
+databricks secrets put-secret forge-secrets DATABASE_URL \
+  --string-value "postgresql://databricks_forge:your-password@ep-xxx-pooler.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
 ```
 
 ### 5. Add the secret as an App resource
@@ -195,7 +195,7 @@ In the **Databricks App UI**:
 1. Open your app's **Configure** page
 2. Under **App resources**, click **+ Add resource**
 3. Select **Secret**
-4. Set scope to `inspire-secrets`, key to `DATABASE_URL`
+4. Set scope to `forge-secrets`, key to `DATABASE_URL`
 5. Set the **Resource key** to `db-secret`
 6. Permission: **Can read**
 
@@ -215,11 +215,11 @@ Using the **direct** endpoint (not the pooler), create the tables:
 
 ```bash
 # Set the direct URL for migrations
-DATABASE_URL="postgresql://databricks_inspire:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full" \
+DATABASE_URL="postgresql://databricks_forge:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full" \
   npx prisma db push
 ```
 
-This creates four tables: `inspire_runs`, `inspire_use_cases`, `inspire_metadata_cache`, and `inspire_exports`.
+This creates four tables: `forge_runs`, `forge_use_cases`, `forge_metadata_cache`, and `forge_exports`.
 
 > **Important:** Always use the **direct** endpoint (without `-pooler`) for `prisma db push`. The pooler endpoint does not support DDL operations.
 
@@ -240,8 +240,8 @@ This creates four tables: `inspire_runs`, `inspire_use_cases`, `inspire_metadata
 ### 1. Clone and install
 
 ```bash
-git clone <repo-url> databricks-inspire
-cd databricks-inspire
+git clone <repo-url> databricks-forge
+cd databricks-forge
 npm install
 ```
 
@@ -251,7 +251,7 @@ Create a `.env` file:
 
 ```env
 # Lakebase connection (pooler endpoint)
-DATABASE_URL="postgresql://databricks_inspire:<password>@ep-xxx-pooler.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
+DATABASE_URL="postgresql://databricks_forge:<password>@ep-xxx-pooler.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
 
 # Databricks workspace (for SQL Warehouse + Model Serving)
 DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
@@ -275,7 +275,7 @@ DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5
 npx prisma generate
 
 # Push schema to Lakebase (use the DIRECT endpoint, not pooler)
-DATABASE_URL="postgresql://databricks_inspire:<password>@ep-xxx.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=require" \
+DATABASE_URL="postgresql://databricks_forge:<password>@ep-xxx.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=require" \
   npx prisma db push
 ```
 
@@ -307,13 +307,13 @@ In the Databricks App UI, add two resources:
 | Resource type | Resource key | Configuration |
 | --- | --- | --- |
 | **SQL Warehouse** | `sql-warehouse` | Select your warehouse, permission: Can use |
-| **Secret** | `db-secret` | Scope: `inspire-secrets`, Key: `DATABASE_URL`, permission: Can read |
+| **Secret** | `db-secret` | Scope: `forge-secrets`, Key: `DATABASE_URL`, permission: Can read |
 
 ### 2. Deploy
 
 ```bash
 # Deploy from git repo or local source
-databricks apps deploy --app-name databricks-inspire
+databricks apps deploy --app-name databricks-forge
 ```
 
 The platform will:
@@ -328,7 +328,7 @@ The platform will:
 
 After deployment, find the app URL in:
 - Databricks Workspace > Apps
-- Or via CLI: `databricks apps get databricks-inspire`
+- Or via CLI: `databricks apps get databricks-forge`
 
 ### Auto-injected environment variables
 
@@ -351,7 +351,7 @@ If you want to build and run the container locally:
 
 ```bash
 # Build
-docker build -t databricks-inspire .
+docker build -t databricks-forge .
 
 # Run (provide env vars)
 docker run -p 3000:3000 \
@@ -360,7 +360,7 @@ docker run -p 3000:3000 \
   -e DATABRICKS_TOKEN=dapi_xxx \
   -e DATABRICKS_WAREHOUSE_ID=abc123 \
   -e DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5 \
-  databricks-inspire
+  databricks-forge
 ```
 
 ---
@@ -419,10 +419,10 @@ All app state is stored in four tables in the Lakebase `public` schema, managed 
 
 | Table | Purpose |
 | --- | --- |
-| `inspire_runs` | Pipeline execution records (config, status, progress, status message, business context) |
-| `inspire_use_cases` | Generated use cases (name, scores, domain, SQL, tables involved) |
-| `inspire_metadata_cache` | Cached UC metadata snapshots |
-| `inspire_exports` | Export history |
+| `forge_runs` | Pipeline execution records (config, status, progress, status message, business context) |
+| `forge_use_cases` | Generated use cases (name, scores, domain, SQL, tables involved) |
+| `forge_metadata_cache` | Cached UC metadata snapshots |
+| `forge_exports` | Export history |
 
 Schema is defined in `prisma/schema.prisma`. To update:
 
@@ -482,9 +482,9 @@ npx shadcn@latest add <component-name>
 
 ## Privacy
 
-By default, Inspire reads **metadata only** -- schema names, table names, column names, data types, and comments. All LLM prompts contain only structural metadata.
+By default, Forge reads **metadata only** -- schema names, table names, column names, data types, and comments. All LLM prompts contain only structural metadata.
 
-When **Data Sampling** is enabled in Settings, the app reads a configurable number of rows (5-50) per table during SQL generation. Sampled data is sent to the AI model to improve SQL accuracy but is **not persisted** -- it exists only in memory during the generation step. See [INSPIRE_ANALYSIS.md - Privacy Model](INSPIRE_ANALYSIS.md#privacy-model) for the full breakdown.
+When **Data Sampling** is enabled in Settings, the app reads a configurable number of rows (5-50) per table during SQL generation. Sampled data is sent to the AI model to improve SQL accuracy but is **not persisted** -- it exists only in memory during the generation step. See [FORGE_ANALYSIS.md - Privacy Model](FORGE_ANALYSIS.md#privacy-model) for the full breakdown.
 
 ---
 
@@ -492,7 +492,7 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 
 | Document | Description |
 | --- | --- |
-| [INSPIRE_ANALYSIS.md](INSPIRE_ANALYSIS.md) | **Comprehensive analysis guide** -- pipeline logic, scoring methodology, prompt engineering, data flow diagrams |
+| [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) | **Comprehensive analysis guide** -- pipeline logic, scoring methodology, prompt engineering, data flow diagrams |
 | [AGENTS.md](AGENTS.md) | AI agent guidance (folder contract, domain types, constraints) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and Lakebase schema |
 | [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
