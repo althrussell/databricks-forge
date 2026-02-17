@@ -60,7 +60,7 @@ import type { UseCase } from "@/lib/domain/types";
 
 interface UseCaseTableProps {
   useCases: UseCase[];
-  onUpdate?: (updated: UseCase) => void;
+  onUpdate?: (updated: UseCase) => Promise<boolean> | void;
 }
 
 export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
@@ -161,7 +161,7 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
   };
 
   // Save adjusted scores
-  const saveAdjustedScores = () => {
+  const saveAdjustedScores = async () => {
     if (!selectedUseCase || !onUpdate) return;
     const updated: UseCase = {
       ...selectedUseCase,
@@ -170,14 +170,18 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
       userImpactScore: adjImpact / 100,
       userOverallScore: adjOverall,
     };
-    onUpdate(updated);
+    const result = await onUpdate(updated);
+    if (result === false) {
+      toast.error("Failed to save score adjustments");
+      return;
+    }
     setSelectedUseCase(updated);
     setAdjustingScores(false);
     toast.success("Scores adjusted");
   };
 
   // Reset to system scores
-  const resetToSystemScores = () => {
+  const resetToSystemScores = async () => {
     if (!selectedUseCase || !onUpdate) return;
     const updated: UseCase = {
       ...selectedUseCase,
@@ -186,7 +190,11 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
       userImpactScore: null,
       userOverallScore: null,
     };
-    onUpdate(updated);
+    const result = await onUpdate(updated);
+    if (result === false) {
+      toast.error("Failed to reset scores");
+      return;
+    }
     setSelectedUseCase(updated);
     setAdjustingScores(false);
     toast.success("Scores reset to system values");
@@ -385,7 +393,7 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                     <>
                       <Button
                         size="sm"
-                        onClick={() => {
+                        onClick={async () => {
                           const updated: UseCase = {
                             ...selectedUseCase,
                             name: editName.trim() || selectedUseCase.name,
@@ -395,7 +403,11 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                               .map((t) => t.trim())
                               .filter(Boolean),
                           };
-                          onUpdate(updated);
+                          const result = await onUpdate(updated);
+                          if (result === false) {
+                            toast.error("Failed to update use case");
+                            return;
+                          }
                           setSelectedUseCase(updated);
                           setEditing(false);
                           toast.success("Use case updated");

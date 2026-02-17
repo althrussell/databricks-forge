@@ -8,11 +8,12 @@
 import { NextResponse } from "next/server";
 import { getAggregateEstateView } from "@/lib/lakebase/environment-scans";
 import { logger } from "@/lib/logger";
+import { toJsonSafe } from "@/lib/json-safe";
 
 export async function GET() {
   try {
     const estate = await getAggregateEstateView();
-    return NextResponse.json(estate);
+    return NextResponse.json(toJsonSafe(estate));
   } catch (error) {
     logger.error("[api/environment/aggregate] GET failed", {
       error: error instanceof Error ? error.message : String(error),
