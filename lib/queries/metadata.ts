@@ -142,10 +142,9 @@ export async function listCatalogs(): Promise<string[]> {
 
 async function listCatalogsOnce(): Promise<string[]> {
   // ── Fast path: single query via system.information_schema ──────────
-  // Note: system.information_schema.schemata may return catalogs the user
-  // can BROWSE but not USE. We still need to probe each candidate to
-  // verify USE CATALOG permission before presenting them in the UI.
-  let candidates: string[] | null = null;
+  // Returns catalogs the user can see. Permission to USE each catalog
+  // is verified lazily when the user expands it (listSchemas throws
+  // MetadataError with INSUFFICIENT_PERMISSIONS if access is denied).
   try {
     const result = await executeSQL(`
       SELECT DISTINCT catalog_name
@@ -153,18 +152,14 @@ async function listCatalogsOnce(): Promise<string[]> {
       WHERE catalog_name NOT IN ('system', '__databricks_internal')
       ORDER BY catalog_name
     `);
-    candidates = result.rows.map((r) => r[0]);
+    return result.rows.map((r) => r[0]);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Permission error on system.information_schema is expected --
-    // fall through to the SHOW CATALOGS approach.
     if (
       !msg.includes("INSUFFICIENT_PERMISSIONS") &&
       !msg.includes("USE CATALOG") &&
       !msg.includes("does not exist")
     ) {
-      // This might be a warehouse connectivity issue -- let it propagate
-      // so withRetry can handle it.
       console.warn(
         "[listCatalogs] Fast path failed (non-permission error), trying fallback:",
         msg
@@ -172,64 +167,25 @@ async function listCatalogsOnce(): Promise<string[]> {
     }
   }
 
-  // ── Fallback: SHOW CATALOGS to get candidate list ─────────────────
-  if (candidates === null) {
-    try {
-      const result = await executeSQL("SHOW CATALOGS");
-      candidates = result.rows
-        .map((r) => r[0])
-        .filter((c) => c !== "system" && c !== "__databricks_internal");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        msg.includes("INSUFFICIENT_PERMISSIONS") ||
-        msg.includes("USE CATALOG")
-      ) {
-        throw new MetadataError(
-          "You don't have permission to list catalogs. Contact your workspace admin.",
-          "INSUFFICIENT_PERMISSIONS"
-        );
-      }
-      throw err;
+  // ── Fallback: SHOW CATALOGS ───────────────────────────────────────
+  try {
+    const result = await executeSQL("SHOW CATALOGS");
+    return result.rows
+      .map((r) => r[0])
+      .filter((c) => c !== "system" && c !== "__databricks_internal");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("INSUFFICIENT_PERMISSIONS") ||
+      msg.includes("USE CATALOG")
+    ) {
+      throw new MetadataError(
+        "You don't have permission to list catalogs. Contact your workspace admin.",
+        "INSUFFICIENT_PERMISSIONS"
+      );
     }
+    throw err;
   }
-
-  if (candidates.length === 0) return [];
-
-  // ── Probe each candidate to verify USE CATALOG permission ─────────
-  return probeCatalogs(candidates);
-}
-
-/**
- * Probe a list of candidate catalogs to verify the user has USE CATALOG
- * permission on each. Returns only the accessible catalogs.
- *
- * Probes run in batches with limited concurrency to avoid overwhelming
- * the SQL Warehouse.
- */
-async function probeCatalogs(candidates: string[]): Promise<string[]> {
-  const PROBE_CONCURRENCY = 5;
-  const accessible: string[] = [];
-
-  for (let i = 0; i < candidates.length; i += PROBE_CONCURRENCY) {
-    const batch = candidates.slice(i, i + PROBE_CONCURRENCY);
-    const probes = await Promise.allSettled(
-      batch.map(async (catalog) => {
-        await executeSQL(
-          `SELECT 1 FROM \`${catalog}\`.information_schema.schemata LIMIT 1`,
-          undefined,
-          undefined,
-          { waitTimeout: "10s" }
-        );
-        return catalog;
-      })
-    );
-    for (const probe of probes) {
-      if (probe.status === "fulfilled") accessible.push(probe.value);
-    }
-  }
-
-  return accessible;
 }
 
 /**
