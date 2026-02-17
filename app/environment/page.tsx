@@ -30,11 +30,18 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   Database,
   Download,
   FileSpreadsheet,
+  Info,
   Loader2,
   Search,
   Workflow,
@@ -398,6 +405,7 @@ export default function EstatePage() {
   // ---------------------------------------------------------------------------
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -593,13 +601,27 @@ export default function EstatePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Table</TableHead>
-                    <TableHead>Domain</TableHead>
-                    <TableHead>Tier</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Sensitivity</TableHead>
-                    <TableHead>Via</TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Table" tip="Fully qualified table name (catalog.schema.table) with its description if one exists — either human-authored or AI-generated." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Domain" tip="Business domain assigned by AI analysis. Groups tables by the business function they serve (e.g. Finance, Customer, Operations)." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Tier" tip="Medallion architecture tier: bronze = raw ingested data, silver = cleansed and conformed, gold = analytics-ready for business users, system = internal/technical." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Size" tip="Physical storage size of the table on disk. Views and inaccessible tables may show as '—'." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Owner" tip="The Unity Catalog owner of this table. Tables without owners lack clear accountability when issues arise." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Sensitivity" tip="Data sensitivity classification determined by AI. 'Confidential' or 'restricted' indicates PII or regulated data requiring compliance controls." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Via" tip="How this table was discovered. 'Selected' means it was within your chosen scan scope. 'Lineage' means it was found by following data dependencies from other tables." />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -731,6 +753,7 @@ export default function EstatePage() {
         </Tabs>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -770,22 +793,26 @@ function AggregateSummary({
           title="Tables"
           value={stats.totalTables}
           icon={<Database className="h-4 w-4" />}
+          tooltip="Total number of tables and views discovered across all scans, including tables found by following data lineage beyond your selected scope."
         />
         <StatCard
           title="Total Size"
           value={humanSize(stats.totalSizeBytes)}
           icon={<BarChart3 className="h-4 w-4" />}
+          tooltip="Combined on-disk storage of all tables in the estate. Views and tables where size could not be determined show as 0 bytes."
         />
         <StatCard
           title="Domains"
           value={stats.domainCount}
           icon={<Database className="h-4 w-4" />}
+          tooltip="Number of distinct business domains identified by AI analysis, such as Finance, Customer, Operations, or Marketing. Helps organise your data by business function."
         />
         <StatCard
           title="PII Tables"
           value={stats.piiTablesCount}
           icon={<ShieldAlert className="h-4 w-4" />}
           alert={stats.piiTablesCount > 0}
+          tooltip="Tables containing personally identifiable information (names, emails, phone numbers, etc.) that may require compliance with regulations like GDPR, CCPA, or HIPAA."
         />
       </div>
 
@@ -883,58 +910,76 @@ function SingleScanSummary({
           title="Tables"
           value={scan.tableCount}
           icon={<Database className="h-4 w-4" />}
+          tooltip="Total tables and views found in this scan, including any discovered by following data lineage beyond your selected scope."
         />
         <StatCard
           title="Size"
           value={humanSize(scan.totalSizeBytes)}
           icon={<BarChart3 className="h-4 w-4" />}
+          tooltip="Combined on-disk storage of all tables in this scan. Views typically show 0 bytes as they don't store data directly."
         />
         <StatCard
           title="Lineage Discovered"
           value={scan.lineageDiscoveredCount}
           icon={<Workflow className="h-4 w-4" />}
+          tooltip="Tables found by walking data lineage — upstream sources and downstream consumers — that were outside your originally selected scope. Shows how your data connects to the wider estate."
         />
         <StatCard
           title="Domains"
           value={scan.domainCount}
           icon={<Database className="h-4 w-4" />}
+          tooltip="Business domains identified by AI analysis (e.g. Finance, Customer, Operations). Groups your tables by the business function they serve."
         />
         <StatCard
           title="PII Tables"
           value={scan.piiTablesCount}
           icon={<ShieldAlert className="h-4 w-4" />}
           alert={scan.piiTablesCount > 0}
+          tooltip="Tables containing personally identifiable information (names, emails, phone numbers, etc.) that may need compliance controls under GDPR, CCPA, or HIPAA."
         />
         <StatCard
           title="Redundancy Pairs"
           value={scan.redundancyPairsCount}
           icon={<AlertTriangle className="h-4 w-4" />}
           alert={scan.redundancyPairsCount > 0}
+          tooltip="Pairs of tables with significant column overlap that may be duplicates, backups, or unnecessary copies. Redundancy wastes storage and risks inconsistent reporting."
         />
         <StatCard
           title="Data Products"
           value={scan.dataProductCount}
           icon={<BarChart3 className="h-4 w-4" />}
+          tooltip="Logical data products identified by AI — cohesive groups of tables that together serve a business function (e.g. 'Customer 360', 'Sales Pipeline'). Formalising these improves reuse and governance."
         />
         <StatCard
           title="Avg Governance"
           value={`${scan.avgGovernanceScore.toFixed(0)}/100`}
           icon={<ShieldAlert className="h-4 w-4" />}
+          tooltip="Average governance score across all tables (0 to 100). Factors include documentation coverage, ownership, sensitivity tagging, maintenance frequency, and access controls. Higher is better."
         />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="With Streaming" value={scan.tablesWithStreaming} />
-        <StatCard title="With CDF" value={scan.tablesWithCDF} />
+        <StatCard
+          title="With Streaming"
+          value={scan.tablesWithStreaming}
+          tooltip="Tables that receive data via streaming writes (Structured Streaming, Auto Loader, etc.). These tables are continuously updated and may need different maintenance strategies."
+        />
+        <StatCard
+          title="With CDF"
+          value={scan.tablesWithCDF}
+          tooltip="Tables with Change Data Feed enabled. CDF lets downstream consumers efficiently track row-level inserts, updates, and deletes — essential for incremental ETL pipelines."
+        />
         <StatCard
           title="Need OPTIMIZE"
           value={scan.tablesNeedingOptimize}
           alert={scan.tablesNeedingOptimize > 0}
+          tooltip="Tables that haven't been OPTIMIZEd in over 30 days. OPTIMIZE compacts small files into larger ones, which dramatically improves query performance and reduces costs."
         />
         <StatCard
           title="Need VACUUM"
           value={scan.tablesNeedingVacuum}
           alert={scan.tablesNeedingVacuum > 0}
+          tooltip="Tables that haven't been VACUUMed in over 30 days. VACUUM removes old, unused data files left by previous writes, freeing up storage and reducing cloud costs."
         />
       </div>
 
@@ -1033,6 +1078,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="Tables Found"
               value={progress.tablesFound}
               icon={<Database className="h-3.5 w-3.5" />}
+              tooltip="Tables and views discovered so far in the selected Unity Catalog scope."
             />
           )}
           {progress.columnsFound > 0 && (
@@ -1040,6 +1086,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="Columns"
               value={progress.columnsFound}
               icon={<BarChart3 className="h-3.5 w-3.5" />}
+              tooltip="Total columns found across all discovered tables. Column names and types are used for AI analysis."
             />
           )}
           {progress.lineageTablesFound > 0 && (
@@ -1047,6 +1094,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="Lineage Tables"
               value={progress.lineageTablesFound}
               icon={<Workflow className="h-3.5 w-3.5" />}
+              tooltip="Additional tables discovered by following data lineage (upstream and downstream dependencies) beyond your original scope."
             />
           )}
           {progress.lineageEdgesFound > 0 && (
@@ -1054,6 +1102,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="Lineage Edges"
               value={progress.lineageEdgesFound}
               icon={<Workflow className="h-3.5 w-3.5" />}
+              tooltip="Data flow connections found between tables. Each edge represents one table feeding data into another via ETL, views, or streaming."
             />
           )}
           {progress.enrichedCount > 0 && (
@@ -1061,6 +1110,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="Enriched"
               value={`${progress.enrichedCount}/${progress.enrichTotal}`}
               icon={<Search className="h-3.5 w-3.5" />}
+              tooltip="Tables that have been deeply analysed with DESCRIBE DETAIL (size, format, files) and DESCRIBE HISTORY (write patterns, maintenance)."
             />
           )}
           {progress.domainsFound > 0 && (
@@ -1068,6 +1118,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="Domains"
               value={progress.domainsFound}
               icon={<Globe className="h-3.5 w-3.5" />}
+              tooltip="Business domains identified so far by the AI analysis pass (e.g. Finance, Customer, Operations)."
             />
           )}
           {progress.piiDetected > 0 && (
@@ -1076,6 +1127,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               value={progress.piiDetected}
               icon={<ShieldAlert className="h-3.5 w-3.5" />}
               alert
+              tooltip="Tables flagged as containing personally identifiable or sensitive data based on column names and types."
             />
           )}
           {progress.llmPass && (
@@ -1083,6 +1135,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
               label="LLM Pass"
               value={progress.llmPass}
               icon={<Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              tooltip="The current AI analysis pass running. Passes include domain categorisation, PII detection, description generation, redundancy checks, relationship discovery, tier classification, data product identification, and governance scoring."
             />
           )}
         </div>
@@ -1096,13 +1149,15 @@ function MiniCounter({
   value,
   icon,
   alert,
+  tooltip,
 }: {
   label: string;
   value: string | number;
   icon: React.ReactNode;
   alert?: boolean;
+  tooltip?: string;
 }) {
-  return (
+  const inner = (
     <div
       className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ${
         alert
@@ -1116,6 +1171,39 @@ function MiniCounter({
         <div className="text-[10px] text-muted-foreground/70">{label}</div>
       </div>
     </div>
+  );
+
+  if (!tooltip) return inner;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="cursor-help">{inner}</div>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[260px]">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Header with tooltip (for table column headers)
+// ---------------------------------------------------------------------------
+
+function HeaderWithTip({ label, tip }: { label: string; tip: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center gap-1 cursor-help">
+          {label}
+          <Info className="h-3 w-3 text-muted-foreground/50" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[280px]">
+        {tip}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1134,7 +1222,9 @@ function ExecutiveSummary({
   insights: InsightRow[];
   humanSize: (bytes: string | number | null) => string;
 }) {
-  // Derive signals from the data
+  // -------------------------------------------------------------------
+  // Derive signals
+  // -------------------------------------------------------------------
   const tables = details.length;
   const views = details.filter((d) => d.tableType === "VIEW").length;
   const baseTables = tables - views;
@@ -1155,95 +1245,166 @@ function ExecutiveSummary({
   const noOwner = details.filter((d) => !d.owner);
   const noDescription = details.filter((d) => !d.comment && !d.generatedDescription);
   const govCritical = details.filter((d) => d.governancePriority === "critical" || d.governancePriority === "high");
+  const documented = tables - noDescription.length;
+  const documentedPct = tables > 0 ? Math.round((documented / tables) * 100) : 0;
 
   const redundancies = insights.filter((i) => i.insightType === "redundancy");
   const implicitRels = insights.filter((i) => i.insightType === "implicit_relationship");
-  const dataProducts = insights.filter((i) => i.insightType === "data_product");
+  const dataProductInsights = insights.filter((i) => i.insightType === "data_product");
   const govGaps = insights.filter((i) => i.insightType === "governance_gap");
 
-  // Build narrative paragraphs
-  const findings: Array<{ label: string; body: string; severity: "info" | "warn" | "critical" }> = [];
+  // Parse data product payloads for richer narrative
+  const dataProducts: Array<{ productName: string; description: string; primaryDomain: string; maturityLevel: string; tables: string[] }> = [];
+  for (const dp of dataProductInsights) {
+    try {
+      dataProducts.push(JSON.parse(dp.payloadJson));
+    } catch { /* skip malformed */ }
+  }
+  const productisedProducts = dataProducts.filter((p) => p.maturityLevel === "productised");
+  const curatedProducts = dataProducts.filter((p) => p.maturityLevel === "curated");
+  const rawProducts = dataProducts.filter((p) => p.maturityLevel === "raw");
 
-  // Estate composition
+  // -------------------------------------------------------------------
+  // Build findings — BUSINESS first, then TECHNICAL
+  // -------------------------------------------------------------------
+  type Finding = { label: string; body: string; severity: "info" | "warn" | "critical"; section: "business" | "technical" };
+  const findings: Finding[] = [];
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BUSINESS LAYER
+  // ═══════════════════════════════════════════════════════════════════
+
+  // 1. Strategic data landscape
   findings.push({
-    label: "Estate Composition",
-    body: `Your data estate comprises ${tables} objects (${baseTables} tables, ${views} views) totalling ${humanSize(stats.totalSizeBytes)}, organised across ${domainList.length} business domain${domainList.length !== 1 ? "s" : ""}${domainList.length > 0 ? ` (${domainList.slice(0, 5).join(", ")}${domainList.length > 5 ? ` and ${domainList.length - 5} more` : ""})` : ""}. The Medallion architecture breakdown is: ${tiers.bronze} bronze, ${tiers.silver} silver, ${tiers.gold} gold${tiers.unclassified > 0 ? `, ${tiers.unclassified} unclassified` : ""}.`,
+    label: "Your Data Landscape",
+    body: `Your organisation manages ${tables} data assets across ${domainList.length} business domain${domainList.length !== 1 ? "s" : ""}${domainList.length > 0 ? ` — ${domainList.slice(0, 4).join(", ")}${domainList.length > 4 ? ` and ${domainList.length - 4} more` : ""}` : ""}. This represents ${humanSize(stats.totalSizeBytes)} of structured data that can fuel analytics, AI, and decision-making. ${tiers.gold > 0 ? `${tiers.gold} asset${tiers.gold !== 1 ? "s are" : " is"} already at gold (analytics-ready) tier, providing immediate value to business teams.` : "No assets have been classified as analytics-ready (gold tier) yet — this is a quick win to unlock."}`,
     severity: "info",
+    section: "business",
   });
 
-  // PII / Sensitivity
+  // 2. Analytics readiness / self-service
+  const selfServicePct = tables > 0 ? Math.round(((tiers.gold + tiers.silver) / tables) * 100) : 0;
+  if (tables > 0) {
+    const readinessVerdict = selfServicePct >= 60
+      ? "Your estate is well-positioned for self-service analytics. Business teams can query and build dashboards on most data without engineering support."
+      : selfServicePct >= 30
+        ? "A moderate portion of data is ready for business consumption, but significant effort is needed to curate more datasets from bronze to silver/gold tiers to support self-service at scale."
+        : "Most of your data is in raw (bronze) form. Business teams cannot easily consume it without significant transformation. Prioritising a curation pipeline would directly reduce time-to-insight for stakeholders.";
+    findings.push({
+      label: "Self-Service Readiness",
+      body: `${selfServicePct}% of your data assets are at silver or gold tier, meaning they are curated and ready for business consumption. ${readinessVerdict}`,
+      severity: selfServicePct >= 60 ? "info" : selfServicePct >= 30 ? "warn" : "critical",
+      section: "business",
+    });
+  }
+
+  // 3. Data products = business capabilities
+  if (dataProducts.length > 0) {
+    const productNames = dataProducts.slice(0, 3).map((p) => `"${p.productName}"`).join(", ");
+    findings.push({
+      label: "Business Data Products",
+      body: `${dataProducts.length} data product${dataProducts.length !== 1 ? "s have" : " has"} been identified — reusable data assets that directly support business functions (${productNames}${dataProducts.length > 3 ? ` and ${dataProducts.length - 3} more` : ""}). ${productisedProducts.length > 0 ? `${productisedProducts.length} ${productisedProducts.length !== 1 ? "are" : "is"} already productised with defined consumers.` : ""} ${curatedProducts.length > 0 ? `${curatedProducts.length} ${curatedProducts.length !== 1 ? "are" : "is"} curated and near-ready for wider adoption.` : ""} ${rawProducts.length > 0 ? `${rawProducts.length} ${rawProducts.length !== 1 ? "are" : "is"} in early stages and would benefit from investment to become self-service ready.` : ""} Formalising these as named products with SLAs and owners accelerates time-to-value for downstream teams and AI initiatives.`,
+      severity: "info",
+      section: "business",
+    });
+  } else if (domainList.length > 0) {
+    findings.push({
+      label: "Data Product Opportunity",
+      body: `No formal data products have been identified yet, but your data spans ${domainList.length} business domain${domainList.length !== 1 ? "s" : ""}. Each domain likely contains candidate data products — curated datasets that multiple teams could reuse. Identifying and productising these would reduce duplicated effort, improve consistency, and accelerate analytics delivery.`,
+      severity: "warn",
+      section: "business",
+    });
+  }
+
+  // 4. Compliance & regulatory exposure
   if (piiTables.length > 0) {
+    const piiPct = Math.round((piiTables.length / tables) * 100);
     const piiDomains = new Set(piiTables.map((d) => d.dataDomain).filter(Boolean));
     findings.push({
-      label: "Sensitive Data Detected",
-      body: `${piiTables.length} table${piiTables.length !== 1 ? "s" : ""} contain${piiTables.length === 1 ? "s" : ""} personally identifiable information (PII) or restricted data, spanning ${piiDomains.size} domain${piiDomains.size !== 1 ? "s" : ""}. These require access controls, encryption-at-rest review, and compliance tagging (GDPR, HIPAA, PCI-DSS as applicable). Unmanaged PII is a regulatory and reputational risk.`,
+      label: "Regulatory & Privacy Exposure",
+      body: `${piiPct}% of your data estate (${piiTables.length} asset${piiTables.length !== 1 ? "s" : ""}) contains personally identifiable or restricted information, touching ${piiDomains.size} business domain${piiDomains.size !== 1 ? "s" : ""}. This creates obligations under regulations like GDPR, CCPA, or HIPAA. Without proper access controls and classification, the business faces regulatory fines, brand damage, and potential loss of customer trust. Proactive governance here directly protects revenue and reputation.`,
       severity: "critical",
+      section: "business",
+    });
+  } else {
+    findings.push({
+      label: "Privacy & Compliance",
+      body: "No sensitive or PII data was detected in the scanned estate. This simplifies compliance obligations, but you should verify this covers all business-critical datasets by expanding scan scope if needed.",
+      severity: "info",
+      section: "business",
     });
   }
 
-  // Governance gaps
-  if (govCritical.length > 0) {
-    findings.push({
-      label: "Governance Gaps",
-      body: `${govCritical.length} table${govCritical.length !== 1 ? "s have" : " has"} critical or high governance gaps. ${noOwner.length} table${noOwner.length !== 1 ? "s lack" : " lacks"} an owner, and ${noDescription.length} have no documentation (neither human-authored nor auto-generated). Without clear ownership and documentation, troubleshooting, compliance audits, and onboarding new team members become significantly harder.`,
-      severity: "warn",
-    });
-  } else if (noOwner.length > 0 || noDescription.length > 0) {
-    findings.push({
-      label: "Documentation & Ownership",
-      body: `${noOwner.length > 0 ? `${noOwner.length} table${noOwner.length !== 1 ? "s" : ""} ${noOwner.length !== 1 ? "have" : "has"} no owner assigned. ` : ""}${noDescription.length > 0 ? `${noDescription.length} table${noDescription.length !== 1 ? "s" : ""} ${noDescription.length !== 1 ? "have" : "has"} no description. ` : ""}Proper metadata hygiene reduces incident response time and supports data mesh adoption.`,
-      severity: "warn",
-    });
-  }
+  // 5. Discoverability & time-to-insight
+  findings.push({
+    label: "Data Discoverability",
+    body: `${documentedPct}% of your data assets have descriptions (either human-authored or auto-generated). ${documentedPct >= 70
+      ? "Analysts and data scientists can find and understand most datasets quickly, reducing onboarding time and enabling faster project delivery."
+      : documentedPct >= 40
+        ? "Many datasets lack descriptions, which forces analysts to spend time asking data engineers what tables mean — a hidden cost that slows every analytics project."
+        : "The majority of datasets have no documentation. This means every new analytics initiative starts with a discovery phase that could take days or weeks. Improving documentation coverage would directly reduce the time from business question to actionable insight."}${noOwner.length > 0 ? ` Additionally, ${noOwner.length} asset${noOwner.length !== 1 ? "s have" : " has"} no assigned owner — when something breaks, there is no clear point of accountability.` : ""}`,
+    severity: documentedPct >= 70 ? "info" : "warn",
+    section: "business",
+  });
 
-  // Redundancy
+  // 6. Cost & efficiency
   if (redundancies.length > 0) {
     findings.push({
-      label: "Redundancy Detected",
-      body: `${redundancies.length} pair${redundancies.length !== 1 ? "s" : ""} of tables appear to contain overlapping or duplicate data. Redundant copies increase storage cost, create inconsistency risk when one copy is updated but not the other, and confuse consumers about which is the "source of truth."`,
+      label: "Wasted Spend & Inconsistency Risk",
+      body: `${redundancies.length} pair${redundancies.length !== 1 ? "s" : ""} of datasets appear to contain overlapping or duplicate data. Beyond the storage cost of maintaining multiple copies, this creates a real business risk: different teams may make decisions based on different versions of the same data, leading to conflicting reports, eroded stakeholder trust, and costly reconciliation efforts.`,
       severity: "warn",
+      section: "business",
     });
   }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TECHNICAL LAYER
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Estate composition (compact)
+  findings.push({
+    label: "Estate Composition",
+    body: `${baseTables} tables and ${views} views totalling ${humanSize(stats.totalSizeBytes)}. Medallion tiers: ${tiers.gold} gold, ${tiers.silver} silver, ${tiers.bronze} bronze${tiers.unclassified > 0 ? `, ${tiers.unclassified} unclassified` : ""}.`,
+    severity: "info",
+    section: "technical",
+  });
 
   // Implicit relationships
   if (implicitRels.length > 0) {
     findings.push({
       label: "Undocumented Relationships",
-      body: `${implicitRels.length} implicit relationship${implicitRels.length !== 1 ? "s were" : " was"} discovered from column naming patterns but ${implicitRels.length !== 1 ? "are" : "is"} not declared as formal foreign keys. Formalising these in Unity Catalog improves query optimiser performance, makes lineage tracking more reliable, and helps analysts understand how data connects.`,
+      body: `${implicitRels.length} implicit relationship${implicitRels.length !== 1 ? "s were" : " was"} inferred from column naming patterns. Formalising these as foreign keys improves query performance, lineage accuracy, and analyst understanding of how data connects.`,
       severity: "info",
+      section: "technical",
     });
   }
 
-  // Data products
-  if (dataProducts.length > 0) {
-    findings.push({
-      label: "Data Products Identified",
-      body: `${dataProducts.length} logical data product${dataProducts.length !== 1 ? "s were" : " was"} identified — coherent groups of tables that serve a specific business function. Formalising these as named data products with SLAs and ownership accelerates self-service analytics and supports data mesh principles.`,
-      severity: "info",
-    });
-  }
-
-  // Views insight
-  if (views > 0) {
-    findings.push({
-      label: "Views in the Estate",
-      body: `${views} view${views !== 1 ? "s" : ""} ${views !== 1 ? "were" : "was"} found alongside base tables. Views are included in lineage tracking and domain classification. They often represent curated access layers or business-friendly abstractions — if they map to gold-tier data products, they should be documented and governed as first-class assets.`,
-      severity: "info",
-    });
-  }
-
-  // Overall gov score
+  // Governance score
   if (stats.avgGovernanceScore > 0) {
     const score = stats.avgGovernanceScore;
     const verdict = score >= 70 ? "healthy" : score >= 40 ? "needs attention" : "at risk";
     findings.push({
-      label: "Overall Governance Score",
-      body: `The average governance score across the estate is ${score.toFixed(0)}/100 (${verdict}). This score factors in documentation coverage, ownership assignment, sensitivity labelling, access controls, maintenance hygiene, and tagging completeness.${score < 70 ? " Prioritise the tables flagged as critical or high to raise the score." : ""}`,
+      label: "Governance Score",
+      body: `Average governance score: ${score.toFixed(0)}/100 (${verdict}). ${govCritical.length > 0 ? `${govCritical.length} asset${govCritical.length !== 1 ? "s" : ""} flagged as critical or high priority.` : ""} Factors: documentation, ownership, sensitivity labelling, access controls, maintenance, and tagging.`,
       severity: score >= 70 ? "info" : score >= 40 ? "warn" : "critical",
+      section: "technical",
+    });
+  }
+
+  // Views
+  if (views > 0) {
+    findings.push({
+      label: "Views in the Estate",
+      body: `${views} view${views !== 1 ? "s" : ""} found. These are included in lineage tracking and domain classification. Views acting as curated access layers should be documented and governed as first-class assets.`,
+      severity: "info",
+      section: "technical",
     });
   }
 
   if (findings.length === 0) return null;
+
+  const businessFindings = findings.filter((f) => f.section === "business");
+  const technicalFindings = findings.filter((f) => f.section === "technical");
 
   const severityIcon = (sev: string) => {
     if (sev === "critical") return <ShieldAlert className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />;
@@ -1251,36 +1412,68 @@ function ExecutiveSummary({
     return <BarChart3 className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
   };
 
-  // Count gov gap insights for severity breakdown
   const critCount = govGaps.filter((g) => g.severity === "critical").length;
   const highCount = govGaps.filter((g) => g.severity === "high").length;
+  const actionCount = findings.filter((f) => f.severity === "critical" || f.severity === "warn").length;
 
   return (
     <Card className="border-primary/20 bg-primary/[0.02]">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <FileSpreadsheet className="h-5 w-5 text-primary" />
-          Executive Summary — Why This Matters
+          Executive Summary
         </CardTitle>
         <CardDescription>
-          Automated analysis of your data estate.{" "}
-          {critCount + highCount > 0
-            ? `${critCount + highCount} finding${critCount + highCount !== 1 ? "s" : ""} require${critCount + highCount === 1 ? "s" : ""} attention.`
-            : "No critical findings."}
+          {actionCount > 0
+            ? `${actionCount} finding${actionCount !== 1 ? "s" : ""} require${actionCount === 1 ? "s" : ""} attention. ${critCount + highCount > 0 ? `${critCount + highCount} governance gap${critCount + highCount !== 1 ? "s" : ""} at critical/high priority.` : ""}`
+            : "Your data estate is in good shape. No critical findings."}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {findings.map((f, idx) => (
-            <div key={idx} className="flex gap-3">
-              {severityIcon(f.severity)}
-              <div>
-                <p className="text-sm font-semibold">{f.label}</p>
-                <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
-              </div>
+      <CardContent className="space-y-6">
+        {/* Business perspective */}
+        {businessFindings.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Business Perspective
+            </h4>
+            <div className="space-y-4">
+              {businessFindings.map((f, idx) => (
+                <div key={`biz-${idx}`} className="flex gap-3">
+                  {severityIcon(f.severity)}
+                  <div>
+                    <p className="text-sm font-semibold">{f.label}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* Divider */}
+        {businessFindings.length > 0 && technicalFindings.length > 0 && (
+          <div className="border-t" />
+        )}
+
+        {/* Technical findings */}
+        {technicalFindings.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Technical Detail
+            </h4>
+            <div className="space-y-3">
+              {technicalFindings.map((f, idx) => (
+                <div key={`tech-${idx}`} className="flex gap-3">
+                  {severityIcon(f.severity)}
+                  <div>
+                    <p className="text-sm font-semibold">{f.label}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1295,11 +1488,13 @@ function StatCard({
   value,
   icon,
   alert,
+  tooltip,
 }: {
   title: string;
   value: string | number;
   icon?: React.ReactNode;
   alert?: boolean;
+  tooltip?: string;
 }) {
   return (
     <Card
@@ -1313,6 +1508,16 @@ function StatCard({
         <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
           {icon}
           {title}
+          {tooltip && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3 w-3 text-muted-foreground/50 cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[260px]">
+                {tooltip}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <div className="text-2xl font-bold">{value}</div>
       </CardContent>
