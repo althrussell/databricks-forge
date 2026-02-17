@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -46,20 +47,28 @@ import {
   Trophy,
   Copy,
   Link2,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
 import type { UseCase } from "@/lib/domain/types";
 
 interface UseCaseTableProps {
   useCases: UseCase[];
+  onUpdate?: (updated: UseCase) => void;
 }
 
-export function UseCaseTable({ useCases }: UseCaseTableProps) {
+export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
   const [search, setSearch] = useState("");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"score" | "name" | "domain">("score");
   const [selectedUseCase, setSelectedUseCase] = useState<UseCase | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editStatement, setEditStatement] = useState("");
+  const [editTables, setEditTables] = useState("");
 
   const domains = useMemo(
     () => [...new Set(useCases.map((uc) => uc.domain))].sort(),
@@ -253,10 +262,71 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
           {selectedUseCase && (
             <>
               <SheetHeader className="pb-2">
-                <SheetTitle className="text-lg leading-snug">
-                  {selectedUseCase.name}
-                </SheetTitle>
+                {editing ? (
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="text-lg font-semibold"
+                  />
+                ) : (
+                  <SheetTitle className="text-lg leading-snug">
+                    {selectedUseCase.name}
+                  </SheetTitle>
+                )}
               </SheetHeader>
+
+              {/* Edit / Save / Cancel actions */}
+              {onUpdate && (
+                <div className="mt-1 flex gap-2">
+                  {editing ? (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const updated: UseCase = {
+                            ...selectedUseCase,
+                            name: editName.trim() || selectedUseCase.name,
+                            statement: editStatement.trim() || selectedUseCase.statement,
+                            tablesInvolved: editTables
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter(Boolean),
+                          };
+                          onUpdate(updated);
+                          setSelectedUseCase(updated);
+                          setEditing(false);
+                          toast.success("Use case updated");
+                        }}
+                      >
+                        <Check className="mr-1 h-3.5 w-3.5" />
+                        Save
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditing(false)}
+                      >
+                        <X className="mr-1 h-3.5 w-3.5" />
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditName(selectedUseCase.name);
+                        setEditStatement(selectedUseCase.statement);
+                        setEditTables(selectedUseCase.tablesInvolved.join(", "));
+                        setEditing(true);
+                      }}
+                    >
+                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Tags row */}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -314,13 +384,22 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
 
                 <Separator />
 
-                {/* Statement with copy */}
+                {/* Statement with copy / edit */}
                 <DetailSection
                   icon={<FileText className="h-4 w-4 text-blue-500" />}
                   title="Statement"
                   copyText={selectedUseCase.statement}
                 >
-                  {selectedUseCase.statement}
+                  {editing ? (
+                    <Textarea
+                      value={editStatement}
+                      onChange={(e) => setEditStatement(e.target.value)}
+                      rows={4}
+                      className="mt-1"
+                    />
+                  ) : (
+                    selectedUseCase.statement
+                  )}
                 </DetailSection>
 
                 {/* Solution with copy */}
@@ -365,7 +444,7 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                 </div>
 
                 {/* Tables Involved */}
-                {selectedUseCase.tablesInvolved.length > 0 && (
+                {(selectedUseCase.tablesInvolved.length > 0 || editing) && (
                   <>
                     <Separator />
                     <DetailSection
@@ -374,18 +453,31 @@ export function UseCaseTable({ useCases }: UseCaseTableProps) {
                       }
                       title="Tables Involved"
                     >
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {selectedUseCase.tablesInvolved.map((t) => (
-                          <Badge
-                            key={t}
-                            variant="outline"
-                            className="gap-1 font-mono text-[11px] font-normal"
-                          >
-                            <Database className="h-2.5 w-2.5 text-muted-foreground" />
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
+                      {editing ? (
+                        <div className="mt-1">
+                          <Input
+                            value={editTables}
+                            onChange={(e) => setEditTables(e.target.value)}
+                            placeholder="catalog.schema.table, ..."
+                          />
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Comma-separated fully-qualified table names
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {selectedUseCase.tablesInvolved.map((t) => (
+                            <Badge
+                              key={t}
+                              variant="outline"
+                              className="gap-1 font-mono text-[11px] font-normal"
+                            >
+                              <Database className="h-2.5 w-2.5 text-muted-foreground" />
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </DetailSection>
                   </>
                 )}

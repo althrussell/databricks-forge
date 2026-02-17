@@ -28,8 +28,12 @@ interface ScanData {
     dataTier: string | null;
     sensitivityLevel: string | null;
     sizeInBytes: bigint | null;
+    numRows: bigint | null;
     partitionColumns: string | null;
     clusteringColumns: string | null;
+    columnsJson: string | null;
+    comment: string | null;
+    generatedDescription: string | null;
   }>;
   lineage: Array<{
     sourceTableFqn: string;
@@ -66,6 +70,7 @@ export function buildERDGraph(
   options: BuildOptions = {}
 ): ERDGraph {
   const {
+    includeFKs = true,
     includeImplicit = true,
     includeLineage = true,
     domain,
@@ -80,20 +85,75 @@ export function buildERDGraph(
   const tableFqnSet = new Set(filteredDetails.map((d) => d.tableFqn));
 
   // Build nodes
-  const nodes: ERDNode[] = filteredDetails.map((d, idx) => ({
-    tableFqn: d.tableFqn,
-    displayName: d.tableName,
-    columns: [], // Populated from column data if available
-    domain: d.dataDomain,
-    tier: (d.dataTier as ERDNode["tier"]) ?? null,
-    hasPII: d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted",
-    size: d.sizeInBytes != null ? Number(d.sizeInBytes) : null,
-    x: (idx % 6) * 300,
-    y: Math.floor(idx / 6) * 200,
-  }));
+  const nodes: ERDNode[] = filteredDetails.map((d, idx) => {
+    // Parse columns from JSON if available
+    let columns: ERDNode["columns"] = [];
+    if (d.columnsJson) {
+      try {
+        const parsed: Array<{ name: string; type: string; nullable?: boolean; comment?: string | null }> = JSON.parse(d.columnsJson);
+        columns = parsed.map((c) => ({
+          name: c.name,
+          type: c.type,
+          isPK: false,
+          isFK: false,
+        }));
+      } catch { /* malformed JSON — skip */ }
+    }
+
+    return {
+      tableFqn: d.tableFqn,
+      displayName: d.tableName,
+      description: d.comment || d.generatedDescription || null,
+      columns,
+      domain: d.dataDomain,
+      tier: (d.dataTier as ERDNode["tier"]) ?? null,
+      hasPII: d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted",
+      size: d.sizeInBytes != null ? Number(d.sizeInBytes) : null,
+      rowCount: d.numRows != null ? Number(d.numRows) : null,
+      x: (idx % 6) * 300,
+      y: Math.floor(idx / 6) * 200,
+    };
+  });
 
   const edges: ERDEdge[] = [];
   let edgeId = 0;
+
+  // Extract explicit FK relationships from insights
+  if (includeFKs) {
+    const fkInsights = scan.insights.filter((i) => i.insightType === "foreign_key");
+    for (const insight of fkInsights) {
+      try {
+        const fk = JSON.parse(insight.payloadJson);
+        const sourceFqn = fk.tableFqn ?? fk.sourceTableFqn;
+        const targetFqn = fk.referencedTableFqn ?? fk.targetTableFqn;
+        if (sourceFqn && targetFqn && tableFqnSet.has(sourceFqn) && tableFqnSet.has(targetFqn)) {
+          // Mark columns as FK in nodes
+          const sourceNode = nodes.find((n) => n.tableFqn === sourceFqn);
+          if (sourceNode) {
+            const col = sourceNode.columns.find((c) => c.name === fk.columnName);
+            if (col) col.isFK = true;
+          }
+          const targetNode = nodes.find((n) => n.tableFqn === targetFqn);
+          if (targetNode) {
+            const col = targetNode.columns.find((c) => c.name === fk.referencedColumnName);
+            if (col) col.isPK = true;
+          }
+
+          edges.push({
+            id: `fk-${edgeId++}`,
+            source: sourceFqn,
+            target: targetFqn,
+            edgeType: "fk",
+            sourceColumn: fk.columnName,
+            targetColumn: fk.referencedColumnName,
+            label: `${fk.columnName} → ${fk.referencedColumnName}`,
+          });
+        }
+      } catch {
+        // Skip malformed FK insights
+      }
+    }
+  }
 
   // Extract implicit relationships from insights
   if (includeImplicit) {

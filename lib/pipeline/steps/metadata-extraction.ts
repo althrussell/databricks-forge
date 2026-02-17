@@ -350,6 +350,7 @@ async function runEnrichmentPass(
     tableCount: expandedTables.length,
     totalSizeBytes: details.reduce((sum, d) => sum + (d.sizeInBytes ?? 0), 0),
     totalFiles: details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0),
+    totalRows: details.reduce((sum, d) => sum + (d.numRows ?? 0), 0),
     tablesWithStreaming: Array.from(histories.values()).filter((h) => h.hasStreamingWrites).length,
     tablesWithCDF: details.filter((d) => d.tableProperties["delta.enableChangeDataFeed"] === "true").length,
     tablesNeedingOptimize: Array.from(healthScores.values()).filter((h) => h.issues.some((i) => i.includes("OPTIMIZE"))).length,
@@ -421,7 +422,8 @@ async function runEnrichmentPass(
     details,
     historiesWithHealth,
     lineageGraph.edges,
-    insightRecords
+    insightRecords,
+    allColumns
   );
 
   logger.info("[metadata-extraction] Environment scan saved", {

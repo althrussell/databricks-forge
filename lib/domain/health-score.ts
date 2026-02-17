@@ -100,6 +100,26 @@ const HEALTH_RULES: HealthRule[] = [
     issue: "Outdated Delta protocol version (reader version < 2)",
     recommendation: "Upgrade Delta protocol to enable features like column mapping and deletion vectors.",
   },
+  {
+    id: "empty_table",
+    deduction: 10,
+    check: (d) => {
+      if (d.numRows == null) return false;
+      return d.numRows === 0 && d.tableType !== "VIEW";
+    },
+    issue: "Table has zero rows",
+    recommendation: "Empty tables add clutter and may indicate failed ingestion or an abandoned asset. Verify data loads or consider dropping.",
+  },
+  {
+    id: "very_large_table",
+    deduction: 5,
+    check: (d) => {
+      if (d.numRows == null) return false;
+      return d.numRows > 1_000_000_000;
+    },
+    issue: "Very large table (> 1 billion rows)",
+    recommendation: "Tables of this scale require careful partitioning, clustering, and maintenance scheduling. Review OPTIMIZE/VACUUM cadence and consider archiving old data.",
+  },
 ];
 
 // ---------------------------------------------------------------------------

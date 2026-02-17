@@ -186,6 +186,7 @@ The root record for each scanning session.
 | `ucPath` | String | Unity Catalog scope scanned (e.g. `catalog.schema`) |
 | `tableCount` | Int | Total tables discovered |
 | `totalSizeBytes` | BigInt | Sum of all table sizes |
+| `totalRows` | BigInt | Sum of all row counts (where statistics available) |
 | `totalFiles` | Int | Sum of all file counts |
 | `tablesWithStreaming` | Int | Tables with streaming writes |
 | `tablesWithCDF` | Int | Tables with Change Data Feed enabled |
@@ -217,6 +218,7 @@ One record per table, containing structural metadata and LLM-enriched fields.
 | `isManaged` | Boolean | Managed vs external table |
 | `owner` | String? | Table owner |
 | `sizeInBytes` | BigInt? | Table size |
+| `numRows` | BigInt? | Row count (from `spark.sql.statistics.numRows` property or `operationMetrics`) |
 | `numFiles` | Int? | Number of files |
 | `partitionColumns` | String? | JSON array of partition columns |
 | `clusteringColumns` | String? | JSON array of clustering columns |
@@ -239,6 +241,8 @@ Delta history insights per table.
 | `tableFqn` | String | Table identifier |
 | `lastWriteTimestamp` | String? | Most recent write |
 | `lastWriteOperation` | String? | Operation type of last write |
+| `lastWriteRows` | BigInt? | Rows affected in last write (from `operationMetrics.numOutputRows`) |
+| `lastWriteBytes` | BigInt? | Bytes written in last write (from `operationMetrics.numOutputBytes`) |
 | `totalWriteOps` | Int | Count of all write operations |
 | `totalStreamingOps` | Int | Streaming write count |
 | `totalOptimizeOps` | Int | OPTIMIZE operations |
@@ -317,8 +321,8 @@ The estate scan pipeline (`lib/pipeline/standalone-scan.ts`) executes seven sequ
 
 **Operations** (per table, concurrency 5):
 1. `DESCRIBE DETAIL` -- size, files, format, location, partition/clustering columns, owner, Delta protocol
-2. `DESCRIBE HISTORY` (limit 100) -- write patterns, operation counts, maintenance timestamps
-3. `SHOW TBLPROPERTIES` -- CDF, auto-optimize, custom properties
+2. `DESCRIBE HISTORY` (limit 100) -- write patterns, operation counts, maintenance timestamps, plus `operationMetrics` parsing for `lastWriteRows` and `lastWriteBytes`
+3. `SHOW TBLPROPERTIES` -- CDF, auto-optimize, custom properties, and `spark.sql.statistics.numRows` for row counts
 
 **View handling**: Views don't support `DESCRIBE DETAIL` or `DESCRIBE HISTORY`. The engine catches these errors gracefully and creates fallback detail records with `tableType: "VIEW"`, ensuring views always appear in the estate.
 
@@ -567,6 +571,8 @@ Each table starts with a score of 100. Rules deduct points for detected issues.
 | `stale_data_90d` | -15 | No write operations in 90 days | Table may be abandoned or unused |
 | `no_cdf_with_streaming` | -10 | Has streaming writes but CDF disabled | Downstream consumers can't track changes |
 | `outdated_delta_protocol` | -5 | Reader version < 2 | Missing performance features from newer protocol |
+| `empty_table` | -10 | Table has zero rows (not a view) | May indicate failed ingestion or abandoned asset |
+| `very_large_table` | -5 | Table has > 1 billion rows | Needs careful partitioning, clustering, and maintenance scheduling |
 
 Each rule generates:
 - An **issue** description explaining the problem
@@ -585,6 +591,7 @@ The ERD graph is built from three data sources:
    - `domain`, `tier` (from LLM passes)
    - `hasPII` flag (from sensitivity detection)
    - `size` (from DESCRIBE DETAIL)
+   - `rowCount` (from table statistics or operation metrics)
 
 2. **Edges -- Implicit Relationships**: Extracted from `ForgeTableInsight` where `insightType === "implicit_relationship"`. These are LLM-discovered join paths without formal FK constraints.
 
@@ -609,7 +616,7 @@ Two Mermaid diagram formats are available:
 
 The UI uses **React Flow** (@xyflow/react) with **dagre** auto-layout:
 
-- **Node rendering**: Tables as cards with domain badge, tier badge, and PII indicator
+- **Node rendering**: Tables as cards with domain badge, tier badge, PII indicator, row count, and storage size
 - **Edge types**:
   - Solid blue: explicit foreign keys
   - Dashed orange: LLM-discovered implicit relationships
@@ -649,9 +656,10 @@ FUNCTION getAggregateEstateView():
      - totalTables (unique tableFqns)
      - totalScans (count of all scans)
      - totalSizeBytes (sum)
+     - totalRows (sum of numRows where available)
      - domainCount (distinct domains)
      - piiTablesCount (from sensitivity data)
-     - avgGovernanceScore (mean)
+     - avgGovernanceScore (mean of per-table governance scores)
      - oldestScanAt / newestScanAt
      - coverageByScope (scan-level breakdown)
 
@@ -812,6 +820,41 @@ The estate engine follows the same privacy principles as the discovery pipeline:
 
 ---
 
+## Row & Size Statistics
+
+The estate engine extracts row counts and size data without running expensive `SELECT COUNT(*)` queries. Instead, it leverages existing metadata:
+
+### Sources of Row Counts
+
+1. **Table Properties** (`SHOW TBLPROPERTIES`): The `spark.sql.statistics.numRows` property is populated when `ANALYZE TABLE` has been run on a table. This is the most reliable source.
+
+2. **Operation Metrics** (`DESCRIBE HISTORY`): Delta table history records include `operationMetrics` JSON for write operations. The engine parses:
+   - `numOutputRows` (or `numTargetRowsInserted` for MERGE) → `lastWriteRows`
+   - `numOutputBytes` (or `numAddedBytes`) → `lastWriteBytes`
+
+3. **Priority**: Table property stats take precedence. If unavailable, the engine falls back to operation metrics from the most recent write.
+
+### Where Row Counts Appear
+
+| Location | Field | Display |
+| --- | --- | --- |
+| Aggregate summary card | `totalRows` | Formatted with K/M/B suffix |
+| Single scan summary card | `totalRows` | Formatted with K/M/B suffix |
+| Table list column | `numRows` | Formatted with K/M/B suffix |
+| ERD node (collapsed) | `rowCount` | Compact format (e.g. "1.2M rows") |
+| Excel: Executive Summary | Total Rows metric | Formatted |
+| Excel: Table Inventory | Rows column | Formatted |
+| Excel: History Insights | Last Write Rows, Last Write Bytes | Formatted |
+
+### Governance Score on Table Details
+
+The `governanceScore` field on `ForgeTableDetail` is populated from the health scoring phase during scan persistence. This enables:
+- Per-table governance display in the table list (colour-coded: green ≥ 70, amber ≥ 40, red < 40)
+- Accurate aggregate `avgGovernanceScore` computation across all tables
+- Filtering and sorting by governance quality
+
+---
+
 ## Constants & Tuning Parameters
 
 | Parameter | Value | Location | Description |
@@ -830,3 +873,5 @@ The estate engine follows the same privacy principles as the discovery pipeline:
 | Small file threshold | 32 MB | `health-score.ts` | Below this = small file problem |
 | Stale data threshold | 90 days | `health-score.ts` | No writes = stale |
 | Maintenance threshold | 30 days | `health-score.ts` | No OPTIMIZE/VACUUM = overdue |
+| Empty table deduction | -10 | `health-score.ts` | Zero rows on non-view table |
+| Very large table deduction | -5 | `health-score.ts` | > 1 billion rows |

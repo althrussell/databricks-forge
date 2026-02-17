@@ -361,6 +361,8 @@ Generate **{target_use_case_count}** unique, actionable AI-powered business use 
 
 {foreign_key_relationships}
 
+{sample_data_section}
+
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
@@ -455,6 +457,8 @@ Generate **{target_use_case_count}** unique, actionable statistics-focused busin
 ### 4. FOREIGN KEY RELATIONSHIPS
 
 {foreign_key_relationships}
+
+{sample_data_section}
 
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 

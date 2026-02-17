@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
+import { computeDataMaturity, type DataMaturityScore, type MaturityPillar } from "@/lib/domain/data-maturity";
 import type { ERDGraph } from "@/lib/domain/types";
 
 const ERDViewer = dynamic(
@@ -82,6 +83,7 @@ interface AggregateStats {
   totalTables: number;
   totalScans: number;
   totalSizeBytes: string;
+  totalRows: string;
   domainCount: number;
   piiTablesCount: number;
   avgGovernanceScore: number;
@@ -99,12 +101,15 @@ interface TableDetailRow {
   format: string | null;
   owner: string | null;
   sizeInBytes: string | null;
+  numRows: string | null;
   numFiles: number | null;
   isManaged: boolean;
   comment: string | null;
   generatedDescription: string | null;
   sensitivityLevel: string | null;
   governancePriority: string | null;
+  governanceScore: number | null;
+  lastModified: string | null;
   discoveredVia: string;
 }
 
@@ -126,6 +131,7 @@ interface SingleScanData {
   ucPath: string;
   tableCount: number;
   totalSizeBytes: string;
+  totalRows: string;
   totalFiles: number;
   tablesWithStreaming: number;
   tablesWithCDF: number;
@@ -141,6 +147,7 @@ interface SingleScanData {
   createdAt: string;
   runId: string | null;
   details: TableDetailRow[];
+  insights: InsightRow[];
 }
 
 interface ScanProgressData {
@@ -375,6 +382,16 @@ export default function EstatePage() {
     return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
   };
 
+  const humanNumber = (value: string | number | null): string => {
+    if (!value) return "—";
+    const n = typeof value === "string" ? parseInt(value, 10) : value;
+    if (isNaN(n) || n === 0) return "0";
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toLocaleString();
+  };
+
   const timeAgo = (iso: string): string => {
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60_000);
@@ -562,6 +579,9 @@ export default function EstatePage() {
               Tables ({activeDetails.length})
             </TabsTrigger>
             <TabsTrigger value="erd">ERD</TabsTrigger>
+            {viewMode === "aggregate" && (
+              <TabsTrigger value="coverage">Table Coverage</TabsTrigger>
+            )}
             {viewMode === "single-scan" && (
               <TabsTrigger value="export">Export</TabsTrigger>
             )}
@@ -575,6 +595,7 @@ export default function EstatePage() {
                 details={aggregate.details}
                 insights={aggregate.insights ?? []}
                 humanSize={humanSize}
+                humanNumber={humanNumber}
                 timeAgo={timeAgo}
                 onViewScan={loadSingleScan}
               />
@@ -582,6 +603,7 @@ export default function EstatePage() {
               <SingleScanSummary
                 scan={selectedScan}
                 humanSize={humanSize}
+                humanNumber={humanNumber}
               />
             ) : null}
           </TabsContent>
@@ -614,10 +636,19 @@ export default function EstatePage() {
                       <HeaderWithTip label="Size" tip="Physical storage size of the table on disk. Views and inaccessible tables may show as '—'." />
                     </TableHead>
                     <TableHead>
+                      <HeaderWithTip label="Rows" tip="Total row count from Delta table statistics. Available when ANALYZE TABLE has been run, or estimated from the latest write operation metrics. '—' means stats are not yet computed." />
+                    </TableHead>
+                    <TableHead>
                       <HeaderWithTip label="Owner" tip="The Unity Catalog owner of this table. Tables without owners lack clear accountability when issues arise." />
                     </TableHead>
                     <TableHead>
+                      <HeaderWithTip label="Gov." tip="Governance score (0-100) based on documentation, ownership, tagging, sensitivity labelling, and maintenance status. Higher is better." />
+                    </TableHead>
+                    <TableHead>
                       <HeaderWithTip label="Sensitivity" tip="Data sensitivity classification determined by AI. 'Confidential' or 'restricted' indicates PII or regulated data requiring compliance controls." />
+                    </TableHead>
+                    <TableHead>
+                      <HeaderWithTip label="Modified" tip="When this table was last modified. Helps identify stale or abandoned datasets." />
                     </TableHead>
                     <TableHead>
                       <HeaderWithTip label="Via" tip="How this table was discovered. 'Selected' means it was within your chosen scan scope. 'Lineage' means it was found by following data dependencies from other tables." />
@@ -663,8 +694,24 @@ export default function EstatePage() {
                         )}
                       </TableCell>
                       <TableCell>{humanSize(t.sizeInBytes)}</TableCell>
+                      <TableCell className="text-xs tabular-nums">
+                        {humanNumber(t.numRows)}
+                      </TableCell>
                       <TableCell className="text-xs">
                         {t.owner ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-xs tabular-nums">
+                        {t.governanceScore != null ? (
+                          <span className={
+                            t.governanceScore >= 70
+                              ? "text-green-600 font-semibold"
+                              : t.governanceScore >= 40
+                                ? "text-amber-600 font-semibold"
+                                : "text-red-600 font-semibold"
+                          }>
+                            {t.governanceScore.toFixed(0)}
+                          </span>
+                        ) : "—"}
                       </TableCell>
                       <TableCell>
                         {t.sensitivityLevel === "confidential" ||
@@ -679,6 +726,9 @@ export default function EstatePage() {
                         ) : (
                           "—"
                         )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {t.lastModified ? timeAgo(t.lastModified) : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -697,7 +747,7 @@ export default function EstatePage() {
                   {filteredTables.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={10}
                         className="text-center py-8 text-muted-foreground"
                       >
                         No tables found
@@ -724,6 +774,13 @@ export default function EstatePage() {
               </div>
             )}
           </TabsContent>
+
+          {/* Table Coverage (aggregate only) */}
+          {viewMode === "aggregate" && (
+            <TabsContent value="coverage" className="space-y-4">
+              <TableCoverageView />
+            </TabsContent>
+          )}
 
           {/* Export (single scan only) */}
           {viewMode === "single-scan" && (
@@ -758,6 +815,210 @@ export default function EstatePage() {
 }
 
 // ---------------------------------------------------------------------------
+// Table Coverage View (links estate + discovery)
+// ---------------------------------------------------------------------------
+
+interface CoverageTableRow {
+  tableFqn: string;
+  domain: string | null;
+  tier: string | null;
+  sensitivityLevel: string | null;
+  governanceScore: number | null;
+  comment: string | null;
+  generatedDescription: string | null;
+  sizeInBytes: string | null;
+  numRows: string | null;
+  owner: string | null;
+  useCases: Array<{
+    id: string;
+    name: string;
+    type: string;
+    domain: string;
+    overallScore: number;
+    runId: string;
+  }>;
+}
+
+function TableCoverageView() {
+  const [data, setData] = useState<{
+    tables: CoverageTableRow[];
+    stats: { totalTables: number; coveredTables: number; uncoveredTables: number; coveragePct: number };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "covered" | "uncovered">("all");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/environment/table-coverage");
+        if (!res.ok) throw new Error("Failed to load");
+        const json = await res.json();
+        if (json.hasEstateData) {
+          setData({ tables: json.tables, stats: json.stats });
+        }
+      } catch {
+        // Silently handle
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  if (loading) return <Skeleton className="h-64 w-full" />;
+  if (!data || data.tables.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="py-12 text-center text-muted-foreground">
+          No estate data available. Run an environment scan first.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const filtered = data.tables.filter((t) => {
+    if (filter === "covered" && t.useCases.length === 0) return false;
+    if (filter === "uncovered" && t.useCases.length > 0) return false;
+    if (search && !t.tableFqn.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">
+            Table Coverage Analysis
+          </CardTitle>
+          <CardDescription>
+            Links estate tables with discovered use cases. Uncovered tables are expansion signals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Total Tables</p>
+              <p className="text-xl font-bold">{data.stats.totalTables}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">With Use Cases</p>
+              <p className="text-xl font-bold text-emerald-600">{data.stats.coveredTables}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Untapped (Expansion Signal)</p>
+              <p className="text-xl font-bold text-orange-600">{data.stats.uncoveredTables}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Coverage</p>
+              <p className="text-xl font-bold">{data.stats.coveragePct}%</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tables..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <Button
+          variant={filter === "all" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("all")}
+        >
+          All
+        </Button>
+        <Button
+          variant={filter === "covered" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("covered")}
+        >
+          With Use Cases
+        </Button>
+        <Button
+          variant={filter === "uncovered" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("uncovered")}
+        >
+          Untapped
+        </Button>
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[300px]">Table</TableHead>
+              <TableHead>Domain</TableHead>
+              <TableHead>Tier</TableHead>
+              <TableHead>Governance</TableHead>
+              <TableHead>Use Cases</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.slice(0, 100).map((t) => (
+              <TableRow key={t.tableFqn}>
+                <TableCell className="font-mono text-xs">
+                  {t.tableFqn}
+                  {t.sensitivityLevel === "confidential" || t.sensitivityLevel === "restricted" ? (
+                    <Badge variant="destructive" className="ml-1 text-[10px]">PII</Badge>
+                  ) : null}
+                </TableCell>
+                <TableCell className="text-xs">{t.domain ?? "—"}</TableCell>
+                <TableCell className="text-xs">{t.tier ?? "—"}</TableCell>
+                <TableCell className="text-xs">
+                  {t.governanceScore != null ? `${t.governanceScore}/100` : "—"}
+                </TableCell>
+                <TableCell>
+                  {t.useCases.length > 0 ? (
+                    <div className="space-y-0.5">
+                      {t.useCases.slice(0, 3).map((uc) => (
+                        <div key={uc.id} className="flex items-center gap-1">
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px]"
+                          >
+                            {uc.type}
+                          </Badge>
+                          <span className="truncate text-xs">{uc.name}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {Math.round(uc.overallScore * 100)}%
+                          </span>
+                        </div>
+                      ))}
+                      {t.useCases.length > 3 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          +{t.useCases.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-orange-600 font-medium">
+                      No use cases — expansion signal
+                    </span>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {filtered.length > 100 && (
+          <div className="p-2 text-center text-sm text-muted-foreground">
+            Showing 100 of {filtered.length} tables
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Aggregate Summary
 // ---------------------------------------------------------------------------
 
@@ -766,6 +1027,7 @@ function AggregateSummary({
   details,
   insights,
   humanSize,
+  humanNumber,
   timeAgo,
   onViewScan,
 }: {
@@ -773,13 +1035,41 @@ function AggregateSummary({
   details: TableDetailRow[];
   insights: InsightRow[];
   humanSize: (bytes: string | number | null) => string;
+  humanNumber: (value: string | number | null) => string;
   timeAgo: (iso: string) => string;
   onViewScan: (scanId: string) => void;
 }) {
   const [coverageOpen, setCoverageOpen] = useState(false);
 
+  // Compute Data Maturity Score
+  const maturity = computeDataMaturity({
+    tableCount: stats.totalTables,
+    avgGovernanceScore: stats.avgGovernanceScore,
+    piiTablesCount: stats.piiTablesCount,
+    tablesWithDescription: details.filter((d) => d.comment || d.generatedDescription).length,
+    tablesWithTags: 0, // Not available at aggregate level yet
+    tablesWithOwner: details.filter((d) => d.owner).length,
+    tablesWithTier: details.filter((d) => d.dataTier).length,
+    tierCount: new Set(details.map((d) => d.dataTier).filter(Boolean)).size,
+    redundancyPairsCount: stats.piiTablesCount, // approximation from aggregate stats
+    dataProductCount: insights.filter((i) => i.insightType === "data_product").length,
+    lineageEdgeCount: 0, // Not in aggregate stats currently
+    lineageDiscoveredCount: 0,
+    domainCount: stats.domainCount,
+    tablesNeedingOptimize: 0,
+    tablesNeedingVacuum: 0,
+    tablesWithStreaming: 0,
+    tablesWithCDF: 0,
+    avgHealthScore: 50,
+    tablesWithAutoOptimize: 0,
+    tablesWithLiquidClustering: 0,
+  });
+
   return (
     <div className="space-y-4">
+      {/* Data Maturity Score */}
+      <DataMaturityCard maturity={maturity} />
+
       {/* Executive Summary */}
       <ExecutiveSummary
         stats={stats}
@@ -788,7 +1078,7 @@ function AggregateSummary({
         humanSize={humanSize}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           title="Tables"
           value={stats.totalTables}
@@ -802,10 +1092,22 @@ function AggregateSummary({
           tooltip="Combined on-disk storage of all tables in the estate. Views and tables where size could not be determined show as 0 bytes."
         />
         <StatCard
+          title="Total Rows"
+          value={humanNumber(stats.totalRows)}
+          icon={<BarChart3 className="h-4 w-4" />}
+          tooltip="Combined row count across all tables where statistics are available. Sourced from table properties (ANALYZE TABLE) or Delta operation metrics. Tables without computed stats show 0."
+        />
+        <StatCard
           title="Domains"
           value={stats.domainCount}
           icon={<Database className="h-4 w-4" />}
           tooltip="Number of distinct business domains identified by AI analysis, such as Finance, Customer, Operations, or Marketing. Helps organise your data by business function."
+        />
+        <StatCard
+          title="Avg Governance"
+          value={`${stats.avgGovernanceScore.toFixed(0)}/100`}
+          icon={<ShieldAlert className="h-4 w-4" />}
+          tooltip="Average governance score across all tables (0 to 100). Factors include documentation coverage, ownership, sensitivity tagging, maintenance frequency, and access controls. Higher is better."
         />
         <StatCard
           title="PII Tables"
@@ -822,6 +1124,9 @@ function AggregateSummary({
           {stats.totalScans} scan{stats.totalScans !== 1 ? "s" : ""} contributing
         </p>
       )}
+
+      {/* Scan Trends */}
+      {stats.totalScans >= 2 && <ScanTrendsPanel />}
 
       {/* Coverage panel */}
       <Collapsible open={coverageOpen} onOpenChange={setCoverageOpen}>
@@ -899,13 +1204,36 @@ function AggregateSummary({
 function SingleScanSummary({
   scan,
   humanSize,
+  humanNumber,
 }: {
   scan: SingleScanData;
   humanSize: (bytes: string | number | null) => string;
+  humanNumber: (value: string | number | null) => string;
 }) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Executive Summary (reuses the same component as aggregate) */}
+      {scan.details.length > 0 && (
+        <ExecutiveSummary
+          stats={{
+            totalTables: scan.tableCount,
+            totalScans: 1,
+            totalSizeBytes: scan.totalSizeBytes,
+            totalRows: scan.totalRows ?? "0",
+            domainCount: scan.domainCount,
+            piiTablesCount: scan.piiTablesCount,
+            avgGovernanceScore: scan.avgGovernanceScore,
+            oldestScanAt: scan.createdAt,
+            newestScanAt: scan.createdAt,
+            coverageByScope: [],
+          }}
+          details={scan.details}
+          insights={scan.insights ?? []}
+          humanSize={humanSize}
+        />
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <StatCard
           title="Tables"
           value={scan.tableCount}
@@ -917,6 +1245,12 @@ function SingleScanSummary({
           value={humanSize(scan.totalSizeBytes)}
           icon={<BarChart3 className="h-4 w-4" />}
           tooltip="Combined on-disk storage of all tables in this scan. Views typically show 0 bytes as they don't store data directly."
+        />
+        <StatCard
+          title="Total Rows"
+          value={humanNumber(scan.totalRows)}
+          icon={<BarChart3 className="h-4 w-4" />}
+          tooltip="Combined row count across all tables with available statistics. Sourced from Delta table properties or write operation metrics."
         />
         <StatCard
           title="Lineage Discovered"
@@ -1210,6 +1544,203 @@ function HeaderWithTip({ label, tip }: { label: string; tip: string }) {
 // ---------------------------------------------------------------------------
 // Executive Summary
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Scan Trends Panel
+// ---------------------------------------------------------------------------
+
+interface TrendMetricRow {
+  label: string;
+  previous: number | string;
+  current: number | string;
+  changeLabel: string;
+  direction: "up" | "down" | "stable";
+  sentiment: "positive" | "negative" | "neutral";
+}
+
+function ScanTrendsPanel() {
+  const [trends, setTrends] = useState<{
+    metrics: TrendMetricRow[];
+    newTables: string[];
+    removedTables: string[];
+    daysBetween: number;
+    previous: { scanId: string; createdAt: string };
+    current: { scanId: string; createdAt: string };
+  } | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/environment/trends");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.hasTrends) {
+          setTrends(json.trends);
+        }
+      } catch {
+        // silent
+      }
+    }
+    load();
+  }, []);
+
+  if (!trends) return null;
+
+  const sentimentColor = {
+    positive: "text-emerald-600 dark:text-emerald-400",
+    negative: "text-red-600 dark:text-red-400",
+    neutral: "text-muted-foreground",
+  };
+  const directionIcon = {
+    up: "\u2191",
+    down: "\u2193",
+    stable: "\u2192",
+  };
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1">
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          Scan Trends ({trends.daysBetween} days between scans)
+          {trends.newTables.length > 0 && (
+            <Badge variant="secondary" className="ml-1 text-[10px]">
+              +{trends.newTables.length} new tables
+            </Badge>
+          )}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <Card className="mt-2">
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+              {trends.metrics.map((m) => (
+                <div key={m.label} className="rounded-md border px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground">{m.label}</p>
+                  <p className="text-sm font-medium">
+                    {m.current}
+                  </p>
+                  <p className={`text-xs ${sentimentColor[m.sentiment]}`}>
+                    {directionIcon[m.direction]} {m.changeLabel}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {(trends.newTables.length > 0 || trends.removedTables.length > 0) && (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {trends.newTables.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-emerald-600">New Tables (+{trends.newTables.length})</p>
+                    <div className="mt-1 max-h-32 overflow-y-auto">
+                      {trends.newTables.slice(0, 10).map((t) => (
+                        <p key={t} className="truncate font-mono text-[10px]">{t}</p>
+                      ))}
+                      {trends.newTables.length > 10 && (
+                        <p className="text-[10px] text-muted-foreground">... and {trends.newTables.length - 10} more</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {trends.removedTables.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-red-600">Removed Tables (-{trends.removedTables.length})</p>
+                    <div className="mt-1 max-h-32 overflow-y-auto">
+                      {trends.removedTables.slice(0, 10).map((t) => (
+                        <p key={t} className="truncate font-mono text-[10px]">{t}</p>
+                      ))}
+                      {trends.removedTables.length > 10 && (
+                        <p className="text-[10px] text-muted-foreground">... and {trends.removedTables.length - 10} more</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Data Maturity Score Card
+// ---------------------------------------------------------------------------
+
+function DataMaturityCard({ maturity }: { maturity: DataMaturityScore }) {
+  const levelColor: Record<string, string> = {
+    Foundational: "text-red-600 dark:text-red-400",
+    Developing: "text-orange-600 dark:text-orange-400",
+    Established: "text-yellow-600 dark:text-yellow-400",
+    Advanced: "text-blue-600 dark:text-blue-400",
+    Leading: "text-emerald-600 dark:text-emerald-400",
+  };
+  const barColor: Record<string, string> = {
+    Foundational: "bg-red-500",
+    Developing: "bg-orange-500",
+    Established: "bg-yellow-500",
+    Advanced: "bg-blue-500",
+    Leading: "bg-emerald-500",
+  };
+
+  function PillarBar({ pillar }: { pillar: MaturityPillar }) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{pillar.name}</p>
+          <p className="text-sm font-bold">{pillar.score}</p>
+        </div>
+        <div className="h-2 w-full rounded-full bg-muted">
+          <div
+            className={`h-full rounded-full ${barColor[maturity.level] ?? "bg-primary"}`}
+            style={{ width: `${pillar.score}%` }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+          {pillar.indicators.map((ind) => (
+            <p key={ind.label} className="text-xs text-muted-foreground">
+              {ind.label}: <span className="font-medium text-foreground">{ind.value}</span>
+            </p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          Data Maturity Score
+        </CardTitle>
+        <CardDescription>
+          Composite score across governance, architecture, operations, and analytics readiness
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex items-baseline gap-3">
+          <span className="text-5xl font-bold tracking-tight">{maturity.overall}</span>
+          <span className="text-lg text-muted-foreground">/100</span>
+          <Badge
+            variant="secondary"
+            className={levelColor[maturity.level]}
+          >
+            {maturity.level}
+          </Badge>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <PillarBar pillar={maturity.pillars.governance} />
+          <PillarBar pillar={maturity.pillars.architecture} />
+          <PillarBar pillar={maturity.pillars.operations} />
+          <PillarBar pillar={maturity.pillars.analyticsReadiness} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function ExecutiveSummary({
   stats,

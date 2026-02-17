@@ -159,9 +159,16 @@ export default function RunsPage() {
             View and manage your discovery pipeline runs
           </p>
         </div>
-        <Button asChild>
-          <Link href="/configure">New Discovery</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {runs.filter((r) => r.status === "completed").length >= 2 && (
+            <Button variant="outline" asChild>
+              <Link href="/runs/compare">Compare Runs</Link>
+            </Button>
+          )}
+          <Button asChild>
+            <Link href="/configure">New Discovery</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Filters Bar */}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
+import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { PipelineContext, UseCase, UseCaseType } from "@/lib/domain/types";
@@ -57,7 +58,13 @@ export async function runUsecaseGeneration(
     batches.push(tables.slice(i, i + MAX_TABLES_PER_BATCH));
   }
 
-  logger.info("Use case generation starting", { tableCount: tables.length, batchCount: batches.length });
+  const sampleRows = run.config.sampleRowsPerTable ?? 0;
+
+  logger.info("Use case generation starting", {
+    tableCount: tables.length,
+    batchCount: batches.length,
+    sampleRowsPerTable: sampleRows,
+  });
 
   const allUseCases: UseCase[] = [];
   const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
@@ -77,11 +84,30 @@ export async function runUsecaseGeneration(
   for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
     batchGroupIdx++;
     const totalGroups = Math.ceil(batches.length / MAX_CONCURRENT_BATCHES);
-    if (runId) await updateRunMessage(runId, `Generating AI & statistical use cases (batch group ${batchGroupIdx} of ${totalGroups})...`);
+    const samplingNote = sampleRows > 0 ? ` with ${sampleRows}-row sampling` : "";
+    if (runId) await updateRunMessage(runId, `Generating AI & statistical use cases${samplingNote} (batch group ${batchGroupIdx} of ${totalGroups})...`);
     const concurrentBatches = batches.slice(i, i + MAX_CONCURRENT_BATCHES);
 
     // Build cross-batch feedback: list of already-generated use case names
     const previousFeedback = buildPreviousUseCasesFeedback(allUseCases);
+
+    // Fetch sample data for all tables in this concurrent group (if enabled)
+    const concurrentTableFqns = concurrentBatches
+      .flat()
+      .map((t) => t.fqn);
+    let sampleDataSection = "";
+    if (sampleRows > 0 && concurrentTableFqns.length > 0) {
+      const sampleResult = await fetchSampleData(concurrentTableFqns, sampleRows);
+      sampleDataSection = sampleResult.markdown;
+      if (sampleResult.tablesSampled > 0) {
+        logger.info("Sample data fetched for use case generation batch", {
+          batchGroup: batchGroupIdx,
+          tablesSampled: sampleResult.tablesSampled,
+          tablesSkipped: sampleResult.tablesSkipped,
+          totalRows: sampleResult.totalRows,
+        });
+      }
+    }
 
     const batchPromises = concurrentBatches.flatMap((batch) => {
       const batchColumns = columns.filter((c) =>
@@ -105,6 +131,7 @@ export async function runUsecaseGeneration(
         industry_reference_use_cases: industryReferenceUseCases,
         schema_markdown: schemaMarkdown,
         foreign_key_relationships: fkMarkdown,
+        sample_data_section: sampleDataSection,
         previous_use_cases_feedback: previousFeedback,
         target_use_case_count: String(targetCount),
       };

@@ -42,8 +42,12 @@ export async function GET(request: NextRequest) {
         dataTier: (d.dataTier as string) ?? null,
         sensitivityLevel: (d.sensitivityLevel as string) ?? null,
         sizeInBytes: d.sizeInBytes ? BigInt(d.sizeInBytes as string) : null,
+        numRows: d.numRows ? BigInt(d.numRows as string) : null,
         partitionColumns: (d.partitionColumns as string) ?? null,
         clusteringColumns: (d.clusteringColumns as string) ?? null,
+        columnsJson: (d.columnsJson as string) ?? null,
+        comment: (d.comment as string) ?? null,
+        generatedDescription: (d.generatedDescription as string) ?? null,
       })),
       lineage: estate.lineage.map((l) => ({
         sourceTableFqn: l.sourceTableFqn as string,

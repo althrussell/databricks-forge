@@ -21,6 +21,7 @@ import {
   type ChatMessage,
 } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
+import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
 import type {
   ColumnInfo,
   DataDomain,
@@ -288,7 +289,15 @@ async function passPIIDetection(
   tables: TableInput[],
   options: IntelligenceOptions
 ): Promise<SensitivityClassification[]> {
-  const allClassifications: SensitivityClassification[] = [];
+  // Phase 1: Deterministic rules (fast, reliable for obvious patterns)
+  const ruleResults = detectPIIDeterministic(tables);
+  const ruleKeys = new Set(ruleResults.map((r) => `${r.tableFqn}::${r.columnName}`));
+  logger.info("[intelligence] Deterministic PII rules found matches", {
+    count: ruleResults.length,
+  });
+
+  // Phase 2: LLM pass for nuanced detection (deduplicate against rule results)
+  const allClassifications: SensitivityClassification[] = [...ruleResults];
 
   for (let i = 0; i < tables.length; i += BATCH_SIZE) {
     const batch = tables.slice(i, i + BATCH_SIZE);
@@ -312,7 +321,14 @@ Return empty array [] if no sensitive columns found.`;
 
     const result = await callLLM(prompt, options.endpoint);
     const parsed = safeParseArray<SensitivityClassification>(result);
-    allClassifications.push(...parsed);
+    // Only add LLM classifications not already caught by rules
+    for (const p of parsed) {
+      const key = `${p.tableFqn}::${p.columnName}`;
+      if (!ruleKeys.has(key)) {
+        allClassifications.push(p);
+        ruleKeys.add(key);
+      }
+    }
   }
 
   return allClassifications;

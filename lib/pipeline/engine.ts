@@ -155,7 +155,33 @@ export async function startPipeline(runId: string): Promise<void> {
       await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
       logger.info(`Step 4: ${STEPS[3].label}`, { runId, step: "usecase-generation" });
       ctx.useCases = await runUsecaseGeneration(ctx, runId);
-      await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} raw use cases`);
+
+      // Post-generation validation: strip hallucinated table references
+      const validFqns = new Set([
+        ...ctx.filteredTables,
+        ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
+      ]);
+      let hallucinated = 0;
+      ctx.useCases = ctx.useCases.filter((uc) => {
+        uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
+          const clean = t.replace(/`/g, "");
+          return validFqns.has(t) || validFqns.has(clean);
+        });
+        if (uc.tablesInvolved.length === 0) {
+          hallucinated++;
+          return false;
+        }
+        return true;
+      });
+      if (hallucinated > 0) {
+        logger.warn("Removed use cases with hallucinated table references", {
+          runId,
+          removedCount: hallucinated,
+          remainingCount: ctx.useCases.length,
+        });
+      }
+
+      await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed — invalid table refs)` : ""}`);
     });
 
     // Step 5: Domain Clustering
