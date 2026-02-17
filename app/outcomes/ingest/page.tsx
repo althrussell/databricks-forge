@@ -878,7 +878,7 @@ export default function IngestOutcomeMapPage() {
               <p className="text-xl font-bold">Outcome Map Ingested!</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 <strong>{parsedOutcome.name}</strong> with{" "}
-                {stats?.useCases ?? 0} use cases is now part of the Inspire AI
+                {stats?.useCases ?? 0} use cases is now part of the Forge AI
                 engine.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">

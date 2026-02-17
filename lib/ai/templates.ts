@@ -1,7 +1,7 @@
 /**
- * Prompt templates for the Inspire pipeline.
+ * Prompt templates for the Forge pipeline.
  *
- * Ported from docs/references/databricks_inspire_v34.ipynb PROMPT_TEMPLATES dict.
+ * Ported from docs/references/databricks_inspire_v34.ipynb (reference) PROMPT_TEMPLATES dict.
  * Each template uses {placeholder} syntax for variable injection.
  *
  * IMPORTANT: When modifying prompts, always update docs/PROMPTS.md in parallel.

@@ -45,7 +45,7 @@ export async function saveEnvironmentScan(
   try {
     await prisma.$transaction(async (tx) => {
       // 1. Upsert the scan record
-      await tx.inspireEnvironmentScan.upsert({
+      await tx.forgeEnvironmentScan.upsert({
         where: { scanId: scan.scanId },
         create: {
           scanId: scan.scanId,
@@ -73,7 +73,7 @@ export async function saveEnvironmentScan(
 
       // 2. Insert table details
       if (details.length > 0) {
-        await tx.inspireTableDetail.createMany({
+        await tx.forgeTableDetail.createMany({
           data: details.map((d) => ({
             scanId: scan.scanId,
             tableFqn: d.fqn,
@@ -115,7 +115,7 @@ export async function saveEnvironmentScan(
 
       // 3. Insert history summaries
       if (histories.length > 0) {
-        await tx.inspireTableHistorySummary.createMany({
+        await tx.forgeTableHistorySummary.createMany({
           data: histories.map((h) => ({
             scanId: scan.scanId,
             tableFqn: h.tableFqn,
@@ -141,7 +141,7 @@ export async function saveEnvironmentScan(
 
       // 4. Insert lineage edges
       if (lineageEdges.length > 0) {
-        await tx.inspireTableLineage.createMany({
+        await tx.forgeTableLineage.createMany({
           data: lineageEdges.map((e) => ({
             scanId: scan.scanId,
             sourceTableFqn: e.sourceTableFqn,
@@ -158,7 +158,7 @@ export async function saveEnvironmentScan(
 
       // 5. Insert insights
       if (insights.length > 0) {
-        await tx.inspireTableInsight.createMany({
+        await tx.forgeTableInsight.createMany({
           data: insights.map((i) => ({
             scanId: scan.scanId,
             insightType: i.insightType,
@@ -196,7 +196,7 @@ export async function saveEnvironmentScan(
  */
 export async function getEnvironmentScan(scanId: string) {
   const prisma = await getPrisma();
-  return prisma.inspireEnvironmentScan.findUnique({
+  return prisma.forgeEnvironmentScan.findUnique({
     where: { scanId },
     include: {
       details: true,
@@ -212,7 +212,7 @@ export async function getEnvironmentScan(scanId: string) {
  */
 export async function getEnvironmentScanByRunId(runId: string) {
   const prisma = await getPrisma();
-  return prisma.inspireEnvironmentScan.findFirst({
+  return prisma.forgeEnvironmentScan.findFirst({
     where: { runId },
     include: {
       details: true,
@@ -229,7 +229,7 @@ export async function getEnvironmentScanByRunId(runId: string) {
  */
 export async function listEnvironmentScans(limit = 20, offset = 0) {
   const prisma = await getPrisma();
-  return prisma.inspireEnvironmentScan.findMany({
+  return prisma.forgeEnvironmentScan.findMany({
     take: limit,
     skip: offset,
     orderBy: { createdAt: "desc" },
@@ -244,7 +244,7 @@ export async function getInsightsByScanId(
   insightType?: string
 ) {
   const prisma = await getPrisma();
-  return prisma.inspireTableInsight.findMany({
+  return prisma.forgeTableInsight.findMany({
     where: {
       scanId,
       ...(insightType ? { insightType } : {}),

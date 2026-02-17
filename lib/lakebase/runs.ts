@@ -66,7 +66,7 @@ function dbRowToRun(row: {
       generationOptions: genOpts.generationOptions,
       sampleRowsPerTable: genOpts.sampleRowsPerTable,
       industry: genOpts.industry,
-      generationPath: row.generationPath ?? "./inspire_gen/",
+      generationPath: row.generationPath ?? "./forge_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? process.env.DATABRICKS_SERVING_ENDPOINT ?? "unknown",
     },
@@ -150,7 +150,7 @@ export async function createRun(
   createdBy?: string | null
 ): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireRun.create({
+  await prisma.forgeRun.create({
     data: {
       runId,
       businessName: config.businessName,
@@ -176,7 +176,7 @@ export async function createRun(
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireRun.findUnique({ where: { runId } });
+  const row = await prisma.forgeRun.findUnique({ where: { runId } });
   return row ? dbRowToRun(row) : null;
 }
 
@@ -185,7 +185,7 @@ export async function listRuns(
   offset = 0
 ): Promise<PipelineRun[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireRun.findMany({
+  const rows = await prisma.forgeRun.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
     skip: offset,
@@ -221,7 +221,7 @@ export async function updateRunStatus(
     data.completedAt = new Date();
   }
 
-  await prisma.inspireRun.update({ where: { runId }, data });
+  await prisma.forgeRun.update({ where: { runId }, data });
 }
 
 /**
@@ -238,7 +238,7 @@ export async function updateRunMessage(
   if (progressPct !== undefined) {
     data.progressPct = progressPct;
   }
-  await prisma.inspireRun.update({ where: { runId }, data });
+  await prisma.forgeRun.update({ where: { runId }, data });
 }
 
 /**
@@ -247,7 +247,7 @@ export async function updateRunMessage(
  */
 export async function deleteRun(runId: string): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireRun.delete({ where: { runId } });
+  await prisma.forgeRun.delete({ where: { runId } });
 }
 
 export async function updateRunBusinessContext(
@@ -255,7 +255,7 @@ export async function updateRunBusinessContext(
   context: BusinessContext
 ): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireRun.update({
+  await prisma.forgeRun.update({
     where: { runId },
     data: { businessContext: JSON.stringify(context) },
   });
@@ -270,7 +270,7 @@ export async function updateRunFilteredTables(
   classifications: Array<{ fqn: string; classification: string; reason: string }>
 ): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireRun.update({
+  await prisma.forgeRun.update({
     where: { runId },
     data: { filteredTablesJson: JSON.stringify(classifications) },
   });
@@ -285,7 +285,7 @@ export async function updateRunMetadataCacheKey(
   cacheKey: string
 ): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireRun.update({
+  await prisma.forgeRun.update({
     where: { runId },
     data: { metadataCacheKey: cacheKey },
   });
@@ -304,7 +304,7 @@ export async function updateRunIndustry(
   autoDetected: boolean = false
 ): Promise<void> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireRun.findUnique({
+  const row = await prisma.forgeRun.findUnique({
     where: { runId },
     select: { generationOptions: true },
   });
@@ -318,7 +318,7 @@ export async function updateRunIndustry(
   genOpts.industry = industry;
   genOpts.industryAutoDetected = autoDetected;
 
-  await prisma.inspireRun.update({
+  await prisma.forgeRun.update({
     where: { runId },
     data: { generationOptions: JSON.stringify(genOpts) },
   });
@@ -333,7 +333,7 @@ export async function updateRunStepLog(
   entry: StepLogEntry
 ): Promise<void> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireRun.findUnique({
+  const row = await prisma.forgeRun.findUnique({
     where: { runId },
     select: { generationOptions: true },
   });
@@ -358,7 +358,7 @@ export async function updateRunStepLog(
 
   genOpts.stepLog = stepLog;
 
-  await prisma.inspireRun.update({
+  await prisma.forgeRun.update({
     where: { runId },
     data: { generationOptions: JSON.stringify(genOpts) },
   });

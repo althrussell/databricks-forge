@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Databricks Inspire AI will be documented in this file.
+All notable changes to Databricks Forge AI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -15,13 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Token usage tracking**: All LLM calls now capture prompt, completion, and total token counts from Model Serving responses and persist them in prompt logs for cost analysis.
 - **Chain-of-thought prompts**: Table filtering and scoring prompt templates now include explicit reasoning workflow sections, improving LLM decision quality.
 - **System/user message separation**: Prompts now use the chat completions format with separate system and user messages, providing better prompt hygiene and structural isolation.
-- Updated all documentation (AGENTS.md, README.md, SECURITY_ARCHITECTURE.md, INSPIRE_ANALYSIS.md, INSPIRE_V1_vs_V2.md, docs/ARCHITECTURE.md, docs/PIPELINE.md, docs/DEPLOYMENT.md) to reflect the new Model Serving architecture.
+- Updated all documentation (AGENTS.md, README.md, SECURITY_ARCHITECTURE.md, FORGE_ANALYSIS.md, FORGE_V1_vs_V2.md, docs/ARCHITECTURE.md, docs/PIPELINE.md, docs/DEPLOYMENT.md) to reflect the new Model Serving architecture.
 - Updated Cursor rules (01-architecture, 04-ai-guardrails, 05-testing) for new architecture conventions.
 
 ### Added
 
 - `lib/dbx/model-serving.ts` -- new Model Serving client with chat completions, streaming, token usage, and custom error handling.
-- `promptTokens`, `completionTokens`, `totalTokens` fields on `InspirePromptLog` Prisma model.
+- `promptTokens`, `completionTokens`, `totalTokens` fields on `ForgePromptLog` Prisma model.
 
 ## [0.2.0] - 2026-02-16
 
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test infrastructure**: Vitest setup with 45 tests covering scoring, templates, parsers, validation
 - **CI pipeline**: GitHub Actions workflow for lint, typecheck, test, and build
 - **Versioning**: App version surfaced in `/api/health`, sidebar footer, and pipeline run metadata
-- **Database indexes**: Indexes on `InspireUseCase(runId)`, `InspireExport(runId)`, `InspireMetadataCache(cachedAt)`
+- **Database indexes**: Indexes on `ForgeUseCase(runId)`, `ForgeExport(runId)`, `ForgeMetadataCache(cachedAt)`
 - **Retry discrimination**: AI agent only retries on 5xx/timeout/network errors, not 4xx
 - **Atomic persistence**: Pipeline use case persistence wrapped in Prisma `$transaction`
 - **Nested error handling**: Pipeline engine catch block now handles `updateRunStatus` failures

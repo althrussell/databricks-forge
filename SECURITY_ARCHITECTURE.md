@@ -1,7 +1,7 @@
-# Security Architecture -- Databricks Inspire AI
+# Security Architecture -- Databricks Forge AI
 
 > This document describes the security architecture, data flows, threat
-> mitigations, and compliance posture of Databricks Inspire AI. It is
+> mitigations, and compliance posture of Databricks Forge AI. It is
 > intended for security reviewers, architects, and compliance teams
 > evaluating the application prior to deployment.
 
@@ -30,7 +30,7 @@
 
 ## 1. Application Overview
 
-Databricks Inspire AI is a web application that discovers data-driven
+Databricks Forge AI is a web application that discovers data-driven
 use cases from Unity Catalog metadata. Users configure a business context,
 point at their Unity Catalog catalogs/schemas, and the application generates
 scored, categorised use cases with optional SQL code.
@@ -288,9 +288,9 @@ When `sampleRowsPerTable > 0` (configurable in Settings, range 0-50):
 
 | Data | Storage | Retention |
 |------|---------|-----------|
-| Pipeline runs | Lakebase (inspire_runs) | Until user deletes via UI |
-| Use cases | Lakebase (inspire_use_cases) | Cascade-deleted with run |
-| Export records | Lakebase (inspire_exports) | Cascade-deleted with run |
+| Pipeline runs | Lakebase (forge_runs) | Until user deletes via UI |
+| Use cases | Lakebase (forge_use_cases) | Cascade-deleted with run |
+| Export records | Lakebase (forge_exports) | Cascade-deleted with run |
 | Exported files (Excel/PDF/PPTX) | In-memory only | Not persisted on disk |
 | Exported notebooks | Databricks Workspace | Governed by Workspace retention |
 

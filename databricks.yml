@@ -1,9 +1,9 @@
 bundle:
-  name: databricks-inspire
+  name: databricks-forge
 
 apps:
-  databricks-inspire:
-    name: "Databricks Inspire AI"
+  databricks-forge:
+    name: "Databricks Forge AI"
     description: "Discover AI-powered use cases from Unity Catalog metadata"
     source_code_path: .
 

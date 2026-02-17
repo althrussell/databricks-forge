@@ -37,7 +37,7 @@ export async function insertExportRecord(
 ): Promise<void> {
   try {
     const prisma = await getPrisma();
-    await prisma.inspireExport.create({
+    await prisma.forgeExport.create({
       data: {
         exportId: randomUUID(),
         runId,
@@ -65,7 +65,7 @@ export async function getExportsByRunId(
   runId: string
 ): Promise<ExportRecordRow[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireExport.findMany({
+  const rows = await prisma.forgeExport.findMany({
     where: { runId },
     orderBy: { createdAt: "desc" },
   });

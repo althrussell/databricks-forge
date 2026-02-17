@@ -14,7 +14,7 @@ import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 export type NotebookLanguage = "PYTHON" | "SQL" | "SCALA" | "R";
 
 interface ImportNotebookOptions {
-  /** Workspace path (e.g. /Users/user@example.com/inspire/notebooks/UC001) */
+  /** Workspace path (e.g. /Users/user@example.com/forge/notebooks/UC001) */
   path: string;
   /** Notebook language */
   language: NotebookLanguage;

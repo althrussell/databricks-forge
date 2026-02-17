@@ -14,12 +14,12 @@ export interface AppSettings {
   notebookPath: string;
 }
 
-const STORAGE_KEY = "inspire-ai-settings";
+const STORAGE_KEY = "forge-ai-settings";
 
 const DEFAULTS: AppSettings = {
   sampleRowsPerTable: 0,
   defaultExportFormat: "excel",
-  notebookPath: "./inspire_gen/",
+  notebookPath: "./forge_gen/",
 };
 
 export function loadSettings(): AppSettings {

@@ -14,7 +14,7 @@ export default function ConfigurePage() {
         </h1>
         <p className="mt-1 text-muted-foreground">
           Configure your business context and Unity Catalog scope, then let
-          Inspire AI discover use cases.
+          Forge AI discover use cases.
         </p>
       </div>
 

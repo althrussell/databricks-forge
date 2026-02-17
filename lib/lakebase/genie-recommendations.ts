@@ -59,7 +59,7 @@ export async function getGenieRecommendationsByRunId(
   runId: string
 ): Promise<GenieSpaceRecommendation[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireGenieRecommendation.findMany({
+  const rows = await prisma.forgeGenieRecommendation.findMany({
     where: { runId },
     orderBy: { useCaseCount: "desc" },
   });
@@ -79,11 +79,11 @@ export async function saveGenieRecommendations(
 
   await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
     // Clear any previous recommendations for this run
-    await tx.inspireGenieRecommendation.deleteMany({ where: { runId } });
+    await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
 
     if (recommendations.length === 0) return;
 
-    await tx.inspireGenieRecommendation.createMany({
+    await tx.forgeGenieRecommendation.createMany({
       data: recommendations.map((rec, idx) => ({
         id: `${runId}_genie_${idx}`,
         runId,

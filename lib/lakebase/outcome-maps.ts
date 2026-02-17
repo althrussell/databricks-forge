@@ -57,7 +57,7 @@ export async function createOutcomeMap(opts: {
     0
   );
 
-  const row = await prisma.inspireOutcomeMap.create({
+  const row = await prisma.forgeOutcomeMap.create({
     data: {
       id,
       industryId: opts.industryId,
@@ -80,7 +80,7 @@ export async function getOutcomeMap(
   id: string
 ): Promise<OutcomeMapRecord | null> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireOutcomeMap.findUnique({ where: { id } });
+  const row = await prisma.forgeOutcomeMap.findUnique({ where: { id } });
   return row ? dbRowToRecord(row) : null;
 }
 
@@ -88,7 +88,7 @@ export async function getOutcomeMapByIndustryId(
   industryId: string
 ): Promise<OutcomeMapRecord | null> {
   const prisma = await getPrisma();
-  const row = await prisma.inspireOutcomeMap.findUnique({
+  const row = await prisma.forgeOutcomeMap.findUnique({
     where: { industryId },
   });
   return row ? dbRowToRecord(row) : null;
@@ -96,7 +96,7 @@ export async function getOutcomeMapByIndustryId(
 
 export async function listOutcomeMaps(): Promise<OutcomeMapSummary[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireOutcomeMap.findMany({
+  const rows = await prisma.forgeOutcomeMap.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -123,7 +123,7 @@ export async function listOutcomeMaps(): Promise<OutcomeMapSummary[]> {
  */
 export async function loadAllCustomOutcomes(): Promise<IndustryOutcome[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireOutcomeMap.findMany({
+  const rows = await prisma.forgeOutcomeMap.findMany({
     select: { parsedJson: true },
   });
   const outcomes: IndustryOutcome[] = [];
@@ -169,7 +169,7 @@ export async function updateOutcomeMap(
   }
 
   try {
-    const row = await prisma.inspireOutcomeMap.update({
+    const row = await prisma.forgeOutcomeMap.update({
       where: { id },
       data,
     });
@@ -186,7 +186,7 @@ export async function updateOutcomeMap(
 export async function deleteOutcomeMap(id: string): Promise<boolean> {
   const prisma = await getPrisma();
   try {
-    await prisma.inspireOutcomeMap.delete({ where: { id } });
+    await prisma.forgeOutcomeMap.delete({ where: { id } });
     return true;
   } catch {
     return false;

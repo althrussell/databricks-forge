@@ -73,7 +73,7 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
       a.href = url;
 
       const ext = format === "excel" ? "xlsx" : format;
-      a.download = `inspire_${businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.${ext}`;
+      a.download = `forge_${businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

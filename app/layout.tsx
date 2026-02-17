@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Databricks Inspire AI",
+  title: "Forge AI",
   description:
     "Discover AI-powered use cases from your Unity Catalog metadata",
   icons: {

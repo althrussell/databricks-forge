@@ -2,7 +2,7 @@
 
 ## Overview
 
-Databricks Inspire AI follows a **ports-and-adapters** architecture. The web app
+Databricks Forge AI follows a **ports-and-adapters** architecture. The web app
 is a Next.js 15 App Router application deployed as a Databricks App. All
 Databricks interactions go through a thin adapter layer (`lib/dbx/`), keeping
 business logic independent of transport details.
@@ -73,8 +73,8 @@ No raw SQL appears anywhere else in the codebase.
 ### `/lib/lakebase/` -- Persistence
 
 - `schema.ts` -- DDL for Lakebase tables + migration helper
-- `runs.ts` -- CRUD for `inspire_runs`
-- `usecases.ts` -- CRUD for `inspire_use_cases`
+- `runs.ts` -- CRUD for `forge_runs`
+- `usecases.ts` -- CRUD for `forge_use_cases`
 
 ### `/lib/export/` -- Output Generation
 
@@ -85,9 +85,9 @@ No raw SQL appears anywhere else in the codebase.
 
 ## Lakebase Schema
 
-Four tables in a dedicated schema (e.g. `inspire_app`):
+Four tables in a dedicated schema (e.g. `forge_app`):
 
-### `inspire_runs`
+### `forge_runs`
 
 | Column             | Type      | Notes                          |
 | ------------------ | --------- | ------------------------------ |
@@ -108,12 +108,12 @@ Four tables in a dedicated schema (e.g. `inspire_app`):
 | created_at         | TIMESTAMP |                                |
 | completed_at       | TIMESTAMP |                                |
 
-### `inspire_use_cases`
+### `forge_use_cases`
 
 | Column             | Type   | Notes                     |
 | ------------------ | ------ | ------------------------- |
 | id                 | STRING | PK                        |
-| run_id             | STRING | FK to inspire_runs        |
+| run_id             | STRING | FK to forge_runs        |
 | use_case_no        | INT    |                           |
 | name               | STRING |                           |
 | type               | STRING | AI / Statistical          |
@@ -133,7 +133,7 @@ Four tables in a dedicated schema (e.g. `inspire_app`):
 | sql_code           | STRING |                           |
 | sql_status         | STRING |                           |
 
-### `inspire_metadata_cache`
+### `forge_metadata_cache`
 
 | Column        | Type      | Notes                        |
 | ------------- | --------- | ---------------------------- |
@@ -144,12 +144,12 @@ Four tables in a dedicated schema (e.g. `inspire_app`):
 | column_count  | INT       |                              |
 | cached_at     | TIMESTAMP |                              |
 
-### `inspire_exports`
+### `forge_exports`
 
 | Column     | Type      | Notes                       |
 | ---------- | --------- | --------------------------- |
 | export_id  | STRING    | PK                          |
-| run_id     | STRING    | FK to inspire_runs          |
+| run_id     | STRING    | FK to forge_runs          |
 | format     | STRING    | excel/pdf/pptx/notebooks    |
 | file_path  | STRING    | Volumes or workspace path   |
 | created_at | TIMESTAMP |                             |
@@ -161,7 +161,7 @@ Four tables in a dedicated schema (e.g. `inspire_app`):
 3. Execute endpoint starts the pipeline engine asynchronously
 4. Engine runs 6 steps, each updating progress in Lakebase
 5. Frontend polls `/api/runs/[runId]` every 3 seconds for status
-6. On completion, use cases are persisted in `inspire_use_cases`
+6. On completion, use cases are persisted in `forge_use_cases`
 7. User views results and triggers exports from the run detail page
 
 ## Auth Model

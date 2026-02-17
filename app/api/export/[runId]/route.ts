@@ -63,7 +63,7 @@ export async function GET(
           headers: {
             "Content-Type":
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "Content-Disposition": `attachment; filename="inspire_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.xlsx"`,
+            "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.xlsx"`,
           },
         });
       }
@@ -76,7 +76,7 @@ export async function GET(
           headers: {
             "Content-Type":
               "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "Content-Disposition": `attachment; filename="inspire_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.pptx"`,
+            "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.pptx"`,
           },
         });
       }
@@ -88,7 +88,7 @@ export async function GET(
           status: 200,
           headers: {
             "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="inspire_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.pdf"`,
+            "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.pdf"`,
           },
         });
       }

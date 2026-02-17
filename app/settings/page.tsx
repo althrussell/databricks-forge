@@ -54,8 +54,8 @@ export default function SettingsPage() {
     return loadSettings().defaultExportFormat ?? "excel";
   });
   const [notebookPath, setNotebookPath] = useState(() => {
-    if (typeof window === "undefined") return "./inspire_gen/";
-    return loadSettings().notebookPath ?? "./inspire_gen/";
+    if (typeof window === "undefined") return "./forge_gen/";
+    return loadSettings().notebookPath ?? "./forge_gen/";
   });
 
   // Profile info from API
@@ -85,10 +85,10 @@ export default function SettingsPage() {
 
   const handleClearLocalData = () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("inspire-ai-settings");
+      localStorage.removeItem("forge-ai-settings");
       setSampleRowsPerTable(0);
       setDefaultExportFormat("excel");
-      setNotebookPath("./inspire_gen/");
+      setNotebookPath("./forge_gen/");
       toast.success("Local settings cleared");
     }
   };
@@ -186,7 +186,7 @@ export default function SettingsPage() {
                   Privacy &amp; data access
                 </p>
                 <p className="mt-1">
-                  When data sampling is enabled, Inspire AI reads a small number
+                  When data sampling is enabled, Forge AI reads a small number
                   of rows from each table involved in a use case. This data is
                   sent to the AI model alongside the schema to improve SQL
                   accuracy. Sampled data is <strong>not</strong> persisted.
@@ -239,7 +239,7 @@ export default function SettingsPage() {
                   id="notebookPath"
                   value={notebookPath}
                   onChange={(e) => setNotebookPath(e.target.value)}
-                  placeholder="./inspire_gen/"
+                  placeholder="./forge_gen/"
                 />
               </div>
             </div>

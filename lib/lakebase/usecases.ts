@@ -77,7 +77,7 @@ export async function insertUseCases(useCases: UseCase[]): Promise<void> {
   const prisma = await getPrisma();
 
   // Prisma createMany for efficient batch inserts
-  await prisma.inspireUseCase.createMany({
+  await prisma.forgeUseCase.createMany({
     data: useCases.map((uc) => ({
       id: uc.id,
       runId: uc.runId,
@@ -109,7 +109,7 @@ export async function insertUseCases(useCases: UseCase[]): Promise<void> {
  */
 export async function getUseCasesByRunId(runId: string): Promise<UseCase[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireUseCase.findMany({
+  const rows = await prisma.forgeUseCase.findMany({
     where: { runId },
     orderBy: [{ overallScore: "desc" }, { useCaseNo: "asc" }],
   });
@@ -124,7 +124,7 @@ export async function getUseCasesByDomain(
   domain: string
 ): Promise<UseCase[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireUseCase.findMany({
+  const rows = await prisma.forgeUseCase.findMany({
     where: { runId, domain },
     orderBy: { overallScore: "desc" },
   });
@@ -136,7 +136,7 @@ export async function getUseCasesByDomain(
  */
 export async function getDomainsForRun(runId: string): Promise<string[]> {
   const prisma = await getPrisma();
-  const results = await prisma.inspireUseCase.findMany({
+  const results = await prisma.forgeUseCase.findMany({
     where: { runId },
     select: { domain: true },
     distinct: ["domain"],
@@ -150,5 +150,5 @@ export async function getDomainsForRun(runId: string): Promise<string[]> {
  */
 export async function deleteUseCasesForRun(runId: string): Promise<void> {
   const prisma = await getPrisma();
-  await prisma.inspireUseCase.deleteMany({ where: { runId } });
+  await prisma.forgeUseCase.deleteMany({ where: { runId } });
 }

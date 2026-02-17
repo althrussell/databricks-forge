@@ -77,7 +77,7 @@ function addFooter(
   if (logo) {
     slide.addImage({ data: logo, x: CONTENT_MARGIN, y: 6.98, w: 0.25, h: 0.26 });
   }
-  slide.addText(`Databricks Inspire AI  |  ${today()}`, {
+  slide.addText(`Databricks Forge AI  |  ${today()}`, {
     x: CONTENT_MARGIN + 0.35,
     y: 7.0,
     w: CONTENT_W - 0.35,
@@ -215,7 +215,7 @@ export async function generatePptx(
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
-  pptx.author = "Databricks Inspire AI";
+  pptx.author = "Databricks Forge AI";
   pptx.title = `${run.config.businessName} - Use Case Catalog`;
 
   const domainStats = computeDomainStats(useCases);
@@ -247,7 +247,7 @@ export async function generatePptx(
   // Red separator above the title
   addRedSeparator(titleSlide, 1.5, 1.3, 3.5);
 
-  titleSlide.addText("Databricks Inspire AI", {
+  titleSlide.addText("Databricks Forge AI", {
     x: 1.5,
     y: 1.6,
     w: 10,

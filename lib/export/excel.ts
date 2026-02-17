@@ -115,7 +115,7 @@ export async function generateExcel(
   useCases: UseCase[]
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Databricks Inspire AI";
+  workbook.creator = "Databricks Forge AI";
   workbook.created = new Date();
 
   // =====================================================================
@@ -169,7 +169,7 @@ export async function generateExcel(
 
   summaryRows.push({ property: "", value: "" }); // spacer
   summaryRows.push({ property: "Generated", value: new Date().toISOString() });
-  summaryRows.push({ property: "Report By", value: "Databricks Inspire AI" });
+  summaryRows.push({ property: "Report By", value: "Databricks Forge AI" });
 
   summaryRows.forEach((row) => summarySheet.addRow(row));
   styleHeaderRow(summarySheet);

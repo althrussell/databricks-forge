@@ -181,7 +181,7 @@ export async function generateEnvironmentExcel(
   scan: ScanWithRelations
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Databricks Inspire AI";
+  wb.creator = "Databricks Forge AI";
   wb.created = new Date();
 
   addExecutiveSummary(wb, scan);

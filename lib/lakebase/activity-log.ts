@@ -48,7 +48,7 @@ export async function logActivity(
 ): Promise<void> {
   try {
     const prisma = await getPrisma();
-    await prisma.inspireActivityLog.create({
+    await prisma.forgeActivityLog.create({
       data: {
         activityId: randomUUID(),
         userId: opts.userId ?? null,
@@ -76,7 +76,7 @@ export async function getRecentActivity(
   limit = 20
 ): Promise<ActivityLogEntry[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireActivityLog.findMany({
+  const rows = await prisma.forgeActivityLog.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
   });
@@ -90,7 +90,7 @@ export async function getActivityForResource(
   resourceId: string
 ): Promise<ActivityLogEntry[]> {
   const prisma = await getPrisma();
-  const rows = await prisma.inspireActivityLog.findMany({
+  const rows = await prisma.forgeActivityLog.findMany({
     where: { resourceId },
     orderBy: { createdAt: "desc" },
   });

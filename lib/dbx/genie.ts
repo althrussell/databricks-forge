@@ -81,7 +81,7 @@ export async function createGenieSpace(opts: {
   const url = `${config.host}/api/2.0/genie/spaces`;
   const headers = await getAppHeaders();
 
-  const parentPath = opts.parentPath ?? "/Shared/Inspire Genie Spaces/";
+  const parentPath = opts.parentPath ?? "/Shared/Forge Genie Spaces/";
 
   // Ensure the parent folder exists in the workspace
   await mkdirs(parentPath);

@@ -95,7 +95,7 @@ export default function DashboardPage() {
           />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              Databricks Inspire AI
+              Forge AI
             </h1>
             <p className="mt-1 text-muted-foreground">
               Transform your Unity Catalog metadata into actionable,
@@ -271,7 +271,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Inspire reads <strong>metadata only</strong> -- schema names,
+                Forge reads <strong>metadata only</strong> -- schema names,
                 table names, and column names. No row-level data is accessed
                 unless data sampling is explicitly enabled.
               </p>
@@ -318,7 +318,7 @@ function EmptyDashboard() {
           <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <BrainCircuit className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="text-xl font-semibold">Welcome to Inspire AI</h2>
+          <h2 className="text-xl font-semibold">Welcome to Forge AI</h2>
           <p className="mt-2 max-w-md text-muted-foreground">
             Discover high-value data use cases from your Unity Catalog metadata.
             Start by configuring your business context and selecting your data
