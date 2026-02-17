@@ -10,7 +10,7 @@ apps:
     resources:
       - name: sql-warehouse
         type: sql_warehouse
-        description: "SQL Warehouse for query execution, ai_query, and Lakebase"
+        description: "SQL Warehouse for metadata queries and generated SQL execution"
 
     env:
       - name: DATABRICKS_WAREHOUSE_ID

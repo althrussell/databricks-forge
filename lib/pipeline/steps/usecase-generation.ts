@@ -1,8 +1,8 @@
 /**
  * Pipeline Step 4: Use Case Generation
  *
- * Generates AI and statistical use cases in parallel batches using ai_query.
- * Each batch processes a subset of tables.
+ * Generates AI and statistical use cases in parallel batches using Model
+ * Serving (JSON mode). Each batch processes a subset of tables.
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";

@@ -1,8 +1,8 @@
 /**
  * Pipeline Step 5: Domain Clustering
  *
- * Assigns each use case to a business domain and subdomain using ai_query.
- * Optionally merges small domains.
+ * Assigns each use case to a business domain and subdomain using Model
+ * Serving (JSON mode). Optionally merges small domains.
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";

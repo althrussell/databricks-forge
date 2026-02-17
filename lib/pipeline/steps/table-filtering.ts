@@ -18,7 +18,7 @@ export interface TableClassification {
   reason: string;
 }
 
-const BATCH_SIZE = 100; // tables per ai_query call
+const BATCH_SIZE = 100; // tables per Model Serving call
 
 /**
  * Build a markdown table list for the prompt.
