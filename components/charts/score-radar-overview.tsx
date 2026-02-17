@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { UseCase } from "@/lib/domain/types";
+import { effectiveScores } from "@/lib/domain/scoring";
 
 /**
  * Palette of distinguishable colours for overlaying multiple use cases.
@@ -50,15 +51,16 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     useCases.length <= 10 ? "all" : "top10"
   );
 
-  // Compute domain averages
+  // Compute domain averages using effective (user-adjusted or system) scores
   const domainAverages = useMemo(() => {
     const map = new Map<string, { sum: number[]; count: number }>();
     for (const uc of useCases) {
+      const eff = effectiveScores(uc);
       const entry = map.get(uc.domain) ?? { sum: [0, 0, 0, 0], count: 0 };
-      entry.sum[0] += uc.priorityScore;
-      entry.sum[1] += uc.feasibilityScore;
-      entry.sum[2] += uc.impactScore;
-      entry.sum[3] += uc.overallScore;
+      entry.sum[0] += eff.priority;
+      entry.sum[1] += eff.feasibility;
+      entry.sum[2] += eff.impact;
+      entry.sum[3] += eff.overall;
       entry.count++;
       map.set(uc.domain, entry);
     }
@@ -88,17 +90,20 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     }
 
     const sorted = [...useCases].sort(
-      (a, b) => b.overallScore - a.overallScore
+      (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
     );
     const subset = viewMode === "top10" ? sorted.slice(0, 10) : sorted;
-    return subset.map((uc) => ({
-      key: uc.id,
-      label: uc.name.length > 35 ? uc.name.slice(0, 32) + "..." : uc.name,
-      priority: Math.round(uc.priorityScore * 100),
-      feasibility: Math.round(uc.feasibilityScore * 100),
-      impact: Math.round(uc.impactScore * 100),
-      overall: Math.round(uc.overallScore * 100),
-    }));
+    return subset.map((uc) => {
+      const eff = effectiveScores(uc);
+      return {
+        key: uc.id,
+        label: uc.name.length > 35 ? uc.name.slice(0, 32) + "..." : uc.name,
+        priority: Math.round(eff.priority * 100),
+        feasibility: Math.round(eff.feasibility * 100),
+        impact: Math.round(eff.impact * 100),
+        overall: Math.round(eff.overall * 100),
+      };
+    });
   }, [viewMode, useCases, domainAverages]);
 
   // Build radar data

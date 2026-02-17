@@ -55,7 +55,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
-import { computeOverallScore } from "@/lib/domain/scoring";
+import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
 import type { UseCase } from "@/lib/domain/types";
 
 interface UseCaseTableProps {
@@ -108,7 +108,7 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
 
     switch (sortBy) {
       case "score":
-        result.sort((a, b) => b.overallScore - a.overallScore);
+        result.sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall);
         break;
       case "name":
         result.sort((a, b) => a.name.localeCompare(b.name));

@@ -9,7 +9,7 @@
 
 import ExcelJS from "exceljs";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
-import { computeDomainStats } from "@/lib/domain/scoring";
+import { computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
 // Brand constants (ARGB format for ExcelJS)
@@ -132,7 +132,7 @@ export async function generateExcel(
   const statsCount = useCases.length - aiCount;
   const avgScore = useCases.length
     ? Math.round(
-        (useCases.reduce((s, uc) => s + uc.overallScore, 0) /
+        (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
           useCases.length) *
           100
       )
@@ -230,7 +230,7 @@ export async function generateExcel(
   ucSheet.columns = baseColumns;
 
   const sortedUseCases = [...useCases].sort(
-    (a, b) => b.overallScore - a.overallScore
+    (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
   );
 
   sortedUseCases.forEach((uc) => {
