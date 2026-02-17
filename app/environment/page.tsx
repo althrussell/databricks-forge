@@ -1668,6 +1668,30 @@ function ScanTrendsPanel() {
 // Data Maturity Score Card
 // ---------------------------------------------------------------------------
 
+function PillarBar({ pillar, barColorClass }: { pillar: MaturityPillar; barColorClass: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{pillar.name}</p>
+        <p className="text-sm font-bold">{pillar.score}</p>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full ${barColorClass}`}
+          style={{ width: `${pillar.score}%` }}
+        />
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {pillar.indicators.map((ind) => (
+          <p key={ind.label} className="text-xs text-muted-foreground">
+            {ind.label}: <span className="font-medium text-foreground">{ind.value}</span>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DataMaturityCard({ maturity }: { maturity: DataMaturityScore }) {
   const levelColor: Record<string, string> = {
     Foundational: "text-red-600 dark:text-red-400",
@@ -1684,29 +1708,7 @@ function DataMaturityCard({ maturity }: { maturity: DataMaturityScore }) {
     Leading: "bg-emerald-500",
   };
 
-  function PillarBar({ pillar }: { pillar: MaturityPillar }) {
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">{pillar.name}</p>
-          <p className="text-sm font-bold">{pillar.score}</p>
-        </div>
-        <div className="h-2 w-full rounded-full bg-muted">
-          <div
-            className={`h-full rounded-full ${barColor[maturity.level] ?? "bg-primary"}`}
-            style={{ width: `${pillar.score}%` }}
-          />
-        </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-          {pillar.indicators.map((ind) => (
-            <p key={ind.label} className="text-xs text-muted-foreground">
-              {ind.label}: <span className="font-medium text-foreground">{ind.value}</span>
-            </p>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const pillBarColor = barColor[maturity.level] ?? "bg-primary";
 
   return (
     <Card>
@@ -1732,10 +1734,10 @@ function DataMaturityCard({ maturity }: { maturity: DataMaturityScore }) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <PillarBar pillar={maturity.pillars.governance} />
-          <PillarBar pillar={maturity.pillars.architecture} />
-          <PillarBar pillar={maturity.pillars.operations} />
-          <PillarBar pillar={maturity.pillars.analyticsReadiness} />
+          <PillarBar pillar={maturity.pillars.governance} barColorClass={pillBarColor} />
+          <PillarBar pillar={maturity.pillars.architecture} barColorClass={pillBarColor} />
+          <PillarBar pillar={maturity.pillars.operations} barColorClass={pillBarColor} />
+          <PillarBar pillar={maturity.pillars.analyticsReadiness} barColorClass={pillBarColor} />
         </div>
       </CardContent>
     </Card>

@@ -111,8 +111,8 @@ export function ScoreRadarChart({
             borderRadius: "var(--radius)",
             fontSize: 12,
           }}
-          formatter={(value: number, name: string) => [
-            `${value}%`,
+          formatter={(value, name) => [
+            `${value ?? 0}%`,
             name === "system" ? "System Score" : "Your Score",
           ]}
         />

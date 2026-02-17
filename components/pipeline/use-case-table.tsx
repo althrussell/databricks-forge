@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import {
   Table,
   TableBody,
@@ -50,8 +51,11 @@ import {
   Pencil,
   Check,
   X,
+  SlidersHorizontal,
+  RotateCcw,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
+import { computeOverallScore } from "@/lib/domain/scoring";
 import type { UseCase } from "@/lib/domain/types";
 
 interface UseCaseTableProps {
@@ -69,6 +73,12 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
   const [editName, setEditName] = useState("");
   const [editStatement, setEditStatement] = useState("");
   const [editTables, setEditTables] = useState("");
+
+  // Score adjustment state
+  const [adjustingScores, setAdjustingScores] = useState(false);
+  const [adjPriority, setAdjPriority] = useState(0);
+  const [adjFeasibility, setAdjFeasibility] = useState(0);
+  const [adjImpact, setAdjImpact] = useState(0);
 
   const domains = useMemo(
     () => [...new Set(useCases.map((uc) => uc.domain))].sort(),
@@ -124,6 +134,77 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
       )
       .slice(0, 5);
   }, [selectedUseCase, useCases]);
+
+  // Computed user overall from sliders
+  const adjOverall = useMemo(
+    () => computeOverallScore(adjPriority / 100, adjFeasibility / 100, adjImpact / 100),
+    [adjPriority, adjFeasibility, adjImpact]
+  );
+
+  const hasUserScoreChanges = useCallback(
+    (uc: UseCase) => {
+      if (!adjustingScores) return false;
+      const sysPri = Math.round(uc.priorityScore * 100);
+      const sysFea = Math.round(uc.feasibilityScore * 100);
+      const sysImp = Math.round(uc.impactScore * 100);
+      return adjPriority !== sysPri || adjFeasibility !== sysFea || adjImpact !== sysImp;
+    },
+    [adjustingScores, adjPriority, adjFeasibility, adjImpact]
+  );
+
+  // Begin score adjustment mode
+  const startAdjusting = (uc: UseCase) => {
+    setAdjPriority(Math.round((uc.userPriorityScore ?? uc.priorityScore) * 100));
+    setAdjFeasibility(Math.round((uc.userFeasibilityScore ?? uc.feasibilityScore) * 100));
+    setAdjImpact(Math.round((uc.userImpactScore ?? uc.impactScore) * 100));
+    setAdjustingScores(true);
+  };
+
+  // Save adjusted scores
+  const saveAdjustedScores = () => {
+    if (!selectedUseCase || !onUpdate) return;
+    const updated: UseCase = {
+      ...selectedUseCase,
+      userPriorityScore: adjPriority / 100,
+      userFeasibilityScore: adjFeasibility / 100,
+      userImpactScore: adjImpact / 100,
+      userOverallScore: adjOverall,
+    };
+    onUpdate(updated);
+    setSelectedUseCase(updated);
+    setAdjustingScores(false);
+    toast.success("Scores adjusted");
+  };
+
+  // Reset to system scores
+  const resetToSystemScores = () => {
+    if (!selectedUseCase || !onUpdate) return;
+    const updated: UseCase = {
+      ...selectedUseCase,
+      userPriorityScore: null,
+      userFeasibilityScore: null,
+      userImpactScore: null,
+      userOverallScore: null,
+    };
+    onUpdate(updated);
+    setSelectedUseCase(updated);
+    setAdjustingScores(false);
+    toast.success("Scores reset to system values");
+  };
+
+  const hasAnyUserScore = (uc: UseCase) =>
+    uc.userPriorityScore != null ||
+    uc.userFeasibilityScore != null ||
+    uc.userImpactScore != null ||
+    uc.userOverallScore != null;
+
+  // Effective scores (user-adjusted if present, else system)
+  const effectiveScores = (uc: UseCase) => ({
+    priority: uc.userPriorityScore ?? uc.priorityScore,
+    feasibility: uc.userFeasibilityScore ?? uc.feasibilityScore,
+    impact: uc.userImpactScore ?? uc.impactScore,
+    overall: uc.userOverallScore ?? uc.overallScore,
+  });
 
   return (
     <>
@@ -205,16 +286,27 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                   <TableRow
                     key={uc.id}
                     className="cursor-pointer transition-colors hover:bg-row-hover"
-                    onClick={() => setSelectedUseCase(uc)}
+                    onClick={() => {
+                      setSelectedUseCase(uc);
+                      setAdjustingScores(false);
+                      setEditing(false);
+                    }}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {idx + 1}
                     </TableCell>
                     <TableCell className="max-w-[300px]">
-                      <p className="truncate font-medium">{uc.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {uc.statement}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{uc.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {uc.statement}
+                          </p>
+                        </div>
+                        {hasAnyUserScore(uc) && (
+                          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <TypeBadge type={uc.type} />
@@ -231,7 +323,10 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <ScoreBadge score={uc.overallScore} />
+                      <ScoreBadge
+                        score={uc.userOverallScore ?? uc.overallScore}
+                        isAdjusted={uc.userOverallScore != null}
+                      />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -240,6 +335,8 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedUseCase(uc);
+                          setAdjustingScores(false);
+                          setEditing(false);
                         }}
                       >
                         Details
@@ -256,7 +353,13 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
       {/* Detail Sheet */}
       <Sheet
         open={!!selectedUseCase}
-        onOpenChange={(open) => !open && setSelectedUseCase(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedUseCase(null);
+            setAdjustingScores(false);
+            setEditing(false);
+          }
+        }}
       >
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           {selectedUseCase && (
@@ -341,6 +444,12 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                     {selectedUseCase.subdomain}
                   </Badge>
                 )}
+                {hasAnyUserScore(selectedUseCase) && (
+                  <Badge variant="outline" className="gap-1 border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300">
+                    <SlidersHorizontal className="h-3 w-3" />
+                    User Adjusted
+                  </Badge>
+                )}
               </div>
 
               <div className="mt-6 space-y-5">
@@ -354,33 +463,156 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                     feasibility={selectedUseCase.feasibilityScore}
                     impact={selectedUseCase.impactScore}
                     overall={selectedUseCase.overallScore}
-                    size={180}
+                    userPriority={adjustingScores ? adjPriority / 100 : selectedUseCase.userPriorityScore}
+                    userFeasibility={adjustingScores ? adjFeasibility / 100 : selectedUseCase.userFeasibilityScore}
+                    userImpact={adjustingScores ? adjImpact / 100 : selectedUseCase.userImpactScore}
+                    userOverall={adjustingScores ? adjOverall : selectedUseCase.userOverallScore}
+                    size={200}
                   />
                 </div>
 
                 {/* Scores Grid */}
                 <div className="grid grid-cols-4 gap-3">
-                  <ScoreCard
-                    icon={<Target className="h-4 w-4" />}
-                    label="Priority"
-                    score={selectedUseCase.priorityScore}
-                  />
-                  <ScoreCard
-                    icon={<Gauge className="h-4 w-4" />}
-                    label="Feasibility"
-                    score={selectedUseCase.feasibilityScore}
-                  />
-                  <ScoreCard
-                    icon={<Zap className="h-4 w-4" />}
-                    label="Impact"
-                    score={selectedUseCase.impactScore}
-                  />
-                  <ScoreCard
-                    icon={<Trophy className="h-4 w-4" />}
-                    label="Overall"
-                    score={selectedUseCase.overallScore}
-                  />
+                  {(() => {
+                    const eff = adjustingScores
+                      ? { priority: adjPriority / 100, feasibility: adjFeasibility / 100, impact: adjImpact / 100, overall: adjOverall }
+                      : effectiveScores(selectedUseCase);
+                    return (
+                      <>
+                        <ScoreCard
+                          icon={<Target className="h-4 w-4" />}
+                          label="Priority"
+                          score={eff.priority}
+                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.priorityScore : undefined}
+                        />
+                        <ScoreCard
+                          icon={<Gauge className="h-4 w-4" />}
+                          label="Feasibility"
+                          score={eff.feasibility}
+                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.feasibilityScore : undefined}
+                        />
+                        <ScoreCard
+                          icon={<Zap className="h-4 w-4" />}
+                          label="Impact"
+                          score={eff.impact}
+                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.impactScore : undefined}
+                        />
+                        <ScoreCard
+                          icon={<Trophy className="h-4 w-4" />}
+                          label="Overall"
+                          score={eff.overall}
+                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.overallScore : undefined}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
+
+                {/* Score Adjustment Panel */}
+                {onUpdate && (
+                  <>
+                    <Separator />
+                    {!adjustingScores ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startAdjusting(selectedUseCase)}
+                        >
+                          <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+                          Adjust Scores
+                        </Button>
+                        {hasAnyUserScore(selectedUseCase) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground"
+                            onClick={resetToSystemScores}
+                          >
+                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                            Reset to System
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4 rounded-lg border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-800 dark:bg-violet-950/30">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">
+                            Adjust Scores
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={saveAdjustedScores}
+                              disabled={!hasUserScoreChanges(selectedUseCase)}
+                            >
+                              <Check className="mr-1 h-3.5 w-3.5" />
+                              Apply
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setAdjustingScores(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+
+                        <ScoreSlider
+                          icon={<Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                          label="Priority"
+                          value={adjPriority}
+                          systemValue={Math.round(selectedUseCase.priorityScore * 100)}
+                          onChange={setAdjPriority}
+                        />
+                        <ScoreSlider
+                          icon={<Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                          label="Feasibility"
+                          value={adjFeasibility}
+                          systemValue={Math.round(selectedUseCase.feasibilityScore * 100)}
+                          onChange={setAdjFeasibility}
+                        />
+                        <ScoreSlider
+                          icon={<Zap className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                          label="Impact"
+                          value={adjImpact}
+                          systemValue={Math.round(selectedUseCase.impactScore * 100)}
+                          onChange={setAdjImpact}
+                        />
+
+                        <div className="flex items-center justify-between rounded-md bg-violet-100 px-3 py-2 dark:bg-violet-900/40">
+                          <div className="flex items-center gap-2">
+                            <Trophy className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                            <span className="text-sm font-medium text-violet-900 dark:text-violet-200">
+                              Computed Overall
+                            </span>
+                          </div>
+                          <span className="text-lg font-bold text-violet-900 dark:text-violet-200">
+                            {Math.round(adjOverall * 100)}%
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-violet-700 dark:text-violet-400">
+                          Overall = Priority (30%) + Feasibility (20%) + Impact (50%).
+                          System scores are preserved and both will appear in exports.
+                        </p>
+
+                        {hasAnyUserScore(selectedUseCase) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-violet-700 dark:text-violet-300"
+                            onClick={resetToSystemScores}
+                          >
+                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                            Reset All to System Scores
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <Separator />
 
@@ -533,7 +765,11 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                           <button
                             key={uc.id}
                             className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-muted/50"
-                            onClick={() => setSelectedUseCase(uc)}
+                            onClick={() => {
+                              setSelectedUseCase(uc);
+                              setAdjustingScores(false);
+                              setEditing(false);
+                            }}
                           >
                             <div>
                               <p className="text-sm font-medium">{uc.name}</p>
@@ -541,7 +777,10 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                                 {uc.domain}
                               </p>
                             </div>
-                            <ScoreBadge score={uc.overallScore} />
+                            <ScoreBadge
+                              score={uc.userOverallScore ?? uc.overallScore}
+                              isAdjusted={uc.userOverallScore != null}
+                            />
                           </button>
                         ))}
                       </div>
@@ -554,6 +793,54 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Score Slider sub-component
+// ---------------------------------------------------------------------------
+
+function ScoreSlider({
+  icon,
+  label,
+  value,
+  systemValue,
+  onChange,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  systemValue: number;
+  onChange: (v: number) => void;
+}) {
+  const changed = value !== systemValue;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-sm font-medium text-violet-900 dark:text-violet-200">{label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {changed && (
+            <span className="text-xs text-muted-foreground line-through">
+              {systemValue}%
+            </span>
+          )}
+          <span className={`text-sm font-bold ${changed ? "text-violet-700 dark:text-violet-300" : "text-foreground"}`}>
+            {value}%
+          </span>
+        </div>
+      </div>
+      <Slider
+        value={[value]}
+        min={0}
+        max={100}
+        step={1}
+        onValueChange={([v]) => onChange(v)}
+      />
+    </div>
   );
 }
 
@@ -644,7 +931,7 @@ function MetaField({
   );
 }
 
-function ScoreBadge({ score }: { score: number }) {
+function ScoreBadge({ score, isAdjusted }: { score: number; isAdjusted?: boolean }) {
   const pct = Math.round(score * 100);
   const color =
     score >= 0.7
@@ -655,8 +942,9 @@ function ScoreBadge({ score }: { score: number }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${color}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${color}`}
     >
+      {isAdjusted && <SlidersHorizontal className="h-2.5 w-2.5" />}
       {pct}%
     </span>
   );
@@ -666,12 +954,17 @@ function ScoreCard({
   icon,
   label,
   score,
+  systemScore,
 }: {
   icon: React.ReactNode;
   label: string;
   score: number;
+  systemScore?: number;
 }) {
   const pct = Math.round(score * 100);
+  const sysPct = systemScore != null ? Math.round(systemScore * 100) : null;
+  const isAdjusted = sysPct != null && sysPct !== pct;
+
   const colorClasses =
     score >= 0.7
       ? "border-green-200 bg-green-50/50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400"
@@ -685,6 +978,11 @@ function ScoreCard({
     >
       <div className="opacity-60">{icon}</div>
       <p className="text-xl font-bold">{pct}%</p>
+      {isAdjusted && (
+        <p className="text-[10px] text-muted-foreground line-through">
+          System: {sysPct}%
+        </p>
+      )}
       <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">
         {label}
       </p>

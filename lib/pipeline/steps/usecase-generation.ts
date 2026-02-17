@@ -267,6 +267,10 @@ async function generateBatch(
         feasibilityScore: 0,
         impactScore: 0,
         overallScore: 0,
+        userPriorityScore: null,
+        userFeasibilityScore: null,
+        userImpactScore: null,
+        userOverallScore: null,
         sqlCode: null,
         sqlStatus: null,
       };
