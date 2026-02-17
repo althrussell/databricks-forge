@@ -233,3 +233,147 @@ model InspireExport {
   @@index([runId])
   @@map("inspire_exports")
 }
+
+// ---------------------------------------------------------------------------
+// Environment Scans
+// ---------------------------------------------------------------------------
+
+model InspireEnvironmentScan {
+  scanId                String   @id @map("scan_id")
+  runId                 String?  @map("run_id")
+  ucPath                String   @map("uc_path")
+  tableCount            Int      @default(0) @map("table_count")
+  totalSizeBytes        BigInt   @default(0) @map("total_size_bytes")
+  totalFiles            Int      @default(0) @map("total_files")
+  tablesWithStreaming    Int      @default(0) @map("tables_with_streaming")
+  tablesWithCDF         Int      @default(0) @map("tables_with_cdf")
+  tablesNeedingOptimize Int      @default(0) @map("tables_needing_optimize")
+  tablesNeedingVacuum   Int      @default(0) @map("tables_needing_vacuum")
+  lineageDiscoveredCount Int     @default(0) @map("lineage_discovered_count")
+  domainCount           Int      @default(0) @map("domain_count")
+  piiTablesCount        Int      @default(0) @map("pii_tables_count")
+  redundancyPairsCount  Int      @default(0) @map("redundancy_pairs_count")
+  dataProductCount      Int      @default(0) @map("data_product_count")
+  avgGovernanceScore    Float    @default(0) @map("avg_governance_score")
+  scanDurationMs        Int?     @map("scan_duration_ms")
+  scanSummaryJson       String?  @map("scan_summary_json")
+  passResultsJson       String?  @map("pass_results_json")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  details    InspireTableDetail[]
+  histories  InspireTableHistorySummary[]
+  lineage    InspireTableLineage[]
+  insights   InspireTableInsight[]
+
+  @@index([runId])
+  @@index([createdAt])
+  @@map("inspire_environment_scans")
+}
+
+model InspireTableDetail {
+  id                    String   @id @default(uuid())
+  scanId                String   @map("scan_id")
+  tableFqn              String   @map("table_fqn")
+  catalog               String
+  schema                String   @map("table_schema")
+  tableName             String   @map("table_name")
+  tableType             String?  @map("table_type")
+  comment               String?
+  generatedDescription  String?  @map("generated_description")
+  format                String?
+  provider              String?
+  location              String?
+  isManaged             Boolean  @default(true) @map("is_managed")
+  owner                 String?
+  sizeInBytes           BigInt?  @map("size_in_bytes")
+  numFiles              Int?     @map("num_files")
+  partitionColumns      String?  @map("partition_columns")
+  clusteringColumns     String?  @map("clustering_columns")
+  deltaMinReaderVersion Int?     @map("delta_min_reader_version")
+  deltaMinWriterVersion Int?     @map("delta_min_writer_version")
+  cdfEnabled            Boolean  @default(false) @map("cdf_enabled")
+  autoOptimize          Boolean  @default(false) @map("auto_optimize")
+  tableCreatedAt        String?  @map("table_created_at")
+  lastModified          String?  @map("last_modified")
+  propertiesJson        String?  @map("properties_json")
+  tagsJson              String?  @map("tags_json")
+  columnTagsJson        String?  @map("column_tags_json")
+  dataDomain            String?  @map("data_domain")
+  dataSubdomain         String?  @map("data_subdomain")
+  dataTier              String?  @map("data_tier")
+  sensitivityLevel      String?  @map("sensitivity_level")
+  governancePriority    String?  @map("governance_priority")
+  governanceScore       Float?   @map("governance_score")
+  discoveredVia         String   @default("selected") @map("discovered_via")
+
+  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([tableFqn])
+  @@index([dataDomain])
+  @@index([sensitivityLevel])
+  @@map("inspire_table_details")
+}
+
+model InspireTableHistorySummary {
+  id                   String   @id @default(uuid())
+  scanId               String   @map("scan_id")
+  tableFqn             String   @map("table_fqn")
+  lastWriteTimestamp   String?  @map("last_write_timestamp")
+  lastWriteOperation   String?  @map("last_write_operation")
+  totalWriteOps        Int      @default(0) @map("total_write_ops")
+  totalStreamingOps    Int      @default(0) @map("total_streaming_ops")
+  totalOptimizeOps     Int      @default(0) @map("total_optimize_ops")
+  totalVacuumOps       Int      @default(0) @map("total_vacuum_ops")
+  totalMergeOps        Int      @default(0) @map("total_merge_ops")
+  lastOptimizeTimestamp String? @map("last_optimize_timestamp")
+  lastVacuumTimestamp  String?  @map("last_vacuum_timestamp")
+  hasStreamingWrites   Boolean  @default(false) @map("has_streaming_writes")
+  historyDays          Int      @default(0) @map("history_days")
+  topOperationsJson    String?  @map("top_operations_json")
+  healthScore          Float?   @map("health_score")
+  issuesJson           String?  @map("issues_json")
+  recommendationsJson  String?  @map("recommendations_json")
+
+  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([tableFqn])
+  @@map("inspire_table_history_summaries")
+}
+
+model InspireTableLineage {
+  id              String   @id @default(uuid())
+  scanId          String   @map("scan_id")
+  sourceTableFqn  String   @map("source_table_fqn")
+  targetTableFqn  String   @map("target_table_fqn")
+  sourceType      String?  @map("source_type")
+  targetType      String?  @map("target_type")
+  entityType      String?  @map("entity_type")
+  lastEventTime   String?  @map("last_event_time")
+  eventCount      Int      @default(1) @map("event_count")
+
+  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([sourceTableFqn])
+  @@index([targetTableFqn])
+  @@map("inspire_table_lineage")
+}
+
+model InspireTableInsight {
+  id          String   @id @default(uuid())
+  scanId      String   @map("scan_id")
+  insightType String   @map("insight_type")
+  tableFqn    String?  @map("table_fqn")
+  payloadJson String   @map("payload_json")
+  severity    String   @default("info")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  scan InspireEnvironmentScan @relation(fields: [scanId], references: [scanId], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([insightType])
+  @@index([tableFqn])
+  @@map("inspire_table_insights")
+}

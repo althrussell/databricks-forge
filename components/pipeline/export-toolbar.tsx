@@ -13,6 +13,37 @@ interface ExportToolbarProps {
 export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolbarProps) {
   const [exporting, setExporting] = useState<string | null>(null);
 
+  const handleExportEnvReport = async () => {
+    setExporting("environment");
+    try {
+      // First, find the scan linked to this run
+      const scanResp = await fetch(`/api/environment-scan`);
+      if (!scanResp.ok) throw new Error("No scans available");
+      const scanData = await scanResp.json();
+      const linked = scanData.scans?.find((s: { runId?: string }) => s.runId === runId);
+      if (!linked) {
+        toast.error("No environment scan linked to this run");
+        return;
+      }
+      const resp = await fetch(`/api/environment-scan/${linked.scanId}/export?format=excel`);
+      if (!resp.ok) throw new Error("Export failed");
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `environment_report_${runId.substring(0, 8)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Environment report exported");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Environment report export failed");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const handleExport = async (format: string) => {
     setExporting(format);
     try {
@@ -102,6 +133,14 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
         {exporting === "notebooks"
           ? "Deploying..."
           : "Deploy Notebooks"}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!!exporting}
+        onClick={() => handleExportEnvReport()}
+      >
+        {exporting === "environment" ? "Exporting..." : "Environment Report"}
       </Button>
     </div>
   );
