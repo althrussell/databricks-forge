@@ -310,23 +310,26 @@ export function generateGenieRecommendations(
       );
 
     // 11. Assemble serialized_space
+    //     The Genie API requires all arrays to be sorted by `id` (or `identifier`).
+    const byId = <T extends { id: string }>(a: T, b: T) => a.id.localeCompare(b.id);
+
     const space: SerializedSpace = {
       version: 2,
-      config: { sample_questions: sampleQuestions },
+      config: { sample_questions: [...sampleQuestions].sort(byId) },
       data_sources: {
-        tables: dataTables,
+        tables: dataTables, // already sorted by identifier above
         ...(dataMetricViews.length > 0
-          ? { metric_views: dataMetricViews }
+          ? { metric_views: dataMetricViews } // already sorted by identifier above
           : {}),
       },
       instructions: {
-        text_instructions: textInstructions,
-        example_question_sqls: exampleSqls,
-        join_specs: joinSpecs,
+        text_instructions: [...textInstructions].sort(byId),
+        example_question_sqls: [...exampleSqls].sort(byId),
+        join_specs: [...joinSpecs].sort(byId),
         sql_snippets: {
-          measures: snippets.measures,
-          filters: snippets.filters,
-          expressions: snippets.expressions,
+          measures: [...snippets.measures].sort(byId),
+          filters: [...snippets.filters].sort(byId),
+          expressions: [...snippets.expressions].sort(byId),
         },
       },
     };
