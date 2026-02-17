@@ -78,25 +78,20 @@ export function getConfig(): DatabricksConfig {
   return _config;
 }
 
+const DEFAULT_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+
 /**
- * Returns the Model Serving endpoint name from the app resource binding.
+ * Returns the Model Serving endpoint name.
  *
- * Read from `DATABRICKS_SERVING_ENDPOINT`, which is mapped from the
- * `serving-endpoint` app resource in databricks.yml.
- *
- * Throws if the variable is not set (no fallback -- the resource must be
- * bound in the app config or set in .env.local for local dev).
+ * Resolution order:
+ *   1. `DATABRICKS_SERVING_ENDPOINT` env var (set via databricks.yml resource
+ *      binding when deployed, or .env.local for local dev).
+ *   2. Falls back to `DEFAULT_SERVING_ENDPOINT` so the app works out of the
+ *      box without requiring the env var. Pipeline runs store the model name
+ *      per-run in the `aiModel` config field.
  */
 export function getServingEndpoint(): string {
-  const endpoint = process.env.DATABRICKS_SERVING_ENDPOINT;
-  if (!endpoint) {
-    throw new Error(
-      "DATABRICKS_SERVING_ENDPOINT is not set. " +
-        "Ensure databricks.yml maps the serving-endpoint resource to this env var, " +
-        "or set it in .env.local for local development."
-    );
-  }
-  return endpoint;
+  return process.env.DATABRICKS_SERVING_ENDPOINT || DEFAULT_SERVING_ENDPOINT;
 }
 
 // ---------------------------------------------------------------------------
