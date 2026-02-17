@@ -290,20 +290,24 @@ export function generateGenieRecommendations(
       sorted
     );
 
-    // 9. Build data_sources.tables
-    const dataTables: DataSourceTable[] = tables.map((fqn) => {
-      const comment = tableComments.get(fqn);
-      return comment
-        ? { identifier: fqn, description: [comment] }
-        : { identifier: fqn };
-    });
+    // 9. Build data_sources.tables (must be sorted by identifier per Genie API)
+    const dataTables: DataSourceTable[] = tables
+      .sort((a, b) => a.localeCompare(b))
+      .map((fqn) => {
+        const comment = tableComments.get(fqn);
+        return comment
+          ? { identifier: fqn, description: [comment] }
+          : { identifier: fqn };
+      });
 
-    // 10. Build data_sources.metric_views
-    const dataMetricViews: DataSourceMetricView[] = metricViews.map((mv) =>
-      mv.comment
-        ? { identifier: mv.fqn, description: [mv.comment] }
-        : { identifier: mv.fqn }
-    );
+    // 10. Build data_sources.metric_views (sorted for consistency)
+    const dataMetricViews: DataSourceMetricView[] = metricViews
+      .sort((a, b) => a.fqn.localeCompare(b.fqn))
+      .map((mv) =>
+        mv.comment
+          ? { identifier: mv.fqn, description: [mv.comment] }
+          : { identifier: mv.fqn }
+      );
 
     // 11. Assemble serialized_space
     const space: SerializedSpace = {
