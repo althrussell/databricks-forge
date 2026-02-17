@@ -48,6 +48,7 @@ import {
   Plus,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import type { ERDGraph } from "@/lib/domain/types";
 
 const ERDViewer = dynamic(
@@ -135,6 +136,22 @@ interface SingleScanData {
   details: TableDetailRow[];
 }
 
+interface ScanProgressData {
+  scanId: string;
+  phase: string;
+  message: string;
+  tablesFound: number;
+  columnsFound: number;
+  lineageTablesFound: number;
+  lineageEdgesFound: number;
+  enrichedCount: number;
+  enrichTotal: number;
+  llmPass: string | null;
+  domainsFound: number;
+  piiDetected: number;
+  elapsedMs: number;
+}
+
 type ViewMode = "aggregate" | "single-scan" | "new-scan";
 
 // ---------------------------------------------------------------------------
@@ -151,8 +168,9 @@ export default function EstatePage() {
   const [searchFilter, setSearchFilter] = useState("");
 
   // New scan form
-  const [ucScope, setUcScope] = useState("");
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgressData | null>(null);
 
   // Load aggregate estate data
   const fetchAggregate = useCallback(async () => {
@@ -214,69 +232,105 @@ export default function EstatePage() {
     setSearchFilter("");
   }, []);
 
+  // Derive the UC scope string from selected catalog browser sources
+  const ucScope = selectedSources.join(", ");
+
   // Start a new scan
   const handleScan = useCallback(async () => {
-    if (!ucScope.trim()) {
+    if (selectedSources.length === 0) {
       toast.error(
-        "Enter a Unity Catalog scope (e.g., my_catalog.my_schema)"
+        "Select at least one catalog or schema to scan."
       );
       return;
     }
+    const scope = selectedSources.join(", ");
     setScanning(true);
+    setScanProgress(null);
     try {
       const resp = await fetch("/api/environment-scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ucMetadata: ucScope }),
+        body: JSON.stringify({ ucMetadata: scope }),
       });
       if (!resp.ok) throw new Error("Failed to start scan");
       const data = await resp.json();
       toast.success(`Scan started: ${data.scanId.slice(0, 8)}...`);
 
-      // Poll for completion
+      // Start polling for progress
       pollForScan(data.scanId);
     } catch {
       toast.error("Failed to start environment scan");
       setScanning(false);
     }
-  }, [ucScope]);
+  }, [selectedSources]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pollForScan = useCallback(
     (scanId: string) => {
       let attempts = 0;
-      const maxAttempts = 120;
-      const interval = 5_000;
+      const maxAttempts = 300; // 10 minutes at 2s intervals
+      const interval = 2_000;
 
       const poll = async () => {
         attempts++;
         try {
-          const resp = await fetch(`/api/environment-scan/${scanId}`);
-          if (resp.ok) {
-            const scan = await resp.json();
-            if (scan.tableCount > 0) {
+          // Poll progress endpoint for live status
+          const progResp = await fetch(
+            `/api/environment-scan/${scanId}/progress`
+          );
+          if (progResp.ok) {
+            const prog: ScanProgressData = await progResp.json();
+            setScanProgress(prog);
+
+            // Check for completion
+            if (prog.phase === "complete") {
               setScanning(false);
-              setUcScope("");
-              toast.success("Scan complete! Refreshing estate view...");
-              // Refresh aggregate + show the new scan
+              setSelectedSources([]);
+              setScanProgress(null);
+              toast.success("Scan complete! Loading results...");
               fetchAggregate();
               fetchAggregateErd();
               loadSingleScan(scanId);
               return;
             }
+
+            if (prog.phase === "failed") {
+              setScanning(false);
+              toast.error(prog.message || "Scan failed.");
+              return;
+            }
+          } else {
+            // Progress endpoint 404 = scan may have completed before tracking started
+            // Fall back to checking the scan result directly
+            const scanResp = await fetch(`/api/environment-scan/${scanId}`);
+            if (scanResp.ok) {
+              const scan = await scanResp.json();
+              if (scan.tableCount > 0) {
+                setScanning(false);
+                setSelectedSources([]);
+                setScanProgress(null);
+                toast.success("Scan complete! Loading results...");
+                fetchAggregate();
+                fetchAggregateErd();
+                loadSingleScan(scanId);
+                return;
+              }
+            }
           }
         } catch {
-          // Continue polling
+          // Continue polling on error
         }
 
         if (attempts < maxAttempts) {
           setTimeout(poll, interval);
         } else {
           setScanning(false);
+          setScanProgress(null);
           toast.error("Scan timed out. Check the logs.");
         }
       };
 
-      setTimeout(poll, interval);
+      // Start polling immediately
+      setTimeout(poll, 1_000);
     },
     [fetchAggregate, fetchAggregateErd, loadSingleScan]
   );
@@ -411,7 +465,7 @@ export default function EstatePage() {
         </Button>
       </div>
 
-      {/* New Scan Form (collapsible) */}
+      {/* New Scan Form with Catalog Browser */}
       {viewMode === "new-scan" && (
         <Card>
           <CardHeader>
@@ -420,21 +474,25 @@ export default function EstatePage() {
               Start a New Scan
             </CardTitle>
             <CardDescription>
-              Scan additional catalogs or schemas to expand the estate view.
+              Browse your Unity Catalog and select catalogs, schemas, or
+              individual tables to scan. Results are merged into the estate view.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              <Input
-                placeholder="Unity Catalog scope (e.g., my_catalog or my_catalog.my_schema)"
-                value={ucScope}
-                onChange={(e) => setUcScope(e.target.value)}
-                disabled={scanning}
-                className="flex-1"
-              />
+          <CardContent className="space-y-4">
+            <CatalogBrowser
+              selectedSources={selectedSources}
+              onSelectionChange={setSelectedSources}
+            />
+
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {selectedSources.length > 0
+                  ? `Scope: ${ucScope}`
+                  : "Select at least one catalog or schema above."}
+              </p>
               <Button
                 onClick={handleScan}
-                disabled={scanning || !ucScope.trim()}
+                disabled={scanning || selectedSources.length === 0}
               >
                 {scanning ? (
                   <>
@@ -448,12 +506,13 @@ export default function EstatePage() {
                 )}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Supports: catalog, catalog.schema, or comma-separated scopes.
-              Results are merged into the estate view.
-            </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Live scan progress */}
+      {scanning && scanProgress && (
+        <ScanProgressCard progress={scanProgress} />
       )}
 
       {/* Loading state */}
@@ -884,6 +943,178 @@ function SingleScanSummary({
           Scan completed in {(scan.scanDurationMs / 1000).toFixed(1)}s
         </p>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scan Progress Card
+// ---------------------------------------------------------------------------
+
+const PHASE_LABELS: Record<string, string> = {
+  starting: "Initialising",
+  "listing-tables": "Discovering Tables",
+  "fetching-metadata": "Fetching Metadata",
+  "walking-lineage": "Walking Lineage",
+  enriching: "Enriching Tables",
+  "fetching-tags": "Fetching Tags",
+  "health-scoring": "Health Scoring",
+  "llm-intelligence": "LLM Analysis",
+  saving: "Saving Results",
+  complete: "Complete",
+  failed: "Failed",
+};
+
+const PHASE_ORDER = [
+  "starting",
+  "listing-tables",
+  "fetching-metadata",
+  "walking-lineage",
+  "enriching",
+  "fetching-tags",
+  "health-scoring",
+  "llm-intelligence",
+  "saving",
+  "complete",
+];
+
+function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
+  const currentPhaseIdx = PHASE_ORDER.indexOf(progress.phase);
+  const totalPhases = PHASE_ORDER.length - 1; // exclude "complete"
+  const pct = Math.max(
+    5,
+    Math.min(
+      95,
+      progress.phase === "enriching" && progress.enrichTotal > 0
+        ? // During enrichment, interpolate within the enriching phase
+          ((currentPhaseIdx + progress.enrichedCount / progress.enrichTotal) /
+            totalPhases) *
+          100
+        : ((currentPhaseIdx + 0.5) / totalPhases) * 100
+    )
+  );
+
+  const elapsed = progress.elapsedMs;
+  const mins = Math.floor(elapsed / 60_000);
+  const secs = Math.floor((elapsed % 60_000) / 1_000);
+  const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10">
+      <CardContent className="pt-5 pb-4 space-y-4">
+        {/* Phase + elapsed */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+            <span className="text-sm font-semibold">
+              {PHASE_LABELS[progress.phase] ?? progress.phase}
+            </span>
+          </div>
+          <Badge variant="secondary" className="text-xs tabular-nums">
+            {elapsedStr}
+          </Badge>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-2 w-full rounded-full bg-blue-100 dark:bg-blue-900/30 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-blue-500 transition-all duration-500 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        {/* Status message */}
+        <p className="text-sm text-muted-foreground">{progress.message}</p>
+
+        {/* Live counters */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {progress.tablesFound > 0 && (
+            <MiniCounter
+              label="Tables Found"
+              value={progress.tablesFound}
+              icon={<Database className="h-3.5 w-3.5" />}
+            />
+          )}
+          {progress.columnsFound > 0 && (
+            <MiniCounter
+              label="Columns"
+              value={progress.columnsFound}
+              icon={<BarChart3 className="h-3.5 w-3.5" />}
+            />
+          )}
+          {progress.lineageTablesFound > 0 && (
+            <MiniCounter
+              label="Lineage Tables"
+              value={progress.lineageTablesFound}
+              icon={<Workflow className="h-3.5 w-3.5" />}
+            />
+          )}
+          {progress.lineageEdgesFound > 0 && (
+            <MiniCounter
+              label="Lineage Edges"
+              value={progress.lineageEdgesFound}
+              icon={<Workflow className="h-3.5 w-3.5" />}
+            />
+          )}
+          {progress.enrichedCount > 0 && (
+            <MiniCounter
+              label="Enriched"
+              value={`${progress.enrichedCount}/${progress.enrichTotal}`}
+              icon={<Search className="h-3.5 w-3.5" />}
+            />
+          )}
+          {progress.domainsFound > 0 && (
+            <MiniCounter
+              label="Domains"
+              value={progress.domainsFound}
+              icon={<Globe className="h-3.5 w-3.5" />}
+            />
+          )}
+          {progress.piiDetected > 0 && (
+            <MiniCounter
+              label="PII Tables"
+              value={progress.piiDetected}
+              icon={<ShieldAlert className="h-3.5 w-3.5" />}
+              alert
+            />
+          )}
+          {progress.llmPass && (
+            <MiniCounter
+              label="LLM Pass"
+              value={progress.llmPass}
+              icon={<Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            />
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniCounter({
+  label,
+  value,
+  icon,
+  alert,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  alert?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ${
+        alert
+          ? "bg-orange-100/60 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400"
+          : "bg-white/60 text-muted-foreground dark:bg-white/5"
+      }`}
+    >
+      {icon}
+      <div>
+        <div className="font-semibold tabular-nums">{value}</div>
+        <div className="text-[10px] text-muted-foreground/70">{label}</div>
+      </div>
     </div>
   );
 }
