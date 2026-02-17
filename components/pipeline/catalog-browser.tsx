@@ -203,7 +203,10 @@ export function CatalogBrowser({
         const res = await fetch(
           `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`
         );
-        if (!res.ok) throw new Error("Failed to fetch schemas");
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error ?? "Failed to fetch schemas");
+        }
         const data = await res.json();
         const schemaNames: string[] = data.schemas ?? [];
         setCatalogs((prev) =>
@@ -275,7 +278,10 @@ export function CatalogBrowser({
       const res = await fetch(
         `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`
       );
-      if (!res.ok) throw new Error("Failed to fetch schemas");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Failed to fetch schemas");
+      }
       const data = await res.json();
       const schemaNames: string[] = data.schemas ?? [];
       setCatalogs((prev) =>
@@ -343,7 +349,10 @@ export function CatalogBrowser({
         const res = await fetch(
           `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`
         );
-        if (!res.ok) throw new Error("Failed to fetch tables");
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error ?? "Failed to fetch tables");
+        }
         const data = await res.json();
         const tables: TableNode[] = (data.tables ?? []).map(
           (t: {
@@ -411,7 +420,10 @@ export function CatalogBrowser({
       const res = await fetch(
         `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`
       );
-      if (!res.ok) throw new Error("Failed to fetch tables");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Failed to fetch tables");
+      }
       const data = await res.json();
       const tables: TableNode[] = (data.tables ?? []).map(
         (t: {
