@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createRun, listRuns } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { safeParseBody, CreateRunSchema } from "@/lib/validation";
-import { getCurrentUserEmail } from "@/lib/dbx/client";
+import { getCurrentUserEmail, getServingEndpoint } from "@/lib/dbx/client";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import type {
   PipelineRunConfig,
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       generationOptions: (body.generationOptions ?? ["SQL Code"]) as GenerationOption[],
       generationPath: body.generationPath ?? "./inspire_gen/",
       languages: (body.languages ?? ["English"]) as SupportedLanguage[],
-      aiModel: body.aiModel ?? "databricks-claude-opus-4-6",
+      aiModel: getServingEndpoint(),
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,
       industry: body.industry ?? "",
     };

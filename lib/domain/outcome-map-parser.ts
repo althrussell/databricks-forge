@@ -7,6 +7,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { getServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "./industry-outcomes";
 
@@ -31,8 +32,9 @@ export interface ParseResult {
  */
 export async function parseOutcomeMapWithAI(
   markdown: string,
-  aiModel: string = "databricks-claude-sonnet-4-5"
+  aiModel?: string
 ): Promise<ParseResult> {
+  const endpoint = aiModel || getServingEndpoint();
   // Truncate very large documents to avoid exceeding context windows
   const MAX_CHARS = 80_000;
   const truncated =
@@ -47,7 +49,7 @@ export async function parseOutcomeMapWithAI(
       variables: {
         markdown_content: truncated,
       },
-      modelEndpoint: aiModel,
+      modelEndpoint: endpoint,
       temperature: 0.2,
       retries: 1,
       responseFormat: "json_object",

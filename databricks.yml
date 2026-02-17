@@ -11,9 +11,16 @@ apps:
       - name: sql-warehouse
         type: sql_warehouse
         description: "SQL Warehouse for metadata queries and generated SQL execution"
+      - name: serving-endpoint
+        type: serving_endpoint
+        description: "Model Serving endpoint for LLM inference (FMAPI)"
 
     env:
       - name: DATABRICKS_WAREHOUSE_ID
         value_from:
           resource: sql-warehouse
           key: id
+      - name: DATABRICKS_SERVING_ENDPOINT
+        value_from:
+          resource: serving-endpoint
+          key: name
