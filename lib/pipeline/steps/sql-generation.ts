@@ -10,6 +10,7 @@
 
 import { executeAIQuery, executeAIQueryStream } from "@/lib/ai/agent";
 import { executeSQL } from "@/lib/dbx/sql";
+import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
@@ -234,7 +235,8 @@ async function generateSqlForUseCase(
   // Fetch sample data if enabled
   let sampleDataSection = "";
   if (sampleRowsPerTable > 0 && uc.tablesInvolved.length > 0) {
-    sampleDataSection = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable);
+    const sampleResult = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable);
+    sampleDataSection = sampleResult.markdown;
   }
 
   // Build the per-use-case prompt variables
@@ -384,82 +386,6 @@ async function attemptSqlFix(
     });
     return null;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Sample data fetching
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch sample rows from each table and format as markdown tables for
- * prompt injection. Helps the LLM understand actual data values, formats,
- * and cardinality to write more precise SQL.
- *
- * Gracefully falls back to metadata-only when the user lacks SELECT
- * permission on a table -- the table is skipped and a warning is logged.
- */
-async function fetchSampleData(
-  tableFqns: string[],
-  rowLimit: number
-): Promise<string> {
-  const sections: string[] = [
-    "### SAMPLE DATA (real rows from the tables -- use this to understand data formats, values, and join keys)\n",
-  ];
-
-  const results = await Promise.allSettled(
-    tableFqns.map(async (fqn) => {
-      const cleanFqn = fqn.replace(/`/g, "");
-      const result = await executeSQL(
-        `SELECT * FROM \`${cleanFqn.split(".").join("\`.\`")}\` LIMIT ${rowLimit}`
-      );
-
-      if (!result.columns || result.columns.length === 0 || result.rows.length === 0) {
-        return { fqn: cleanFqn, markdown: `**${cleanFqn}**: (empty table)\n` };
-      }
-
-      const colNames = result.columns.map((c) => c.name);
-      const header = `| ${colNames.join(" | ")} |`;
-      const separator = `| ${colNames.map(() => "---").join(" | ")} |`;
-      const rows = result.rows.map((row) => {
-        const cells = row.map((val) => {
-          if (val === null || val === undefined) return "NULL";
-          const s = String(val);
-          return s.length > 60 ? s.substring(0, 57) + "..." : s;
-        });
-        return `| ${cells.join(" | ")} |`;
-      });
-
-      const markdown = `**${cleanFqn}** (${result.rows.length} sample rows):\n${header}\n${separator}\n${rows.join("\n")}\n`;
-      return { fqn: cleanFqn, markdown };
-    })
-  );
-
-  let skippedCount = 0;
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    if (r.status === "fulfilled") {
-      sections.push(r.value.markdown);
-    } else {
-      skippedCount++;
-      const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
-      const isPermission =
-        errMsg.includes("INSUFFICIENT_PERMISSIONS") ||
-        errMsg.includes("does not have SELECT") ||
-        errMsg.includes("ACCESS_DENIED");
-      logger.warn("Data sampling failed for table, falling back to metadata only", {
-        table: tableFqns[i],
-        reason: isPermission ? "insufficient SELECT permission" : errMsg,
-      });
-    }
-  }
-
-  if (skippedCount > 0) {
-    logger.info(
-      `Data sampling: ${results.length - skippedCount}/${results.length} tables sampled, ${skippedCount} skipped (falling back to metadata only for those)`
-    );
-  }
-
-  return sections.length > 1 ? sections.join("\n") : "";
 }
 
 // ---------------------------------------------------------------------------

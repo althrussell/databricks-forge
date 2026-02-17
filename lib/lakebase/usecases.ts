@@ -37,6 +37,10 @@ function dbRowToUseCase(row: {
   feasibilityScore: number | null;
   impactScore: number | null;
   overallScore: number | null;
+  userPriorityScore: number | null;
+  userFeasibilityScore: number | null;
+  userImpactScore: number | null;
+  userOverallScore: number | null;
   sqlCode: string | null;
   sqlStatus: string | null;
 }): UseCase {
@@ -59,6 +63,10 @@ function dbRowToUseCase(row: {
     feasibilityScore: row.feasibilityScore ?? 0,
     impactScore: row.impactScore ?? 0,
     overallScore: row.overallScore ?? 0,
+    userPriorityScore: row.userPriorityScore ?? null,
+    userFeasibilityScore: row.userFeasibilityScore ?? null,
+    userImpactScore: row.userImpactScore ?? null,
+    userOverallScore: row.userOverallScore ?? null,
     sqlCode: row.sqlCode ?? null,
     sqlStatus: row.sqlStatus ?? null,
   };

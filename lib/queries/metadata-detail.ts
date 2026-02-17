@@ -59,6 +59,7 @@ export async function describeDetail(
       comment: null, // filled later from information_schema
       sizeInBytes: parseIntSafe(col("sizeInBytes") ?? col("size_in_bytes")),
       numFiles: parseIntSafe(col("numFiles") ?? col("num_files")),
+      numRows: null, // populated later from TBLPROPERTIES (spark.sql.statistics.numRows)
       format: col("format"),
       partitionColumns: parseStringArray(partitionCols),
       clusteringColumns: parseStringArray(clusteringCols),
@@ -113,6 +114,7 @@ export function createFallbackDetail(
     comment: null,
     sizeInBytes: null,
     numFiles: null,
+    numRows: null,
     format: null,
     partitionColumns: [],
     clusteringColumns: [],
@@ -167,10 +169,15 @@ export async function describeHistory(
     const operationParamsIdx = colIdx("operationParameters") >= 0
       ? colIdx("operationParameters")
       : colIdx("operation_parameters");
+    const operationMetricsIdx = colIdx("operationMetrics") >= 0
+      ? colIdx("operationMetrics")
+      : colIdx("operation_metrics");
 
     const opCounts: Record<string, number> = {};
     let lastWriteTimestamp: string | null = null;
     let lastWriteOperation: string | null = null;
+    let lastWriteRows: number | null = null;
+    let lastWriteBytes: number | null = null;
     let lastOptimize: string | null = null;
     let lastVacuum: string | null = null;
     let totalWrite = 0;
@@ -185,6 +192,7 @@ export async function describeHistory(
       const ts = timestampIdx >= 0 ? row[timestampIdx] : null;
       const op = operationIdx >= 0 ? row[operationIdx] ?? "" : "";
       const opParams = operationParamsIdx >= 0 ? row[operationParamsIdx] ?? "" : "";
+      const opMetrics = operationMetricsIdx >= 0 ? row[operationMetricsIdx] ?? "" : "";
 
       opCounts[op] = (opCounts[op] ?? 0) + 1;
 
@@ -201,6 +209,14 @@ export async function describeHistory(
         if (!lastWriteTimestamp || (ts && ts > lastWriteTimestamp)) {
           lastWriteTimestamp = ts;
           lastWriteOperation = op;
+          // Parse operationMetrics for row/byte counts
+          if (opMetrics) {
+            try {
+              const metrics = typeof opMetrics === "string" ? JSON.parse(opMetrics) : opMetrics;
+              lastWriteRows = parseIntSafe(metrics.numOutputRows ?? metrics.numTargetRowsInserted ?? null);
+              lastWriteBytes = parseIntSafe(metrics.numOutputBytes ?? metrics.numAddedBytes ?? null);
+            } catch { /* skip malformed metrics */ }
+          }
         }
       }
 
@@ -224,6 +240,8 @@ export async function describeHistory(
       tableFqn,
       lastWriteTimestamp,
       lastWriteOperation,
+      lastWriteRows,
+      lastWriteBytes,
       totalWriteOps: totalWrite,
       totalStreamingOps: totalStreaming,
       totalOptimizeOps: totalOptimize,
@@ -431,6 +449,11 @@ export async function enrichTablesInBatches(
         // Merge properties into detail
         if (properties && Object.keys(properties).length > 0) {
           effectiveDetail.tableProperties = properties;
+          // Extract row count from computed statistics (available after ANALYZE TABLE)
+          const statsNumRows = properties["spark.sql.statistics.numRows"];
+          if (statsNumRows && effectiveDetail.numRows == null) {
+            effectiveDetail.numRows = parseIntSafe(statsNumRows);
+          }
         }
 
         return { fqn: t.fqn, detail: effectiveDetail, history, properties };
@@ -493,6 +516,8 @@ function emptyHistory(tableFqn: string): TableHistorySummary {
     tableFqn,
     lastWriteTimestamp: null,
     lastWriteOperation: null,
+    lastWriteRows: null,
+    lastWriteBytes: null,
     totalWriteOps: 0,
     totalStreamingOps: 0,
     totalOptimizeOps: 0,

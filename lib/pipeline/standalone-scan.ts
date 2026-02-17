@@ -279,6 +279,7 @@ export async function runStandaloneEnrichment(
     tableCount: expandedTables.length,
     totalSizeBytes: details.reduce((sum, d) => sum + (d.sizeInBytes ?? 0), 0),
     totalFiles: details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0),
+    totalRows: details.reduce((sum, d) => sum + (d.numRows ?? 0), 0),
     tablesWithStreaming: Array.from(histories.values()).filter((h) => h.hasStreamingWrites).length,
     tablesWithCDF: details.filter((d) => d.tableProperties["delta.enableChangeDataFeed"] === "true").length,
     tablesNeedingOptimize: Array.from(healthScores.values()).filter((h) => h.issues.some((i) => i.includes("OPTIMIZE"))).length,
@@ -296,6 +297,17 @@ export async function runStandaloneEnrichment(
   };
 
   const insightRecords: InsightRecord[] = [];
+
+  // Persist explicit FKs as insights so the ERD viewer can render them
+  for (const fk of allFKs) {
+    insightRecords.push({
+      insightType: "foreign_key",
+      tableFqn: fk.tableFqn,
+      payloadJson: JSON.stringify(fk),
+      severity: "info",
+    });
+  }
+
   if (intelligenceResult) {
     for (const s of intelligenceResult.sensitivities) {
       insightRecords.push({ insightType: "pii_detection", tableFqn: s.tableFqn, payloadJson: JSON.stringify(s), severity: s.classification === "PII" || s.classification === "Health" ? "critical" : "high" });
@@ -314,7 +326,7 @@ export async function runStandaloneEnrichment(
     }
   }
 
-  await saveEnvironmentScan(scan, details, historiesWithHealth, lineageGraph.edges, insightRecords);
+  await saveEnvironmentScan(scan, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
 
   updateScanProgress(scanId, {
     phase: "complete",

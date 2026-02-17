@@ -66,6 +66,12 @@ These are the core TypeScript types used throughout the app:
 | `MetadataSnapshot` | Cached UC metadata (tables, columns, FKs)        |
 | `ExportRecord`     | Record of an export (format, path, timestamp)    |
 | `PipelineStep`     | Enum of pipeline step identifiers                |
+| `EnvironmentScan`  | A completed estate scan (scope, counts, scores)  |
+| `TableDetail`      | Per-table structural + LLM metadata              |
+| `TableHistorySummary` | Delta history insights per table              |
+| `LineageEdge`      | Directed edge in the data lineage graph          |
+| `ERDGraph`         | Entity-relationship graph (nodes + edges)        |
+| `TableHealthInsight` | Health score + issues + recommendations        |
 
 ## Pipeline Steps (Discover Usecases)
 
@@ -80,6 +86,26 @@ The core pipeline runs these steps sequentially:
 7. **sql-generation** -- Generate bespoke SQL for each use case via Model Serving (streaming)
 
 Each step updates progress in Lakebase. The frontend polls for status.
+
+## Estate Scan Pipeline (Environment Intelligence)
+
+The estate pipeline (`lib/pipeline/standalone-scan.ts`) scans Unity Catalog
+metadata and applies LLM intelligence to produce a comprehensive view of the
+data estate. See `ESTATE_ANALYSIS.md` for full documentation.
+
+Key modules:
+- `lib/queries/metadata.ts` -- table/column discovery from `information_schema`
+- `lib/queries/metadata-detail.ts` -- DESCRIBE DETAIL/HISTORY/TBLPROPERTIES
+- `lib/queries/lineage.ts` -- BFS lineage walking via `system.access.table_lineage`
+- `lib/domain/health-score.ts` -- rule-based health scoring (10 rules)
+- `lib/pipeline/environment-intelligence.ts` -- 8 LLM passes (domains, PII, descriptions, redundancy, relationships, tiers, data products, governance)
+- `lib/export/erd-generator.ts` -- ERD graph builder + Mermaid export
+- `lib/export/environment-excel.ts` -- 12-sheet Excel report
+- `lib/lakebase/environment-scans.ts` -- persistence + aggregate estate view
+- `lib/pipeline/scan-progress.ts` -- in-memory progress tracker
+
+Data model: `ForgeEnvironmentScan`, `ForgeTableDetail`, `ForgeTableHistorySummary`,
+`ForgeTableLineage`, `ForgeTableInsight` (see Prisma schema).
 
 ## Infrastructure
 

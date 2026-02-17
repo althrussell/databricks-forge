@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -37,6 +38,8 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  Database,
+  Copy,
 } from "lucide-react";
 import type {
   PipelineRun,
@@ -45,7 +48,7 @@ import type {
   BusinessContext,
   StepLogEntry,
 } from "@/lib/domain/types";
-import { computeDomainStats } from "@/lib/domain/scoring";
+import { computeDomainStats, computeSchemaCoverage } from "@/lib/domain/scoring";
 import {
   type IndustryOutcome,
   type StrategicPriority,
@@ -82,6 +85,7 @@ export default function RunDetailPage({
   params: Promise<{ runId: string }>;
 }) {
   const { runId } = use(params);
+  const router = useRouter();
   const { getOutcome: getIndustryOutcome } = useIndustryOutcomes();
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
@@ -232,9 +236,32 @@ export default function RunDetailPage({
               })}`}
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/runs">Back to Runs</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {isCompleted && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  sessionStorage.setItem(
+                    "forge:duplicate-config",
+                    JSON.stringify(run.config)
+                  );
+                  router.push("/configure");
+                }}
+              >
+                <Copy className="mr-1 h-3.5 w-3.5" />
+                Duplicate Config
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/runs/compare?run=${runId}`}>Compare</Link>
+              </Button>
+            </>
+          )}
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/runs">Back to Runs</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Industry Outcome Map Banner */}
@@ -366,7 +393,7 @@ export default function RunDetailPage({
                     Run Configuration
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <ConfigField label="AI Model" value={run.config.aiModel} />
                     <ConfigField
@@ -395,6 +422,24 @@ export default function RunDetailPage({
                       }
                     />
                   </div>
+                  {/* Data Sampling indicator */}
+                  {run.config.sampleRowsPerTable > 0 ? (
+                    <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
+                      <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <p className="text-sm text-blue-800 dark:text-blue-300">
+                        <span className="font-medium">Data sampling enabled</span>
+                        {" \u2014 "}
+                        {run.config.sampleRowsPerTable} rows per table sampled during discovery and SQL generation
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-md border border-muted px-3 py-2">
+                      <Database className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        Data sampling disabled — metadata only (no row-level data read)
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -430,6 +475,9 @@ export default function RunDetailPage({
                 </div>
               )}
 
+              {/* Schema Coverage -- expansion signals */}
+              {useCases.length > 0 && <SchemaCoverageCard useCases={useCases} />}
+
               {/* Industry Coverage Analysis */}
               {run.config.industry && useCases.length > 0 && (
                 <IndustryCoverageCard
@@ -461,7 +509,29 @@ export default function RunDetailPage({
             {/* Use Cases Tab */}
             <TabsContent value="usecases" className="pt-4">
               {useCases.length > 0 ? (
-                <UseCaseTable useCases={useCases} />
+                <UseCaseTable
+                  useCases={useCases}
+                  onUpdate={async (updated) => {
+                    try {
+                      const res = await fetch(`/api/runs/${runId}/usecases/${updated.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          name: updated.name,
+                          statement: updated.statement,
+                          tablesInvolved: updated.tablesInvolved,
+                        }),
+                      });
+                      if (res.ok) {
+                        setUseCases((prev) =>
+                          prev.map((uc) => (uc.id === updated.id ? updated : uc))
+                        );
+                      }
+                    } catch {
+                      // Handled by toast in the table component
+                    }
+                  }}
+                />
               ) : (
                 <Card className="border-dashed">
                   <CardContent className="flex flex-col items-center justify-center py-12">
@@ -516,6 +586,91 @@ function SummaryCard({ title, value }: { title: string; value: string }) {
       <CardContent className="pt-6">
         <p className="text-sm text-muted-foreground">{title}</p>
         <p className="text-2xl font-bold">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SchemaCoverageCard({ useCases }: { useCases: UseCase[] }) {
+  // Derive all unique tables referenced by use cases
+  const allReferencedTables = new Set<string>();
+  for (const uc of useCases) {
+    for (const fqn of uc.tablesInvolved) {
+      allReferencedTables.add(fqn.replace(/`/g, ""));
+    }
+  }
+
+  // Count per-table references
+  const tableCounts = new Map<string, number>();
+  for (const uc of useCases) {
+    for (const fqn of uc.tablesInvolved) {
+      const clean = fqn.replace(/`/g, "");
+      tableCounts.set(clean, (tableCounts.get(clean) ?? 0) + 1);
+    }
+  }
+
+  const topTables = [...tableCounts.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10);
+
+  if (allReferencedTables.size === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Database className="h-4 w-4 text-emerald-500" />
+          Schema Coverage
+        </CardTitle>
+        <CardDescription>
+          Tables referenced by generated use cases -- most-referenced tables represent your highest-value data assets
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+          <div>
+            <p className="text-xs text-muted-foreground">Tables Referenced</p>
+            <p className="text-lg font-bold">{allReferencedTables.size}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Unique Table-UC Links</p>
+            <p className="text-lg font-bold">
+              {[...tableCounts.values()].reduce((s, v) => s + v, 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Avg Use Cases per Table</p>
+            <p className="text-lg font-bold">
+              {allReferencedTables.size > 0
+                ? (
+                    [...tableCounts.values()].reduce((s, v) => s + v, 0) /
+                    allReferencedTables.size
+                  ).toFixed(1)
+                : "0"}
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Most-Referenced Tables (highest-value data assets)
+          </p>
+          <div className="space-y-1.5">
+            {topTables.map(([fqn, count]) => (
+              <div
+                key={fqn}
+                className="flex items-center justify-between rounded-md border px-3 py-1.5"
+              >
+                <span className="truncate font-mono text-xs">{fqn}</span>
+                <Badge variant="secondary" className="ml-2 shrink-0">
+                  {count} use case{count !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

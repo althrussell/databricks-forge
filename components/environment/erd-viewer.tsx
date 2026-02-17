@@ -36,16 +36,34 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import type { ERDGraph } from "@/lib/domain/types";
 
+// Helpers for compact display in ERD nodes
+function humanizeCount(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function humanizeBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
 // ---------------------------------------------------------------------------
 // Table node component
 // ---------------------------------------------------------------------------
 
 interface TableNodeData {
   label: string;
+  tableFqn: string;
+  description: string | null;
   domain: string | null;
   tier: string | null;
   hasPII: boolean;
   columnCount: number;
+  rowCount: number | null;
+  size: number | null;
   columns: Array<{ name: string; type: string; isPK: boolean; isFK: boolean }>;
   expanded: boolean;
   onToggle: () => void;
@@ -53,8 +71,14 @@ interface TableNodeData {
 }
 
 function TableNode({ data }: { data: TableNodeData }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm min-w-[200px] max-w-[300px]">
+    <div
+      className="relative rounded-lg border bg-card text-card-foreground shadow-sm min-w-[200px] max-w-[300px]"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <Handle type="target" position={Position.Left} className="!bg-blue-500" />
       <Handle type="source" position={Position.Right} className="!bg-blue-500" />
 
@@ -108,8 +132,72 @@ function TableNode({ data }: { data: TableNodeData }) {
           )}
         </div>
       ) : (
-        <div className="px-3 py-1.5 text-xs text-muted-foreground">
-          {data.columnCount} columns
+        <div className="px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+          <span>{data.columnCount} cols</span>
+          {data.rowCount != null && data.rowCount > 0 && (
+            <span className="tabular-nums">{humanizeCount(data.rowCount)} rows</span>
+          )}
+          {data.size != null && data.size > 0 && (
+            <span className="tabular-nums">{humanizeBytes(data.size)}</span>
+          )}
+        </div>
+      )}
+
+      {/* Hover tooltip: description + full column list */}
+      {hovered && !data.expanded && (data.description || data.columns.length > 0) && (
+        <div className="absolute z-50 left-full top-0 ml-2 w-[320px] max-h-[400px] overflow-y-auto rounded-lg border bg-popover text-popover-foreground shadow-lg p-3 text-xs">
+          {/* FQN */}
+          <p className="font-mono text-[10px] text-muted-foreground mb-1 break-all">
+            {data.tableFqn}
+          </p>
+
+          {/* Description */}
+          {data.description && (
+            <p className="text-sm text-foreground mb-2 leading-relaxed">
+              {data.description}
+            </p>
+          )}
+
+          {/* Stats row */}
+          <div className="flex items-center gap-3 text-muted-foreground mb-2 flex-wrap">
+            <span>{data.columnCount} columns</span>
+            {data.rowCount != null && data.rowCount > 0 && (
+              <span>{humanizeCount(data.rowCount)} rows</span>
+            )}
+            {data.size != null && data.size > 0 && (
+              <span>{humanizeBytes(data.size)}</span>
+            )}
+          </div>
+
+          {/* Column list */}
+          {data.columns.length > 0 && (
+            <div className="border-t pt-2 space-y-0.5">
+              {data.columns.slice(0, 30).map((col) => (
+                <div
+                  key={col.name}
+                  className="flex items-center gap-1 py-0.5"
+                >
+                  {col.isPK && (
+                    <span className="text-yellow-600 font-bold text-[10px]">PK</span>
+                  )}
+                  {col.isFK && (
+                    <span className="text-blue-600 font-bold text-[10px]">FK</span>
+                  )}
+                  <span className="font-mono text-foreground truncate">
+                    {col.name}
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted-foreground/70 shrink-0">
+                    {col.type}
+                  </span>
+                </div>
+              ))}
+              {data.columns.length > 30 && (
+                <p className="text-muted-foreground/60 pt-1">
+                  +{data.columns.length - 30} more columns
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -215,10 +303,14 @@ export function ERDViewer({ graph }: ERDViewerProps) {
       position: { x: n.x, y: n.y },
       data: {
         label: n.displayName,
+        tableFqn: n.tableFqn,
+        description: n.description,
         domain: n.domain,
         tier: n.tier,
         hasPII: n.hasPII,
         columnCount: n.columns.length,
+        rowCount: n.rowCount,
+        size: n.size,
         columns: n.columns,
         expanded: expandedNodes.has(n.tableFqn),
         onToggle: () => toggleNode(n.tableFqn),

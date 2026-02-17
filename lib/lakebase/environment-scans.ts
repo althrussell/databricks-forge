@@ -13,6 +13,7 @@ import type {
   TableHistorySummary,
   LineageEdge,
   TableHealthInsight,
+  ColumnInfo,
 } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
@@ -38,9 +39,22 @@ export async function saveEnvironmentScan(
   details: TableDetail[],
   histories: Array<TableHistorySummary & TableHealthInsight>,
   lineageEdges: LineageEdge[],
-  insights: InsightRecord[]
+  insights: InsightRecord[],
+  columns: ColumnInfo[] = []
 ): Promise<void> {
   const prisma = await getPrisma();
+
+  // Build a per-table column lookup
+  const columnsByTable = new Map<string, Array<{ name: string; type: string; nullable: boolean; comment: string | null }>>();
+  for (const col of columns) {
+    if (!columnsByTable.has(col.tableFqn)) columnsByTable.set(col.tableFqn, []);
+    columnsByTable.get(col.tableFqn)!.push({
+      name: col.columnName,
+      type: col.dataType,
+      nullable: col.isNullable,
+      comment: col.comment,
+    });
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -54,6 +68,7 @@ export async function saveEnvironmentScan(
           tableCount: scan.tableCount,
           totalSizeBytes: BigInt(scan.totalSizeBytes),
           totalFiles: scan.totalFiles,
+          totalRows: BigInt(scan.totalRows),
           tablesWithStreaming: scan.tablesWithStreaming,
           tablesWithCDF: scan.tablesWithCDF,
           tablesNeedingOptimize: scan.tablesNeedingOptimize,
@@ -70,6 +85,12 @@ export async function saveEnvironmentScan(
         },
         update: {},
       });
+
+      // Build a lookup for health scores from histories
+      const healthScoreMap = new Map<string, number>();
+      for (const h of histories) {
+        healthScoreMap.set(h.tableFqn, h.healthScore);
+      }
 
       // 2. Insert table details
       if (details.length > 0) {
@@ -90,6 +111,7 @@ export async function saveEnvironmentScan(
             owner: d.owner,
             sizeInBytes: d.sizeInBytes != null ? BigInt(d.sizeInBytes) : null,
             numFiles: d.numFiles,
+            numRows: d.numRows != null ? BigInt(d.numRows) : null,
             partitionColumns: JSON.stringify(d.partitionColumns),
             clusteringColumns: JSON.stringify(d.clusteringColumns),
             deltaMinReaderVersion: d.deltaMinReaderVersion,
@@ -98,6 +120,7 @@ export async function saveEnvironmentScan(
             autoOptimize: d.tableProperties["delta.autoOptimize.optimizeWrite"] === "true",
             tableCreatedAt: d.createdAt,
             lastModified: d.lastModified,
+            columnsJson: JSON.stringify(columnsByTable.get(d.fqn) ?? []),
             propertiesJson: JSON.stringify(d.tableProperties),
             tagsJson: null,
             columnTagsJson: null,
@@ -106,7 +129,7 @@ export async function saveEnvironmentScan(
             dataTier: d.dataTier,
             sensitivityLevel: d.sensitivityLevel,
             governancePriority: d.governancePriority,
-            governanceScore: null,
+            governanceScore: healthScoreMap.get(d.fqn) ?? null,
             discoveredVia: d.discoveredVia,
           })),
           skipDuplicates: true,
@@ -121,6 +144,8 @@ export async function saveEnvironmentScan(
             tableFqn: h.tableFqn,
             lastWriteTimestamp: h.lastWriteTimestamp,
             lastWriteOperation: h.lastWriteOperation,
+            lastWriteRows: h.lastWriteRows != null ? BigInt(h.lastWriteRows) : null,
+            lastWriteBytes: h.lastWriteBytes != null ? BigInt(h.lastWriteBytes) : null,
             totalWriteOps: h.totalWriteOps,
             totalStreamingOps: h.totalStreamingOps,
             totalOptimizeOps: h.totalOptimizeOps,
@@ -249,6 +274,7 @@ export interface AggregateEstateView {
     totalTables: number;
     totalScans: number;
     totalSizeBytes: string;
+    totalRows: string;
     domainCount: number;
     piiTablesCount: number;
     avgGovernanceScore: number;
@@ -296,6 +322,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
         totalTables: 0,
         totalScans: 0,
         totalSizeBytes: "0",
+        totalRows: "0",
         domainCount: 0,
         piiTablesCount: 0,
         avgGovernanceScore: 0,
@@ -370,6 +397,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
   const govScores = mergedDetails.filter((d) => d.governanceScore != null).map((d) => d.governanceScore!);
   const avgGov = govScores.length > 0 ? govScores.reduce((a, b) => a + b, 0) / govScores.length : 0;
   const totalSize = mergedDetails.reduce((sum, d) => sum + (d.sizeInBytes ?? BigInt(0)), BigInt(0));
+  const totalRows = mergedDetails.reduce((sum, d) => sum + (d.numRows ?? BigInt(0)), BigInt(0));
 
   // Coverage: which scans contributed
   const coverageByScope = scans.map((s) => ({
@@ -382,12 +410,20 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
 
   // Serialize — strip the `scan` relation from each record for JSON
   const serializeDetail = (d: typeof mergedDetails[number]) => {
-    const { scan: _scan, sizeInBytes, ...rest } = d;
-    return { ...rest, sizeInBytes: sizeInBytes?.toString() ?? null };
+    const { scan: _scan, sizeInBytes, numRows, ...rest } = d;
+    return {
+      ...rest,
+      sizeInBytes: sizeInBytes?.toString() ?? null,
+      numRows: numRows?.toString() ?? null,
+    };
   };
   const serializeHistory = (h: typeof mergedHistories[number]) => {
-    const { scan: _scan, ...rest } = h;
-    return rest;
+    const { scan: _scan, lastWriteRows, lastWriteBytes, ...rest } = h;
+    return {
+      ...rest,
+      lastWriteRows: lastWriteRows?.toString() ?? null,
+      lastWriteBytes: lastWriteBytes?.toString() ?? null,
+    };
   };
   const serializeLineage = (l: typeof mergedLineage[number]) => {
     const { scan: _scan, ...rest } = l;
@@ -407,6 +443,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
       totalTables: mergedDetails.length,
       totalScans: scans.length,
       totalSizeBytes: totalSize.toString(),
+      totalRows: totalRows.toString(),
       domainCount: domains.size,
       piiTablesCount: piiCount,
       avgGovernanceScore: avgGov,

@@ -6,7 +6,7 @@
  */
 
 export interface AppSettings {
-  /** Number of sample rows to fetch per table for SQL generation (0 = disabled) */
+  /** Number of sample rows to fetch per table for discovery & SQL generation (0 = disabled) */
   sampleRowsPerTable: number;
   /** Default export format */
   defaultExportFormat: string;

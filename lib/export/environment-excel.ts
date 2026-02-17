@@ -1,12 +1,14 @@
 /**
  * Environment Report Excel Export.
  *
- * Generates a Databricks-branded 12-sheet .xlsx workbook with full
+ * Generates a Databricks-branded 13-sheet .xlsx workbook with full
  * environment scan results including domains, PII, lineage, health,
- * governance, and data products.
+ * governance, data products, and Databricks feature adoption analysis.
  */
 
 import ExcelJS from "exceljs";
+import { computeFeatureAdoption } from "@/lib/domain/feature-adoption";
+import { computeDataMaturity } from "@/lib/domain/data-maturity";
 
 // ---------------------------------------------------------------------------
 // Brand constants (ARGB format for ExcelJS)
@@ -78,6 +80,16 @@ function humanSize(bytes: number | bigint | null | undefined): string {
   return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+function humanNumber(n: number | bigint | null | undefined): string {
+  if (n == null) return "—";
+  const v = typeof n === "bigint" ? Number(n) : n;
+  if (v === 0) return "0";
+  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return v.toLocaleString();
+}
+
 function safeJSON<T>(json: string | null | undefined, fallback: T): T {
   if (!json) return fallback;
   try { return JSON.parse(json) as T; } catch { return fallback; }
@@ -121,6 +133,7 @@ interface ScanWithRelations {
     owner: string | null;
     sizeInBytes: bigint | null;
     numFiles: number | null;
+    numRows: bigint | null;
     partitionColumns: string | null;
     clusteringColumns: string | null;
     dataDomain: string | null;
@@ -138,6 +151,8 @@ interface ScanWithRelations {
   }>;
   histories: Array<{
     tableFqn: string;
+    lastWriteRows: bigint | null;
+    lastWriteBytes: bigint | null;
     totalWriteOps: number;
     totalStreamingOps: number;
     totalOptimizeOps: number;
@@ -196,6 +211,7 @@ export async function generateEnvironmentExcel(
   addLineage(wb, scan);
   addHistoryInsights(wb, scan);
   addTagsProperties(wb, scan);
+  addFeatureAdoption(wb, scan);
 
   const arrayBuffer = await wb.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);
@@ -212,7 +228,41 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     { header: "Value", key: "value", width: 30 },
   ];
 
-  const rows = [
+  // Compute Data Maturity Score
+  const adoption = computeFeatureAdoption(scan.details, scan.histories);
+  const maturity = computeDataMaturity({
+    tableCount: scan.tableCount,
+    avgGovernanceScore: scan.avgGovernanceScore,
+    piiTablesCount: scan.piiTablesCount,
+    tablesWithDescription: scan.details.filter((d) => d.comment || d.generatedDescription).length,
+    tablesWithTags: scan.details.filter((d) => {
+      try { return JSON.parse(d.tagsJson ?? "[]").length > 0; } catch { return false; }
+    }).length,
+    tablesWithOwner: scan.details.filter((d) => d.owner).length,
+    tablesWithTier: scan.details.filter((d) => d.dataTier).length,
+    tierCount: new Set(scan.details.map((d) => d.dataTier).filter(Boolean)).size,
+    redundancyPairsCount: scan.redundancyPairsCount,
+    dataProductCount: scan.dataProductCount,
+    lineageEdgeCount: scan.lineage.length,
+    lineageDiscoveredCount: scan.lineageDiscoveredCount,
+    domainCount: scan.domainCount,
+    tablesNeedingOptimize: scan.tablesNeedingOptimize,
+    tablesNeedingVacuum: scan.tablesNeedingVacuum,
+    tablesWithStreaming: scan.tablesWithStreaming,
+    tablesWithCDF: scan.tablesWithCDF,
+    avgHealthScore: scan.histories.reduce((s, h) => s + (h.healthScore ?? 0), 0) / Math.max(scan.histories.length, 1),
+    tablesWithAutoOptimize: adoption.stats.autoOptimizeCount,
+    tablesWithLiquidClustering: adoption.stats.liquidClusteringCount,
+  });
+
+  const rows: Array<{ metric: string; value: string | number }> = [
+    { metric: "DATA MATURITY SCORE", value: `${maturity.overall}/100 — ${maturity.level}` },
+    { metric: "  Governance Pillar", value: `${maturity.pillars.governance.score}/100` },
+    { metric: "  Architecture Pillar", value: `${maturity.pillars.architecture.score}/100` },
+    { metric: "  Operations Pillar", value: `${maturity.pillars.operations.score}/100` },
+    { metric: "  Analytics Readiness Pillar", value: `${maturity.pillars.analyticsReadiness.score}/100` },
+    { metric: "FEATURE ADOPTION SCORE", value: `${adoption.adoptionScore}/100` },
+    { metric: "", value: "" },
     { metric: "Scan ID", value: scan.scanId },
     { metric: "UC Scope", value: scan.ucPath },
     { metric: "Scanned At", value: scan.createdAt.toISOString() },
@@ -220,6 +270,7 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     { metric: "Total Tables", value: scan.tableCount },
     { metric: "Tables via Lineage Discovery", value: scan.lineageDiscoveredCount },
     { metric: "Total Size", value: humanSize(scan.totalSizeBytes) },
+    { metric: "Total Rows", value: humanNumber(scan.details.reduce((sum, d) => sum + Number(d.numRows ?? 0), 0)) },
     { metric: "Total Files", value: scan.totalFiles },
     { metric: "Managed vs External", value: `${scan.details.filter((d) => d.isManaged).length} / ${scan.details.filter((d) => !d.isManaged).length}` },
     { metric: "Tables with Streaming", value: scan.tablesWithStreaming },
@@ -233,7 +284,13 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     { metric: "Avg Governance Score", value: scan.avgGovernanceScore.toFixed(1) },
   ];
 
-  for (const r of rows) sheet.addRow(r);
+  for (const r of rows) {
+    const row = sheet.addRow(r);
+    // Bold the headline maturity/adoption rows
+    if (typeof r.metric === "string" && r.metric.startsWith("DATA MATURITY") || r.metric.startsWith("FEATURE ADOPTION")) {
+      row.eachCell((cell) => { cell.font = { bold: true, size: 12 }; });
+    }
+  }
   styleHeaderRow(sheet);
   styleDataRows(sheet, 2, rows.length + 1);
 }
@@ -253,6 +310,7 @@ function addTableInventory(wb: ExcelJS.Workbook, scan: ScanWithRelations): void 
     { header: "Format", key: "format", width: 10 },
     { header: "Owner", key: "owner", width: 20 },
     { header: "Size", key: "size", width: 12 },
+    { header: "Rows", key: "rows", width: 12 },
     { header: "Files", key: "files", width: 8 },
     { header: "Managed", key: "managed", width: 10 },
     { header: "Description", key: "description", width: 50 },
@@ -271,6 +329,7 @@ function addTableInventory(wb: ExcelJS.Workbook, scan: ScanWithRelations): void 
       format: d.format ?? "—",
       owner: d.owner ?? "—",
       size: humanSize(d.sizeInBytes),
+      rows: humanNumber(d.numRows),
       files: d.numFiles ?? "—",
       managed: d.isManaged ? "Managed" : "External",
       description: d.comment ?? d.generatedDescription ?? "—",
@@ -597,6 +656,8 @@ function addHistoryInsights(wb: ExcelJS.Workbook, scan: ScanWithRelations): void
     { header: "VACUUM", key: "vacuum", width: 12 },
     { header: "MERGE", key: "merge", width: 10 },
     { header: "Last Write", key: "lastWrite", width: 20 },
+    { header: "Last Write Rows", key: "lastWriteRows", width: 16 },
+    { header: "Last Write Bytes", key: "lastWriteBytes", width: 16 },
     { header: "History Span", key: "span", width: 14 },
   ];
 
@@ -609,6 +670,8 @@ function addHistoryInsights(wb: ExcelJS.Workbook, scan: ScanWithRelations): void
       vacuum: h.totalVacuumOps,
       merge: h.totalMergeOps,
       lastWrite: h.lastWriteTimestamp ?? "—",
+      lastWriteRows: humanNumber(h.lastWriteRows),
+      lastWriteBytes: humanSize(h.lastWriteBytes),
       span: `${h.historyDays} days`,
     });
   }
@@ -649,4 +712,96 @@ function addTagsProperties(wb: ExcelJS.Workbook, scan: ScanWithRelations): void 
 
   styleHeaderRow(sheet);
   styleDataRows(sheet, 2, rowNum);
+}
+
+// ---------------------------------------------------------------------------
+// Sheet 13: Feature Adoption
+// ---------------------------------------------------------------------------
+
+function addFeatureAdoption(wb: ExcelJS.Workbook, scan: ScanWithRelations): void {
+  const adoption = computeFeatureAdoption(scan.details, scan.histories);
+
+  const sheet = wb.addWorksheet("Feature Adoption");
+  sheet.columns = [
+    { header: "Feature", key: "feature", width: 28 },
+    { header: "Category", key: "category", width: 16 },
+    { header: "Severity", key: "severity", width: 12 },
+    { header: "Current State", key: "current", width: 60 },
+    { header: "Recommendation", key: "recommendation", width: 70 },
+    { header: "Tables Affected", key: "affected", width: 16 },
+    { header: "Example Tables", key: "examples", width: 60 },
+  ];
+
+  // Add adoption score as first row
+  const scoreRow = sheet.addRow({
+    feature: "OVERALL ADOPTION SCORE",
+    category: "",
+    severity: "",
+    current: `${adoption.adoptionScore}/100`,
+    recommendation: adoption.adoptionScore >= 80
+      ? "Strong feature adoption. Focus on remaining gaps."
+      : adoption.adoptionScore >= 50
+        ? "Moderate adoption. Several opportunities to improve performance and governance."
+        : "Low adoption. Significant opportunities to leverage Databricks platform features.",
+    affected: "",
+    examples: "",
+  });
+  scoreRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 12 };
+  });
+
+  // Add findings
+  for (const f of adoption.findings) {
+    const row = sheet.addRow({
+      feature: f.feature,
+      category: f.category,
+      severity: f.severity,
+      current: f.current,
+      recommendation: f.recommendation,
+      affected: f.tablesAffected,
+      examples: f.tables.join(", "),
+    });
+
+    const sevCell = row.getCell("severity");
+    const { fill, font } = f.severity === "high"
+      ? { fill: RED_FILL, font: RED_FONT }
+      : f.severity === "medium"
+        ? { fill: AMBER_FILL, font: AMBER_FONT }
+        : { fill: GREEN_FILL, font: GREEN_FONT };
+    sevCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+    sevCell.font = { color: { argb: font }, bold: true };
+  }
+
+  // Summary stats below findings
+  sheet.addRow({});
+  const statsHeader = sheet.addRow({
+    feature: "STATISTICS",
+    category: "Value",
+  });
+  statsHeader.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: WHITE } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DATABRICKS_BLUE } };
+  });
+
+  const stats = [
+    ["Total Tables", adoption.stats.totalTables],
+    ["Delta Tables", adoption.stats.deltaTableCount],
+    ["Liquid Clustering", adoption.stats.liquidClusteringCount],
+    ["Legacy Partitioning", adoption.stats.legacyPartitionCount],
+    ["CDF Enabled", adoption.stats.cdfEnabledCount],
+    ["Streaming Without CDF", adoption.stats.streamingWithoutCdfCount],
+    ["Auto-Optimize Enabled", adoption.stats.autoOptimizeCount],
+    ["Large Tables Without Auto-Optimize", adoption.stats.largeWithoutAutoOptimize],
+    ["Outdated Delta Protocol", adoption.stats.outdatedProtocolCount],
+    ["Without Description", adoption.stats.tablesWithoutDescription],
+    ["Without Owner", adoption.stats.tablesWithoutOwner],
+    ["With UC Tags", adoption.stats.tablesWithTags],
+  ] as const;
+  for (const [metric, value] of stats) {
+    sheet.addRow({ feature: metric, category: String(value) });
+  }
+
+  styleHeaderRow(sheet);
+  const lastRow = adoption.findings.length + stats.length + 4;
+  styleDataRows(sheet, 2, lastRow);
 }

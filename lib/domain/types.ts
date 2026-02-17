@@ -89,7 +89,7 @@ export interface PipelineRunConfig {
   generationPath: string;
   languages: SupportedLanguage[];
   aiModel: string;
-  sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for SQL gen
+  sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for discovery & SQL gen
   industry: string; // industry outcome map id, empty = not selected
 }
 
@@ -161,6 +161,11 @@ export interface UseCase {
   feasibilityScore: number;
   impactScore: number;
   overallScore: number;
+  /** User-adjusted scores (null = user hasn't overridden system score) */
+  userPriorityScore: number | null;
+  userFeasibilityScore: number | null;
+  userImpactScore: number | null;
+  userOverallScore: number | null;
   sqlCode: string | null;
   sqlStatus: string | null;
 }
@@ -255,9 +260,10 @@ export interface TableDetail {
   tableType: string;
   comment: string | null;
 
-  /** DESCRIBE DETAIL fields */
+  /** DESCRIBE DETAIL fields + statistics */
   sizeInBytes: number | null;
   numFiles: number | null;
+  numRows: number | null; // from spark.sql.statistics.numRows (ANALYZE TABLE) or operationMetrics
   format: string | null; // delta, parquet, csv, etc.
   partitionColumns: string[];
   clusteringColumns: string[];
@@ -292,6 +298,8 @@ export interface TableHistorySummary {
   tableFqn: string;
   lastWriteTimestamp: string | null;
   lastWriteOperation: string | null;
+  lastWriteRows: number | null; // numOutputRows from the latest write's operationMetrics
+  lastWriteBytes: number | null; // numOutputBytes from the latest write's operationMetrics
   totalWriteOps: number;
   totalStreamingOps: number;
   totalOptimizeOps: number;
@@ -424,6 +432,7 @@ export interface EnvironmentScan {
   tableCount: number;
   totalSizeBytes: number;
   totalFiles: number;
+  totalRows: number; // sum of numRows across all tables (where available)
   tablesWithStreaming: number;
   tablesWithCDF: number;
   tablesNeedingOptimize: number;
@@ -459,6 +468,7 @@ export interface IntelligenceResult {
 export interface ERDNode {
   tableFqn: string;
   displayName: string;
+  description: string | null;
   columns: Array<{
     name: string;
     type: string;
@@ -469,6 +479,7 @@ export interface ERDNode {
   tier: DataTier | null;
   hasPII: boolean;
   size: number | null;
+  rowCount: number | null;
   x: number;
   y: number;
 }

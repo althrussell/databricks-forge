@@ -29,9 +29,16 @@ export async function GET(
     const serialized = {
       ...scan,
       totalSizeBytes: scan.totalSizeBytes.toString(),
+      totalRows: scan.totalRows.toString(),
       details: scan.details.map((d) => ({
         ...d,
         sizeInBytes: d.sizeInBytes?.toString() ?? null,
+        numRows: d.numRows?.toString() ?? null,
+      })),
+      histories: scan.histories.map((h) => ({
+        ...h,
+        lastWriteRows: h.lastWriteRows?.toString() ?? null,
+        lastWriteBytes: h.lastWriteBytes?.toString() ?? null,
       })),
     };
 

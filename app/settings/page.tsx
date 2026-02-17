@@ -153,9 +153,11 @@ export default function SettingsPage() {
             Data Sampling
           </CardTitle>
           <CardDescription>
-            Control whether sample rows are fetched from tables during SQL
-            generation. More rows give the AI richer context to write precise
-            queries, at the cost of reading row-level data and longer run times.
+            Control whether sample rows are fetched from tables during use case
+            discovery and SQL generation. Real data values help the AI understand
+            what each table contains, producing more relevant use cases and
+            more accurate SQL queries. Trade-off: reads row-level data and
+            increases run time.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -186,10 +188,12 @@ export default function SettingsPage() {
                   Privacy &amp; data access
                 </p>
                 <p className="mt-1">
-                  When data sampling is enabled, Forge AI reads a small number
-                  of rows from each table involved in a use case. This data is
-                  sent to the AI model alongside the schema to improve SQL
-                  accuracy. Sampled data is <strong>not</strong> persisted.
+                When data sampling is enabled, Forge AI reads a small number
+                of rows from each table during use case discovery and SQL
+                generation. This data is sent to the AI model alongside the
+                schema so it can understand real data values, formats, and
+                patterns -- producing better use cases and more accurate SQL.
+                Sampled data is <strong>not</strong> persisted.
                 </p>
               </div>
             </div>

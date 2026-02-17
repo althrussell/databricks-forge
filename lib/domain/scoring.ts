@@ -87,3 +87,68 @@ export function computeDomainStats(useCases: UseCase[]): DomainStats[] {
     }))
     .sort((a, b) => b.avgScore - a.avgScore);
 }
+
+// ---------------------------------------------------------------------------
+// Schema Coverage Analysis
+// ---------------------------------------------------------------------------
+
+export interface SchemaCoverage {
+  /** Total tables in the filtered estate */
+  totalTables: number;
+  /** Tables referenced by at least one use case */
+  coveredTables: number;
+  /** Tables not referenced by any use case (expansion signals) */
+  uncoveredTables: string[];
+  /** Coverage percentage */
+  coveragePct: number;
+  /** Tables with most use case references (most valuable data assets) */
+  topTables: Array<{ fqn: string; useCaseCount: number }>;
+}
+
+/**
+ * Compute which tables from the estate have use cases and which don't.
+ * Uncovered tables in data-rich domains are expansion signals for account teams.
+ */
+export function computeSchemaCoverage(
+  filteredTables: string[],
+  useCases: UseCase[]
+): SchemaCoverage {
+  // Build a count of how many use cases reference each table
+  const tableCounts = new Map<string, number>();
+  for (const fqn of filteredTables) {
+    tableCounts.set(fqn.replace(/`/g, ""), 0);
+  }
+  for (const uc of useCases) {
+    for (const fqn of uc.tablesInvolved) {
+      const clean = fqn.replace(/`/g, "");
+      tableCounts.set(clean, (tableCounts.get(clean) ?? 0) + 1);
+    }
+  }
+
+  const covered: string[] = [];
+  const uncovered: string[] = [];
+  for (const [fqn, count] of tableCounts) {
+    if (count > 0) {
+      covered.push(fqn);
+    } else {
+      uncovered.push(fqn);
+    }
+  }
+
+  // Top tables by use case count
+  const topTables = [...tableCounts.entries()]
+    .filter(([, count]) => count > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 20)
+    .map(([fqn, useCaseCount]) => ({ fqn, useCaseCount }));
+
+  return {
+    totalTables: filteredTables.length,
+    coveredTables: covered.length,
+    uncoveredTables: uncovered,
+    coveragePct: filteredTables.length > 0
+      ? Math.round((covered.length / filteredTables.length) * 100)
+      : 0,
+    topTables,
+  };
+}

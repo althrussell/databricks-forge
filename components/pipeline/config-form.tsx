@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,6 +106,28 @@ export function ConfigForm() {
   const [selectedLanguages, setSelectedLanguages] = useState<
     SupportedLanguage[]
   >(["English"]);
+
+  // Hydrate from sessionStorage (for "Duplicate Config" flow)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("forge:duplicate-config");
+      if (!raw) return;
+      sessionStorage.removeItem("forge:duplicate-config");
+      const cfg = JSON.parse(raw);
+      if (cfg.businessName) setBusinessName(cfg.businessName);
+      if (cfg.industry) setIndustry(cfg.industry);
+      if (cfg.ucMetadata) {
+        setManualMode(true);
+        setManualInput(cfg.ucMetadata);
+      }
+      if (cfg.businessDomains?.length) setBusinessDomains(cfg.businessDomains);
+      if (cfg.businessPriorities?.length) setSelectedPriorities(cfg.businessPriorities);
+      if (cfg.strategicGoals) setStrategicGoals(cfg.strategicGoals);
+      if (cfg.languages?.length) setSelectedLanguages(cfg.languages);
+    } catch {
+      // Ignore malformed data
+    }
+  }, []);
 
   const togglePriority = (priority: BusinessPriority) => {
     setSelectedPriorities((prev) =>
