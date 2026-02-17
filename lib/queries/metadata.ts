@@ -142,7 +142,10 @@ export async function listCatalogs(): Promise<string[]> {
 
 async function listCatalogsOnce(): Promise<string[]> {
   // ── Fast path: single query via system.information_schema ──────────
-  let fastPathError: unknown = null;
+  // Note: system.information_schema.schemata may return catalogs the user
+  // can BROWSE but not USE. We still need to probe each candidate to
+  // verify USE CATALOG permission before presenting them in the UI.
+  let candidates: string[] | null = null;
   try {
     const result = await executeSQL(`
       SELECT DISTINCT catalog_name
@@ -150,12 +153,11 @@ async function listCatalogsOnce(): Promise<string[]> {
       WHERE catalog_name NOT IN ('system', '__databricks_internal')
       ORDER BY catalog_name
     `);
-    return result.rows.map((r) => r[0]);
+    candidates = result.rows.map((r) => r[0]);
   } catch (err) {
-    fastPathError = err;
     const msg = err instanceof Error ? err.message : String(err);
     // Permission error on system.information_schema is expected --
-    // fall through to the probe approach.
+    // fall through to the SHOW CATALOGS approach.
     if (
       !msg.includes("INSUFFICIENT_PERMISSIONS") &&
       !msg.includes("USE CATALOG") &&
@@ -170,32 +172,42 @@ async function listCatalogsOnce(): Promise<string[]> {
     }
   }
 
-  // ── Fallback: SHOW CATALOGS + lightweight per-catalog probes ───────
-  let candidates: string[];
-  try {
-    const result = await executeSQL("SHOW CATALOGS");
-    candidates = result.rows
-      .map((r) => r[0])
-      .filter((c) => c !== "system" && c !== "__databricks_internal");
-  } catch (err) {
-    // Both paths failed -- throw so retry logic can kick in
-    const msg = err instanceof Error ? err.message : String(err);
-    if (
-      msg.includes("INSUFFICIENT_PERMISSIONS") ||
-      msg.includes("USE CATALOG")
-    ) {
-      throw new MetadataError(
-        "You don't have permission to list catalogs. Contact your workspace admin.",
-        "INSUFFICIENT_PERMISSIONS"
-      );
+  // ── Fallback: SHOW CATALOGS to get candidate list ─────────────────
+  if (candidates === null) {
+    try {
+      const result = await executeSQL("SHOW CATALOGS");
+      candidates = result.rows
+        .map((r) => r[0])
+        .filter((c) => c !== "system" && c !== "__databricks_internal");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("INSUFFICIENT_PERMISSIONS") ||
+        msg.includes("USE CATALOG")
+      ) {
+        throw new MetadataError(
+          "You don't have permission to list catalogs. Contact your workspace admin.",
+          "INSUFFICIENT_PERMISSIONS"
+        );
+      }
+      throw err;
     }
-    // Warehouse-level failure -- throw for retry
-    throw err;
   }
 
   if (candidates.length === 0) return [];
 
-  // Probe in batches to avoid overwhelming the warehouse with N parallel requests
+  // ── Probe each candidate to verify USE CATALOG permission ─────────
+  return probeCatalogs(candidates);
+}
+
+/**
+ * Probe a list of candidate catalogs to verify the user has USE CATALOG
+ * permission on each. Returns only the accessible catalogs.
+ *
+ * Probes run in batches with limited concurrency to avoid overwhelming
+ * the SQL Warehouse.
+ */
+async function probeCatalogs(candidates: string[]): Promise<string[]> {
   const PROBE_CONCURRENCY = 5;
   const accessible: string[] = [];
 
@@ -221,10 +233,21 @@ async function listCatalogsOnce(): Promise<string[]> {
 }
 
 /**
- * List schemas in a catalog. Returns an empty array if the user lacks
- * USE CATALOG permission (instead of throwing).
+ * List schemas in a catalog. Throws `MetadataError` with
+ * `INSUFFICIENT_PERMISSIONS` if the user lacks USE CATALOG permission.
+ *
+ * Wrapped in retry logic to survive transient warehouse errors.
  */
 export async function listSchemas(catalog: string): Promise<string[]> {
+  return withRetry(() => listSchemasOnce(catalog), {
+    maxRetries: 1,
+    initialBackoffMs: 2_000,
+    maxBackoffMs: 5_000,
+    label: "listSchemas",
+  });
+}
+
+async function listSchemasOnce(catalog: string): Promise<string[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
   const sql = `
     SELECT schema_name
@@ -238,8 +261,10 @@ export async function listSchemas(catalog: string): Promise<string[]> {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("USE CATALOG")) {
-      console.warn(`[metadata] No permission on catalog ${catalog}, returning empty`);
-      return [];
+      throw new MetadataError(
+        `Insufficient permissions on catalog "${catalog}". Grant USE CATALOG to access schemas.`,
+        "INSUFFICIENT_PERMISSIONS"
+      );
     }
     throw error;
   }
@@ -247,8 +272,22 @@ export async function listSchemas(catalog: string): Promise<string[]> {
 
 /**
  * List tables in a catalog.schema scope.
+ *
+ * Wrapped in retry logic to survive transient warehouse errors.
  */
 export async function listTables(
+  catalog: string,
+  schema?: string
+): Promise<TableInfo[]> {
+  return withRetry(() => listTablesOnce(catalog, schema), {
+    maxRetries: 1,
+    initialBackoffMs: 2_000,
+    maxBackoffMs: 5_000,
+    label: "listTables",
+  });
+}
+
+async function listTablesOnce(
   catalog: string,
   schema?: string
 ): Promise<TableInfo[]> {
