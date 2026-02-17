@@ -206,14 +206,6 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
     uc.userImpactScore != null ||
     uc.userOverallScore != null;
 
-  // Effective scores (user-adjusted if present, else system)
-  const effectiveScores = (uc: UseCase) => ({
-    priority: uc.userPriorityScore ?? uc.priorityScore,
-    feasibility: uc.userFeasibilityScore ?? uc.feasibilityScore,
-    impact: uc.userImpactScore ?? uc.impactScore,
-    overall: uc.userOverallScore ?? uc.overallScore,
-  });
-
   return (
     <>
       <div className="space-y-4">
