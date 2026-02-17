@@ -425,6 +425,7 @@ export function CatalogBrowser({
         throw new Error(errBody.error ?? "Failed to fetch tables");
       }
       const data = await res.json();
+      console.log("[CatalogBrowser] raw API response tables:", data.tables?.length, data.tables?.slice(0, 3));
       const tables: TableNode[] = (data.tables ?? []).map(
         (t: {
           tableName: string;
@@ -438,6 +439,7 @@ export function CatalogBrowser({
           tableType: t.tableType,
         })
       );
+      console.log("[CatalogBrowser] mapped tables:", tables.length, tables.slice(0, 3));
       updateSchema((s) => ({
         ...s,
         loading: false,
@@ -445,6 +447,7 @@ export function CatalogBrowser({
         tables,
       }));
     } catch (err) {
+      console.error("[CatalogBrowser] fetch tables error:", err);
       updateSchema((s) => ({
         ...s,
         loading: false,
@@ -972,6 +975,12 @@ function SchemaRow({
       {/* Tables */}
       {showExpanded && (
         <div className="ml-5 border-l pl-2">
+          {/* Debug: visible table count */}
+          {!schema.loading && schema.tables.length > 0 && (
+            <div className="px-2 py-0.5 text-[10px] text-muted-foreground/50">
+              {schema.tables.length} table(s) | filtered: {filteredTables.length}
+            </div>
+          )}
           {schema.loading && (
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
               <RefreshCw className="h-3 w-3 animate-spin" />
