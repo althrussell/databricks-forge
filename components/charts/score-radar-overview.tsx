@@ -20,6 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Filter } from "lucide-react";
 import type { UseCase } from "@/lib/domain/types";
 import { effectiveScores } from "@/lib/domain/scoring";
 
@@ -50,6 +55,17 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(
     useCases.length <= 10 ? "all" : "top10"
   );
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const toggleUseCase = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // Compute domain averages using effective (user-adjusted or system) scores
   const domainAverages = useMemo(() => {
@@ -106,11 +122,26 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     });
   }, [viewMode, useCases, domainAverages]);
 
+  // Sorted use cases for the filter picker list
+  const sortedUseCases = useMemo(
+    () =>
+      [...useCases].sort(
+        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
+      ),
+    [useCases]
+  );
+
+  // Apply use case filter (skip for domain averages or when nothing is selected)
+  const filteredSeries = useMemo(() => {
+    if (viewMode === "domain-avg" || selectedIds.size === 0) return series;
+    return series.filter((s) => selectedIds.has(s.key));
+  }, [series, selectedIds, viewMode]);
+
   // Build radar data
   const metrics = ["Priority", "Feasibility", "Impact", "Overall"] as const;
   const radarData = metrics.map((metric) => {
     const row: Record<string, string | number> = { metric };
-    for (const s of series) {
+    for (const s of filteredSeries) {
       const fieldMap: Record<string, keyof typeof s> = {
         Priority: "priority",
         Feasibility: "feasibility",
@@ -123,8 +154,8 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
   });
 
   // Limit to 10 series maximum for readability
-  const displaySeries = series.slice(0, 10);
-  const isTruncated = series.length > 10;
+  const displaySeries = filteredSeries.slice(0, 10);
+  const isTruncated = filteredSeries.length > 10;
 
   if (useCases.length === 0) return null;
 
@@ -143,21 +174,91 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
             )}
           </CardDescription>
         </div>
-        <Select
-          value={viewMode}
-          onValueChange={(v) => setViewMode(v as ViewMode)}
-        >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="top10">Top 10 Use Cases</SelectItem>
-            <SelectItem value="domain-avg">Domain Averages</SelectItem>
-            {useCases.length <= 20 && (
-              <SelectItem value="all">All Use Cases</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {viewMode !== "domain-avg" && (
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                  <Filter className="size-3.5" />
+                  Filter
+                  {selectedIds.size > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="ml-0.5 h-5 px-1.5 text-[10px]"
+                    >
+                      {selectedIds.size}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-0" align="end">
+                <Command>
+                  <CommandInput placeholder="Search use cases..." />
+                  <div className="flex items-center justify-between border-b px-3 py-1.5">
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() =>
+                        setSelectedIds(
+                          new Set(useCases.map((uc) => uc.id))
+                        )
+                      }
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setSelectedIds(new Set())}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <CommandList>
+                    <CommandEmpty>No use cases found.</CommandEmpty>
+                    {sortedUseCases.map((uc) => (
+                      <CommandItem
+                        key={uc.id}
+                        value={uc.name}
+                        onSelect={() => toggleUseCase(uc.id)}
+                        className="gap-2"
+                      >
+                        <Checkbox
+                          checked={selectedIds.has(uc.id)}
+                          className="pointer-events-none"
+                        />
+                        <span className="flex-1 truncate text-xs">
+                          {uc.name}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="ml-auto shrink-0 text-[10px] font-normal"
+                        >
+                          {uc.domain}
+                        </Badge>
+                      </CommandItem>
+                    ))}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          )}
+          <Select
+            value={viewMode}
+            onValueChange={(v) => setViewMode(v as ViewMode)}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="top10">Top 10 Use Cases</SelectItem>
+              <SelectItem value="domain-avg">Domain Averages</SelectItem>
+              {useCases.length <= 20 && (
+                <SelectItem value="all">All Use Cases</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={340}>
