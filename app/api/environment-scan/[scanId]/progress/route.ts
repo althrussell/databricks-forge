@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { getScanProgress } from "@/lib/pipeline/scan-progress";
 import { isValidUUID } from "@/lib/validation";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: Request,
@@ -16,11 +17,15 @@ export async function GET(
   const { scanId } = await params;
 
   if (!isValidUUID(scanId)) {
+    logger.warn("[api/environment-scan/progress] Invalid scan ID", { scanId });
     return NextResponse.json({ error: "Invalid scan ID" }, { status: 400 });
   }
 
   const progress = getScanProgress(scanId);
   if (!progress) {
+    logger.warn("[api/environment-scan/progress] No progress data found for this scan", {
+      scanId,
+    });
     return NextResponse.json(
       { error: "No progress data found for this scan" },
       { status: 404 }

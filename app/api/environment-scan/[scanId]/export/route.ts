@@ -19,10 +19,15 @@ export async function GET(
     const format = request.nextUrl.searchParams.get("format") ?? "excel";
 
     if (!isValidUUID(scanId)) {
+      logger.warn("[api/environment-scan/export] Invalid scan ID", { scanId });
       return NextResponse.json({ error: "Invalid scan ID" }, { status: 400 });
     }
 
     if (format !== "excel") {
+      logger.warn("[api/environment-scan/export] Unsupported format", {
+        scanId,
+        format,
+      });
       return NextResponse.json(
         { error: "Only excel format is supported" },
         { status: 400 }
@@ -31,6 +36,7 @@ export async function GET(
 
     const scan = await getEnvironmentScan(scanId);
     if (!scan) {
+      logger.warn("[api/environment-scan/export] Scan not found", { scanId });
       return NextResponse.json({ error: "Scan not found" }, { status: 404 });
     }
 

@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { ensureMigrated } from "@/lib/lakebase/schema";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -99,12 +100,10 @@ export async function GET() {
       recentRuns: recent,
     });
   } catch (error) {
-    console.error("[GET /api/stats]", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/stats] GET failed", { error: msg });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to fetch stats",
-      },
+      { error: msg },
       { status: 500 }
     );
   }

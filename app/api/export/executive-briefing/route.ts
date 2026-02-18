@@ -21,14 +21,19 @@ export async function GET(request: NextRequest) {
     const runId = request.nextUrl.searchParams.get("runId");
 
     if (!scanId || !isValidUUID(scanId)) {
+      logger.warn("[api/export/executive-briefing] Valid scanId is required", {
+        scanId: scanId ?? null,
+      });
       return NextResponse.json({ error: "Valid scanId is required" }, { status: 400 });
     }
     if (runId && !isValidUUID(runId)) {
+      logger.warn("[api/export/executive-briefing] Invalid runId", { runId });
       return NextResponse.json({ error: "Invalid runId" }, { status: 400 });
     }
 
     const scan = await getEnvironmentScan(scanId);
     if (!scan) {
+      logger.warn("[api/export/executive-briefing] Scan not found", { scanId });
       return NextResponse.json({ error: "Scan not found" }, { status: 404 });
     }
 

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { logger } from "@/lib/logger";
 import { createRun, listRuns } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { safeParseBody, CreateRunSchema } from "@/lib/validation";
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
 
     const parsed = await safeParseBody(request, CreateRunSchema);
     if (!parsed.success) {
+      logger.warn("[api/runs] POST validation failed", { error: parsed.error });
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
@@ -58,11 +60,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ runId }, { status: 201 });
   } catch (error) {
-    console.error("[POST /api/runs]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create run" },
-      { status: 500 }
-    );
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/runs] POST failed", { error: msg });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -77,10 +77,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ runs });
   } catch (error) {
-    console.error("[GET /api/runs]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to list runs" },
-      { status: 500 }
-    );
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/runs] GET failed", { error: msg });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

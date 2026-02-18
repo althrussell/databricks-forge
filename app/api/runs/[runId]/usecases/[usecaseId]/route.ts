@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { isValidUUID } from "@/lib/validation";
+import { isValidUUID, isSafeId } from "@/lib/validation";
 import { getPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { computeOverallScore } from "@/lib/domain/scoring";
@@ -18,14 +18,20 @@ export async function PATCH(
   try {
     const { runId, usecaseId } = await params;
 
+    logger.info("[api/runs/usecases] PATCH request", { runId, usecaseId });
+
     if (!isValidUUID(runId)) {
+      logger.warn("[api/runs/usecases] Invalid run ID", { runId });
       return NextResponse.json({ error: `Invalid run ID: "${runId}"` }, { status: 400 });
     }
-    if (!isValidUUID(usecaseId)) {
+    if (!isSafeId(usecaseId)) {
+      logger.warn("[api/runs/usecases] Invalid use case ID", { usecaseId });
       return NextResponse.json({ error: `Invalid use case ID: "${usecaseId}"` }, { status: 400 });
     }
 
     const body = await request.json();
+    logger.info("[api/runs/usecases] PATCH body", { fields: Object.keys(body) });
+
     const prisma = await getPrisma();
 
     // Verify the use case exists and belongs to the run
@@ -43,6 +49,7 @@ export async function PATCH(
     });
 
     if (!existing) {
+      logger.warn("[api/runs/usecases] Use case not found", { runId, usecaseId });
       return NextResponse.json({ error: "Use case not found" }, { status: 404 });
     }
 
@@ -120,6 +127,7 @@ export async function PATCH(
     }
 
     if (Object.keys(updateData).length === 0) {
+      logger.warn("[api/runs/usecases] No valid fields to update", { runId, usecaseId, bodyKeys: Object.keys(body) });
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 

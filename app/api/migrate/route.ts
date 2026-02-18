@@ -5,6 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { runMigrations } from "@/lib/lakebase/schema";
 
 export async function POST() {
@@ -12,7 +13,8 @@ export async function POST() {
     await runMigrations();
     return NextResponse.json({ message: "Migrations completed successfully" });
   } catch (error) {
-    console.error("[POST /api/migrate]", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[migrate] Migration failed", { error: msg });
     return NextResponse.json(
       {
         error:
