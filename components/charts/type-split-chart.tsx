@@ -54,6 +54,7 @@ export function TypeSplitChart({
             <Tooltip
               contentStyle={{
                 backgroundColor: "var(--color-card)",
+                color: "var(--color-card-foreground)",
                 borderColor: "var(--color-border)",
                 borderRadius: "var(--radius)",
                 fontSize: 12,
