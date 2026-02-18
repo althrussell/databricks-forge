@@ -18,8 +18,11 @@ export async function PATCH(
   try {
     const { runId, usecaseId } = await params;
 
-    if (!isValidUUID(runId) || !isValidUUID(usecaseId)) {
-      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: `Invalid run ID: "${runId}"` }, { status: 400 });
+    }
+    if (!isValidUUID(usecaseId)) {
+      return NextResponse.json({ error: `Invalid use case ID: "${usecaseId}"` }, { status: 400 });
     }
 
     const body = await request.json();
