@@ -9,7 +9,6 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
   Tooltip,
-  Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +62,30 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const handleLegendClick = (key: string) => {
+    if (viewMode === "domain-avg") return;
+    const allKeys = series.map((s) => s.key);
+    setSelectedIds((prev) => {
+      if (prev.size === 0) {
+        // No filter active -- hide the clicked item by selecting all others
+        const next = new Set(allKeys);
+        next.delete(key);
+        return next;
+      }
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+        // If nothing left, clear filter entirely (shows all)
+        if (next.size === 0) return new Set();
+      } else {
+        next.add(key);
+        // If all are now selected, clear filter (same as showing all)
+        if (next.size >= allKeys.length) return new Set();
+      }
       return next;
     });
   };
@@ -136,6 +159,13 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     if (viewMode === "domain-avg" || selectedIds.size === 0) return series;
     return series.filter((s) => selectedIds.has(s.key));
   }, [series, selectedIds, viewMode]);
+
+  // Stable colour assignment based on position in the unfiltered series
+  const seriesColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    series.forEach((s, i) => map.set(s.key, PALETTE[i % PALETTE.length]));
+    return map;
+  }, [series]);
 
   // Build radar data
   const metrics = ["Priority", "Feasibility", "Impact", "Overall"] as const;
@@ -278,18 +308,21 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
               tickCount={5}
               axisLine={false}
             />
-            {displaySeries.map((s, i) => (
-              <Radar
-                key={s.key}
-                name={s.label}
-                dataKey={s.key}
-                stroke={PALETTE[i % PALETTE.length]}
-                fill={PALETTE[i % PALETTE.length]}
-                fillOpacity={0.05}
-                strokeWidth={2}
-                dot={displaySeries.length <= 5}
-              />
-            ))}
+            {displaySeries.map((s) => {
+              const color = seriesColorMap.get(s.key) ?? PALETTE[0];
+              return (
+                <Radar
+                  key={s.key}
+                  name={s.label}
+                  dataKey={s.key}
+                  stroke={color}
+                  fill={color}
+                  fillOpacity={0.05}
+                  strokeWidth={2}
+                  dot={displaySeries.length <= 5}
+                />
+              );
+            })}
             <Tooltip
               contentStyle={{
                 backgroundColor: "var(--color-card)",
@@ -300,34 +333,33 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
               }}
               formatter={(value) => [`${value ?? 0}%`, undefined]}
             />
-            {displaySeries.length <= 8 && (
-              <Legend
-                wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                iconType="circle"
-                iconSize={8}
-              />
-            )}
           </RadarChart>
         </ResponsiveContainer>
 
-        {/* Compact legend for many series */}
-        {displaySeries.length > 8 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {displaySeries.map((s, i) => (
-              <Badge
+        {/* Clickable legend -- click a name to toggle it on/off */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {series.slice(0, 10).map((s) => {
+            const color = seriesColorMap.get(s.key) ?? PALETTE[0];
+            const isActive =
+              selectedIds.size === 0 || selectedIds.has(s.key);
+            return (
+              <button
                 key={s.key}
-                variant="outline"
-                className="gap-1.5 text-xs font-normal"
+                type="button"
+                onClick={() => handleLegendClick(s.key)}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-normal transition-opacity ${
+                  isActive ? "opacity-100" : "opacity-40"
+                } ${viewMode !== "domain-avg" ? "cursor-pointer hover:opacity-80" : ""}`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: color }}
                 />
                 {s.label}
-              </Badge>
-            ))}
-          </div>
-        )}
+              </button>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
