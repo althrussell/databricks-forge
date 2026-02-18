@@ -66,9 +66,8 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     });
   };
 
-  const handleLegendClick = (key: string) => {
+  const handleLegendClick = (key: string, allKeys: string[]) => {
     if (viewMode === "domain-avg") return;
-    const allKeys = series.map((s) => s.key);
     setSelectedIds((prev) => {
       if (prev.size === 0) {
         // No filter active -- hide the clicked item by selecting all others
@@ -90,61 +89,6 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     });
   };
 
-  // Compute domain averages using effective (user-adjusted or system) scores
-  const domainAverages = useMemo(() => {
-    const map = new Map<string, { sum: number[]; count: number }>();
-    for (const uc of useCases) {
-      const eff = effectiveScores(uc);
-      const entry = map.get(uc.domain) ?? { sum: [0, 0, 0, 0], count: 0 };
-      entry.sum[0] += eff.priority;
-      entry.sum[1] += eff.feasibility;
-      entry.sum[2] += eff.impact;
-      entry.sum[3] += eff.overall;
-      entry.count++;
-      map.set(uc.domain, entry);
-    }
-    return [...map.entries()]
-      .map(([domain, { sum, count }]) => ({
-        label: domain,
-        priority: Math.round((sum[0] / count) * 100),
-        feasibility: Math.round((sum[1] / count) * 100),
-        impact: Math.round((sum[2] / count) * 100),
-        overall: Math.round((sum[3] / count) * 100),
-        count,
-      }))
-      .sort((a, b) => b.overall - a.overall);
-  }, [useCases]);
-
-  // Select the series to show based on the view mode
-  const series = useMemo(() => {
-    if (viewMode === "domain-avg") {
-      return domainAverages.slice(0, 10).map((d) => ({
-        key: d.label,
-        label: `${d.label} (${d.count})`,
-        priority: d.priority,
-        feasibility: d.feasibility,
-        impact: d.impact,
-        overall: d.overall,
-      }));
-    }
-
-    const sorted = [...useCases].sort(
-      (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
-    );
-    const subset = viewMode === "top10" ? sorted.slice(0, 10) : sorted;
-    return subset.map((uc) => {
-      const eff = effectiveScores(uc);
-      return {
-        key: uc.id,
-        label: uc.name.length > 35 ? uc.name.slice(0, 32) + "..." : uc.name,
-        priority: Math.round(eff.priority * 100),
-        feasibility: Math.round(eff.feasibility * 100),
-        impact: Math.round(eff.impact * 100),
-        overall: Math.round(eff.overall * 100),
-      };
-    });
-  }, [viewMode, useCases, domainAverages]);
-
   // Sorted use cases for the filter picker list
   const sortedUseCases = useMemo(
     () =>
@@ -154,18 +98,73 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     [useCases]
   );
 
-  // Apply use case filter (skip for domain averages or when nothing is selected)
-  const filteredSeries = useMemo(() => {
-    if (viewMode === "domain-avg" || selectedIds.size === 0) return series;
-    return series.filter((s) => selectedIds.has(s.key));
-  }, [series, selectedIds, viewMode]);
+  // Single memo: series, filtered series, and colour map derived together
+  // so the React Compiler can preserve memoization without cross-memo deps.
+  const { series, filteredSeries, seriesColorMap } = useMemo(() => {
+    // Domain averages
+    const domainMap = new Map<string, { sum: number[]; count: number }>();
+    for (const uc of useCases) {
+      const eff = effectiveScores(uc);
+      const entry = domainMap.get(uc.domain) ?? { sum: [0, 0, 0, 0], count: 0 };
+      entry.sum[0] += eff.priority;
+      entry.sum[1] += eff.feasibility;
+      entry.sum[2] += eff.impact;
+      entry.sum[3] += eff.overall;
+      entry.count++;
+      domainMap.set(uc.domain, entry);
+    }
+    const domainAverages = [...domainMap.entries()]
+      .map(([domain, { sum, count }]) => ({
+        label: domain,
+        priority: Math.round((sum[0] / count) * 100),
+        feasibility: Math.round((sum[1] / count) * 100),
+        impact: Math.round((sum[2] / count) * 100),
+        overall: Math.round((sum[3] / count) * 100),
+        count,
+      }))
+      .sort((a, b) => b.overall - a.overall);
 
-  // Stable colour assignment based on position in the unfiltered series
-  const seriesColorMap = useMemo(() => {
-    const map = new Map<string, string>();
-    series.forEach((s, i) => map.set(s.key, PALETTE[i % PALETTE.length]));
-    return map;
-  }, [series]);
+    // Series based on view mode
+    let allSeries: { key: string; label: string; priority: number; feasibility: number; impact: number; overall: number }[];
+    if (viewMode === "domain-avg") {
+      allSeries = domainAverages.slice(0, 10).map((d) => ({
+        key: d.label,
+        label: `${d.label} (${d.count})`,
+        priority: d.priority,
+        feasibility: d.feasibility,
+        impact: d.impact,
+        overall: d.overall,
+      }));
+    } else {
+      const sorted = [...useCases].sort(
+        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
+      );
+      const subset = viewMode === "top10" ? sorted.slice(0, 10) : sorted;
+      allSeries = subset.map((uc) => {
+        const eff = effectiveScores(uc);
+        return {
+          key: uc.id,
+          label: uc.name.length > 35 ? uc.name.slice(0, 32) + "..." : uc.name,
+          priority: Math.round(eff.priority * 100),
+          feasibility: Math.round(eff.feasibility * 100),
+          impact: Math.round(eff.impact * 100),
+          overall: Math.round(eff.overall * 100),
+        };
+      });
+    }
+
+    // Filtered series (skip for domain averages or when nothing is selected)
+    const filtered =
+      viewMode === "domain-avg" || selectedIds.size === 0
+        ? allSeries
+        : allSeries.filter((s) => selectedIds.has(s.key));
+
+    // Stable colour assignment based on position in the unfiltered series
+    const colorMap = new Map<string, string>();
+    allSeries.forEach((s, i) => colorMap.set(s.key, PALETTE[i % PALETTE.length]));
+
+    return { series: allSeries, filteredSeries: filtered, seriesColorMap: colorMap };
+  }, [viewMode, useCases, selectedIds]);
 
   // Build radar data
   const metrics = ["Priority", "Feasibility", "Impact", "Overall"] as const;
@@ -346,7 +345,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
               <button
                 key={s.key}
                 type="button"
-                onClick={() => handleLegendClick(s.key)}
+                onClick={() => handleLegendClick(s.key, series.map((item) => item.key))}
                 className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-normal transition-opacity ${
                   isActive ? "opacity-100" : "opacity-40"
                 } ${viewMode !== "domain-avg" ? "cursor-pointer hover:opacity-80" : ""}`}
