@@ -24,6 +24,7 @@ const STEP_LABELS: Record<string, string> = {
   "domain-clustering": "Domains",
   scoring: "Scoring",
   "sql-generation": "SQL Gen",
+  "genie-recommendations": "Recommendations",
 };
 
 export function StepDurationChart({
@@ -39,17 +40,20 @@ export function StepDurationChart({
 
   if (data.length === 0) return null;
 
+  // Scale height to the number of bars so labels never overlap
+  const chartHeight = Math.max(200, data.length * 40);
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
           <BarChart
             data={data}
             layout="vertical"
-            margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
+            margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
           >
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis
@@ -63,7 +67,7 @@ export function StepDurationChart({
               type="category"
               tick={{ fontSize: 11 }}
               className="fill-muted-foreground"
-              width={90}
+              width={110}
             />
             <Tooltip
               formatter={(value) => [`${value}s`, "Duration"]}
