@@ -6,6 +6,12 @@
 
 Databricks Forge AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
 
+<p align="center">
+  <img src="public/1.png" alt="Forge AI — Main Dashboard" width="100%" />
+  <br />
+  <em>Main Dashboard — query performance overview with AI insights, impact scoring, and cost analysis</em>
+</p>
+
 ---
 
 ## What It Does
@@ -23,6 +29,12 @@ Databricks Forge AI is a web application deployed as a [Databricks App](https://
 - Supports **20+ languages** for generated documentation
 - **Real-time status messages** during pipeline execution (e.g. "Filtering tables (batch 2 of 5)...")
 - **Privacy-first**: reads only metadata by default (table/column names and schemas). Optional [data sampling](FORGE_ANALYSIS.md#data-sampling) can be enabled for improved SQL accuracy
+
+<p align="center">
+  <img src="public/3.png" alt="Query Detail — expanded view with AI insights and performance flags" width="100%" />
+  <br />
+  <em>Query Detail — AI-powered insights, performance flags, I/O stats, and time breakdown at a glance</em>
+</p>
 
 ---
 
@@ -102,7 +114,25 @@ The "Discover Usecases" pipeline runs 7 steps sequentially. The frontend polls f
 
 Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
 
+<p align="center">
+  <img src="public/4.png" alt="AI Analysis — root cause analysis with rewrite suggestions" width="100%" />
+  <br />
+  <em>AI Analysis — deep-dive with root causes, rewrite suggestions, risk assessment, and validation plan</em>
+</p>
+
 > For the full analysis methodology, scoring formulas, prompt engineering details, and data flow diagrams, see [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md).
+
+<p align="center">
+  <img src="public/2.png" alt="Warehouse Monitor — real-time metrics and query timeline" width="100%" />
+  <br />
+  <em>Warehouse Monitor — live warehouse metrics, query timeline, duration distribution, and top users</em>
+</p>
+
+<p align="center">
+  <img src="public/5.png" alt="Warehouse Health Report — sizing recommendations and cost analysis" width="100%" />
+  <br />
+  <em>Warehouse Health Report — 7-day analysis with sizing recommendations, hourly activity, and cost of inaction</em>
+</p>
 
 ---
 
