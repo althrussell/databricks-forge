@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { ensureMigrated } from "@/lib/lakebase/schema";
@@ -19,6 +20,11 @@ export async function GET(request: NextRequest) {
     const runBId = searchParams.get("runB");
 
     if (!runAId || !runBId || !isValidUUID(runAId) || !isValidUUID(runBId)) {
+      logger.warn("Invalid or missing run IDs for compare", {
+        runAId: runAId ?? null,
+        runBId: runBId ?? null,
+        route: "/api/runs/compare",
+      });
       return NextResponse.json(
         { error: "Both runA and runB query params (valid UUIDs) are required" },
         { status: 400 }
@@ -31,6 +37,11 @@ export async function GET(request: NextRequest) {
     ]);
 
     if (!runA || !runB) {
+      logger.warn("One or both runs not found for compare", {
+        runAId,
+        runBId,
+        route: "/api/runs/compare",
+      });
       return NextResponse.json(
         { error: "One or both runs not found" },
         { status: 404 }
@@ -93,7 +104,10 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[GET /api/runs/compare]", error);
+    logger.error("Failed to compare runs", {
+      error: error instanceof Error ? error.message : String(error),
+      route: "/api/runs/compare",
+    });
     return NextResponse.json(
       {
         error:

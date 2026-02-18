@@ -37,6 +37,10 @@ export async function POST(request: NextRequest) {
     const ucMetadata = body.ucMetadata;
 
     if (!ucMetadata || typeof ucMetadata !== "string") {
+      logger.warn("[api/environment-scan] ucMetadata is required", {
+        hasUcMetadata: !!ucMetadata,
+        ucMetadataType: typeof ucMetadata,
+      });
       return NextResponse.json(
         { error: "ucMetadata is required" },
         { status: 400 }

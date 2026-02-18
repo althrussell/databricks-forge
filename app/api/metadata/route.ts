@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import {
   listCatalogs,
   listSchemas,
@@ -47,6 +48,10 @@ export async function GET(request: NextRequest) {
       }
       case "schemas": {
         if (!catalogRaw) {
+          logger.warn("Missing required catalog param for schemas", {
+            type: "schemas",
+            queryParams: { type, catalog: catalogRaw, schema: schemaRaw },
+          });
           return NextResponse.json(
             { error: "catalog query param is required", errorCode: "INVALID_REQUEST" },
             { status: 400 }
@@ -58,6 +63,10 @@ export async function GET(request: NextRequest) {
       }
       case "tables": {
         if (!catalogRaw) {
+          logger.warn("Missing required catalog param for tables", {
+            type: "tables",
+            queryParams: { type, catalog: catalogRaw, schema: schemaRaw },
+          });
           return NextResponse.json(
             { error: "catalog query param is required", errorCode: "INVALID_REQUEST" },
             { status: 400 }
@@ -71,6 +80,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ tables });
       }
       default:
+        logger.warn("Unknown metadata type requested", {
+          type,
+          allowedTypes: ["warmup", "catalogs", "schemas", "tables"],
+        });
         return NextResponse.json(
           { error: `Unknown type: ${type}. Use warmup, catalogs, schemas, or tables.`, errorCode: "INVALID_REQUEST" },
           { status: 400 }
@@ -78,6 +91,10 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     if (error instanceof IdentifierValidationError) {
+      logger.warn("Identifier validation failed", {
+        error: error.message,
+        errorCode: "INVALID_REQUEST",
+      });
       return NextResponse.json(
         { error: error.message, errorCode: "INVALID_REQUEST" },
         { status: 400 }
@@ -90,7 +107,10 @@ export async function GET(request: NextRequest) {
         { status }
       );
     }
-    console.error("[GET /api/metadata]", error);
+    logger.error("Failed to fetch metadata", {
+      error: error instanceof Error ? error.message : String(error),
+      path: "/api/metadata",
+    });
     const message =
       error instanceof Error ? error.message : "Failed to fetch metadata";
     return NextResponse.json(

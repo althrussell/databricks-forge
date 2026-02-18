@@ -24,11 +24,13 @@ export async function GET(
     const domain = request.nextUrl.searchParams.get("domain") ?? undefined;
 
     if (!isValidUUID(scanId)) {
+      logger.warn("[api/environment-scan/erd] Invalid scan ID", { scanId });
       return NextResponse.json({ error: "Invalid scan ID" }, { status: 400 });
     }
 
     const scan = await getEnvironmentScan(scanId);
     if (!scan) {
+      logger.warn("[api/environment-scan/erd] Scan not found", { scanId });
       return NextResponse.json({ error: "Scan not found" }, { status: 404 });
     }
 

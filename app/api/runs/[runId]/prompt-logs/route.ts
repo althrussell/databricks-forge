@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import {
   getPromptLogsByRunId,
   getPromptLogStats,
@@ -17,11 +18,17 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ runId: string }> }
 ) {
+  let runId: string | undefined;
   try {
     await ensureMigrated();
-    const { runId } = await params;
+    const resolved = await params;
+    runId = resolved.runId;
 
     if (!isValidUUID(runId)) {
+      logger.warn("Invalid run ID format for prompt-logs", {
+        runId,
+        route: "/api/runs/[runId]/prompt-logs",
+      });
       return NextResponse.json(
         { error: "Invalid run ID format" },
         { status: 400 }
@@ -30,6 +37,10 @@ export async function GET(
 
     const run = await getRunById(runId);
     if (!run) {
+      logger.warn("Run not found for prompt-logs", {
+        runId,
+        route: "/api/runs/[runId]/prompt-logs",
+      });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
@@ -40,7 +51,11 @@ export async function GET(
 
     return NextResponse.json({ logs, stats });
   } catch (error) {
-    console.error("[GET /api/runs/[runId]/prompt-logs]", error);
+    logger.error("Failed to fetch prompt logs", {
+      error: error instanceof Error ? error.message : String(error),
+      route: "/api/runs/[runId]/prompt-logs",
+      runId,
+    });
     return NextResponse.json(
       {
         error:

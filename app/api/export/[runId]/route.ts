@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { generateExcel } from "@/lib/export/excel";
@@ -31,6 +32,11 @@ export async function GET(
     const format = searchParams.get("format") as ExportFormat | null;
 
     if (!format || !["excel", "pdf", "pptx", "notebooks"].includes(format)) {
+      logger.warn("[api/export/runId] Invalid or missing format", {
+        runId,
+        format: format ?? "missing",
+        reason: "format query param required: excel, pdf, pptx, or notebooks",
+      });
       return NextResponse.json(
         { error: "format query param required: excel, pdf, pptx, or notebooks" },
         { status: 400 }
@@ -39,10 +45,17 @@ export async function GET(
 
     const run = await getRunById(runId);
     if (!run) {
+      logger.warn("[api/export/runId] Run not found", { runId, format });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
     if (run.status !== "completed") {
+      logger.warn("[api/export/runId] Run not completed", {
+        runId,
+        format,
+        status: run.status,
+        reason: "Run has not completed yet",
+      });
       return NextResponse.json(
         { error: "Run has not completed yet" },
         { status: 400 }
@@ -101,13 +114,19 @@ export async function GET(
         return NextResponse.json({ ...result, url: workspaceUrl });
       }
       default:
+        logger.warn("[api/export/runId] Unsupported format", {
+          runId,
+          format,
+          reason: `Unsupported format: ${format}`,
+        });
         return NextResponse.json(
           { error: `Unsupported format: ${format}` },
           { status: 400 }
         );
     }
   } catch (error) {
-    console.error("[GET /api/export/[runId]]", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/export/runId] GET failed", { error: msg });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Export failed" },
       { status: 500 }

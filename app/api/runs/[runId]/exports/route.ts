@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { getExportsByRunId } from "@/lib/lakebase/exports";
 import { getRunById } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
@@ -14,11 +15,17 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ runId: string }> }
 ) {
+  let runId: string | undefined;
   try {
     await ensureMigrated();
-    const { runId } = await params;
+    const resolved = await params;
+    runId = resolved.runId;
 
     if (!isValidUUID(runId)) {
+      logger.warn("Invalid run ID format for exports", {
+        runId,
+        route: "/api/runs/[runId]/exports",
+      });
       return NextResponse.json(
         { error: "Invalid run ID format" },
         { status: 400 }
@@ -27,6 +34,10 @@ export async function GET(
 
     const run = await getRunById(runId);
     if (!run) {
+      logger.warn("Run not found for exports", {
+        runId,
+        route: "/api/runs/[runId]/exports",
+      });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
@@ -34,7 +45,11 @@ export async function GET(
 
     return NextResponse.json({ exports });
   } catch (error) {
-    console.error("[GET /api/runs/[runId]/exports]", error);
+    logger.error("Failed to fetch exports", {
+      error: error instanceof Error ? error.message : String(error),
+      route: "/api/runs/[runId]/exports",
+      runId,
+    });
     return NextResponse.json(
       {
         error:

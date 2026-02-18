@@ -63,6 +63,17 @@ export function validateUUID(value: string, label = "ID"): string {
 }
 
 // ---------------------------------------------------------------------------
+// Safe ID validation (UUIDs or custom formats like FUL-001-abc123)
+// ---------------------------------------------------------------------------
+
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+
+/** Returns true if value is a non-empty string of alphanumeric, hyphen, or underscore chars (max 128). */
+export function isSafeId(value: string): boolean {
+  return SAFE_ID_RE.test(value);
+}
+
+// ---------------------------------------------------------------------------
 // Zod schemas for API routes
 // ---------------------------------------------------------------------------
 

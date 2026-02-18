@@ -12,6 +12,7 @@ import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { logActivity } from "@/lib/lakebase/activity-log";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: NextRequest,
@@ -22,12 +23,14 @@ export async function GET(
     const { runId } = await params;
 
     if (!isValidUUID(runId)) {
+      logger.warn("[api/runs] GET invalid run ID", { runId });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
     const run = await getRunById(runId);
 
     if (!run) {
+      logger.warn("[api/runs] GET run not found", { runId });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
@@ -39,9 +42,10 @@ export async function GET(
 
     return NextResponse.json({ run, useCases });
   } catch (error) {
-    console.error("[GET /api/runs/[runId]]", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/runs] GET failed", { runId: "unknown", error: msg });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to get run" },
+      { error: msg || "Failed to get run" },
       { status: 500 }
     );
   }
@@ -56,16 +60,19 @@ export async function DELETE(
     const { runId } = await params;
 
     if (!isValidUUID(runId)) {
+      logger.warn("[api/runs] DELETE invalid run ID", { runId });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
     const run = await getRunById(runId);
 
     if (!run) {
+      logger.warn("[api/runs] DELETE run not found", { runId });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
     if (run.status === "running") {
+      logger.warn("[api/runs] DELETE blocked -- run still in progress", { runId });
       return NextResponse.json(
         { error: "Cannot delete a running pipeline. Wait for it to complete or fail." },
         { status: 409 }
@@ -81,11 +88,13 @@ export async function DELETE(
       metadata: { businessName: run.config.businessName },
     });
 
+    logger.info("[api/runs] Run deleted", { runId });
     return NextResponse.json({ deleted: true, runId });
   } catch (error) {
-    console.error("[DELETE /api/runs/[runId]]", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/runs] DELETE failed", { error: msg });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete run" },
+      { error: msg || "Failed to delete run" },
       { status: 500 }
     );
   }
