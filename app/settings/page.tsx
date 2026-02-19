@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { loadSettings, saveSettings } from "@/lib/settings";
+import { loadSettings, saveSettings, type GenieEngineDefaults } from "@/lib/settings";
 import {
   Shield,
   Database,
@@ -33,6 +33,7 @@ import {
   Target,
   Scale,
   Layers,
+  Sparkles,
 } from "lucide-react";
 import {
   DISCOVERY_DEPTHS,
@@ -74,6 +75,11 @@ export default function SettingsPage() {
     return loadSettings().discoveryDepthConfigs;
   });
 
+  const [genieDefaults, setGenieDefaults] = useState<GenieEngineDefaults>(() => {
+    if (typeof window === "undefined") return { maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true };
+    return loadSettings().genieEngineDefaults;
+  });
+
   const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
     setDepthConfigs((prev) => ({
       ...prev,
@@ -102,7 +108,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults });
     toast.success("Settings saved");
   };
 
@@ -114,6 +120,7 @@ export default function SettingsPage() {
       setNotebookPath("./forge_gen/");
       setDefaultDiscoveryDepth("balanced");
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
+      setGenieDefaults({ maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true });
       toast.success("Local settings cleared");
     }
   };
@@ -370,6 +377,74 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Genie Engine Defaults */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Genie Engine
+          </CardTitle>
+          <CardDescription>
+            Global defaults for Genie Space generation. These apply to all new
+            runs. Per-run configuration (glossary, custom SQL, column overrides)
+            is still editable within each run.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="maxTables">Max tables per space</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="maxTables"
+                type="number"
+                min={1}
+                max={30}
+                value={genieDefaults.maxTablesPerSpace}
+                onChange={(e) =>
+                  setGenieDefaults((prev) => ({
+                    ...prev,
+                    maxTablesPerSpace: Math.min(30, Math.max(1, parseInt(e.target.value) || 25)),
+                  }))
+                }
+                className="w-24"
+              />
+              <span className="text-xs text-muted-foreground">
+                Databricks Genie supports up to 30 tables per space
+              </span>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <GenieToggle
+              label="LLM Refinement"
+              description="Use AI to generate semantic expressions, instructions, and trusted assets"
+              checked={genieDefaults.llmRefinement}
+              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, llmRefinement: v }))}
+            />
+            <GenieToggle
+              label="Auto Benchmarks"
+              description="Generate test questions with expected SQL to evaluate Genie accuracy"
+              checked={genieDefaults.generateBenchmarks}
+              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateBenchmarks: v }))}
+            />
+            <GenieToggle
+              label="Metric Views"
+              description="Propose metric view definitions (KPIs, dimensions, measures)"
+              checked={genieDefaults.generateMetricViews}
+              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateMetricViews: v }))}
+            />
+            <GenieToggle
+              label="Auto Time Periods"
+              description="Generate standard date filters and dimensions (last week, last month, fiscal quarters)"
+              checked={genieDefaults.autoTimePeriods}
+              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, autoTimePeriods: v }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Export Preferences */}
       <Card>
         <CardHeader>
@@ -477,5 +552,37 @@ export default function SettingsPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+function GenieToggle({
+  label,
+  description,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(!checked)}
+      className={`rounded-lg border-2 p-4 text-left transition-colors ${
+        checked
+          ? "border-violet-500/50 bg-violet-500/5"
+          : "border-muted text-muted-foreground"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        <div
+          className={`h-4 w-4 rounded-full ${checked ? "bg-violet-500" : "bg-muted"}`}
+        />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    </button>
   );
 }

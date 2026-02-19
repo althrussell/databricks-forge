@@ -264,6 +264,7 @@ export function generateGenieRecommendations(
           left: { identifier: fk.tableFqn },
           right: { identifier: fk.referencedTableFqn },
           sql: [`${fk.tableFqn}.${fk.columnName} = ${fk.referencedTableFqn}.${fk.referencedColumnName}`],
+          relationship_type: "many_to_one",
         });
       }
     }
@@ -357,6 +358,10 @@ export function generateGenieRecommendations(
       measureCount: snippets.measures.length,
       filterCount: snippets.filters.length,
       dimensionCount: snippets.expressions.length,
+      benchmarkCount: 0,
+      instructionCount: textInstructions.length,
+      sampleQuestionCount: sampleQuestions.length,
+      sqlFunctionCount: 0,
       tables,
       metricViews: metricViews.map((mv) => mv.fqn),
       serializedSpace: JSON.stringify(space),
