@@ -2,7 +2,17 @@
 # Maps app resources to environment variables consumed by the Next.js backend.
 #
 # Required app resources (configure in Databricks App UI):
-#   1. SQL Warehouse — resource key: "sql-warehouse"
+#   1. SQL Warehouse  — resource key: "sql-warehouse"
+#   2. Serving Endpoint — resource key: "serving-endpoint"
+#
+# Required user authorization scopes (configure in App UI → Configure → Add Scope):
+#   1. sql — SQL Statement Execution API (metadata queries, generated SQL)
+#   (defaults: iam.access-control:read, iam.current-user:read — auto-included)
+#
+# Auth model:
+#   - SQL queries run as the logged-in user (OBO via x-forwarded-access-token)
+#   - Model Serving, Workspace API, Genie API run as the app service principal
+#   - Background pipeline tasks fall back to service principal
 #
 # Lakebase Autoscale is self-provisioned at startup using the platform-
 # injected service principal credentials (DATABRICKS_CLIENT_ID/SECRET/HOST).
@@ -15,3 +25,5 @@ command:
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: DATABRICKS_SERVING_ENDPOINT
+    valueFrom: serving-endpoint

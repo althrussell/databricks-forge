@@ -387,7 +387,7 @@ apps:
         type: serving_endpoint
 ```
 
-**`app.yaml`** (runtime config -- startup command + additional env vars):
+**`app.yaml`** (runtime config -- startup command + env var mappings):
 
 ```yaml
 command:
@@ -397,6 +397,8 @@ command:
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: DATABRICKS_SERVING_ENDPOINT
+    valueFrom: serving-endpoint
 ```
 
 ### Environment variables at runtime
@@ -416,15 +418,25 @@ env:
 
 ### Permissions summary
 
-The app's service principal needs these permissions in the workspace:
+The app uses **two complementary auth models** ([docs](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/auth)):
 
-| Resource | Permission | Why |
+**User authorization (OBO)** -- the logged-in user's identity and UC permissions apply:
+
+| API | Scope required | What runs as the user |
 | --- | --- | --- |
-| SQL Warehouse | **Can use** | Execute metadata queries and generated SQL |
-| Model Serving endpoint | **Can query** | Send LLM inference requests (chat completions) |
-| Unity Catalog (catalogs/schemas) | **USE CATALOG / USE SCHEMA** | Read `information_schema` for metadata discovery |
-| `system.access.table_lineage` | **SELECT** | Walk data lineage graphs during discovery |
-| Workspace folders | **Can manage** | Create folders and deploy SQL notebooks on export |
+| SQL Statement Execution | `sql` | All metadata queries, generated SQL, health check |
+| Workspace REST API | `files.files` | Notebook export to `/Workspace/Users/<email>/` |
+| Unity Catalog metadata | `catalog.catalogs:read`, `catalog.schemas:read`, `catalog.tables:read` | `SHOW CATALOGS/SCHEMAS/TABLES`, `information_schema` |
+
+**App authorization (service principal)** -- the app's own identity for shared/background operations:
+
+| Resource | Permission | What runs as the SP |
+| --- | --- | --- |
+| SQL Warehouse | **Can use** | Background pipeline tasks (SP fallback when no user context) |
+| Model Serving endpoint | **Can query** | All LLM inference requests (chat completions) |
+| Unity Catalog (catalogs/schemas) | **USE CATALOG / USE SCHEMA / SELECT** | Background metadata queries (SP fallback) |
+| `system.access.table_lineage` | **SELECT** | Lineage graph walking |
+| Genie Spaces | **Can manage** | Create, update, and trash Genie Spaces |
 
 Grant Unity Catalog permissions to the app's service principal:
 
@@ -463,8 +475,8 @@ Schema changes in `prisma/schema.prisma` are applied automatically on the next s
 | Schema push fails at startup | Lakebase compute still waking from scale-to-zero | Restart the app -- compute wakes automatically and retries succeed |
 | "Failed to connect to warehouse" | Warehouse binding missing or stopped | Verify `sql-warehouse` resource is configured and warehouse is running |
 | "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured (Step 2) |
-| "USE CATALOG denied" on discovery | Service principal lacks UC grants | Grant `USE CATALOG`, `USE SCHEMA`, `SELECT` (see Permissions above) |
-| Lineage discovery returns 0 tables | Missing lineage permissions | Grant `SELECT` on `system.access.table_lineage` |
+| "USE CATALOG denied" on discovery | User or SP lacks UC grants | With OBO auth, the logged-in user needs `USE CATALOG` / `USE SCHEMA` / `SELECT`. The SP needs the same grants as a fallback for background tasks. |
+| Lineage discovery returns 0 tables | Missing lineage permissions | Grant `SELECT` on `system.access.table_lineage` to the user and/or SP |
 
 View logs for detailed error messages:
 
@@ -478,12 +490,15 @@ databricks apps logs databricks-forge --follow
 
 ```
 [ ] 1. Databricks CLI installed and authenticated
-[ ] 2. App created: databricks apps create databricks-forge
-[ ] 3. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
-[ ] 4. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
-[ ] 5. UC grants applied to the app's service principal
-[ ] 6. Deployed from Git: click Deploy > From Git > enter branch (e.g. main)
-[ ] 7. Health check passes: curl <app-url>/api/health
+[ ] 2. Workspace previews enabled (Apps OBO User Auth + Apps Install from Git)
+[ ] 3. App created: databricks apps create databricks-forge
+[ ] 4. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
+[ ] 5. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
+[ ] 6. User authorization scopes added: sql, files.files, catalog.catalogs:read,
+       catalog.schemas:read, catalog.tables:read
+[ ] 7. UC grants applied to the app's service principal
+[ ] 8. Deployed from Git: click Deploy > From Git > enter branch (e.g. main)
+[ ] 9. Health check passes: curl <app-url>/api/health
 ```
 
 > Lakebase is auto-provisioned on first deploy -- no manual database, role, secret, or resource binding steps needed.
@@ -518,7 +533,7 @@ All API routes are server-side only. The frontend calls them via `fetch()`.
 | **Excel** | exceljs | 3-sheet workbook: Summary, Use Cases (filterable), Domains |
 | **PowerPoint** | pptxgenjs | Title slide, executive summary, domain breakdown, top 10 use cases |
 | **PDF** | pdfkit | Databricks-branded A4 landscape report with cover page, executive summary, domain breakdown, and individual use case pages |
-| **Notebooks** | Workspace REST API | One SQL notebook per use case, organised by domain, deployed to your workspace |
+| **Notebooks** | Workspace REST API | One SQL notebook per use case, organised by domain, deployed to the user's workspace folder (via OBO auth) |
 
 ---
 
