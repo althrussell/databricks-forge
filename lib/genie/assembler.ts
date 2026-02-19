@@ -221,7 +221,7 @@ export function assembleSerializedSpace(
   let benchIdx = 0;
   for (const b of outputs.benchmarkQuestions) {
     const answer = b.expectedSql
-      ? [{ format: "sql", content: [b.expectedSql] }]
+      ? [{ format: "SQL", content: [b.expectedSql] }]
       : undefined;
     const allPhrasings = [b.question, ...b.alternatePhrasings];
     for (const phrasing of allPhrasings) {
