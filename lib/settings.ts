@@ -5,6 +5,9 @@
  * They are read by the pipeline config form at submission time.
  */
 
+import type { DiscoveryDepth } from "@/lib/domain/types";
+import { DISCOVERY_DEPTHS } from "@/lib/domain/types";
+
 export interface AppSettings {
   /** Number of sample rows to fetch per table for discovery & SQL generation (0 = disabled) */
   sampleRowsPerTable: number;
@@ -12,6 +15,8 @@ export interface AppSettings {
   defaultExportFormat: string;
   /** Default notebook deployment path */
   notebookPath: string;
+  /** Default discovery depth for new pipeline runs */
+  defaultDiscoveryDepth: DiscoveryDepth;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -20,6 +25,7 @@ const DEFAULTS: AppSettings = {
   sampleRowsPerTable: 0,
   defaultExportFormat: "excel",
   notebookPath: "./forge_gen/",
+  defaultDiscoveryDepth: "balanced",
 };
 
 export function loadSettings(): AppSettings {
@@ -41,6 +47,11 @@ export function loadSettings(): AppSettings {
         typeof parsed.notebookPath === "string"
           ? parsed.notebookPath
           : DEFAULTS.notebookPath,
+      defaultDiscoveryDepth:
+        typeof parsed.defaultDiscoveryDepth === "string" &&
+        (DISCOVERY_DEPTHS as readonly string[]).includes(parsed.defaultDiscoveryDepth)
+          ? (parsed.defaultDiscoveryDepth as DiscoveryDepth)
+          : DEFAULTS.defaultDiscoveryDepth,
     };
   } catch {
     return { ...DEFAULTS };

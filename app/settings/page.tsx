@@ -26,12 +26,18 @@ import {
   Shield,
   Database,
   User,
-  Globe,
   Trash2,
   Save,
   FileText,
   FolderOpen,
+  Target,
+  Scale,
+  Layers,
 } from "lucide-react";
+import {
+  DISCOVERY_DEPTHS,
+  type DiscoveryDepth,
+} from "@/lib/domain/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,6 +63,10 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return "./forge_gen/";
     return loadSettings().notebookPath ?? "./forge_gen/";
   });
+  const [defaultDiscoveryDepth, setDefaultDiscoveryDepth] = useState<DiscoveryDepth>(() => {
+    if (typeof window === "undefined") return "balanced";
+    return loadSettings().defaultDiscoveryDepth ?? "balanced";
+  });
 
   // Profile info from API
   const [profile, setProfile] = useState<{
@@ -79,7 +89,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth });
     toast.success("Settings saved");
   };
 
@@ -89,6 +99,7 @@ export default function SettingsPage() {
       setSampleRowsPerTable(0);
       setDefaultExportFormat("excel");
       setNotebookPath("./forge_gen/");
+      setDefaultDiscoveryDepth("balanced");
       toast.success("Local settings cleared");
     }
   };
@@ -197,6 +208,82 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Discovery Depth */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Discovery Depth
+          </CardTitle>
+          <CardDescription>
+            Set the default discovery depth for new pipeline runs. This controls
+            the quality/quantity trade-off: how many use cases are generated per
+            batch, the minimum quality floor, and the adaptive volume cap.
+            You can still override this per-run in the configuration form.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {([
+              {
+                value: "focused" as DiscoveryDepth,
+                label: "Focused",
+                icon: Target,
+                description: "Fewer, highest-quality use cases. Best for targeted workshops or demos.",
+                details: "8-12 per batch · quality floor 0.4 · cap 75",
+              },
+              {
+                value: "balanced" as DiscoveryDepth,
+                label: "Balanced",
+                icon: Scale,
+                description: "Good mix of breadth and quality. Recommended for most discovery runs.",
+                details: "12-18 per batch · quality floor 0.3 · cap 150",
+              },
+              {
+                value: "comprehensive" as DiscoveryDepth,
+                label: "Comprehensive",
+                icon: Layers,
+                description: "Maximum coverage across all domains. Longer runs, broader output.",
+                details: "15-22 per batch · quality floor 0.2 · cap 250",
+              },
+            ]).map((opt) => {
+              const selected = defaultDiscoveryDepth === opt.value;
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setDefaultDiscoveryDepth(opt.value)}
+                  className={`flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-colors ${
+                    selected
+                      ? "border-primary bg-primary/5"
+                      : "border-muted hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 ${selected ? "text-primary" : "text-muted-foreground"}`} />
+                    <span className={`text-sm font-medium ${selected ? "text-primary" : ""}`}>
+                      {opt.label}
+                    </span>
+                    {opt.value === "balanced" && (
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {opt.description}
+                  </p>
+                  <p className="text-[10px] font-mono text-muted-foreground/70">
+                    {opt.details}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
