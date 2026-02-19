@@ -223,14 +223,18 @@ export function generateGenieRecommendations(
       (a, b) => b.overallScore - a.overallScore
     );
 
-    // 1. Collect tables (filter out invalid identifiers from LLM hallucinations)
+    // 1. Collect tables (strip backticks + filter out invalid identifiers)
     const tableSet = new Set<string>();
     for (const uc of sorted) {
       for (const t of uc.tablesInvolved) {
-        if (isValidTableFqn(t)) tableSet.add(t);
+        const clean = t.replace(/`/g, "");
+        if (isValidTableFqn(clean)) tableSet.add(clean);
       }
     }
     const tables = Array.from(tableSet);
+
+    // A Genie Space requires at least one table -- skip domains with none
+    if (tables.length === 0) continue;
 
     // 2. Find metric views in same catalog.schema as domain tables
     const domainCatalogSchemas = new Set<string>();

@@ -59,6 +59,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate that the space has at least one table (Genie API requirement)
+    try {
+      const parsed = JSON.parse(serializedSpace);
+      const tables = parsed?.data_sources?.tables;
+      if (!Array.isArray(tables) || tables.length === 0) {
+        return NextResponse.json(
+          { error: "Cannot create a Genie Space with no tables. At least one table is required." },
+          { status: 400 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid serializedSpace JSON" },
+        { status: 400 }
+      );
+    }
+
     const config = getConfig();
 
     // Create Genie space via Databricks API
