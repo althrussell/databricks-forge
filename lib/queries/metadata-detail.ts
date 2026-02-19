@@ -372,38 +372,6 @@ export async function getColumnTags(
 }
 
 // ---------------------------------------------------------------------------
-// System tables
-// ---------------------------------------------------------------------------
-
-/**
- * Query recent query history touching tables in the given scope.
- * Graceful fallback to empty array.
- */
-export async function getQueryHistory(
-  catalog: string,
-  _schema?: string // eslint-disable-line @typescript-eslint/no-unused-vars
-): Promise<Array<{ statementText: string; executedBy: string; startTime: string }>> {
-  try {
-    const sql = `
-      SELECT statement_text, executed_by, start_time
-      FROM system.query.history
-      WHERE statement_text LIKE '%${validateIdentifier(catalog, "catalog")}%'
-        AND start_time > DATEADD(DAY, -30, CURRENT_TIMESTAMP())
-      ORDER BY start_time DESC
-      LIMIT 100
-    `;
-    const result = await executeSQL(sql);
-    return result.rows.map((row) => ({
-      statementText: row[0] ?? "",
-      executedBy: row[1] ?? "",
-      startTime: row[2] ?? "",
-    }));
-  } catch {
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Batch enrichment orchestrator
 // ---------------------------------------------------------------------------
 

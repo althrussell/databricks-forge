@@ -109,7 +109,7 @@ export default function SettingsPage() {
           host: data.host ?? null,
         });
       })
-      .catch(() => {});
+      .catch(() => setProfile({ email: null, host: null }));
   }, []);
 
   const handleSave = () => {

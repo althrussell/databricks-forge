@@ -5,6 +5,8 @@
  * warehouse cold starts or temporary network issues.
  */
 
+import { logger } from "@/lib/logger";
+
 // ---------------------------------------------------------------------------
 // Error classification
 // ---------------------------------------------------------------------------
@@ -80,9 +82,7 @@ export async function withRetry<T>(
           initialBackoffMs * Math.pow(2, attempt - 1),
           maxBackoffMs
         );
-        console.log(
-          `[${label}] Retry ${attempt}/${maxRetries} after ${backoffMs}ms`
-        );
+        logger.info(`[${label}] Retry ${attempt}/${maxRetries} after ${backoffMs}ms`);
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
@@ -95,9 +95,7 @@ export async function withRetry<T>(
       }
 
       if (attempt < maxRetries) {
-        console.warn(
-          `[${label}] Attempt ${attempt + 1} failed: ${lastError.message}`
-        );
+        logger.warn(`[${label}] Attempt ${attempt + 1} failed: ${lastError.message}`);
       }
     }
   }

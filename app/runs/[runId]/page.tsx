@@ -580,7 +580,7 @@ export default function RunDetailPage({
                       if (!res.ok) {
                         const data = await res.json().catch(() => ({}));
                         const msg = data?.error || `HTTP ${res.status}`;
-                        console.error("[onUpdate] PATCH failed", res.status, data);
+                        void 0; // logged server-side
                         return { ok: false, error: msg };
                       }
                       setUseCases((prev) =>
@@ -588,7 +588,7 @@ export default function RunDetailPage({
                       );
                       return { ok: true };
                     } catch (err) {
-                      console.error("[onUpdate] error", err);
+                      void 0; // network error surfaced in return value
                       return { ok: false, error: err instanceof Error ? err.message : "Network error" };
                     }
                   }}

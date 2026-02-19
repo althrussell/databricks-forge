@@ -134,12 +134,6 @@ function parseGenieEngineDefaults(raw: unknown): GenieEngineDefaults {
   return result;
 }
 
-/** Resolve the config for a specific depth from saved settings. */
-export function resolveDepthConfig(depth: DiscoveryDepth): DiscoveryDepthConfig {
-  const settings = loadSettings();
-  return settings.discoveryDepthConfigs[depth];
-}
-
 export function saveSettings(settings: Partial<AppSettings>): AppSettings {
   const current = loadSettings();
   const merged = { ...current, ...settings };

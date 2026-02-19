@@ -80,7 +80,7 @@ function ComparePageInner() {
         );
         setRuns(completedRuns);
       })
-      .catch(() => {})
+      .catch(() => setRuns([]))
       .finally(() => setRunsLoading(false));
   }, []);
 
