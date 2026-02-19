@@ -153,7 +153,12 @@ export function ConfigForm() {
         setManualMode(true);
         setManualInput(cfg.ucMetadata);
       }
-      if (cfg.businessDomains?.length) setBusinessDomains(cfg.businessDomains);
+      if (cfg.businessDomains?.length) {
+        const domains = Array.isArray(cfg.businessDomains)
+          ? cfg.businessDomains
+          : cfg.businessDomains.split(",").map((d: string) => d.trim()).filter(Boolean);
+        setBusinessDomains(domains);
+      }
       if (cfg.businessPriorities?.length) setSelectedPriorities(cfg.businessPriorities);
       if (cfg.strategicGoals) setStrategicGoals(cfg.strategicGoals);
       if (cfg.languages?.length) setSelectedLanguages(cfg.languages);
