@@ -6,11 +6,8 @@
 #   2. Secret — resource key: "db-secret" (scope: forge-secrets, key: DATABASE_URL)
 
 command:
-  - "npx"
-  - "next"
-  - "start"
-  - "-p"
-  - "8000"
+  - "sh"
+  - "scripts/start.sh"
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
