@@ -124,9 +124,9 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
     return `${host}/genie/rooms/${spaceId}`;
   }
 
-  // Selectable = not already deployed
+  // Selectable = not already deployed AND has at least one table
   const selectableDomains = recommendations
-    .filter((r) => !isDeployed(r.domain))
+    .filter((r) => !isDeployed(r.domain) && r.tableCount > 0)
     .map((r) => r.domain);
 
   const allSelected =
@@ -357,6 +357,8 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   const deployed = isDeployed(rec.domain);
                   const tracking = getTracking(rec.domain);
 
+                  const noTables = rec.tableCount === 0;
+
                   return (
                     <tr
                       key={rec.domain}
@@ -370,7 +372,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                         <Checkbox
                           checked={selected.has(rec.domain)}
                           onCheckedChange={() => toggleSelect(rec.domain)}
-                          disabled={deployed}
+                          disabled={deployed || noTables}
                           aria-label={`Select ${rec.domain}`}
                         />
                       </td>
@@ -394,7 +396,13 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
-                        {rec.tableCount}
+                        {noTables ? (
+                          <Badge variant="destructive" className="text-[10px]">
+                            No Tables
+                          </Badge>
+                        ) : (
+                          rec.tableCount
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         {rec.useCaseCount}
@@ -812,6 +820,10 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                ) : detailRec.tableCount === 0 ? (
+                  <Button className="w-full" variant="secondary" disabled>
+                    Cannot Deploy — No Tables
+                  </Button>
                 ) : (
                   <Button
                     className="w-full bg-green-600 hover:bg-green-700"
