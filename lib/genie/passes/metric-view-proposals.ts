@@ -1,19 +1,46 @@
 /**
  * Pass 6: Metric View Proposals (LLM)
  *
- * Analyzes domain tables and generated measures to propose metric view
- * YAML definitions. Outputs CREATE VIEW ... WITH METRICS DDL that can
- * be reviewed and deployed by the customer.
+ * Analyses domain tables, measures, dimensions, joins, and column enrichments
+ * to propose production-grade metric view YAML definitions conforming to
+ * Databricks Unity Catalog YAML v1.1 specification.
+ *
+ * Features:
+ * - Embedded YAML v1.1 spec reference for the LLM
+ * - Star/snowflake schema joins from FK metadata
+ * - FILTER clause measures for conditional KPIs
+ * - Ratio measures (safe re-aggregation)
+ * - Window measures (running totals, period-over-period, YTD) when date columns present
+ * - Materialization recommendations for high-table-count domains
+ * - Seed YAML from Pass 2 measures/dimensions as starting point
+ * - Column enrichment descriptions as YAML comments
+ * - Post-generation YAML validation against schema allowlist
  */
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase } from "@/lib/domain/types";
-import type { MetricViewProposal, EnrichedSqlSnippetMeasure, EnrichedSqlSnippetDimension } from "../types";
-import { buildSchemaContextBlock, type SchemaAllowlist } from "../schema-allowlist";
+import type {
+  MetricViewProposal,
+  EnrichedSqlSnippetMeasure,
+  EnrichedSqlSnippetDimension,
+  ColumnEnrichment,
+} from "../types";
+import {
+  buildSchemaContextBlock,
+  isValidTable,
+  type SchemaAllowlist,
+} from "../schema-allowlist";
 
 const TEMPERATURE = 0.2;
+
+export interface JoinSpecInput {
+  leftTable: string;
+  rightTable: string;
+  sql: string;
+  relationshipType: "many_to_one" | "one_to_many" | "one_to_one";
+}
 
 export interface MetricViewProposalsInput {
   domain: string;
@@ -23,6 +50,8 @@ export interface MetricViewProposalsInput {
   useCases: UseCase[];
   measures: EnrichedSqlSnippetMeasure[];
   dimensions: EnrichedSqlSnippetDimension[];
+  joinSpecs: JoinSpecInput[];
+  columnEnrichments: ColumnEnrichment[];
   endpoint: string;
 }
 
@@ -30,10 +59,210 @@ export interface MetricViewProposalsOutput {
   proposals: MetricViewProposal[];
 }
 
+// ---------------------------------------------------------------------------
+// YAML v1.1 Spec Reference (condensed for LLM prompt)
+// ---------------------------------------------------------------------------
+
+const YAML_SPEC_REFERENCE = `
+## Databricks Metric View YAML v1.1 Specification
+
+A metric view separates measure definitions from dimension groupings.
+Measures are queried via MEASURE(\`name\`) and re-aggregate safely at any granularity.
+
+### Required DDL wrapper:
+\`\`\`sql
+CREATE OR REPLACE VIEW catalog.schema.view_name
+WITH METRICS
+LANGUAGE YAML
+AS $$
+  version: 1.1
+  comment: "Description"
+  source: catalog.schema.table
+  -- ... YAML body ...
+$$
+\`\`\`
+
+### YAML fields:
+- version: "1.1" (required)
+- comment: string (optional, describes the metric view)
+- source: catalog.schema.table (required, the primary fact table)
+- filter: SQL boolean expression (optional, global WHERE)
+- dimensions: list (required, at least one)
+  - name: Display Name (backtick-quoted in queries)
+  - expr: SQL expression (column ref or transformation)
+  - comment: string (optional description)
+- measures: list (required, at least one)
+  - name: Display Name (queried via MEASURE(\`name\`))
+  - expr: aggregate expression (SUM, COUNT, AVG, MIN, MAX)
+  - comment: string (optional description)
+- joins: list (optional, star/snowflake schema)
+  - name: alias for the joined table
+  - source: catalog.schema.dim_table
+  - on: source.fk = alias.pk
+  - joins: nested list (for snowflake, DBR 17.1+)
+
+### Measure patterns:
+- Basic: \`SUM(amount)\`, \`COUNT(1)\`, \`AVG(price)\`
+- Filtered: \`SUM(amount) FILTER (WHERE status = 'OPEN')\`
+- Ratio: \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
+- Distinct: \`COUNT(DISTINCT customer_id)\`
+
+### Window measures (experimental, use version: 0.1):
+- Add a \`window\` block to a measure:
+  - order: dimension name
+  - range: cumulative | trailing N unit | current | all
+  - semiadditive: first | last
+
+### Materialization (experimental):
+\`\`\`yaml
+materialization:
+  schedule: every 6 hours
+  mode: relaxed
+  materialized_views:
+    - name: daily_summary
+      type: aggregated
+      dimensions: [dim1]
+      measures: [measure1]
+\`\`\`
+`.trim();
+
+// ---------------------------------------------------------------------------
+// Seed YAML builder
+// ---------------------------------------------------------------------------
+
+function buildSeedYaml(
+  primaryTable: string,
+  measures: EnrichedSqlSnippetMeasure[],
+  dimensions: EnrichedSqlSnippetDimension[],
+  enrichmentMap: Map<string, string>,
+): string {
+  const topMeasures = measures.slice(0, 6);
+  const topDims = dimensions
+    .filter((d) => !d.isTimePeriod)
+    .slice(0, 4);
+  const timeDims = dimensions
+    .filter((d) => d.isTimePeriod)
+    .slice(0, 2);
+  const allDims = [...topDims, ...timeDims];
+
+  if (topMeasures.length === 0 || allDims.length === 0) return "";
+
+  const dimLines = allDims.map((d) => {
+    const comment = enrichmentMap.get(d.name);
+    const commentLine = comment ? `\n      comment: "${comment}"` : "";
+    return `    - name: ${d.name}\n      expr: ${d.sql}${commentLine}`;
+  });
+
+  const measureLines = topMeasures.map((m) => {
+    const comment = enrichmentMap.get(m.name);
+    const commentLine = comment ? `\n      comment: "${comment}"` : "";
+    return `    - name: ${m.name}\n      expr: ${m.sql}${commentLine}`;
+  });
+
+  return [
+    "  version: 1.1",
+    `  source: ${primaryTable}`,
+    "  dimensions:",
+    ...dimLines,
+    "  measures:",
+    ...measureLines,
+  ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// YAML Validation
+// ---------------------------------------------------------------------------
+
+interface ValidationResult {
+  status: "valid" | "warning" | "error";
+  issues: string[];
+}
+
+function validateMetricViewYaml(
+  yaml: string,
+  ddl: string,
+  allowlist: SchemaAllowlist,
+): ValidationResult {
+  const issues: string[] = [];
+
+  if (!yaml.includes("version:")) {
+    issues.push("Missing required field: version");
+  }
+  if (!yaml.includes("source:")) {
+    issues.push("Missing required field: source");
+  }
+  if (!yaml.includes("dimensions:")) {
+    issues.push("Missing required field: dimensions");
+  }
+  if (!yaml.includes("measures:")) {
+    issues.push("Missing required field: measures");
+  }
+
+  const sourceMatch = yaml.match(/source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/);
+  if (sourceMatch) {
+    const sourceFqn = sourceMatch[1];
+    if (!isValidTable(allowlist, sourceFqn)) {
+      issues.push(`Source table not found in schema: ${sourceFqn}`);
+    }
+  }
+
+  const joinSourceMatches = yaml.matchAll(/joins:[\s\S]*?source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/g);
+  for (const m of joinSourceMatches) {
+    const joinFqn = m[1];
+    if (!isValidTable(allowlist, joinFqn)) {
+      issues.push(`Join table not found in schema: ${joinFqn}`);
+    }
+  }
+
+  if (!ddl.includes("WITH METRICS")) {
+    issues.push("DDL missing WITH METRICS clause");
+  }
+  if (!ddl.includes("LANGUAGE YAML")) {
+    issues.push("DDL missing LANGUAGE YAML clause");
+  }
+  if (!ddl.includes("$$")) {
+    issues.push("DDL missing $$ delimiters");
+  }
+
+  const hasCritical = issues.some((i) =>
+    i.startsWith("Missing required") || i.includes("not found in schema")
+  );
+
+  return {
+    status: issues.length === 0 ? "valid" : hasCritical ? "error" : "warning",
+    issues,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Feature detection helpers
+// ---------------------------------------------------------------------------
+
+function detectFeatures(yaml: string): {
+  hasJoins: boolean;
+  hasFilteredMeasures: boolean;
+  hasWindowMeasures: boolean;
+  hasMaterialization: boolean;
+} {
+  return {
+    hasJoins: /\bjoins:/i.test(yaml),
+    hasFilteredMeasures: /FILTER\s*\(/i.test(yaml),
+    hasWindowMeasures: /\bwindow:/i.test(yaml),
+    hasMaterialization: /\bmaterialization:/i.test(yaml),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Main pass
+// ---------------------------------------------------------------------------
+
 export async function runMetricViewProposals(
-  input: MetricViewProposalsInput
+  input: MetricViewProposalsInput,
 ): Promise<MetricViewProposalsOutput> {
-  const { domain, tableFqns, metadata, useCases, measures, dimensions, endpoint } = input;
+  const {
+    domain, tableFqns, metadata, allowlist, useCases,
+    measures, dimensions, joinSpecs, columnEnrichments, endpoint,
+  } = input;
 
   if (tableFqns.length === 0 || measures.length === 0) {
     return { proposals: [] };
@@ -41,9 +270,18 @@ export async function runMetricViewProposals(
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
+  // Build enrichment lookup: column name -> description
+  const enrichmentMap = new Map<string, string>();
+  for (const e of columnEnrichments) {
+    if (e.description) {
+      enrichmentMap.set(e.columnName, e.description);
+    }
+  }
+
+  // Build measures/dimensions context
   const measuresBlock = measures
     .slice(0, 15)
-    .map((m) => `- ${m.name}: ${m.sql}`)
+    .map((m) => `- ${m.name}: ${m.sql}${m.instructions ? ` — ${m.instructions}` : ""}`)
     .join("\n");
 
   const dimensionsBlock = dimensions
@@ -58,27 +296,77 @@ export async function runMetricViewProposals(
     .map((d) => `- ${d.name}: ${d.sql}`)
     .join("\n");
 
-  const systemMessage = `You are a Databricks SQL expert creating metric view definitions.
+  // Build join context
+  const joinBlock = joinSpecs.length > 0
+    ? joinSpecs.map((j) =>
+        `- ${j.leftTable} → ${j.rightTable} ON ${j.sql} (${j.relationshipType})`
+      ).join("\n")
+    : "";
+
+  // Build column enrichments context
+  const enrichmentBlock = columnEnrichments
+    .filter((e) => e.description)
+    .slice(0, 20)
+    .map((e) => `- ${e.tableFqn}.${e.columnName}: ${e.description}`)
+    .join("\n");
+
+  // Identify date columns for window measure guidance
+  const dateColumns: string[] = [];
+  for (const col of metadata.columns) {
+    if (tableFqns.some((t) => t.toLowerCase() === col.tableFqn.toLowerCase())) {
+      const dt = col.dataType.toLowerCase();
+      if (dt.includes("date") || dt.includes("timestamp")) {
+        dateColumns.push(`${col.tableFqn}.${col.columnName}`);
+      }
+    }
+  }
+
+  // Build seed YAML from existing measures/dimensions
+  const primaryTable = tableFqns[0];
+  const seedYaml = buildSeedYaml(primaryTable, measures, dimensions, enrichmentMap);
+
+  // Determine if materialization should be suggested
+  const suggestMaterialization = tableFqns.length > 10 || joinSpecs.length > 3;
+
+  const systemMessage = `You are a Databricks SQL expert creating Unity Catalog metric view definitions.
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
-Create 1-3 metric view proposals for the "${domain}" domain. Each metric view should:
-1. Use one source table (the most central/important one)
-2. Define meaningful dimensions from the columns
-3. Include time-based dimensions (DATE_TRUNC)
-4. Define measures using aggregations (SUM, COUNT, AVG, etc.) with FILTER clauses where appropriate
-5. Add clear comments for all components
+${YAML_SPEC_REFERENCE}
 
-Output format for each proposal (JSON):
+---
+
+## Your Task
+
+Create 1-3 metric view proposals for the "${domain}" domain. Each proposal MUST:
+
+1. Follow the YAML v1.1 spec exactly (version, source, dimensions, measures)
+2. Use a central fact table as the source
+${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric views using the joins: block to pull dimensions from dimension tables" : "3. Define meaningful dimensions from the source table columns"}
+4. Include time-based dimensions using DATE_TRUNC for any date/timestamp columns
+5. Include a mix of measure types:
+   - Basic aggregates (SUM, COUNT, AVG)
+   - FILTER clause measures for status/category breakdowns, e.g. \`SUM(amount) FILTER (WHERE status = 'OPEN')\`
+   - Ratio measures that safely re-aggregate, e.g. \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
+   - COUNT DISTINCT measures for cardinality metrics
+6. Add descriptive \`comment\` fields on dimensions and measures using the column descriptions provided
+${dateColumns.length > 0 ? `7. For at least one proposal, include window measures for time intelligence (running totals, period-over-period, or YTD) using version: 0.1 and the window: block` : ""}
+${suggestMaterialization ? `8. For the most complex proposal, include a materialization: block (schedule: every 6 hours, mode: relaxed) with at least one aggregated materialized view` : ""}
+
+## Output format (JSON):
 {
-  "name": "metric_view_name",
-  "description": "What this metric view measures",
-  "yaml": "version: 1.1\\ncomment: ...\\nsource: catalog.schema.table\\n...",
-  "ddl": "CREATE OR REPLACE VIEW catalog.schema.metric_view_name\\nWITH METRICS\\nLANGUAGE YAML\\nAS $$\\n...\\n$$",
-  "sourceTables": ["catalog.schema.table"]
+  "proposals": [
+    {
+      "name": "metric_view_name",
+      "description": "What this metric view measures and why it is useful",
+      "yaml": "version: 1.1\\ncomment: ...\\nsource: catalog.schema.table\\n...",
+      "ddl": "CREATE OR REPLACE VIEW catalog.schema.metric_view_name\\nWITH METRICS\\nLANGUAGE YAML\\nAS $$\\n...\\n$$",
+      "sourceTables": ["catalog.schema.table", "catalog.schema.dim_table"]
+    }
+  ]
 }
 
-Return JSON: { "proposals": [...] }`;
+IMPORTANT: The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.`;
 
   const userMessage = `${schemaBlock}
 
@@ -91,6 +379,10 @@ ${dimensionsBlock || "(none)"}
 ### TIME DIMENSIONS
 ${timeDimensions || "(none)"}
 
+${joinBlock ? `### JOIN RELATIONSHIPS\n${joinBlock}\n` : ""}
+${enrichmentBlock ? `### COLUMN DESCRIPTIONS (use as comment values in YAML)\n${enrichmentBlock}\n` : ""}
+${dateColumns.length > 0 ? `### DATE/TIMESTAMP COLUMNS (candidates for time dimensions and window measures)\n${dateColumns.slice(0, 10).map((c) => `- ${c}`).join("\n")}\n` : ""}
+${seedYaml ? `### SEED YAML (starting point — improve, extend, and add joins/filters/ratios)\n\`\`\`yaml\n${seedYaml}\n\`\`\`\n` : ""}
 ### DOMAIN USE CASES (for context)
 ${useCases.slice(0, 5).map((uc) => `- ${uc.name}: ${uc.statement}`).join("\n")}
 
@@ -116,14 +408,41 @@ Create metric view proposals for this domain.`;
       : Array.isArray(parsed) ? parsed : [];
 
     const proposals: MetricViewProposal[] = items
-      .map((p) => ({
-        name: String(p.name ?? ""),
-        description: String(p.description ?? ""),
-        yaml: String(p.yaml ?? ""),
-        ddl: String(p.ddl ?? ""),
-        sourceTables: Array.isArray(p.sourceTables) ? p.sourceTables.map(String) : [],
-      }))
+      .map((p) => {
+        const yamlStr = String(p.yaml ?? "");
+        const ddlStr = String(p.ddl ?? "");
+
+        const validation = validateMetricViewYaml(yamlStr, ddlStr, allowlist);
+        const features = detectFeatures(yamlStr);
+
+        return {
+          name: String(p.name ?? ""),
+          description: String(p.description ?? ""),
+          yaml: yamlStr,
+          ddl: ddlStr,
+          sourceTables: Array.isArray(p.sourceTables) ? p.sourceTables.map(String) : [],
+          hasJoins: features.hasJoins,
+          hasFilteredMeasures: features.hasFilteredMeasures,
+          hasWindowMeasures: features.hasWindowMeasures,
+          hasMaterialization: features.hasMaterialization,
+          validationStatus: validation.status,
+          validationIssues: validation.issues,
+        };
+      })
       .filter((p) => p.name.length > 0 && p.ddl.length > 0);
+
+    logger.info("Metric view proposals generated", {
+      domain,
+      count: proposals.length,
+      features: proposals.map((p) => ({
+        name: p.name,
+        joins: p.hasJoins,
+        filtered: p.hasFilteredMeasures,
+        window: p.hasWindowMeasures,
+        materialized: p.hasMaterialization,
+        validation: p.validationStatus,
+      })),
+    });
 
     return { proposals };
   } catch (err) {

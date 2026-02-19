@@ -190,6 +190,12 @@ export interface MetricViewProposal {
   yaml: string;
   ddl: string;
   sourceTables: string[];
+  hasJoins: boolean;
+  hasFilteredMeasures: boolean;
+  hasWindowMeasures: boolean;
+  hasMaterialization: boolean;
+  validationStatus: "valid" | "warning" | "error";
+  validationIssues: string[];
 }
 
 /** Aggregated output from all engine passes for a single domain. */

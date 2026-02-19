@@ -218,37 +218,7 @@ async function processDomain(
     }),
   ]);
 
-  // Pass 5: Benchmark Generation (parallel with Pass 6)
-  onProgress("Generating benchmarks & metric views...");
-  const [benchmarkResult, metricViewResult] = await Promise.all([
-    config.generateBenchmarks
-      ? runBenchmarkGeneration({
-          tableFqns: tables,
-          metadata,
-          allowlist,
-          useCases,
-          entityCandidates: columnResult.entityCandidates,
-          customerBenchmarks: config.benchmarkQuestions,
-          endpoint,
-        })
-      : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
-
-    // Pass 6: Metric View Proposals (parallel with Pass 5)
-    config.generateMetricViews
-      ? runMetricViewProposals({
-          domain,
-          tableFqns: tables,
-          metadata,
-          allowlist,
-          useCases,
-          measures: exprResult.measures,
-          dimensions: exprResult.dimensions,
-          endpoint,
-        })
-      : Promise.resolve({ proposals: [] }),
-  ]);
-
-  // Build join specs from foreign keys
+  // Build join specs from foreign keys (needed by Pass 6 and final output)
   const tableSet = new Set(tables.map((t) => t.toLowerCase()));
   const fkJoins = metadata.foreignKeys
     .filter((fk) =>
@@ -284,10 +254,52 @@ async function processDomain(
       })),
   ];
 
-  // Sample questions from top use cases
-  const sampleQuestions = useCases
+  // Pass 5: Benchmark Generation (parallel with Pass 6)
+  onProgress("Generating benchmarks & metric views...");
+  const [benchmarkResult, metricViewResult] = await Promise.all([
+    config.generateBenchmarks
+      ? runBenchmarkGeneration({
+          tableFqns: tables,
+          metadata,
+          allowlist,
+          useCases,
+          entityCandidates: columnResult.entityCandidates,
+          customerBenchmarks: config.benchmarkQuestions,
+          endpoint,
+        })
+      : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
+
+    // Pass 6: Metric View Proposals (parallel with Pass 5)
+    config.generateMetricViews
+      ? runMetricViewProposals({
+          domain,
+          tableFqns: tables,
+          metadata,
+          allowlist,
+          useCases,
+          measures: exprResult.measures,
+          dimensions: exprResult.dimensions,
+          joinSpecs: allJoins,
+          columnEnrichments: columnResult.enrichments,
+          endpoint,
+        })
+      : Promise.resolve({ proposals: [] }),
+  ]);
+
+  // Sample questions: prefer trusted query questions (column-grounded)
+  // over abstract use case statements for better Genie vocabulary learning
+  const trustedQuestionTexts = trustedResult.queries
+    .filter((tq) => tq.question.trim().length > 0)
+    .map((tq) => tq.question);
+  const fallbackQuestions = useCases
     .slice(0, 5)
     .map((uc) => statementToQuestion(uc.statement));
+  const sampleQuestions = [
+    ...trustedQuestionTexts.slice(0, 5),
+    ...fallbackQuestions,
+  ]
+    .filter((q, i, arr) => arr.indexOf(q) === i)
+    .slice(0, 5);
 
   return {
     domain,

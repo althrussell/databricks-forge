@@ -196,6 +196,156 @@ export async function updateGenieSpace(
 }
 
 // ---------------------------------------------------------------------------
+// Conversation API -- ask questions to a deployed Genie Space
+// ---------------------------------------------------------------------------
+
+export interface GenieConversationMessage {
+  question: string;
+  conversationId: string;
+  messageId: string;
+  status: "COMPLETED" | "EXECUTING_QUERY" | "FAILED" | "CANCELLED" | "SUBMITTED" | "FILTERING_RESULTS" | "ASKING_AI" | "CANCELLED_BY_USER";
+  sql?: string;
+  textResponse?: string;
+  error?: string;
+}
+
+async function pollMessageCompletion(
+  spaceId: string,
+  conversationId: string,
+  messageId: string,
+  timeoutMs = 120_000
+): Promise<GenieConversationMessage> {
+  const config = getConfig();
+  const headers = await getAppHeaders();
+  const deadline = Date.now() + timeoutMs;
+  const terminalStatuses = new Set(["COMPLETED", "FAILED", "CANCELLED", "CANCELLED_BY_USER"]);
+
+  while (Date.now() < deadline) {
+    const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages/${messageId}`;
+    const response = await fetchWithTimeout(url, { method: "GET", headers }, TIMEOUTS.WORKSPACE);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Genie get message failed (${response.status}): ${text}`);
+    }
+
+    const msg = (await response.json()) as {
+      id: string;
+      status: string;
+      query_result?: { query_text?: string };
+      error?: { message?: string };
+      content?: string;
+    };
+
+    if (terminalStatuses.has(msg.status)) {
+      return {
+        question: "",
+        conversationId,
+        messageId,
+        status: msg.status as GenieConversationMessage["status"],
+        sql: msg.query_result?.query_text,
+        textResponse: msg.content,
+        error: msg.error?.message,
+      };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+
+  return {
+    question: "",
+    conversationId,
+    messageId,
+    status: "FAILED",
+    error: `Timed out after ${timeoutMs}ms`,
+  };
+}
+
+/**
+ * Start a new conversation with a Genie Space by asking a question.
+ * Polls until the response is complete or times out.
+ */
+export async function startConversation(
+  spaceId: string,
+  question: string,
+  timeoutMs = 120_000
+): Promise<GenieConversationMessage> {
+  const config = getConfig();
+  const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations`;
+  const headers = await getAppHeaders();
+
+  const response = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ content: question }),
+    },
+    TIMEOUTS.WORKSPACE
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Genie start conversation failed (${response.status}): ${text}`);
+  }
+
+  const data = (await response.json()) as {
+    conversation_id: string;
+    message_id: string;
+  };
+
+  const result = await pollMessageCompletion(
+    spaceId,
+    data.conversation_id,
+    data.message_id,
+    timeoutMs
+  );
+
+  return { ...result, question };
+}
+
+/**
+ * Send a follow-up question in an existing Genie conversation.
+ * Polls until the response is complete or times out.
+ */
+export async function sendFollowUp(
+  spaceId: string,
+  conversationId: string,
+  question: string,
+  timeoutMs = 120_000
+): Promise<GenieConversationMessage> {
+  const config = getConfig();
+  const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages`;
+  const headers = await getAppHeaders();
+
+  const response = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ content: question }),
+    },
+    TIMEOUTS.WORKSPACE
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Genie follow-up failed (${response.status}): ${text}`);
+  }
+
+  const data = (await response.json()) as { id: string };
+
+  const result = await pollMessageCompletion(
+    spaceId,
+    conversationId,
+    data.id,
+    timeoutMs
+  );
+
+  return { ...result, question };
+}
+
+// ---------------------------------------------------------------------------
 // Trash (soft delete)
 // ---------------------------------------------------------------------------
 
