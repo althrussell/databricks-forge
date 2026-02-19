@@ -9,6 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
@@ -18,6 +23,7 @@ import {
   XCircle,
   Download,
   Activity,
+  ChevronRight,
 } from "lucide-react";
 
 interface ActivityEntry {
@@ -88,79 +94,86 @@ export function ActivityFeed({ limit = 10 }: { limit?: number }) {
   }, [fetchActivities]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-lg">Recent Activity</CardTitle>
-        </div>
-        <CardDescription>Latest actions across the platform</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : activities.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No activity recorded yet. Actions like creating runs, exporting
-            results, and pipeline completions will appear here.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {activities.map((a) => {
-              const config = ACTION_CONFIG[a.action] ?? {
-                icon: <Activity className="h-3.5 w-3.5" />,
-                label: a.action,
-                color: "text-muted-foreground",
-              };
-              const businessName =
-                (a.metadata?.businessName as string) ??
-                (a.metadata?.format as string) ??
-                "";
+    <Collapsible defaultOpen={false}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer select-none">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-lg">Recent Activity</CardTitle>
+              <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-90" />
+            </div>
+            <CardDescription>Latest actions across the platform</CardDescription>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : activities.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No activity recorded yet. Actions like creating runs, exporting
+                results, and pipeline completions will appear here.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {activities.map((a) => {
+                  const config = ACTION_CONFIG[a.action] ?? {
+                    icon: <Activity className="h-3.5 w-3.5" />,
+                    label: a.action,
+                    color: "text-muted-foreground",
+                  };
+                  const businessName =
+                    (a.metadata?.businessName as string) ??
+                    (a.metadata?.format as string) ??
+                    "";
 
-              return (
-                <div
-                  key={a.activityId}
-                  className="flex items-center gap-3 rounded-md border p-2.5"
-                >
-                  <div className={config.color}>{config.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">
-                      <span className="font-medium">{config.label}</span>
-                      {businessName && (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          &mdash; {businessName}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {a.userId && <>{a.userId} &middot; </>}
-                      {new Date(a.createdAt).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                  {a.resourceId && a.action !== "deleted_run" && (
-                    <Link
-                      href={`/runs/${a.resourceId}`}
-                      className="text-xs text-primary hover:underline"
+                  return (
+                    <div
+                      key={a.activityId}
+                      className="flex items-center gap-3 rounded-md border p-2.5"
                     >
-                      View
-                    </Link>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                      <div className={config.color}>{config.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm">
+                          <span className="font-medium">{config.label}</span>
+                          {businessName && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              &mdash; {businessName}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {a.userId && <>{a.userId} &middot; </>}
+                          {new Date(a.createdAt).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      {a.resourceId && a.action !== "deleted_run" && (
+                        <Link
+                          href={`/runs/${a.resourceId}`}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          View
+                        </Link>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }

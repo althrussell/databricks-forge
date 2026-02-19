@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RunProgress } from "@/components/pipeline/run-progress";
 import { UseCaseTable } from "@/components/pipeline/use-case-table";
 import { ExportToolbar } from "@/components/pipeline/export-toolbar";
-import { GenieSpacesTab } from "@/components/pipeline/genie-spaces-tab";
+import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
 import { ScoreDistributionChart } from "@/components/charts/score-distribution-chart";
 import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
 import { TypeSplitChart } from "@/components/charts/type-split-chart";
@@ -607,7 +607,7 @@ export default function RunDetailPage({
             {/* Genie Spaces Tab */}
             {useCases.length > 0 && (
               <TabsContent value="genie" className="pt-4">
-                <GenieSpacesTab runId={run.runId} />
+                <GenieWorkbench runId={run.runId} />
               </TabsContent>
             )}
 

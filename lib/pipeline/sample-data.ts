@@ -12,10 +12,13 @@
 
 import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
+import type { SampleDataCache, SampleDataEntry } from "@/lib/genie/types";
 
 export interface SampleDataResult {
   /** Formatted markdown section ready for prompt injection (empty string if nothing sampled) */
   markdown: string;
+  /** Structured raw data keyed by table FQN for downstream analysis (entity extraction, etc.) */
+  structured: SampleDataCache;
   /** Number of tables successfully sampled */
   tablesSampled: number;
   /** Number of tables skipped (permission errors, empty tables) */
@@ -36,6 +39,7 @@ export async function fetchSampleData(
   const sections: string[] = [
     "### SAMPLE DATA (real rows from the tables -- use this to understand data formats, values, and join keys)\n",
   ];
+  const structured: SampleDataCache = new Map();
 
   let tablesSampled = 0;
   let tablesSkipped = 0;
@@ -49,10 +53,11 @@ export async function fetchSampleData(
       );
 
       if (!result.columns || result.columns.length === 0 || result.rows.length === 0) {
-        return { fqn: cleanFqn, markdown: `**${cleanFqn}**: (empty table)\n`, rowCount: 0 };
+        return { fqn: cleanFqn, markdown: `**${cleanFqn}**: (empty table)\n`, rowCount: 0, entry: null };
       }
 
       const colNames = result.columns.map((c) => c.name);
+      const colTypes = result.columns.map((c) => c.typeName ?? "STRING");
       const header = `| ${colNames.join(" | ")} |`;
       const separator = `| ${colNames.map(() => "---").join(" | ")} |`;
       const rows = result.rows.map((row) => {
@@ -65,7 +70,14 @@ export async function fetchSampleData(
       });
 
       const markdown = `**${cleanFqn}** (${result.rows.length} sample rows):\n${header}\n${separator}\n${rows.join("\n")}\n`;
-      return { fqn: cleanFqn, markdown, rowCount: result.rows.length };
+
+      const entry: SampleDataEntry = {
+        columns: colNames,
+        columnTypes: colTypes,
+        rows: result.rows,
+      };
+
+      return { fqn: cleanFqn, markdown, rowCount: result.rows.length, entry };
     })
   );
 
@@ -76,6 +88,9 @@ export async function fetchSampleData(
       if (r.value.rowCount > 0) {
         tablesSampled++;
         totalRows += r.value.rowCount;
+        if (r.value.entry) {
+          structured.set(r.value.fqn, r.value.entry);
+        }
       } else {
         tablesSkipped++;
       }
@@ -101,6 +116,7 @@ export async function fetchSampleData(
 
   return {
     markdown: sections.length > 1 ? sections.join("\n") : "",
+    structured,
     tablesSampled,
     tablesSkipped,
     totalRows,

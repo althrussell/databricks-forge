@@ -259,6 +259,10 @@ export async function describeHistory(
       logger.debug("[metadata-detail] Skipping DESCRIBE HISTORY for view", { tableFqn });
       return null;
     }
+    if (msg.includes("DELTA_ONLY_OPERATION")) {
+      logger.debug("[metadata-detail] Skipping DESCRIBE HISTORY for non-Delta table", { tableFqn });
+      return null;
+    }
     if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("(403)")) {
       logger.warn("[metadata-detail] Permission denied for DESCRIBE HISTORY", { tableFqn });
       return null;
@@ -410,34 +414,58 @@ export interface EnrichmentResult {
 }
 
 /**
- * Enrich tables in parallel batches. Runs DESCRIBE DETAIL, DESCRIBE HISTORY,
- * and SHOW TBLPROPERTIES for each table.
+ * Enrich tables in parallel batches. Runs DESCRIBE DETAIL, DESCRIBE HISTORY
+ * (Delta tables only), and SHOW TBLPROPERTIES for each table.
  *
  * When DESCRIBE DETAIL returns null (views, permission denied), a fallback
  * TableDetail is created so the table still appears in the estate.
  *
- * @param tables - array of { fqn, discoveredVia, tableType? }
+ * DESCRIBE HISTORY is a Delta-only operation. Tables are skipped when:
+ * - `dataSourceFormat` is provided and is not DELTA, OR
+ * - DESCRIBE DETAIL returns a non-DELTA format
+ *
+ * @param tables - array of { fqn, discoveredVia, tableType?, dataSourceFormat? }
  * @param concurrency - how many tables to process in parallel (default 5)
  * @param onProgress - optional callback for progress updates
  */
 export async function enrichTablesInBatches(
-  tables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType?: string }>,
+  tables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType?: string; dataSourceFormat?: string | null }>,
   concurrency = 5,
   onProgress?: (completed: number, total: number) => void
 ): Promise<Map<string, EnrichmentResult>> {
   const results = new Map<string, EnrichmentResult>();
   let completed = 0;
+  let historySkipped = 0;
 
   for (let i = 0; i < tables.length; i += concurrency) {
     const batch = tables.slice(i, i + concurrency);
 
     const batchResults = await Promise.allSettled(
       batch.map(async (t) => {
-        const [detail, history, properties] = await Promise.all([
+        const knownFormat = t.dataSourceFormat?.toUpperCase() ?? null;
+        const skipHistoryUpfront = knownFormat !== null && knownFormat !== "DELTA";
+
+        const [detail, properties] = await Promise.all([
           describeDetail(t.fqn, t.discoveredVia),
-          describeHistory(t.fqn),
           getTableProperties(t.fqn),
         ]);
+
+        // Determine whether to run DESCRIBE HISTORY based on known format or DESCRIBE DETAIL result
+        const detailFormat = detail?.format?.toUpperCase() ?? null;
+        const isDelta = skipHistoryUpfront
+          ? false
+          : detailFormat === null || detailFormat === "DELTA";
+
+        let history: TableHistorySummary | null = null;
+        if (isDelta) {
+          history = await describeHistory(t.fqn);
+        } else {
+          historySkipped++;
+          logger.debug("[metadata-detail] Skipping DESCRIBE HISTORY for non-Delta table", {
+            tableFqn: t.fqn,
+            format: knownFormat ?? detailFormat ?? "unknown",
+          });
+        }
 
         // If DESCRIBE DETAIL returned null (view or inaccessible), create a fallback
         const effectiveDetail = detail ?? createFallbackDetail(
@@ -449,7 +477,6 @@ export async function enrichTablesInBatches(
         // Merge properties into detail
         if (properties && Object.keys(properties).length > 0) {
           effectiveDetail.tableProperties = properties;
-          // Extract row count from computed statistics (available after ANALYZE TABLE)
           const statsNumRows = properties["spark.sql.statistics.numRows"];
           if (statsNumRows && effectiveDetail.numRows == null) {
             effectiveDetail.numRows = parseIntSafe(statsNumRows);
@@ -475,6 +502,13 @@ export async function enrichTablesInBatches(
 
     logger.info("[metadata-detail] Enrichment progress", {
       completed,
+      total: tables.length,
+    });
+  }
+
+  if (historySkipped > 0) {
+    logger.info("[metadata-detail] Skipped DESCRIBE HISTORY for non-Delta tables", {
+      skipped: historySkipped,
       total: tables.length,
     });
   }

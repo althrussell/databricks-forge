@@ -6,7 +6,7 @@
  */
 
 import { getPrisma } from "@/lib/prisma";
-import type { GenieSpaceRecommendation } from "@/lib/genie/types";
+import type { GenieSpaceRecommendation, GenieEnginePassOutputs } from "@/lib/genie/types";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -73,36 +73,51 @@ export async function getGenieRecommendationsByRunId(
 /** Persist Genie recommendations for a run (delete-and-insert in a transaction). */
 export async function saveGenieRecommendations(
   runId: string,
-  recommendations: GenieSpaceRecommendation[]
+  recommendations: GenieSpaceRecommendation[],
+  passOutputs?: GenieEnginePassOutputs[],
+  engineConfigVersion?: number
 ): Promise<void> {
   const prisma = await getPrisma();
 
+  const outputsByDomain = new Map<string, GenieEnginePassOutputs>();
+  if (passOutputs) {
+    for (const po of passOutputs) {
+      outputsByDomain.set(po.domain, po);
+    }
+  }
+
   await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-    // Clear any previous recommendations for this run
     await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
 
     if (recommendations.length === 0) return;
 
     await tx.forgeGenieRecommendation.createMany({
-      data: recommendations.map((rec, idx) => ({
-        id: `${runId}_genie_${idx}`,
-        runId,
-        domain: rec.domain,
-        subdomains: JSON.stringify(rec.subdomains),
-        title: rec.title,
-        description: rec.description,
-        tableCount: rec.tableCount,
-        metricViewCount: rec.metricViewCount,
-        useCaseCount: rec.useCaseCount,
-        sqlExampleCount: rec.sqlExampleCount,
-        joinCount: rec.joinCount,
-        measureCount: rec.measureCount,
-        filterCount: rec.filterCount,
-        dimensionCount: rec.dimensionCount,
-        tables: JSON.stringify(rec.tables),
-        metricViews: JSON.stringify(rec.metricViews),
-        serializedSpace: rec.serializedSpace,
-      })),
+      data: recommendations.map((rec, idx) => {
+        const po = outputsByDomain.get(rec.domain);
+        return {
+          id: `${runId}_genie_${idx}`,
+          runId,
+          domain: rec.domain,
+          subdomains: JSON.stringify(rec.subdomains),
+          title: rec.title,
+          description: rec.description,
+          tableCount: rec.tableCount,
+          metricViewCount: rec.metricViewCount,
+          useCaseCount: rec.useCaseCount,
+          sqlExampleCount: rec.sqlExampleCount,
+          joinCount: rec.joinCount,
+          measureCount: rec.measureCount,
+          filterCount: rec.filterCount,
+          dimensionCount: rec.dimensionCount,
+          tables: JSON.stringify(rec.tables),
+          metricViews: JSON.stringify(rec.metricViews),
+          serializedSpace: rec.serializedSpace,
+          benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
+          columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
+          metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
+          engineConfigVersion: engineConfigVersion ?? 0,
+        };
+      }),
     });
   });
 }
