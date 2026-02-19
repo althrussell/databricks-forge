@@ -78,6 +78,29 @@ export function assembleSerializedSpace(
     outputs.entityMatchingCandidates.map((c) => `${c.tableFqn}:${c.columnName}`)
   );
 
+  // Column type lookup for format_assistance: tableFqn:columnName -> dataType
+  const columnTypeMap = new Map<string, string>();
+  for (const c of metadata.columns) {
+    columnTypeMap.set(`${c.tableFqn}:${c.columnName}`, c.dataType.toUpperCase());
+  }
+
+  const FORMAT_ASSIST_TYPES = new Set(["DECIMAL", "DOUBLE", "FLOAT", "NUMERIC"]);
+  const FORMAT_ASSIST_NAME_PATTERN =
+    /price|amount|revenue|cost|total|rate|percent|margin|fee|salary|budget|discount|tax|balance|profit/i;
+
+  // Join relationship lookup: tableFqn -> descriptions of related tables
+  const joinRelationships = new Map<string, string[]>();
+  for (const j of outputs.joinSpecs) {
+    const leftKey = j.leftTable.toLowerCase();
+    const rightKey = j.rightTable.toLowerCase();
+    const leftRels = joinRelationships.get(leftKey) ?? [];
+    leftRels.push(`Joins to ${j.rightTable} (${j.relationshipType ?? "related"})`);
+    joinRelationships.set(leftKey, leftRels);
+    const rightRels = joinRelationships.get(rightKey) ?? [];
+    rightRels.push(`Joins to ${j.leftTable} (${j.relationshipType ?? "related"})`);
+    joinRelationships.set(rightKey, rightRels);
+  }
+
   // 1. Data source tables (validated)
   const validTables = outputs.tables.filter((fqn) => {
     if (!isValidTable(allowlist, fqn)) {
@@ -90,11 +113,29 @@ export function assembleSerializedSpace(
   const dataTables: DataSourceTable[] = validTables
     .sort((a, b) => a.localeCompare(b))
     .map((fqn) => {
+      const descParts: string[] = [];
       const comment = tableComments.get(fqn);
-      const table: DataSourceTable = { identifier: fqn };
-      if (comment) table.description = [comment];
+      if (comment) descParts.push(comment);
+
+      const rels = joinRelationships.get(fqn.toLowerCase());
+      if (rels && rels.length > 0) {
+        descParts.push(rels.join(". ") + ".");
+      }
 
       const enrichments = columnsByTable.get(fqn);
+      if (enrichments && enrichments.length > 0) {
+        const keyDescs = enrichments
+          .filter((ce) => ce.description && !ce.hidden)
+          .slice(0, 5)
+          .map((ce) => `${ce.columnName}: ${ce.description}`);
+        if (keyDescs.length > 0) {
+          descParts.push("Key columns: " + keyDescs.join("; ") + ".");
+        }
+      }
+
+      const table: DataSourceTable = { identifier: fqn };
+      if (descParts.length > 0) table.description = [descParts.join(" ")];
+
       if (enrichments && enrichments.length > 0) {
         const cols: DataSourceTableColumn[] = enrichments.map((ce) => {
           const col: DataSourceTableColumn = { name: ce.columnName };
@@ -103,6 +144,13 @@ export function assembleSerializedSpace(
           if (ce.hidden) col.hidden = true;
           if (ce.entityMatchingCandidate || entityMatchingSet.has(`${fqn}:${ce.columnName}`)) {
             col.entity_matching = true;
+          }
+          const colType = columnTypeMap.get(`${fqn}:${ce.columnName}`) ?? "";
+          if (
+            FORMAT_ASSIST_TYPES.has(colType) ||
+            FORMAT_ASSIST_NAME_PATTERN.test(ce.columnName)
+          ) {
+            col.format_assistance = true;
           }
           return col;
         });

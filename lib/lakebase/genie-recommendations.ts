@@ -134,6 +134,7 @@ export async function saveGenieRecommendations(
           benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
           columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
           metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
+          trustedFunctions: po ? JSON.stringify(po.trustedFunctions) : null,
           engineConfigVersion: engineConfigVersion ?? 0,
         };
       }),

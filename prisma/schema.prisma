@@ -194,6 +194,7 @@ model ForgeGenieRecommendation {
   benchmarks          String?                              // JSON: BenchmarkQuestion[]
   columnEnrichments   String?  @map("column_enrichments")  // JSON: ColumnEnrichment[]
   metricViewProposals String?  @map("metric_view_proposals") // JSON: MetricViewProposal[]
+  trustedFunctions    String?  @map("trusted_functions")     // JSON: TrustedAssetFunction[]
   engineConfigVersion Int      @default(0) @map("engine_config_version")
   createdAt           DateTime @default(now()) @map("created_at")
 

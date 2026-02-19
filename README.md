@@ -70,7 +70,7 @@ databricks-forge/
     ui/                         # shadcn primitives
     pipeline/                   # Config form, progress, table, export
   lib/
-    prisma.ts                   # Prisma client singleton (OAuth token rotation)
+    prisma.ts                   # Prisma client singleton (auto-provisioned or static URL)
     generated/prisma/           # Generated Prisma client (gitignored)
     dbx/                        # Databricks SQL client + Workspace API
     queries/                    # SQL text + row mappers
@@ -109,106 +109,40 @@ Each step updates its status and a human-readable **status message** in Lakebase
 
 ---
 
-## Lakebase Autoscaling Setup
+## Lakebase (Zero-Touch Auto-Provisioning)
 
 The app persists all state (pipeline runs, use cases, exports) in [Lakebase Autoscaling](https://docs.databricks.com/aws/en/oltp/projects/authentication) -- a Postgres-compatible OLTP database managed by Databricks. The schema is managed by [Prisma ORM](https://www.prisma.io/).
 
-### 1. Create a Lakebase project
+### How it works
 
-In your Databricks workspace, navigate to **SQL > Lakebase** and create a new project (or use an existing one). Note the **pooler** and **direct** endpoint hostnames from the **Connect** dialog.
+**No manual database setup is required.** When deployed as a Databricks App, the app automatically:
 
-<p align="center">
-  <img src="docs/images/lakebase-connect.png" alt="Lakebase — Connect to your database dialog" width="600" />
-</p>
+1. **Creates a Lakebase Autoscale project** (`databricks-forge`) on first boot using the platform-injected service principal credentials
+2. **Generates short-lived OAuth DB credentials** for Postgres connections (rotated automatically every ~50 minutes)
+3. **Pushes the Prisma schema** (`prisma db push`) to create all 15 tables on first deploy, and applies additive changes on subsequent deploys
 
-### 2. Create a Postgres role for the app
+There are no Databricks secrets, no password management, and no manual resource bindings for the database. The service principal that Databricks Apps injects (`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` / `DATABRICKS_HOST`) is all the app needs.
 
-Connect to your Lakebase database as the project owner (via the Lakebase UI SQL editor, `psql`, or any Postgres client) and create a dedicated role:
+### First deploy vs subsequent deploys
 
-```sql
--- Create the application role with a native Postgres password
-CREATE ROLE databricks_forge WITH LOGIN PASSWORD 'your-secure-password';
-
--- Allow connecting and using the public schema
-GRANT CONNECT ON DATABASE databricks_postgres TO databricks_forge;
-GRANT USAGE  ON SCHEMA public TO databricks_forge;
-
--- Allow DDL so the app can create and alter its own tables at startup
-GRANT CREATE ON SCHEMA public TO databricks_forge;
-```
-
-That's all you need. The app runs `prisma db push` automatically every time it starts, which creates all tables as the `databricks_forge` role. Since this role **owns** the tables it creates, it automatically has full read/write/alter permissions on them -- no additional DML grants required.
-
-**Redeployments are safe.** `prisma db push` is idempotent: if the tables already exist and match the schema, it does nothing. If new tables or columns were added to the Prisma schema, it creates them. It never drops existing tables or columns.
-
-> **Note:** Using a native Postgres password (rather than OAuth tokens) is recommended for application roles. Native passwords don't expire hourly and are simpler to manage. See [Lakebase authentication docs](https://docs.databricks.com/aws/en/oltp/projects/authentication) for details.
-
-### 3. Build the connection string
-
-Your `DATABASE_URL` follows the standard Postgres format:
-
-```
-postgresql://<role>:<password>@<host>/<database>?sslmode=verify-full
-```
-
-Use the **direct** endpoint (not pooler) so that automatic schema migrations work at startup:
-
-| Endpoint | Hostname pattern | Used for |
+| Scenario | What happens | Extra time |
 | --- | --- | --- |
-| **Direct** | `ep-xxx.database.<region>.cloud.databricks.com` | Application queries + auto-migration at startup |
-| **Pooler** | `ep-xxx-pooler.database.<region>.cloud.databricks.com` | Not used (pooler cannot run DDL for migrations) |
+| **First deploy** | Creates Lakebase project, waits for it to be ready, creates all tables | ~30-60s |
+| **Subsequent deploys** | Detects existing project, skips creation, syncs schema (no-op if unchanged) | ~1-2s |
+| **After idle (scale-to-zero)** | Compute wakes automatically on first connection | ~200ms |
 
-Example:
+### Redeployments are safe
 
-```
-postgresql://databricks_forge:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full
-```
+`prisma db push` is idempotent: if the tables already exist and match the schema, it does nothing. If new tables or columns were added to the Prisma schema, it creates them. It never drops existing tables or columns.
 
-### 4. Store the connection string as a Databricks secret
-
-The `DATABASE_URL` contains credentials and must not be committed to the repo. Store it in a [Databricks secret scope](https://docs.databricks.com/en/security/secrets/index.html):
-
-```bash
-# Create a secret scope for the app
-databricks secrets create-scope forge-secrets
-
-# Store the direct connection string (direct endpoint required for auto-migration)
-databricks secrets put-secret forge-secrets DATABASE_URL \
-  --string-value "postgresql://databricks_forge:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
-```
-
-### 5. Add the secret as an App resource
-
-In the **Databricks App UI**:
-
-1. Open your app's **Configure** page
-2. Under **App resources**, click **+ Add resource**
-3. Select **Secret**
-4. Set scope to `forge-secrets`, key to `DATABASE_URL`
-5. Set the **Resource key** to `db-secret`
-6. Permission: **Can read**
-
-The `app.yaml` maps this resource to the `DATABASE_URL` environment variable:
-
-```yaml
-env:
-  - name: DATABASE_URL
-    valueFrom: db-secret
-```
-
-At runtime, Databricks injects the actual connection string -- it never appears in your code.
-
-### 6. Schema migration (automatic)
+### Schema migration (automatic)
 
 The database schema is pushed **automatically** every time the server starts. The startup script (`scripts/start.sh`) runs `prisma db push` before launching Next.js, creating tables on first deploy and applying additive changes on subsequent deploys.
-
-> **Important:** `DATABASE_URL` must point to the **direct** Lakebase endpoint (without `-pooler`). The pooler endpoint does not support DDL operations. Since the app now runs migrations at startup, the direct endpoint is required for both schema sync and normal queries.
 
 If you ever need to push the schema manually (e.g. during local development):
 
 ```bash
-DATABASE_URL="postgresql://databricks_forge:your-password@ep-xxx.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full" \
-  npx prisma db push
+DATABASE_URL="postgresql://..." npx prisma db push
 ```
 
 ---
@@ -223,7 +157,7 @@ DATABASE_URL="postgresql://databricks_forge:your-password@ep-xxx.database.us-wes
   - Access to **Unity Catalog** metadata you want to analyse
   - A **Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
 - A **Databricks Personal Access Token (PAT)**
-- A **Lakebase Autoscaling** project (see [Lakebase setup](#lakebase-autoscaling-setup) above)
+- A **Lakebase Autoscaling** project (for local dev -- see [Lakebase setup](#lakebase-zero-touch-auto-provisioning); when deployed as a Databricks App this is created automatically)
 
 ### 1. Clone and install
 
@@ -238,8 +172,8 @@ npm install
 Create a `.env` file:
 
 ```env
-# Lakebase connection (direct endpoint — required for auto-migration at startup)
-DATABASE_URL="postgresql://databricks_forge:<password>@ep-xxx.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
+# Lakebase connection (local dev only — auto-provisioned when deployed as a Databricks App)
+DATABASE_URL="postgresql://<user>:<password>@<host>/databricks_postgres?sslmode=require"
 
 # Databricks workspace (for SQL Warehouse + Model Serving)
 DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
@@ -250,7 +184,7 @@ DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5
 
 | Variable | Where to find it |
 | --- | --- |
-| `DATABASE_URL` | Built from your Lakebase project (see [step 3](#3-build-the-connection-string) above) |
+| `DATABASE_URL` | Your Lakebase connection string (local dev only; auto-provisioned when deployed) |
 | `DATABRICKS_HOST` | Your workspace URL |
 | `DATABRICKS_TOKEN` | User Settings > Developer > Access Tokens > Generate New Token |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouses > click your warehouse > Connection Details |
@@ -290,8 +224,9 @@ Before you start, ensure you have:
 - [ ] **A Databricks workspace** with Unity Catalog enabled
 - [ ] **A SQL Warehouse** (Serverless or Pro) running in that workspace
 - [ ] **A Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
-- [ ] **A Lakebase Autoscaling project** created (see [Lakebase setup](#lakebase-autoscaling-setup) above)
 - [ ] **Workspace previews enabled**: Both **Databricks Apps - On-Behalf-Of User Authorization** and **Databricks Apps - Install Apps from Git** must be turned on in your workspace Admin Settings under Previews
+
+> **Lakebase is auto-provisioned.** The app creates its own Lakebase Autoscale project on first boot -- no manual database setup, no secret scopes, no resource bindings for the database.
 
 <p align="center">
   <img src="docs/images/previews.png" alt="Required preview features in workspace settings" width="700" />
@@ -325,43 +260,9 @@ databricks apps create databricks-forge \
 
 ---
 
-### Step 2: Create the secret scope and store DATABASE_URL
+### Step 2: Configure app resources
 
-The `DATABASE_URL` contains your Lakebase connection string with credentials. It must be stored securely in a Databricks secret scope -- **never committed to code**.
-
-```bash
-# Create a secret scope (one-time setup)
-databricks secrets create-scope forge-secrets
-```
-
-```bash
-# Store the connection string
-# IMPORTANT: Use the DIRECT endpoint (without -pooler) -- required for auto-migration
-databricks secrets put-secret forge-secrets DATABASE_URL \
-  --string-value "postgresql://databricks_forge:<YOUR_PASSWORD>@<YOUR_ENDPOINT>.database.<REGION>.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
-```
-
-**Example** (replace placeholders):
-
-```bash
-databricks secrets put-secret forge-secrets DATABASE_URL \
-  --string-value "postgresql://databricks_forge:MySecurePass123@ep-abc123.database.us-west-2.cloud.databricks.com/databricks_postgres?sslmode=verify-full"
-```
-
-Verify the secret was stored:
-
-```bash
-databricks secrets list-secrets forge-secrets
-# Should show: DATABASE_URL
-```
-
-> **Where do I get this URL?** See [Lakebase Setup - Step 3](#3-build-the-connection-string) above. You must use the **direct** endpoint hostname (e.g. `ep-xxx.database.us-west-2.cloud.databricks.com`) so that automatic schema migrations can run DDL statements at startup.
-
----
-
-### Step 3: Configure app resources
-
-The app requires three Databricks resource bindings. These are configured in the **Databricks App UI** or via the CLI.
+The app requires two Databricks resource bindings. These are configured in the **Databricks App UI** or via the CLI. The database (Lakebase) is auto-provisioned at startup -- no binding needed.
 
 #### Option A: Configure via the App UI
 
@@ -371,10 +272,9 @@ Navigate to **Workspace > Apps > databricks-forge > Configure** and add:
 | --- | --- | --- | --- |
 | 1 | **SQL Warehouse** | `sql-warehouse` | Select your warehouse. Permission: **Can use** |
 | 2 | **Serving Endpoint** | `serving-endpoint` | Select your Model Serving endpoint. Permission: **Can query** |
-| 3 | **Secret** | `db-secret` | Scope: `forge-secrets`, Key: `DATABASE_URL`. Permission: **Can read** |
 
 <p align="center">
-  <img src="docs/images/app-resources.png" alt="App resources — configured SQL Warehouse, Serving Endpoint, and Secret" width="700" />
+  <img src="docs/images/app-resources.png" alt="App resources — configured SQL Warehouse and Serving Endpoint" width="700" />
 </p>
 
 #### Option B: Configure via CLI
@@ -393,18 +293,11 @@ databricks apps update-resources databricks-forge \
   --resource-name serving-endpoint \
   --resource-type serving_endpoint \
   --resource-id <YOUR_SERVING_ENDPOINT_NAME>
-
-# Bind the DATABASE_URL secret
-databricks apps update-resources databricks-forge \
-  --resource-name db-secret \
-  --resource-type secret \
-  --resource-secret-scope forge-secrets \
-  --resource-secret-key DATABASE_URL
 ```
 
 ---
 
-### Step 3b: Configure User Authorization scopes
+### Step 2b: Configure User Authorization scopes
 
 If **On-Behalf-Of User Authorization** is enabled (recommended), configure the API scopes the app needs to act on behalf of users. In the app's Configure page, under **User authorization**, add these scopes:
 
@@ -422,7 +315,7 @@ If **On-Behalf-Of User Authorization** is enabled (recommended), configure the A
 
 ---
 
-### Step 4: Deploy the app
+### Step 3: Deploy the app
 
 Deploy from the app details page by clicking **Deploy**, selecting **From Git**, and entering your branch (e.g. `main`).
 
@@ -432,6 +325,7 @@ The platform will:
 2. **Build** -- runs `npm run build` (generates the Prisma client, builds the Next.js standalone server, and copies static assets)
 3. **Inject** environment variables from resource bindings (see table below)
 4. **Start** the app using `scripts/start.sh` (from `app.yaml`), which:
+   - **Auto-provisions Lakebase** -- creates the `databricks-forge` project on first deploy (skipped on subsequent deploys)
    - Runs `prisma db push` automatically (creates all tables on first deploy, applies additive schema changes on subsequent deploys)
    - Starts the Next.js standalone server on port 8000
 
@@ -449,7 +343,7 @@ databricks apps logs databricks-forge --follow
 
 ---
 
-### Step 5: Verify the deployment
+### Step 4: Verify the deployment
 
 ```bash
 # Get the app URL
@@ -498,13 +392,11 @@ apps:
 ```yaml
 command:
   - "sh"
-  - "scripts/start.sh"           # runs prisma db push, then starts Next.js
+  - "scripts/start.sh"           # auto-provisions Lakebase, runs prisma db push, then starts Next.js
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
-  - name: DATABASE_URL
-    valueFrom: db-secret          # from the secret resource binding
 ```
 
 ### Environment variables at runtime
@@ -516,9 +408,9 @@ env:
 | `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret | Auto-injected by Databricks Apps platform |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | From `sql-warehouse` resource binding |
 | `DATABRICKS_SERVING_ENDPOINT` | Model Serving endpoint name | From `serving-endpoint` resource binding |
-| `DATABASE_URL` | Lakebase connection string | From `db-secret` secret resource binding |
+| `DATABASE_URL` | Lakebase connection string | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 
-> `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically by the Databricks Apps runtime. You never need to set these manually.
+> `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically by the Databricks Apps runtime. You never need to set these manually. `DATABASE_URL` is generated dynamically -- no secrets needed.
 
 ---
 
@@ -532,7 +424,6 @@ The app's service principal needs these permissions in the workspace:
 | Model Serving endpoint | **Can query** | Send LLM inference requests (chat completions) |
 | Unity Catalog (catalogs/schemas) | **USE CATALOG / USE SCHEMA** | Read `information_schema` for metadata discovery |
 | `system.access.table_lineage` | **SELECT** | Walk data lineage graphs during discovery |
-| Secret scope `forge-secrets` | **Can read** | Read the `DATABASE_URL` at runtime |
 | Workspace folders | **Can manage** | Create folders and deploy SQL notebooks on export |
 
 Grant Unity Catalog permissions to the app's service principal:
@@ -566,11 +457,12 @@ Schema changes in `prisma/schema.prisma` are applied automatically on the next s
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| App starts but shows "DATABASE_URL is not set" | Secret binding missing | Verify `db-secret` resource is configured (Step 3) |
-| Schema push fails at startup | DATABASE_URL uses pooler endpoint | Update the secret to use the **direct** endpoint (without `-pooler`) |
-| "permission denied for schema public" | Lakebase role lacks DDL grants | Run `GRANT CREATE ON SCHEMA public TO databricks_forge;` |
+| "DATABASE_URL is not set and Lakebase auto-provisioning is not available" | Running locally without `.env` | Set `DATABASE_URL` in `.env` for local dev |
+| "Lakebase provisioning returned empty URL" | SP lacks permission to create Lakebase projects | Ensure the app's service principal can manage Lakebase resources |
+| "Create project failed (403)" | Lakebase Autoscale not available in region | Check [supported regions](https://docs.databricks.com/aws/en/oltp/projects/authentication); fall back to manual `DATABASE_URL` |
+| Schema push fails at startup | Lakebase compute still waking from scale-to-zero | Restart the app -- compute wakes automatically and retries succeed |
 | "Failed to connect to warehouse" | Warehouse binding missing or stopped | Verify `sql-warehouse` resource is configured and warehouse is running |
-| "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured (Step 3) |
+| "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured (Step 2) |
 | "USE CATALOG denied" on discovery | Service principal lacks UC grants | Grant `USE CATALOG`, `USE SCHEMA`, `SELECT` (see Permissions above) |
 | Lineage discovery returns 0 tables | Missing lineage permissions | Grant `SELECT` on `system.access.table_lineage` |
 
@@ -586,17 +478,15 @@ databricks apps logs databricks-forge --follow
 
 ```
 [ ] 1. Databricks CLI installed and authenticated
-[ ] 2. Lakebase project created with databricks_forge role
-[ ] 3. Secret scope created: databricks secrets create-scope forge-secrets
-[ ] 4. DATABASE_URL stored: databricks secrets put-secret forge-secrets DATABASE_URL ...
-[ ] 5. App created: databricks apps create databricks-forge
-[ ] 6. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
-[ ] 7. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
-[ ] 8. Secret resource bound (key: db-secret, scope: forge-secrets, permission: Can read)
-[ ] 9. UC grants applied to the app's service principal
-[ ] 10. Deployed from Git: click Deploy > From Git > enter branch (e.g. main)
-[ ] 11. Health check passes: curl <app-url>/api/health
+[ ] 2. App created: databricks apps create databricks-forge
+[ ] 3. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
+[ ] 4. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
+[ ] 5. UC grants applied to the app's service principal
+[ ] 6. Deployed from Git: click Deploy > From Git > enter branch (e.g. main)
+[ ] 7. Health check passes: curl <app-url>/api/health
 ```
+
+> Lakebase is auto-provisioned on first deploy -- no manual database, role, secret, or resource binding steps needed.
 
 ---
 

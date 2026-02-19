@@ -113,13 +113,13 @@ graph TB
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse          # Bound SQL Warehouse resource
-  - name: DATABASE_URL
-    valueFrom: db-secret              # Secret-backed Lakebase connection
 ```
 
 The `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`
-are automatically injected by the Databricks Apps runtime. No credentials
-are hardcoded or bundled with the application image.
+are automatically injected by the Databricks Apps runtime. `DATABASE_URL` is
+generated dynamically at startup by `scripts/provision-lakebase.mjs` using
+Lakebase Autoscale OAuth credentials -- no secrets or manual bindings needed.
+No credentials are hardcoded or bundled with the application image.
 
 ---
 
@@ -405,7 +405,7 @@ Invalid items are logged and dropped; they do not crash the pipeline.
 | `DATABRICKS_CLIENT_ID` | Databricks Apps runtime | Platform-injected |
 | `DATABRICKS_CLIENT_SECRET` | Databricks Apps runtime | Platform-injected |
 | `DATABRICKS_WAREHOUSE_ID` | `app.yaml` resource binding | Platform-injected |
-| `DATABASE_URL` | `app.yaml` secret binding | Databricks Secrets |
+| `DATABASE_URL` | Auto-generated at startup | Lakebase Autoscale OAuth |
 | `DATABRICKS_TOKEN` | `.env.local` (local dev only) | Developer machine |
 
 ### Controls
@@ -699,7 +699,7 @@ third-party API, or cross-region endpoint.
 |----------|----------|--------|-------------|
 | `DATABRICKS_HOST` | Yes | Platform | Workspace URL (e.g. `https://workspace.cloud.databricks.com`) |
 | `DATABRICKS_WAREHOUSE_ID` | Yes | app.yaml | Bound SQL Warehouse ID |
-| `DATABASE_URL` | Yes | app.yaml (secret) | Lakebase PostgreSQL connection string |
+| `DATABASE_URL` | Yes | Auto-provisioned | Lakebase PostgreSQL connection string (generated at startup) |
 | `DATABRICKS_CLIENT_ID` | Auto | Platform | Service principal client ID |
 | `DATABRICKS_CLIENT_SECRET` | Auto | Platform | Service principal client secret |
 | `DATABRICKS_TOKEN` | Dev only | `.env.local` | Personal access token for local development |

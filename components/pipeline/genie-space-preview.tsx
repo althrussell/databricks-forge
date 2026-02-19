@@ -38,6 +38,7 @@ import type {
   ColumnEnrichment,
   MetricViewProposal,
   BenchmarkInput,
+  TrustedAssetFunction,
 } from "@/lib/genie/types";
 
 interface GenieSpacePreviewProps {
@@ -48,6 +49,7 @@ interface ExtendedRecommendation extends GenieSpaceRecommendation {
   benchmarks?: string | null;
   columnEnrichments?: string | null;
   metricViewProposals?: string | null;
+  trustedFunctions?: string | null;
 }
 
 export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
@@ -137,6 +139,10 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
 
   const benchmarks: BenchmarkInput[] = rec?.benchmarks
     ? (() => { try { return JSON.parse(rec.benchmarks!) as BenchmarkInput[]; } catch { return []; } })()
+    : [];
+
+  const trustedFns: TrustedAssetFunction[] = rec?.trustedFunctions
+    ? (() => { try { return JSON.parse(rec.trustedFunctions!) as TrustedAssetFunction[]; } catch { return []; } })()
     : [];
 
   return (
@@ -402,12 +408,29 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
               <AccordionItem value="functions">
                 <AccordionTrigger className="text-xs font-medium">
                   SQL Functions ({parsed.instructions.sql_functions.length})
+                  {trustedFns.length > 0 && (
+                    <Badge variant="outline" className="ml-2 text-[9px]">
+                      {trustedFns.length} deployable
+                    </Badge>
+                  )}
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-0.5 text-xs font-mono text-muted-foreground">
-                    {parsed.instructions.sql_functions.map((fn) => (
-                      <div key={fn.id} className="truncate">{fn.identifier}</div>
-                    ))}
+                  <div className="space-y-2 text-xs">
+                    {parsed.instructions.sql_functions.map((fn) => {
+                      const tfn = trustedFns.find(
+                        (t) => t.name.toLowerCase() === fn.identifier.toLowerCase()
+                      );
+                      return (
+                        <TrustedFunctionCard
+                          key={fn.id}
+                          identifier={fn.identifier}
+                          ddl={tfn?.ddl ?? null}
+                          description={tfn?.description ?? null}
+                          runId={runId}
+                          domain={selectedDomain!}
+                        />
+                      );
+                    })}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -479,16 +502,13 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                 <AccordionContent>
                   <div className="space-y-4">
                     {mvProposals.map((mv, i) => (
-                      <div key={i} className="rounded border p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-semibold">{mv.name}</span>
-                          <Badge variant="outline" className="text-[9px]">proposal</Badge>
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">{mv.description}</p>
-                        <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
-                          {mv.ddl}
-                        </pre>
-                      </div>
+                      <MetricViewProposalCard
+                        key={i}
+                        proposal={mv}
+                        runId={runId}
+                        domain={rec.domain}
+                        onDeployed={fetchData}
+                      />
                     ))}
                   </div>
                 </AccordionContent>
@@ -659,6 +679,200 @@ function EditableTextRow({
           remove
         </button>
       </span>
+    </div>
+  );
+}
+
+function TrustedFunctionCard({
+  identifier,
+  ddl,
+  description,
+  runId,
+  domain,
+}: {
+  identifier: string;
+  ddl: string | null;
+  description: string | null;
+  runId: string;
+  domain: string;
+}) {
+  const [deploying, setDeploying] = useState(false);
+  const [deployed, setDeployed] = useState(false);
+
+  const handleDeploy = async () => {
+    if (!ddl) return;
+    setDeploying(true);
+    try {
+      const res = await fetch(
+        `/api/runs/${runId}/genie-engine/${encodeURIComponent(domain)}/functions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ddl, name: identifier }),
+        }
+      );
+      if (res.ok) {
+        toast.success(`Function "${identifier}" created`);
+        setDeployed(true);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to create function");
+      }
+    } catch {
+      toast.error("Failed to create function");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  return (
+    <div className="rounded border p-2">
+      <div className="flex items-center justify-between gap-2">
+        <code className="rounded bg-muted px-1 font-mono text-[10px] font-semibold">
+          {identifier}
+        </code>
+        {ddl ? (
+          <Button
+            size="sm"
+            variant={deployed ? "outline" : "default"}
+            onClick={handleDeploy}
+            disabled={deploying || deployed}
+            className="h-5 px-2 text-[9px]"
+          >
+            {deployed ? "Deployed" : deploying ? "Creating..." : "Deploy"}
+          </Button>
+        ) : (
+          <Badge variant="outline" className="text-[9px] text-muted-foreground">
+            no DDL
+          </Badge>
+        )}
+      </div>
+      {description && (
+        <p className="mt-0.5 text-[10px] text-muted-foreground">{description}</p>
+      )}
+      {ddl && (
+        <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-1.5 text-[10px] font-mono leading-relaxed">
+          {ddl}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function MetricViewProposalCard({
+  proposal,
+  runId,
+  domain,
+  onDeployed,
+}: {
+  proposal: MetricViewProposal;
+  runId: string;
+  domain: string;
+  onDeployed: () => void;
+}) {
+  const [deploying, setDeploying] = useState(false);
+  const [deployed, setDeployed] = useState(false);
+
+  const handleDeploy = async () => {
+    setDeploying(true);
+    try {
+      const res = await fetch(
+        `/api/runs/${runId}/genie-engine/${encodeURIComponent(domain)}/metric-views`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ddl: proposal.ddl,
+            name: proposal.name,
+            description: proposal.description,
+          }),
+        }
+      );
+      if (res.ok) {
+        toast.success(`Metric view "${proposal.name}" created`);
+        setDeployed(true);
+        onDeployed();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to create metric view");
+      }
+    } catch {
+      toast.error("Failed to create metric view");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const mv = {
+    ...proposal,
+    hasJoins: proposal.hasJoins ?? false,
+    hasFilteredMeasures: proposal.hasFilteredMeasures ?? false,
+    hasWindowMeasures: proposal.hasWindowMeasures ?? false,
+    hasMaterialization: proposal.hasMaterialization ?? false,
+    validationStatus: proposal.validationStatus ?? "valid" as const,
+    validationIssues: proposal.validationIssues ?? [],
+  };
+  const validationColor =
+    mv.validationStatus === "valid"
+      ? "bg-emerald-500/10 text-emerald-600"
+      : mv.validationStatus === "warning"
+        ? "bg-amber-500/10 text-amber-600"
+        : "bg-red-500/10 text-red-600";
+
+  return (
+    <div className="rounded border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs font-semibold">{mv.name}</span>
+        <div className="flex items-center gap-1">
+          {mv.hasJoins && (
+            <Badge variant="outline" className="text-[9px]">joins</Badge>
+          )}
+          {mv.hasFilteredMeasures && (
+            <Badge variant="outline" className="text-[9px]">filtered</Badge>
+          )}
+          {mv.hasWindowMeasures && (
+            <Badge variant="outline" className="text-[9px]">window</Badge>
+          )}
+          {mv.hasMaterialization && (
+            <Badge variant="outline" className="text-[9px]">materialized</Badge>
+          )}
+          <Badge className={`text-[9px] ${validationColor}`}>
+            {mv.validationStatus}
+          </Badge>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{mv.description}</p>
+      {mv.validationIssues.length > 0 && (
+        <div className="mt-1.5 rounded bg-amber-50 p-1.5 dark:bg-amber-950/20">
+          <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+            Validation issues:
+          </p>
+          {mv.validationIssues.map((issue, idx) => (
+            <p key={idx} className="text-[10px] text-amber-600 dark:text-amber-500">
+              - {issue}
+            </p>
+          ))}
+        </div>
+      )}
+      <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
+        {mv.ddl}
+      </pre>
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={deployed ? "outline" : "default"}
+          onClick={handleDeploy}
+          disabled={deploying || deployed || mv.validationStatus === "error"}
+          className="h-6 px-3 text-[10px]"
+        >
+          {deployed ? "Deployed" : deploying ? "Creating..." : "Deploy Metric View"}
+        </Button>
+        {mv.sourceTables.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">
+            Source: {mv.sourceTables.join(", ")}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
