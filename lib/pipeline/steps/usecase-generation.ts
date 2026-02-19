@@ -108,6 +108,13 @@ export async function runUsecaseGeneration(
     if (sampleRows > 0 && concurrentTableFqns.length > 0) {
       const sampleResult = await fetchSampleData(concurrentTableFqns, sampleRows);
       sampleDataSection = sampleResult.markdown;
+      // Accumulate structured sample data for downstream Genie Engine use
+      if (sampleResult.structured.size > 0) {
+        if (!ctx.sampleData) ctx.sampleData = new Map();
+        for (const [fqn, entry] of sampleResult.structured) {
+          ctx.sampleData.set(fqn, entry);
+        }
+      }
       if (sampleResult.tablesSampled > 0) {
         logger.info("Sample data fetched for use case generation batch", {
           batchGroup: batchGroupIdx,

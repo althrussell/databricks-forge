@@ -201,6 +201,7 @@ export interface TableInfo {
   tableName: string;
   fqn: string; // catalog.schema.table
   tableType: string;
+  dataSourceFormat?: string | null;
   comment: string | null;
   discoveredVia?: "selected" | "lineage";
 }
@@ -268,6 +269,8 @@ export interface PipelineContext {
   filteredTables: string[]; // FQNs of business-relevant tables
   useCases: UseCase[];
   lineageGraph: LineageGraph | null;
+  /** Cached sample rows from data sampling, keyed by table FQN. Used by Genie Engine for entity extraction. */
+  sampleData: import("@/lib/genie/types").SampleDataCache | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -205,10 +205,12 @@ async function runEnrichmentPass(
   const scanId = uuidv4();
   const startTime = Date.now();
 
-  // Build a lookup of tableType from the original table list
+  // Build lookups from the original table list
   const tableTypeLookup = new Map<string, string>();
+  const formatLookup = new Map<string, string | null>();
   for (const t of allTables) {
     tableTypeLookup.set(t.fqn, t.tableType);
+    if (t.dataSourceFormat) formatLookup.set(t.fqn, t.dataSourceFormat);
   }
 
   // Step 1: Lineage walk (traversal depth from config)
@@ -219,8 +221,8 @@ async function runEnrichmentPass(
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;
   const expandedTables = [
-    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE" })),
-    ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE" })),
+    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
+    ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
   ];
 
   logger.info("[metadata-extraction] Lineage expanded scope", {

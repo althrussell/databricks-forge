@@ -46,6 +46,7 @@ model ForgeRun {
   promptLogs           ForgePromptLog[]
   genieRecommendations ForgeGenieRecommendation[]
   genieSpaces          ForgeGenieSpace[]
+  genieEngineConfigs   ForgeGenieEngineConfig[]
 
   @@map("forge_runs")
 }
@@ -173,30 +174,53 @@ model ForgeOutcomeMap {
 // ---------------------------------------------------------------------------
 
 model ForgeGenieRecommendation {
-  id              String   @id @map("recommendation_id")
-  runId           String   @map("run_id")
-  domain          String
-  subdomains      String?                              // JSON array
-  title           String
-  description     String
-  tableCount      Int      @default(0) @map("table_count")
-  metricViewCount Int      @default(0) @map("metric_view_count")
-  useCaseCount    Int      @default(0) @map("use_case_count")
-  sqlExampleCount Int      @default(0) @map("sql_example_count")
-  joinCount       Int      @default(0) @map("join_count")
-  measureCount    Int      @default(0) @map("measure_count")
-  filterCount     Int      @default(0) @map("filter_count")
-  dimensionCount  Int      @default(0) @map("dimension_count")
-  tables          String?                              // JSON array of FQNs
-  metricViews     String?  @map("metric_views")        // JSON array of FQNs
-  serializedSpace String   @map("serialized_space")    // JSON for Genie API
-  createdAt       DateTime @default(now()) @map("created_at")
+  id                  String   @id @map("recommendation_id")
+  runId               String   @map("run_id")
+  domain              String
+  subdomains          String?                              // JSON array
+  title               String
+  description         String
+  tableCount          Int      @default(0) @map("table_count")
+  metricViewCount     Int      @default(0) @map("metric_view_count")
+  useCaseCount        Int      @default(0) @map("use_case_count")
+  sqlExampleCount     Int      @default(0) @map("sql_example_count")
+  joinCount           Int      @default(0) @map("join_count")
+  measureCount        Int      @default(0) @map("measure_count")
+  filterCount         Int      @default(0) @map("filter_count")
+  dimensionCount      Int      @default(0) @map("dimension_count")
+  tables              String?                              // JSON array of FQNs
+  metricViews         String?  @map("metric_views")        // JSON array of FQNs
+  serializedSpace     String   @map("serialized_space")    // JSON for Genie API
+  benchmarks          String?                              // JSON: BenchmarkQuestion[]
+  columnEnrichments   String?  @map("column_enrichments")  // JSON: ColumnEnrichment[]
+  metricViewProposals String?  @map("metric_view_proposals") // JSON: MetricViewProposal[]
+  engineConfigVersion Int      @default(0) @map("engine_config_version")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
   @@unique([runId, domain])
   @@index([runId])
   @@map("forge_genie_recommendations")
+}
+
+// ---------------------------------------------------------------------------
+// Genie Engine Configuration (per-run, customer-editable)
+// ---------------------------------------------------------------------------
+
+model ForgeGenieEngineConfig {
+  id        String   @id @map("config_id")
+  runId     String   @map("run_id")
+  version   Int      @default(1)
+  config    String                                       // JSON: GenieEngineConfig
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId])
+  @@index([runId])
+  @@map("forge_genie_engine_configs")
 }
 
 // ---------------------------------------------------------------------------

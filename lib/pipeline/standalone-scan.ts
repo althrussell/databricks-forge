@@ -120,10 +120,12 @@ export async function runStandaloneEnrichment(
     message: `Found ${allTables.length} tables and ${allColumns.length} columns.`,
   });
 
-  // Build a lookup of tableType from the original table list
+  // Build lookups from the original table list
   const tableTypeLookup = new Map<string, string>();
+  const formatLookup = new Map<string, string | null>();
   for (const t of allTables) {
     tableTypeLookup.set(t.fqn, t.tableType);
+    if (t.dataSourceFormat) formatLookup.set(t.fqn, t.dataSourceFormat);
   }
 
   // Phase 2: Lineage walk
@@ -135,8 +137,8 @@ export async function runStandaloneEnrichment(
   const lineageGraph = await walkLineage(seedFqns, { maxDepth: lineageDepth });
 
   const expandedTables = [
-    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE" })),
-    ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE" })),
+    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
+    ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
   ];
 
   // Fetch columns for lineage-discovered tables so they appear in the ERD

@@ -69,6 +69,7 @@ export async function startPipeline(runId: string): Promise<void> {
     filteredTables: [],
     useCases: [],
     lineageGraph: null,
+    sampleData: null,
   };
 
   /** Helper: record step start/end timing in the run's stepLog. */

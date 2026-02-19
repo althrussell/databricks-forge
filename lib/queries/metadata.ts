@@ -320,20 +320,22 @@ export function mergeTableComments(
 }
 
 /**
- * Fetch table types from information_schema.tables.
+ * Fetch table types and data source formats from information_schema.tables.
  *
- * Returns a Map of FQN -> table_type (TABLE, VIEW, MATERIALIZED_VIEW, etc.).
- * This is critical because `SHOW TABLES` does not distinguish views from tables.
+ * Returns { types, formats } maps keyed by FQN.
+ * - types: FQN -> table_type (TABLE, VIEW, MATERIALIZED_VIEW, etc.)
+ * - formats: FQN -> data_source_format (DELTA, PARQUET, CSV, JSON, etc.)
  */
 export async function fetchTableTypes(
   catalog: string,
   schema?: string
-): Promise<Map<string, string>> {
+): Promise<{ types: Map<string, string>; formats: Map<string, string> }> {
   const types = new Map<string, string>();
+  const formats = new Map<string, string>();
   try {
     const safeCatalog = validateIdentifier(catalog, "catalog");
     let sql = `
-      SELECT table_catalog, table_schema, table_name, table_type
+      SELECT table_catalog, table_schema, table_name, table_type, data_source_format
       FROM \`${safeCatalog}\`.information_schema.tables
       WHERE table_schema NOT IN ('information_schema', 'default')
     `;
@@ -348,7 +350,10 @@ export async function fetchTableTypes(
       const sch = row[1] ?? "";
       const tbl = row[2] ?? "";
       const typ = row[3] ?? "TABLE";
-      types.set(`${cat}.${sch}.${tbl}`, typ);
+      const fmt = row[4] ?? null;
+      const fqn = `${cat}.${sch}.${tbl}`;
+      types.set(fqn, typ);
+      if (fmt) formats.set(fqn, fmt);
     }
 
     logger.info("[metadata] Fetched table types", {
@@ -356,6 +361,7 @@ export async function fetchTableTypes(
       schema: schema ?? "(all)",
       total: types.size,
       views: Array.from(types.values()).filter((t) => t === "VIEW").length,
+      deltaCount: Array.from(formats.values()).filter((f) => f.toUpperCase() === "DELTA").length,
     });
   } catch (error) {
     logger.warn("[metadata] Failed to fetch table types, continuing without", {
@@ -363,21 +369,29 @@ export async function fetchTableTypes(
       error: error instanceof Error ? error.message : String(error),
     });
   }
-  return types;
+  return { types, formats };
 }
 
 /**
- * Merge table types into a list of TableInfo objects in-place.
- * Updates the `tableType` field from the default "TABLE" to the actual type.
+ * Merge table types and formats into a list of TableInfo objects in-place.
+ * Updates the `tableType` and `dataSourceFormat` fields.
  */
 export function mergeTableTypes(
   tables: TableInfo[],
-  types: Map<string, string>
+  typesOrResult: Map<string, string> | { types: Map<string, string>; formats: Map<string, string> }
 ): void {
+  const types = typesOrResult instanceof Map ? typesOrResult : typesOrResult.types;
+  const formats = typesOrResult instanceof Map ? null : typesOrResult.formats;
   for (const table of tables) {
     const type = types.get(table.fqn);
     if (type) {
       table.tableType = type;
+    }
+    if (formats) {
+      const format = formats.get(table.fqn);
+      if (format) {
+        table.dataSourceFormat = format;
+      }
     }
   }
 }

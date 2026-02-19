@@ -1,10 +1,13 @@
 /**
- * Genie Space Recommendation Engine.
+ * Legacy Genie Space Recommendation Engine.
  *
- * Analyses a completed pipeline run's domains, use cases, metadata, and
- * foreign keys to produce ready-to-create Genie Space configurations
- * with full knowledge store (tables, metric views, sample questions,
- * SQL examples, join specs, sql_snippets, and text instructions).
+ * Backward-compatible wrapper: the original regex-based, deterministic
+ * generator that runs without LLM calls. The new Genie Engine
+ * (lib/genie/engine.ts) supersedes this for production use, but this
+ * module is kept as a fallback for older runs and environments where
+ * the engine is unavailable.
+ *
+ * New code should use `runGenieEngine()` from `lib/genie/engine.ts`.
  */
 
 import { createHash } from "crypto";
