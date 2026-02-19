@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
-    "start": "next start",
+    "start": "prisma db push --skip-generate && next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",

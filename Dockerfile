@@ -38,10 +38,19 @@ COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/lib/generated/prisma ./lib/generated/prisma
 
+# Copy Prisma CLI (needed for auto-migration at startup)
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+# Copy startup script
+COPY scripts/start.sh ./scripts/start.sh
+RUN chmod +x ./scripts/start.sh
+
 # Databricks Apps sets DATABRICKS_APP_PORT
-# Fallback to 3000 for local dev
-ENV PORT=3000
+# Fallback to 8000 for consistency with app.yaml
+ENV PORT=8000
 
-EXPOSE 3000
+EXPOSE 8000
 
-CMD ["node", "server.js"]
+CMD ["sh", "scripts/start.sh"]
