@@ -363,6 +363,10 @@ Generate **{target_use_case_count}** unique, actionable AI-powered business use 
 
 {sample_data_section}
 
+{lineage_context}
+
+Tables connected via lineage represent actual data pipelines. When multiple tables at different refinement levels (raw -> clean -> aggregated) appear, focus use cases on the highest-quality version unless the lower-level table provides unique columns or granularity not available in the refined version.
+
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
@@ -459,6 +463,10 @@ Generate **{target_use_case_count}** unique, actionable statistics-focused busin
 {foreign_key_relationships}
 
 {sample_data_section}
+
+{lineage_context}
+
+Tables connected via lineage represent actual data pipelines. When multiple tables at different refinement levels (raw -> clean -> aggregated) appear, focus use cases on the highest-quality version unless the lower-level table provides unique columns or granularity not available in the refined version.
 
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 

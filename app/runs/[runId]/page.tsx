@@ -90,6 +90,7 @@ export default function RunDetailPage({
   const { getOutcome: getIndustryOutcome } = useIndustryOutcomes();
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
+  const [lineageDiscoveredFqns, setLineageDiscoveredFqns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -119,6 +120,7 @@ export default function RunDetailPage({
       const data = await res.json();
       setRun(data.run);
       if (data.useCases) setUseCases(data.useCases);
+      if (data.lineageDiscoveredFqns) setLineageDiscoveredFqns(data.lineageDiscoveredFqns);
       setError(null);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -400,7 +402,11 @@ export default function RunDetailPage({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+                    <ConfigField
+                      label="Discovery Depth"
+                      value={(run.config.discoveryDepth ?? "balanced").charAt(0).toUpperCase() + (run.config.discoveryDepth ?? "balanced").slice(1)}
+                    />
                     <ConfigField label="AI Model" value={run.config.aiModel} />
                     <ConfigField
                       label="Industry"
@@ -482,7 +488,7 @@ export default function RunDetailPage({
               )}
 
               {/* Schema Coverage -- expansion signals */}
-              {useCases.length > 0 && <SchemaCoverageCard useCases={useCases} />}
+              {useCases.length > 0 && <SchemaCoverageCard useCases={useCases} lineageDiscoveredFqns={lineageDiscoveredFqns} />}
 
               {/* Industry Coverage Analysis */}
               {run.config.industry && useCases.length > 0 && (
@@ -517,6 +523,7 @@ export default function RunDetailPage({
               {useCases.length > 0 ? (
                 <UseCaseTable
                   useCases={useCases}
+                  lineageDiscoveredFqns={lineageDiscoveredFqns}
                   onUpdate={async (updated) => {
                     try {
                       const original = useCases.find((uc) => uc.id === updated.id);
@@ -640,7 +647,8 @@ function SummaryCard({ title, value }: { title: string; value: string }) {
   );
 }
 
-function SchemaCoverageCard({ useCases }: { useCases: UseCase[] }) {
+function SchemaCoverageCard({ useCases, lineageDiscoveredFqns = [] }: { useCases: UseCase[]; lineageDiscoveredFqns?: string[] }) {
+  const lineageFqnSet = new Set(lineageDiscoveredFqns);
   // Derive all unique tables referenced by use cases
   const allReferencedTables = new Set<string>();
   for (const uc of useCases) {
@@ -676,10 +684,23 @@ function SchemaCoverageCard({ useCases }: { useCases: UseCase[] }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div>
             <p className="text-xs text-muted-foreground">Tables Referenced</p>
             <p className="text-lg font-bold">{allReferencedTables.size}</p>
+            {lineageDiscoveredFqns.length > 0 && (() => {
+              const selectedCount = [...allReferencedTables].filter((fqn) => !lineageFqnSet.has(fqn)).length;
+              const lineageCount = [...allReferencedTables].filter((fqn) => lineageFqnSet.has(fqn)).length;
+              return lineageCount > 0 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  {selectedCount} selected + {lineageCount} via lineage
+                </p>
+              ) : null;
+            })()}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Via Lineage</p>
+            <p className="text-lg font-bold">{[...allReferencedTables].filter((fqn) => lineageFqnSet.has(fqn)).length}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Unique Table-UC Links</p>
@@ -707,17 +728,27 @@ function SchemaCoverageCard({ useCases }: { useCases: UseCase[] }) {
             Most-Referenced Tables (highest-value data assets)
           </p>
           <div className="space-y-1.5">
-            {topTables.map(([fqn, count]) => (
-              <div
-                key={fqn}
-                className="flex items-center justify-between rounded-md border px-3 py-1.5"
-              >
-                <span className="truncate font-mono text-xs">{fqn}</span>
-                <Badge variant="secondary" className="ml-2 shrink-0">
-                  {count} use case{count !== 1 ? "s" : ""}
-                </Badge>
-              </div>
-            ))}
+            {topTables.map(([fqn, count]) => {
+              const isLineage = lineageFqnSet.has(fqn);
+              return (
+                <div
+                  key={fqn}
+                  className={`flex items-center justify-between rounded-md border px-3 py-1.5 ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
+                >
+                  <span className="truncate font-mono text-xs">{fqn}</span>
+                  <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                    {isLineage && (
+                      <Badge variant="outline" className="border-blue-400/60 text-[10px] text-blue-500">
+                        via lineage
+                      </Badge>
+                    )}
+                    <Badge variant="secondary">
+                      {count} use case{count !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </CardContent>

@@ -23,14 +23,42 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Keyboard, X, Plus, Building2 } from "lucide-react";
+import { Keyboard, X, Plus, Building2, Target, Scale, Layers } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
   SUPPORTED_LANGUAGES,
+  DISCOVERY_DEPTHS,
   type BusinessPriority,
   type SupportedLanguage,
+  type DiscoveryDepth,
 } from "@/lib/domain/types";
+
+const DEPTH_OPTIONS: Array<{
+  value: DiscoveryDepth;
+  label: string;
+  description: string;
+  icon: typeof Target;
+}> = [
+  {
+    value: "focused",
+    label: "Focused",
+    description: "Fewer, highest-quality use cases. Best for targeted workshops or demos.",
+    icon: Target,
+  },
+  {
+    value: "balanced",
+    label: "Balanced",
+    description: "Good mix of breadth and quality. Recommended for most discovery runs.",
+    icon: Scale,
+  },
+  {
+    value: "comprehensive",
+    label: "Comprehensive",
+    description: "Maximum coverage across your data estate. Best for large-scale assessments.",
+    icon: Layers,
+  },
+];
 import { loadSettings } from "@/lib/settings";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
 
@@ -56,6 +84,7 @@ export function ConfigForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [discoveryDepth, setDiscoveryDepth] = useState<DiscoveryDepth>("balanced");
   const [businessName, setBusinessName] = useState("");
   const [industry, setIndustry] = useState("");
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
@@ -114,6 +143,7 @@ export function ConfigForm() {
       if (!raw) return;
       sessionStorage.removeItem("forge:duplicate-config");
       const cfg = JSON.parse(raw);
+      if (cfg.discoveryDepth && DISCOVERY_DEPTHS.includes(cfg.discoveryDepth)) setDiscoveryDepth(cfg.discoveryDepth);
       if (cfg.businessName) setBusinessName(cfg.businessName);
       if (cfg.industry) setIndustry(cfg.industry);
       if (cfg.ucMetadata) {
@@ -176,6 +206,7 @@ export function ConfigForm() {
           strategicGoals: strategicGoals.trim(),
           languages: selectedLanguages,
           sampleRowsPerTable: appSettings.sampleRowsPerTable,
+          discoveryDepth,
         }),
       });
 
@@ -209,6 +240,52 @@ export function ConfigForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Discovery Depth */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Discovery Depth</CardTitle>
+          <CardDescription>
+            Choose how broadly to search for use cases. This affects how many
+            use cases are generated and the quality threshold applied.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {DEPTH_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const selected = discoveryDepth === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setDiscoveryDepth(opt.value)}
+                  className={`flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-colors ${
+                    selected
+                      ? "border-primary bg-primary/5"
+                      : "border-muted hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 ${selected ? "text-primary" : "text-muted-foreground"}`} />
+                    <span className={`text-sm font-medium ${selected ? "text-primary" : ""}`}>
+                      {opt.label}
+                    </span>
+                    {opt.value === "balanced" && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        Recommended
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {opt.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Required Fields */}
       <Card>
         <CardHeader>

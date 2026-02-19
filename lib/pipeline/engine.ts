@@ -68,6 +68,7 @@ export async function startPipeline(runId: string): Promise<void> {
     metadata: null,
     filteredTables: [],
     useCases: [],
+    lineageGraph: null,
   };
 
   /** Helper: record step start/end timing in the run's stepLog. */
@@ -131,7 +132,9 @@ export async function startPipeline(runId: string): Promise<void> {
     await logStep(PipelineStep.MetadataExtraction, async () => {
       await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
       logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
-      ctx.metadata = await runMetadataExtraction(ctx, runId);
+      const extractionResult = await runMetadataExtraction(ctx, runId);
+      ctx.metadata = extractionResult.snapshot;
+      ctx.lineageGraph = extractionResult.lineageGraph;
       // Link the metadata snapshot to this run for auditing
       if (ctx.metadata.cacheKey) {
         await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);

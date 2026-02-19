@@ -291,6 +291,7 @@ export async function generateExecutiveBriefing(
     [bodyCell("Data Products"), bodyCell(String(estate.dataProductCount))],
     [bodyCell("Feature Adoption Score"), bodyCell(`${adoption.adoptionScore}/100`)],
     [bodyCell("Lineage Edges"), bodyCell(String(estate.lineageEdgeCount))],
+    [bodyCell("Tables via Lineage"), bodyCell(estate.lineageDiscoveredCount > 0 ? `${estate.lineageDiscoveredCount} discovered` : "None")],
   ];
   overviewSlide.addTable(estateRows, {
     x: 7.5, y: 1.2, w: 5.2, fontSize: 11, border: { type: "solid", pt: 0.5, color: "D1D5DB" },

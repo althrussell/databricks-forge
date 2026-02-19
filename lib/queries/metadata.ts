@@ -489,6 +489,167 @@ export async function listMetricViews(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Batch lookups by FQN (for lineage-discovered tables)
+// ---------------------------------------------------------------------------
+
+function parseFqn(fqn: string): { catalog: string; schema: string; tableName: string } | null {
+  const parts = fqn.split(".");
+  if (parts.length !== 3) return null;
+  return { catalog: parts[0], schema: parts[1], tableName: parts[2] };
+}
+
+function buildFqnWhereClause(fqns: string[]): string {
+  const conditions = fqns
+    .map((fqn) => parseFqn(fqn))
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .map(
+      (p) =>
+        `(table_catalog = '${p.catalog}' AND table_schema = '${p.schema}' AND table_name = '${p.tableName}')`
+    );
+  return conditions.join(" OR ");
+}
+
+/**
+ * Fetch TableInfo for a list of specific FQNs (e.g. lineage-discovered tables).
+ * Queries information_schema.tables by exact FQN match.
+ */
+export async function fetchTableInfoBatch(fqns: string[]): Promise<TableInfo[]> {
+  if (fqns.length === 0) return [];
+
+  const catalogs = [...new Set(fqns.map((f) => f.split(".")[0]).filter(Boolean))];
+  const results: TableInfo[] = [];
+
+  for (const catalog of catalogs) {
+    const catalogFqns = fqns.filter((f) => f.startsWith(`${catalog}.`));
+    const whereClause = buildFqnWhereClause(catalogFqns);
+    if (!whereClause) continue;
+
+    try {
+      const safeCatalog = validateIdentifier(catalog, "catalog");
+      const sql = `
+        SELECT table_catalog, table_schema, table_name, table_type, comment
+        FROM \`${safeCatalog}\`.information_schema.tables
+        WHERE (${whereClause})
+      `;
+      const result = await executeSQL(sql);
+      for (const row of result.rows) {
+        const cat = row[0] ?? "";
+        const sch = row[1] ?? "";
+        const tbl = row[2] ?? "";
+        results.push({
+          catalog: cat,
+          schema: sch,
+          tableName: tbl,
+          fqn: `${cat}.${sch}.${tbl}`,
+          tableType: row[3] ?? "TABLE",
+          comment: row[4] ?? null,
+        });
+      }
+    } catch (error) {
+      logger.warn("[metadata] fetchTableInfoBatch failed for catalog", {
+        catalog,
+        count: catalogFqns.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Fetch ColumnInfo for a list of specific FQNs (e.g. lineage-discovered tables).
+ * Queries information_schema.columns by exact FQN match.
+ */
+export async function fetchColumnsBatch(fqns: string[]): Promise<ColumnInfo[]> {
+  if (fqns.length === 0) return [];
+
+  const catalogs = [...new Set(fqns.map((f) => f.split(".")[0]).filter(Boolean))];
+  const results: ColumnInfo[] = [];
+
+  for (const catalog of catalogs) {
+    const catalogFqns = fqns.filter((f) => f.startsWith(`${catalog}.`));
+    const whereClause = buildFqnWhereClause(catalogFqns);
+    if (!whereClause) continue;
+
+    try {
+      const safeCatalog = validateIdentifier(catalog, "catalog");
+      const sql = `
+        SELECT table_catalog, table_schema, table_name,
+               column_name, data_type, ordinal_position, is_nullable, comment
+        FROM \`${safeCatalog}\`.information_schema.columns
+        WHERE (${whereClause})
+        ORDER BY table_schema, table_name, ordinal_position
+      `;
+      const mapped = await executeSQLMapped(sql, rowToColumn);
+      results.push(...mapped);
+    } catch (error) {
+      logger.warn("[metadata] fetchColumnsBatch failed for catalog", {
+        catalog,
+        count: catalogFqns.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Fetch ForeignKey relationships for a list of specific FQNs.
+ * Queries information_schema constraint tables by exact FQN match.
+ */
+export async function fetchForeignKeysBatch(fqns: string[]): Promise<ForeignKey[]> {
+  if (fqns.length === 0) return [];
+
+  const catalogs = [...new Set(fqns.map((f) => f.split(".")[0]).filter(Boolean))];
+  const results: ForeignKey[] = [];
+
+  for (const catalog of catalogs) {
+    const catalogFqns = fqns.filter((f) => f.startsWith(`${catalog}.`));
+    const whereClause = buildFqnWhereClause(catalogFqns);
+    if (!whereClause) continue;
+
+    try {
+      const safeCatalog = validateIdentifier(catalog, "catalog");
+      const sql = `
+        SELECT
+          tc.constraint_name,
+          kcu.table_catalog || '.' || kcu.table_schema || '.' || kcu.table_name AS table_fqn,
+          kcu.column_name,
+          ccu.table_catalog || '.' || ccu.table_schema || '.' || ccu.table_name AS referenced_table_fqn,
+          ccu.column_name AS referenced_column_name
+        FROM \`${safeCatalog}\`.information_schema.table_constraints tc
+        JOIN \`${safeCatalog}\`.information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+        JOIN \`${safeCatalog}\`.information_schema.constraint_column_usage ccu
+          ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND (${whereClause.replace(/table_catalog/g, "kcu.table_catalog").replace(/table_schema/g, "kcu.table_schema").replace(/table_name/g, "kcu.table_name")})
+      `;
+      const result = await executeSQL(sql);
+      for (const row of result.rows) {
+        results.push({
+          constraintName: row[0] ?? "",
+          tableFqn: row[1] ?? "",
+          columnName: row[2] ?? "",
+          referencedTableFqn: row[3] ?? "",
+          referencedColumnName: row[4] ?? "",
+        });
+      }
+    } catch {
+      // FK views may not be available
+    }
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Markdown builders
+// ---------------------------------------------------------------------------
+
 /**
  * Build a schema markdown string for prompt injection.
  * Groups columns by table and formats as markdown.

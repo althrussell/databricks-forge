@@ -94,6 +94,7 @@ export function buildERDGraph(
         columns = parsed.map((c) => ({
           name: c.name,
           type: c.type,
+          description: c.comment ?? null,
           isPK: false,
           isFK: false,
         }));

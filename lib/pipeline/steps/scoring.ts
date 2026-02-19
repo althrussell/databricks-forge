@@ -16,7 +16,19 @@ import {
   CrossDomainDedupItemSchema,
   validateLLMArray,
 } from "@/lib/validation";
-import type { PipelineContext, UseCase } from "@/lib/domain/types";
+import type { PipelineContext, UseCase, DiscoveryDepth } from "@/lib/domain/types";
+
+const QUALITY_FLOORS: Record<DiscoveryDepth, number> = {
+  focused: 0.4,
+  balanced: 0.3,
+  comprehensive: 0.2,
+};
+
+const ADAPTIVE_CAPS: Record<DiscoveryDepth, number> = {
+  focused: 75,
+  balanced: 150,
+  comprehensive: 250,
+};
 
 export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, useCases } = ctx;
@@ -89,11 +101,11 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     }
   }
 
-  // Step 6d: Global score calibration
+  // Step 6d: Global score calibration (chunked for full coverage)
   if (scored.length > 10) {
     if (runId) await updateRunMessage(runId, `Calibrating scores across ${domains.length} domains...`);
     try {
-      await calibrateScoresGlobally(scored, bc as unknown as Record<string, string>, run.config.aiModel, runId);
+      await calibrateScoresChunked(scored, bc as unknown as Record<string, string>, run.config.aiModel, runId);
     } catch (error) {
       logger.warn("Global calibration failed", { error: error instanceof Error ? error.message : String(error) });
     }
@@ -111,16 +123,28 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     uc.id = `${domainPrefix}-${String(uc.useCaseNo).padStart(3, "0")}-${uc.id.substring(0, 8)}`;
   }
 
-  // Step 6f: Volume filter -- cap at 200 use cases
-  const MAX_USE_CASES = 200;
-  if (scored.length > MAX_USE_CASES) {
-    scored = scored.slice(0, MAX_USE_CASES);
+  // Step 6f: Quality floor -- drop use cases below depth-specific threshold
+  const depth = run.config.discoveryDepth ?? "balanced";
+  const floor = QUALITY_FLOORS[depth];
+  const beforeFloor = scored.length;
+  scored = scored.filter((uc) => uc.overallScore >= floor);
+  if (scored.length < beforeFloor) {
+    const removed = beforeFloor - scored.length;
+    logger.info("Quality floor applied", { floor, removed, remaining: scored.length });
+    if (runId) await updateRunMessage(runId, `Quality floor (${floor}): removed ${removed} low-scoring use cases`);
+  }
+
+  // Step 6g: Adaptive volume cap
+  const cap = ADAPTIVE_CAPS[depth];
+  if (scored.length > cap) {
+    scored = scored.slice(0, cap);
+    if (runId) await updateRunMessage(runId, `Volume cap (${depth}): capped at ${cap} use cases`);
   }
 
   const finalDomains = [...new Set(scored.map((uc) => uc.domain))].length;
   if (runId) await updateRunMessage(runId, `Final: ${scored.length} use cases across ${finalDomains} domains`);
 
-  logger.info("Scoring complete", { useCaseCount: scored.length, domainCount: finalDomains });
+  logger.info("Scoring complete", { useCaseCount: scored.length, domainCount: finalDomains, depth });
 
   return scored;
 }
@@ -256,7 +280,11 @@ function clampScore(value: number): number {
 // Global score calibration
 // ---------------------------------------------------------------------------
 
-async function calibrateScoresGlobally(
+/**
+ * Chunked global calibration: takes top 8 per domain, then calibrates in
+ * chunks of 50 with 5-item overlap anchors for scale consistency.
+ */
+async function calibrateScoresChunked(
   useCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
@@ -268,51 +296,67 @@ async function calibrateScoresGlobally(
     const domainCases = useCases
       .filter((uc) => uc.domain === domain)
       .sort((a, b) => b.overallScore - a.overallScore)
-      .slice(0, 5);
+      .slice(0, 8);
     candidates.push(...domainCases);
   }
 
-  const toCalibrate = candidates
-    .sort((a, b) => b.overallScore - a.overallScore)
-    .slice(0, 50);
+  const sorted = candidates.sort((a, b) => b.overallScore - a.overallScore);
+  if (sorted.length < 5) return;
 
-  if (toCalibrate.length < 5) return;
-
-  const useCaseMarkdown = toCalibrate
-    .map(
-      (uc) =>
-        `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`
-    )
-    .join("\n");
-
-  const result = await executeAIQuery({
-    promptKey: "GLOBAL_SCORE_CALIBRATION_PROMPT",
-    variables: {
-      business_context: JSON.stringify(businessContext),
-      strategic_goals: businessContext.strategicGoals ?? "",
-      use_case_markdown: `| No | Domain | Name | Type | Statement | Current Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
-    },
-    modelEndpoint: aiModel,
-    responseFormat: "json_object",
-    runId,
-    step: "scoring",
-  });
-
-  let rawItems: unknown[];
-  try {
-    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
-  } catch (parseErr) {
-    logger.warn("Failed to parse calibration response JSON", {
-      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-    });
-    return;
-  }
-
-  const items = validateLLMArray(rawItems, CalibrationItemSchema, "calibrateScoresGlobally");
+  const CHUNK_SIZE = 50;
+  const ANCHOR_SIZE = 5;
   const calibrationMap = new Map<number, number>();
-  for (const item of items) {
-    if (!isNaN(item.no)) {
-      calibrationMap.set(item.no, clampScore(item.overall_score));
+  let totalAdjusted = 0;
+
+  for (let offset = 0; offset < sorted.length; offset += CHUNK_SIZE - ANCHOR_SIZE) {
+    const chunk = sorted.slice(offset, offset + CHUNK_SIZE);
+    if (chunk.length < 5) break;
+
+    const useCaseMarkdown = chunk
+      .map(
+        (uc) =>
+          `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`
+      )
+      .join("\n");
+
+    try {
+      const result = await executeAIQuery({
+        promptKey: "GLOBAL_SCORE_CALIBRATION_PROMPT",
+        variables: {
+          business_context: JSON.stringify(businessContext),
+          strategic_goals: businessContext.strategicGoals ?? "",
+          use_case_markdown: `| No | Domain | Name | Type | Statement | Current Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
+        },
+        modelEndpoint: aiModel,
+        responseFormat: "json_object",
+        runId,
+        step: "scoring",
+      });
+
+      let rawItems: unknown[];
+      try {
+        rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      } catch (parseErr) {
+        logger.warn("Failed to parse calibration chunk JSON", {
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          chunkOffset: offset,
+        });
+        continue;
+      }
+
+      const items = validateLLMArray(rawItems, CalibrationItemSchema, "calibrateScoresChunked");
+      for (const item of items) {
+        if (!isNaN(item.no)) {
+          calibrationMap.set(item.no, clampScore(item.overall_score));
+        }
+      }
+      totalAdjusted += items.length;
+    } catch (error) {
+      logger.warn("Calibration chunk failed", {
+        chunkOffset: offset,
+        chunkSize: chunk.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -323,7 +367,11 @@ async function calibrateScoresGlobally(
     }
   }
 
-  logger.info("Global calibration complete", { adjustedCount: calibrationMap.size });
+  logger.info("Chunked calibration complete", {
+    candidatesConsidered: sorted.length,
+    adjustedCount: calibrationMap.size,
+    chunks: Math.ceil(sorted.length / (CHUNK_SIZE - ANCHOR_SIZE)),
+  });
 }
 
 // ---------------------------------------------------------------------------

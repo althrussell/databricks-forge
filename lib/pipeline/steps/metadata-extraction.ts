@@ -23,6 +23,9 @@ import {
   fetchTableTypes,
   mergeTableTypes,
   buildSchemaMarkdown,
+  fetchTableInfoBatch,
+  fetchColumnsBatch,
+  fetchForeignKeysBatch,
 } from "@/lib/queries/metadata";
 import {
   enrichTablesInBatches,
@@ -50,6 +53,7 @@ import type {
   TableDetail,
   TableHistorySummary,
   TableHealthInsight,
+  LineageGraph,
 } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
@@ -74,10 +78,15 @@ function parseUCMetadata(
   });
 }
 
+export interface MetadataExtractionResult {
+  snapshot: MetadataSnapshot;
+  lineageGraph: LineageGraph | null;
+}
+
 export async function runMetadataExtraction(
   ctx: PipelineContext,
   runId?: string
-): Promise<MetadataSnapshot> {
+): Promise<MetadataExtractionResult> {
   const { config } = ctx.run;
   const scopes = parseUCMetadata(config.ucMetadata);
   const enrichmentStart = Date.now();
@@ -144,6 +153,7 @@ export async function runMetadataExtraction(
     tableCount: allTables.length,
     columnCount: allColumns.length,
     cachedAt: new Date().toISOString(),
+    lineageDiscoveredFqns: [],
   };
 
   logger.info(
@@ -152,8 +162,9 @@ export async function runMetadataExtraction(
 
   // --- Phase 2: Enrichment pass ---
 
+  let lineageGraph: LineageGraph | null = null;
   try {
-    await runEnrichmentPass(
+    lineageGraph = await runEnrichmentPass(
       snapshot,
       allTables,
       allColumns,
@@ -170,7 +181,7 @@ export async function runMetadataExtraction(
   const enrichmentMs = Date.now() - enrichmentStart;
   logger.info("[metadata-extraction] Enrichment pass duration", { durationMs: enrichmentMs });
 
-  return snapshot;
+  return { snapshot, lineageGraph };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +195,7 @@ async function runEnrichmentPass(
   allFKs: ForeignKey[],
   scopes: Array<{ catalog: string; schema?: string }>,
   runId?: string
-): Promise<void> {
+): Promise<LineageGraph> {
   const scanId = uuidv4();
   const startTime = Date.now();
 
@@ -194,10 +205,10 @@ async function runEnrichmentPass(
     tableTypeLookup.set(t.fqn, t.tableType);
   }
 
-  // Step 1: Lineage walk
+  // Step 1: Lineage walk (full traversal up to depth 10)
   if (runId) await updateRunMessage(runId, "Walking lineage to discover related tables...");
   const seedFqns = allTables.map((t) => t.fqn);
-  const lineageGraph = await walkLineage(seedFqns);
+  const lineageGraph = await walkLineage(seedFqns, { maxDepth: 10 });
 
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;
@@ -211,6 +222,43 @@ async function runEnrichmentPass(
     discovered: discoveredFqns.length,
     total: expandedTables.length,
   });
+
+  // Fetch metadata for lineage-discovered tables and merge into snapshot
+  if (discoveredFqns.length > 0) {
+    if (runId) await updateRunMessage(runId, `Fetching metadata for ${discoveredFqns.length} lineage-discovered tables...`);
+    try {
+      const newTableInfos = await fetchTableInfoBatch(discoveredFqns);
+      newTableInfos.forEach((t) => { t.discoveredVia = "lineage"; });
+      const newColumns = await fetchColumnsBatch(discoveredFqns);
+      const newFKs = await fetchForeignKeysBatch(discoveredFqns);
+
+      snapshot.tables.push(...newTableInfos);
+      snapshot.columns.push(...newColumns);
+      snapshot.foreignKeys.push(...newFKs);
+      snapshot.lineageDiscoveredFqns = discoveredFqns;
+      allColumns.push(...newColumns);
+      snapshot.tableCount = snapshot.tables.length;
+      snapshot.columnCount = snapshot.columns.length;
+      snapshot.schemaMarkdown = buildSchemaMarkdown(snapshot.tables, snapshot.columns);
+
+      logger.info("[metadata-extraction] Merged lineage-discovered tables into snapshot", {
+        newTables: newTableInfos.length,
+        newColumns: newColumns.length,
+        newFKs: newFKs.length,
+      });
+    } catch (error) {
+      logger.warn("[metadata-extraction] Failed to fetch lineage table metadata (non-fatal)", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (runId) {
+      await updateRunMessage(
+        runId,
+        `Lineage walk discovered ${discoveredFqns.length} additional tables (${seedFqns.length} selected + ${discoveredFqns.length} via lineage = ${snapshot.tableCount} total)`
+      );
+    }
+  }
 
   // Step 2: Deep metadata enrichment
   if (runId) await updateRunMessage(runId, `Enriching ${expandedTables.length} tables (DESCRIBE DETAIL + HISTORY)...`);
@@ -432,4 +480,6 @@ async function runEnrichmentPass(
     lineageEdges: lineageGraph.edges.length,
     insights: insightRecords.length,
   });
+
+  return lineageGraph;
 }

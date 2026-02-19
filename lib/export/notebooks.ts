@@ -102,8 +102,10 @@ function sanitizeName(name: string): string {
 export async function generateNotebooks(
   run: PipelineRun,
   useCases: UseCase[],
-  userEmail?: string | null
+  userEmail?: string | null,
+  lineageDiscoveredFqns: string[] = []
 ): Promise<NotebookDeployResult> {
+  const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const bizSlug = run.config.businessName.replace(/\s+/g, "_");
   const root = userEmail
     ? `/Users/${userEmail}/forge_gen`
@@ -139,7 +141,7 @@ export async function generateNotebooks(
     const notebookName = sanitizeName(domain);
     const notebookPath = `${basePath}${notebookName}`;
 
-    const content = buildDomainNotebook(run, domain, cases);
+    const content = buildDomainNotebook(run, domain, cases, lineageFqnSet);
 
     try {
       await importNotebook({
@@ -229,7 +231,8 @@ function buildIndexNotebook(run: PipelineRun, useCases: UseCase[]): string {
 function buildDomainNotebook(
   run: PipelineRun,
   domain: string,
-  useCases: UseCase[]
+  useCases: UseCase[],
+  lineageFqnSet: Set<string> = new Set()
 ): string {
   const cells: JupyterCell[] = [];
 
@@ -311,7 +314,7 @@ function buildDomainNotebook(
         `| **Business Value** | ${safeStr(uc.businessValue)} |\n`,
         `| **Beneficiary** | ${safeStr(uc.beneficiary)} |\n`,
         `| **Sponsor** | ${safeStr(uc.sponsor)} |\n`,
-        `| **Tables Involved** | ${uc.tablesInvolved.join(", ") || "N/A"} |\n`,
+        `| **Tables Involved** | ${uc.tablesInvolved.map((t) => lineageFqnSet.has(t) ? `${t} (via lineage)` : t).join(", ") || "N/A"} |\n`,
       ])
     );
 
@@ -319,7 +322,8 @@ function buildDomainNotebook(
     if (uc.tablesInvolved.length > 0) {
       const exploreLines: string[] = [];
       for (const t of uc.tablesInvolved) {
-        exploreLines.push(`DESCRIBE TABLE ${t};\n`);
+        const lineageComment = lineageFqnSet.has(t) ? " -- discovered via lineage" : "";
+        exploreLines.push(`DESCRIBE TABLE ${t};${lineageComment}\n`);
       }
       cells.push(sqlCell(exploreLines));
     }

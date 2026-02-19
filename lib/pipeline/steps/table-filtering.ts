@@ -85,11 +85,19 @@ export async function runTableFiltering(
     }
   }
 
-  if (runId) await updateRunMessage(runId, `Identified ${businessTables.length} business-relevant tables out of ${tables.length}`);
+  const lineageFqns = new Set(metadata.lineageDiscoveredFqns ?? []);
+  const selectedCount = businessTables.filter((fqn) => !lineageFqns.has(fqn)).length;
+  const lineageCount = businessTables.filter((fqn) => lineageFqns.has(fqn)).length;
+  const lineageNote = lineageCount > 0
+    ? `: ${selectedCount} from your selection + ${lineageCount} discovered via lineage`
+    : "";
+  if (runId) await updateRunMessage(runId, `Identified ${businessTables.length} business-relevant tables out of ${tables.length}${lineageNote}`);
 
   logger.info("Table filtering complete", {
     businessTables: businessTables.length,
     totalTables: tables.length,
+    fromSelection: selectedCount,
+    fromLineage: lineageCount,
   });
 
   return businessTables;

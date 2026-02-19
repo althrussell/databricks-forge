@@ -49,6 +49,9 @@ export const GENERATION_OPTIONS = [
 
 export type GenerationOption = (typeof GENERATION_OPTIONS)[number];
 
+export const DISCOVERY_DEPTHS = ["focused", "balanced", "comprehensive"] as const;
+export type DiscoveryDepth = (typeof DISCOVERY_DEPTHS)[number];
+
 export const SUPPORTED_LANGUAGES = [
   "English",
   "Arabic",
@@ -91,6 +94,7 @@ export interface PipelineRunConfig {
   aiModel: string;
   sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for discovery & SQL gen
   industry: string; // industry outcome map id, empty = not selected
+  discoveryDepth: DiscoveryDepth; // controls generation volume, quality floor, and adaptive cap
 }
 
 /** Per-step timing and metadata logged during pipeline execution. */
@@ -181,6 +185,7 @@ export interface TableInfo {
   fqn: string; // catalog.schema.table
   tableType: string;
   comment: string | null;
+  discoveredVia?: "selected" | "lineage";
 }
 
 export interface ColumnInfo {
@@ -219,6 +224,7 @@ export interface MetadataSnapshot {
   tableCount: number;
   columnCount: number;
   cachedAt: string; // ISO timestamp
+  lineageDiscoveredFqns: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -244,6 +250,7 @@ export interface PipelineContext {
   metadata: MetadataSnapshot | null;
   filteredTables: string[]; // FQNs of business-relevant tables
   useCases: UseCase[];
+  lineageGraph: LineageGraph | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +479,7 @@ export interface ERDNode {
   columns: Array<{
     name: string;
     type: string;
+    description: string | null;
     isPK: boolean;
     isFK: boolean;
   }>;

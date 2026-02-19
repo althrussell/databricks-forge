@@ -66,9 +66,10 @@ interface UpdateResult {
 interface UseCaseTableProps {
   useCases: UseCase[];
   onUpdate?: (updated: UseCase) => Promise<UpdateResult> | void;
+  lineageDiscoveredFqns?: string[];
 }
 
-export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
+export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }: UseCaseTableProps) {
   const [search, setSearch] = useState("");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -707,16 +708,27 @@ export function UseCaseTable({ useCases, onUpdate }: UseCaseTableProps) {
                         </div>
                       ) : (
                         <div className="mt-1 flex flex-wrap gap-1.5">
-                          {selectedUseCase.tablesInvolved.map((t) => (
-                            <Badge
-                              key={t}
-                              variant="outline"
-                              className="gap-1 font-mono text-[11px] font-normal"
-                            >
-                              <Database className="h-2.5 w-2.5 text-muted-foreground" />
-                              {t}
-                            </Badge>
-                          ))}
+                          {selectedUseCase.tablesInvolved.map((t) => {
+                            const isLineage = lineageDiscoveredFqns.includes(t);
+                            return (
+                              <Badge
+                                key={t}
+                                variant="outline"
+                                className={`gap-1 font-mono text-[11px] font-normal ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
+                                title={isLineage ? "This table was automatically discovered via data lineage — it was not in your original catalog/schema selection." : undefined}
+                              >
+                                {isLineage ? (
+                                  <Link2 className="h-2.5 w-2.5 text-blue-500" />
+                                ) : (
+                                  <Database className="h-2.5 w-2.5 text-muted-foreground" />
+                                )}
+                                {t}
+                                {isLineage && (
+                                  <span className="text-[9px] text-blue-500">via lineage</span>
+                                )}
+                              </Badge>
+                            );
+                          })}
                         </div>
                       )}
                     </DetailSection>

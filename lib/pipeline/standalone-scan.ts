@@ -13,6 +13,7 @@ import {
   mergeTableComments,
   fetchTableTypes,
   mergeTableTypes,
+  fetchColumnsBatch,
 } from "@/lib/queries/metadata";
 import {
   enrichTablesInBatches,
@@ -135,6 +136,18 @@ export async function runStandaloneEnrichment(
     ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE" })),
     ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE" })),
   ];
+
+  // Fetch columns for lineage-discovered tables so they appear in the ERD
+  if (lineageGraph.discoveredTables.length > 0) {
+    try {
+      const lineageCols = await fetchColumnsBatch(lineageGraph.discoveredTables);
+      allColumns.push(...lineageCols);
+    } catch (error) {
+      logger.warn("[standalone-scan] Failed to fetch lineage-discovered columns (non-fatal)", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   updateScanProgress(scanId, {
     lineageTablesFound: lineageGraph.discoveredTables.length,

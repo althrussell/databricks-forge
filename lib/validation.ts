@@ -96,6 +96,7 @@ export const CreateRunSchema = z.object({
       return Math.min(Math.max(isNaN(n) ? 0 : n, 0), 50);
     }),
   industry: z.string().max(100).optional().default(""),
+  discoveryDepth: z.enum(["focused", "balanced", "comprehensive"]).optional().default("balanced"),
 });
 
 export type CreateRunInput = z.infer<typeof CreateRunSchema>;
