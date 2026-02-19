@@ -3,7 +3,7 @@
 ## Overview
 
 Databricks Forge AI follows a **ports-and-adapters** architecture. The web app
-is a Next.js 15 App Router application deployed as a Databricks App. All
+is a Next.js 16 App Router application deployed as a Databricks App. All
 Databricks interactions go through a thin adapter layer (`lib/dbx/`), keeping
 business logic independent of transport details.
 
@@ -75,6 +75,11 @@ No raw SQL appears anywhere else in the codebase.
 - `schema.ts` -- DDL for Lakebase tables + migration helper
 - `runs.ts` -- CRUD for `forge_runs`
 - `usecases.ts` -- CRUD for `forge_use_cases`
+- `genie-recommendations.ts` -- CRUD for Genie Space recommendations
+- `genie-engine-config.ts` -- Versioned Genie Engine config
+- `genie-spaces.ts` -- Deployed Genie Space tracking
+- `environment-scans.ts` -- Estate scan persistence + aggregate view
+- `activity-log.ts`, `prompt-logs.ts`, `exports.ts`, `metadata-cache.ts`, `outcome-maps.ts`
 
 ### `/lib/export/` -- Output Generation
 
@@ -85,81 +90,32 @@ No raw SQL appears anywhere else in the codebase.
 
 ## Lakebase Schema
 
-Four tables in a dedicated schema (e.g. `forge_app`):
+15 tables in Lakebase managed by Prisma (see `prisma/schema.prisma` for full definitions):
 
-### `forge_runs`
-
-| Column             | Type      | Notes                          |
-| ------------------ | --------- | ------------------------------ |
-| run_id             | STRING    | PK, UUID                      |
-| business_name      | STRING    |                                |
-| uc_metadata        | STRING    | Catalogs/schemas/tables input  |
-| operation          | STRING    |                                |
-| business_priorities| STRING    | JSON array                     |
-| strategic_goals    | STRING    |                                |
-| business_domains   | STRING    |                                |
-| ai_model           | STRING    |                                |
-| languages          | STRING    | JSON array                     |
-| status             | STRING    | pending/running/completed/failed |
-| current_step       | STRING    | Active pipeline step           |
-| progress_pct       | INT       |                                |
-| business_context   | STRING    | JSON blob from LLM             |
-| error_message      | STRING    |                                |
-| created_at         | TIMESTAMP |                                |
-| completed_at       | TIMESTAMP |                                |
-
-### `forge_use_cases`
-
-| Column             | Type   | Notes                     |
-| ------------------ | ------ | ------------------------- |
-| id                 | STRING | PK                        |
-| run_id             | STRING | FK to forge_runs        |
-| use_case_no        | INT    |                           |
-| name               | STRING |                           |
-| type               | STRING | AI / Statistical          |
-| analytics_technique| STRING |                           |
-| statement          | STRING |                           |
-| solution           | STRING |                           |
-| business_value     | STRING |                           |
-| beneficiary        | STRING |                           |
-| sponsor            | STRING |                           |
-| domain             | STRING |                           |
-| subdomain          | STRING |                           |
-| tables_involved    | STRING | JSON array of FQNs        |
-| priority_score     | DOUBLE |                           |
-| feasibility_score  | DOUBLE |                           |
-| impact_score       | DOUBLE |                           |
-| overall_score      | DOUBLE |                           |
-| sql_code           | STRING |                           |
-| sql_status         | STRING |                           |
-
-### `forge_metadata_cache`
-
-| Column        | Type      | Notes                        |
-| ------------- | --------- | ---------------------------- |
-| cache_key     | STRING    | PK                           |
-| uc_path       | STRING    |                              |
-| metadata_json | STRING    | Serialised schema markdown   |
-| table_count   | INT       |                              |
-| column_count  | INT       |                              |
-| cached_at     | TIMESTAMP |                              |
-
-### `forge_exports`
-
-| Column     | Type      | Notes                       |
-| ---------- | --------- | --------------------------- |
-| export_id  | STRING    | PK                          |
-| run_id     | STRING    | FK to forge_runs          |
-| format     | STRING    | excel/pdf/pptx/notebooks    |
-| file_path  | STRING    | Volumes or workspace path   |
-| created_at | TIMESTAMP |                             |
+| Table | Purpose |
+| --- | --- |
+| `forge_runs` | Pipeline execution records (config, status, progress, business context) |
+| `forge_use_cases` | Generated use cases (scores, domain, SQL, tables involved) |
+| `forge_metadata_cache` | Cached UC metadata snapshots |
+| `forge_exports` | Export history (format, path, timestamp) |
+| `forge_prompt_logs` | LLM prompt/response audit trail |
+| `forge_activity_log` | User activity feed |
+| `forge_outcome_maps` | Industry outcome map definitions |
+| `forge_genie_recommendations` | Generated Genie Space recommendations per domain |
+| `forge_genie_engine_configs` | Genie Engine config versions per run |
+| `forge_genie_spaces` | Tracked deployed Genie Spaces |
+| `forge_environment_scans` | Estate scan records (scope, counts, aggregate scores) |
+| `forge_table_details` | Per-table metadata + LLM enrichments from estate scans |
+| `forge_table_history_summaries` | Delta table history insights |
+| `forge_table_lineage` | Data lineage edges |
+| `forge_table_insights` | Health scores, issues, and recommendations per table |
 
 ## Data Flow
 
 1. User submits configuration via `/configure` page
 2. API route creates a `PipelineRun` record in Lakebase (status=pending)
 3. Execute endpoint starts the pipeline engine asynchronously
-4. Engine runs 6 steps, each updating progress in Lakebase
+4. Engine runs 7 steps, each updating progress in Lakebase
 5. Frontend polls `/api/runs/[runId]` every 3 seconds for status
 6. On completion, use cases are persisted in `forge_use_cases`
 7. User views results and triggers exports from the run detail page

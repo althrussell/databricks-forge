@@ -5,7 +5,7 @@
 
 ## Pipeline Overview
 
-The pipeline runs 6 core steps sequentially. Each step:
+The pipeline runs 7 core steps sequentially (plus an optional 8th Genie Engine step). Each step:
 
 - Receives the current pipeline state (run config + accumulated results)
 - Executes SQL queries (metadata) and/or Model Serving calls (LLM via chat completions API)
@@ -13,17 +13,21 @@ The pipeline runs 6 core steps sequentially. Each step:
 - Updates `progress_pct` and `current_step` on the run record
 
 ```
-[1] Business Context  (15%)
+[1] Business Context      (10%)
         │
-[2] Metadata Extraction  (30%)
+[2] Metadata Extraction   (25%)
         │
-[3] Table Filtering  (45%)
+[3] Table Filtering       (35%)
         │
-[4] Use Case Generation  (65%)
+[4] Use Case Generation   (55%)
         │
-[5] Domain Clustering  (80%)
+[5] Domain Clustering     (70%)
         │
-[6] Scoring & Dedup  (100%)
+[6] Scoring & Dedup       (85%)
+        │
+[7] SQL Generation        (100%)
+        │
+[8] Genie Engine          (optional, post-pipeline)
 ```
 
 ---
@@ -211,3 +215,53 @@ remove duplicates.
 
 **Error handling:** If scoring fails for a domain, assign default scores (0.5).
 If dedup fails, keep all use cases.
+
+---
+
+## Step 7: SQL Generation
+
+**File:** `lib/pipeline/steps/sql-generation.ts`
+
+**Purpose:** Generate bespoke SQL code for each use case, producing runnable
+Databricks SQL that demonstrates the analytical technique.
+
+**Prompts:** `SQL_GENERATION_PROMPT`
+
+**Inputs:**
+- `business_context` (from Step 1)
+- `schema_markdown` with business tables (from Step 3)
+- Use cases with domains and scores (from Step 6)
+- Optional sample data (if data sampling is enabled)
+
+**Process:**
+1. For each use case, call Model Serving with the use case details + schema context
+2. Stream the SQL response to reduce latency
+3. Parse and validate the generated SQL
+4. Persist `sql_code` and `sql_status` on each use case record
+
+**Output:** Use cases with `sql_code` populated and `sql_status` set to `generated`.
+
+**Error handling:** If SQL generation fails for a use case, set `sql_status` to `failed`
+and continue with the next use case.
+
+---
+
+## Step 8: Genie Engine (Optional)
+
+**File:** `lib/genie/engine.ts`
+
+**Purpose:** Generate Databricks Genie Space recommendations from the pipeline
+results. This is a post-pipeline step triggered from the Genie Workbench UI.
+
+See [docs/GENIE_ENGINE.md](GENIE_ENGINE.md) for full documentation of the
+Genie Engine, its configuration, LLM passes, assembler, and deployment.
+
+**Process:**
+1. Select tables per domain using LLM-based table scoring
+2. Run up to 8 LLM passes: column intelligence, entity matching, semantic
+   expressions, trusted assets, benchmarks, metric views, sample questions,
+   text instructions
+3. Generate time-period filters and dimensions for date columns
+4. Assemble all outputs into a `SerializedSpace` v2 JSON payload
+5. Persist recommendations in `forge_genie_recommendations`
+6. User can review, edit, and deploy spaces from the Genie Workbench

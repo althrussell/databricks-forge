@@ -12,6 +12,8 @@ import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 import { mkdirs } from "./workspace";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
 
+export const DEFAULT_GENIE_PARENT_PATH = "/Shared/Forge Genie Spaces/";
+
 // ---------------------------------------------------------------------------
 // List
 // ---------------------------------------------------------------------------
@@ -75,7 +77,7 @@ export async function getGenieSpace(
 
 const VALID_BENCHMARK_FORMATS = new Set(["SQL"]);
 
-function sanitizeSerializedSpace(raw: string): string {
+export function sanitizeSerializedSpace(raw: string): string {
   try {
     const parsed = JSON.parse(raw);
 
@@ -128,7 +130,7 @@ export async function createGenieSpace(opts: {
   const url = `${config.host}/api/2.0/genie/spaces`;
   const headers = await getAppHeaders();
 
-  const parentPath = opts.parentPath ?? "/Shared/Forge Genie Spaces/";
+  const parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
 
   // Ensure the parent folder exists in the workspace
   await mkdirs(parentPath);

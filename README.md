@@ -650,14 +650,25 @@ These map to the form fields on the `/configure` page:
 
 ## Lakebase Schema (Prisma)
 
-All app state is stored in four tables in the Lakebase `public` schema, managed by Prisma.
+All app state is stored in 15 tables in the Lakebase `public` schema, managed by Prisma.
 
 | Table | Purpose |
 | --- | --- |
-| `forge_runs` | Pipeline execution records (config, status, progress, status message, business context) |
-| `forge_use_cases` | Generated use cases (name, scores, domain, SQL, tables involved) |
+| `forge_runs` | Pipeline execution records (config, status, progress, business context) |
+| `forge_use_cases` | Generated use cases (scores, domain, SQL, tables involved) |
 | `forge_metadata_cache` | Cached UC metadata snapshots |
-| `forge_exports` | Export history |
+| `forge_exports` | Export history (format, path, timestamp) |
+| `forge_prompt_logs` | LLM prompt/response audit trail |
+| `forge_activity_log` | User activity feed |
+| `forge_outcome_maps` | Industry outcome map definitions |
+| `forge_genie_recommendations` | Generated Genie Space recommendations per domain |
+| `forge_genie_engine_configs` | Genie Engine config versions per run |
+| `forge_genie_spaces` | Tracked deployed Genie Spaces |
+| `forge_environment_scans` | Estate scan records (scope, counts, aggregate scores) |
+| `forge_table_details` | Per-table metadata + LLM enrichments from estate scans |
+| `forge_table_history_summaries` | Delta table history insights |
+| `forge_table_lineage` | Data lineage edges |
+| `forge_table_insights` | Health scores, issues, and recommendations per table |
 
 Schema is defined in `prisma/schema.prisma`. To update:
 
@@ -734,6 +745,7 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and Lakebase schema |
 | [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
 | [docs/PROMPTS.md](docs/PROMPTS.md) | Prompt template catalog |
+| [docs/GENIE_ENGINE.md](docs/GENIE_ENGINE.md) | Genie Engine architecture, configuration, and best practices |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment and local dev guide |
 
 ---

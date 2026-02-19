@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
-import { createGenieSpace, updateGenieSpace } from "@/lib/dbx/genie";
+import { createGenieSpace, updateGenieSpace, DEFAULT_GENIE_PARENT_PATH } from "@/lib/dbx/genie";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import {
@@ -69,7 +69,7 @@ export async function POST(
     } else {
       // Create new space
       const body = await request.json().catch(() => ({})) as Record<string, string>;
-      const parentPath = body.parentPath ?? "/Shared/Forge Genie Spaces/";
+      const parentPath = body.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
 
       const result = await createGenieSpace({
         title: rec.title,
