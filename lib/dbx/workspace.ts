@@ -2,9 +2,12 @@
  * Databricks Workspace REST API helpers.
  *
  * Used for creating/importing notebooks into the Databricks workspace.
+ * Uses getHeaders() (OBO user token when available, SP fallback) so that
+ * notebooks are created under the logged-in user's identity and ownership.
+ * Requires the `files.files` user authorization scope.
  */
 
-import { getConfig, getAppHeaders } from "./client";
+import { getConfig, getHeaders } from "./client";
 import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 
 // ---------------------------------------------------------------------------
@@ -51,7 +54,7 @@ export async function importNotebook(
     format: options.format ?? "SOURCE",
   };
 
-  const headers = await getAppHeaders();
+  const headers = await getHeaders();
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify(body) },
@@ -73,7 +76,7 @@ export async function mkdirs(path: string): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/mkdirs`;
 
-  const headers = await getAppHeaders();
+  const headers = await getHeaders();
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify({ path }) },
@@ -98,7 +101,7 @@ export async function deleteWorkspaceObject(
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/delete`;
 
-  const headers = await getAppHeaders();
+  const headers = await getHeaders();
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify({ path, recursive }) },

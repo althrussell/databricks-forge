@@ -309,21 +309,10 @@ async function generateDbCredential(): Promise<string> {
   }
 
   const { name: endpointName } = await resolveEndpoint();
-  const host = getHost();
-  const wsToken = await getWorkspaceToken();
 
-  const resp = await fetchWithTimeout(
-    `${host}/api/2.0/postgres:generateDatabaseCredential`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${wsToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ endpoint: endpointName }),
-    },
-    TIMEOUTS.AUTH
-  );
+  const resp = await lakebaseApi("POST", "credentials", {
+    endpoint: endpointName,
+  });
 
   if (!resp.ok) {
     const text = await resp.text();
@@ -332,11 +321,15 @@ async function generateDbCredential(): Promise<string> {
     );
   }
 
-  const data: { token: string; expires_in?: number } = await resp.json();
+  const data: { token: string; expire_time?: string } = await resp.json();
+
+  const expiresAt = data.expire_time
+    ? new Date(data.expire_time).getTime()
+    : Date.now() + 3_600_000;
 
   _dbCredential = {
     value: data.token,
-    expiresAt: Date.now() + (data.expires_in ?? 3_600) * 1_000,
+    expiresAt,
   };
   _credentialGeneration++;
 

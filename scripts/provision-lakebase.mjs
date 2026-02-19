@@ -197,18 +197,7 @@ async function getUsername() {
 }
 
 async function generateCredential(epName) {
-  const host = getHost();
-  const resp = await timedFetch(
-    `${host}/api/2.0/postgres:generateDatabaseCredential`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ endpoint: epName }),
-    }
-  );
+  const resp = await api("POST", "credentials", { endpoint: epName });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`Generate credential failed (${resp.status}): ${text}`);

@@ -113,7 +113,24 @@ graph TB
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse          # Bound SQL Warehouse resource
+  - name: DATABRICKS_SERVING_ENDPOINT
+    valueFrom: serving-endpoint       # Bound Model Serving endpoint
 ```
+
+### User Authorization Scopes
+
+The app uses on-behalf-of (OBO) user authorization for SQL queries. Configure
+these scopes in the Databricks App UI (**Configure** → **+Add Scope**):
+
+| Scope | Purpose |
+|-------|---------|
+| `sql` | SQL Statement Execution API (metadata queries, generated SQL, health check) |
+| `iam.access-control:read` | (default -- auto-included) Access control resolution |
+| `iam.current-user:read` | (default -- auto-included) User identity from proxy headers |
+
+All other Databricks APIs (Model Serving, Workspace, Genie) use app
+authorization (service principal) because their scopes are not available in
+the user-auth scope picker.
 
 The `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`
 are automatically injected by the Databricks Apps runtime. `DATABASE_URL` is
@@ -161,9 +178,13 @@ control is fully delegated to the Databricks platform:
   (or service principal). The user can only see catalogs, schemas, and tables
   they have `USE` or `SELECT` permissions on.
 - **SQL Warehouse access**: The user must have `CAN USE` on the bound SQL Warehouse.
-- **Workspace access**: Notebook export uses service principal credentials
-  (`getAppHeaders`) because the Workspace API requires scopes not available
-  in user-auth mode.
+- **Workspace access**: Notebook export uses the logged-in user's OBO token
+  (`getHeaders` with `files.files` scope) so notebooks are created under the
+  user's identity and ownership. Falls back to service principal when no
+  request context is available.
+- **Model Serving / Genie**: LLM inference and Genie Space management use
+  service principal credentials (`getAppHeaders`) because these operations
+  are performed by the app, not on behalf of individual users.
 - **Lakebase**: Application-level data (runs, use cases) is accessible to all
   authenticated users of the app. There is no per-user row-level isolation on
   pipeline runs.

@@ -224,9 +224,8 @@ export async function getHeaders(): Promise<Record<string, string>> {
 /**
  * Returns headers using app authorization (service principal) only.
  *
- * Use for APIs whose scopes are NOT available in user authorization
- * (e.g. Workspace REST API — requires `workspace` scope which is not
- * exposed in the Databricks Apps user-auth scope picker).
+ * Use for APIs where the action is performed by the app, not the user
+ * (e.g. Model Serving LLM calls, Genie Space management).
  */
 export async function getAppHeaders(): Promise<Record<string, string>> {
   const token = await getAppBearerToken();
