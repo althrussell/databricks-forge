@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build && sh scripts/postbuild.sh",
     "postinstall": "prisma generate",
-    "start": "prisma db push --skip-generate && next start",
+    "start": "prisma db push && next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",

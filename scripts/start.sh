@@ -19,7 +19,7 @@ PRISMA_BIN="./node_modules/.bin/prisma"
 
 if [ -x "$PRISMA_BIN" ]; then
   echo "[startup] Syncing database schema..."
-  if "$PRISMA_BIN" db push --skip-generate 2>&1; then
+  if "$PRISMA_BIN" db push 2>&1; then
     echo "[startup] Schema sync complete."
   else
     echo "[startup] WARNING: Schema sync failed — tables may already be up to date."
