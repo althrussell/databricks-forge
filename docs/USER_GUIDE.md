@@ -233,7 +233,7 @@ You can copy any section using the copy buttons.
 Click the **Edit** button to modify the name, statement, or tables involved.
 
 <p align="center">
-  <img src="images/guide-12-usecase-edit.png" alt="Editing a use case" width="100%" />
+  <img src="images/guide-12-usecase-edit.png" alt="Editing a use case" width="33%" />
 </p>
 
 **Adjusting scores:**
@@ -241,7 +241,7 @@ Click the **Edit** button to modify the name, statement, or tables involved.
 Click **Adjust Scores** to override the system-generated scores with your own judgment using the sliders.
 
 <p align="center">
-  <img src="images/guide-13-score-adjust.png" alt="Score adjustment sliders" width="100%" />
+  <img src="images/guide-13-score-adjust.png" alt="Score adjustment sliders" width="33%" />
 </p>
 
 - Drag the **Priority**, **Feasibility**, and **Impact** sliders.
@@ -295,7 +295,7 @@ Each recommendation includes:
 Click any row to open the detail sheet.
 
 <p align="center">
-  <img src="images/guide-16-genie-detail.png" alt="Genie Space detail" width="100%" />
+  <img src="images/guide-16-genie-detail.png" alt="Genie Space detail" width="33%" />
 </p>
 
 The detail sheet shows:
