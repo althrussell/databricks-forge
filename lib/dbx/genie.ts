@@ -78,11 +78,11 @@ const VALID_BENCHMARK_FORMATS = new Set(["SQL"]);
 function sanitizeSerializedSpace(raw: string): string {
   try {
     const parsed = JSON.parse(raw);
-    const benchmarks = parsed?.instructions?.benchmarks;
-    if (Array.isArray(benchmarks)) {
-      for (const b of benchmarks) {
-        if (Array.isArray(b.answer)) {
-          for (const a of b.answer) {
+    const questions = parsed?.benchmarks?.questions;
+    if (Array.isArray(questions)) {
+      for (const q of questions) {
+        if (Array.isArray(q.answer)) {
+          for (const a of q.answer) {
             if (
               typeof a.format === "string" &&
               !VALID_BENCHMARK_FORMATS.has(a.format)
