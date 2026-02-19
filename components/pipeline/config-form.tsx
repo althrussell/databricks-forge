@@ -84,7 +84,10 @@ export function ConfigForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [discoveryDepth, setDiscoveryDepth] = useState<DiscoveryDepth>("balanced");
+  const [discoveryDepth, setDiscoveryDepth] = useState<DiscoveryDepth>(() => {
+    if (typeof window === "undefined") return "balanced";
+    return loadSettings().defaultDiscoveryDepth ?? "balanced";
+  });
   const [businessName, setBusinessName] = useState("");
   const [industry, setIndustry] = useState("");
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
