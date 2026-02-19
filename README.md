@@ -7,9 +7,7 @@
 Databricks Forge AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
 
 <p align="center">
-  <img src="public/1.png" alt="Forge AI — Main Dashboard" width="100%" />
-  <br />
-  <em>Main Dashboard — query performance overview with AI insights, impact scoring, and cost analysis</em>
+  <img src="public/forge_home.png" alt="Databricks Forge AI — Home" width="100%" />
 </p>
 
 ---
@@ -29,12 +27,6 @@ Databricks Forge AI is a web application deployed as a [Databricks App](https://
 - Supports **20+ languages** for generated documentation
 - **Real-time status messages** during pipeline execution (e.g. "Filtering tables (batch 2 of 5)...")
 - **Privacy-first**: reads only metadata by default (table/column names and schemas). Optional [data sampling](FORGE_ANALYSIS.md#data-sampling) can be enabled for improved SQL accuracy
-
-<p align="center">
-  <img src="public/3.png" alt="Query Detail — expanded view with AI insights and performance flags" width="100%" />
-  <br />
-  <em>Query Detail — AI-powered insights, performance flags, I/O stats, and time breakdown at a glance</em>
-</p>
 
 ---
 
@@ -59,7 +51,6 @@ databricks-forge/
   AGENTS.md                     # AI agent guidance
   app.yaml                      # Databricks App runtime config
   databricks.yml                # Databricks App manifest (bundles)
-  Dockerfile                    # Multi-stage Docker build
   prisma/
     schema.prisma               # Prisma schema (Lakebase tables)
   app/                          # Next.js routes + UI
@@ -114,25 +105,7 @@ The "Discover Usecases" pipeline runs 7 steps sequentially. The frontend polls f
 
 Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
 
-<p align="center">
-  <img src="public/4.png" alt="AI Analysis — root cause analysis with rewrite suggestions" width="100%" />
-  <br />
-  <em>AI Analysis — deep-dive with root causes, rewrite suggestions, risk assessment, and validation plan</em>
-</p>
-
 > For the full analysis methodology, scoring formulas, prompt engineering details, and data flow diagrams, see [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md).
-
-<p align="center">
-  <img src="public/2.png" alt="Warehouse Monitor — real-time metrics and query timeline" width="100%" />
-  <br />
-  <em>Warehouse Monitor — live warehouse metrics, query timeline, duration distribution, and top users</em>
-</p>
-
-<p align="center">
-  <img src="public/5.png" alt="Warehouse Health Report — sizing recommendations and cost analysis" width="100%" />
-  <br />
-  <em>Warehouse Health Report — 7-day analysis with sizing recommendations, hourly activity, and cost of inaction</em>
-</p>
 
 ---
 
@@ -143,6 +116,10 @@ The app persists all state (pipeline runs, use cases, exports) in [Lakebase Auto
 ### 1. Create a Lakebase project
 
 In your Databricks workspace, navigate to **SQL > Lakebase** and create a new project (or use an existing one). Note the **pooler** and **direct** endpoint hostnames from the **Connect** dialog.
+
+<p align="center">
+  <img src="docs/images/lakebase-connect.png" alt="Lakebase — Connect to your database dialog" width="600" />
+</p>
 
 ### 2. Create a Postgres role for the app
 
@@ -314,6 +291,11 @@ Before you start, ensure you have:
 - [ ] **A SQL Warehouse** (Serverless or Pro) running in that workspace
 - [ ] **A Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
 - [ ] **A Lakebase Autoscaling project** created (see [Lakebase setup](#lakebase-autoscaling-setup) above)
+- [ ] **Workspace previews enabled**: Both **Databricks Apps - On-Behalf-Of User Authorization** and **Databricks Apps - Install Apps from Git** must be turned on in your workspace Admin Settings under Previews
+
+<p align="center">
+  <img src="docs/images/previews.png" alt="Required preview features in workspace settings" width="700" />
+</p>
 
 Verify your CLI is authenticated:
 
@@ -325,6 +307,14 @@ databricks auth describe
 ---
 
 ### Step 1: Create the Databricks App
+
+In the Databricks workspace, navigate to **Compute > Apps** and click **Create app**. Choose **Create a custom app from scratch**, then configure the Git repository in step 2 of the wizard.
+
+<p align="center">
+  <img src="docs/images/create-app.png" alt="Create new app — Databricks UI" width="700" />
+</p>
+
+You can also create the app via CLI:
 
 ```bash
 databricks apps create databricks-forge \
@@ -383,6 +373,10 @@ Navigate to **Workspace > Apps > databricks-forge > Configure** and add:
 | 2 | **Serving Endpoint** | `serving-endpoint` | Select your Model Serving endpoint. Permission: **Can query** |
 | 3 | **Secret** | `db-secret` | Scope: `forge-secrets`, Key: `DATABASE_URL`. Permission: **Can read** |
 
+<p align="center">
+  <img src="docs/images/app-resources.png" alt="App resources — configured SQL Warehouse, Serving Endpoint, and Secret" width="700" />
+</p>
+
 #### Option B: Configure via CLI
 
 If you prefer to script everything:
@@ -410,19 +404,36 @@ databricks apps update-resources databricks-forge \
 
 ---
 
+### Step 3b: Configure User Authorization scopes
+
+If **On-Behalf-Of User Authorization** is enabled (recommended), configure the API scopes the app needs to act on behalf of users. In the app's Configure page, under **User authorization**, add these scopes:
+
+| Scope | Description |
+| --- | --- |
+| `sql` | Execute SQL and manage SQL resources |
+| `files.files` | Manage files and directories (for notebook export) |
+| `catalog.tables:read` | Read tables in Unity Catalog |
+| `catalog.schemas:read` | Read schemas in Unity Catalog |
+| `catalog.catalogs:read` | Read catalogs in Unity Catalog |
+
+<p align="center">
+  <img src="docs/images/user-auth.png" alt="User authorization — API scopes configuration" width="700" />
+</p>
+
+---
+
 ### Step 4: Deploy the app
 
-```bash
-databricks apps deploy databricks-forge --source-code-path .
-```
+Deploy from the app details page by clicking **Deploy**, selecting **From Git**, and entering your branch (e.g. `main`).
 
 The platform will:
 
-1. **Build** the container from the `Dockerfile` (runs `prisma generate` at build time)
-2. **Inject** environment variables from resource bindings (see table below)
-3. **Start** the app using `scripts/start.sh`, which:
+1. **Install dependencies** -- runs `npm install`
+2. **Build** -- runs `npm run build` (generates the Prisma client, builds the Next.js standalone server, and copies static assets)
+3. **Inject** environment variables from resource bindings (see table below)
+4. **Start** the app using `scripts/start.sh` (from `app.yaml`), which:
    - Runs `prisma db push` automatically (creates all tables on first deploy, applies additive schema changes on subsequent deploys)
-   - Starts the Next.js production server on port 8000
+   - Starts the Next.js standalone server on port 8000
 
 > First deploy takes 3-5 minutes. Subsequent deploys are faster.
 
@@ -545,11 +556,7 @@ GRANT SELECT ON TABLE system.access.table_lineage TO `<service_principal_name>`;
 
 ### Updating the app
 
-After making code changes, redeploy:
-
-```bash
-databricks apps deploy databricks-forge --source-code-path .
-```
+After making code changes, push to your Git repository and click **Deploy** from the app details page. Select **From Git** and enter your branch or tag.
 
 Schema changes in `prisma/schema.prisma` are applied automatically on the next startup -- no manual migration step required.
 
@@ -587,31 +594,9 @@ databricks apps logs databricks-forge --follow
 [ ] 7. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
 [ ] 8. Secret resource bound (key: db-secret, scope: forge-secrets, permission: Can read)
 [ ] 9. UC grants applied to the app's service principal
-[ ] 10. Deployed: databricks apps deploy databricks-forge --source-code-path .
+[ ] 10. Deployed from Git: click Deploy > From Git > enter branch (e.g. main)
 [ ] 11. Health check passes: curl <app-url>/api/health
 ```
-
----
-
-## Docker (Local / Manual)
-
-If you want to build and run the container locally (outside Databricks Apps):
-
-```bash
-# Build
-docker build -t databricks-forge .
-
-# Run (provide all env vars manually)
-docker run -p 8000:8000 \
-  -e DATABASE_URL="postgresql://databricks_forge:<password>@ep-xxx.database.<region>.cloud.databricks.com/databricks_postgres?sslmode=verify-full" \
-  -e DATABRICKS_HOST=https://your-workspace.cloud.databricks.com \
-  -e DATABRICKS_TOKEN=dapi_your_pat_token \
-  -e DATABRICKS_WAREHOUSE_ID=abc123def456 \
-  -e DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5 \
-  databricks-forge
-```
-
-The container runs `scripts/start.sh`, which auto-migrates the database and starts the server on port 8000.
 
 ---
 
@@ -742,6 +727,8 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 
 | Document | Description |
 | --- | --- |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **User guide** -- step-by-step walkthrough of every feature with screenshots |
+| [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) | **Security architecture** -- data flows, threat mitigations, auth model, compliance posture |
 | [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) | **Comprehensive analysis guide** -- pipeline logic, scoring methodology, prompt engineering, data flow diagrams |
 | [AGENTS.md](AGENTS.md) | AI agent guidance (folder contract, domain types, constraints) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and Lakebase schema |
