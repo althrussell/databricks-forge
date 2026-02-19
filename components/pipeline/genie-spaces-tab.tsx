@@ -338,13 +338,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                     Subdomains
                   </th>
                   <th className="px-3 py-2.5 text-center font-medium">
-                    Tables
-                  </th>
-                  <th className="px-3 py-2.5 text-center font-medium">
-                    Use Cases
-                  </th>
-                  <th className="px-3 py-2.5 text-center font-medium">
-                    SQL Examples
+                    Knowledge Store
                   </th>
                   <th className="px-3 py-2.5 text-center font-medium">
                     Status
@@ -395,20 +389,25 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-center">
+                      <td className="px-3 py-2.5">
                         {noTables ? (
                           <Badge variant="destructive" className="text-[10px]">
                             No Tables
                           </Badge>
                         ) : (
-                          rec.tableCount
+                          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
+                            <KSChip label="Tables" value={rec.tableCount} />
+                            {rec.metricViewCount > 0 && (
+                              <KSChip label="Metric Views" value={rec.metricViewCount} accent="violet" />
+                            )}
+                            <KSChip label="Use Cases" value={rec.useCaseCount} />
+                            <KSChip label="SQL" value={rec.sqlExampleCount} />
+                            <KSChip label="Measures" value={rec.measureCount} accent="blue" />
+                            <KSChip label="Filters" value={rec.filterCount} accent="amber" />
+                            <KSChip label="Dimensions" value={rec.dimensionCount} accent="emerald" />
+                            <KSChip label="Joins" value={rec.joinCount} />
+                          </div>
                         )}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        {rec.useCaseCount}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        {rec.sqlExampleCount}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         {deployed ? (
@@ -859,6 +858,32 @@ function StatBadge({ label, value }: { label: string; value: number }) {
       <div className="font-semibold">{value}</div>
       <div className="text-muted-foreground">{label}</div>
     </div>
+  );
+}
+
+const ACCENT_COLORS: Record<string, string> = {
+  blue: "text-blue-500",
+  amber: "text-amber-500",
+  emerald: "text-emerald-500",
+  violet: "text-violet-500",
+};
+
+function KSChip({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent?: "blue" | "amber" | "emerald" | "violet";
+}) {
+  if (value === 0) return null;
+  const valueColor = accent ? ACCENT_COLORS[accent] : "text-foreground";
+  return (
+    <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-[10px]">
+      <span className={`font-semibold ${valueColor}`}>{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+    </span>
   );
 }
 
