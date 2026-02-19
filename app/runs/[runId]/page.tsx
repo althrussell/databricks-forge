@@ -405,7 +405,12 @@ export default function RunDetailPage({
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                     <ConfigField
                       label="Discovery Depth"
-                      value={(run.config.discoveryDepth ?? "balanced").charAt(0).toUpperCase() + (run.config.discoveryDepth ?? "balanced").slice(1)}
+                      value={
+                        ((run.config.discoveryDepth ?? "balanced").charAt(0).toUpperCase() + (run.config.discoveryDepth ?? "balanced").slice(1))
+                        + (run.config.depthConfig
+                          ? ` (${run.config.depthConfig.batchTargetMin}-${run.config.depthConfig.batchTargetMax}/batch, floor ${run.config.depthConfig.qualityFloor}, cap ${run.config.depthConfig.adaptiveCap}, lineage ${run.config.depthConfig.lineageDepth} hops)`
+                          : "")
+                      }
                     />
                     <ConfigField label="AI Model" value={run.config.aiModel} />
                     <ConfigField

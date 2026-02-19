@@ -52,10 +52,12 @@ function parseUCMetadata(
 
 /**
  * Run a standalone environment scan (no pipeline run context).
+ * @param lineageDepth Max BFS hops for lineage walk (default 5).
  */
 export async function runStandaloneEnrichment(
   scanId: string,
-  ucMetadata: string
+  ucMetadata: string,
+  lineageDepth = 5
 ): Promise<void> {
   const startTime = Date.now();
   const scopes = parseUCMetadata(ucMetadata);
@@ -130,7 +132,7 @@ export async function runStandaloneEnrichment(
     message: `Walking lineage from ${allTables.length} seed tables...`,
   });
   const seedFqns = allTables.map((t) => t.fqn);
-  const lineageGraph = await walkLineage(seedFqns);
+  const lineageGraph = await walkLineage(seedFqns, { maxDepth: lineageDepth });
 
   const expandedTables = [
     ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE" })),

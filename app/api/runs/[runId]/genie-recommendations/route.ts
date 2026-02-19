@@ -14,6 +14,7 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { listTrackedGenieSpaces } from "@/lib/lakebase/genie-spaces";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { generateGenieRecommendations } from "@/lib/genie/recommend";
+import { getConfig } from "@/lib/dbx/client";
 
 export async function GET(
   _request: NextRequest,
@@ -65,11 +66,17 @@ export async function GET(
     // Load tracking status for this run
     const tracked = await listTrackedGenieSpaces(runId);
 
+    let databricksHost: string | null = null;
+    try {
+      databricksHost = getConfig().host;
+    } catch { /* host unavailable in some dev environments */ }
+
     return NextResponse.json({
       runId,
       businessName: run.config.businessName,
       recommendations,
       tracked,
+      databricksHost,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

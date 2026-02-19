@@ -21,6 +21,7 @@ import type {
   SupportedLanguage,
   DiscoveryDepth,
 } from "@/lib/domain/types";
+import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,
       industry: body.industry ?? "",
       discoveryDepth: (body.discoveryDepth ?? "balanced") as DiscoveryDepth,
+      depthConfig: body.depthConfig ?? DEFAULT_DEPTH_CONFIGS[(body.discoveryDepth ?? "balanced") as DiscoveryDepth],
     };
 
     const userEmail = await getCurrentUserEmail();

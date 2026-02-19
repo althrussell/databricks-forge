@@ -62,6 +62,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
     GenieSpaceRecommendation[]
   >([]);
   const [tracked, setTracked] = useState<TrackedGenieSpace[]>([]);
+  const [databricksHost, setDatabricksHost] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +94,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
       }
       setRecommendations(data.recommendations ?? []);
       setTracked(data.tracked ?? []);
+      if (data.databricksHost) setDatabricksHost(data.databricksHost);
     } catch {
       setError("Failed to load Genie recommendations");
     } finally {
@@ -114,6 +116,12 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
 
   function isDeployed(domain: string): boolean {
     return !!getTracking(domain);
+  }
+
+  function genieSpaceUrl(spaceId: string): string | null {
+    if (!databricksHost) return null;
+    const host = databricksHost.replace(/\/$/, "");
+    return `${host}/explore/genie/${spaceId}`;
   }
 
   // Selectable = not already deployed
@@ -396,11 +404,26 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         {deployed ? (
-                          <Badge className="bg-green-500/10 text-green-600">
-                            {tracking?.status === "updated"
-                              ? "Updated"
-                              : "Deployed"}
-                          </Badge>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Badge className="bg-green-500/10 text-green-600">
+                              {tracking?.status === "updated"
+                                ? "Updated"
+                                : "Deployed"}
+                            </Badge>
+                            {tracking && genieSpaceUrl(tracking.spaceId) && (
+                              <a
+                                href={genieSpaceUrl(tracking.spaceId)!}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-violet-600 transition-colors hover:bg-violet-500/10"
+                                title="Open in Databricks"
+                              >
+                                Open
+                                <ExternalLinkIcon className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
                         ) : (
                           <Badge variant="secondary">Not Deployed</Badge>
                         )}
@@ -745,7 +768,19 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
               </div>
 
               {/* Footer actions */}
-              <SheetFooter className="mt-6">
+              <SheetFooter className="mt-6 flex-col gap-2 sm:flex-col">
+                {detailTracking && genieSpaceUrl(detailTracking.spaceId) && (
+                  <Button asChild className="w-full bg-violet-600 hover:bg-violet-700">
+                    <a
+                      href={genieSpaceUrl(detailTracking.spaceId)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLinkIcon className="mr-2 h-4 w-4" />
+                      Open in Databricks
+                    </a>
+                  </Button>
+                )}
                 {detailTracking ? (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -830,6 +865,24 @@ function GenieIcon({ className }: { className?: string }) {
       <path d="M9 22h6" />
       <path d="M10 18v4" />
       <path d="M14 18v4" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
     </svg>
   );
 }

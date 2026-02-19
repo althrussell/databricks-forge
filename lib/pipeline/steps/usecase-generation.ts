@@ -15,17 +15,12 @@ import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-ser
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
-import type { PipelineContext, UseCase, UseCaseType, DiscoveryDepth, LineageGraph } from "@/lib/domain/types";
+import type { PipelineContext, UseCase, UseCaseType, LineageGraph } from "@/lib/domain/types";
+import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
 const MAX_TABLES_PER_BATCH = 20;
 const MAX_CONCURRENT_BATCHES = 3;
-
-const BATCH_TARGET_RANGES: Record<DiscoveryDepth, { min: number; max: number }> = {
-  focused: { min: 8, max: 12 },
-  balanced: { min: 12, max: 18 },
-  comprehensive: { min: 15, max: 22 },
-};
 
 /** Shape of each use case object in the JSON array returned by the LLM. */
 interface UseCaseItem {
@@ -75,7 +70,8 @@ export async function runUsecaseGeneration(
   const allUseCases: UseCase[] = [];
   const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
   const depth = run.config.discoveryDepth ?? "balanced";
-  const targetRange = BATCH_TARGET_RANGES[depth];
+  const dc = run.config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
+  const targetRange = { min: dc.batchTargetMin, max: dc.batchTargetMax };
 
   // Build lineage context for prompt injection
   const lineageContext = ctx.lineageGraph

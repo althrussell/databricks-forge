@@ -42,6 +42,7 @@ import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environm
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
+import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import type {
   MetadataSnapshot,
   MetricViewInfo,
@@ -54,6 +55,7 @@ import type {
   TableHistorySummary,
   TableHealthInsight,
   LineageGraph,
+  DiscoveryDepthConfig,
 } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
@@ -164,12 +166,15 @@ export async function runMetadataExtraction(
 
   let lineageGraph: LineageGraph | null = null;
   try {
+    const depth = config.discoveryDepth ?? "balanced";
+    const dc = config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
     lineageGraph = await runEnrichmentPass(
       snapshot,
       allTables,
       allColumns,
       allFKs,
       scopes,
+      dc,
       runId
     );
   } catch (error) {
@@ -194,6 +199,7 @@ async function runEnrichmentPass(
   allColumns: ColumnInfo[],
   allFKs: ForeignKey[],
   scopes: Array<{ catalog: string; schema?: string }>,
+  depthConfig: DiscoveryDepthConfig,
   runId?: string
 ): Promise<LineageGraph> {
   const scanId = uuidv4();
@@ -205,10 +211,10 @@ async function runEnrichmentPass(
     tableTypeLookup.set(t.fqn, t.tableType);
   }
 
-  // Step 1: Lineage walk (full traversal up to depth 10)
-  if (runId) await updateRunMessage(runId, "Walking lineage to discover related tables...");
+  // Step 1: Lineage walk (traversal depth from config)
+  if (runId) await updateRunMessage(runId, `Walking lineage (up to ${depthConfig.lineageDepth} hops) to discover related tables...`);
   const seedFqns = allTables.map((t) => t.fqn);
-  const lineageGraph = await walkLineage(seedFqns, { maxDepth: 10 });
+  const lineageGraph = await walkLineage(seedFqns, { maxDepth: depthConfig.lineageDepth });
 
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;

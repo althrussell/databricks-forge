@@ -16,19 +16,8 @@ import {
   CrossDomainDedupItemSchema,
   validateLLMArray,
 } from "@/lib/validation";
-import type { PipelineContext, UseCase, DiscoveryDepth } from "@/lib/domain/types";
-
-const QUALITY_FLOORS: Record<DiscoveryDepth, number> = {
-  focused: 0.4,
-  balanced: 0.3,
-  comprehensive: 0.2,
-};
-
-const ADAPTIVE_CAPS: Record<DiscoveryDepth, number> = {
-  focused: 75,
-  balanced: 150,
-  comprehensive: 250,
-};
+import type { PipelineContext, UseCase } from "@/lib/domain/types";
+import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 
 export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, useCases } = ctx;
@@ -125,7 +114,8 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
 
   // Step 6f: Quality floor -- drop use cases below depth-specific threshold
   const depth = run.config.discoveryDepth ?? "balanced";
-  const floor = QUALITY_FLOORS[depth];
+  const dc = run.config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
+  const floor = dc.qualityFloor;
   const beforeFloor = scored.length;
   scored = scored.filter((uc) => uc.overallScore >= floor);
   if (scored.length < beforeFloor) {
@@ -135,7 +125,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   }
 
   // Step 6g: Adaptive volume cap
-  const cap = ADAPTIVE_CAPS[depth];
+  const cap = dc.adaptiveCap;
   if (scored.length > cap) {
     scored = scored.slice(0, cap);
     if (runId) await updateRunMessage(runId, `Volume cap (${depth}): capped at ${cap} use cases`);
