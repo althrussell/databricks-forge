@@ -152,24 +152,17 @@ Connect to your Lakebase database as the project owner (via the Lakebase UI SQL 
 -- Create the application role with a native Postgres password
 CREATE ROLE databricks_forge WITH LOGIN PASSWORD 'your-secure-password';
 
--- Allow connecting to the database
+-- Allow connecting and using the public schema
 GRANT CONNECT ON DATABASE databricks_postgres TO databricks_forge;
+GRANT USAGE  ON SCHEMA public TO databricks_forge;
 
--- Allow using the public schema
-GRANT USAGE ON SCHEMA public TO databricks_forge;
-
--- Table-level permissions
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO databricks_forge;
-
--- Future tables in the schema (so Prisma can create tables)
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO databricks_forge;
-
--- Allow Prisma to run DDL (CREATE TABLE, ALTER TABLE, etc.)
+-- Allow DDL so the app can create and alter its own tables at startup
 GRANT CREATE ON SCHEMA public TO databricks_forge;
 ```
 
-Tables are created automatically by the app at startup. Since the app connects as `databricks_forge`, it already owns the tables it creates -- no manual ownership transfer is needed.
+That's all you need. The app runs `prisma db push` automatically every time it starts, which creates all tables as the `databricks_forge` role. Since this role **owns** the tables it creates, it automatically has full read/write/alter permissions on them -- no additional DML grants required.
+
+**Redeployments are safe.** `prisma db push` is idempotent: if the tables already exist and match the schema, it does nothing. If new tables or columns were added to the Prisma schema, it creates them. It never drops existing tables or columns.
 
 > **Note:** Using a native Postgres password (rather than OAuth tokens) is recommended for application roles. Native passwords don't expire hourly and are simpler to manage. See [Lakebase authentication docs](https://docs.databricks.com/aws/en/oltp/projects/authentication) for details.
 
