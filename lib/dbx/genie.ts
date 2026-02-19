@@ -67,6 +67,39 @@ export async function getGenieSpace(
 }
 
 // ---------------------------------------------------------------------------
+// Sanitise serialized space before sending to the API.
+// Fixes known enum casing issues (e.g. benchmark answer format must be
+// uppercase "SQL", not lowercase "sql") so that older persisted payloads
+// still deploy successfully.
+// ---------------------------------------------------------------------------
+
+const VALID_BENCHMARK_FORMATS = new Set(["SQL"]);
+
+function sanitizeSerializedSpace(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw);
+    const benchmarks = parsed?.instructions?.benchmarks;
+    if (Array.isArray(benchmarks)) {
+      for (const b of benchmarks) {
+        if (Array.isArray(b.answer)) {
+          for (const a of b.answer) {
+            if (
+              typeof a.format === "string" &&
+              !VALID_BENCHMARK_FORMATS.has(a.format)
+            ) {
+              a.format = a.format.toUpperCase();
+            }
+          }
+        }
+      }
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return raw;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
 
@@ -89,7 +122,7 @@ export async function createGenieSpace(opts: {
   const body = {
     title: opts.title,
     description: opts.description,
-    serialized_space: opts.serializedSpace,
+    serialized_space: sanitizeSerializedSpace(opts.serializedSpace),
     warehouse_id: opts.warehouseId,
     parent_path: parentPath,
   };
@@ -129,7 +162,7 @@ export async function updateGenieSpace(
   if (opts.title !== undefined) body.title = opts.title;
   if (opts.description !== undefined) body.description = opts.description;
   if (opts.serializedSpace !== undefined)
-    body.serialized_space = opts.serializedSpace;
+    body.serialized_space = sanitizeSerializedSpace(opts.serializedSpace);
   if (opts.warehouseId !== undefined) body.warehouse_id = opts.warehouseId;
 
   const response = await fetchWithTimeout(
