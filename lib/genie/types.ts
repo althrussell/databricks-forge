@@ -261,9 +261,19 @@ export interface SerializedDataSources {
   metric_views?: DataSourceMetricView[];
 }
 
+export interface DataSourceTableColumn {
+  name: string;
+  description?: string;
+  synonyms?: string[];
+  hidden?: boolean;
+  entity_matching?: boolean;
+  format_assistance?: boolean;
+}
+
 export interface DataSourceTable {
   identifier: string; // catalog.schema.table
   description?: string[];
+  columns?: DataSourceTableColumn[];
 }
 
 export interface DataSourceMetricView {
@@ -288,6 +298,7 @@ export interface ExampleQuestionSql {
   id: string;
   question: string[];
   sql: string[];
+  usage_guidance?: string[];
 }
 
 export interface SqlFunction {
@@ -300,6 +311,7 @@ export interface JoinSpec {
   left: { identifier: string };
   right: { identifier: string };
   sql: string[];
+  relationship_type?: "one_to_one" | "one_to_many" | "many_to_one";
 }
 
 export interface SqlSnippets {
@@ -312,18 +324,24 @@ export interface SqlSnippetMeasure {
   id: string;
   alias: string;
   sql: string[];
+  synonyms?: string[];
+  instructions?: string[];
 }
 
 export interface SqlSnippetFilter {
   id: string;
   sql: string[];
   display_name: string;
+  synonyms?: string[];
+  instructions?: string[];
 }
 
 export interface SqlSnippetExpression {
   id: string;
   alias: string;
   sql: string[];
+  synonyms?: string[];
+  instructions?: string[];
 }
 
 export interface SerializedBenchmarks {
@@ -353,6 +371,10 @@ export interface GenieSpaceRecommendation {
   measureCount: number;
   filterCount: number;
   dimensionCount: number;
+  benchmarkCount: number;
+  instructionCount: number;
+  sampleQuestionCount: number;
+  sqlFunctionCount: number;
   tables: string[];
   metricViews: string[];
   serializedSpace: string; // JSON string ready for the Create API

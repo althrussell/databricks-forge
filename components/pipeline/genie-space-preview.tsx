@@ -161,20 +161,30 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
       {rec && parsed && (
         <div className="space-y-4">
           {/* Stats */}
-          <div className="grid grid-cols-6 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <StatCard label="Tables" value={rec.tableCount} />
             <StatCard label="Metric Views" value={rec.metricViewCount} />
+            <StatCard label="Use Cases" value={rec.useCaseCount} />
+            <StatCard label="SQL Examples" value={rec.sqlExampleCount} />
+          </div>
+          <div className="grid grid-cols-4 gap-2">
             <StatCard label="Measures" value={rec.measureCount} />
             <StatCard label="Filters" value={rec.filterCount} />
             <StatCard label="Dimensions" value={rec.dimensionCount} />
+            <StatCard label="Joins" value={rec.joinCount} />
+          </div>
+          <div className="grid grid-cols-4 gap-2">
             <StatCard label="Benchmarks" value={benchmarks.length} />
+            <StatCard label="Instructions" value={rec.instructionCount} />
+            <StatCard label="Questions" value={rec.sampleQuestionCount} />
+            <StatCard label="Functions" value={rec.sqlFunctionCount} />
           </div>
 
           <Accordion type="multiple" defaultValue={["tables", "measures"]} className="w-full">
-            {/* Tables */}
+            {/* Tables & Views */}
             <AccordionItem value="tables">
               <AccordionTrigger className="text-xs font-medium">
-                Tables ({rec.tableCount})
+                Tables &amp; Views ({rec.tableCount})
               </AccordionTrigger>
               <AccordionContent>
                 <div className="max-h-48 space-y-1 overflow-auto">
@@ -183,15 +193,27 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                       <span className="truncate font-mono text-muted-foreground">{t}</span>
                     </div>
                   ))}
-                  {rec.metricViews.map((mv) => (
-                    <div key={mv} className="flex items-center gap-2 text-xs">
-                      <Badge variant="outline" className="text-[9px]">metric view</Badge>
-                      <span className="truncate font-mono text-violet-500">{mv}</span>
-                    </div>
-                  ))}
                 </div>
               </AccordionContent>
             </AccordionItem>
+
+            {/* Metric Views */}
+            {rec.metricViews.length > 0 && (
+              <AccordionItem value="metric-views-data">
+                <AccordionTrigger className="text-xs font-medium">
+                  Metric Views ({rec.metricViewCount})
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="max-h-48 space-y-1 overflow-auto">
+                    {rec.metricViews.map((mv) => (
+                      <div key={mv} className="flex items-center gap-2 text-xs">
+                        <span className="truncate font-mono text-violet-500">{mv}</span>
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
 
             {/* Column Enrichments */}
             {enrichments.length > 0 && (
@@ -361,9 +383,30 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                   Join Relationships ({parsed.instructions.join_specs.length})
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-1 text-xs font-mono text-muted-foreground">
+                  <div className="space-y-1 text-xs">
                     {parsed.instructions.join_specs.map((j) => (
-                      <div key={j.id} className="truncate">{j.sql.join(" ")}</div>
+                      <div key={j.id} className="flex items-baseline gap-2 py-0.5">
+                        <span className="truncate font-mono text-muted-foreground">{j.sql.join(" ")}</span>
+                        {j.relationship_type && (
+                          <Badge variant="outline" className="shrink-0 text-[9px]">{j.relationship_type}</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
+            {/* SQL Functions (Trusted Asset UDFs) */}
+            {parsed.instructions.sql_functions && parsed.instructions.sql_functions.length > 0 && (
+              <AccordionItem value="functions">
+                <AccordionTrigger className="text-xs font-medium">
+                  SQL Functions ({parsed.instructions.sql_functions.length})
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-0.5 text-xs font-mono text-muted-foreground">
+                    {parsed.instructions.sql_functions.map((fn) => (
+                      <div key={fn.id} className="truncate">{fn.identifier}</div>
                     ))}
                   </div>
                 </AccordionContent>

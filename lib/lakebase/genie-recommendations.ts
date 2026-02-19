@@ -31,6 +31,21 @@ function dbRowToRecommendation(row: {
   metricViews: string | null;
   serializedSpace: string;
 }): GenieSpaceRecommendation {
+  // Derive counts not stored as dedicated columns from the serialized space
+  let benchmarkCount = 0;
+  let instructionCount = 0;
+  let sampleQuestionCount = 0;
+  let sqlFunctionCount = 0;
+  try {
+    const space = JSON.parse(row.serializedSpace);
+    benchmarkCount = space?.benchmarks?.questions?.length ?? 0;
+    instructionCount = space?.instructions?.text_instructions?.length ?? 0;
+    sampleQuestionCount = space?.config?.sample_questions?.length ?? 0;
+    sqlFunctionCount = space?.instructions?.sql_functions?.length ?? 0;
+  } catch {
+    // serializedSpace is malformed -- counts stay at 0
+  }
+
   return {
     domain: row.domain,
     subdomains: row.subdomains ? JSON.parse(row.subdomains) : [],
@@ -44,6 +59,10 @@ function dbRowToRecommendation(row: {
     measureCount: row.measureCount,
     filterCount: row.filterCount,
     dimensionCount: row.dimensionCount,
+    benchmarkCount,
+    instructionCount,
+    sampleQuestionCount,
+    sqlFunctionCount,
     tables: row.tables ? JSON.parse(row.tables) : [],
     metricViews: row.metricViews ? JSON.parse(row.metricViews) : [],
     serializedSpace: row.serializedSpace,

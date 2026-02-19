@@ -18,13 +18,25 @@ import { GenieConfigEditor } from "./genie-config-editor";
 import { GenieSpacePreview } from "./genie-space-preview";
 import type { GenieEngineConfig } from "@/lib/genie/types";
 import { defaultGenieEngineConfig } from "@/lib/genie/types";
+import { loadSettings } from "@/lib/settings";
 
 interface GenieWorkbenchProps {
   runId: string;
 }
 
 export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
-  const [config, setConfig] = useState<GenieEngineConfig>(defaultGenieEngineConfig());
+  const [config, setConfig] = useState<GenieEngineConfig>(() => {
+    const cfg = defaultGenieEngineConfig();
+    if (typeof window !== "undefined") {
+      const { genieEngineDefaults } = loadSettings();
+      cfg.maxTablesPerSpace = genieEngineDefaults.maxTablesPerSpace;
+      cfg.llmRefinement = genieEngineDefaults.llmRefinement;
+      cfg.generateBenchmarks = genieEngineDefaults.generateBenchmarks;
+      cfg.generateMetricViews = genieEngineDefaults.generateMetricViews;
+      cfg.autoTimePeriods = genieEngineDefaults.autoTimePeriods;
+    }
+    return cfg;
+  });
   const [configVersion, setConfigVersion] = useState(0);
   const [configLoading, setConfigLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -75,7 +87,15 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       const res = await fetch(`/api/runs/${runId}/genie-engine/config`);
       const data = await res.json();
       if (res.ok) {
-        setConfig(data.config);
+        const cfg = data.config as GenieEngineConfig;
+        // Apply global Genie Engine defaults from Settings
+        const { genieEngineDefaults } = loadSettings();
+        cfg.maxTablesPerSpace = genieEngineDefaults.maxTablesPerSpace;
+        cfg.llmRefinement = genieEngineDefaults.llmRefinement;
+        cfg.generateBenchmarks = genieEngineDefaults.generateBenchmarks;
+        cfg.generateMetricViews = genieEngineDefaults.generateMetricViews;
+        cfg.autoTimePeriods = genieEngineDefaults.autoTimePeriods;
+        setConfig(cfg);
         setConfigVersion(data.version);
       }
     } catch {

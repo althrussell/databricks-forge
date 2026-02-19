@@ -8,6 +8,14 @@
 import type { DiscoveryDepth, DiscoveryDepthConfig } from "@/lib/domain/types";
 import { DISCOVERY_DEPTHS, DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 
+export interface GenieEngineDefaults {
+  maxTablesPerSpace: number;
+  llmRefinement: boolean;
+  generateBenchmarks: boolean;
+  generateMetricViews: boolean;
+  autoTimePeriods: boolean;
+}
+
 export interface AppSettings {
   /** Number of sample rows to fetch per table for discovery & SQL generation (0 = disabled) */
   sampleRowsPerTable: number;
@@ -19,9 +27,19 @@ export interface AppSettings {
   defaultDiscoveryDepth: DiscoveryDepth;
   /** Tunable parameters for each discovery depth level */
   discoveryDepthConfigs: Record<DiscoveryDepth, DiscoveryDepthConfig>;
+  /** Global Genie Engine defaults applied to new runs */
+  genieEngineDefaults: GenieEngineDefaults;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
+
+const DEFAULT_GENIE_ENGINE: GenieEngineDefaults = {
+  maxTablesPerSpace: 25,
+  llmRefinement: true,
+  generateBenchmarks: true,
+  generateMetricViews: true,
+  autoTimePeriods: true,
+};
 
 const DEFAULTS: AppSettings = {
   sampleRowsPerTable: 0,
@@ -29,6 +47,7 @@ const DEFAULTS: AppSettings = {
   notebookPath: "./forge_gen/",
   defaultDiscoveryDepth: "balanced",
   discoveryDepthConfigs: { ...DEFAULT_DEPTH_CONFIGS },
+  genieEngineDefaults: { ...DEFAULT_GENIE_ENGINE },
 };
 
 export function loadSettings(): AppSettings {
@@ -56,6 +75,7 @@ export function loadSettings(): AppSettings {
           ? (parsed.defaultDiscoveryDepth as DiscoveryDepth)
           : DEFAULTS.defaultDiscoveryDepth,
       discoveryDepthConfigs: parseDepthConfigs(parsed.discoveryDepthConfigs),
+      genieEngineDefaults: parseGenieEngineDefaults(parsed.genieEngineDefaults),
     };
   } catch {
     return { ...DEFAULTS };
@@ -84,6 +104,18 @@ function parseDepthConfigs(
       result[depth] = obj[depth];
     }
   }
+  return result;
+}
+
+function parseGenieEngineDefaults(raw: unknown): GenieEngineDefaults {
+  const result = { ...DEFAULT_GENIE_ENGINE };
+  if (typeof raw !== "object" || raw === null) return result;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.maxTablesPerSpace === "number") result.maxTablesPerSpace = obj.maxTablesPerSpace;
+  if (typeof obj.llmRefinement === "boolean") result.llmRefinement = obj.llmRefinement;
+  if (typeof obj.generateBenchmarks === "boolean") result.generateBenchmarks = obj.generateBenchmarks;
+  if (typeof obj.generateMetricViews === "boolean") result.generateMetricViews = obj.generateMetricViews;
+  if (typeof obj.autoTimePeriods === "boolean") result.autoTimePeriods = obj.autoTimePeriods;
   return result;
 }
 

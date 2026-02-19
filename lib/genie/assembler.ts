@@ -8,8 +8,10 @@ import type {
   SerializedSpace,
   SampleQuestion,
   DataSourceTable,
+  DataSourceTableColumn,
   DataSourceMetricView,
   ExampleQuestionSql,
+  SqlFunction,
   JoinSpec,
   SqlSnippetMeasure,
   SqlSnippetFilter,
@@ -63,6 +65,19 @@ export function assembleSerializedSpace(
     if (mv.comment) mvComments.set(mv.fqn, mv.comment);
   }
 
+  // Column enrichments lookup: tableFqn -> ColumnEnrichment[]
+  const columnsByTable = new Map<string, typeof outputs.columnEnrichments>();
+  for (const ce of outputs.columnEnrichments) {
+    const list = columnsByTable.get(ce.tableFqn) ?? [];
+    list.push(ce);
+    columnsByTable.set(ce.tableFqn, list);
+  }
+
+  // Entity matching candidates lookup
+  const entityMatchingSet = new Set(
+    outputs.entityMatchingCandidates.map((c) => `${c.tableFqn}:${c.columnName}`)
+  );
+
   // 1. Data source tables (validated)
   const validTables = outputs.tables.filter((fqn) => {
     if (!isValidTable(allowlist, fqn)) {
@@ -76,7 +91,25 @@ export function assembleSerializedSpace(
     .sort((a, b) => a.localeCompare(b))
     .map((fqn) => {
       const comment = tableComments.get(fqn);
-      return comment ? { identifier: fqn, description: [comment] } : { identifier: fqn };
+      const table: DataSourceTable = { identifier: fqn };
+      if (comment) table.description = [comment];
+
+      const enrichments = columnsByTable.get(fqn);
+      if (enrichments && enrichments.length > 0) {
+        const cols: DataSourceTableColumn[] = enrichments.map((ce) => {
+          const col: DataSourceTableColumn = { name: ce.columnName };
+          if (ce.description) col.description = ce.description;
+          if (ce.synonyms.length > 0) col.synonyms = ce.synonyms;
+          if (ce.hidden) col.hidden = true;
+          if (ce.entityMatchingCandidate || entityMatchingSet.has(`${fqn}:${ce.columnName}`)) {
+            col.entity_matching = true;
+          }
+          return col;
+        });
+        table.columns = cols;
+      }
+
+      return table;
     });
 
   // 2. Data source metric views
@@ -86,6 +119,17 @@ export function assembleSerializedSpace(
       const comment = mvComments.get(fqn);
       return comment ? { identifier: fqn, description: [comment] } : { identifier: fqn };
     });
+
+  // Table limit guard (Genie spaces support up to 30 tables/views)
+  const totalDataObjects = dataTables.length + dataMetricViews.length;
+  if (totalDataObjects > 30) {
+    logger.warn("Genie space exceeds 30 table/view limit", {
+      domain,
+      tables: dataTables.length,
+      metricViews: dataMetricViews.length,
+      total: totalDataObjects,
+    });
+  }
 
   // 3. Sample questions
   const sampleQuestions: SampleQuestion[] = outputs.sampleQuestions
@@ -98,11 +142,20 @@ export function assembleSerializedSpace(
   // 4. SQL examples (from trusted queries + use case SQL)
   const exampleSqls: ExampleQuestionSql[] = outputs.trustedQueries
     .slice(0, 10)
-    .map((tq, i) => ({
-      id: makeId(seed, "sql", i),
-      question: [tq.question],
-      sql: [tq.sql],
-    }));
+    .map((tq, i) => {
+      const entry: ExampleQuestionSql = {
+        id: makeId(seed, "sql", i),
+        question: [tq.question],
+        sql: [tq.sql],
+      };
+      if (tq.parameters.length > 0) {
+        const guidance = tq.parameters.map(
+          (p) => `Parameter "${p.name}" (${p.type}): ${p.comment}${p.defaultValue ? ` [default: ${p.defaultValue}]` : ""}`
+        );
+        entry.usage_guidance = guidance;
+      }
+      return entry;
+    });
 
   // 5. Join specs
   const joinSpecs: JoinSpec[] = outputs.joinSpecs
@@ -111,6 +164,7 @@ export function assembleSerializedSpace(
       left: { identifier: j.leftTable },
       right: { identifier: j.rightTable },
       sql: [j.sql],
+      ...(j.relationshipType ? { relationship_type: j.relationshipType } : {}),
     }));
 
   // 6. SQL snippets (measures, filters, dimensions)
@@ -121,6 +175,8 @@ export function assembleSerializedSpace(
       id: makeId(seed, "measure", i),
       alias: m.name,
       sql: [m.sql],
+      ...(m.synonyms.length > 0 ? { synonyms: m.synonyms } : {}),
+      ...(m.instructions ? { instructions: [m.instructions] } : {}),
     }));
 
   const filters: SqlSnippetFilter[] = outputs.filters
@@ -130,6 +186,8 @@ export function assembleSerializedSpace(
       id: makeId(seed, "filter", i),
       sql: [f.sql],
       display_name: f.name,
+      ...(f.synonyms.length > 0 ? { synonyms: f.synonyms } : {}),
+      ...(f.instructions ? { instructions: [f.instructions] } : {}),
     }));
 
   const expressions: SqlSnippetExpression[] = outputs.dimensions
@@ -139,9 +197,18 @@ export function assembleSerializedSpace(
       id: makeId(seed, "expr", i),
       alias: d.name,
       sql: [d.sql],
+      ...(d.synonyms.length > 0 ? { synonyms: d.synonyms } : {}),
+      ...(d.instructions ? { instructions: [d.instructions] } : {}),
     }));
 
-  // 7. Text instructions
+  // 7. SQL functions (trusted assets)
+  const sqlFunctions: SqlFunction[] = outputs.trustedFunctions
+    .map((fn, i) => ({
+      id: makeId(seed, "fn", i),
+      identifier: fn.name,
+    }));
+
+  // 8. Text instructions
   const textInstructions: TextInstruction[] = outputs.textInstructions
     .filter((t) => t.trim().length > 0)
     .map((t, i) => ({
@@ -149,14 +216,23 @@ export function assembleSerializedSpace(
       content: [t],
     }));
 
-  // 8. Benchmarks
-  const benchmarks: BenchmarkQuestion[] = outputs.benchmarkQuestions
-    .slice(0, 50)
-    .map((b, i) => ({
-      id: makeId(seed, "bench", i),
-      question: [b.question, ...b.alternatePhrasings],
-      answer: b.expectedSql ? [{ format: "sql", content: [b.expectedSql] }] : undefined,
-    }));
+  // 9. Benchmarks -- each phrasing gets its own entry sharing the same answer
+  const benchmarks: BenchmarkQuestion[] = [];
+  let benchIdx = 0;
+  for (const b of outputs.benchmarkQuestions) {
+    const answer = b.expectedSql
+      ? [{ format: "sql", content: [b.expectedSql] }]
+      : undefined;
+    const allPhrasings = [b.question, ...b.alternatePhrasings];
+    for (const phrasing of allPhrasings) {
+      benchmarks.push({
+        id: makeId(seed, "bench", benchIdx++),
+        question: [phrasing],
+        answer,
+      });
+    }
+    if (benchmarks.length >= 50) break;
+  }
 
   const space: SerializedSpace = {
     version: 2,
@@ -168,6 +244,7 @@ export function assembleSerializedSpace(
     instructions: {
       text_instructions: [...textInstructions].sort(byId),
       example_question_sqls: [...exampleSqls].sort(byId),
+      ...(sqlFunctions.length > 0 ? { sql_functions: [...sqlFunctions].sort(byId) } : {}),
       join_specs: [...joinSpecs].sort(byId),
       sql_snippets: {
         measures: [...measures].sort(byId),
@@ -214,6 +291,10 @@ export function buildRecommendation(
     measureCount: space.instructions.sql_snippets.measures.length,
     filterCount: space.instructions.sql_snippets.filters.length,
     dimensionCount: space.instructions.sql_snippets.expressions.length,
+    benchmarkCount: space.benchmarks?.questions.length ?? 0,
+    instructionCount: space.instructions.text_instructions.length,
+    sampleQuestionCount: space.config.sample_questions.length,
+    sqlFunctionCount: space.instructions.sql_functions?.length ?? 0,
     tables: outputs.tables,
     metricViews: outputs.metricViews,
     serializedSpace: JSON.stringify(space),

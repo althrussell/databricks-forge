@@ -63,18 +63,6 @@ export function GenieConfigEditor({ config, onChange }: GenieConfigEditorProps) 
             <div className="grid gap-4 py-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-xs">Max Tables per Space</Label>
-                  <Input
-                    type="number"
-                    value={config.maxTablesPerSpace}
-                    onChange={(e) => update({ maxTablesPerSpace: parseInt(e.target.value) || 25 })}
-                    min={1}
-                    max={30}
-                    className="h-8 text-sm"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Genie limit is 30</p>
-                </div>
-                <div className="space-y-2">
                   <Label className="text-xs">Entity Matching</Label>
                   <Select
                     value={config.entityMatchingMode}
@@ -90,63 +78,34 @@ export function GenieConfigEditor({ config, onChange }: GenieConfigEditorProps) 
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Fiscal Year Start Month</Label>
+                  <Select
+                    value={String(config.fiscalYearStartMonth)}
+                    onValueChange={(v) => update({ fiscalYearStartMonth: parseInt(v) })}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTH_NAMES.map((name, idx) => (
+                        <SelectItem key={idx + 1} value={String(idx + 1)}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <ToggleCard
-                  label="LLM Refinement"
-                  description="Use AI to generate expressions and instructions"
-                  checked={config.llmRefinement}
-                  onToggle={(v) => update({ llmRefinement: v })}
-                />
-                <ToggleCard
-                  label="Benchmarks"
-                  description="Auto-generate test questions"
-                  checked={config.generateBenchmarks}
-                  onToggle={(v) => update({ generateBenchmarks: v })}
-                />
-                <ToggleCard
-                  label="Metric Views"
-                  description="Propose metric view definitions"
-                  checked={config.generateMetricViews}
-                  onToggle={(v) => update({ generateMetricViews: v })}
-                />
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Time Period Configuration */}
-        <AccordionItem value="time">
-          <AccordionTrigger className="text-sm font-medium">
-            Time Periods & Fiscal Year
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="grid gap-4 py-2">
               <ToggleCard
-                label="Auto Time Periods"
-                description="Generate standard date filters and dimensions"
-                checked={config.autoTimePeriods}
-                onToggle={(v) => update({ autoTimePeriods: v })}
+                label="Trusted Assets"
+                description="Generate parameterized SQL queries and UDF definitions"
+                checked={config.generateTrustedAssets}
+                onToggle={(v) => update({ generateTrustedAssets: v })}
               />
-              <div className="space-y-2">
-                <Label className="text-xs">Fiscal Year Start Month</Label>
-                <Select
-                  value={String(config.fiscalYearStartMonth)}
-                  onValueChange={(v) => update({ fiscalYearStartMonth: parseInt(v) })}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTH_NAMES.map((name, idx) => (
-                      <SelectItem key={idx + 1} value={String(idx + 1)}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Max tables, LLM refinement, benchmarks, metric views, and auto time periods are configured in global Settings.
+              </p>
             </div>
           </AccordionContent>
         </AccordionItem>
