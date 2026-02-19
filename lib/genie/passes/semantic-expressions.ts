@@ -10,6 +10,7 @@
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
+import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase, BusinessContext } from "@/lib/domain/types";
 import type {
   GenieEngineConfig,
@@ -187,7 +188,7 @@ function parseLLMExpressions(content: string): {
   dimensions: EnrichedSqlSnippetDimension[];
 } {
   try {
-    const parsed = JSON.parse(content);
+    const parsed = parseLLMJson(content) as Record<string, unknown>;
     return {
       measures: parseArray(parsed.measures).map((m) => ({
         name: String(m.name ?? ""),

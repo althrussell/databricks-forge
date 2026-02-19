@@ -8,6 +8,7 @@
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
+import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
@@ -91,7 +92,7 @@ Generate ${TARGET_BENCHMARKS} benchmark questions with expected SQL and alternat
     });
 
     const content = result.content ?? "";
-    const parsed = JSON.parse(content);
+    const parsed = parseLLMJson(content) as Record<string, unknown>;
     const items: Record<string, unknown>[] = Array.isArray(parsed.benchmarks)
       ? parsed.benchmarks
       : Array.isArray(parsed) ? parsed : [];

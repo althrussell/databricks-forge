@@ -8,6 +8,7 @@
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
+import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase } from "@/lib/domain/types";
 import type { MetricViewProposal, EnrichedSqlSnippetMeasure, EnrichedSqlSnippetDimension } from "../types";
 import { buildSchemaContextBlock, type SchemaAllowlist } from "../schema-allowlist";
@@ -109,7 +110,7 @@ Create metric view proposals for this domain.`;
     });
 
     const content = result.content ?? "";
-    const parsed = JSON.parse(content);
+    const parsed = parseLLMJson(content) as Record<string, unknown>;
     const items: Record<string, unknown>[] = Array.isArray(parsed.proposals)
       ? parsed.proposals
       : Array.isArray(parsed) ? parsed : [];

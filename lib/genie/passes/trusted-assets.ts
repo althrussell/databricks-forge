@@ -8,6 +8,7 @@
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
+import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type {
   TrustedAssetQuery,
@@ -105,7 +106,7 @@ Create parameterized queries and UDF functions from these examples.`;
     });
 
     const content = result.content ?? "";
-    const parsed = JSON.parse(content);
+    const parsed = parseLLMJson(content) as Record<string, unknown>;
 
     const queries: TrustedAssetQuery[] = parseArray(parsed.queries)
       .map((q) => ({

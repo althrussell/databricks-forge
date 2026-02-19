@@ -7,6 +7,7 @@
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
+import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, SensitivityClassification } from "@/lib/domain/types";
 import type {
   ColumnEnrichment,
@@ -180,9 +181,9 @@ Analyze ALL columns in the tables above and return the enrichment JSON array.`;
 
 function parseColumnEnrichments(content: string, tableFqns: string[]): ColumnEnrichment[] {
   try {
-    const parsed = JSON.parse(content);
+    const parsed = parseLLMJson(content) as Record<string, unknown>;
     const items: unknown[] = Array.isArray(parsed)
-      ? parsed
+      ? parsed as unknown[]
       : Array.isArray(parsed.columns) ? parsed.columns
       : Array.isArray(parsed.enrichments) ? parsed.enrichments
       : [];
