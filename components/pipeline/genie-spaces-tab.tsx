@@ -121,7 +121,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   function genieSpaceUrl(spaceId: string): string | null {
     if (!databricksHost) return null;
     const host = databricksHost.replace(/\/$/, "");
-    return `${host}/explore/genie/${spaceId}`;
+    return `${host}/genie/rooms/${spaceId}`;
   }
 
   // Selectable = not already deployed
