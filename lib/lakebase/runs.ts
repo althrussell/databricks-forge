@@ -66,6 +66,7 @@ function dbRowToRun(row: {
       generationOptions: genOpts.generationOptions,
       sampleRowsPerTable: genOpts.sampleRowsPerTable,
       industry: genOpts.industry,
+      discoveryDepth: (genOpts.discoveryDepth ?? "balanced") as PipelineRunConfig["discoveryDepth"],
       generationPath: row.generationPath ?? "./forge_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
@@ -98,12 +99,13 @@ function parseGenerationOptions(raw: string | null): {
   generationOptions: GenerationOption[];
   sampleRowsPerTable: number;
   industry: string;
+  discoveryDepth: string;
   industryAutoDetected: boolean;
   appVersion: string | null;
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
@@ -115,6 +117,7 @@ function parseGenerationOptions(raw: string | null): {
         generationOptions: parsed.options ?? ["SQL Code"],
         sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
         industry: parsed.industry ?? "",
+        discoveryDepth: parsed.discoveryDepth ?? "balanced",
         industryAutoDetected: parsed.industryAutoDetected === true,
         appVersion: parsed.appVersion ?? null,
         promptVersions: parsed.promptVersions ?? null,
@@ -128,12 +131,14 @@ function parseGenerationOptions(raw: string | null): {
 function serializeGenerationOptions(
   options: GenerationOption[],
   sampleRowsPerTable: number,
-  industry: string = ""
+  industry: string = "",
+  discoveryDepth: string = "balanced"
 ): string {
   return JSON.stringify({
     options,
     sampleRowsPerTable,
     industry,
+    discoveryDepth,
     appVersion: packageJson.version,
     promptVersions: PROMPT_VERSIONS,
     stepLog: [],
@@ -164,7 +169,8 @@ export async function createRun(
       generationOptions: serializeGenerationOptions(
         config.generationOptions,
         config.sampleRowsPerTable,
-        config.industry
+        config.industry,
+        config.discoveryDepth
       ),
       generationPath: config.generationPath,
       createdBy: createdBy ?? null,

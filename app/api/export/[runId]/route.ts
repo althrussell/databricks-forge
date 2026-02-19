@@ -15,6 +15,7 @@ import { generateExcel } from "@/lib/export/excel";
 import { generatePptx } from "@/lib/export/pptx";
 import { generatePdf } from "@/lib/export/pdf";
 import { generateNotebooks } from "@/lib/export/notebooks";
+import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { getConfig, getCurrentUserEmail } from "@/lib/dbx/client";
 import { insertExportRecord } from "@/lib/lakebase/exports";
@@ -64,11 +65,19 @@ export async function GET(
 
     const useCases = await getUseCasesByRunId(runId);
 
+    let lineageDiscoveredFqns: string[] = [];
+    try {
+      const snapshot = await loadMetadataForRun(runId);
+      lineageDiscoveredFqns = snapshot?.lineageDiscoveredFqns ?? [];
+    } catch {
+      // Non-critical
+    }
+
     const userEmail = await getCurrentUserEmail();
 
     switch (format) {
       case "excel": {
-        const buffer = await generateExcel(run, useCases);
+        const buffer = await generateExcel(run, useCases, lineageDiscoveredFqns);
         insertExportRecord(runId, "excel");
         logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "excel", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(buffer), {
@@ -81,7 +90,7 @@ export async function GET(
         });
       }
       case "pptx": {
-        const buffer = await generatePptx(run, useCases);
+        const buffer = await generatePptx(run, useCases, lineageDiscoveredFqns);
         insertExportRecord(runId, "pptx");
         logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pptx", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(buffer), {
@@ -94,7 +103,7 @@ export async function GET(
         });
       }
       case "pdf": {
-        const pdfBuffer = await generatePdf(run, useCases);
+        const pdfBuffer = await generatePdf(run, useCases, lineageDiscoveredFqns);
         insertExportRecord(runId, "pdf");
         logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pdf", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(pdfBuffer), {
@@ -106,7 +115,7 @@ export async function GET(
         });
       }
       case "notebooks": {
-        const result = await generateNotebooks(run, useCases, userEmail);
+        const result = await generateNotebooks(run, useCases, userEmail, lineageDiscoveredFqns);
         const { host } = getConfig();
         const workspaceUrl = `${host}/#workspace${result.path}`;
         insertExportRecord(runId, "notebooks", result.path);

@@ -44,11 +44,12 @@ export async function saveEnvironmentScan(
 ): Promise<void> {
   const prisma = await getPrisma();
 
-  // Build a per-table column lookup
+  // Build a per-table column lookup (lowercase FQN keys for case-insensitive matching)
   const columnsByTable = new Map<string, Array<{ name: string; type: string; nullable: boolean; comment: string | null }>>();
   for (const col of columns) {
-    if (!columnsByTable.has(col.tableFqn)) columnsByTable.set(col.tableFqn, []);
-    columnsByTable.get(col.tableFqn)!.push({
+    const key = col.tableFqn.toLowerCase();
+    if (!columnsByTable.has(key)) columnsByTable.set(key, []);
+    columnsByTable.get(key)!.push({
       name: col.columnName,
       type: col.dataType,
       nullable: col.isNullable,
@@ -120,7 +121,7 @@ export async function saveEnvironmentScan(
             autoOptimize: d.tableProperties["delta.autoOptimize.optimizeWrite"] === "true",
             tableCreatedAt: d.createdAt,
             lastModified: d.lastModified,
-            columnsJson: JSON.stringify(columnsByTable.get(d.fqn) ?? []),
+            columnsJson: JSON.stringify(columnsByTable.get(d.fqn.toLowerCase()) ?? []),
             propertiesJson: JSON.stringify(d.tableProperties),
             tagsJson: null,
             columnTagsJson: null,

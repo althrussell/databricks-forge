@@ -42,7 +42,7 @@ export async function walkLineage(
   seedTables: string[],
   options: LineageWalkOptions = {}
 ): Promise<LineageGraph> {
-  const maxDepth = Math.min(options.maxDepth ?? 3, 5);
+  const maxDepth = Math.min(options.maxDepth ?? 3, 10);
   const direction = options.direction ?? "both";
   const maxDiscovered = options.maxDiscoveredTables ?? 500;
 

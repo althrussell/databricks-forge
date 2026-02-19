@@ -259,10 +259,16 @@ function drawTable(
 // Main export function
 // ---------------------------------------------------------------------------
 
+function annotateTableFqn(fqn: string, lineageFqns: Set<string>): string {
+  return lineageFqns.has(fqn) ? `${fqn} (via lineage)` : fqn;
+}
+
 export async function generatePdf(
   run: PipelineRun,
-  useCases: UseCase[]
+  useCases: UseCase[],
+  lineageDiscoveredFqns: string[] = []
 ): Promise<Buffer> {
+  const lineageFqnSet = new Set(lineageDiscoveredFqns);
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Uint8Array[] = [];
 
@@ -637,7 +643,7 @@ export async function generatePdf(
         if (uc.tablesInvolved.length > 0) {
           fields.push({
             label: "Tables Involved",
-            value: uc.tablesInvolved.join(", "),
+            value: uc.tablesInvolved.map((t) => annotateTableFqn(t, lineageFqnSet)).join(", "),
           });
         }
 

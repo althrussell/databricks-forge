@@ -110,10 +110,16 @@ function styleScoreCell(cell: ExcelJS.Cell, value: number): void {
 // Main export function
 // ---------------------------------------------------------------------------
 
+function annotateTableFqn(fqn: string, lineageFqns: Set<string>): string {
+  return lineageFqns.has(fqn) ? `${fqn} (via lineage)` : fqn;
+}
+
 export async function generateExcel(
   run: PipelineRun,
-  useCases: UseCase[]
+  useCases: UseCase[],
+  lineageDiscoveredFqns: string[] = []
 ): Promise<Buffer> {
+  const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Databricks Forge AI";
   workbook.created = new Date();
@@ -246,7 +252,7 @@ export async function generateExcel(
       businessValue: uc.businessValue,
       beneficiary: uc.beneficiary,
       sponsor: uc.sponsor,
-      tables: uc.tablesInvolved.join(", "),
+      tables: uc.tablesInvolved.map((t) => annotateTableFqn(t, lineageFqnSet)).join(", "),
       sql: uc.sqlCode ?? "",
       priority: uc.priorityScore,
       feasibility: uc.feasibilityScore,

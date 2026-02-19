@@ -64,7 +64,7 @@ interface TableNodeData {
   columnCount: number;
   rowCount: number | null;
   size: number | null;
-  columns: Array<{ name: string; type: string; isPK: boolean; isFK: boolean }>;
+  columns: Array<{ name: string; type: string; description: string | null; isPK: boolean; isFK: boolean }>;
   expanded: boolean;
   onToggle: () => void;
   [key: string]: unknown;
@@ -116,13 +116,18 @@ function TableNode({ data }: { data: TableNodeData }) {
       </div>
 
       {data.expanded ? (
-        <div className="px-3 py-2 text-xs space-y-0.5 max-h-[200px] overflow-y-auto">
+        <div className="px-3 py-2 text-xs space-y-0.5 max-h-[280px] overflow-y-auto">
           {data.columns.slice(0, 20).map((col) => (
-            <div key={col.name} className="flex items-center gap-1 text-muted-foreground">
-              {col.isPK && <span className="text-yellow-600 font-bold">PK</span>}
-              {col.isFK && <span className="text-blue-600 font-bold">FK</span>}
-              <span className="truncate">{col.name}</span>
-              <span className="ml-auto text-[10px] opacity-60">{col.type}</span>
+            <div key={col.name} className="text-muted-foreground">
+              <div className="flex items-center gap-1">
+                {col.isPK && <span className="text-yellow-600 font-bold">PK</span>}
+                {col.isFK && <span className="text-blue-600 font-bold">FK</span>}
+                <span className="truncate">{col.name}</span>
+                <span className="ml-auto text-[10px] opacity-60 shrink-0">{col.type}</span>
+              </div>
+              {col.description && (
+                <p className="pl-4 text-[10px] opacity-50 truncate">{col.description}</p>
+              )}
             </div>
           ))}
           {data.columns.length > 20 && (
@@ -171,24 +176,28 @@ function TableNode({ data }: { data: TableNodeData }) {
 
           {/* Column list */}
           {data.columns.length > 0 && (
-            <div className="border-t pt-2 space-y-0.5">
+            <div className="border-t pt-2 space-y-1">
               {data.columns.slice(0, 30).map((col) => (
-                <div
-                  key={col.name}
-                  className="flex items-center gap-1 py-0.5"
-                >
-                  {col.isPK && (
-                    <span className="text-yellow-600 font-bold text-[10px]">PK</span>
+                <div key={col.name} className="py-0.5">
+                  <div className="flex items-center gap-1">
+                    {col.isPK && (
+                      <span className="text-yellow-600 font-bold text-[10px]">PK</span>
+                    )}
+                    {col.isFK && (
+                      <span className="text-blue-600 font-bold text-[10px]">FK</span>
+                    )}
+                    <span className="font-mono text-foreground truncate">
+                      {col.name}
+                    </span>
+                    <span className="ml-auto text-[10px] text-muted-foreground/70 shrink-0">
+                      {col.type}
+                    </span>
+                  </div>
+                  {col.description && (
+                    <p className="pl-4 text-[10px] text-muted-foreground/60 leading-snug">
+                      {col.description}
+                    </p>
                   )}
-                  {col.isFK && (
-                    <span className="text-blue-600 font-bold text-[10px]">FK</span>
-                  )}
-                  <span className="font-mono text-foreground truncate">
-                    {col.name}
-                  </span>
-                  <span className="ml-auto text-[10px] text-muted-foreground/70 shrink-0">
-                    {col.type}
-                  </span>
                 </div>
               ))}
               {data.columns.length > 30 && (

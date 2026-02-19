@@ -19,6 +19,7 @@ import type {
   BusinessPriority,
   GenerationOption,
   SupportedLanguage,
+  DiscoveryDepth,
 } from "@/lib/domain/types";
 
 export async function POST(request: NextRequest) {
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
       aiModel: body.aiModel,
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,
       industry: body.industry ?? "",
+      discoveryDepth: (body.discoveryDepth ?? "balanced") as DiscoveryDepth,
     };
 
     const userEmail = await getCurrentUserEmail();

@@ -15,11 +15,17 @@ import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-ser
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
-import type { PipelineContext, UseCase, UseCaseType } from "@/lib/domain/types";
+import type { PipelineContext, UseCase, UseCaseType, DiscoveryDepth, LineageGraph } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
 const MAX_TABLES_PER_BATCH = 20;
 const MAX_CONCURRENT_BATCHES = 3;
+
+const BATCH_TARGET_RANGES: Record<DiscoveryDepth, { min: number; max: number }> = {
+  focused: { min: 8, max: 12 },
+  balanced: { min: 12, max: 18 },
+  comprehensive: { min: 15, max: 22 },
+};
 
 /** Shape of each use case object in the JSON array returned by the LLM. */
 interface UseCaseItem {
@@ -68,6 +74,13 @@ export async function runUsecaseGeneration(
 
   const allUseCases: UseCase[] = [];
   const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
+  const depth = run.config.discoveryDepth ?? "balanced";
+  const targetRange = BATCH_TARGET_RANGES[depth];
+
+  // Build lineage context for prompt injection
+  const lineageContext = ctx.lineageGraph
+    ? buildFilteredLineageSummary(ctx.lineageGraph, filteredTables, 30)
+    : "";
 
   // Build focus areas instruction from config if business domains provided
   const focusAreasInstruction = run.config.businessDomains
@@ -115,9 +128,8 @@ export async function runUsecaseGeneration(
       );
       const schemaMarkdown = buildSchemaMarkdown(batch, batchColumns);
 
-      // Quantity guidance: 8-15 per batch, scaled by table count
       const tableCount = batch.length;
-      const targetCount = Math.max(8, Math.min(15, tableCount));
+      const targetCount = Math.max(targetRange.min, Math.min(targetRange.max, tableCount));
 
       const baseVars: Record<string, string> = {
         business_context: JSON.stringify(bc),
@@ -134,6 +146,7 @@ export async function runUsecaseGeneration(
         sample_data_section: sampleDataSection,
         previous_use_cases_feedback: previousFeedback,
         target_use_case_count: String(targetCount),
+        lineage_context: lineageContext,
       };
 
       // Generate both AI and Stats use cases per batch
@@ -275,4 +288,33 @@ async function generateBatch(
         sqlStatus: null,
       };
     });
+}
+
+/**
+ * Build a lineage summary filtered to business-relevant tables.
+ * Only includes edges where at least one endpoint survived table filtering,
+ * which naturally excludes bronze/raw staging tables that were classified as technical.
+ */
+function buildFilteredLineageSummary(
+  graph: LineageGraph,
+  filteredTables: string[],
+  maxEdges: number
+): string {
+  if (graph.edges.length === 0) return "";
+
+  const filteredSet = new Set(filteredTables);
+  const relevant = graph.edges.filter(
+    (e) => filteredSet.has(e.sourceTableFqn) || filteredSet.has(e.targetTableFqn)
+  );
+  if (relevant.length === 0) return "";
+
+  const edges = relevant.slice(0, maxEdges);
+  const lines = edges.map((e) =>
+    `${e.sourceTableFqn} -> ${e.targetTableFqn}${e.entityType ? ` (via ${e.entityType})` : ""}`
+  );
+  const header = "**Data Lineage Context** (actual pipeline data flows):";
+  const suffix = relevant.length > maxEdges
+    ? `\n... and ${relevant.length - maxEdges} more data flow edges`
+    : "";
+  return `${header}\n${lines.join("\n")}${suffix}`;
 }

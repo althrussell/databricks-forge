@@ -53,6 +53,9 @@ export async function loadMetadataSnapshot(
     if (!snapshot.metricViews) {
       snapshot.metricViews = [];
     }
+    if (!snapshot.lineageDiscoveredFqns) {
+      snapshot.lineageDiscoveredFqns = [];
+    }
     return snapshot;
   } catch {
     return null;
