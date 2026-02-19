@@ -97,6 +97,13 @@ export const CreateRunSchema = z.object({
     }),
   industry: z.string().max(100).optional().default(""),
   discoveryDepth: z.enum(["focused", "balanced", "comprehensive"]).optional().default("balanced"),
+  depthConfig: z.object({
+    batchTargetMin: z.number().int().min(1).max(50),
+    batchTargetMax: z.number().int().min(1).max(100),
+    qualityFloor: z.number().min(0).max(1),
+    adaptiveCap: z.number().int().min(10).max(1000),
+    lineageDepth: z.number().int().min(1).max(10),
+  }).optional(),
 });
 
 export type CreateRunInput = z.infer<typeof CreateRunSchema>;

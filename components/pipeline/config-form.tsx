@@ -210,6 +210,7 @@ export function ConfigForm() {
           languages: selectedLanguages,
           sampleRowsPerTable: appSettings.sampleRowsPerTable,
           discoveryDepth,
+          depthConfig: appSettings.discoveryDepthConfigs[discoveryDepth],
         }),
       });
 

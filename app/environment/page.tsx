@@ -57,6 +57,7 @@ import {
 import dynamic from "next/dynamic";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { computeDataMaturity, type DataMaturityScore, type MaturityPillar } from "@/lib/domain/data-maturity";
+import { loadSettings } from "@/lib/settings";
 import type { ERDGraph } from "@/lib/domain/types";
 
 const ERDViewer = dynamic(
@@ -261,10 +262,12 @@ export default function EstatePage() {
     setScanning(true);
     setScanProgress(null);
     try {
+      const settings = loadSettings();
+      const depthCfg = settings.discoveryDepthConfigs[settings.defaultDiscoveryDepth];
       const resp = await fetch("/api/environment-scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ucMetadata: scope }),
+        body: JSON.stringify({ ucMetadata: scope, lineageDepth: depthCfg.lineageDepth }),
       });
       if (!resp.ok) throw new Error("Failed to start scan");
       const data = await resp.json();

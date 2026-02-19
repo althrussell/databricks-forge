@@ -52,6 +52,22 @@ export type GenerationOption = (typeof GENERATION_OPTIONS)[number];
 export const DISCOVERY_DEPTHS = ["focused", "balanced", "comprehensive"] as const;
 export type DiscoveryDepth = (typeof DISCOVERY_DEPTHS)[number];
 
+/** Tunable parameters for a single discovery depth level. */
+export interface DiscoveryDepthConfig {
+  batchTargetMin: number;
+  batchTargetMax: number;
+  qualityFloor: number;
+  adaptiveCap: number;
+  lineageDepth: number;
+}
+
+/** Factory defaults -- used when no user override is stored. */
+export const DEFAULT_DEPTH_CONFIGS: Record<DiscoveryDepth, DiscoveryDepthConfig> = {
+  focused:       { batchTargetMin: 8,  batchTargetMax: 12, qualityFloor: 0.4, adaptiveCap: 75,  lineageDepth: 3  },
+  balanced:      { batchTargetMin: 12, batchTargetMax: 18, qualityFloor: 0.3, adaptiveCap: 150, lineageDepth: 5  },
+  comprehensive: { batchTargetMin: 15, batchTargetMax: 22, qualityFloor: 0.2, adaptiveCap: 250, lineageDepth: 10 },
+};
+
 export const SUPPORTED_LANGUAGES = [
   "English",
   "Arabic",
@@ -95,6 +111,7 @@ export interface PipelineRunConfig {
   sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for discovery & SQL gen
   industry: string; // industry outcome map id, empty = not selected
   discoveryDepth: DiscoveryDepth; // controls generation volume, quality floor, and adaptive cap
+  depthConfig?: DiscoveryDepthConfig; // resolved parameters for the selected depth (from settings or defaults)
 }
 
 /** Per-step timing and metadata logged during pipeline execution. */
