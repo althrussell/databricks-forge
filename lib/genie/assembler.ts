@@ -208,13 +208,15 @@ export function assembleSerializedSpace(
       identifier: fn.name,
     }));
 
-  // 8. Text instructions
-  const textInstructions: TextInstruction[] = outputs.textInstructions
-    .filter((t) => t.trim().length > 0)
-    .map((t, i) => ({
-      id: makeId(seed, "instr", i),
-      content: [t],
-    }));
+  // 8. Text instructions -- API allows at most one TextInstruction entry;
+  //    all instruction strings go into its content[] array.
+  const instrContent = outputs.textInstructions.filter(
+    (t) => t.trim().length > 0
+  );
+  const textInstructions: TextInstruction[] =
+    instrContent.length > 0
+      ? [{ id: makeId(seed, "instr", 0), content: instrContent }]
+      : [];
 
   // 9. Benchmarks -- each phrasing gets its own entry sharing the same answer
   const benchmarks: BenchmarkQuestion[] = [];
@@ -292,7 +294,7 @@ export function buildRecommendation(
     filterCount: space.instructions.sql_snippets.filters.length,
     dimensionCount: space.instructions.sql_snippets.expressions.length,
     benchmarkCount: space.benchmarks?.questions.length ?? 0,
-    instructionCount: space.instructions.text_instructions.length,
+    instructionCount: space.instructions.text_instructions.flatMap((t) => t.content).length,
     sampleQuestionCount: space.config.sample_questions.length,
     sqlFunctionCount: space.instructions.sql_functions?.length ?? 0,
     tables: outputs.tables,

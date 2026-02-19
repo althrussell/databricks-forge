@@ -53,6 +53,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 export default function SettingsPage() {
   const [sampleRowsPerTable, setSampleRowsPerTable] = useState(() => {
     if (typeof window === "undefined") return 0;
@@ -76,7 +81,7 @@ export default function SettingsPage() {
   });
 
   const [genieDefaults, setGenieDefaults] = useState<GenieEngineDefaults>(() => {
-    if (typeof window === "undefined") return { maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true };
+    if (typeof window === "undefined") return { engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" };
     return loadSettings().genieEngineDefaults;
   });
 
@@ -120,7 +125,7 @@ export default function SettingsPage() {
       setNotebookPath("./forge_gen/");
       setDefaultDiscoveryDepth("balanced");
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
-      setGenieDefaults({ maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true });
+      setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       toast.success("Local settings cleared");
     }
   };
@@ -386,61 +391,165 @@ export default function SettingsPage() {
           </CardTitle>
           <CardDescription>
             Global defaults for Genie Space generation. These apply to all new
-            runs. Per-run configuration (glossary, custom SQL, column overrides)
-            is still editable within each run.
+            runs. Per-run configuration (glossary, custom SQL, column overrides,
+            benchmarks, instructions) is still editable within each run.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="maxTables">Max tables per space</Label>
-            <div className="flex items-center gap-3">
-              <Input
-                id="maxTables"
-                type="number"
-                min={1}
-                max={30}
-                value={genieDefaults.maxTablesPerSpace}
-                onChange={(e) =>
-                  setGenieDefaults((prev) => ({
-                    ...prev,
-                    maxTablesPerSpace: Math.min(30, Math.max(1, parseInt(e.target.value) || 25)),
-                  }))
-                }
-                className="w-24"
-              />
-              <span className="text-xs text-muted-foreground">
-                Databricks Genie supports up to 30 tables per space
-              </span>
+          {/* Master enable/disable */}
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              genieDefaults.engineEnabled
+                ? "border-violet-500/50 bg-violet-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div>
+              <p className="text-sm font-medium">Genie Engine</p>
+              <p className="text-xs text-muted-foreground">
+                {genieDefaults.engineEnabled
+                  ? "Enabled — LLM-powered Genie Space generation is active for all runs"
+                  : "Disabled — Engine config will be read-only in runs; only legacy generation available"}
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() =>
+                setGenieDefaults((prev) => ({
+                  ...prev,
+                  engineEnabled: !prev.engineEnabled,
+                }))
+              }
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                genieDefaults.engineEnabled ? "bg-violet-500" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  genieDefaults.engineEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
 
-          <Separator />
+          <div className={genieDefaults.engineEnabled ? "" : "pointer-events-none opacity-50"}>
+            {/* Max tables + Fiscal year */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="maxTables">Max tables per space</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="maxTables"
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={genieDefaults.maxTablesPerSpace}
+                    onChange={(e) =>
+                      setGenieDefaults((prev) => ({
+                        ...prev,
+                        maxTablesPerSpace: Math.min(30, Math.max(1, parseInt(e.target.value) || 25)),
+                      }))
+                    }
+                    className="w-24"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Up to 30 tables per space
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fiscalMonth">Fiscal year start month</Label>
+                <Select
+                  value={String(genieDefaults.fiscalYearStartMonth)}
+                  onValueChange={(v) =>
+                    setGenieDefaults((prev) => ({
+                      ...prev,
+                      fiscalYearStartMonth: parseInt(v),
+                    }))
+                  }
+                >
+                  <SelectTrigger id="fiscalMonth" className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTH_NAMES.map((name, idx) => (
+                      <SelectItem key={idx + 1} value={String(idx + 1)}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <GenieToggle
-              label="LLM Refinement"
-              description="Use AI to generate semantic expressions, instructions, and trusted assets"
-              checked={genieDefaults.llmRefinement}
-              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, llmRefinement: v }))}
-            />
-            <GenieToggle
-              label="Auto Benchmarks"
-              description="Generate test questions with expected SQL to evaluate Genie accuracy"
-              checked={genieDefaults.generateBenchmarks}
-              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateBenchmarks: v }))}
-            />
-            <GenieToggle
-              label="Metric Views"
-              description="Propose metric view definitions (KPIs, dimensions, measures)"
-              checked={genieDefaults.generateMetricViews}
-              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateMetricViews: v }))}
-            />
-            <GenieToggle
-              label="Auto Time Periods"
-              description="Generate standard date filters and dimensions (last week, last month, fiscal quarters)"
-              checked={genieDefaults.autoTimePeriods}
-              onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, autoTimePeriods: v }))}
-            />
+            {/* Entity matching */}
+            <div className="mt-4 space-y-2">
+              <Label>Entity Matching</Label>
+              <div className="flex gap-2">
+                {([
+                  { value: "auto" as const, label: "Auto (from sample data)" },
+                  { value: "manual" as const, label: "Manual only" },
+                  { value: "off" as const, label: "Disabled" },
+                ]).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() =>
+                      setGenieDefaults((prev) => ({
+                        ...prev,
+                        entityMatchingMode: opt.value,
+                      }))
+                    }
+                    className={`rounded-md border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                      genieDefaults.entityMatchingMode === opt.value
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-muted text-muted-foreground hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Auto uses sample data to detect value aliases (e.g. &quot;Florida&quot; &rarr; &quot;FL&quot;)
+              </p>
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* Feature toggles */}
+            <div className="grid gap-3 md:grid-cols-2">
+              <GenieToggle
+                label="LLM Refinement"
+                description="Use AI to generate semantic expressions, instructions, and trusted assets"
+                checked={genieDefaults.llmRefinement}
+                onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, llmRefinement: v }))}
+              />
+              <GenieToggle
+                label="Trusted Assets"
+                description="Generate parameterized SQL queries and UDF definitions"
+                checked={genieDefaults.generateTrustedAssets}
+                onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateTrustedAssets: v }))}
+              />
+              <GenieToggle
+                label="Auto Benchmarks"
+                description="Generate test questions with expected SQL to evaluate Genie accuracy"
+                checked={genieDefaults.generateBenchmarks}
+                onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateBenchmarks: v }))}
+              />
+              <GenieToggle
+                label="Metric Views"
+                description="Propose metric view definitions (KPIs, dimensions, measures)"
+                checked={genieDefaults.generateMetricViews}
+                onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, generateMetricViews: v }))}
+              />
+              <GenieToggle
+                label="Auto Time Periods"
+                description="Generate standard date filters and dimensions (last week, last month, fiscal quarters)"
+                checked={genieDefaults.autoTimePeriods}
+                onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, autoTimePeriods: v }))}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

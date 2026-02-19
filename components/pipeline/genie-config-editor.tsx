@@ -1,13 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,13 +13,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type {
   GenieEngineConfig,
   GlossaryEntry,
@@ -39,76 +25,34 @@ import type {
 interface GenieConfigEditorProps {
   config: GenieEngineConfig;
   onChange: (config: GenieEngineConfig) => void;
+  disabled?: boolean;
 }
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-export function GenieConfigEditor({ config, onChange }: GenieConfigEditorProps) {
+export function GenieConfigEditor({ config, onChange, disabled }: GenieConfigEditorProps) {
   const update = (partial: Partial<GenieEngineConfig>) => {
     onChange({ ...config, ...partial });
   };
 
+  if (disabled) {
+    return (
+      <div className="rounded-lg border-2 border-dashed border-muted p-8 text-center">
+        <p className="text-sm font-medium text-muted-foreground">
+          Genie Engine is disabled
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Enable the Genie Engine in global Settings to configure per-run parameters.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <Accordion type="multiple" defaultValue={["general", "glossary"]} className="w-full">
-        {/* General Settings */}
-        <AccordionItem value="general">
-          <AccordionTrigger className="text-sm font-medium">
-            General Settings
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="grid gap-4 py-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs">Entity Matching</Label>
-                  <Select
-                    value={config.entityMatchingMode}
-                    onValueChange={(v) => update({ entityMatchingMode: v as GenieEngineConfig["entityMatchingMode"] })}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Auto (from sample data)</SelectItem>
-                      <SelectItem value="manual">Manual only</SelectItem>
-                      <SelectItem value="off">Disabled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Fiscal Year Start Month</Label>
-                  <Select
-                    value={String(config.fiscalYearStartMonth)}
-                    onValueChange={(v) => update({ fiscalYearStartMonth: parseInt(v) })}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MONTH_NAMES.map((name, idx) => (
-                        <SelectItem key={idx + 1} value={String(idx + 1)}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <ToggleCard
-                label="Trusted Assets"
-                description="Generate parameterized SQL queries and UDF definitions"
-                checked={config.generateTrustedAssets}
-                onToggle={(v) => update({ generateTrustedAssets: v })}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Max tables, LLM refinement, benchmarks, metric views, and auto time periods are configured in global Settings.
-              </p>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
+      <p className="text-[10px] text-muted-foreground">
+        Engine toggles, entity matching, fiscal year, and trusted asset settings are configured in global <span className="font-semibold">Settings</span>.
+        Per-run overrides below let you customise glossary, SQL, column metadata, benchmarks, and instructions.
+      </p>
+      <Accordion type="multiple" defaultValue={["glossary"]} className="w-full">
 
         {/* Business Glossary */}
         <AccordionItem value="glossary">
@@ -226,34 +170,6 @@ export function GenieConfigEditor({ config, onChange }: GenieConfigEditorProps) 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function ToggleCard({
-  label,
-  description,
-  checked,
-  onToggle,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onToggle: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onToggle(!checked)}
-      className={`rounded-lg border p-3 text-left transition-colors ${
-        checked ? "border-violet-500 bg-violet-500/5" : "border-border"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">{label}</span>
-        <div className={`h-3 w-3 rounded-full ${checked ? "bg-violet-500" : "bg-muted"}`} />
-      </div>
-      <p className="mt-1 text-[10px] text-muted-foreground">{description}</p>
-    </button>
-  );
-}
 
 function GlossaryEditor({
   entries,

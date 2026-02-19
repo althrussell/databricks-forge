@@ -78,6 +78,8 @@ const VALID_BENCHMARK_FORMATS = new Set(["SQL"]);
 function sanitizeSerializedSpace(raw: string): string {
   try {
     const parsed = JSON.parse(raw);
+
+    // Fix benchmark answer format enum casing
     const questions = parsed?.benchmarks?.questions;
     if (Array.isArray(questions)) {
       for (const q of questions) {
@@ -93,6 +95,18 @@ function sanitizeSerializedSpace(raw: string): string {
         }
       }
     }
+
+    // Collapse text_instructions to at most one entry (API limit)
+    const instrs = parsed?.instructions?.text_instructions;
+    if (Array.isArray(instrs) && instrs.length > 1) {
+      const allContent = instrs.flatMap(
+        (i: { content?: string[] }) => i.content ?? []
+      );
+      parsed.instructions.text_instructions = [
+        { id: instrs[0].id, content: allContent },
+      ];
+    }
+
     return JSON.stringify(parsed);
   } catch {
     return raw;

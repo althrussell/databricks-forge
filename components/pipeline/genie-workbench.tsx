@@ -24,18 +24,27 @@ interface GenieWorkbenchProps {
   runId: string;
 }
 
+function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
+  if (typeof window === "undefined") return cfg;
+  const { genieEngineDefaults: g } = loadSettings();
+  cfg.maxTablesPerSpace = g.maxTablesPerSpace;
+  cfg.llmRefinement = g.llmRefinement;
+  cfg.generateBenchmarks = g.generateBenchmarks;
+  cfg.generateMetricViews = g.generateMetricViews;
+  cfg.autoTimePeriods = g.autoTimePeriods;
+  cfg.generateTrustedAssets = g.generateTrustedAssets;
+  cfg.fiscalYearStartMonth = g.fiscalYearStartMonth;
+  cfg.entityMatchingMode = g.entityMatchingMode;
+  return cfg;
+}
+
 export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
+  const [engineEnabled, setEngineEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return loadSettings().genieEngineDefaults.engineEnabled;
+  });
   const [config, setConfig] = useState<GenieEngineConfig>(() => {
-    const cfg = defaultGenieEngineConfig();
-    if (typeof window !== "undefined") {
-      const { genieEngineDefaults } = loadSettings();
-      cfg.maxTablesPerSpace = genieEngineDefaults.maxTablesPerSpace;
-      cfg.llmRefinement = genieEngineDefaults.llmRefinement;
-      cfg.generateBenchmarks = genieEngineDefaults.generateBenchmarks;
-      cfg.generateMetricViews = genieEngineDefaults.generateMetricViews;
-      cfg.autoTimePeriods = genieEngineDefaults.autoTimePeriods;
-    }
-    return cfg;
+    return applyGlobalDefaults(defaultGenieEngineConfig());
   });
   const [configVersion, setConfigVersion] = useState(0);
   const [configLoading, setConfigLoading] = useState(true);
@@ -87,15 +96,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       const res = await fetch(`/api/runs/${runId}/genie-engine/config`);
       const data = await res.json();
       if (res.ok) {
-        const cfg = data.config as GenieEngineConfig;
-        // Apply global Genie Engine defaults from Settings
-        const { genieEngineDefaults } = loadSettings();
-        cfg.maxTablesPerSpace = genieEngineDefaults.maxTablesPerSpace;
-        cfg.llmRefinement = genieEngineDefaults.llmRefinement;
-        cfg.generateBenchmarks = genieEngineDefaults.generateBenchmarks;
-        cfg.generateMetricViews = genieEngineDefaults.generateMetricViews;
-        cfg.autoTimePeriods = genieEngineDefaults.autoTimePeriods;
-        setConfig(cfg);
+        setConfig(applyGlobalDefaults(data.config as GenieEngineConfig));
         setConfigVersion(data.version);
       }
     } catch {
@@ -189,7 +190,12 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {configDirty && (
+            {!engineEnabled && (
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                Engine Disabled
+              </Badge>
+            )}
+            {configDirty && engineEnabled && (
               <Button variant="outline" size="sm" onClick={handleSaveConfig}>
                 Save Config
               </Button>
@@ -197,7 +203,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             <Button
               size="sm"
               onClick={handleRegenerate}
-              disabled={generating}
+              disabled={generating || !engineEnabled}
               className="bg-violet-600 hover:bg-violet-700"
             >
               {generating ? "Generating..." : "Regenerate Spaces"}
@@ -228,6 +234,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
           <GenieConfigEditor
             config={config}
             onChange={handleConfigChange}
+            disabled={!engineEnabled}
           />
         </TabsContent>
 
