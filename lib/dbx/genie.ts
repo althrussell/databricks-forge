@@ -10,6 +10,7 @@
 import { getConfig, getAppHeaders } from "./client";
 import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 import { mkdirs } from "./workspace";
+import { logger } from "@/lib/logger";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
 
 export const DEFAULT_GENIE_PARENT_PATH = "/Shared/Forge Genie Spaces/";
@@ -132,8 +133,17 @@ export async function createGenieSpace(opts: {
 
   const parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
 
-  // Ensure the parent folder exists in the workspace
-  await mkdirs(parentPath);
+  // Best-effort: pre-create the parent folder. The Genie API creates it
+  // automatically, so this is not required. It may fail in Databricks Apps
+  // where the `workspace` scope is unavailable.
+  try {
+    await mkdirs(parentPath);
+  } catch (err) {
+    logger.debug("mkdirs for Genie parent path failed (non-fatal)", {
+      parentPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   const body = {
     title: opts.title,
