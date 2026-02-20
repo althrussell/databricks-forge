@@ -91,6 +91,29 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
     return () => stopPolling();
   }, [stopPolling]);
 
+  // Auto-detect an in-progress Genie job (e.g. fired by the pipeline)
+  useEffect(() => {
+    let cancelled = false;
+    async function checkActiveJob() {
+      try {
+        const res = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          if (data.status === "generating") {
+            setGenerating(true);
+            setGenProgress(data.percent ?? 0);
+            setGenMessage(data.message ?? "");
+            startPolling();
+          }
+        }
+      } catch {
+        // ignore -- no active job or endpoint unavailable
+      }
+    }
+    checkActiveJob();
+    return () => { cancelled = true; };
+  }, [runId, startPolling]);
+
   const fetchConfig = useCallback(async () => {
     try {
       const res = await fetch(`/api/runs/${runId}/genie-engine/config`);

@@ -7,7 +7,8 @@
  * 1. Try raw JSON.parse (fast path for well-behaved models)
  * 2. Extract between ```json / ``` fences using indexOf
  * 3. Bracket-match: find first { or [ and last } or ]
- * 4. Throw descriptive error
+ * 4. Repair common LLM JSON errors (missing commas, trailing commas)
+ * 5. Throw descriptive error
  */
 export function parseLLMJson(raw: string): unknown {
   const trimmed = raw.replace(/^\uFEFF/, "").trim();
@@ -28,7 +29,12 @@ export function parseLLMJson(raw: string): unknown {
       // continue to bracket matching on the fenced content
       const bracketed = extractBrackets(fenced);
       if (bracketed !== null) {
-        return JSON.parse(bracketed);
+        try {
+          return JSON.parse(bracketed);
+        } catch {
+          // try repair on fenced bracket content
+          return tryRepairAndParse(bracketed);
+        }
       }
     }
   }
@@ -39,13 +45,50 @@ export function parseLLMJson(raw: string): unknown {
     try {
       return JSON.parse(bracketed);
     } catch {
-      // fall through
+      // Strategy 4: repair common LLM JSON errors then re-parse
+      return tryRepairAndParse(bracketed);
     }
   }
 
   throw new SyntaxError(
     `parseLLMJson: unable to extract valid JSON from LLM response (${trimmed.length} chars, starts with: ${JSON.stringify(trimmed.slice(0, 60))})`
   );
+}
+
+/**
+ * Attempt to repair common JSON errors produced by LLMs and re-parse.
+ * Throws the original SyntaxError if repair doesn't help.
+ */
+function tryRepairAndParse(text: string): unknown {
+  const repaired = repairLlmJson(text);
+  return JSON.parse(repaired);
+}
+
+/**
+ * Fix common structural JSON errors in LLM output.
+ *
+ * In valid JSON, literal newlines only appear between tokens (never inside
+ * strings, where they must be escaped as \n). This means patterns like
+ * `}\n{` are unambiguously a missing comma between adjacent array elements.
+ */
+function repairLlmJson(text: string): string {
+  let result = text;
+
+  // Fix 1: Missing comma between adjacent objects in arrays — the #1 LLM JSON error.
+  //   } <whitespace/newline> {  →  }, {
+  //   Also handles same-line  } {  (compact JSON from json_object mode).
+  result = result.replace(/\}(\s+)\{/g, "},$1{");
+
+  // Fix 2: Missing comma between a closing bracket/brace and the next element.
+  //   ] <whitespace> {  or  } <whitespace> [
+  result = result.replace(/\](\s+)\{/g, "],$1{");
+  result = result.replace(/\}(\s+)\[/g, "},$1[");
+
+  // Fix 3: Trailing commas before ] or } (common when LLM adds a comma after
+  // the last element).
+  result = result.replace(/,(\s*[\]}])/g, "$1");
+
+  return result;
 }
 
 function extractFromFences(text: string): string | null {

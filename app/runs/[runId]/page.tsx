@@ -98,6 +98,55 @@ export default function RunDetailPage({
 
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Genie Engine background generation indicator
+  const [genieGenerating, setGenieGenerating] = useState(false);
+  const geniePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (run?.status !== "completed" || useCases.length === 0) return;
+
+    let cancelled = false;
+
+    async function checkGenieStatus() {
+      try {
+        const res = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.status === "generating") {
+          setGenieGenerating(true);
+          if (!geniePollRef.current) {
+            geniePollRef.current = setInterval(async () => {
+              try {
+                const r = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
+                if (r.ok) {
+                  const d = await r.json();
+                  if (d.status !== "generating") {
+                    setGenieGenerating(false);
+                    if (geniePollRef.current) {
+                      clearInterval(geniePollRef.current);
+                      geniePollRef.current = null;
+                    }
+                  }
+                }
+              } catch { /* ignore */ }
+            }, 3000);
+          }
+        } else {
+          setGenieGenerating(false);
+        }
+      } catch { /* ignore */ }
+    }
+
+    checkGenieStatus();
+    return () => {
+      cancelled = true;
+      if (geniePollRef.current) {
+        clearInterval(geniePollRef.current);
+        geniePollRef.current = null;
+      }
+    };
+  }, [run?.status, runId, useCases.length]);
+
   // Prompt logs state
   const [promptLogs, setPromptLogs] = useState<PromptLogEntry[]>([]);
   const [promptStats, setPromptStats] = useState<PromptLogStats | null>(null);
@@ -377,7 +426,9 @@ export default function RunDetailPage({
                 Use Cases ({useCases.length})
               </TabsTrigger>
               {useCases.length > 0 && (
-                <TabsTrigger value="genie">Genie Spaces</TabsTrigger>
+                <TabsTrigger value="genie">
+                  Genie Spaces {genieGenerating && <span className="ml-1 animate-pulse text-violet-500">●</span>}
+                </TabsTrigger>
               )}
               <TabsTrigger
                 value="observability"

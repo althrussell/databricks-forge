@@ -27,6 +27,12 @@ import { runDomainClustering } from "./steps/domain-clustering";
 import { runScoring } from "./steps/scoring";
 import { runSqlGeneration } from "./steps/sql-generation";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
+import {
+  startJob,
+  updateJob,
+  completeJob,
+  failJob,
+} from "@/lib/genie/engine-status";
 
 // ---------------------------------------------------------------------------
 // Step definitions with progress percentages
@@ -249,19 +255,15 @@ export async function startPipeline(runId: string): Promise<void> {
       }
     });
 
-    // Step 8: Genie Space Recommendations
-    let genieCount = 0;
-    await logStep(PipelineStep.GenieRecommendations, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.GenieRecommendations, 90, undefined, `Building Genie Space recommendations from ${ctx.useCases.length} use cases...`);
-      logger.info(`Step 8: ${STEPS[7].label}`, { runId, step: "genie-recommendations" });
-      genieCount = await runGenieRecommendations(ctx, runId);
-      await updateRunStatus(runId, "running", PipelineStep.GenieRecommendations, 98, undefined, `Built ${genieCount} Genie Space recommendations`);
-    });
-
-    // Mark as completed
+    // Mark as completed -- Genie Engine runs in the background
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-    await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL, ${genieCount} Genie spaces)`);
-    logger.info(`Pipeline completed`, { runId, useCaseCount: ctx.useCases.length, sqlOk, genieCount });
+    await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
+    logger.info("Pipeline completed, starting Genie Engine in background", { runId, useCaseCount: ctx.useCases.length, sqlOk });
+
+    // Fire Genie Engine as a non-blocking background task.
+    // Uses the same engine-status tracker as the "Regenerate" button so the
+    // Genie Workbench can poll for progress.
+    startGenieEngineBackground(ctx, runId);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown pipeline error";
@@ -283,6 +285,37 @@ export async function startPipeline(runId: string): Promise<void> {
       });
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Background Genie Engine
+// ---------------------------------------------------------------------------
+
+/**
+ * Fire-and-forget the Genie Engine after the pipeline completes.
+ * Progress is tracked via engine-status.ts (the same mechanism used by the
+ * "Regenerate Spaces" button), so the Genie Workbench can poll for updates.
+ */
+function startGenieEngineBackground(
+  ctx: PipelineContext,
+  runId: string
+): void {
+  startJob(runId);
+
+  runGenieRecommendations(
+    ctx,
+    runId,
+    (message, percent) => updateJob(runId, message, percent),
+  )
+    .then((count) => {
+      completeJob(runId, count);
+      logger.info("Background Genie Engine completed", { runId, genieCount: count });
+    })
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      failJob(runId, msg);
+      logger.error("Background Genie Engine failed", { runId, error: msg });
+    });
 }
 
 /**
