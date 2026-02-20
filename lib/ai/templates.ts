@@ -936,8 +936,13 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - Use 3-7 CTEs for readability -- break the query into logical steps (data assembly, transformation, analysis, output)
 - Use **business-friendly CTE names** like \`customer_lifetime_value\`, \`revenue_trend_analysis\`, \`risk_score_calculation\` -- NOT \`cte1\`, \`temp\`, \`base\`
 - For **hierarchy traversal** (org charts, bill-of-materials, category trees), use \`WITH RECURSIVE\` with a depth safety limit (\`WHERE depth < 10\`)
-- LIMIT 10 on the **FINAL SELECT** statement only (not intermediate CTEs)
+- \`LIMIT 10\` on the **FINAL SELECT** statement only (not intermediate CTEs). For strict top-N results, ALWAYS use \`ORDER BY ... LIMIT N\` -- NEVER use \`RANK()\` or \`DENSE_RANK()\` for top-N because ties can return more than N rows. Use \`ROW_NUMBER()\` with \`QUALIFY\` only for per-group deduplication (e.g. "latest row per customer"), NOT for top-N lists
 - **CRITICAL LENGTH CONSTRAINT**: Keep the total query UNDER 120 lines of SQL. Be concise -- depth of analysis is important but do NOT pad the query with redundant calculations, excessive comments, or repeated patterns. If the analysis requires many similar calculations, pick the 3-5 most impactful ones rather than exhaustively computing every possible metric
+
+**3b. IDENTIFYING COLUMNS IN OUTPUT (MANDATORY)**
+- The FINAL SELECT must always include human-readable identifying columns (e.g. customer name, email address, product name, account ID) when the query is entity-level (per-customer, per-product, per-account, etc.)
+- Never output only aggregated metrics or surrogate keys without the corresponding identifying columns that let a user recognise the entity
+- If the schema contains columns like \`email_address\`, \`customer_name\`, \`full_name\`, \`product_name\`, etc., include them in the final output alongside any IDs or metrics
 
 **4. AI USE CASE RULES**
 - Use the appropriate Databricks AI function as the primary analytical technique
@@ -961,7 +966,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - No markdown fences: output raw SQL only
 
 **7. ADVANCED DBSQL FEATURES (USE WHERE APPROPRIATE)**
-- **QUALIFY**: Use \`QUALIFY\` instead of wrapping window functions in subqueries. Pattern: \`SELECT *, ROW_NUMBER() OVER (...) AS rn FROM table QUALIFY rn = 1\`
+- **QUALIFY**: Use \`QUALIFY\` instead of wrapping window functions in subqueries for **per-group deduplication** only. Pattern: \`SELECT *, ROW_NUMBER() OVER (PARTITION BY group_col ORDER BY ...) AS rn FROM table QUALIFY rn = 1\`. Do NOT use QUALIFY for top-N lists -- use \`ORDER BY ... LIMIT N\` instead
 - **Pipe syntax**: For complex multi-step transformations, consider using pipe syntax (\`|>\`) for readability. Pattern: \`FROM table |> WHERE ... |> AGGREGATE ... GROUP BY ... |> ORDER BY ...\`
 - **COLLATE**: For case-insensitive string comparisons, use \`COLLATE UTF8_LCASE\` instead of \`LOWER()\`/\`UPPER()\` wrappers
 - Prefer window functions over self-joins where possible

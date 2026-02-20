@@ -5,14 +5,13 @@
  */
 
 import { NextResponse } from "next/server";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
     await ensureMigrated();
-    const prisma = await getPrisma();
 
     const [
       totalRuns,
@@ -21,7 +20,7 @@ export async function GET() {
       runningRuns,
       allUseCases,
       recentRuns,
-    ] = await Promise.all([
+    ] = await withPrisma((prisma) => Promise.all([
       prisma.forgeRun.count(),
       prisma.forgeRun.count({ where: { status: "completed" } }),
       prisma.forgeRun.count({ where: { status: "failed" } }),
@@ -48,7 +47,7 @@ export async function GET() {
           _count: { select: { useCases: true } },
         },
       }),
-    ]);
+    ]));
 
     // Compute aggregate stats from use cases
     const totalUseCases = allUseCases.length;

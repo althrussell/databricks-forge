@@ -117,6 +117,10 @@ For each benchmark:
 - expectedSql: Valid SQL that correctly answers the question
 - alternatePhrasings: 2-4 different ways to ask the same question
 
+SQL rules for expectedSql:
+- For top-N queries (e.g. "top 10 customers"), ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() because ties can return more than N rows.
+- Always include human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT alongside IDs and metrics when the query is entity-level.
+
 Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "alternatePhrasings": ["..."] }] }`;
 
   const userMessage = `${schemaBlock}

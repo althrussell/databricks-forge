@@ -88,7 +88,16 @@ export async function runInstructionGeneration(
     instructions.push(config.globalInstructions);
   }
 
-  // 8. LLM-refined instruction (if enabled)
+  // 8. SQL output quality rules
+  instructions.push(
+    `SQL output rules: ` +
+    `(1) Always include human-readable identifying columns (e.g. customer name, email address, product name) in query results -- ` +
+    `never return only IDs or surrogate keys without the corresponding descriptive columns. ` +
+    `(2) For "top N" queries, use ORDER BY ... LIMIT N to guarantee exactly N rows. ` +
+    `Do not use RANK() or DENSE_RANK() for top-N because ties can return more than N rows.`
+  );
+
+  // 9. LLM-refined instruction (if enabled)
   if (config.llmRefinement && businessContext) {
     try {
       const refined = await generateLLMInstruction(

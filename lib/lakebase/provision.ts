@@ -397,6 +397,16 @@ export async function refreshDbCredential(): Promise<string> {
 }
 
 /**
+ * Force-invalidate the cached DB credential so the next
+ * `refreshDbCredential()` / `getLakebaseConnectionUrl()` call mints
+ * a new one. Use this when an authentication error is caught to
+ * guarantee the stale credential is discarded.
+ */
+export function invalidateDbCredential(): void {
+  _dbCredential = null;
+}
+
+/**
  * Monotonically increasing counter that bumps every time a genuinely new
  * DB credential is minted. Used by lib/prisma.ts to detect token rotation
  * and recreate the connection pool.

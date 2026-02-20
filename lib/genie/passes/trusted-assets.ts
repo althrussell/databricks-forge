@@ -115,11 +115,14 @@ From the provided SQL examples, create:
    - Type each parameter (String, Date, Numeric) based on the column's data type
    - For entity-matching columns, include sample values in the parameter comment
    - Include DEFAULT NULL for optional parameters
+   - PRESERVE all human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT output -- do not strip them during parameterization
+   - For top-N queries, use ORDER BY ... LIMIT N, NOT RANK()/DENSE_RANK() (ties can return more than N rows)
 
 2. **SQL functions (UDFs)**: For the most common question patterns, create a CREATE FUNCTION statement.
    - Use table-valued functions (RETURNS TABLE)
    - Include descriptive COMMENT on the function and parameters
    - Handle NULL parameters with ISNULL() checks
+   - Include identifying columns (name, email, etc.) in the RETURNS TABLE definition
 
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }],
