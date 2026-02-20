@@ -46,6 +46,7 @@ import type {
   SerializedSpace,
 } from "@/lib/genie/types";
 import type { UseCase } from "@/lib/domain/types";
+import { GenieDeployModal } from "./genie-deploy-modal";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -100,6 +101,12 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
       error?: string;
     }[];
   } | null>(null);
+
+  // Deploy modal state
+  const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const [deployModalDomains, setDeployModalDomains] = useState<
+    GenieEngineRecommendation[]
+  >([]);
 
   // Per-domain regeneration state
   const [regeneratingDomain, setRegeneratingDomain] = useState<string | null>(null);
@@ -215,75 +222,19 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   // Actions
   // -------------------------------------------------------------------------
 
-  async function handleBulkDeploy() {
+  function handleBulkDeploy() {
     const toDeploy = recommendations.filter(
       (r) => selected.has(r.domain) && !isDeployed(r.domain)
     );
     if (toDeploy.length === 0) return;
+    setDeployModalDomains(toDeploy);
+    setDeployModalOpen(true);
+  }
 
-    setDeploying(true);
-    let successCount = 0;
-    let failCount = 0;
-    const failReasons: string[] = [];
-    const BATCH_SIZE = 3;
-
-    for (let i = 0; i < toDeploy.length; i += BATCH_SIZE) {
-      const batch = toDeploy.slice(i, i + BATCH_SIZE);
-      setDeployProgress(
-        `Deploying ${Math.min(i + BATCH_SIZE, toDeploy.length)} of ${toDeploy.length}...`
-      );
-
-      const results = await Promise.allSettled(
-        batch.map(async (rec) => {
-          const res = await fetch("/api/genie-spaces", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: rec.title,
-              description: rec.description,
-              serializedSpace: rec.serializedSpace,
-              runId,
-              domain: rec.domain,
-            }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(
-              data.error || `Failed to create space for ${rec.domain}`
-            );
-          }
-        })
-      );
-
-      for (const r of results) {
-        if (r.status === "fulfilled") successCount++;
-        else {
-          failCount++;
-          failReasons.push(
-            r.reason instanceof Error ? r.reason.message : String(r.reason)
-          );
-        }
-      }
-    }
-
-    setDeploying(false);
-    setDeployProgress(null);
+  function handleDeployModalComplete() {
     setSelected(new Set());
-    await fetchRecommendations();
-
-    if (failCount === 0) {
-      toast.success(
-        `Successfully deployed ${successCount} Genie space${successCount !== 1 ? "s" : ""}`
-      );
-    } else {
-      const reasons = failReasons.length > 0
-        ? `: ${failReasons.join("; ")}`
-        : "";
-      toast.error(
-        `Deployed ${successCount}, failed ${failCount} Genie space${failCount !== 1 ? "s" : ""}${reasons}`,
-        { duration: 10000 }
-      );
-    }
+    setDeployModalOpen(false);
+    fetchRecommendations();
   }
 
   async function handleTrash(domain: string) {
@@ -729,12 +680,9 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
             <Button
               size="sm"
               onClick={handleBulkDeploy}
-              disabled={deploying}
               className="bg-green-600 hover:bg-green-700"
             >
-              {deploying
-                ? deployProgress ?? "Deploying..."
-                : `Deploy Selected (${selected.size})`}
+              Deploy Selected ({selected.size})
             </Button>
           </div>
         </div>
@@ -1308,16 +1256,12 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   <Button
                     className="w-full bg-green-600 hover:bg-green-700"
                     onClick={() => {
-                      setSelected(
-                        (prev) => new Set([...prev, detailRec.domain])
-                      );
                       setDetailDomain(null);
-                      toast.info(
-                        `"${detailRec.domain}" added to selection. Click Deploy Selected to create.`
-                      );
+                      setDeployModalDomains([detailRec]);
+                      setDeployModalOpen(true);
                     }}
                   >
-                    Select for Deploy
+                    Deploy
                   </Button>
                 )}
               </SheetFooter>
@@ -1325,6 +1269,15 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Deploy Modal */}
+      <GenieDeployModal
+        open={deployModalOpen}
+        onOpenChange={setDeployModalOpen}
+        domains={deployModalDomains}
+        runId={runId}
+        onComplete={handleDeployModalComplete}
+      />
     </div>
   );
 }

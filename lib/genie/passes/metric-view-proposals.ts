@@ -35,6 +35,19 @@ import {
 
 const TEMPERATURE = 0.2;
 
+/**
+ * Strip fully-qualified table prefixes (catalog.schema.table.column) from
+ * SQL expressions, leaving bare column names. Metric view YAML expects
+ * bare column references or join-alias prefixes, not FQN table prefixes.
+ */
+function stripFqnPrefixes(sql: string): string {
+  // Match `catalog.schema.table.column` and replace with just `column`
+  return sql.replace(
+    /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g,
+    "$1"
+  );
+}
+
 export interface JoinSpecInput {
   leftTable: string;
   rightTable: string;
@@ -150,13 +163,13 @@ function buildSeedYaml(
   const dimLines = allDims.map((d) => {
     const comment = enrichmentMap.get(d.name);
     const commentLine = comment ? `\n      comment: "${comment}"` : "";
-    return `    - name: ${d.name}\n      expr: ${d.sql}${commentLine}`;
+    return `    - name: ${d.name}\n      expr: ${stripFqnPrefixes(d.sql)}${commentLine}`;
   });
 
   const measureLines = topMeasures.map((m) => {
     const comment = enrichmentMap.get(m.name);
     const commentLine = comment ? `\n      comment: "${comment}"` : "";
-    return `    - name: ${m.name}\n      expr: ${m.sql}${commentLine}`;
+    return `    - name: ${m.name}\n      expr: ${stripFqnPrefixes(m.sql)}${commentLine}`;
   });
 
   return [
@@ -203,6 +216,16 @@ function validateMetricViewYaml(
     const sourceFqn = sourceMatch[1];
     if (!isValidTable(allowlist, sourceFqn)) {
       issues.push(`Source table not found in schema: ${sourceFqn}`);
+    }
+  }
+
+  // Detect FQN-qualified column references in expr fields (catalog.schema.table.column)
+  const fqnColPattern = /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\b/g;
+  const exprBlocks = yaml.match(/expr:\s*.+/g) ?? [];
+  for (const exprLine of exprBlocks) {
+    const fqnMatches = exprLine.match(fqnColPattern);
+    if (fqnMatches) {
+      issues.push(`FQN column reference in expr (use bare column name instead): ${fqnMatches[0]}`);
     }
   }
 
@@ -278,22 +301,22 @@ export async function runMetricViewProposals(
     }
   }
 
-  // Build measures/dimensions context
+  // Build measures/dimensions context (strip FQN prefixes for metric view context)
   const measuresBlock = measures
     .slice(0, 15)
-    .map((m) => `- ${m.name}: ${m.sql}${m.instructions ? ` — ${m.instructions}` : ""}`)
+    .map((m) => `- ${m.name}: ${stripFqnPrefixes(m.sql)}${m.instructions ? ` — ${m.instructions}` : ""}`)
     .join("\n");
 
   const dimensionsBlock = dimensions
     .filter((d) => !d.isTimePeriod)
     .slice(0, 10)
-    .map((d) => `- ${d.name}: ${d.sql}`)
+    .map((d) => `- ${d.name}: ${stripFqnPrefixes(d.sql)}`)
     .join("\n");
 
   const timeDimensions = dimensions
     .filter((d) => d.isTimePeriod)
     .slice(0, 5)
-    .map((d) => `- ${d.name}: ${d.sql}`)
+    .map((d) => `- ${d.name}: ${stripFqnPrefixes(d.sql)}`)
     .join("\n");
 
   // Build join context
@@ -366,7 +389,9 @@ ${suggestMaterialization ? `8. For the most complex proposal, include a material
   ]
 }
 
-IMPORTANT: The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.`;
+IMPORTANT:
+- The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.
+- Column references in YAML expr fields must use BARE column names (e.g. \`amount\`, \`franchiseID\`) or JOIN ALIAS prefixes (e.g. \`franchise.franchiseID\`). NEVER use fully-qualified table names as column prefixes (e.g. \`catalog.schema.table.column\` is WRONG — the SQL engine cannot resolve 4-part names in metric view expressions).`;
 
   const userMessage = `${schemaBlock}
 
@@ -410,7 +435,14 @@ Create metric view proposals for this domain.`;
     const proposals: MetricViewProposal[] = items
       .map((p) => {
         const yamlStr = String(p.yaml ?? "");
-        const ddlStr = String(p.ddl ?? "");
+        let ddlStr = String(p.ddl ?? "");
+
+        // Safety net: strip FQN column prefixes from YAML expr/on lines in the DDL.
+        // Preserve CREATE VIEW and source: lines (those need FQN).
+        ddlStr = ddlStr.replace(
+          /^(\s*(?:expr|on):\s*)(.+)$/gm,
+          (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
+        );
 
         const validation = validateMetricViewYaml(yamlStr, ddlStr, allowlist);
         const features = detectFeatures(yamlStr);
