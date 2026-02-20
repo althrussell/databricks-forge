@@ -55,6 +55,10 @@ interface CatalogNode {
 interface CatalogBrowserProps {
   selectedSources: string[];
   onSelectionChange: (sources: string[]) => void;
+  /** "table" = select catalogs/schemas/tables (default). "schema" = single schema selection only. */
+  selectionMode?: "table" | "schema";
+  /** Pre-expand a specific catalog.schema path on mount. */
+  defaultExpandPath?: string;
 }
 
 /** How long cached children remain fresh before refetch on expand (ms). */
@@ -73,6 +77,8 @@ type BrowserPhase =
 export function CatalogBrowser({
   selectedSources,
   onSelectionChange,
+  selectionMode = "table",
+  defaultExpandPath,
 }: CatalogBrowserProps) {
   const [catalogs, setCatalogs] = useState<CatalogNode[]>([]);
   const [phase, setPhase] = useState<BrowserPhase>("warming-up");
@@ -174,6 +180,18 @@ export function CatalogBrowser({
       cancelled = true;
     };
   }, [warmupWarehouse, fetchCatalogs]);
+
+  // ── Auto-expand default path when ready ─────────────────────────────────
+  const defaultExpandedRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "ready" || !defaultExpandPath || defaultExpandedRef.current) return;
+    const parts = defaultExpandPath.split(".");
+    if (parts.length >= 1) {
+      defaultExpandedRef.current = true;
+      toggleCatalog(parts[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, defaultExpandPath]);
 
   // ── Full retry (warmup + fetch) ────────────────────────────────────────
   const fullRetry = useCallback(async () => {
@@ -640,6 +658,7 @@ export function CatalogBrowser({
                   onAdd={addSource}
                   onRemove={removeSource}
                   searchFilter={searchLower}
+                  selectionMode={selectionMode}
                 />
               ))
             )}
@@ -647,8 +666,8 @@ export function CatalogBrowser({
         </div>
       </div>
 
-      {/* Selected sources pills */}
-      {selectedSources.length > 0 && (
+      {/* Selected sources pills (hidden in schema mode -- parent manages display) */}
+      {selectionMode === "table" && selectedSources.length > 0 && (
         <div>
           <p className="mb-1.5 text-xs font-medium text-muted-foreground">
             Selected sources ({selectedSources.length})
@@ -698,6 +717,7 @@ function CatalogRow({
   onAdd,
   onRemove,
   searchFilter,
+  selectionMode = "table",
 }: {
   catalog: CatalogNode;
   onToggleCatalog: () => void;
@@ -709,6 +729,7 @@ function CatalogRow({
   onAdd: (source: string) => void;
   onRemove: (source: string) => void;
   searchFilter?: string;
+  selectionMode?: "table" | "schema";
 }) {
   const catalogSelected = isSelected(catalog.name);
   const hasSearch = !!searchFilter;
@@ -770,28 +791,30 @@ function CatalogRow({
           <RefreshCw className="h-3 w-3" />
         </Button>
 
-        {catalogSelected ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 gap-1 px-2 text-xs text-green-600"
-            onClick={() => onRemove(catalog.name)}
-          >
-            <Check className="h-3 w-3" />
-            Added
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 gap-1 px-2 text-xs opacity-0 group-hover:opacity-100"
-            onClick={() => onAdd(catalog.name)}
-          >
-            <Plus className="h-3 w-3" />
-            Add all
-          </Button>
+        {selectionMode === "table" && (
+          catalogSelected ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs text-green-600"
+              onClick={() => onRemove(catalog.name)}
+            >
+              <Check className="h-3 w-3" />
+              Added
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs opacity-0 group-hover:opacity-100"
+              onClick={() => onAdd(catalog.name)}
+            >
+              <Plus className="h-3 w-3" />
+              Add all
+            </Button>
+          )
         )}
       </div>
 
@@ -846,6 +869,7 @@ function CatalogRow({
               onAdd={onAdd}
               onRemove={onRemove}
               searchFilter={searchFilter}
+              selectionMode={selectionMode}
             />
           ))}
         </div>
@@ -868,6 +892,7 @@ function SchemaRow({
   onAdd,
   onRemove,
   searchFilter,
+  selectionMode = "table",
 }: {
   schema: SchemaNode;
   catalogName: string;
@@ -878,6 +903,7 @@ function SchemaRow({
   onAdd: (source: string) => void;
   onRemove: (source: string) => void;
   searchFilter?: string;
+  selectionMode?: "table" | "schema";
 }) {
   const schemaPath = `${catalogName}.${schema.name}`;
   const schemaSelected = isSelected(schemaPath);
@@ -900,57 +926,86 @@ function SchemaRow({
   // Show expanded section when schema is expanded OR tables were loaded
   const isOpen = schema.expanded || schema.tables.length > 0;
 
+  const isSchemaMode = selectionMode === "schema";
+
+  const handleSchemaClick = () => {
+    if (isSchemaMode) {
+      // Single-select: replace selection with this schema
+      if (schemaSelected) {
+        onRemove(schemaPath);
+      } else {
+        onAdd(schemaPath);
+      }
+    } else {
+      onToggle();
+    }
+  };
+
   return (
     <div>
       {/* Schema level */}
-      <div className="group/schema flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/50">
+      <div className={`group/schema flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/50 ${isSchemaMode && schemaSelected ? "bg-violet-50 dark:bg-violet-950/30" : ""}`}>
         <button
           type="button"
-          onClick={onToggle}
+          onClick={handleSchemaClick}
           className="flex shrink-0 items-center gap-1"
         >
-          {isOpen ? (
+          {isSchemaMode ? (
+            schemaSelected ? (
+              <Check className="h-3.5 w-3.5 text-green-600" />
+            ) : (
+              <Layers className="h-3.5 w-3.5 text-blue-500" />
+            )
+          ) : isOpen ? (
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           )}
-          <Layers className="h-3.5 w-3.5 text-blue-500" />
+          {!isSchemaMode && <Layers className="h-3.5 w-3.5 text-blue-500" />}
         </button>
 
         <button
           type="button"
-          onClick={onToggle}
-          className={`flex-1 text-left text-sm ${covered && !schemaSelected ? "text-muted-foreground" : ""}`}
+          onClick={handleSchemaClick}
+          className={`flex-1 text-left text-sm ${covered && !schemaSelected ? "text-muted-foreground" : ""} ${isSchemaMode && schemaSelected ? "font-medium text-violet-700 dark:text-violet-400" : ""}`}
         >
           <HighlightMatch text={schema.name} query={searchFilter} />
-          {schema.tables.length > 0 && (
+          {!isSchemaMode && schema.tables.length > 0 && (
             <span className="ml-1.5 text-[10px] text-muted-foreground/60">
               ({schema.tables.length})
             </span>
           )}
-          {covered && !schemaSelected && (
+          {!isSchemaMode && covered && !schemaSelected && (
             <span className="ml-1.5 text-[10px] text-muted-foreground/60">
               (included via catalog)
             </span>
           )}
         </button>
 
-        {/* Per-schema refresh */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-5 w-5 shrink-0 p-0 opacity-0 group-hover/schema:opacity-60 hover:!opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRefresh();
-          }}
-          title="Refresh tables"
-        >
-          <RefreshCw className="h-2.5 w-2.5" />
-        </Button>
+        {/* Per-schema refresh -- only in table mode */}
+        {!isSchemaMode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 w-5 shrink-0 p-0 opacity-0 group-hover/schema:opacity-60 hover:!opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRefresh();
+            }}
+            title="Refresh tables"
+          >
+            <RefreshCw className="h-2.5 w-2.5" />
+          </Button>
+        )}
 
-        {schemaSelected ? (
+        {isSchemaMode ? (
+          schemaSelected ? (
+            <Badge variant="outline" className="text-[9px] text-green-600 border-green-200">
+              Selected
+            </Badge>
+          ) : null
+        ) : schemaSelected ? (
           <Button
             type="button"
             variant="ghost"
@@ -975,8 +1030,8 @@ function SchemaRow({
         )}
       </div>
 
-      {/* Tables section -- shown when schema is open */}
-      {isOpen && (
+      {/* Tables section -- hidden in schema mode, shown when schema is open in table mode */}
+      {!isSchemaMode && isOpen && (
         <div className="ml-5 border-l pl-2">
           {schema.loading && (
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
