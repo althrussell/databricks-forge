@@ -942,41 +942,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                     </AccordionItem>
                   )}
 
-                  {/* Column Details */}
-                  {detailParsed.data_sources.tables.some((t) => t.columns && t.columns.length > 0) && (
-                    <AccordionItem value="columns">
-                      <AccordionTrigger className="text-xs font-medium">
-                        Column Intelligence ({detailParsed.data_sources.tables.reduce((n, t) => n + (t.columns?.length ?? 0), 0)})
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="max-h-64 space-y-1 overflow-auto text-xs">
-                          {detailParsed.data_sources.tables
-                            .filter((t) => t.columns && t.columns.length > 0)
-                            .map((t) => (
-                              <div key={t.identifier} className="space-y-0.5">
-                                <p className="font-mono text-[10px] font-semibold text-muted-foreground">{t.identifier}</p>
-                                {t.columns!.filter((c) => !c.hidden).map((c, ci) => (
-                                  <div key={ci} className="ml-3 flex items-baseline gap-2 py-0.5">
-                                    <code className="rounded bg-muted px-1 font-mono text-[10px]">{c.name}</code>
-                                    {c.description && <span className="text-muted-foreground">{c.description}</span>}
-                                    {c.synonyms && c.synonyms.length > 0 && (
-                                      <span className="flex gap-0.5">
-                                        {c.synonyms.map((s, si) => (
-                                          <Badge key={si} variant="outline" className="text-[9px]">{s}</Badge>
-                                        ))}
-                                      </span>
-                                    )}
-                                    {c.entity_matching && (
-                                      <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">entity</Badge>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            ))}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+                  {/* Column enrichment info is now folded into table descriptions */}
 
                   {/* Sample Questions */}
                   {detailParsed.config.sample_questions.length > 0 && (

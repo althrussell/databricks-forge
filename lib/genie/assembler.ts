@@ -8,7 +8,6 @@ import type {
   SerializedSpace,
   SampleQuestion,
   DataSourceTable,
-  DataSourceTableColumn,
   DataSourceMetricView,
   ExampleQuestionSql,
   SqlFunction,
@@ -73,21 +72,6 @@ export function assembleSerializedSpace(
     columnsByTable.set(ce.tableFqn, list);
   }
 
-  // Entity matching candidates lookup
-  const entityMatchingSet = new Set(
-    outputs.entityMatchingCandidates.map((c) => `${c.tableFqn}:${c.columnName}`)
-  );
-
-  // Column type lookup for format_assistance: tableFqn:columnName -> dataType
-  const columnTypeMap = new Map<string, string>();
-  for (const c of metadata.columns) {
-    columnTypeMap.set(`${c.tableFqn}:${c.columnName}`, c.dataType.toUpperCase());
-  }
-
-  const FORMAT_ASSIST_TYPES = new Set(["DECIMAL", "DOUBLE", "FLOAT", "NUMERIC"]);
-  const FORMAT_ASSIST_NAME_PATTERN =
-    /price|amount|revenue|cost|total|rate|percent|margin|fee|salary|budget|discount|tax|balance|profit/i;
-
   // Join relationship lookup: tableFqn -> descriptions of related tables
   const joinRelationships = new Map<string, string[]>();
   for (const j of outputs.joinSpecs) {
@@ -131,31 +115,25 @@ export function assembleSerializedSpace(
         if (keyDescs.length > 0) {
           descParts.push("Key columns: " + keyDescs.join("; ") + ".");
         }
+
+        const synonymParts = enrichments
+          .filter((ce) => ce.synonyms.length > 0 && !ce.hidden)
+          .slice(0, 5)
+          .map((ce) => `${ce.columnName} (aka ${ce.synonyms.join(", ")})`);
+        if (synonymParts.length > 0) {
+          descParts.push("Synonyms: " + synonymParts.join("; ") + ".");
+        }
+
+        const hiddenCols = enrichments
+          .filter((ce) => ce.hidden)
+          .map((ce) => ce.columnName);
+        if (hiddenCols.length > 0) {
+          descParts.push("Ignore columns: " + hiddenCols.join(", ") + ".");
+        }
       }
 
       const table: DataSourceTable = { identifier: fqn };
       if (descParts.length > 0) table.description = [descParts.join(" ")];
-
-      if (enrichments && enrichments.length > 0) {
-        const cols: DataSourceTableColumn[] = enrichments.map((ce) => {
-          const col: DataSourceTableColumn = { name: ce.columnName };
-          if (ce.description) col.description = ce.description;
-          if (ce.synonyms.length > 0) col.synonyms = ce.synonyms;
-          if (ce.hidden) col.hidden = true;
-          if (ce.entityMatchingCandidate || entityMatchingSet.has(`${fqn}:${ce.columnName}`)) {
-            col.entity_matching = true;
-          }
-          const colType = columnTypeMap.get(`${fqn}:${ce.columnName}`) ?? "";
-          if (
-            FORMAT_ASSIST_TYPES.has(colType) ||
-            FORMAT_ASSIST_NAME_PATTERN.test(ce.columnName)
-          ) {
-            col.format_assistance = true;
-          }
-          return col;
-        });
-        table.columns = cols;
-      }
 
       return table;
     });

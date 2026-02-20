@@ -267,19 +267,9 @@ export interface SerializedDataSources {
   metric_views?: DataSourceMetricView[];
 }
 
-export interface DataSourceTableColumn {
-  name: string;
-  description?: string;
-  synonyms?: string[];
-  hidden?: boolean;
-  entity_matching?: boolean;
-  format_assistance?: boolean;
-}
-
 export interface DataSourceTable {
   identifier: string; // catalog.schema.table
   description?: string[];
-  columns?: DataSourceTableColumn[];
 }
 
 export interface DataSourceMetricView {
