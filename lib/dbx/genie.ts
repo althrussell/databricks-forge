@@ -152,39 +152,50 @@ export async function createGenieSpace(opts: {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces`;
   const headers = await getAppHeaders();
+  const sanitized = sanitizeSerializedSpace(opts.serializedSpace);
 
   let parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
 
-  // Pre-create the parent folder. If mkdirs fails (e.g. in Databricks Apps
-  // where the workspace scope is unavailable), fall back to /Shared/ which
-  // always exists.
+  // Best-effort: pre-create the parent folder.
   try {
     await mkdirs(parentPath);
-  } catch (err) {
-    logger.warn("mkdirs for Genie parent path failed, falling back to /Shared/", {
-      parentPath,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    parentPath = FALLBACK_GENIE_PARENT_PATH;
+  } catch {
+    // Will be caught by the retry below if the path doesn't exist
   }
 
   const body = {
     title: opts.title,
     description: opts.description,
-    serialized_space: sanitizeSerializedSpace(opts.serializedSpace),
+    serialized_space: sanitized,
     warehouse_id: opts.warehouseId,
     parent_path: parentPath,
   };
 
-  const response = await fetchWithTimeout(
+  let response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify(body) },
     TIMEOUTS.WORKSPACE
   );
 
+  // If the parent path doesn't exist, retry with /Shared/ as fallback
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Genie create space failed (${response.status}): ${text}`);
+    if (text.includes("RESOURCE_DOES_NOT_EXIST") && parentPath !== FALLBACK_GENIE_PARENT_PATH) {
+      logger.warn("Genie parent path does not exist, retrying with /Shared/", { parentPath });
+      parentPath = FALLBACK_GENIE_PARENT_PATH;
+      body.parent_path = parentPath;
+      response = await fetchWithTimeout(
+        url,
+        { method: "POST", headers, body: JSON.stringify(body) },
+        TIMEOUTS.WORKSPACE
+      );
+      if (!response.ok) {
+        const retryText = await response.text();
+        throw new Error(`Genie create space failed (${response.status}): ${retryText}`);
+      }
+    } else {
+      throw new Error(`Genie create space failed (${response.status}): ${text}`);
+    }
   }
 
   return (await response.json()) as GenieSpaceResponse;
