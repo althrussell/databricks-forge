@@ -220,9 +220,9 @@ Open [http://localhost:3000](http://localhost:3000) and click **Start New Discov
 
 ## Deployment (Databricks Apps)
 
-Databricks Apps runs your web application inside the workspace with **automatic OAuth authentication** and resource bindings. No PAT tokens or manual credential management required.
+The recommended way to deploy is **directly from Git** using the Databricks Apps UI. No CLI required -- just point your workspace at this repository and the platform handles the rest.
 
-This section is a **complete, copy-paste guide** from zero to a running app. Follow every step in order.
+> For background on the "Install from Git" feature, see [Deploy Databricks Apps directly from Git](https://community.databricks.com/t5/technical-blog/deploy-databricks-apps-directly-from-git/ba-p/147766).
 
 ---
 
@@ -230,7 +230,6 @@ This section is a **complete, copy-paste guide** from zero to a running app. Fol
 
 Before you start, ensure you have:
 
-- [ ] **Databricks CLI v0.200+** installed and authenticated against your target workspace
 - [ ] **A Databricks workspace** with Unity Catalog enabled
 - [ ] **A SQL Warehouse** (Serverless or Pro) running in that workspace
 - [ ] **A Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
@@ -242,41 +241,45 @@ Before you start, ensure you have:
   <img src="docs/images/previews.png" alt="Required preview features in workspace settings" width="700" />
 </p>
 
-Verify your CLI is authenticated:
-
-```bash
-databricks auth describe
-# Should show your workspace URL and authentication method
-```
-
 ---
 
-### Step 1: Create the Databricks App
+### Step 1: Create the app from Git
 
-In the Databricks workspace, navigate to **Compute > Apps** and click **Create app**. Choose **Create a custom app from scratch**, then configure the Git repository in step 2 of the wizard.
+1. In your Databricks workspace, navigate to **Compute > Apps**
+2. Click **Create app** and choose **Create a custom app from scratch**
+3. In step 2 of the wizard, select **From Git repository**
+4. Enter the Git URL for this repository and select the branch (e.g. `main`)
+5. Click **Create**
 
 <p align="center">
   <img src="docs/images/create-app.png" alt="Create new app — Databricks UI" width="700" />
 </p>
 
-You can also create the app via CLI:
+The platform clones the repo, detects `app.yaml` and `databricks.yml`, and sets up the app automatically.
+
+<details>
+<summary>Alternative: Create via Databricks CLI</summary>
+
+If you prefer the CLI:
 
 ```bash
 databricks apps create databricks-forge \
   --description "Discover AI-powered use cases from Unity Catalog metadata"
 ```
 
-> If the app already exists, skip this step.
+Then deploy from Git:
+
+```bash
+databricks apps deploy databricks-forge --source-code-path . --branch main
+```
+
+</details>
 
 ---
 
 ### Step 2: Configure app resources
 
-The app requires two Databricks resource bindings. These are configured in the **Databricks App UI** or via the CLI. The database (Lakebase) is auto-provisioned at startup -- no binding needed.
-
-#### Option A: Configure via the App UI
-
-Navigate to **Workspace > Apps > databricks-forge > Configure** and add:
+The app requires two Databricks resource bindings. Configure them in the app's **Configure** page:
 
 | # | Resource type | Resource key | Configuration |
 | --- | --- | --- | --- |
@@ -287,29 +290,13 @@ Navigate to **Workspace > Apps > databricks-forge > Configure** and add:
   <img src="docs/images/app-resources.png" alt="App resources — configured SQL Warehouse and Serving Endpoint" width="700" />
 </p>
 
-#### Option B: Configure via CLI
-
-If you prefer to script everything:
-
-```bash
-# Bind the SQL Warehouse
-databricks apps update-resources databricks-forge \
-  --resource-name sql-warehouse \
-  --resource-type sql_warehouse \
-  --resource-id <YOUR_WAREHOUSE_ID>
-
-# Bind the Model Serving endpoint
-databricks apps update-resources databricks-forge \
-  --resource-name serving-endpoint \
-  --resource-type serving_endpoint \
-  --resource-id <YOUR_SERVING_ENDPOINT_NAME>
-```
+The database (Lakebase) is auto-provisioned at startup -- no binding needed.
 
 ---
 
-### Step 2b: Configure User Authorization scopes
+### Step 3: Configure User Authorization scopes
 
-If **On-Behalf-Of User Authorization** is enabled (recommended), configure the API scopes the app needs to act on behalf of users. In the app's Configure page, under **User authorization**, add these scopes:
+In the app's **Configure** page, under **User authorization**, add these scopes:
 
 | Scope | Description |
 | --- | --- |
@@ -325,51 +312,55 @@ If **On-Behalf-Of User Authorization** is enabled (recommended), configure the A
 
 ---
 
-### Step 3: Deploy the app
+### Step 4: Deploy
 
-Deploy from the app details page by clicking **Deploy**, selecting **From Git**, and entering your branch (e.g. `main`).
-
-The platform will:
+Click **Deploy** from the app details page. The platform will:
 
 1. **Install dependencies** -- runs `npm install`
-2. **Build** -- runs `npm run build` (generates the Prisma client, builds the Next.js standalone server, and copies static assets)
-3. **Inject** environment variables from resource bindings (see table below)
+2. **Build** -- runs `npm run build` (generates Prisma client, builds the Next.js standalone server, copies static assets)
+3. **Inject** environment variables from resource bindings
 4. **Start** the app using `scripts/start.sh` (from `app.yaml`), which:
-   - **Auto-provisions Lakebase** -- creates the `databricks-forge` project on first deploy (skipped on subsequent deploys)
-   - Runs `prisma db push` automatically (creates all tables on first deploy, applies additive schema changes on subsequent deploys)
+   - **Auto-provisions Lakebase** on first deploy (skipped on subsequent deploys)
+   - Runs `prisma db push` (creates all tables on first deploy, applies additive changes on subsequent deploys)
    - Starts the Next.js standalone server on port 8000
 
 > First deploy takes 3-5 minutes. Subsequent deploys are faster.
 
-Monitor the deployment:
+---
 
-```bash
-# Check deployment status
-databricks apps get databricks-forge
+### Step 5: Grant UC permissions to the service principal
 
-# Stream logs
-databricks apps logs databricks-forge --follow
+The app's service principal needs access to the catalogs you want to discover:
+
+```sql
+-- Replace <service_principal_name> with your app's service principal
+-- Replace <catalog> with each catalog the app should discover
+
+GRANT USE CATALOG ON CATALOG <catalog> TO `<service_principal_name>`;
+GRANT USE SCHEMA ON CATALOG <catalog> TO `<service_principal_name>`;
+GRANT SELECT ON CATALOG <catalog> TO `<service_principal_name>`;
+
+-- Lineage access (required for estate scans)
+GRANT USE SCHEMA ON SCHEMA system.access TO `<service_principal_name>`;
+GRANT SELECT ON TABLE system.access.table_lineage TO `<service_principal_name>`;
 ```
+
+> **Tip:** Find the service principal name in the app settings, or run: `databricks apps get databricks-forge --output json | jq '.service_principal'`
 
 ---
 
-### Step 4: Verify the deployment
+### Step 6: Verify
 
-```bash
-# Get the app URL
-databricks apps get databricks-forge --output json | jq -r '.url'
-```
+Open the app URL in your browser. You should see the Forge AI dashboard.
 
-Open the URL in your browser. You should see the Forge AI dashboard.
-
-You can also hit the health endpoint:
+You can also check the health endpoint:
 
 ```bash
 APP_URL=$(databricks apps get databricks-forge --output json | jq -r '.url')
 curl -s "$APP_URL/api/health" | jq .
 ```
 
-A healthy response shows connectivity to both the SQL Warehouse and Lakebase:
+A healthy response:
 
 ```json
 {
@@ -381,11 +372,17 @@ A healthy response shows connectivity to both the SQL Warehouse and Lakebase:
 
 ---
 
+### Updating the app
+
+Push changes to your Git repository, then click **Deploy** from the app details page and select your branch. Schema changes in `prisma/schema.prisma` are applied automatically on the next startup.
+
+---
+
 ### How it all fits together
 
 The app uses two config files that map resources to environment variables:
 
-**`databricks.yml`** (bundle manifest -- declares the app and its resource types):
+**`databricks.yml`** (bundle manifest):
 
 ```yaml
 apps:
@@ -397,12 +394,12 @@ apps:
         type: serving_endpoint
 ```
 
-**`app.yaml`** (runtime config -- startup command + env var mappings):
+**`app.yaml`** (runtime config):
 
 ```yaml
 command:
   - "sh"
-  - "scripts/start.sh"           # auto-provisions Lakebase, runs prisma db push, then starts Next.js
+  - "scripts/start.sh"
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
@@ -415,63 +412,38 @@ env:
 
 | Variable | Source | How it's set |
 | --- | --- | --- |
-| `DATABRICKS_HOST` | Workspace URL | Auto-injected by Databricks Apps platform |
-| `DATABRICKS_CLIENT_ID` | Service principal OAuth client ID | Auto-injected by Databricks Apps platform |
-| `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret | Auto-injected by Databricks Apps platform |
+| `DATABRICKS_HOST` | Workspace URL | Auto-injected by platform |
+| `DATABRICKS_CLIENT_ID` | Service principal OAuth client ID | Auto-injected by platform |
+| `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret | Auto-injected by platform |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | From `sql-warehouse` resource binding |
 | `DATABRICKS_SERVING_ENDPOINT` | Model Serving endpoint name | From `serving-endpoint` resource binding |
 | `DATABASE_URL` | Lakebase connection string | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 
-> `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically by the Databricks Apps runtime. You never need to set these manually. `DATABASE_URL` is generated dynamically -- no secrets needed.
+> `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically. `DATABASE_URL` is generated dynamically. You never set these manually.
 
 ---
 
-### Permissions summary
+### Auth model
 
 The app uses **two complementary auth models** ([docs](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/auth)):
 
-**User authorization (OBO)** -- the logged-in user's identity and UC permissions apply:
+**User authorization (OBO)** -- the logged-in user's identity and UC permissions:
 
-| API | Scope required | What runs as the user |
+| API | Scope | What runs as the user |
 | --- | --- | --- |
 | SQL Statement Execution | `sql` | All metadata queries, generated SQL, health check |
 | Workspace REST API | `files.files` | Notebook export to `/Workspace/Users/<email>/` |
 | Unity Catalog metadata | `catalog.catalogs:read`, `catalog.schemas:read`, `catalog.tables:read` | `SHOW CATALOGS/SCHEMAS/TABLES`, `information_schema` |
 
-**App authorization (service principal)** -- the app's own identity for shared/background operations:
+**App authorization (service principal)** -- the app's own identity for background operations:
 
 | Resource | Permission | What runs as the SP |
 | --- | --- | --- |
-| SQL Warehouse | **Can use** | Background pipeline tasks (SP fallback when no user context) |
-| Model Serving endpoint | **Can query** | All LLM inference requests (chat completions) |
-| Unity Catalog (catalogs/schemas) | **USE CATALOG / USE SCHEMA / SELECT** | Background metadata queries (SP fallback) |
+| SQL Warehouse | **Can use** | Background pipeline tasks |
+| Model Serving endpoint | **Can query** | All LLM inference requests |
+| Unity Catalog | **USE CATALOG / USE SCHEMA / SELECT** | Background metadata queries |
 | `system.access.table_lineage` | **SELECT** | Lineage graph walking |
 | Genie Spaces | **Can manage** | Create, update, and trash Genie Spaces |
-
-Grant Unity Catalog permissions to the app's service principal:
-
-```sql
--- Replace <service_principal_name> with your app's service principal
--- Replace <catalog> with each catalog the app should discover
-
-GRANT USE CATALOG ON CATALOG <catalog> TO `<service_principal_name>`;
-GRANT USE SCHEMA ON CATALOG <catalog> TO `<service_principal_name>`;
-GRANT SELECT ON CATALOG <catalog> TO `<service_principal_name>`;
-
--- Lineage access (required for lineage-based discovery)
-GRANT USE SCHEMA ON SCHEMA system.access TO `<service_principal_name>`;
-GRANT SELECT ON TABLE system.access.table_lineage TO `<service_principal_name>`;
-```
-
-> **Tip:** To find the service principal name, check the app's settings in the Databricks App UI, or run: `databricks apps get databricks-forge --output json | jq '.service_principal'`
-
----
-
-### Updating the app
-
-After making code changes, push to your Git repository and click **Deploy** from the app details page. Select **From Git** and enter your branch or tag.
-
-Schema changes in `prisma/schema.prisma` are applied automatically on the next startup -- no manual migration step required.
 
 ---
 
@@ -485,10 +457,10 @@ Schema changes in `prisma/schema.prisma` are applied automatically on the next s
 | Schema push fails at startup | Lakebase compute still waking from scale-to-zero | Restart the app -- compute wakes automatically and retries succeed |
 | "Failed to connect to warehouse" | Warehouse binding missing or stopped | Verify `sql-warehouse` resource is configured and warehouse is running |
 | "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured (Step 2) |
-| "USE CATALOG denied" on discovery | User or SP lacks UC grants | With OBO auth, the logged-in user needs `USE CATALOG` / `USE SCHEMA` / `SELECT`. The SP needs the same grants as a fallback for background tasks. |
+| "USE CATALOG denied" on discovery | User or SP lacks UC grants | The logged-in user and SP both need `USE CATALOG` / `USE SCHEMA` / `SELECT` |
 | Lineage discovery returns 0 tables | Missing lineage permissions | Grant `SELECT` on `system.access.table_lineage` to the user and/or SP |
 
-View logs for detailed error messages:
+View logs:
 
 ```bash
 databricks apps logs databricks-forge --follow
@@ -496,22 +468,20 @@ databricks apps logs databricks-forge --follow
 
 ---
 
-### Complete deployment checklist
+### Deployment checklist
 
 ```
-[ ] 1. Databricks CLI installed and authenticated
-[ ] 2. Workspace previews enabled (Apps OBO User Auth + Apps Install from Git)
-[ ] 3. App created: databricks apps create databricks-forge
-[ ] 4. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
-[ ] 5. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
-[ ] 6. User authorization scopes added: sql, files.files, catalog.catalogs:read,
+[ ] 1. Workspace previews enabled (Apps OBO User Auth + Apps Install from Git)
+[ ] 2. App created from Git (Compute > Apps > Create app > From Git)
+[ ] 3. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
+[ ] 4. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
+[ ] 5. User authorization scopes: sql, files.files, catalog.catalogs:read,
        catalog.schemas:read, catalog.tables:read
-[ ] 7. UC grants applied to the app's service principal
-[ ] 8. Deployed from Git: click Deploy > From Git > enter branch (e.g. main)
-[ ] 9. Health check passes: curl <app-url>/api/health
+[ ] 6. UC grants applied to the app's service principal
+[ ] 7. Deployed and health check passes: <app-url>/api/health
 ```
 
-> Lakebase is auto-provisioned on first deploy -- no manual database, role, secret, or resource binding steps needed.
+> Lakebase is auto-provisioned on first deploy -- no manual database setup needed.
 
 ---
 
