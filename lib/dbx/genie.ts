@@ -317,6 +317,8 @@ async function pollMessageCompletion(
 /**
  * Start a new conversation with a Genie Space by asking a question.
  * Polls until the response is complete or times out.
+ *
+ * API: POST /api/2.0/genie/spaces/{space_id}/start-conversation
  */
 export async function startConversation(
   spaceId: string,
@@ -324,7 +326,7 @@ export async function startConversation(
   timeoutMs = 120_000
 ): Promise<GenieConversationMessage> {
   const config = getConfig();
-  const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations`;
+  const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/start-conversation`;
   const headers = await getAppHeaders();
 
   const response = await fetchWithTimeout(
@@ -343,14 +345,23 @@ export async function startConversation(
   }
 
   const data = (await response.json()) as {
-    conversation_id: string;
-    message_id: string;
+    conversation_id?: string;
+    message_id?: string;
+    conversation?: { id: string };
+    message?: { message_id: string };
   };
+
+  const conversationId = data.conversation_id ?? data.conversation?.id;
+  const messageId = data.message_id ?? data.message?.message_id;
+
+  if (!conversationId || !messageId) {
+    throw new Error("Genie start-conversation response missing conversation_id or message_id");
+  }
 
   const result = await pollMessageCompletion(
     spaceId,
-    data.conversation_id,
-    data.message_id,
+    conversationId,
+    messageId,
     timeoutMs
   );
 
@@ -386,12 +397,20 @@ export async function sendFollowUp(
     throw new Error(`Genie follow-up failed (${response.status}): ${text}`);
   }
 
-  const data = (await response.json()) as { id: string };
+  const data = (await response.json()) as {
+    id?: string;
+    message_id?: string;
+  };
+
+  const messageId = data.id ?? data.message_id;
+  if (!messageId) {
+    throw new Error("Genie follow-up response missing message id");
+  }
 
   const result = await pollMessageCompletion(
     spaceId,
     conversationId,
-    data.id,
+    messageId,
     timeoutMs
   );
 
