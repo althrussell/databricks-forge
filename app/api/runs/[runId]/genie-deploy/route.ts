@@ -91,12 +91,64 @@ function rewriteDdlTarget(ddl: string, targetSchema: string): string {
 }
 
 /**
+ * Fix ambiguous join `on:` clauses by qualifying bare column names with `source.`.
+ * E.g. `on: customerID = customer.customerID` -> `on: source.customerID = customer.customerID`
+ *
+ * A bare column is one that appears without a dot prefix on the left side of `=`.
+ */
+function qualifyJoinCriteria(onExpr: string): string {
+  return onExpr.replace(
+    /^(\s*)(\b[a-zA-Z_]\w*\b)\s*=\s*(\b[a-zA-Z_]\w*\b)\.(\b[a-zA-Z_]\w*\b)\s*$/,
+    "$1source.$2 = $3.$4"
+  );
+}
+
+/**
+ * Remove window: blocks from YAML measures. The window spec is experimental
+ * and the YAML parser frequently rejects LLM-generated window structures.
+ * Handles both inline `window: {...}` and multi-line indented blocks.
+ */
+function stripWindowBlocks(ddl: string): string {
+  const lines = ddl.split("\n");
+  const result: string[] = [];
+  let skipIndent = -1;
+
+  for (const line of lines) {
+    if (skipIndent >= 0) {
+      const indent = line.search(/\S/);
+      if (indent > skipIndent || (indent === -1 && line.trim() === "")) {
+        continue;
+      }
+      skipIndent = -1;
+    }
+
+    if (/^\s*window:\s*/.test(line)) {
+      const windowIndent = line.search(/\S/);
+      const afterColon = line.replace(/^\s*window:\s*/, "").trim();
+      if (afterColon && !afterColon.startsWith("{")) {
+        // single-line window value -- skip this line only
+        continue;
+      }
+      // multi-line block or inline object -- skip until dedent
+      skipIndent = windowIndent;
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  return result.join("\n");
+}
+
+/**
  * Sanitize a metric view DDL before execution:
  * 1. Strip FQN column prefixes from expr: and on: lines
- * 2. Remove `comment:` lines (unsupported by Databricks YAML parser for dimensions/measures)
+ * 2. Remove `comment:` lines (unsupported by Databricks YAML parser)
+ * 3. Qualify ambiguous join criteria with `source.` prefix
+ * 4. Strip window: blocks (experimental, frequently malformed)
  */
 function sanitizeMetricViewDdl(ddl: string): string {
-  return ddl
+  let result = ddl
     .replace(
       /^(\s*(?:expr|on):\s*)(.+)$/gm,
       (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
@@ -104,6 +156,17 @@ function sanitizeMetricViewDdl(ddl: string): string {
     .replace(/^\s*comment:\s*"[^"]*"\s*$/gm, "")
     .replace(/^\s*comment:\s*'[^']*'\s*$/gm, "")
     .replace(/^\s*comment:\s*[^\n]+$/gm, "");
+
+  // Fix ambiguous join on: clauses
+  result = result.replace(
+    /^(\s*on:\s*)(.+)$/gm,
+    (_match, prefix: string, expr: string) => prefix + qualifyJoinCriteria(expr).trim()
+  );
+
+  // Remove window blocks that the YAML parser rejects
+  result = stripWindowBlocks(result);
+
+  return result;
 }
 
 /**

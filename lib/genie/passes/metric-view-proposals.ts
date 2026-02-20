@@ -10,7 +10,7 @@
  * - Star/snowflake schema joins from FK metadata
  * - FILTER clause measures for conditional KPIs
  * - Ratio measures (safe re-aggregation)
- * - Window measures (running totals, period-over-period, YTD) when date columns present
+ * - Time-based dimensions via DATE_TRUNC for date/timestamp columns
  * - Materialization recommendations for high-table-count domains
  * - Seed YAML from Pass 2 measures/dimensions as starting point
  * - Column enrichment descriptions inform dimension/measure naming
@@ -105,11 +105,12 @@ $$
   - name: Display Name (queried via MEASURE(\`name\`))
   - expr: aggregate expression (SUM, COUNT, AVG, MIN, MAX)
 
-IMPORTANT: Dimension and measure entries only support "name", "expr", and optionally "window". Do NOT add "comment" or any other fields -- the YAML parser will reject them.
+IMPORTANT: Dimension and measure entries only support "name" and "expr". Do NOT add "comment", "window", or any other fields -- the YAML parser will reject them.
 - joins: list (optional, star/snowflake schema)
   - name: alias for the joined table
   - source: catalog.schema.dim_table
-  - on: source.fk = alias.pk
+  - on: MUST qualify BOTH sides. Use \`source.\` for the primary table alias and the join name for the dimension table.
+    Example: \`source.customerID = customer.customerID\` (NOT \`customerID = customer.customerID\` which is ambiguous)
   - joins: nested list (for snowflake, DBR 17.1+)
 
 ### Measure patterns:
@@ -118,11 +119,7 @@ IMPORTANT: Dimension and measure entries only support "name", "expr", and option
 - Ratio: \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
 - Distinct: \`COUNT(DISTINCT customer_id)\`
 
-### Window measures (experimental, use version: 0.1):
-- Add a \`window\` block to a measure:
-  - order: dimension name
-  - range: cumulative | trailing N unit | current | all
-  - semiadditive: first | last
+Do NOT use window: blocks on measures -- this feature is experimental and not supported in production.
 
 ### Materialization (experimental):
 \`\`\`yaml
@@ -326,17 +323,6 @@ export async function runMetricViewProposals(
     .map((e) => `- ${e.tableFqn}.${e.columnName}: ${e.description}`)
     .join("\n");
 
-  // Identify date columns for window measure guidance
-  const dateColumns: string[] = [];
-  for (const col of metadata.columns) {
-    if (tableFqns.some((t) => t.toLowerCase() === col.tableFqn.toLowerCase())) {
-      const dt = col.dataType.toLowerCase();
-      if (dt.includes("date") || dt.includes("timestamp")) {
-        dateColumns.push(`${col.tableFqn}.${col.columnName}`);
-      }
-    }
-  }
-
   // Build seed YAML from existing measures/dimensions
   const primaryTable = tableFqns[0];
   const seedYaml = buildSeedYaml(primaryTable, measures, dimensions);
@@ -366,8 +352,7 @@ ${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric
    - Ratio measures that safely re-aggregate, e.g. \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
    - COUNT DISTINCT measures for cardinality metrics
 6. Use descriptive dimension/measure \`name\` values informed by the column descriptions provided
-${dateColumns.length > 0 ? `7. For at least one proposal, include window measures for time intelligence (running totals, period-over-period, or YTD) using version: 0.1 and the window: block` : ""}
-${suggestMaterialization ? `8. For the most complex proposal, include a materialization: block (schedule: every 6 hours, mode: relaxed) with at least one aggregated materialized view` : ""}
+${suggestMaterialization ? `7. For the most complex proposal, include a materialization: block (schedule: every 6 hours, mode: relaxed) with at least one aggregated materialized view` : ""}
 
 ## Output format (JSON):
 {
@@ -399,7 +384,6 @@ ${timeDimensions || "(none)"}
 
 ${joinBlock ? `### JOIN RELATIONSHIPS\n${joinBlock}\n` : ""}
 ${enrichmentBlock ? `### COLUMN DESCRIPTIONS (use to inform descriptive dimension/measure names)\n${enrichmentBlock}\n` : ""}
-${dateColumns.length > 0 ? `### DATE/TIMESTAMP COLUMNS (candidates for time dimensions and window measures)\n${dateColumns.slice(0, 10).map((c) => `- ${c}`).join("\n")}\n` : ""}
 ${seedYaml ? `### SEED YAML (starting point — improve, extend, and add joins/filters/ratios)\n\`\`\`yaml\n${seedYaml}\n\`\`\`\n` : ""}
 ### DOMAIN USE CASES (for context)
 ${useCases.slice(0, 5).map((uc) => `- ${uc.name}: ${uc.statement}`).join("\n")}
