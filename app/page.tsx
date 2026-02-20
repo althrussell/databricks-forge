@@ -36,6 +36,7 @@ interface DashboardStats {
   totalUseCases: number;
   aiCount: number;
   statisticalCount: number;
+  geospatialCount: number;
   avgScore: number;
   totalDomains: number;
   domainBreakdown: { domain: string; count: number }[];
@@ -152,7 +153,7 @@ export default function DashboardPage() {
               icon={<BrainCircuit className="h-4 w-4 text-violet-500" />}
               label="Use Cases"
               value={stats.totalUseCases}
-              detail={`${stats.aiCount} AI, ${stats.statisticalCount} Statistical`}
+              detail={`${stats.aiCount} AI, ${stats.statisticalCount} Stat${stats.geospatialCount ? `, ${stats.geospatialCount} Geo` : ""}`}
             />
             <KPICard
               icon={<Trophy className="h-4 w-4 text-amber-500" />}
@@ -190,6 +191,7 @@ export default function DashboardPage() {
               <TypeSplitChart
                 aiCount={stats.aiCount}
                 statisticalCount={stats.statisticalCount}
+                geospatialCount={stats.geospatialCount}
               />
             </div>
           )}

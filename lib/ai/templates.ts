@@ -286,8 +286,8 @@ Return a JSON array of objects. Each object has these fields:
 
 - **no**: Sequential number (1, 2, 3...) (number)
 - **name**: A short, clear name that emphasizes BUSINESS VALUE, not technical implementation. Use exciting business-oriented verbs: Anticipate, Predict, Envision, Segment, Identify, Detect, Reveal. Example: "Anticipate Monthly Revenue Trends with Action Plans" (NOT "Forecast Revenue") (string)
-- **type**: "AI" or "Statistical" (string)
-- **analytics_technique**: The PRIMARY analytics technique used (e.g., Forecasting, Classification, Anomaly Detection, Cohort Analysis, Segmentation, Sentiment Analysis, Trend Analysis, Correlation Analysis, Pareto Analysis) (string)
+- **type**: "AI", "Statistical", or "Geospatial" (string). Use "Geospatial" when the use case primarily relies on spatial/location analysis (H3 indexing, ST functions, proximity, containment, or spatial aggregation)
+- **analytics_technique**: The PRIMARY analytics technique used (e.g., Forecasting, Classification, Anomaly Detection, Cohort Analysis, Segmentation, Sentiment Analysis, Trend Analysis, Correlation Analysis, Pareto Analysis, Proximity Analysis, Spatial Clustering, Catchment Analysis) (string)
 - **statement**: Business problem statement (1-2 sentences). Focus on IMPACT (Revenue, Cost, Risk) (string)
 - **solution**: Technical solution description (2-3 sentences) (string)
 - **business_value**: Expected business impact (1-2 sentences). Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts. Good: "Reduces fuel costs and extends aircraft lifespan". Bad: "Optimizes performance" (too generic) (string)
@@ -353,6 +353,8 @@ Generate **{target_use_case_count}** unique, actionable AI-powered business use 
 
 {ai_functions_summary}
 
+{geospatial_functions_summary}
+
 ### 3. DATA SCHEMA
 
 {schema_markdown}
@@ -394,8 +396,8 @@ Return a JSON array of objects with these fields:
 
 - **no**: Sequential number (number)
 - **name**: Emphasize BUSINESS VALUE, not the AI technique. Use verbs like: Anticipate, Predict, Detect, Reveal, Classify, Extract (string)
-- **type**: Must be "AI" for all use cases in this batch (string)
-- **analytics_technique**: The PRIMARY AI function used (ai_forecast, ai_classify, ai_query, ai_summarize, ai_extract, ai_analyze_sentiment, ai_similarity, ai_mask, ai_translate, vector_search) (string)
+- **type**: "AI" or "Geospatial". Use "Geospatial" ONLY when the use case primarily relies on spatial/location analysis using H3 or ST functions on longitude/latitude columns. Default to "AI" (string)
+- **analytics_technique**: The PRIMARY function used. AI: ai_forecast, ai_classify, ai_query, ai_summarize, ai_extract, ai_analyze_sentiment, ai_similarity, ai_mask, ai_translate, vector_search, ai_gen. Geospatial: Proximity Analysis, Spatial Clustering, Catchment Analysis, H3 Indexing (string)
 - **statement**: Business problem statement (1-2 sentences). Focus on IMPACT (string)
 - **solution**: Technical solution description (2-3 sentences) (string)
 - **business_value**: Focus on WHY this matters. Do NOT mention specific percentages or dollar amounts (string)
@@ -907,6 +909,8 @@ You are a **Principal Databricks SQL Engineer** with 15+ years of experience wri
 
 {statistical_functions_detailed}
 
+{geospatial_functions_summary}
+
 ### AI MODEL ENDPOINT (for ai_query calls)
 
 When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
@@ -920,6 +924,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - All string literals must use single quotes
 - COALESCE string defaults must be quoted: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
 - CTE-computed columns (aliases you define with AS) are fine to reference in subsequent CTEs, but source table columns MUST come from the schema
+- Use \`DECIMAL(18,2)\` instead of FLOAT/DOUBLE for financial and monetary calculations to avoid precision errors
 
 **2. FIRST CTE MUST USE SELECT DISTINCT (MANDATORY)**
 - The FIRST CTE MUST ALWAYS use \`SELECT DISTINCT\` to ensure NO DUPLICATE RECORDS
@@ -930,12 +935,16 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 **3. CTE STRUCTURE & QUERY LENGTH**
 - Use 3-7 CTEs for readability -- break the query into logical steps (data assembly, transformation, analysis, output)
 - Use **business-friendly CTE names** like \`customer_lifetime_value\`, \`revenue_trend_analysis\`, \`risk_score_calculation\` -- NOT \`cte1\`, \`temp\`, \`base\`
+- For **hierarchy traversal** (org charts, bill-of-materials, category trees), use \`WITH RECURSIVE\` with a depth safety limit (\`WHERE depth < 10\`)
 - LIMIT 10 on the **FINAL SELECT** statement only (not intermediate CTEs)
 - **CRITICAL LENGTH CONSTRAINT**: Keep the total query UNDER 120 lines of SQL. Be concise -- depth of analysis is important but do NOT pad the query with redundant calculations, excessive comments, or repeated patterns. If the analysis requires many similar calculations, pick the 3-5 most impactful ones rather than exhaustively computing every possible metric
 
 **4. AI USE CASE RULES**
 - Use the appropriate Databricks AI function as the primary analytical technique
+- For simple text generation without a custom endpoint, prefer \`ai_gen(prompt)\` over \`ai_query()\`
 - When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`
+- **STRUCTURED OUTPUT**: When the AI output must conform to a schema, use \`responseFormat => 'STRUCT<result: STRUCT<field1: TYPE, field2: TYPE>>'\` instead of parsing free text. The top-level STRUCT must have exactly one field
+- **ERROR HANDLING FOR BATCH**: When processing many rows, use \`failOnError => false\` so one bad row does not abort the entire query. Access results via \`result.result\` and errors via \`result.errorMessage\`
 - **PERSONA ENRICHMENT (MANDATORY)**: Every \`ai_query()\` persona MUST include business context. Do NOT use generic personas. Pattern:
   \`CONCAT('You are a [Role] for {business_name} focused on [relevant business context]. Strategic goals include: [relevant goals]. Analyze...')\`
 - Build the AI prompt as a column in a CTE FIRST, then pass it to \`ai_query()\` in the next CTE
@@ -950,6 +959,19 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - JOIN correctly using the foreign key relationships provided
 - Be specific: reference exact column names; write concrete WHERE, GROUP BY, and ORDER BY clauses
 - No markdown fences: output raw SQL only
+
+**7. ADVANCED DBSQL FEATURES (USE WHERE APPROPRIATE)**
+- **QUALIFY**: Use \`QUALIFY\` instead of wrapping window functions in subqueries. Pattern: \`SELECT *, ROW_NUMBER() OVER (...) AS rn FROM table QUALIFY rn = 1\`
+- **Pipe syntax**: For complex multi-step transformations, consider using pipe syntax (\`|>\`) for readability. Pattern: \`FROM table |> WHERE ... |> AGGREGATE ... GROUP BY ... |> ORDER BY ...\`
+- **COLLATE**: For case-insensitive string comparisons, use \`COLLATE UTF8_LCASE\` instead of \`LOWER()\`/\`UPPER()\` wrappers
+- Prefer window functions over self-joins where possible
+- Use explicit column lists over SELECT *
+
+**8. GEOSPATIAL USE CASE RULES**
+- When tables contain longitude/latitude columns, use H3 functions for spatial indexing: \`h3_longlatash3(lon, lat, resolution)\`
+- Use ST functions for precise spatial calculations: \`ST_Distance()\`, \`ST_Contains()\`, \`ST_Within()\`
+- H3 resolution guide: 7 (city blocks, ~1.2 km), 9 (buildings, ~175 m), 5 (districts, ~8.5 km)
+- Combine H3 for fast filtering with ST_Distance for precise measurement
 
 ### OUTPUT FORMAT
 
@@ -1017,11 +1039,12 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 
 - **COALESCE text defaults**: Wrap text defaults in single quotes: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
 - **Column not found**: Check the schema above for the correct column name; use the EXACT spelling. If the column does not exist in the schema, REMOVE the reference -- do NOT guess or invent a substitute column name
-- **Type mismatch**: Cast columns to the correct type (e.g., \`CAST(col AS STRING)\`)
-- **Window function errors**: Check PARTITION BY and ORDER BY clauses; ensure the window is valid
+- **Type mismatch**: Cast columns to the correct type (e.g., \`CAST(col AS STRING)\`). Use \`DECIMAL(18,2)\` for financial data, not FLOAT/DOUBLE
+- **Window function errors**: Check PARTITION BY and ORDER BY clauses; ensure the window is valid. Prefer QUALIFY over wrapping in a subquery
 - **Ambiguous column**: Qualify with table alias (e.g., \`t1.col\` not just \`col\`)
-- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct
+- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct. If using \`responseFormat\`, the top-level STRUCT must have exactly one field
 - **AI_FORECAST errors**: Ensure \`time_col\`, \`value_col\`, \`group_col\` are string literals (quoted), not column references
+- **Geospatial errors**: H3 functions require BIGINT cell IDs; ST functions require GEOMETRY/GEOGRAPHY types. Use \`ST_Point(lon, lat)\` to create point geometries from coordinates
 - **Truncated SQL / syntax error at end of input**: The original query was too long and got cut off. SIMPLIFY the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total
 
 ### OUTPUT FORMAT

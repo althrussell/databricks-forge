@@ -1,10 +1,11 @@
 /**
- * AI Functions and Statistical Functions registries.
+ * AI Functions, Statistical Functions, and Geospatial Functions registries.
  *
  * These registries are injected into use-case generation prompts to guide the
  * LLM on what Databricks SQL functions are available.
  *
  * Ported from docs/references/databricks_inspire_v34.ipynb (reference)
+ * Extended with DBSQL-specific features from the Databricks SQL skill.
  */
 
 // ---------------------------------------------------------------------------
@@ -81,12 +82,19 @@ export const AI_FUNCTIONS: Record<string, AIFunction> = {
     exampleUseCases:
       "Customer communication translation, content localization, multilingual support",
   },
+  ai_gen: {
+    function: "ai_gen",
+    businessValue:
+      "Generates text from a prompt using a built-in LLM (no endpoint required). Simpler alternative to ai_query for straightforward text generation.",
+    exampleUseCases:
+      "Product description generation, email drafting, simple text enrichment",
+  },
   ai_query: {
     function: "ai_query",
     businessValue:
-      "Invokes custom model serving endpoints or LLMs for flexible AI-powered analysis, generation, and recommendations.",
+      "Invokes custom model serving endpoints or LLMs for flexible AI-powered analysis, generation, and recommendations. Supports structured output via `responseFormat` parameter and graceful error handling via `failOnError => false`.",
     exampleUseCases:
-      "Custom analysis, recommendation generation, complex reasoning tasks",
+      "Custom analysis, recommendation generation, complex reasoning tasks, structured data extraction",
   },
   ai_forecast: {
     function: "ai_forecast",
@@ -98,9 +106,30 @@ export const AI_FUNCTIONS: Record<string, AIFunction> = {
   vector_search: {
     function: "vector_search",
     businessValue:
-      "Semantic search using vector embeddings for intelligent information retrieval and recommendation systems.",
+      "Semantic search using vector embeddings for intelligent information retrieval and recommendation systems. Table-valued function requiring named arguments: `index =>`, `query_text =>`, `num_results =>`.",
     exampleUseCases:
       "Similar product recommendations, knowledge base search, semantic matching",
+  },
+  http_request: {
+    function: "http_request",
+    businessValue:
+      "Makes HTTP requests to external services from SQL using Unity Catalog HTTP connections. Returns `STRUCT<status_code: INT, text: STRING>`. Requires a pre-configured CONNECTION.",
+    exampleUseCases:
+      "External API enrichment, webhook notifications, third-party data validation",
+  },
+  remote_query: {
+    function: "remote_query",
+    businessValue:
+      "Runs SQL queries against external databases (PostgreSQL, MySQL, SQL Server, Snowflake, BigQuery, etc.) via Lakehouse Federation. Read-only table-valued function.",
+    exampleUseCases:
+      "Cross-system analytics, federated joins with external databases, data migration validation",
+  },
+  read_files: {
+    function: "read_files",
+    businessValue:
+      "Reads CSV, JSON, Parquet, Avro, ORC, or XML files directly from Unity Catalog Volumes or cloud storage. Supports schema inference, glob patterns, and partition discovery.",
+    exampleUseCases:
+      "Volume file ingestion, ad-hoc file analysis, document pipeline input for ai_parse_document",
   },
 };
 
@@ -262,6 +291,157 @@ export const STATISTICAL_FUNCTIONS: Record<string, StatisticalFunction> = {
 };
 
 // ---------------------------------------------------------------------------
+// Geospatial Functions (H3 + ST)
+// ---------------------------------------------------------------------------
+
+export interface GeospatialFunction {
+  function: string;
+  businessValue: string;
+  useCases: string;
+  category: string;
+}
+
+export const GEOSPATIAL_FUNCTIONS: Record<string, GeospatialFunction> = {
+  // H3 Indexing
+  "h3_longlatash3(lon, lat, resolution)": {
+    function: "h3_longlatash3(lon, lat, resolution)",
+    businessValue:
+      "Convert longitude/latitude to H3 hexagonal cell ID for spatial indexing and efficient proximity joins",
+    useCases:
+      "Store catchment areas, delivery zone mapping, customer-to-location assignment",
+    category: "H3 Indexing",
+  },
+  "h3_polyfillash3(geometry, resolution)": {
+    function: "h3_polyfillash3(geometry, resolution)",
+    businessValue:
+      "Fill a polygon with H3 cells for area coverage and density analysis",
+    useCases:
+      "Service area coverage, zone density heatmaps, territory planning",
+    category: "H3 Indexing",
+  },
+  "h3_toparent(h3CellId, resolution)": {
+    function: "h3_toparent(h3CellId, resolution)",
+    businessValue:
+      "Roll up H3 cells to coarser resolution for multi-level spatial aggregation",
+    useCases:
+      "Regional rollups, zoom-level aggregation, hierarchical spatial analysis",
+    category: "H3 Indexing",
+  },
+  "h3_kring(h3CellId, k)": {
+    function: "h3_kring(h3CellId, k)",
+    businessValue:
+      "Get all H3 cells within grid distance k for neighbourhood analysis",
+    useCases:
+      "Nearby store lookup, local competitor analysis, proximity-based alerts",
+    category: "H3 Indexing",
+  },
+  "h3_distance(h3CellId1, h3CellId2)": {
+    function: "h3_distance(h3CellId1, h3CellId2)",
+    businessValue:
+      "Compute grid distance between two H3 cells for fast approximate proximity checks",
+    useCases:
+      "Distance-based filtering, nearest-neighbour approximation, logistics routing",
+    category: "H3 Indexing",
+  },
+
+  // Spatial Constructors
+  "ST_Point(x, y)": {
+    function: "ST_Point(x, y)",
+    businessValue:
+      "Create point geometry from longitude/latitude for spatial operations",
+    useCases:
+      "Geocoding results, sensor locations, event coordinates",
+    category: "Spatial Constructors",
+  },
+  "ST_MakeLine(point1, point2)": {
+    function: "ST_MakeLine(point1, point2)",
+    businessValue:
+      "Create line geometry connecting two points for route and path analysis",
+    useCases:
+      "Delivery routes, travel paths, network edges",
+    category: "Spatial Constructors",
+  },
+
+  // Spatial Measurements
+  "ST_Distance(geom1, geom2)": {
+    function: "ST_Distance(geom1, geom2)",
+    businessValue:
+      "Calculate exact distance between two geometries in metres for proximity analysis",
+    useCases:
+      "Store proximity, delivery radius, nearest-facility calculation",
+    category: "Spatial Measurements",
+  },
+  "ST_Area(geometry)": {
+    function: "ST_Area(geometry)",
+    businessValue:
+      "Calculate the area of a polygon for coverage and capacity analysis",
+    useCases:
+      "Territory sizing, warehouse footprint, coverage area measurement",
+    category: "Spatial Measurements",
+  },
+  "ST_Length(geometry)": {
+    function: "ST_Length(geometry)",
+    businessValue:
+      "Calculate length of a line for route and network analysis",
+    useCases:
+      "Route distance, pipeline length, road segment measurement",
+    category: "Spatial Measurements",
+  },
+
+  // Spatial Relationships
+  "ST_Contains(geom1, geom2)": {
+    function: "ST_Contains(geom1, geom2)",
+    businessValue:
+      "Test if one geometry fully contains another for containment queries",
+    useCases:
+      "Point-in-polygon, zone assignment, boundary containment checks",
+    category: "Spatial Relationships",
+  },
+  "ST_Intersects(geom1, geom2)": {
+    function: "ST_Intersects(geom1, geom2)",
+    businessValue:
+      "Test if two geometries overlap for spatial join and overlap detection",
+    useCases:
+      "Zone overlap detection, coverage gap analysis, spatial joins",
+    category: "Spatial Relationships",
+  },
+  "ST_Within(geom1, geom2)": {
+    function: "ST_Within(geom1, geom2)",
+    businessValue:
+      "Test if a geometry is inside another for inclusion filtering",
+    useCases:
+      "Geofencing, region-based filtering, boundary compliance",
+    category: "Spatial Relationships",
+  },
+  "ST_DWithin(geom1, geom2, distance)": {
+    function: "ST_DWithin(geom1, geom2, distance)",
+    businessValue:
+      "Test if two geometries are within a specified distance for radius queries",
+    useCases:
+      "Radius search, proximity alerts, nearby entity detection",
+    category: "Spatial Relationships",
+  },
+
+  // Spatial Transformations
+  "ST_Buffer(geometry, distance)": {
+    function: "ST_Buffer(geometry, distance)",
+    businessValue:
+      "Create a buffer zone around a geometry for catchment and exclusion analysis",
+    useCases:
+      "Delivery zones, exclusion perimeters, service area buffers",
+    category: "Spatial Transformations",
+  },
+  "ST_Union(geom1, geom2)": {
+    function: "ST_Union(geom1, geom2)",
+    businessValue:
+      "Merge two geometries into a single shape for territory consolidation",
+    useCases:
+      "Territory merging, coverage union, boundary consolidation",
+    category: "Spatial Transformations",
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Summary generators (for prompt injection)
 // ---------------------------------------------------------------------------
 
@@ -294,4 +474,24 @@ export function generateStatisticalFunctionsSummary(): string {
   });
 
   return `## Available Statistical Functions\n\n${sections.join("\n\n")}`;
+}
+
+/**
+ * Generate a markdown summary of geospatial functions for prompt injection.
+ */
+export function generateGeospatialFunctionsSummary(): string {
+  const byCategory: Record<string, GeospatialFunction[]> = {};
+  for (const f of Object.values(GEOSPATIAL_FUNCTIONS)) {
+    if (!byCategory[f.category]) byCategory[f.category] = [];
+    byCategory[f.category].push(f);
+  }
+
+  const sections = Object.entries(byCategory).map(([cat, funcs]) => {
+    const items = funcs
+      .map((f) => `  - **${f.function}**: ${f.businessValue}`)
+      .join("\n");
+    return `### ${cat}\n${items}`;
+  });
+
+  return `## Available Geospatial Functions (H3 + ST)\n\n${sections.join("\n\n")}`;
 }

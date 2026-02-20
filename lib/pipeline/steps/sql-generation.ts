@@ -14,6 +14,7 @@ import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
+  generateGeospatialFunctionsSummary,
 } from "@/lib/ai/functions";
 import {
   buildSchemaMarkdown,
@@ -92,6 +93,7 @@ export async function runSqlGeneration(
   // Function reference docs (computed once)
   const aiFunctionsSummary = generateAIFunctionsSummary();
   const statisticalFunctionsSummary = generateStatisticalFunctionsSummary();
+  const geospatialFunctionsSummary = generateGeospatialFunctionsSummary();
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 
@@ -132,6 +134,7 @@ export async function runSqlGeneration(
             businessVars,
             aiFunctionsSummary,
             statisticalFunctionsSummary,
+            geospatialFunctionsSummary,
             columnsByTable,
             tableByFqn,
             metadata.foreignKeys,
@@ -188,6 +191,7 @@ async function generateSqlForUseCase(
   businessVars: Record<string, string>,
   aiFunctionsSummary: string,
   statisticalFunctionsSummary: string,
+  geospatialFunctionsSummary: string,
   columnsByTable: Map<string, ColumnInfo[]>,
   tableByFqn: Map<string, TableInfo>,
   allForeignKeys: ForeignKey[],
@@ -257,6 +261,8 @@ async function generateSqlForUseCase(
       uc.type === "AI" ? aiFunctionsSummary : "",
     statistical_functions_detailed:
       uc.type === "Statistical" ? statisticalFunctionsSummary : "",
+    geospatial_functions_summary:
+      uc.type === "Geospatial" ? geospatialFunctionsSummary : "",
   };
 
   // Use streaming for SQL generation -- it's the longest-running LLM call
@@ -412,10 +418,10 @@ function validateSqlOutput(
   const upperSql = sql.toUpperCase();
   const normalizedSql = sql.replace(/`/g, "");
 
-  // Check 1: SQL starts with a recognized keyword
-  const startsValid = /^(--|WITH\b|SELECT\b|CREATE\b)/i.test(sql.trim());
+  // Check 1: SQL starts with a recognized keyword (FROM supports pipe syntax)
+  const startsValid = /^(--|WITH\b|SELECT\b|CREATE\b|FROM\b)/i.test(sql.trim());
   if (!startsValid) {
-    warnings.push("SQL does not start with --, WITH, SELECT, or CREATE");
+    warnings.push("SQL does not start with --, WITH, SELECT, CREATE, or FROM");
   }
 
   // Check 2: At least one expected table is referenced
@@ -457,9 +463,17 @@ function validateSqlOutput(
       "true", "false", "asc", "desc", "insert", "into", "values", "update",
       "set", "delete", "create", "table", "view", "temp", "temporary",
       "if", "replace", "drop", "alter", "add", "column", "named_struct",
-      "ai_query", "ai_classify", "ai_forecast", "ai_summarize",
-      "ai_analyze_sentiment", "ai_extract", "temperature", "max_tokens",
-      "modelparameters", "response", "result",
+      "ai_query", "ai_gen", "ai_classify", "ai_forecast", "ai_summarize",
+      "ai_analyze_sentiment", "ai_extract", "ai_similarity", "ai_mask",
+      "ai_fix_grammar", "ai_translate", "ai_parse_document",
+      "temperature", "max_tokens", "modelparameters", "responseformat",
+      "failonerror", "response", "result", "qualify",
+      "h3_longlatash3", "h3_polyfillash3", "h3_toparent", "h3_kring",
+      "h3_distance", "h3_ischildof", "st_point", "st_distance",
+      "st_contains", "st_intersects", "st_within", "st_dwithin",
+      "st_buffer", "st_area", "st_length", "st_union", "st_makeline",
+      "http_request", "remote_query", "read_files", "vector_search",
+      "recursive", "depth",
     ]);
 
     // Extract identifiers after dots (likely column references): table.column
@@ -535,8 +549,8 @@ function cleanSqlResponse(raw: string): string {
     sql = sql.substring(0, sql.lastIndexOf("```"));
   }
 
-  // Strip any leading text before the first SQL comment or keyword
-  const sqlStart = sql.search(/^(--|WITH\b|SELECT\b|CREATE\b)/im);
+  // Strip any leading text before the first SQL comment or keyword (FROM supports pipe syntax)
+  const sqlStart = sql.search(/^(--|WITH\b|SELECT\b|CREATE\b|FROM\b)/im);
   if (sqlStart > 0) {
     sql = sql.substring(sqlStart);
   }
