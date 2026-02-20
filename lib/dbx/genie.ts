@@ -119,6 +119,15 @@ export function sanitizeSerializedSpace(raw: string): string {
       }
     }
 
+    // Sort metric_views by identifier (Genie API requirement)
+    const metricViews = parsed?.data_sources?.metric_views;
+    if (Array.isArray(metricViews)) {
+      metricViews.sort(
+        (a: { identifier?: string }, b: { identifier?: string }) =>
+          (a.identifier ?? "").localeCompare(b.identifier ?? "")
+      );
+    }
+
     // Strip unsupported `instructions` field from sql_snippets (measures, filters, expressions)
     const snippets = parsed?.instructions?.sql_snippets;
     if (snippets) {
