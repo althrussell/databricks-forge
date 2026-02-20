@@ -59,32 +59,42 @@ databricks-forge/
     configure/page.tsx          # Pipeline configuration form
     runs/page.tsx               # Runs list
     runs/[runId]/page.tsx       # Run detail + results
+    environment/page.tsx        # Estate scan + data intelligence
+    outcomes/page.tsx           # Industry outcome maps browser
+    settings/page.tsx           # App settings
     api/
-      runs/route.ts             # POST create / GET list
-      runs/[runId]/route.ts     # GET run details
-      runs/[runId]/execute/     # POST start pipeline
-      metadata/route.ts         # GET Unity Catalog browser
-      export/[runId]/route.ts   # GET export
-      migrate/route.ts          # POST run Prisma migrations
+      runs/                     # CRUD + execute pipeline
+      metadata/                 # Unity Catalog browser
+      export/                   # Excel, PPTX, PDF, notebook export
+      genie-spaces/             # Genie Space CRUD + deploy
+      environment-scan/         # Estate scan execution + results
+      environment/              # Aggregate estate views + trends
+      outcome-maps/             # Industry outcome map registry
+      stats/                    # Dashboard statistics
+      activity/                 # Activity feed
+      health/                   # Health check endpoint
+      migrate/                  # Prisma schema sync
   components/
     ui/                         # shadcn primitives
-    pipeline/                   # Config form, progress, table, export
+    pipeline/                   # Config form, progress, table, export, Genie workbench
   lib/
     prisma.ts                   # Prisma client singleton (auto-provisioned or static URL)
     generated/prisma/           # Generated Prisma client (gitignored)
-    dbx/                        # Databricks SQL client + Workspace API
+    dbx/                        # Databricks SQL client, Model Serving, Workspace API, Genie API
     queries/                    # SQL text + row mappers
-    domain/                     # TypeScript types + scoring
-    ai/                         # Prompt templates + Model Serving client
-    pipeline/                   # Engine + 6 step modules
-    lakebase/                   # Prisma-based CRUD for runs + use cases
-    export/                     # Excel, PPTX, PDF, notebook generators
+    domain/                     # TypeScript types, scoring, health scores, data maturity
+    ai/                         # Prompt templates + Model Serving execution
+    pipeline/                   # Pipeline engine + step modules + estate scan
+    genie/                      # Genie Engine (multi-pass LLM space generator)
+    lakebase/                   # Prisma-based CRUD for all domain entities
+    export/                     # Excel, PPTX, PDF, notebook, ERD generators
   docs/
     ARCHITECTURE.md             # Ports-and-adapters design
     PIPELINE.md                 # Step-by-step pipeline reference
     PROMPTS.md                  # Full prompt template catalog
     DEPLOYMENT.md               # Deployment and local dev guide
-    references/                 # Original Databricks notebook
+    GENIE_ENGINE.md             # Genie Engine architecture and configuration
+    USER_GUIDE.md               # End-user walkthrough with screenshots
 ```
 
 ---
@@ -515,13 +525,26 @@ All API routes are server-side only. The frontend calls them via `fetch()`.
 | `GET` | `/api/runs` | List all runs (supports `?limit=` and `?offset=`) |
 | `GET` | `/api/runs/[runId]` | Get run status, config, and use cases (if completed) |
 | `POST` | `/api/runs/[runId]/execute` | Start pipeline execution asynchronously |
+| `GET` | `/api/runs/compare` | Compare two runs side by side |
 | `GET` | `/api/metadata?type=catalogs` | List Unity Catalog catalogs |
 | `GET` | `/api/metadata?type=schemas&catalog=X` | List schemas in a catalog |
 | `GET` | `/api/metadata?type=tables&catalog=X&schema=Y` | List tables |
 | `GET` | `/api/export/[runId]?format=excel` | Download Excel workbook |
 | `GET` | `/api/export/[runId]?format=pptx` | Download PowerPoint deck |
-| `GET` | `/api/export/[runId]?format=pdf` | Download PDF catalog (JSON for now) |
+| `GET` | `/api/export/[runId]?format=pdf` | Download PDF report |
 | `GET` | `/api/export/[runId]?format=notebooks` | Deploy SQL notebooks to workspace |
+| `GET/POST` | `/api/genie-spaces` | List or create Genie Space recommendations |
+| `GET/PUT/DELETE` | `/api/genie-spaces/[spaceId]` | Get, update, or trash a Genie Space |
+| `POST` | `/api/environment-scan` | Start an estate scan |
+| `GET` | `/api/environment-scan/[scanId]` | Get scan results |
+| `GET` | `/api/environment/aggregate` | Aggregate estate view across scans |
+| `GET` | `/api/environment/trends` | Estate metric trends over time |
+| `GET` | `/api/environment/table-coverage` | Table coverage statistics |
+| `GET/POST` | `/api/outcome-maps` | List or create industry outcome maps |
+| `GET` | `/api/outcome-maps/registry` | Browse all available outcome maps |
+| `GET` | `/api/stats` | Dashboard summary statistics |
+| `GET` | `/api/activity` | Recent activity feed |
+| `GET` | `/api/health` | Health check (DB + warehouse connectivity) |
 | `POST` | `/api/migrate` | Trigger Prisma schema sync |
 
 ---
@@ -592,10 +615,13 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full column definitions.
 ### Available scripts
 
 ```bash
-npm run dev      # Start development server (Turbopack)
-npm run build    # Production build
-npm run start    # Start production server
-npm run lint     # Run ESLint
+npm run dev        # Start development server (Turbopack)
+npm run build      # Production build
+npm run start      # Start production server
+npm run lint       # Run ESLint
+npm run typecheck  # TypeScript strict type checking
+npm test           # Run tests (Vitest)
+npm run test:watch # Run tests in watch mode
 ```
 
 ### Prisma commands
@@ -644,14 +670,17 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 | Document | Description |
 | --- | --- |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **User guide** -- step-by-step walkthrough of every feature with screenshots |
-| [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) | **Security architecture** -- data flows, threat mitigations, auth model, compliance posture |
 | [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) | **Comprehensive analysis guide** -- pipeline logic, scoring methodology, prompt engineering, data flow diagrams |
-| [AGENTS.md](AGENTS.md) | AI agent guidance (folder contract, domain types, constraints) |
+| [ESTATE_ANALYSIS.md](ESTATE_ANALYSIS.md) | **Estate scan guide** -- environment intelligence pipeline, health scoring, lineage |
+| [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) | **Security architecture** -- data flows, threat mitigations, auth model, compliance posture |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and Lakebase schema |
 | [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
 | [docs/PROMPTS.md](docs/PROMPTS.md) | Prompt template catalog |
 | [docs/GENIE_ENGINE.md](docs/GENIE_ENGINE.md) | Genie Engine architecture, configuration, and best practices |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment and local dev guide |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines and development setup |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting process |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
 
 ---
 
