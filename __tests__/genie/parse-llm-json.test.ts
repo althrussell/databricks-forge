@@ -75,4 +75,47 @@ describe("parseLLMJson", () => {
     const input = '```json\r\n{"key": "value"}\r\n```';
     expect(parseLLMJson(input)).toEqual({ key: "value" });
   });
+
+  describe("truncation recovery", () => {
+    it("recovers truncated array with complete elements", () => {
+      const input = '{"items": [{"a": 1}, {"b": 2}, {"c": 3';
+      const result = parseLLMJson(input) as { items: unknown[] };
+      expect(result.items).toEqual([{ a: 1 }, { b: 2 }]);
+    });
+
+    it("recovers truncated object mid-string-value", () => {
+      const input = '{"queries": [{"question": "What is revenue?", "sql": "SELECT SUM(amount)"}, {"question": "Truncated quer';
+      const result = parseLLMJson(input) as { queries: unknown[] };
+      expect(result.queries).toHaveLength(1);
+      expect(result.queries[0]).toEqual({
+        question: "What is revenue?",
+        sql: "SELECT SUM(amount)",
+      });
+    });
+
+    it("recovers truncated nested structure", () => {
+      const input = '{"benchmarks": [{"question": "Q1", "sql": "SELECT 1", "alt": ["a", "b"]}, {"question": "Q2", "sql": "SELECT';
+      const result = parseLLMJson(input) as { benchmarks: unknown[] };
+      expect(result.benchmarks).toHaveLength(1);
+      expect(result.benchmarks[0]).toEqual({
+        question: "Q1",
+        sql: "SELECT 1",
+        alt: ["a", "b"],
+      });
+    });
+
+    it("recovers when truncated right after a complete element comma", () => {
+      const input = '{"data": [{"x": 1},';
+      const result = parseLLMJson(input) as { data: unknown[] };
+      expect(result.data).toEqual([{ x: 1 }]);
+    });
+
+    it("still throws for completely invalid input", () => {
+      expect(() => parseLLMJson("just plain text")).toThrow();
+    });
+
+    it("still throws for empty truncation", () => {
+      expect(() => parseLLMJson("{")).toThrow();
+    });
+  });
 });

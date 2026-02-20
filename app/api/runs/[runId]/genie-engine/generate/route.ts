@@ -16,11 +16,23 @@ import { startJob, updateJob, completeJob, failJob } from "@/lib/genie/engine-st
 import { logger } from "@/lib/logger";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ runId: string }> }
 ) {
   try {
     const { runId } = await params;
+
+    // Parse optional domain filter from request body
+    let domains: string[] | undefined;
+    try {
+      const body = await request.json();
+      if (Array.isArray(body?.domains) && body.domains.length > 0) {
+        domains = body.domains.filter((d: unknown) => typeof d === "string" && d.length > 0);
+        if (domains!.length === 0) domains = undefined;
+      }
+    } catch {
+      // No body or invalid JSON -- regenerate all domains
+    }
 
     const run = await getRunById(runId);
     if (!run) {
@@ -53,6 +65,7 @@ export async function POST(
       metadata,
       config,
       sampleData: null,
+      domainFilter: domains,
       onProgress: (message, percent) => updateJob(runId, message, percent),
     })
       .then(async (result) => {
@@ -60,13 +73,15 @@ export async function POST(
           runId,
           result.recommendations,
           result.passOutputs,
-          version
+          version,
+          domains,
         );
         completeJob(runId, result.recommendations.length);
         logger.info("Genie Engine generation complete (async)", {
           runId,
           recommendationCount: result.recommendations.length,
           configVersion: version,
+          domainFilter: domains ?? "all",
         });
       })
       .catch((err) => {
@@ -82,7 +97,10 @@ export async function POST(
       runId,
       status: "generating",
       configVersion: version,
-      message: "Genie Engine generation started. Poll /generate/status for progress.",
+      domains: domains ?? null,
+      message: domains
+        ? `Regenerating ${domains.length} domain${domains.length !== 1 ? "s" : ""}. Poll /generate/status for progress.`
+        : "Genie Engine generation started. Poll /generate/status for progress.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -39,6 +39,8 @@ export interface GenieEngineInput {
   config?: GenieEngineConfig;
   sampleData?: SampleDataCache | null;
   piiClassifications?: SensitivityClassification[];
+  /** When set, only regenerate the listed domains (partial run). */
+  domainFilter?: string[];
   onProgress?: (message: string, percent: number) => void;
 }
 
@@ -64,6 +66,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     config = defaultGenieEngineConfig(),
     sampleData = null,
     piiClassifications,
+    domainFilter,
     onProgress,
   } = input;
 
@@ -80,15 +83,22 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
   // Pass 0: Table Selection + Grouping
   onProgress?.("Grouping tables into domains...", 5);
-  const domainGroups = runTableSelection(useCases, metadata, config);
+  const allDomainGroups = runTableSelection(useCases, metadata, config);
+
+  // Apply domain filter for partial regeneration
+  const domainGroups = domainFilter?.length
+    ? allDomainGroups.filter((g) => domainFilter.includes(g.domain))
+    : allDomainGroups;
 
   if (domainGroups.length === 0) {
-    logger.warn("No domain groups produced", { runId: run.runId });
+    logger.warn("No domain groups produced", { runId: run.runId, domainFilter });
     return { recommendations: [], passOutputs: [] };
   }
 
   logger.info("Pass 0 complete: table selection", {
     domainCount: domainGroups.length,
+    totalDomains: allDomainGroups.length,
+    filtered: !!domainFilter?.length,
     domains: domainGroups.map((g) => `${g.domain} (${g.tables.length} tables)`),
   });
 

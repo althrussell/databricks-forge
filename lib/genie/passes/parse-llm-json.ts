@@ -63,21 +63,130 @@ export function parseLLMJson(raw: string): unknown {
 
 /**
  * Attempt to repair common JSON errors produced by LLMs and re-parse.
- * Logs the raw and repaired strings on failure for diagnostics.
+ * If standard repair fails, attempts truncation recovery to salvage
+ * complete array elements from output that was cut off mid-generation.
  */
 function tryRepairAndParse(text: string): unknown {
   const repaired = repairLlmJson(text);
   try {
     return JSON.parse(repaired);
-  } catch (err) {
-    logger.warn("parseLLMJson: all strategies failed, dumping raw LLM output", {
-      error: err instanceof Error ? err.message : String(err),
-      rawLength: text.length,
-      raw: text.slice(0, 4000),
-      repairedDiff: repaired !== text,
-    });
-    throw err;
+  } catch {
+    // continue to truncation recovery
   }
+
+  // Truncation recovery: try to close open structures to salvage partial output
+  const recovered = tryTruncationRecovery(repaired);
+  if (recovered !== null) {
+    try {
+      const result = JSON.parse(recovered);
+      logger.warn("parseLLMJson: recovered truncated JSON output", {
+        rawLength: text.length,
+        recoveredLength: recovered.length,
+      });
+      return result;
+    } catch {
+      // fall through to final error
+    }
+  }
+
+  logger.warn("parseLLMJson: all strategies failed, dumping raw LLM output", {
+    rawLength: text.length,
+    raw: text.slice(0, 4000),
+    repairedDiff: repaired !== text,
+  });
+  throw new SyntaxError(
+    `parseLLMJson: unable to extract valid JSON from LLM response (${text.length} chars)`
+  );
+}
+
+/**
+ * Attempt to recover a valid JSON object from truncated LLM output by
+ * finding the last complete array element and closing all open structures.
+ *
+ * Works by scanning backwards from the truncation point to find the last
+ * complete JSON value boundary, then appending the necessary closing
+ * brackets/braces.
+ */
+function tryTruncationRecovery(text: string): string | null {
+  const trimmed = text.trimEnd();
+  if (trimmed.length === 0) return null;
+
+  // Only attempt recovery if the text starts with { or [ (valid JSON root)
+  const firstChar = trimmed[0];
+  if (firstChar !== "{" && firstChar !== "[") return null;
+
+  // Find the last position where a complete value ends.
+  // In JSON, values end at: }, ], ", digits, true/false/null.
+  // We look for the last } or ] that could close an array element,
+  // or the last complete string/number/boolean value.
+  // The safest heuristic: find the last complete object "}" in an array context.
+
+  // Strategy: progressively trim from the end, trying to close the structure.
+  // Find the last occurrence of '}' or ']' that might end a complete element.
+  for (let i = trimmed.length - 1; i >= 0; i--) {
+    const ch = trimmed[i];
+    if (ch !== "}" && ch !== "]" && ch !== '"' && !/\d/.test(ch)) continue;
+
+    const candidate = trimmed.slice(0, i + 1);
+    const closers = computeClosingBrackets(candidate);
+    if (closers === null) continue;
+
+    const attempt = candidate + closers;
+    try {
+      JSON.parse(attempt);
+      return attempt;
+    } catch {
+      // continue scanning backwards
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Given a JSON prefix, compute the sequence of closing brackets/braces
+ * needed to make it structurally complete. Returns null if the nesting
+ * stack is inconsistent (e.g., mismatched brackets).
+ */
+function computeClosingBrackets(text: string): string | null {
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (inString) {
+      if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      stack.push("}");
+    } else if (ch === "[") {
+      stack.push("]");
+    } else if (ch === "}" || ch === "]") {
+      if (stack.length === 0) return null;
+      const expected = stack.pop();
+      if (expected !== ch) return null;
+    }
+  }
+
+  // If we're inside an unclosed string, we can't reliably recover
+  if (inString) return null;
+
+  return stack.reverse().join("");
 }
 
 /**

@@ -99,6 +99,9 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
     }[];
   } | null>(null);
 
+  // Per-domain regeneration state
+  const [regeneratingDomain, setRegeneratingDomain] = useState<string | null>(null);
+
   // -------------------------------------------------------------------------
   // Data fetching
   // -------------------------------------------------------------------------
@@ -380,6 +383,46 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
       toast.error("Failed to run benchmarks");
     } finally {
       setRunningBenchmarks(null);
+    }
+  }
+
+  async function handleRegenerateDomain(domain: string) {
+    setRegeneratingDomain(domain);
+    try {
+      const res = await fetch(`/api/runs/${runId}/genie-engine/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domains: [domain] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to start regeneration");
+        setRegeneratingDomain(null);
+        return;
+      }
+
+      toast.info(`Regenerating "${domain}"...`);
+
+      const poll = setInterval(async () => {
+        try {
+          const sr = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
+          if (!sr.ok) return;
+          const sd = await sr.json();
+          if (sd.status === "completed") {
+            clearInterval(poll);
+            setRegeneratingDomain(null);
+            toast.success(`"${domain}" regenerated`);
+            await fetchRecommendations();
+          } else if (sd.status === "failed") {
+            clearInterval(poll);
+            setRegeneratingDomain(null);
+            toast.error(sd.error || `"${domain}" regeneration failed`);
+          }
+        } catch { /* retry */ }
+      }, 2000);
+    } catch {
+      toast.error("Failed to start regeneration");
+      setRegeneratingDomain(null);
     }
   }
 
@@ -1072,6 +1115,16 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                     </a>
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => handleRegenerateDomain(detailRec.domain)}
+                  disabled={regeneratingDomain === detailRec.domain}
+                >
+                  {regeneratingDomain === detailRec.domain
+                    ? "Regenerating..."
+                    : "Regenerate Domain"}
+                </Button>
                 {detailTracking && (
                   <div className="flex w-full gap-2">
                     <Button
