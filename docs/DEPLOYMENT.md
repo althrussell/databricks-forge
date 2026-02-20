@@ -82,31 +82,18 @@ On first run, the app needs to create its Lakebase tables. Either:
 
 ---
 
-## Docker Build (for Databricks Apps)
+## Build and Start (Databricks Apps)
 
-The Dockerfile uses a multi-stage build:
+Databricks Apps builds the application using the project's `package.json`
+scripts. No Dockerfile is needed -- the platform handles containerisation.
 
-```dockerfile
-# Stage 1: Build
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+The build and start sequence is:
 
-# Stage 2: Run
-FROM node:18-alpine AS runner
-WORKDIR /app
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-EXPOSE 3000
-ENV PORT=3000
-CMD ["node", "server.js"]
-```
+1. `npm install` (runs `postinstall` which triggers `prisma generate`)
+2. `npm run build` (runs `prisma generate && next build && sh scripts/postbuild.sh`)
+3. `scripts/start.sh` (pushes the Prisma schema and starts the standalone Next.js server)
 
-The app reads `DATABRICKS_APP_PORT` at runtime and falls back to `PORT` or 3000.
+The app reads `DATABRICKS_APP_PORT` at runtime and falls back to port 3000.
 
 ---
 
