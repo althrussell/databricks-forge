@@ -4,15 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
   Accordion,
   AccordionContent,
@@ -30,11 +26,6 @@ import { toast } from "sonner";
 import type {
   GenieSpaceRecommendation,
   SerializedSpace,
-  SqlSnippetMeasure,
-  SqlSnippetFilter,
-  SqlSnippetExpression,
-  TextInstruction,
-  SampleQuestion,
   ColumnEnrichment,
   MetricViewProposal,
   BenchmarkInput,
@@ -531,7 +522,6 @@ function StatCard({ label, value }: { label: string; value: number }) {
 }
 
 function EditableSnippetRow({
-  id,
   label,
   sql,
   onSave,
@@ -606,7 +596,6 @@ function EditableSnippetRow({
 }
 
 function EditableTextRow({
-  id,
   text,
   multiline,
   onSave,

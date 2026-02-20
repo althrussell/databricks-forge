@@ -42,3 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# internal docs (removed for public release)
+docs/outcome maps/
+docs/references/

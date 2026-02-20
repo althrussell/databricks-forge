@@ -167,8 +167,7 @@ export async function buildReferenceUseCasesPrompt(
   const industry = await getIndustryOutcomeAsync(industryId);
   if (!industry) return "";
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  void businessDomains; // reserved for future domain-based filtering
+  void businessDomains;
 
   const lines: string[] = [
     `### INDUSTRY REFERENCE USE CASES (${industry.name})`,

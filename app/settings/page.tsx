@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -36,7 +36,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  DISCOVERY_DEPTHS,
   DEFAULT_DEPTH_CONFIGS,
   type DiscoveryDepth,
   type DiscoveryDepthConfig,

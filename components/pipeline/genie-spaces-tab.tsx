@@ -76,8 +76,6 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   const [detailDomain, setDetailDomain] = useState<string | null>(null);
 
   // Deploy state
-  const [deploying, setDeploying] = useState(false);
-  const [deployProgress, setDeployProgress] = useState<string | null>(null);
 
   // Trash loading
   const [trashingDomain, setTrashingDomain] = useState<string | null>(null);

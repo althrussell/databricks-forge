@@ -296,8 +296,6 @@ async function calibrateScoresChunked(
   const CHUNK_SIZE = 50;
   const ANCHOR_SIZE = 5;
   const calibrationMap = new Map<number, number>();
-  let totalAdjusted = 0;
-
   for (let offset = 0; offset < sorted.length; offset += CHUNK_SIZE - ANCHOR_SIZE) {
     const chunk = sorted.slice(offset, offset + CHUNK_SIZE);
     if (chunk.length < 5) break;
@@ -340,7 +338,6 @@ async function calibrateScoresChunked(
           calibrationMap.set(item.no, clampScore(item.overall_score));
         }
       }
-      totalAdjusted += items.length;
     } catch (error) {
       logger.warn("Calibration chunk failed", {
         chunkOffset: offset,

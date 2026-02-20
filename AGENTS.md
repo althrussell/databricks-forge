@@ -31,12 +31,6 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - SQL Warehouse is bound as an app resource (no hardcoded warehouse IDs).
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
 
-## Reference Notebook
-
-`docs/references/databricks_inspire_v34.ipynb` contains the original Databricks
-notebook with all prompt templates, pipeline logic, and data structures. It is
-the authoritative source when porting logic to TypeScript.
-
 ## Folder Contract
 
 ```

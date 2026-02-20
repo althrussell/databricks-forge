@@ -160,19 +160,16 @@ export function GenieDeployModal({
     [domains]
   );
 
-  // Initialize: select all non-error assets, set default schema
-  useEffect(() => {
-    if (open) {
-      setStep("select");
-      setResults([]);
-      setDeployLog([]);
-      const initial = new Set(
-        allAssets.filter((a) => !a.hasError).map((a) => a.id)
-      );
-      setSelectedAssets(initial);
-      setTargetSchema(defaultSchema ? [defaultSchema] : []);
-    }
-  }, [open, allAssets, defaultSchema]);
+  const initializeModal = useCallback(() => {
+    setStep("select");
+    setResults([]);
+    setDeployLog([]);
+    const initial = new Set(
+      allAssets.filter((a) => !a.hasError).map((a) => a.id)
+    );
+    setSelectedAssets(initial);
+    setTargetSchema(defaultSchema ? [defaultSchema] : []);
+  }, [allAssets, defaultSchema]);
 
   // Auto-scroll deploy log
   useEffect(() => {
@@ -340,6 +337,7 @@ export function GenieDeployModal({
   return (
     <Dialog open={open} onOpenChange={(o) => {
       if (step === "deploying") return;
+      if (o) initializeModal();
       if (!o && step === "done") onComplete();
       onOpenChange(o);
     }}>

@@ -16,7 +16,6 @@ import type {
   SupportedLanguage,
 } from "@/lib/domain/types";
 import { PROMPT_VERSIONS } from "@/lib/ai/templates";
-import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Mappers

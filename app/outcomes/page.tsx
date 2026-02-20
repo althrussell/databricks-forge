@@ -304,11 +304,6 @@ function IndustryDetailView({
 }) {
   const ucCount = countUseCases(industry);
   const priCount = countPriorities(industry);
-  const kpiCount = industry.objectives.reduce(
-    (acc, obj) =>
-      acc + obj.priorities.reduce((a, p) => a + p.kpis.length, 0),
-    0
-  );
   const personaCount = new Set(
     industry.objectives.flatMap((obj) =>
       obj.priorities.flatMap((p) => p.personas)

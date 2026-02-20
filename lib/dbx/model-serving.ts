@@ -19,7 +19,7 @@
  */
 
 import { getConfig, getAppHeaders } from "./client";
-import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------

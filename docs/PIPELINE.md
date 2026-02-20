@@ -1,7 +1,6 @@
 # Pipeline Reference
 
 > Detailed reference for each pipeline step in the "Discover Usecases" flow.
-> Extracted from `docs/references/databricks_inspire_v34.ipynb`.
 
 ## Pipeline Overview
 

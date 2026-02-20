@@ -8,7 +8,6 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
@@ -40,7 +39,7 @@ function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
 }
 
 export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
-  const [engineEnabled, setEngineEnabled] = useState(() => {
+  const [engineEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
     return loadSettings().genieEngineDefaults.engineEnabled;
   });

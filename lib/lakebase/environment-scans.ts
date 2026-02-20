@@ -411,7 +411,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
 
   // Serialize — strip the `scan` relation from each record for JSON
   const serializeDetail = (d: typeof mergedDetails[number]) => {
-    const { scan: _scan, sizeInBytes, numRows, ...rest } = d;
+    const { scan: _, sizeInBytes, numRows, ...rest } = d;
     return {
       ...rest,
       sizeInBytes: sizeInBytes?.toString() ?? null,
@@ -419,7 +419,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     };
   };
   const serializeHistory = (h: typeof mergedHistories[number]) => {
-    const { scan: _scan, lastWriteRows, lastWriteBytes, ...rest } = h;
+    const { scan: _h, lastWriteRows, lastWriteBytes, ...rest } = h;
     return {
       ...rest,
       lastWriteRows: lastWriteRows?.toString() ?? null,
@@ -427,11 +427,11 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     };
   };
   const serializeLineage = (l: typeof mergedLineage[number]) => {
-    const { scan: _scan, ...rest } = l;
+    const { scan: _l, ...rest } = l;
     return rest;
   };
   const serializeInsight = (i: typeof mergedInsights[number]) => {
-    const { scan: _scan, ...rest } = i;
+    const { scan: _i, ...rest } = i;
     return rest;
   };
 

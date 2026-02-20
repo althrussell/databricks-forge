@@ -7,7 +7,7 @@
  */
 
 import type { UseCase, MetadataSnapshot, MetricViewInfo } from "@/lib/domain/types";
-import type { GenieEngineConfig, TableGroupOverride } from "../types";
+import type { GenieEngineConfig } from "../types";
 import { logger } from "@/lib/logger";
 
 export interface DomainGroup {

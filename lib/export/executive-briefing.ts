@@ -15,8 +15,8 @@ import PptxGenJS from "pptxgenjs";
 import fs from "fs";
 import path from "path";
 import type { UseCase } from "@/lib/domain/types";
-import { computeDataMaturity, type DataMaturityScore } from "@/lib/domain/data-maturity";
-import { computeFeatureAdoption, type FeatureAdoptionSummary } from "@/lib/domain/feature-adoption";
+import { computeDataMaturity } from "@/lib/domain/data-maturity";
+import { computeFeatureAdoption } from "@/lib/domain/feature-adoption";
 import { computeDomainStats, computeSchemaCoverage, effectiveScores } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
@@ -161,20 +161,6 @@ function scoreColor(score: number): string {
   return score >= 70 ? SCORE_GREEN : score >= 40 ? SCORE_AMBER : DB_RED;
 }
 
-function addSectionSlide(pptx: PptxGenJS, title: string, subtitle: string): PptxGenJS.Slide {
-  const slide = pptx.addSlide();
-  slide.background = { color: DB_DARK };
-  addBrandShapes(slide);
-  addRedSeparator(slide, CONTENT_MARGIN, 2.8, 3);
-  slide.addText(title, {
-    x: CONTENT_MARGIN, y: 3.0, w: CONTENT_W, fontSize: 36, bold: true, color: WHITE, fontFace: "Calibri",
-  });
-  slide.addText(subtitle, {
-    x: CONTENT_MARGIN, y: 4.0, w: CONTENT_W, fontSize: 18, color: TEXT_LIGHT,
-  });
-  addFooter(slide, "dark");
-  return slide;
-}
 
 // ---------------------------------------------------------------------------
 // Main export

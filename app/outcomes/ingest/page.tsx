@@ -104,7 +104,6 @@ export default function IngestOutcomeMapPage() {
       const file = e.dataTransfer.files[0];
       if (file) readFile(file);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -113,7 +112,6 @@ export default function IngestOutcomeMapPage() {
       const file = e.target.files?.[0];
       if (file) readFile(file);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 

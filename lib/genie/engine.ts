@@ -11,7 +11,6 @@ import type {
   PipelineRun,
   UseCase,
   MetadataSnapshot,
-  BusinessContext,
   SensitivityClassification,
 } from "@/lib/domain/types";
 import type {

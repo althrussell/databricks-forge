@@ -3,7 +3,7 @@ import {
   extractEntityCandidates,
   extractEntityCandidatesFromSchema,
 } from "@/lib/genie/entity-extraction";
-import type { SampleDataCache, EntityMatchingCandidate } from "@/lib/genie/types";
+import type { SampleDataCache } from "@/lib/genie/types";
 
 function makeSampleCache(entries: Record<string, { columns: string[]; columnTypes: string[]; rows: unknown[][] }>): SampleDataCache {
   const cache = new Map() as SampleDataCache;
