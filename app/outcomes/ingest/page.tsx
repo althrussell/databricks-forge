@@ -97,25 +97,7 @@ export default function IngestOutcomeMapPage() {
   // File handling
   // -------------------------------------------------------------------------
 
-  const handleFileDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const file = e.dataTransfer.files[0];
-      if (file) readFile(file);
-    },
-    []
-  );
-
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) readFile(file);
-    },
-    []
-  );
-
-  function readFile(file: File) {
+  const readFile = useCallback((file: File) => {
     if (!file.name.endsWith(".md") && !file.name.endsWith(".markdown")) {
       setParseError("Please upload a markdown (.md) file.");
       return;
@@ -123,12 +105,30 @@ export default function IngestOutcomeMapPage() {
     setFileName(file.name);
     setParseError(null);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
       setRawMarkdown(text);
     };
     reader.readAsText(file);
-  }
+  }, []);
+
+  const handleFileDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = e.dataTransfer.files[0];
+      if (file) readFile(file);
+    },
+    [readFile]
+  );
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) readFile(file);
+    },
+    [readFile]
+  );
 
   // -------------------------------------------------------------------------
   // AI Parse

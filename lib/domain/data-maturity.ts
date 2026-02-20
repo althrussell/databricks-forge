@@ -181,7 +181,6 @@ export function computeDataMaturity(inputs: MaturityInputs): DataMaturityScore {
   // --- Operations Pillar ---
   const optimizeScore = clamp(100 - pctScore(inputs.tablesNeedingOptimize, t));
   const vacuumScore = clamp(100 - pctScore(inputs.tablesNeedingVacuum, t));
-  const streamingPct = pctScore(inputs.tablesWithStreaming, t);
   const cdfPct = inputs.tablesWithStreaming > 0
     ? pctScore(inputs.tablesWithCDF, inputs.tablesWithStreaming)
     : (inputs.tablesWithCDF > 0 ? 80 : 50); // no streaming = neutral

@@ -411,7 +411,8 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
 
   // Serialize — strip the `scan` relation from each record for JSON
   const serializeDetail = (d: typeof mergedDetails[number]) => {
-    const { scan: _, sizeInBytes, numRows, ...rest } = d;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { scan, sizeInBytes, numRows, ...rest } = d;
     return {
       ...rest,
       sizeInBytes: sizeInBytes?.toString() ?? null,
@@ -419,7 +420,8 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     };
   };
   const serializeHistory = (h: typeof mergedHistories[number]) => {
-    const { scan: _h, lastWriteRows, lastWriteBytes, ...rest } = h;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { scan, lastWriteRows, lastWriteBytes, ...rest } = h;
     return {
       ...rest,
       lastWriteRows: lastWriteRows?.toString() ?? null,
@@ -427,11 +429,13 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     };
   };
   const serializeLineage = (l: typeof mergedLineage[number]) => {
-    const { scan: _l, ...rest } = l;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { scan, ...rest } = l;
     return rest;
   };
   const serializeInsight = (i: typeof mergedInsights[number]) => {
-    const { scan: _i, ...rest } = i;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { scan, ...rest } = i;
     return rest;
   };
 
