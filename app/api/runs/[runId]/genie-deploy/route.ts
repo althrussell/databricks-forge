@@ -284,6 +284,17 @@ export async function POST(
           const fqn = `${body.targetSchema}.${objectName}`;
 
           await executeSQL(rewritten);
+
+          // Grant SELECT so the Genie service can access the metric view
+          try {
+            await executeSQL(`GRANT SELECT ON VIEW ${fqn} TO \`account users\``);
+          } catch (grantErr) {
+            logger.warn("GRANT on metric view failed (non-fatal)", {
+              fqn,
+              error: grantErr instanceof Error ? grantErr.message : String(grantErr),
+            });
+          }
+
           deployedMvs.push({ fqn, description: mv.description });
           assets.push({ name: mv.name, type: "metric_view", success: true, fqn });
 
@@ -303,6 +314,17 @@ export async function POST(
           const fqn = `${body.targetSchema}.${objectName}`;
 
           await executeSQL(rewritten);
+
+          // Grant EXECUTE so the Genie service can invoke the function
+          try {
+            await executeSQL(`GRANT EXECUTE ON FUNCTION ${fqn} TO \`account users\``);
+          } catch (grantErr) {
+            logger.warn("GRANT on function failed (non-fatal)", {
+              fqn,
+              error: grantErr instanceof Error ? grantErr.message : String(grantErr),
+            });
+          }
+
           deployedFns.push({ fqn });
           assets.push({ name: fn.name, type: "function", success: true, fqn });
 
