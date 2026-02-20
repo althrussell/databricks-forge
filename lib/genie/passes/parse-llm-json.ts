@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 /**
  * Safely parse JSON from LLM responses that may be wrapped in
  * markdown code fences, contain preamble/postamble text, or
@@ -8,7 +10,7 @@
  * 2. Extract between ```json / ``` fences using indexOf
  * 3. Bracket-match: find first { or [ and last } or ]
  * 4. Repair common LLM JSON errors (missing commas, trailing commas)
- * 5. Throw descriptive error
+ * 5. Throw descriptive error (with raw string logged for diagnostics)
  */
 export function parseLLMJson(raw: string): unknown {
   const trimmed = raw.replace(/^\uFEFF/, "").trim();
@@ -50,6 +52,10 @@ export function parseLLMJson(raw: string): unknown {
     }
   }
 
+  logger.warn("parseLLMJson: no JSON structure found in LLM response", {
+    rawLength: trimmed.length,
+    raw: trimmed.slice(0, 4000),
+  });
   throw new SyntaxError(
     `parseLLMJson: unable to extract valid JSON from LLM response (${trimmed.length} chars, starts with: ${JSON.stringify(trimmed.slice(0, 60))})`
   );
@@ -57,11 +63,21 @@ export function parseLLMJson(raw: string): unknown {
 
 /**
  * Attempt to repair common JSON errors produced by LLMs and re-parse.
- * Throws the original SyntaxError if repair doesn't help.
+ * Logs the raw and repaired strings on failure for diagnostics.
  */
 function tryRepairAndParse(text: string): unknown {
   const repaired = repairLlmJson(text);
-  return JSON.parse(repaired);
+  try {
+    return JSON.parse(repaired);
+  } catch (err) {
+    logger.warn("parseLLMJson: all strategies failed, dumping raw LLM output", {
+      error: err instanceof Error ? err.message : String(err),
+      rawLength: text.length,
+      raw: text.slice(0, 4000),
+      repairedDiff: repaired !== text,
+    });
+    throw err;
+  }
 }
 
 /**
