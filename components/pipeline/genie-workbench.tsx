@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -52,6 +53,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
   const [genProgress, setGenProgress] = useState(0);
   const [genMessage, setGenMessage] = useState("");
   const [configDirty, setConfigDirty] = useState(false);
+  const [domains, setDomains] = useState<string[]>([]);
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -60,6 +63,19 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       pollRef.current = null;
     }
   }, []);
+
+  const fetchDomains = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/runs/${runId}/genie-recommendations`);
+      const data = await res.json();
+      if (res.ok && data.recommendations) {
+        const names: string[] = data.recommendations.map(
+          (r: { domain: string }) => r.domain
+        );
+        setDomains(names);
+      }
+    } catch { /* ignore */ }
+  }, [runId]);
 
   const startPolling = useCallback(() => {
     stopPolling();
@@ -74,6 +90,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             stopPolling();
             setGenerating(false);
             setGenProgress(100);
+            setSelectedDomains(new Set());
+            fetchDomains();
             toast.success(`Genie Engine complete: ${data.domainCount} domain${data.domainCount !== 1 ? "s" : ""} generated`);
           } else if (data.status === "failed") {
             stopPolling();
@@ -85,7 +103,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
         // Silently retry
       }
     }, 2000);
-  }, [runId, stopPolling]);
+  }, [runId, stopPolling, fetchDomains]);
 
   useEffect(() => {
     return () => stopPolling();
@@ -131,7 +149,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
 
   useEffect(() => {
     fetchConfig();
-  }, [fetchConfig]);
+    fetchDomains();
+  }, [fetchConfig, fetchDomains]);
 
   const handleConfigChange = useCallback((newConfig: GenieEngineConfig) => {
     setConfig(newConfig);
@@ -158,17 +177,19 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
     }
   }, [runId, config]);
 
-  const handleRegenerate = useCallback(async () => {
+  const handleRegenerate = useCallback(async (filterDomains?: string[]) => {
     if (configDirty) {
       await handleSaveConfig();
     }
 
     setGenerating(true);
     setGenProgress(0);
-    setGenMessage("Starting...");
+    setGenMessage(filterDomains?.length ? `Regenerating ${filterDomains.length} domain${filterDomains.length !== 1 ? "s" : ""}...` : "Starting...");
     try {
+      const body = filterDomains?.length ? JSON.stringify({ domains: filterDomains }) : undefined;
       const res = await fetch(`/api/runs/${runId}/genie-engine/generate`, {
         method: "POST",
+        ...(body ? { headers: { "Content-Type": "application/json" }, body } : {}),
       });
       const data = await res.json();
       if (res.ok) {
@@ -223,16 +244,63 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
                 Save Config
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={handleRegenerate}
-              disabled={generating || !engineEnabled}
-              className="bg-violet-600 hover:bg-violet-700"
-            >
-              {generating ? "Generating..." : "Regenerate Spaces"}
-            </Button>
+            {selectedDomains.size > 0 ? (
+              <Button
+                size="sm"
+                onClick={() => handleRegenerate([...selectedDomains])}
+                disabled={generating || !engineEnabled}
+                className="bg-violet-600 hover:bg-violet-700"
+              >
+                {generating ? "Generating..." : `Regenerate ${selectedDomains.size} Domain${selectedDomains.size !== 1 ? "s" : ""}`}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => handleRegenerate()}
+                disabled={generating || !engineEnabled}
+                className="bg-violet-600 hover:bg-violet-700"
+              >
+                {generating ? "Generating..." : "Regenerate All"}
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Domain picker */}
+        {domains.length > 1 && !generating && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-muted-foreground">Domains:</span>
+            {domains.map((d) => (
+              <label
+                key={d}
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors hover:bg-muted/50 data-[selected=true]:border-violet-400 data-[selected=true]:bg-violet-500/10"
+                data-selected={selectedDomains.has(d)}
+              >
+                <Checkbox
+                  checked={selectedDomains.has(d)}
+                  onCheckedChange={(checked) => {
+                    setSelectedDomains((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.add(d);
+                      else next.delete(d);
+                      return next;
+                    });
+                  }}
+                  className="h-3 w-3"
+                />
+                {d}
+              </label>
+            ))}
+            {selectedDomains.size > 0 && (
+              <button
+                onClick={() => setSelectedDomains(new Set())}
+                className="text-[10px] text-muted-foreground underline hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
 
         {generating && (
           <div className="space-y-1">

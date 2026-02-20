@@ -110,12 +110,18 @@ export async function getGenieRecommendationsByRunId(
 // Write (bulk upsert -- called from pipeline step)
 // ---------------------------------------------------------------------------
 
-/** Persist Genie recommendations for a run (delete-and-insert in a transaction). */
+/**
+ * Persist Genie recommendations for a run.
+ *
+ * When `replaceDomains` is provided, only the listed domains are deleted and
+ * re-inserted (partial merge). Otherwise all recommendations are replaced.
+ */
 export async function saveGenieRecommendations(
   runId: string,
   recommendations: GenieSpaceRecommendation[],
   passOutputs?: GenieEnginePassOutputs[],
-  engineConfigVersion?: number
+  engineConfigVersion?: number,
+  replaceDomains?: string[],
 ): Promise<void> {
   const prisma = await getPrisma();
 
@@ -127,15 +133,25 @@ export async function saveGenieRecommendations(
   }
 
   await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-    await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
+    if (replaceDomains?.length) {
+      await tx.forgeGenieRecommendation.deleteMany({
+        where: { runId, domain: { in: replaceDomains } },
+      });
+    } else {
+      await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
+    }
 
     if (recommendations.length === 0) return;
 
+    // When merging, use domain-based IDs to avoid collisions with existing rows
     await tx.forgeGenieRecommendation.createMany({
       data: recommendations.map((rec, idx) => {
         const po = outputsByDomain.get(rec.domain);
+        const id = replaceDomains?.length
+          ? `${runId}_genie_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`
+          : `${runId}_genie_${idx}`;
         return {
-          id: `${runId}_genie_${idx}`,
+          id,
           runId,
           domain: rec.domain,
           subdomains: JSON.stringify(rec.subdomains),
