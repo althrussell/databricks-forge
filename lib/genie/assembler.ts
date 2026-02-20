@@ -199,10 +199,9 @@ export function assembleSerializedSpace(
     .slice(0, 20)
     .map((m, i) => ({
       id: makeId(seed, "measure", i),
-      alias: m.name,
+      alias: m.instructions ? `${m.name} -- ${m.instructions}` : m.name,
       sql: [m.sql],
       ...(m.synonyms.length > 0 ? { synonyms: m.synonyms } : {}),
-      ...(m.instructions ? { instructions: [m.instructions] } : {}),
     }));
 
   const filters: SqlSnippetFilter[] = outputs.filters
@@ -211,9 +210,8 @@ export function assembleSerializedSpace(
     .map((f, i) => ({
       id: makeId(seed, "filter", i),
       sql: [f.sql],
-      display_name: f.name,
+      display_name: f.instructions ? `${f.name} -- ${f.instructions}` : f.name,
       ...(f.synonyms.length > 0 ? { synonyms: f.synonyms } : {}),
-      ...(f.instructions ? { instructions: [f.instructions] } : {}),
     }));
 
   const expressions: SqlSnippetExpression[] = outputs.dimensions
@@ -221,10 +219,9 @@ export function assembleSerializedSpace(
     .slice(0, 20)
     .map((d, i) => ({
       id: makeId(seed, "expr", i),
-      alias: d.name,
+      alias: d.instructions ? `${d.name} -- ${d.instructions}` : d.name,
       sql: [d.sql],
       ...(d.synonyms.length > 0 ? { synonyms: d.synonyms } : {}),
-      ...(d.instructions ? { instructions: [d.instructions] } : {}),
     }));
 
   // 7. SQL functions (trusted assets)
