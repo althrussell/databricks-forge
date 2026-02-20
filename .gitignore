@@ -44,5 +44,6 @@ next-env.d.ts
 /lib/generated/prisma
 
 # internal docs (removed for public release)
+FORGE_V1_vs_V2.md
 docs/outcome maps/
 docs/references/
