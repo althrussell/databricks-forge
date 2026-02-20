@@ -57,8 +57,19 @@ interface DomainResult {
 }
 
 // ---------------------------------------------------------------------------
-// DDL rewriting
+// DDL rewriting & sanitization
 // ---------------------------------------------------------------------------
+
+/**
+ * Strip 4-part FQN column prefixes (catalog.schema.table.column -> column)
+ * from a SQL/YAML expression string.
+ */
+function stripFqnPrefixes(sql: string): string {
+  return sql.replace(
+    /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g,
+    "$1"
+  );
+}
 
 /**
  * Rewrite the target FQN in a CREATE statement to use a different
@@ -77,6 +88,22 @@ function rewriteDdlTarget(ddl: string, targetSchema: string): string {
       return `${prefix}${targetSchema}.${objectName}`;
     }
   );
+}
+
+/**
+ * Sanitize a metric view DDL before execution:
+ * 1. Strip FQN column prefixes from expr: and on: lines
+ * 2. Remove `comment:` lines (unsupported by Databricks YAML parser for dimensions/measures)
+ */
+function sanitizeMetricViewDdl(ddl: string): string {
+  return ddl
+    .replace(
+      /^(\s*(?:expr|on):\s*)(.+)$/gm,
+      (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
+    )
+    .replace(/^\s*comment:\s*"[^"]*"\s*$/gm, "")
+    .replace(/^\s*comment:\s*'[^']*'\s*$/gm, "")
+    .replace(/^\s*comment:\s*[^\n]+$/gm, "");
 }
 
 /**
@@ -187,7 +214,9 @@ export async function POST(
       // 1. Deploy metric views
       for (const mv of domainReq.metricViews) {
         try {
-          const rewritten = rewriteDdlTarget(mv.ddl, body.targetSchema);
+          const rewritten = sanitizeMetricViewDdl(
+            rewriteDdlTarget(mv.ddl, body.targetSchema)
+          );
           const objectName = extractObjectName(rewritten) ?? mv.name;
           const fqn = `${body.targetSchema}.${objectName}`;
 

@@ -13,7 +13,7 @@
  * - Window measures (running totals, period-over-period, YTD) when date columns present
  * - Materialization recommendations for high-table-count domains
  * - Seed YAML from Pass 2 measures/dimensions as starting point
- * - Column enrichment descriptions as YAML comments
+ * - Column enrichment descriptions inform dimension/measure naming
  * - Post-generation YAML validation against schema allowlist
  */
 
@@ -89,7 +89,6 @@ WITH METRICS
 LANGUAGE YAML
 AS $$
   version: 1.1
-  comment: "Description"
   source: catalog.schema.table
   -- ... YAML body ...
 $$
@@ -97,17 +96,16 @@ $$
 
 ### YAML fields:
 - version: "1.1" (required)
-- comment: string (optional, describes the metric view)
 - source: catalog.schema.table (required, the primary fact table)
 - filter: SQL boolean expression (optional, global WHERE)
 - dimensions: list (required, at least one)
   - name: Display Name (backtick-quoted in queries)
   - expr: SQL expression (column ref or transformation)
-  - comment: string (optional description)
 - measures: list (required, at least one)
   - name: Display Name (queried via MEASURE(\`name\`))
   - expr: aggregate expression (SUM, COUNT, AVG, MIN, MAX)
-  - comment: string (optional description)
+
+IMPORTANT: Dimension and measure entries only support "name", "expr", and optionally "window". Do NOT add "comment" or any other fields -- the YAML parser will reject them.
 - joins: list (optional, star/snowflake schema)
   - name: alias for the joined table
   - source: catalog.schema.dim_table
@@ -147,7 +145,6 @@ function buildSeedYaml(
   primaryTable: string,
   measures: EnrichedSqlSnippetMeasure[],
   dimensions: EnrichedSqlSnippetDimension[],
-  enrichmentMap: Map<string, string>,
 ): string {
   const topMeasures = measures.slice(0, 6);
   const topDims = dimensions
@@ -161,15 +158,11 @@ function buildSeedYaml(
   if (topMeasures.length === 0 || allDims.length === 0) return "";
 
   const dimLines = allDims.map((d) => {
-    const comment = enrichmentMap.get(d.name);
-    const commentLine = comment ? `\n      comment: "${comment}"` : "";
-    return `    - name: ${d.name}\n      expr: ${stripFqnPrefixes(d.sql)}${commentLine}`;
+    return `    - name: ${d.name}\n      expr: ${stripFqnPrefixes(d.sql)}`;
   });
 
   const measureLines = topMeasures.map((m) => {
-    const comment = enrichmentMap.get(m.name);
-    const commentLine = comment ? `\n      comment: "${comment}"` : "";
-    return `    - name: ${m.name}\n      expr: ${stripFqnPrefixes(m.sql)}${commentLine}`;
+    return `    - name: ${m.name}\n      expr: ${stripFqnPrefixes(m.sql)}`;
   });
 
   return [
@@ -346,7 +339,7 @@ export async function runMetricViewProposals(
 
   // Build seed YAML from existing measures/dimensions
   const primaryTable = tableFqns[0];
-  const seedYaml = buildSeedYaml(primaryTable, measures, dimensions, enrichmentMap);
+  const seedYaml = buildSeedYaml(primaryTable, measures, dimensions);
 
   // Determine if materialization should be suggested
   const suggestMaterialization = tableFqns.length > 10 || joinSpecs.length > 3;
@@ -372,7 +365,7 @@ ${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric
    - FILTER clause measures for status/category breakdowns, e.g. \`SUM(amount) FILTER (WHERE status = 'OPEN')\`
    - Ratio measures that safely re-aggregate, e.g. \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
    - COUNT DISTINCT measures for cardinality metrics
-6. Add descriptive \`comment\` fields on dimensions and measures using the column descriptions provided
+6. Use descriptive dimension/measure \`name\` values informed by the column descriptions provided
 ${dateColumns.length > 0 ? `7. For at least one proposal, include window measures for time intelligence (running totals, period-over-period, or YTD) using version: 0.1 and the window: block` : ""}
 ${suggestMaterialization ? `8. For the most complex proposal, include a materialization: block (schedule: every 6 hours, mode: relaxed) with at least one aggregated materialized view` : ""}
 
@@ -382,7 +375,7 @@ ${suggestMaterialization ? `8. For the most complex proposal, include a material
     {
       "name": "metric_view_name",
       "description": "What this metric view measures and why it is useful",
-      "yaml": "version: 1.1\\ncomment: ...\\nsource: catalog.schema.table\\n...",
+      "yaml": "version: 1.1\\nsource: catalog.schema.table\\n...",
       "ddl": "CREATE OR REPLACE VIEW catalog.schema.metric_view_name\\nWITH METRICS\\nLANGUAGE YAML\\nAS $$\\n...\\n$$",
       "sourceTables": ["catalog.schema.table", "catalog.schema.dim_table"]
     }
@@ -405,7 +398,7 @@ ${dimensionsBlock || "(none)"}
 ${timeDimensions || "(none)"}
 
 ${joinBlock ? `### JOIN RELATIONSHIPS\n${joinBlock}\n` : ""}
-${enrichmentBlock ? `### COLUMN DESCRIPTIONS (use as comment values in YAML)\n${enrichmentBlock}\n` : ""}
+${enrichmentBlock ? `### COLUMN DESCRIPTIONS (use to inform descriptive dimension/measure names)\n${enrichmentBlock}\n` : ""}
 ${dateColumns.length > 0 ? `### DATE/TIMESTAMP COLUMNS (candidates for time dimensions and window measures)\n${dateColumns.slice(0, 10).map((c) => `- ${c}`).join("\n")}\n` : ""}
 ${seedYaml ? `### SEED YAML (starting point — improve, extend, and add joins/filters/ratios)\n\`\`\`yaml\n${seedYaml}\n\`\`\`\n` : ""}
 ### DOMAIN USE CASES (for context)
