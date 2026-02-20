@@ -321,7 +321,6 @@ export interface SqlSnippetMeasure {
   alias: string;
   sql: string[];
   synonyms?: string[];
-  instructions?: string[];
 }
 
 export interface SqlSnippetFilter {
@@ -329,7 +328,6 @@ export interface SqlSnippetFilter {
   sql: string[];
   display_name: string;
   synonyms?: string[];
-  instructions?: string[];
 }
 
 export interface SqlSnippetExpression {
@@ -337,7 +335,6 @@ export interface SqlSnippetExpression {
   alias: string;
   sql: string[];
   synonyms?: string[];
-  instructions?: string[];
 }
 
 export interface SerializedBenchmarks {

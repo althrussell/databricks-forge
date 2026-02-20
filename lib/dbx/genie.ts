@@ -110,12 +110,24 @@ export function sanitizeSerializedSpace(raw: string): string {
       ];
     }
 
-    // Strip unsupported `columns` field from data_sources.tables
-    // (the Genie API protobuf Table message does not have this field)
+    // Strip unsupported fields from data_sources.tables
     const tables = parsed?.data_sources?.tables;
     if (Array.isArray(tables)) {
       for (const t of tables) {
         delete t.columns;
+      }
+    }
+
+    // Strip unsupported `instructions` field from sql_snippets (measures, filters, expressions)
+    const snippets = parsed?.instructions?.sql_snippets;
+    if (snippets) {
+      for (const key of ["measures", "filters", "expressions"] as const) {
+        const items = snippets[key];
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            delete item.instructions;
+          }
+        }
       }
     }
 
