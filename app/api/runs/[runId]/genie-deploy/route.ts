@@ -211,7 +211,9 @@ function patchSerializedSpace(
         });
       }
     }
-    dataSources.metric_views = existing;
+    dataSources.metric_views = existing.sort((a, b) =>
+      a.identifier.localeCompare(b.identifier)
+    );
   }
 
   // Patch sql_functions into instructions
@@ -285,14 +287,24 @@ export async function POST(
 
           await executeSQL(rewritten);
 
-          // Grant SELECT so the Genie service can access the metric view
-          try {
-            await executeSQL(`GRANT SELECT ON VIEW ${fqn} TO \`account users\``);
-          } catch (grantErr) {
-            logger.warn("GRANT on metric view failed (non-fatal)", {
-              fqn,
-              error: grantErr instanceof Error ? grantErr.message : String(grantErr),
-            });
+          // Grant broad access so the Genie service can validate and query
+          // the metric view. The Genie API uses a separate internal identity
+          // to verify table access, so the creating SP's ownership isn't enough.
+          for (const grant of [
+            `GRANT ALL PRIVILEGES ON TABLE ${fqn} TO \`account users\``,
+            `GRANT SELECT ON TABLE ${fqn} TO \`account users\``,
+          ]) {
+            try {
+              await executeSQL(grant);
+              logger.info("GRANT succeeded on metric view", { fqn, grant });
+              break;
+            } catch (grantErr) {
+              logger.warn("GRANT attempt on metric view failed", {
+                fqn,
+                grant,
+                error: grantErr instanceof Error ? grantErr.message : String(grantErr),
+              });
+            }
           }
 
           deployedMvs.push({ fqn, description: mv.description });
@@ -316,13 +328,21 @@ export async function POST(
           await executeSQL(rewritten);
 
           // Grant EXECUTE so the Genie service can invoke the function
-          try {
-            await executeSQL(`GRANT EXECUTE ON FUNCTION ${fqn} TO \`account users\``);
-          } catch (grantErr) {
-            logger.warn("GRANT on function failed (non-fatal)", {
-              fqn,
-              error: grantErr instanceof Error ? grantErr.message : String(grantErr),
-            });
+          for (const grant of [
+            `GRANT ALL PRIVILEGES ON FUNCTION ${fqn} TO \`account users\``,
+            `GRANT EXECUTE ON FUNCTION ${fqn} TO \`account users\``,
+          ]) {
+            try {
+              await executeSQL(grant);
+              logger.info("GRANT succeeded on function", { fqn, grant });
+              break;
+            } catch (grantErr) {
+              logger.warn("GRANT attempt on function failed", {
+                fqn,
+                grant,
+                error: grantErr instanceof Error ? grantErr.message : String(grantErr),
+              });
+            }
           }
 
           deployedFns.push({ fqn });
