@@ -14,6 +14,7 @@ import { logger } from "@/lib/logger";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
 
 export const DEFAULT_GENIE_PARENT_PATH = "/Shared/Forge Genie Spaces/";
+const FALLBACK_GENIE_PARENT_PATH = "/Shared/";
 
 // ---------------------------------------------------------------------------
 // List
@@ -152,18 +153,19 @@ export async function createGenieSpace(opts: {
   const url = `${config.host}/api/2.0/genie/spaces`;
   const headers = await getAppHeaders();
 
-  const parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
+  let parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
 
-  // Best-effort: pre-create the parent folder. The Genie API creates it
-  // automatically, so this is not required. It may fail in Databricks Apps
-  // where the `workspace` scope is unavailable.
+  // Pre-create the parent folder. If mkdirs fails (e.g. in Databricks Apps
+  // where the workspace scope is unavailable), fall back to /Shared/ which
+  // always exists.
   try {
     await mkdirs(parentPath);
   } catch (err) {
-    logger.debug("mkdirs for Genie parent path failed (non-fatal)", {
+    logger.warn("mkdirs for Genie parent path failed, falling back to /Shared/", {
       parentPath,
       error: err instanceof Error ? err.message : String(err),
     });
+    parentPath = FALLBACK_GENIE_PARENT_PATH;
   }
 
   const body = {
