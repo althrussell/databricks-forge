@@ -9,6 +9,7 @@ import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
+  generateGeospatialFunctionsSummary,
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
@@ -160,6 +161,7 @@ export async function runUsecaseGeneration(
             ...baseVars,
             ai_functions_summary: generateAIFunctionsSummary(),
             statistical_functions_detailed: "",
+            geospatial_functions_summary: generateGeospatialFunctionsSummary(),
           },
           "AI",
           run.runId,

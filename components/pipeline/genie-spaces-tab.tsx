@@ -40,10 +40,12 @@ import {
 } from "@/components/ui/accordion";
 import { toast } from "sonner";
 import type {
-  GenieSpaceRecommendation,
+  GenieEngineRecommendation,
+  MetricViewProposal,
   TrackedGenieSpace,
   SerializedSpace,
 } from "@/lib/genie/types";
+import type { UseCase } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -59,7 +61,7 @@ interface GenieSpacesTabProps {
 
 export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   const [recommendations, setRecommendations] = useState<
-    GenieSpaceRecommendation[]
+    GenieEngineRecommendation[]
   >([]);
   const [tracked, setTracked] = useState<TrackedGenieSpace[]>([]);
   const [databricksHost, setDatabricksHost] = useState<string | null>(null);
@@ -102,6 +104,11 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   // Per-domain regeneration state
   const [regeneratingDomain, setRegeneratingDomain] = useState<string | null>(null);
 
+  // Use cases for detail sheet (lazy-loaded per domain, cached)
+  const [detailUseCases, setDetailUseCases] = useState<UseCase[]>([]);
+  const [useCaseCache, setUseCaseCache] = useState<Map<string, UseCase[]>>(new Map());
+  const [loadingUseCases, setLoadingUseCases] = useState(false);
+
   // -------------------------------------------------------------------------
   // Data fetching
   // -------------------------------------------------------------------------
@@ -128,6 +135,37 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   useEffect(() => {
     fetchRecommendations();
   }, [fetchRecommendations]);
+
+  useEffect(() => {
+    if (!detailDomain) {
+      setDetailUseCases([]);
+      return;
+    }
+    const cached = useCaseCache.get(detailDomain);
+    if (cached) {
+      setDetailUseCases(cached);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingUseCases(true);
+      try {
+        const res = await fetch(`/api/runs/${runId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const all: UseCase[] = data.useCases ?? [];
+        const filtered = all.filter((uc) => uc.domain === detailDomain);
+        setUseCaseCache((prev) => new Map(prev).set(detailDomain, filtered));
+        setDetailUseCases(filtered);
+      } catch {
+        /* non-critical */
+      } finally {
+        if (!cancelled) setLoadingUseCases(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [detailDomain, runId, useCaseCache]);
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -443,6 +481,17 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
         }
       })()
     : null;
+
+  const detailMvProposals: MetricViewProposal[] = detailRec?.metricViewProposals
+    ? (() => {
+        try {
+          const parsed = JSON.parse(detailRec.metricViewProposals);
+          return Array.isArray(parsed) ? (parsed as MetricViewProposal[]) : [];
+        } catch {
+          return [];
+        }
+      })()
+    : [];
 
   const detailTracking = detailDomain ? getTracking(detailDomain) : undefined;
 
@@ -771,19 +820,124 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   </AccordionItem>
 
                   {/* Metric Views */}
-                  {detailRec.metricViews.length > 0 && (
+                  {(detailRec.metricViews.length > 0 || detailMvProposals.length > 0 || (detailParsed.data_sources.metric_views && detailParsed.data_sources.metric_views.length > 0)) && (
                     <AccordionItem value="metric-views">
                       <AccordionTrigger className="text-xs font-medium">
                         Metric Views ({detailRec.metricViewCount})
                       </AccordionTrigger>
                       <AccordionContent>
-                        <div className="max-h-48 space-y-0.5 overflow-auto text-xs">
-                          {detailRec.metricViews.map((mv) => (
-                            <div key={mv} className="truncate font-mono text-violet-500">
-                              {mv}
-                            </div>
-                          ))}
+                        <div className="max-h-80 space-y-3 overflow-auto text-xs">
+                          {detailMvProposals.length > 0 ? (
+                            detailMvProposals.map((mv, i) => (
+                              <div key={i} className="space-y-1.5 rounded border p-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-semibold text-violet-500">{mv.name}</span>
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      mv.validationStatus === "valid"
+                                        ? "border-green-500/50 text-green-600 text-[9px]"
+                                        : mv.validationStatus === "warning"
+                                          ? "border-amber-500/50 text-amber-600 text-[9px]"
+                                          : "border-red-500/50 text-red-600 text-[9px]"
+                                    }
+                                  >
+                                    {mv.validationStatus}
+                                  </Badge>
+                                </div>
+                                {mv.description && (
+                                  <p className="text-muted-foreground">{mv.description}</p>
+                                )}
+                                <div className="flex flex-wrap gap-1">
+                                  {mv.sourceTables.map((t) => (
+                                    <Badge key={t} variant="outline" className="font-mono text-[9px]">{t}</Badge>
+                                  ))}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {mv.hasJoins && <Badge className="bg-blue-500/10 text-blue-600 text-[9px]">joins</Badge>}
+                                  {mv.hasFilteredMeasures && <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">filtered</Badge>}
+                                  {mv.hasWindowMeasures && <Badge className="bg-purple-500/10 text-purple-600 text-[9px]">window</Badge>}
+                                  {mv.hasMaterialization && <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px]">materialized</Badge>}
+                                </div>
+                                {mv.ddl && (
+                                  <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
+                                    {mv.ddl}
+                                  </pre>
+                                )}
+                              </div>
+                            ))
+                          ) : detailParsed.data_sources.metric_views && detailParsed.data_sources.metric_views.length > 0 ? (
+                            detailParsed.data_sources.metric_views.map((mv) => (
+                              <div key={mv.identifier} className="space-y-0.5">
+                                <span className="truncate font-mono text-violet-500">{mv.identifier}</span>
+                                {mv.description && mv.description.length > 0 && (
+                                  <p className="text-muted-foreground">{mv.description.join(" ")}</p>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            detailRec.metricViews.map((mv) => (
+                              <div key={mv} className="truncate font-mono text-violet-500">
+                                {mv}
+                              </div>
+                            ))
+                          )}
                         </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* Use Cases */}
+                  {detailRec.useCaseCount > 0 && (
+                    <AccordionItem value="usecases">
+                      <AccordionTrigger className="text-xs font-medium">
+                        Use Cases ({detailRec.useCaseCount})
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        {loadingUseCases ? (
+                          <div className="space-y-2">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                              <Skeleton key={i} className="h-10 w-full" />
+                            ))}
+                          </div>
+                        ) : detailUseCases.length > 0 ? (
+                          <div className="max-h-72 space-y-2 overflow-auto">
+                            {detailUseCases.map((uc) => (
+                              <div key={uc.id} className="rounded border p-2 space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium">{uc.name}</span>
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      uc.type === "AI"
+                                        ? "border-violet-500/50 text-violet-600 text-[9px]"
+                                        : uc.type === "Geospatial"
+                                          ? "border-emerald-500/50 text-emerald-600 text-[9px]"
+                                          : "border-blue-500/50 text-blue-600 text-[9px]"
+                                    }
+                                  >
+                                    {uc.type}
+                                  </Badge>
+                                  <span className="ml-auto text-[10px] font-medium tabular-nums text-muted-foreground">
+                                    {Math.round(uc.overallScore)}%
+                                  </span>
+                                </div>
+                                {uc.statement && (
+                                  <p className="text-[11px] text-muted-foreground line-clamp-2">{uc.statement}</p>
+                                )}
+                                {uc.tablesInvolved.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {uc.tablesInvolved.map((t) => (
+                                      <Badge key={t} variant="outline" className="font-mono text-[9px]">{t}</Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No use case details available.</p>
+                        )}
                       </AccordionContent>
                     </AccordionItem>
                   )}

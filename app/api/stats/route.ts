@@ -53,7 +53,8 @@ export async function GET() {
     // Compute aggregate stats from use cases
     const totalUseCases = allUseCases.length;
     const aiCount = allUseCases.filter((uc) => uc.type === "AI").length;
-    const statisticalCount = totalUseCases - aiCount;
+    const statisticalCount = allUseCases.filter((uc) => uc.type === "Statistical").length;
+    const geospatialCount = allUseCases.filter((uc) => uc.type === "Geospatial").length;
     const scores = allUseCases
       .map((uc) => uc.overallScore)
       .filter((s): s is number => s != null);
@@ -93,6 +94,7 @@ export async function GET() {
       totalUseCases,
       aiCount,
       statisticalCount,
+      geospatialCount,
       avgScore,
       totalDomains: domainBreakdown.length,
       domainBreakdown,

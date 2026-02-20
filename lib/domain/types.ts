@@ -161,7 +161,7 @@ export interface BusinessContext {
 // Use Case
 // ---------------------------------------------------------------------------
 
-export type UseCaseType = "AI" | "Statistical";
+export type UseCaseType = "AI" | "Statistical" | "Geospatial";
 
 export interface UseCase {
   id: string;

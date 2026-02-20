@@ -538,7 +538,10 @@ export default function RunDetailPage({
                     statisticalCount={
                       useCases.filter((uc) => uc.type === "Statistical").length
                     }
-                    title="AI vs Statistical"
+                    geospatialCount={
+                      useCases.filter((uc) => uc.type === "Geospatial").length
+                    }
+                    title="Use Case Types"
                   />
                 </div>
               )}

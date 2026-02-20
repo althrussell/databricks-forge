@@ -9,20 +9,29 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+const TYPE_COLORS: Record<string, string> = {
+  AI: "oklch(0.55 0.18 280)",
+  Statistical: "oklch(0.60 0.15 175)",
+  Geospatial: "oklch(0.60 0.16 145)",
+};
+
 interface TypeSplitChartProps {
   aiCount: number;
   statisticalCount: number;
+  geospatialCount?: number;
   title?: string;
 }
 
 export function TypeSplitChart({
   aiCount,
   statisticalCount,
-  title = "AI vs Statistical",
+  geospatialCount = 0,
+  title = "Use Case Types",
 }: TypeSplitChartProps) {
   const data = [
     { name: "AI", value: aiCount },
     { name: "Statistical", value: statisticalCount },
+    { name: "Geospatial", value: geospatialCount },
   ].filter((d) => d.value > 0);
 
   if (data.length === 0) return null;
@@ -48,8 +57,12 @@ export function TypeSplitChart({
               labelLine={false}
               fontSize={12}
             >
-              <Cell fill="oklch(0.55 0.18 280)" />
-              <Cell fill="oklch(0.60 0.15 175)" />
+              {data.map((entry) => (
+                <Cell
+                  key={entry.name}
+                  fill={TYPE_COLORS[entry.name] ?? "oklch(0.50 0.10 240)"}
+                />
+              ))}
             </Pie>
             <Tooltip
               contentStyle={{
