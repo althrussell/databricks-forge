@@ -411,6 +411,7 @@ export interface GenieEngineRecommendation extends GenieSpaceRecommendation {
   benchmarks: string | null;
   columnEnrichments: string | null;
   metricViewProposals: string | null;
+  trustedFunctions: string | null;
   engineConfigVersion: number;
 }
 

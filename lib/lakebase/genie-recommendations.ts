@@ -6,13 +6,13 @@
  */
 
 import { getPrisma } from "@/lib/prisma";
-import type { GenieSpaceRecommendation, GenieEnginePassOutputs } from "@/lib/genie/types";
+import type { GenieSpaceRecommendation, GenieEngineRecommendation, GenieEnginePassOutputs } from "@/lib/genie/types";
 
 // ---------------------------------------------------------------------------
 // Mappers
 // ---------------------------------------------------------------------------
 
-function dbRowToRecommendation(row: {
+interface DbRow {
   id: string;
   runId: string;
   domain: string;
@@ -30,8 +30,14 @@ function dbRowToRecommendation(row: {
   tables: string | null;
   metricViews: string | null;
   serializedSpace: string;
-}): GenieSpaceRecommendation {
-  // Derive counts not stored as dedicated columns from the serialized space
+  benchmarks: string | null;
+  columnEnrichments: string | null;
+  metricViewProposals: string | null;
+  trustedFunctions: string | null;
+  engineConfigVersion: number;
+}
+
+function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
   let benchmarkCount = 0;
   let instructionCount = 0;
   let sampleQuestionCount = 0;
@@ -46,13 +52,23 @@ function dbRowToRecommendation(row: {
     // serializedSpace is malformed -- counts stay at 0
   }
 
+  // If no pre-existing metric views but we have proposals, reflect the proposal count
+  const metricViewsArr: string[] = row.metricViews ? JSON.parse(row.metricViews) : [];
+  let metricViewCount = row.metricViewCount;
+  if (metricViewCount === 0 && row.metricViewProposals) {
+    try {
+      const proposals = JSON.parse(row.metricViewProposals);
+      if (Array.isArray(proposals)) metricViewCount = proposals.length;
+    } catch { /* ignore */ }
+  }
+
   return {
     domain: row.domain,
     subdomains: row.subdomains ? JSON.parse(row.subdomains) : [],
     title: row.title,
     description: row.description,
     tableCount: row.tableCount,
-    metricViewCount: row.metricViewCount,
+    metricViewCount,
     useCaseCount: row.useCaseCount,
     sqlExampleCount: row.sqlExampleCount,
     joinCount: row.joinCount,
@@ -64,8 +80,13 @@ function dbRowToRecommendation(row: {
     sampleQuestionCount,
     sqlFunctionCount,
     tables: row.tables ? JSON.parse(row.tables) : [],
-    metricViews: row.metricViews ? JSON.parse(row.metricViews) : [],
+    metricViews: metricViewsArr,
     serializedSpace: row.serializedSpace,
+    benchmarks: row.benchmarks,
+    columnEnrichments: row.columnEnrichments,
+    metricViewProposals: row.metricViewProposals,
+    trustedFunctions: row.trustedFunctions,
+    engineConfigVersion: row.engineConfigVersion,
   };
 }
 
@@ -73,10 +94,10 @@ function dbRowToRecommendation(row: {
 // Read
 // ---------------------------------------------------------------------------
 
-/** List all stored Genie recommendations for a run. */
+/** List all stored Genie recommendations for a run (includes engine-extended fields). */
 export async function getGenieRecommendationsByRunId(
   runId: string
-): Promise<GenieSpaceRecommendation[]> {
+): Promise<GenieEngineRecommendation[]> {
   const prisma = await getPrisma();
   const rows = await prisma.forgeGenieRecommendation.findMany({
     where: { runId },

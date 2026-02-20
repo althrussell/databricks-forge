@@ -15,6 +15,7 @@ import { listTrackedGenieSpaces } from "@/lib/lakebase/genie-spaces";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { generateGenieRecommendations } from "@/lib/genie/recommend";
 import { getConfig } from "@/lib/dbx/client";
+import type { GenieSpaceRecommendation } from "@/lib/genie/types";
 
 export async function GET(
   _request: NextRequest,
@@ -36,7 +37,7 @@ export async function GET(
     }
 
     // Try to load persisted recommendations (generated in pipeline step 8)
-    let recommendations = await getGenieRecommendationsByRunId(runId);
+    let recommendations: GenieSpaceRecommendation[] = await getGenieRecommendationsByRunId(runId);
 
     // Fallback: on-demand generation for runs that pre-date the pipeline step
     if (recommendations.length === 0) {

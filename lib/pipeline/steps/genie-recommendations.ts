@@ -16,7 +16,8 @@ import { logger } from "@/lib/logger";
 
 export async function runGenieRecommendations(
   ctx: PipelineContext,
-  runId: string
+  runId: string,
+  onProgress?: (message: string, percent: number) => void,
 ): Promise<number> {
   const metadata = ctx.metadata ?? (await loadMetadataForRun(runId));
   if (!metadata) {
@@ -39,6 +40,7 @@ export async function runGenieRecommendations(
       metadata,
       config,
       sampleData: ctx.sampleData,
+      onProgress,
     });
 
     await saveGenieRecommendations(runId, result.recommendations, result.passOutputs, version);
