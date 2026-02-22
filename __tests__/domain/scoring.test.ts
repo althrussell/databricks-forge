@@ -39,18 +39,21 @@ function makeUseCase(overrides: Partial<UseCase> = {}): UseCase {
 }
 
 describe("computeOverallScore", () => {
-  it("computes weighted score correctly", () => {
-    // priority 0.3, feasibility 0.2, impact 0.5
-    expect(computeOverallScore(1.0, 1.0, 1.0)).toBe(1.0);
-    expect(computeOverallScore(0.0, 0.0, 0.0)).toBe(0.0);
-    expect(computeOverallScore(0.7, 0.6, 0.8)).toBe(0.73);
+  it("computes Value-First weighted score: (priority * 0.75) + (feasibility * 0.25)", () => {
+    expect(computeOverallScore(1.0, 1.0)).toBe(1.0);
+    expect(computeOverallScore(0.0, 0.0)).toBe(0.0);
+    // 0.7 * 0.75 + 0.6 * 0.25 = 0.525 + 0.15 = 0.675
+    expect(computeOverallScore(0.7, 0.6)).toBe(0.675);
   });
 
   it("handles edge values", () => {
-    expect(computeOverallScore(0.5, 0.5, 0.5)).toBe(0.5);
-    expect(computeOverallScore(1.0, 0.0, 0.0)).toBe(0.3);
-    expect(computeOverallScore(0.0, 1.0, 0.0)).toBe(0.2);
-    expect(computeOverallScore(0.0, 0.0, 1.0)).toBe(0.5);
+    expect(computeOverallScore(0.5, 0.5)).toBe(0.5);
+    expect(computeOverallScore(1.0, 0.0)).toBe(0.75);
+    expect(computeOverallScore(0.0, 1.0)).toBe(0.25);
+  });
+
+  it("ignores impact score (it is embedded in priority)", () => {
+    expect(computeOverallScore(0.8, 0.6)).toBe(computeOverallScore(0.8, 0.6, 0.9));
   });
 });
 

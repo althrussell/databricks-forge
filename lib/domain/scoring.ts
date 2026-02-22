@@ -8,15 +8,23 @@ import type { UseCase } from "./types";
 
 /**
  * Compute the weighted overall score from individual dimensions.
- * Weights: priority 0.3, feasibility 0.2, impact 0.5
+ *
+ * Formula: (priority * 0.75) + (feasibility * 0.25)
+ *
+ * This matches the Value-First formula used in SCORE_USE_CASES_PROMPT and
+ * GLOBAL_SCORE_CALIBRATION_PROMPT. `priority_score` is the composite Value
+ * Score (ROI 60% + Strategic Alignment 25% + TTV 7.5% + Reusability 7.5%),
+ * so ROI/impact is already embedded in it. `impactScore` is retained as a
+ * standalone metric (raw ROI sub-score) but does not separately contribute
+ * to the overall score.
  */
 export function computeOverallScore(
   priorityScore: number,
   feasibilityScore: number,
-  impactScore: number
+  _impactScore?: number
 ): number {
   return Number(
-    (priorityScore * 0.3 + feasibilityScore * 0.2 + impactScore * 0.5).toFixed(3)
+    (priorityScore * 0.75 + feasibilityScore * 0.25).toFixed(3)
   );
 }
 

@@ -97,6 +97,8 @@ async function assignDomains(
     )
     .join("\n");
 
+  const targetDomainCount = Math.max(3, Math.min(25, Math.round(useCases.length / 10)));
+
   const result = await executeAIQuery({
     promptKey: "DOMAIN_FINDER_PROMPT",
     variables: {
@@ -106,6 +108,7 @@ async function assignDomains(
       use_cases_csv: useCasesCsv,
       previous_violations: "None",
       output_language: "English",
+      target_domain_count: String(targetDomainCount),
     },
     modelEndpoint: aiModel,
     responseFormat: "json_object",
