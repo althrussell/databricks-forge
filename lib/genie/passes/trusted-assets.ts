@@ -16,7 +16,7 @@ import type {
   EntityMatchingCandidate,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 2;
@@ -120,8 +120,14 @@ async function processTrustedAssetBatch(
   allowlist: SchemaAllowlist,
   endpoint: string,
 ): Promise<TrustedAssetsOutput> {
+  const MAX_SQL_CHARS = 3000;
   const sqlExamples = batch
-    .map((uc) => `Question: ${uc.name}\nSQL:\n${uc.sqlCode}`)
+    .map((uc) => {
+      const sql = (uc.sqlCode ?? "").length > MAX_SQL_CHARS
+        ? uc.sqlCode!.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
+        : uc.sqlCode;
+      return `Question: ${uc.name}\nSQL:\n${sql}`;
+    })
     .join("\n\n---\n\n");
 
   const systemMessage = `You are a SQL expert creating trusted assets for a Databricks Genie space.
@@ -142,6 +148,7 @@ From the provided SQL examples, create:
    - Include descriptive COMMENT on the function and parameters
    - Handle NULL parameters with ISNULL() checks
    - Include identifying columns (name, email, etc.) in the RETURNS TABLE definition
+   - LIMIT values MUST be integer literals (e.g. LIMIT 10), NOT parameters -- Databricks requires LIMIT to be a constant
 
 SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
 - PRESERVE the full CTE structure and all business logic from the source SQL. Do NOT simplify, remove CTEs, drop analytical columns, or reduce query complexity.
@@ -154,7 +161,7 @@ QUANTITY RULES:
 - Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
 - Produce at least 1 SQL function (UDF) per batch. Prioritize the most reusable analytical pattern as a table-valued function.
 
-${DATABRICKS_SQL_RULES}
+${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }],

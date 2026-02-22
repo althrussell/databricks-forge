@@ -228,7 +228,7 @@ function patchSerializedSpace(
       );
       if (!already) {
         existing.push({
-          id: `fn_deploy_${existing.length}`,
+          id: uuidv4().replace(/-/g, ""),
           identifier: fn.fqn,
         });
       }

@@ -12,11 +12,11 @@ import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 
 const TEMPERATURE = 0.1;
-const BENCHMARKS_PER_BATCH = 5;
-const BATCH_SIZE = 4;
+const BENCHMARKS_PER_BATCH = 3;
+const BATCH_SIZE = 2;
 
 interface JoinSpecInput {
   leftTable: string;
@@ -114,8 +114,14 @@ async function processBenchmarkBatch(
   allowlist: SchemaAllowlist,
   endpoint: string,
 ): Promise<BenchmarkInput[]> {
+  const MAX_SQL_CHARS = 3000;
   const useCaseContext = batch
-    .map((uc) => `Use case: ${uc.name}\nQuestion: ${uc.statement}\nGROUND TRUTH SQL (use this as the expectedSql, do NOT simplify):\n${uc.sqlCode}`)
+    .map((uc) => {
+      const sql = (uc.sqlCode ?? "").length > MAX_SQL_CHARS
+        ? uc.sqlCode!.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
+        : uc.sqlCode;
+      return `Use case: ${uc.name}\nQuestion: ${uc.statement}\nGROUND TRUTH SQL (use this as the expectedSql, do NOT simplify):\n${sql}`;
+    })
     .join("\n\n---\n\n");
 
   const systemMessage = `You are a QA expert creating benchmark questions for a Databricks Genie space.
@@ -145,7 +151,7 @@ SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
 - Do NOT add columns not present in the source SQL (e.g., do not add "country" if the source SQL does not include it).
 - Do NOT remove columns present in the source SQL (e.g., do not drop email_address, scoring columns, or percentile baselines).
 
-${DATABRICKS_SQL_RULES}
+${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "alternatePhrasings": ["..."] }] }`;
 
