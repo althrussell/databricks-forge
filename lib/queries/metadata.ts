@@ -517,10 +517,12 @@ function buildFqnWhereClause(fqns: string[]): string {
   const conditions = fqns
     .map((fqn) => parseFqn(fqn))
     .filter((p): p is NonNullable<typeof p> => p !== null)
-    .map(
-      (p) =>
-        `(table_catalog = '${p.catalog}' AND table_schema = '${p.schema}' AND table_name = '${p.tableName}')`
-    );
+    .map((p) => {
+      const safeCatalog = validateIdentifier(p.catalog, "catalog");
+      const safeSchema = validateIdentifier(p.schema, "schema");
+      const safeTable = validateIdentifier(p.tableName, "table");
+      return `(table_catalog = '${safeCatalog}' AND table_schema = '${safeSchema}' AND table_name = '${safeTable}')`;
+    });
   return conditions.join(" OR ");
 }
 

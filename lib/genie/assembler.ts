@@ -33,6 +33,45 @@ function makeId(seed: string, category: string, index: number): string {
 
 const byId = <T extends { id: string }>(a: T, b: T) => a.id.localeCompare(b.id);
 
+/** Extract the table name (last segment) from a fully-qualified name for use as a join alias. */
+function fqnToAlias(fqn: string): string {
+  const parts = fqn.replace(/`/g, "").split(".");
+  return parts[parts.length - 1];
+}
+
+/**
+ * Rewrite a join SQL condition from FQN-based references to alias-based
+ * backtick-quoted references that the Genie API expects.
+ *
+ * Input:  "samples.bakehouse.orders.customerID = samples.bakehouse.customers.customerID"
+ * Output: "`orders`.`customerID` = `customers`.`customerID`"
+ */
+function rewriteJoinSql(
+  sql: string,
+  leftFqn: string,
+  leftAlias: string,
+  rightFqn: string,
+  rightAlias: string,
+): string {
+  let result = sql;
+
+  // Replace FQN.column references (catalog.schema.table.column) with `alias`.`column`.
+  // Process the longer FQN first to avoid partial matches.
+  const replacements: [string, string][] = (
+    [[leftFqn, leftAlias], [rightFqn, rightAlias]] as [string, string][]
+  ).sort((a, b) => b[0].length - a[0].length);
+
+  for (const [fqn, alias] of replacements) {
+    const escaped = fqn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(
+      new RegExp(`${escaped}\\.([a-zA-Z_]\\w*)`, "g"),
+      `\`${alias}\`.\`$1\``
+    );
+  }
+
+  return result;
+}
+
 export interface AssembleOptions {
   runId: string;
   businessName: string;
@@ -183,15 +222,31 @@ export function assembleSerializedSpace(
       return entry;
     });
 
-  // 5. Join specs
+  // 5. Join specs -- format for the Genie API:
+  //    - left/right need identifier + alias
+  //    - sql uses backtick-quoted alias.column references
+  //    - relationship_type is encoded as a SQL comment: --rt=FROM_RELATIONSHIP_TYPE_...--
   const joinSpecs: JoinSpec[] = outputs.joinSpecs
-    .map((j, i) => ({
-      id: makeId(seed, "join", i),
-      left: { identifier: j.leftTable },
-      right: { identifier: j.rightTable },
-      sql: [j.sql],
-      ...(j.relationshipType ? { relationship_type: j.relationshipType } : {}),
-    }));
+    .map((j, i) => {
+      const leftAlias = fqnToAlias(j.leftTable);
+      let rightAlias = fqnToAlias(j.rightTable);
+      if (rightAlias === leftAlias) rightAlias = `${rightAlias}_2`;
+
+      const rewrittenSql = rewriteJoinSql(j.sql, j.leftTable, leftAlias, j.rightTable, rightAlias);
+      const sqlEntries = [rewrittenSql];
+
+      if (j.relationshipType) {
+        const rtTag = `FROM_RELATIONSHIP_TYPE_${j.relationshipType.toUpperCase()}`;
+        sqlEntries.push(`--rt=${rtTag}--`);
+      }
+
+      return {
+        id: makeId(seed, "join", i),
+        left: { identifier: j.leftTable, alias: leftAlias },
+        right: { identifier: j.rightTable, alias: rightAlias },
+        sql: sqlEntries,
+      };
+    });
 
   // 6. SQL snippets (measures, filters, dimensions)
   const measures: SqlSnippetMeasure[] = outputs.measures
@@ -241,6 +296,12 @@ export function assembleSerializedSpace(
       ? [{ id: makeId(seed, "instr", 0), content: instrContent }]
       : [];
 
+  const instrTotalChars = instrContent.reduce((sum, s) => sum + s.length, 0);
+  logger.info("Genie instruction size", { domain, totalChars: instrTotalChars, blocks: instrContent.length });
+  if (instrTotalChars > 3000) {
+    logger.warn("Genie instructions exceed recommended limit", { domain, totalChars: instrTotalChars });
+  }
+
   // 9. Benchmarks -- each phrasing gets its own entry sharing the same answer
   const benchmarks: BenchmarkQuestion[] = [];
   let benchIdx = 0;
@@ -256,7 +317,7 @@ export function assembleSerializedSpace(
         answer,
       });
     }
-    if (benchmarks.length >= 50) break;
+    if (benchmarks.length >= 10) break;
   }
 
   const space: SerializedSpace = {

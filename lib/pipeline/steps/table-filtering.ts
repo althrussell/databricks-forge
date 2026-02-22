@@ -9,7 +9,7 @@
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { updateRunMessage, updateRunFilteredTables } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
-import type { PipelineContext, TableInfo } from "@/lib/domain/types";
+import type { ColumnInfo, PipelineContext, TableInfo } from "@/lib/domain/types";
 
 /** Classification record for a table — stored as audit trail in Lakebase. */
 export interface TableClassification {
@@ -19,17 +19,42 @@ export interface TableClassification {
 }
 
 const BATCH_SIZE = 100; // tables per Model Serving call
+const MAX_COLUMNS_PER_TABLE = 8; // top columns shown to aid classification
 
 /**
- * Build a markdown table list for the prompt.
+ * Build a markdown table list for the prompt, including top column names
+ * to improve classification accuracy.
  */
-function buildTablesMarkdown(tables: TableInfo[]): string {
+function buildTablesMarkdown(
+  tables: TableInfo[],
+  columnsByTable: Map<string, string[]>
+): string {
   return tables
     .map((t) => {
       const comment = t.comment ? ` -- ${t.comment}` : "";
-      return `- ${t.fqn} (${t.tableType})${comment}`;
+      const cols = columnsByTable.get(t.fqn);
+      const colHint = cols && cols.length > 0
+        ? ` [columns: ${cols.slice(0, MAX_COLUMNS_PER_TABLE).join(", ")}${cols.length > MAX_COLUMNS_PER_TABLE ? ", ..." : ""}]`
+        : "";
+      return `- ${t.fqn} (${t.tableType})${comment}${colHint}`;
     })
     .join("\n");
+}
+
+/**
+ * Group columns by table FQN for efficient lookup.
+ */
+function buildColumnIndex(columns: ColumnInfo[]): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const col of columns) {
+    const existing = index.get(col.tableFqn);
+    if (existing) {
+      existing.push(col.columnName);
+    } else {
+      index.set(col.tableFqn, [col.columnName]);
+    }
+  }
+  return index;
 }
 
 export async function runTableFiltering(
@@ -41,6 +66,7 @@ export async function runTableFiltering(
   if (!run.businessContext) throw new Error("Business context not available");
 
   const tables = metadata.tables;
+  const columnIndex = buildColumnIndex(metadata.columns);
 
   // If very few tables, skip filtering -- include all
   if (tables.length <= 5) {
@@ -58,7 +84,7 @@ export async function runTableFiltering(
     const batch = tables.slice(i, i + BATCH_SIZE);
     if (runId) await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
     try {
-      const { filteredFqns, classifications } = await filterBatch(batch, run.config.businessName, run.businessContext, run.config.aiModel, runId);
+      const { filteredFqns, classifications } = await filterBatch(batch, columnIndex, run.config.businessName, run.businessContext, run.config.aiModel, runId);
       businessTables.push(...filteredFqns);
       allClassifications.push(...classifications);
     } catch (error) {
@@ -112,6 +138,7 @@ interface TableClassificationItem {
 
 async function filterBatch(
   tables: TableInfo[],
+  columnIndex: Map<string, string[]>,
   businessName: string,
   businessContext: { industries: string },
   aiModel: string,
@@ -128,7 +155,7 @@ async function filterBatch(
       additional_context_section: "",
       strategy_rules:
         "Default to BUSINESS classification. Only mark as TECHNICAL if the table has zero business relevance.",
-      tables_markdown: buildTablesMarkdown(tables),
+      tables_markdown: buildTablesMarkdown(tables, columnIndex),
     },
     modelEndpoint: aiModel,
     responseFormat: "json_object",

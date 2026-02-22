@@ -28,7 +28,9 @@ import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
+import { runJoinInference } from "./passes/join-inference";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
+import { isValidTable } from "./schema-allowlist";
 import { logger } from "@/lib/logger";
 
 export interface GenieEngineInput {
@@ -201,33 +203,8 @@ async function processDomain(
     endpoint,
   });
 
-  // Pass 3: Trusted Asset Authoring (parallel with Pass 4)
-  onProgress("Creating trusted assets...");
-  const [trustedResult, instructionResult] = await Promise.all([
-    config.generateTrustedAssets
-      ? runTrustedAssetAuthoring({
-          tableFqns: tables,
-          metadata,
-          allowlist,
-          useCases,
-          entityCandidates: columnResult.entityCandidates,
-          endpoint,
-        })
-      : Promise.resolve({ queries: [], functions: [] }),
-
-    // Pass 4: Instruction Generation (parallel with Pass 3)
-    runInstructionGeneration({
-      domain,
-      subdomains,
-      businessName: run.config.businessName,
-      businessContext: run.businessContext,
-      config,
-      entityCandidates: columnResult.entityCandidates,
-      endpoint,
-    }),
-  ]);
-
-  // Build join specs from foreign keys (needed by Pass 6 and final output)
+  // Build join specs from foreign keys, use case SQL, and LLM inference.
+  // Computed before Passes 3-5 so all downstream passes have join context.
   const tableSet = new Set(tables.map((t) => t.toLowerCase()));
   const fkJoins = metadata.foreignKeys
     .filter((fk) =>
@@ -241,7 +218,6 @@ async function processDomain(
       relationshipType: "many_to_one" as const,
     }));
 
-  // Apply join overrides
   const joinOverrides = config.joinOverrides.filter(
     (j) => tableSet.has(j.leftTable.toLowerCase()) && tableSet.has(j.rightTable.toLowerCase())
   );
@@ -249,7 +225,7 @@ async function processDomain(
     joinOverrides.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
   );
 
-  const allJoins = [
+  const fkAndOverrideJoins = [
     ...fkJoins.filter((j) =>
       !overrideKeys.has(`${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
     ),
@@ -263,6 +239,72 @@ async function processDomain(
       })),
   ];
 
+  const existingJoinKeys = new Set(
+    fkAndOverrideJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
+  );
+  const sqlInferredJoins = inferJoinsFromUseCaseSql(useCases, tableSet, existingJoinKeys, allowlist);
+
+  let llmInferredJoins: typeof sqlInferredJoins = [];
+  if (config.llmRefinement && (fkAndOverrideJoins.length + sqlInferredJoins.length) < 3) {
+    try {
+      onProgress("Inferring table relationships...");
+      const allExistingKeys = new Set([
+        ...existingJoinKeys,
+        ...sqlInferredJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`),
+      ]);
+      const llmResult = await runJoinInference({
+        tableFqns: tables,
+        metadata,
+        allowlist,
+        existingJoinKeys: allExistingKeys,
+        endpoint,
+      });
+      llmInferredJoins = llmResult.joins;
+    } catch (err) {
+      logger.warn("LLM join inference failed, continuing with FK + SQL-inferred joins", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const allJoins = [...fkAndOverrideJoins, ...sqlInferredJoins, ...llmInferredJoins];
+
+  logger.info("Join specs assembled", {
+    domain,
+    fkJoins: fkAndOverrideJoins.length,
+    sqlInferred: sqlInferredJoins.length,
+    llmInferred: llmInferredJoins.length,
+    total: allJoins.length,
+  });
+
+  // Pass 3: Trusted Asset Authoring (parallel with Pass 4)
+  onProgress("Creating trusted assets...");
+  const [trustedResult, instructionResult] = await Promise.all([
+    config.generateTrustedAssets
+      ? runTrustedAssetAuthoring({
+          tableFqns: tables,
+          metadata,
+          allowlist,
+          useCases,
+          entityCandidates: columnResult.entityCandidates,
+          joinSpecs: allJoins,
+          endpoint,
+        })
+      : Promise.resolve({ queries: [], functions: [] }),
+
+    // Pass 4: Instruction Generation (parallel with Pass 3)
+    runInstructionGeneration({
+      domain,
+      subdomains,
+      businessName: run.config.businessName,
+      businessContext: run.businessContext,
+      config,
+      entityCandidates: columnResult.entityCandidates,
+      joinSpecs: allJoins,
+      endpoint,
+    }),
+  ]);
+
   // Pass 5: Benchmark Generation (parallel with Pass 6)
   onProgress("Generating benchmarks & metric views...");
   const [benchmarkResult, metricViewResult] = await Promise.all([
@@ -274,6 +316,7 @@ async function processDomain(
           useCases,
           entityCandidates: columnResult.entityCandidates,
           customerBenchmarks: config.benchmarkQuestions,
+          joinSpecs: allJoins,
           endpoint,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
@@ -328,6 +371,85 @@ async function processDomain(
     metricViewProposals: metricViewResult.proposals,
     joinSpecs: allJoins,
   };
+}
+
+/**
+ * Extract JOIN relationships from use case SQL that already passed EXPLAIN
+ * validation. Parses FROM and JOIN clauses to discover table pairs and their
+ * join conditions, deduplicating against already-known joins.
+ */
+function inferJoinsFromUseCaseSql(
+  useCases: UseCase[],
+  tableSet: Set<string>,
+  existingJoinKeys: Set<string>,
+  allowlist: ReturnType<typeof buildSchemaAllowlist>
+): Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> {
+  const discovered = new Map<string, { leftTable: string; rightTable: string; sql: string }>();
+
+  // Match: JOIN `catalog.schema.table` alias ON condition
+  // Handles optional backticks/quotes and multi-word aliases
+  const joinRegex = /JOIN\s+[`"]?([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)[`"]?\s+(?:AS\s+)?(\w+)\s+ON\s+([^\n;]+)/gi;
+  const fromRegex = /FROM\s+[`"]?([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)[`"]?/gi;
+
+  for (const uc of useCases) {
+    if (!uc.sqlCode) continue;
+    const sql = uc.sqlCode;
+
+    // Collect FROM tables to pair with JOINed tables
+    const fromTables: string[] = [];
+    let fromMatch: RegExpExecArray | null;
+    while ((fromMatch = fromRegex.exec(sql)) !== null) {
+      fromTables.push(fromMatch[1]);
+    }
+    fromRegex.lastIndex = 0;
+
+    let joinMatch: RegExpExecArray | null;
+    while ((joinMatch = joinRegex.exec(sql)) !== null) {
+      const rightTable = joinMatch[1];
+      const onCondition = joinMatch[3].trim();
+
+      // Find the most likely left table from FROM clauses
+      const leftTable = fromTables.find((ft) =>
+        onCondition.toLowerCase().includes(ft.split(".").pop()!.toLowerCase())
+      ) ?? fromTables[0];
+
+      if (!leftTable) continue;
+
+      // Both tables must be in the domain's table set and schema allowlist
+      if (
+        !tableSet.has(leftTable.toLowerCase()) ||
+        !tableSet.has(rightTable.toLowerCase()) ||
+        !isValidTable(allowlist, leftTable) ||
+        !isValidTable(allowlist, rightTable)
+      ) continue;
+
+      const pairKey = `${leftTable.toLowerCase()}|${rightTable.toLowerCase()}`;
+      const reversePairKey = `${rightTable.toLowerCase()}|${leftTable.toLowerCase()}`;
+
+      if (existingJoinKeys.has(pairKey) || existingJoinKeys.has(reversePairKey)) continue;
+      if (discovered.has(pairKey) || discovered.has(reversePairKey)) continue;
+
+      // Normalize the ON condition to use FQNs where possible
+      const joinSql = `${leftTable}.${onCondition.split("=")[0].trim().split(".").pop()} = ${rightTable}.${onCondition.split("=")[1]?.trim().split(".").pop() ?? ""}`.trim();
+
+      discovered.set(pairKey, { leftTable, rightTable, sql: joinSql });
+    }
+    joinRegex.lastIndex = 0;
+  }
+
+  const results = [...discovered.values()].map((j) => ({
+    ...j,
+    relationshipType: "many_to_one" as const,
+  }));
+
+  if (results.length > 0) {
+    logger.info("Inferred joins from use case SQL", {
+      count: results.length,
+      pairs: results.map((j) => `${j.leftTable} -> ${j.rightTable}`),
+    });
+  }
+
+  return results;
 }
 
 function statementToQuestion(statement: string): string {

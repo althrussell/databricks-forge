@@ -304,10 +304,9 @@ export interface SqlFunction {
 
 export interface JoinSpec {
   id: string;
-  left: { identifier: string };
-  right: { identifier: string };
+  left: { identifier: string; alias?: string };
+  right: { identifier: string; alias?: string };
   sql: string[];
-  relationship_type?: "one_to_one" | "one_to_many" | "many_to_one";
 }
 
 export interface SqlSnippets {

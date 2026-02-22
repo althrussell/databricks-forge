@@ -228,12 +228,14 @@ function patchSerializedSpace(
       );
       if (!already) {
         existing.push({
-          id: `fn_deploy_${existing.length}`,
+          id: uuidv4().replace(/-/g, ""),
           identifier: fn.fqn,
         });
       }
     }
-    instructions.sql_functions = existing;
+    instructions.sql_functions = existing.sort((a, b) =>
+      a.id.localeCompare(b.id) || a.identifier.localeCompare(b.identifier)
+    );
   }
 
   space.data_sources = dataSources;

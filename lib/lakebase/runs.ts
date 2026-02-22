@@ -16,6 +16,7 @@ import type {
   SupportedLanguage,
 } from "@/lib/domain/types";
 import { PROMPT_VERSIONS } from "@/lib/ai/templates";
+import { archiveCurrentPromptTemplates } from "@/lib/lakebase/prompt-templates";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -171,6 +172,9 @@ export async function createRun(
       progressPct: 0,
     },
   });
+
+  // Archive current prompt templates (fire-and-forget, non-blocking)
+  archiveCurrentPromptTemplates().catch(() => {});
 }
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
@@ -241,8 +245,9 @@ export async function updateRunMessage(
 }
 
 /**
- * Delete a pipeline run and all associated data (use cases, exports).
- * Cascade deletes are handled by the database schema.
+ * Delete a pipeline run and all associated data (use cases, exports,
+ * environment scans, Genie data). Cascade deletes are handled by the
+ * database schema.
  */
 export async function deleteRun(runId: string): Promise<void> {
   const prisma = await getPrisma();

@@ -120,6 +120,8 @@ IMPORTANT: Dimension and measure entries only support "name" and "expr". Do NOT 
 - Distinct: \`COUNT(DISTINCT customer_id)\`
 
 Do NOT use window: blocks on measures -- this feature is experimental and not supported in production.
+Do NOT use window functions (OVER clause) in measure expressions -- metric views do not support OVER().
+NEVER use MEDIAN() -- use PERCENTILE_APPROX(col, 0.5) instead.
 
 ### Materialization (experimental):
 \`\`\`yaml
@@ -219,6 +221,15 @@ function validateMetricViewYaml(
     }
   }
 
+  // Detect window functions in measure expressions (OVER clause) -- unsupported in metric views
+  const measureBlock = yaml.match(/measures:[\s\S]*$/)?.[0] ?? "";
+  const measureExprs = measureBlock.match(/expr:\s*.+/g) ?? [];
+  for (const exprLine of measureExprs) {
+    if (/\bOVER\s*\(/i.test(exprLine)) {
+      issues.push(`Window function (OVER) in measure expr is not supported in metric views: ${exprLine.trim()}`);
+    }
+  }
+
   const joinSourceMatches = yaml.matchAll(/joins:[\s\S]*?source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/g);
   for (const m of joinSourceMatches) {
     const joinFqn = m[1];
@@ -238,7 +249,7 @@ function validateMetricViewYaml(
   }
 
   const hasCritical = issues.some((i) =>
-    i.startsWith("Missing required") || i.includes("not found in schema")
+    i.startsWith("Missing required") || i.includes("not found in schema") || i.includes("Window function")
   );
 
   return {

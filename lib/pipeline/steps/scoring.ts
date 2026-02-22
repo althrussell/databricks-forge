@@ -61,7 +61,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     if (domainCases.length <= 2) continue;
 
     try {
-      const toRemove = await deduplicateDomain(domainCases, run.config.aiModel, runId);
+      const toRemove = await deduplicateDomain(domainCases, bcRecord, run.config.aiModel, runId);
       removedCount += toRemove.size;
       scored = scored.filter((uc) => !toRemove.has(uc.useCaseNo));
     } catch (error) {
@@ -77,7 +77,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   if (scored.length > 5) {
     if (runId) await updateRunMessage(runId, `Cross-domain dedup: reviewing ${scored.length} use cases...`);
     try {
-      const crossDomainRemoved = await deduplicateCrossDomain(scored, run.config.aiModel, runId);
+      const crossDomainRemoved = await deduplicateCrossDomain(scored, bcRecord, run.config.aiModel, runId);
       if (crossDomainRemoved.size > 0) {
         scored = scored.filter((uc) => !crossDomainRemoved.has(uc.useCaseNo));
         if (runId) {
@@ -216,13 +216,14 @@ async function scoreDomain(
 
 async function deduplicateDomain(
   domainCases: UseCase[],
+  businessContext: Record<string, string>,
   aiModel: string,
   runId?: string
 ): Promise<Set<number>> {
   const useCaseMarkdown = domainCases
     .map(
       (uc) =>
-        `| ${uc.useCaseNo} | ${uc.name} | ${uc.type} | ${uc.statement} |`
+        `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} |`
     )
     .join("\n");
 
@@ -230,7 +231,9 @@ async function deduplicateDomain(
     promptKey: "REVIEW_USE_CASES_PROMPT",
     variables: {
       total_count: String(domainCases.length),
-      use_case_markdown: `| No | Name | Type | Statement |\n|---|---|---|---|\n${useCaseMarkdown}`,
+      business_name: businessContext.businessName ?? "",
+      strategic_goals: businessContext.strategicGoals ?? "",
+      use_case_markdown: `| No | Domain | Name | Type | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,
     responseFormat: "json_object",
@@ -367,6 +370,7 @@ async function calibrateScoresChunked(
 
 async function deduplicateCrossDomain(
   useCases: UseCase[],
+  businessContext: Record<string, string>,
   aiModel: string,
   runId?: string
 ): Promise<Set<number>> {
@@ -380,6 +384,8 @@ async function deduplicateCrossDomain(
   const result = await executeAIQuery({
     promptKey: "CROSS_DOMAIN_DEDUP_PROMPT",
     variables: {
+      business_name: businessContext.businessName ?? "",
+      strategic_goals: businessContext.strategicGoals ?? "",
       use_case_markdown: `| No | Domain | Name | Type | Statement | Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
     },
     modelEndpoint: aiModel,

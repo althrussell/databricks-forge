@@ -20,6 +20,7 @@ import type {
   EnrichedSqlSnippetDimension,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { generateTimePeriods } from "../time-periods";
 
 const TEMPERATURE = 0.2;
@@ -148,11 +149,20 @@ Generate SQL expressions in three categories:
 2. **Filters**: Common WHERE conditions with business-friendly names
 3. **Dimensions**: GROUP BY expressions with business-friendly names
 
+Include complex analytical patterns where the use case SQL demonstrates them:
+- Composite scoring measures (weighted multi-factor scores bounded by LEAST/GREATEST)
+- Segmentation dimensions (CASE WHEN chains that classify entities into named tiers or risk segments)
+- Percentile-based baselines (PERCENTILE_APPROX for P20, P50 thresholds)
+- Trend statistics (REGR_SLOPE, REGR_R2 for time-series trend detection)
+- Revenue share expressions (value / SUM(value) OVER ())
+
 For each expression provide:
 - name: Business-friendly display name
 - sql: Valid Databricks SQL expression using ONLY identifiers from the schema
 - synonyms: Array of alternative terms users might say
 - instructions: When and how to use this expression
+
+${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "measures": [...], "filters": [...], "dimensions": [...] }`;
 

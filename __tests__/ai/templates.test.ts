@@ -76,7 +76,6 @@ describe("formatPrompt", () => {
     // These should not throw
     const keys = [
       "BUSINESS_CONTEXT_WORKER_PROMPT",
-      "BASE_USE_CASE_GEN_PROMPT",
       "AI_USE_CASE_GEN_PROMPT",
       "STATS_USE_CASE_GEN_PROMPT",
       "DOMAIN_FINDER_PROMPT",

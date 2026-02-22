@@ -28,7 +28,7 @@ import {
 } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import { insertPromptLog } from "@/lib/lakebase/prompt-logs";
-import { formatPrompt, PROMPT_VERSIONS, type PromptKey } from "./templates";
+import { formatPrompt, PROMPT_VERSIONS, PROMPT_SYSTEM_MESSAGES, type PromptKey } from "./templates";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,13 +83,6 @@ export interface AIQueryOptions {
   systemMessage?: string;
 }
 
-/**
- * Honesty score threshold below which a warning is logged.
- * Scores are 0.0-1.0. Responses below this threshold may indicate the LLM
- * is uncertain about its output quality.
- */
-const LOW_HONESTY_THRESHOLD = 0.3;
-
 export interface AIQueryResult {
   /** Raw response text from the LLM */
   rawResponse: string;
@@ -120,7 +113,6 @@ const PROMPT_TEMPERATURES: Partial<Record<PromptKey, number>> = {
   // Phase 2: Table Filtering
   FILTER_BUSINESS_TABLES_PROMPT: 0.2,
   // Phase 3: Use Case Generation (creative -- needs diversity)
-  BASE_USE_CASE_GEN_PROMPT: 0.7,
   AI_USE_CASE_GEN_PROMPT: 0.8,
   STATS_USE_CASE_GEN_PROMPT: 0.7,
   // Phase 4: Domain Clustering
@@ -135,10 +127,17 @@ const PROMPT_TEMPERATURES: Partial<Record<PromptKey, number>> = {
   // Phase 6: SQL Generation (precise)
   USE_CASE_SQL_GEN_PROMPT: 0.1,
   USE_CASE_SQL_FIX_PROMPT: 0.1,
-  // Phase 7: Export & Translation
-  SUMMARY_GEN_PROMPT: 0.5,
-  KEYWORDS_TRANSLATE_PROMPT: 0.2,
-  USE_CASE_TRANSLATE_PROMPT: 0.3,
+  // Phase 7: Outcome Map Parsing
+  PARSE_OUTCOME_MAP: 0.2,
+  // Environment Intelligence
+  ENV_DOMAIN_CATEGORISATION_PROMPT: 0.3,
+  ENV_PII_DETECTION_PROMPT: 0.1,
+  ENV_AUTO_DESCRIPTIONS_PROMPT: 0.3,
+  ENV_REDUNDANCY_DETECTION_PROMPT: 0.2,
+  ENV_IMPLICIT_RELATIONSHIPS_PROMPT: 0.2,
+  ENV_MEDALLION_TIER_PROMPT: 0.2,
+  ENV_DATA_PRODUCTS_PROMPT: 0.4,
+  ENV_GOVERNANCE_GAPS_PROMPT: 0.2,
 };
 
 function getDefaultTemperature(promptKey: PromptKey): number {
@@ -289,11 +288,14 @@ async function executeAIQueryOnce(
   const prompt = formatPrompt(options.promptKey, options.variables);
   const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
 
-  // Build chat messages with system/user separation
+  // Build chat messages with system/user separation.
+  // Use explicit systemMessage if provided, otherwise fall back to the
+  // per-prompt system message for better persona/instruction adherence.
   const messages: ChatMessage[] = [];
+  const systemMsg = options.systemMessage ?? PROMPT_SYSTEM_MESSAGES[options.promptKey];
 
-  if (options.systemMessage) {
-    messages.push({ role: "system", content: options.systemMessage });
+  if (systemMsg) {
+    messages.push({ role: "system", content: systemMsg });
   }
 
   messages.push({ role: "user", content: prompt });
@@ -341,15 +343,6 @@ async function executeAIQueryOnce(
       totalTokens: response.usage.totalTokens,
     }),
   });
-
-  // Warn on low honesty scores
-  if (honestyScore !== null && honestyScore < LOW_HONESTY_THRESHOLD) {
-    logger.warn("Low honesty score — LLM may be uncertain about output quality", {
-      promptKey: options.promptKey,
-      honestyScore,
-      threshold: LOW_HONESTY_THRESHOLD,
-    });
-  }
 
   // Warn if the response was truncated (finish_reason: "length")
   if (response.finishReason === "length") {

@@ -44,9 +44,12 @@ model ForgeRun {
   useCases             ForgeUseCase[]
   exports              ForgeExport[]
   promptLogs           ForgePromptLog[]
-  genieRecommendations ForgeGenieRecommendation[]
-  genieSpaces          ForgeGenieSpace[]
-  genieEngineConfigs   ForgeGenieEngineConfig[]
+  genieRecommendations     ForgeGenieRecommendation[]
+  genieSpaces              ForgeGenieSpace[]
+  genieEngineConfigs       ForgeGenieEngineConfig[]
+  dashboardRecommendations ForgeDashboardRecommendation[]
+  dashboards               ForgeDashboard[]
+  environmentScans         ForgeEnvironmentScan[]
 
   @@map("forge_runs")
 }
@@ -115,6 +118,21 @@ model ForgePromptLog {
   @@index([runId])
   @@index([runId, step])
   @@map("forge_prompt_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Prompt Template Archive (content-addressable)
+// ---------------------------------------------------------------------------
+
+model ForgePromptTemplate {
+  versionHash  String   @id @map("version_hash")
+  promptKey    String   @map("prompt_key")
+  templateText String   @map("template_text")
+  charCount    Int      @map("char_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([promptKey])
+  @@map("forge_prompt_templates")
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +265,54 @@ model ForgeGenieSpace {
 }
 
 // ---------------------------------------------------------------------------
+// Dashboard Recommendations (generated in pipeline)
+// ---------------------------------------------------------------------------
+
+model ForgeDashboardRecommendation {
+  id                  String   @id @map("recommendation_id")
+  runId               String   @map("run_id")
+  domain              String
+  subdomains          String?                              // JSON array
+  title               String
+  description         String
+  datasetCount        Int      @default(0) @map("dataset_count")
+  widgetCount         Int      @default(0) @map("widget_count")
+  useCaseIds          String?  @map("use_case_ids")        // JSON array
+  serializedDashboard String   @map("serialized_dashboard") // Lakeview JSON
+  dashboardDesign     String?  @map("dashboard_design")     // JSON: DashboardDesign
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, domain])
+  @@index([runId])
+  @@map("forge_dashboard_recommendations")
+}
+
+// ---------------------------------------------------------------------------
+// Dashboards (tracking)
+// ---------------------------------------------------------------------------
+
+model ForgeDashboard {
+  id           String   @id @map("dashboard_tracking_id")
+  dashboardId  String   @map("dashboard_id")
+  runId        String   @map("run_id")
+  domain       String
+  title        String
+  status       String   @default("created") // created | updated | trashed
+  dashboardUrl String?  @map("dashboard_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, domain])
+  @@index([runId])
+  @@index([dashboardId])
+  @@map("forge_dashboards")
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -290,6 +356,7 @@ model ForgeEnvironmentScan {
   passResultsJson       String?  @map("pass_results_json")
   createdAt             DateTime @default(now()) @map("created_at")
 
+  run        ForgeRun? @relation(fields: [runId], references: [runId], onDelete: Cascade)
   details    ForgeTableDetail[]
   histories  ForgeTableHistorySummary[]
   lineage    ForgeTableLineage[]
