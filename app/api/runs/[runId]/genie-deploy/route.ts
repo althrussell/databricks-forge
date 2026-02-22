@@ -233,7 +233,9 @@ function patchSerializedSpace(
         });
       }
     }
-    instructions.sql_functions = existing;
+    instructions.sql_functions = existing.sort((a, b) =>
+      a.id.localeCompare(b.id) || a.identifier.localeCompare(b.identifier)
+    );
   }
 
   space.data_sources = dataSources;
