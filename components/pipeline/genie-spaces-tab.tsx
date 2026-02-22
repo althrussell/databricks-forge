@@ -86,19 +86,6 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
     { question: string; status: string; sql?: string; error?: string }[] | null
   >(null);
 
-  // Benchmark runner state
-  const [runningBenchmarks, setRunningBenchmarks] = useState<string | null>(null);
-  const [benchmarkResults, setBenchmarkResults] = useState<{
-    passed: number;
-    total: number;
-    results: {
-      question: string;
-      expectedSql: string | null;
-      actualSql: string | null;
-      passed: boolean;
-      error?: string;
-    }[];
-  } | null>(null);
 
   // Deploy modal state
   const [deployModalOpen, setDeployModalOpen] = useState(false);
@@ -305,71 +292,6 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
       toast.error("Failed to test Genie Space");
     } finally {
       setTestingDomain(null);
-    }
-  }
-
-  async function handleRunBenchmarks(domain: string) {
-    const tracking = getTracking(domain);
-    if (!tracking) return;
-
-    const rec = recommendations.find((r) => r.domain === domain);
-    if (!rec) return;
-
-    let benchmarkQuestions: { question: string; expectedSql?: string }[] = [];
-    try {
-      const parsed = JSON.parse(rec.serializedSpace) as SerializedSpace;
-      const bqs = parsed.benchmarks?.questions ?? [];
-      benchmarkQuestions = bqs.slice(0, 10).map((b) => ({
-        question: b.question.join(" "),
-        expectedSql: b.answer?.[0]?.content?.join("\n"),
-      }));
-    } catch { /* use empty */ }
-
-    if (benchmarkQuestions.length === 0) {
-      toast.error("No benchmark questions available");
-      return;
-    }
-
-    setRunningBenchmarks(domain);
-    setBenchmarkResults(null);
-
-    try {
-      const res = await fetch(
-        `/api/runs/${runId}/genie-engine/${encodeURIComponent(domain)}/test`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            spaceId: tracking.spaceId,
-            questions: benchmarkQuestions.map((q) => q.question),
-          }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Benchmark run failed");
-        return;
-      }
-
-      const results = (data.results as { question: string; status: string; sql?: string; error?: string }[]).map(
-        (r, i) => ({
-          question: r.question,
-          expectedSql: benchmarkQuestions[i]?.expectedSql ?? null,
-          actualSql: r.sql ?? null,
-          passed: r.status === "COMPLETED",
-          error: r.error,
-        })
-      );
-      const passed = results.filter((r) => r.passed).length;
-
-      setBenchmarkResults({ passed, total: results.length, results });
-      toast.success(
-        `Benchmarks: ${passed}/${results.length} passed`
-      );
-    } catch {
-      toast.error("Failed to run benchmarks");
-    } finally {
-      setRunningBenchmarks(null);
     }
   }
 
@@ -1122,50 +1044,6 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                 </div>
               )}
 
-              {/* Benchmark Results */}
-              {benchmarkResults && detailDomain && (
-                <div className="mt-4 space-y-2 px-4">
-                  <Separator />
-                  <h4 className="text-xs font-semibold">
-                    Benchmark Results ({benchmarkResults.passed}/{benchmarkResults.total} passed)
-                  </h4>
-                  {benchmarkResults.results.map((r, i) => (
-                    <div key={i} className="rounded border p-2">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          className={
-                            r.passed
-                              ? "bg-green-500/10 text-green-600"
-                              : "bg-red-500/10 text-red-600"
-                          }
-                        >
-                          {r.passed ? "Pass" : "Fail"}
-                        </Badge>
-                        <span className="text-xs">{r.question}</span>
-                      </div>
-                      {r.actualSql && (
-                        <div className="mt-1">
-                          <p className="text-[9px] font-medium text-muted-foreground">Generated:</p>
-                          <pre className="max-h-20 overflow-auto rounded bg-muted/50 p-1 text-[10px] font-mono">
-                            {r.actualSql}
-                          </pre>
-                        </div>
-                      )}
-                      {r.expectedSql && (
-                        <div className="mt-1">
-                          <p className="text-[9px] font-medium text-muted-foreground">Expected:</p>
-                          <pre className="max-h-20 overflow-auto rounded bg-muted/30 p-1 text-[10px] font-mono">
-                            {r.expectedSql}
-                          </pre>
-                        </div>
-                      )}
-                      {r.error && (
-                        <p className="mt-1 text-[10px] text-destructive">{r.error}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
 
               {/* Footer actions */}
               <SheetFooter className="mt-6 flex-col gap-2 sm:flex-col">
@@ -1202,16 +1080,6 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                       {testingDomain === detailRec.domain
                         ? "Testing..."
                         : "Test Space"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => handleRunBenchmarks(detailRec.domain)}
-                      disabled={runningBenchmarks === detailRec.domain}
-                    >
-                      {runningBenchmarks === detailRec.domain
-                        ? "Running..."
-                        : "Run Benchmarks"}
                     </Button>
                   </div>
                 )}

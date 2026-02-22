@@ -12,6 +12,7 @@ import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
 const TEMPERATURE = 0.1;
 const BENCHMARKS_PER_BATCH = 5;
@@ -143,6 +144,8 @@ SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
 - PRESERVE all advanced analytics: CORR, REGR_SLOPE, REGR_INTERCEPT, PERCENTILE_APPROX, SKEWNESS, KURTOSIS, CUME_DIST, cross-join correlation CTEs, revenue share calculations.
 - Do NOT add columns not present in the source SQL (e.g., do not add "country" if the source SQL does not include it).
 - Do NOT remove columns present in the source SQL (e.g., do not drop email_address, scoring columns, or percentile baselines).
+
+${DATABRICKS_SQL_RULES}
 
 Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "alternatePhrasings": ["..."] }] }`;
 

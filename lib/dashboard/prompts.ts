@@ -11,6 +11,7 @@ import type {
   EnrichedSqlSnippetDimension,
   EnrichedSqlSnippetFilter,
 } from "@/lib/genie/types";
+import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
 export const DASHBOARD_SYSTEM_MESSAGE =
   "You are a Principal Analytics Engineer specialising in Databricks AI/BI (Lakeview) dashboards. " +
@@ -150,6 +151,9 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push('   - Optionally 1 table for detail records (type: "table")');
   sections.push("");
   sections.push("### SQL Rules");
+  sections.push(DATABRICKS_SQL_RULES);
+  sections.push("");
+  sections.push("Dashboard-specific SQL rules:");
   sections.push("- Use ONLY fully-qualified table names (catalog.schema.table)");
   sections.push("- Use ONLY tables listed in Available Tables above");
   sections.push("- Use Spark SQL syntax (date_sub, DATE_TRUNC, not INTERVAL)");
@@ -157,9 +161,6 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push("- KPI dataset must return exactly 1 row");
   sections.push("- Trend dataset must include a date column");
   sections.push("- Breakdown dataset should use GROUP BY with ORDER BY and LIMIT 10");
-  sections.push("- NEVER nest a window function (OVER) inside an aggregate function (SUM, AVG, COUNT, MIN, MAX). This is a SQL error in Databricks.");
-  sections.push("  If you need aggregated + windowed stats together, compute the window functions in a subquery first, then aggregate the results in an outer query.");
-  sections.push("- NEVER use MEDIAN() — it is not supported in Databricks SQL. Use PERCENTILE_APPROX(col, 0.5) instead.");
   sections.push("- Always validate that each query can run standalone with no syntax errors.");
   sections.push("");
   sections.push("### Widget Fields");

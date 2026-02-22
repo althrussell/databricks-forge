@@ -20,6 +20,7 @@ import type {
   EnrichedSqlSnippetDimension,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { generateTimePeriods } from "../time-periods";
 
 const TEMPERATURE = 0.2;
@@ -160,6 +161,8 @@ For each expression provide:
 - sql: Valid Databricks SQL expression using ONLY identifiers from the schema
 - synonyms: Array of alternative terms users might say
 - instructions: When and how to use this expression
+
+${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "measures": [...], "filters": [...], "dimensions": [...] }`;
 

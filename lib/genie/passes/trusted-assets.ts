@@ -16,6 +16,7 @@ import type {
   EntityMatchingCandidate,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 3;
@@ -152,6 +153,8 @@ SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
 QUANTITY RULES:
 - Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
 - Produce at least 1 SQL function (UDF) per batch. Prioritize the most reusable analytical pattern as a table-valued function.
+
+${DATABRICKS_SQL_RULES}
 
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }],

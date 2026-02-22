@@ -9,6 +9,7 @@
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import type { BusinessContext } from "@/lib/domain/types";
+import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 import type {
   GenieEngineConfig,
   EntityMatchingCandidate,
@@ -109,22 +110,17 @@ export async function runInstructionGeneration(
     instructions.push(config.globalInstructions);
   }
 
-  // 9. SQL output quality rules
+  // 9. SQL output quality rules (shared + instruction-specific)
   instructions.push(
-    `SQL output rules: ` +
-    `(1) Always include human-readable identifying columns (e.g. customer name, email address, product name) in query results -- ` +
-    `never return only IDs or surrogate keys without the corresponding descriptive columns. ` +
-    `(2) For "top N" queries, use ORDER BY ... LIMIT N to guarantee exactly N rows. ` +
-    `Do not use RANK() or DENSE_RANK() for top-N because ties can return more than N rows. ` +
-    `(3) When the question implies analytical scoring, segmentation, or risk classification, ` +
-    `produce the full scoring formula as a CTE -- do not simplify to a single WHERE filter. ` +
-    `(4) Preserve exact NTILE/RANK window function ordering. NTILE with ORDER BY ASC assigns ` +
-    `higher quintile numbers to higher values. Do not reverse sort direction. ` +
-    `(5) When computing percentile baselines (e.g. P20, P50), use PERCENTILE_APPROX with ` +
-    `the correct percentile value and include it as a named column in the output. ` +
-    `(6) Include advanced statistical functions (CORR, REGR_SLOPE, STDDEV, SKEWNESS, KURTOSIS) ` +
-    `when the question involves trend analysis, correlation, or distribution profiling. ` +
-    `(7) Match the exact column list from the example queries. Do not add extra GROUP BY ` +
+    `SQL output rules:\n${DATABRICKS_SQL_RULES}\n\n` +
+    `Additional analytical rules:\n` +
+    `- When the question implies analytical scoring, segmentation, or risk classification, ` +
+    `produce the full scoring formula as a CTE -- do not simplify to a single WHERE filter.\n` +
+    `- Preserve exact NTILE/RANK window function ordering. NTILE with ORDER BY ASC assigns ` +
+    `higher quintile numbers to higher values. Do not reverse sort direction.\n` +
+    `- Include advanced statistical functions (CORR, REGR_SLOPE, STDDEV, SKEWNESS, KURTOSIS) ` +
+    `when the question involves trend analysis, correlation, or distribution profiling.\n` +
+    `- Match the exact column list from the example queries. Do not add extra GROUP BY ` +
     `columns (e.g. country) that could split aggregations and alter results.`
   );
 

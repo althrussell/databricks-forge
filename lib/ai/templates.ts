@@ -9,6 +9,7 @@
 
 import { createHash } from "crypto";
 import { logger } from "@/lib/logger";
+import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
 // ---------------------------------------------------------------------------
 // Shared instruction fragments
@@ -881,6 +882,8 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - Use ST functions for precise spatial calculations: \`ST_Distance()\`, \`ST_Contains()\`, \`ST_Within()\`
 - H3 resolution guide: 7 (city blocks, ~1.2 km), 9 (buildings, ~175 m), 5 (districts, ~8.5 km)
 - Combine H3 for fast filtering with ST_Distance for precise measurement
+
+${DATABRICKS_SQL_RULES}
 
 ### OUTPUT FORMAT
 
