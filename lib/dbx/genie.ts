@@ -141,11 +141,54 @@ export function sanitizeSerializedSpace(raw: string): string {
       }
     }
 
-    // Strip unsupported `relationship_type` from join_specs
+    // Sanitize join_specs: rewrite FQN SQL to alias format, add aliases, encode relationship_type
     const joinSpecs = parsed?.instructions?.join_specs;
     if (Array.isArray(joinSpecs)) {
       for (const js of joinSpecs) {
-        delete js.relationship_type;
+        const leftId: string = js.left?.identifier ?? "";
+        const rightId: string = js.right?.identifier ?? "";
+
+        // Add aliases if missing
+        if (leftId && !js.left.alias) {
+          js.left.alias = leftId.split(".").pop() ?? leftId;
+        }
+        if (rightId && !js.right.alias) {
+          let alias = rightId.split(".").pop() ?? rightId;
+          if (alias === js.left.alias) alias = `${alias}_2`;
+          js.right.alias = alias;
+        }
+
+        // Rewrite FQN.column references in sql[] to `alias`.`column` format
+        if (Array.isArray(js.sql) && leftId && rightId) {
+          const leftAlias = js.left.alias as string;
+          const rightAlias = js.right.alias as string;
+
+          js.sql = js.sql.map((s: string) => {
+            if (s.startsWith("--")) return s;
+            let result = s;
+            // Sort by length descending to avoid partial matches
+            const replacements = (
+              [[leftId, leftAlias], [rightId, rightAlias]] as [string, string][]
+            ).sort((a, b) => b[0].length - a[0].length);
+            for (const [fqn, alias] of replacements) {
+              const escaped = fqn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              result = result.replace(
+                new RegExp(`${escaped}\\.([a-zA-Z_]\\w*)`, "g"),
+                `\`${alias}\`.\`$1\``
+              );
+            }
+            return result;
+          });
+        }
+
+        // Encode relationship_type as SQL comment if present
+        if (js.relationship_type) {
+          const rtTag = `FROM_RELATIONSHIP_TYPE_${String(js.relationship_type).toUpperCase()}`;
+          if (Array.isArray(js.sql) && !js.sql.some((s: string) => s.includes("--rt="))) {
+            js.sql.push(`--rt=${rtTag}--`);
+          }
+          delete js.relationship_type;
+        }
       }
     }
 
