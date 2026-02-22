@@ -27,12 +27,19 @@ import { runDomainClustering } from "./steps/domain-clustering";
 import { runScoring } from "./steps/scoring";
 import { runSqlGeneration } from "./steps/sql-generation";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
+import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
 import {
   startJob,
   updateJob,
   completeJob,
   failJob,
 } from "@/lib/genie/engine-status";
+import {
+  startDashboardJob,
+  updateDashboardJob,
+  completeDashboardJob,
+  failDashboardJob,
+} from "@/lib/dashboard/engine-status";
 
 // ---------------------------------------------------------------------------
 // Step definitions with progress percentages
@@ -260,10 +267,9 @@ export async function startPipeline(runId: string): Promise<void> {
     await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
     logger.info("Pipeline completed, starting Genie Engine in background", { runId, useCaseCount: ctx.useCases.length, sqlOk });
 
-    // Fire Genie Engine as a non-blocking background task.
-    // Uses the same engine-status tracker as the "Regenerate" button so the
-    // Genie Workbench can poll for progress.
+    // Fire Genie Engine and Dashboard Engine as non-blocking background tasks.
     startGenieEngineBackground(ctx, runId);
+    startDashboardEngineBackground(ctx, runId);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown pipeline error";
@@ -315,6 +321,37 @@ function startGenieEngineBackground(
       const msg = err instanceof Error ? err.message : String(err);
       failJob(runId, msg);
       logger.error("Background Genie Engine failed", { runId, error: msg });
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Background Dashboard Engine
+// ---------------------------------------------------------------------------
+
+/**
+ * Fire-and-forget the Dashboard Engine after the pipeline completes.
+ * Progress is tracked via dashboard/engine-status.ts so the Dashboards
+ * tab can poll for updates.
+ */
+function startDashboardEngineBackground(
+  ctx: PipelineContext,
+  runId: string
+): void {
+  startDashboardJob(runId);
+
+  runDashboardRecommendations(
+    ctx,
+    runId,
+    (message, percent) => updateDashboardJob(runId, message, percent),
+  )
+    .then((count) => {
+      completeDashboardJob(runId, count);
+      logger.info("Background Dashboard Engine completed", { runId, dashboardCount: count });
+    })
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      failDashboardJob(runId, msg);
+      logger.error("Background Dashboard Engine failed", { runId, error: msg });
     });
 }
 

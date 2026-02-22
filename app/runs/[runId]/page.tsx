@@ -25,6 +25,7 @@ import { RunProgress } from "@/components/pipeline/run-progress";
 import { UseCaseTable } from "@/components/pipeline/use-case-table";
 import { ExportToolbar } from "@/components/pipeline/export-toolbar";
 import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
+import { DashboardsTab } from "@/components/pipeline/dashboards-tab";
 import { ScoreDistributionChart } from "@/components/charts/score-distribution-chart";
 import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
 import { TypeSplitChart } from "@/components/charts/type-split-chart";
@@ -110,6 +111,10 @@ export default function RunDetailPage({
   const [genieGenerating, setGenieGenerating] = useState(false);
   const geniePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Dashboard Engine background generation indicator
+  const [dashboardGenerating, setDashboardGenerating] = useState(false);
+  const dashboardPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     if (run?.status !== "completed" || useCases.length === 0) return;
 
@@ -151,6 +156,52 @@ export default function RunDetailPage({
       if (geniePollRef.current) {
         clearInterval(geniePollRef.current);
         geniePollRef.current = null;
+      }
+    };
+  }, [run?.status, runId, useCases.length]);
+
+  // Dashboard Engine background generation polling
+  useEffect(() => {
+    if (run?.status !== "completed" || useCases.length === 0) return;
+
+    let cancelled = false;
+
+    async function checkDashboardStatus() {
+      try {
+        const res = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.status === "generating") {
+          setDashboardGenerating(true);
+          if (!dashboardPollRef.current) {
+            dashboardPollRef.current = setInterval(async () => {
+              try {
+                const r = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
+                if (r.ok) {
+                  const d = await r.json();
+                  if (d.status !== "generating") {
+                    setDashboardGenerating(false);
+                    if (dashboardPollRef.current) {
+                      clearInterval(dashboardPollRef.current);
+                      dashboardPollRef.current = null;
+                    }
+                  }
+                }
+              } catch { /* ignore */ }
+            }, 3000);
+          }
+        } else {
+          setDashboardGenerating(false);
+        }
+      } catch { /* ignore */ }
+    }
+
+    checkDashboardStatus();
+    return () => {
+      cancelled = true;
+      if (dashboardPollRef.current) {
+        clearInterval(dashboardPollRef.current);
+        dashboardPollRef.current = null;
       }
     };
   }, [run?.status, runId, useCases.length]);
@@ -438,6 +489,11 @@ export default function RunDetailPage({
                   Genie Spaces {genieGenerating && <span className="ml-1 animate-pulse text-violet-500">●</span>}
                 </TabsTrigger>
               )}
+              {useCases.length > 0 && (
+                <TabsTrigger value="dashboards">
+                  Dashboards {dashboardGenerating && <span className="ml-1 animate-pulse text-blue-500">●</span>}
+                </TabsTrigger>
+              )}
               <TabsTrigger
                 value="observability"
                 onClick={() => fetchPromptLogs()}
@@ -678,6 +734,13 @@ export default function RunDetailPage({
             {useCases.length > 0 && (
               <TabsContent value="genie" className="pt-4">
                 <GenieWorkbench runId={run.runId} />
+              </TabsContent>
+            )}
+
+            {/* Dashboards Tab */}
+            {useCases.length > 0 && (
+              <TabsContent value="dashboards" className="pt-4">
+                <DashboardsTab runId={run.runId} />
               </TabsContent>
             )}
 
