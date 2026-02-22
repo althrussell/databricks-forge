@@ -47,6 +47,7 @@ model ForgeRun {
   genieRecommendations ForgeGenieRecommendation[]
   genieSpaces          ForgeGenieSpace[]
   genieEngineConfigs   ForgeGenieEngineConfig[]
+  environmentScans     ForgeEnvironmentScan[]
 
   @@map("forge_runs")
 }
@@ -115,6 +116,21 @@ model ForgePromptLog {
   @@index([runId])
   @@index([runId, step])
   @@map("forge_prompt_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Prompt Template Archive (content-addressable)
+// ---------------------------------------------------------------------------
+
+model ForgePromptTemplate {
+  versionHash  String   @id @map("version_hash")
+  promptKey    String   @map("prompt_key")
+  templateText String   @map("template_text")
+  charCount    Int      @map("char_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([promptKey])
+  @@map("forge_prompt_templates")
 }
 
 // ---------------------------------------------------------------------------
@@ -290,6 +306,7 @@ model ForgeEnvironmentScan {
   passResultsJson       String?  @map("pass_results_json")
   createdAt             DateTime @default(now()) @map("created_at")
 
+  run        ForgeRun? @relation(fields: [runId], references: [runId], onDelete: Cascade)
   details    ForgeTableDetail[]
   histories  ForgeTableHistorySummary[]
   lineage    ForgeTableLineage[]
