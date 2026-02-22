@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -62,6 +63,12 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
 
   const [regeneratingDomain, setRegeneratingDomain] = useState<string | null>(null);
 
+  // Generation progress
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState(0);
+  const [genMessage, setGenMessage] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // -------------------------------------------------------------------------
   // Data fetching
   // -------------------------------------------------------------------------
@@ -89,6 +96,76 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
   useEffect(() => {
     fetchRecommendations();
   }, [fetchRecommendations]);
+
+  // -------------------------------------------------------------------------
+  // Generation progress polling
+  // -------------------------------------------------------------------------
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    setGenerating(true);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setGenProgress(data.percent ?? 0);
+        setGenMessage(data.message ?? "");
+
+        if (data.status === "completed") {
+          stopPolling();
+          setGenerating(false);
+          setRegeneratingDomain(null);
+          setGenProgress(100);
+          setGenMessage("");
+          toast.success("Dashboard generation complete");
+          fetchRecommendations();
+        } else if (data.status === "failed") {
+          stopPolling();
+          setGenerating(false);
+          setRegeneratingDomain(null);
+          setGenMessage("");
+          toast.error(`Dashboard generation failed: ${data.error ?? "unknown error"}`);
+          fetchRecommendations();
+        }
+      } catch {
+        /* ignore transient poll errors */
+      }
+    }, 2000);
+  }, [runId, stopPolling, fetchRecommendations]);
+
+  // Auto-detect in-progress generation on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.status === "generating") {
+          setGenerating(true);
+          setGenProgress(data.percent ?? 0);
+          setGenMessage(data.message ?? "");
+          startPolling();
+        }
+      } catch {
+        /* no active job */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runId, startPolling]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -150,26 +227,8 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
       });
       if (!res.ok) throw new Error("Regeneration failed");
       toast.success(`Regenerating dashboard for ${domain}...`);
-
-      // Poll for completion
-      const poll = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
-          if (statusRes.ok) {
-            const status = await statusRes.json();
-            if (status.status !== "generating") {
-              clearInterval(poll);
-              setRegeneratingDomain(null);
-              fetchRecommendations();
-              if (status.status === "completed") {
-                toast.success(`Dashboard for ${domain} regenerated`);
-              } else {
-                toast.error(`Dashboard regeneration failed: ${status.error ?? "unknown"}`);
-              }
-            }
-          }
-        } catch { /* ignore poll errors */ }
-      }, 2000);
+      setGenerating(true);
+      startPolling();
     } catch (err) {
       setRegeneratingDomain(null);
       toast.error(err instanceof Error ? err.message : "Regeneration failed");
@@ -223,34 +282,34 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
         <CardHeader>
           <CardTitle>Dashboards</CardTitle>
           <CardDescription>
-            No dashboard recommendations generated yet. Dashboard recommendations
-            are created automatically when the pipeline completes.
+            {generating
+              ? "Generating dashboard recommendations..."
+              : "No dashboard recommendations generated yet. Dashboard recommendations are created automatically when the pipeline completes."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
-                toast.success("Dashboard generation started");
-                const poll = setInterval(async () => {
-                  const r = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
-                  if (r.ok) {
-                    const d = await r.json();
-                    if (d.status !== "generating") {
-                      clearInterval(poll);
-                      fetchRecommendations();
-                    }
-                  }
-                }, 3000);
-              } catch {
-                toast.error("Failed to start dashboard generation");
-              }
-            }}
-          >
-            Generate Dashboards
-          </Button>
+          {generating ? (
+            <div className="space-y-1">
+              <Progress value={genProgress} className="h-2" />
+              <p className="text-[10px] text-muted-foreground">{genMessage}</p>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
+                  toast.success("Dashboard generation started");
+                  setGenerating(true);
+                  startPolling();
+                } catch {
+                  toast.error("Failed to start dashboard generation");
+                }
+              }}
+            >
+              Generate Dashboards
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
@@ -271,26 +330,19 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
             <Button
               variant="outline"
               size="sm"
+              disabled={generating}
               onClick={async () => {
                 try {
                   await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
                   toast.success("Regenerating all dashboards...");
-                  const poll = setInterval(async () => {
-                    const r = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
-                    if (r.ok) {
-                      const d = await r.json();
-                      if (d.status !== "generating") {
-                        clearInterval(poll);
-                        fetchRecommendations();
-                      }
-                    }
-                  }, 3000);
+                  setGenerating(true);
+                  startPolling();
                 } catch {
                   toast.error("Failed to start regeneration");
                 }
               }}
             >
-              Regenerate All
+              {generating ? "Generating..." : "Regenerate All"}
             </Button>
             <Button
               size="sm"
@@ -301,6 +353,14 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
             </Button>
           </div>
         </CardHeader>
+
+        {generating && (
+          <div className="space-y-1 px-6 pb-4">
+            <Progress value={genProgress} className="h-2" />
+            <p className="text-[10px] text-muted-foreground">{genMessage}</p>
+          </div>
+        )}
+
         <CardContent>
           {/* Table header */}
           <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-4 px-2 py-2 text-sm font-medium text-muted-foreground border-b">

@@ -65,10 +65,14 @@ export function DashboardDeployModal({
   const [deployingIdx, setDeployingIdx] = useState(0);
 
   function handleClose() {
+    const wasCompleted = step === "done";
     setStep("configure");
     setResults([]);
     setDeployingIdx(0);
     onOpenChange(false);
+    if (wasCompleted) {
+      onDeployComplete();
+    }
   }
 
   async function handleDeploy() {
@@ -116,7 +120,6 @@ export function DashboardDeployModal({
     }
 
     setStep("done");
-    onDeployComplete();
 
     const successCount = deployResults.filter((r) => !r.error).length;
     if (successCount === deployResults.length) {

@@ -20,12 +20,20 @@ import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } 
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 3;
 
+export interface JoinSpecInput {
+  leftTable: string;
+  rightTable: string;
+  sql: string;
+  relationshipType: string;
+}
+
 export interface TrustedAssetsInput {
   tableFqns: string[];
   metadata: MetadataSnapshot;
   allowlist: SchemaAllowlist;
   useCases: UseCase[];
   entityCandidates: EntityMatchingCandidate[];
+  joinSpecs: JoinSpecInput[];
   endpoint: string;
 }
 
@@ -37,11 +45,11 @@ export interface TrustedAssetsOutput {
 export async function runTrustedAssetAuthoring(
   input: TrustedAssetsInput
 ): Promise<TrustedAssetsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, entityCandidates, endpoint } = input;
+  const { tableFqns, metadata, allowlist, useCases, entityCandidates, joinSpecs, endpoint } = input;
 
   const topUseCases = useCases
     .filter((uc) => uc.sqlCode && uc.sqlStatus === "generated")
-    .slice(0, 8);
+    .slice(0, 12);
 
   if (topUseCases.length === 0) {
     return { queries: [], functions: [] };
@@ -49,6 +57,7 @@ export async function runTrustedAssetAuthoring(
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
   const entityBlock = buildEntityBlock(entityCandidates);
+  const joinBlock = buildJoinBlock(joinSpecs);
 
   const batches: UseCase[][] = [];
   for (let i = 0; i < topUseCases.length; i += BATCH_SIZE) {
@@ -67,7 +76,7 @@ export async function runTrustedAssetAuthoring(
   for (const batch of batches) {
     try {
       const result = await processTrustedAssetBatch(
-        batch, schemaBlock, entityBlock, allowlist, endpoint
+        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint
       );
       allQueries.push(...result.queries);
       allFunctions.push(...result.functions);
@@ -94,10 +103,19 @@ function buildEntityBlock(entityCandidates: EntityMatchingCandidate[]): string {
   }`;
 }
 
+function buildJoinBlock(joinSpecs: JoinSpecInput[]): string {
+  if (joinSpecs.length === 0) return "";
+  const lines = joinSpecs.map(
+    (j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql} (${j.relationshipType})`
+  );
+  return `### TABLE RELATIONSHIPS (use these exact join conditions)\n${lines.join("\n")}`;
+}
+
 async function processTrustedAssetBatch(
   batch: UseCase[],
   schemaBlock: string,
   entityBlock: string,
+  joinBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
 ): Promise<TrustedAssetsOutput> {
@@ -124,6 +142,17 @@ From the provided SQL examples, create:
    - Handle NULL parameters with ISNULL() checks
    - Include identifying columns (name, email, etc.) in the RETURNS TABLE definition
 
+SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
+- PRESERVE the full CTE structure and all business logic from the source SQL. Do NOT simplify, remove CTEs, drop analytical columns, or reduce query complexity.
+- PRESERVE all columns in the SELECT list exactly as they appear in the source SQL. Do NOT add columns not present in the source or remove columns that are present.
+- PRESERVE exact threshold values (LIMIT N, WHERE conditions, >= comparisons). Do NOT change numeric thresholds, filter conditions, or row limits.
+- PRESERVE window function ordering (ASC/DESC) exactly. NTILE, RANK, ROW_NUMBER semantics depend on sort direction -- reversing ORDER BY reverses the business meaning.
+- PRESERVE all statistical and advanced functions (CORR, REGR_SLOPE, REGR_INTERCEPT, REGR_R2, PERCENTILE_APPROX, SKEWNESS, KURTOSIS, CUME_DIST). These are analytical requirements, not optional embellishments.
+
+QUANTITY RULES:
+- Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
+- Produce at least 1 SQL function (UDF) per batch. Prioritize the most reusable analytical pattern as a table-valued function.
+
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }],
   "functions": [{ "name": "...", "ddl": "CREATE OR REPLACE FUNCTION...", "description": "..." }]
@@ -132,6 +161,8 @@ Return JSON: {
   const userMessage = `${schemaBlock}
 
 ${entityBlock}
+
+${joinBlock}
 
 ### SQL EXAMPLES TO PARAMETERIZE
 ${sqlExamples}
@@ -147,7 +178,7 @@ Create parameterized queries and UDF functions from these examples.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 4096,
+    maxTokens: 8192,
     responseFormat: "json_object",
   });
 
@@ -173,7 +204,8 @@ Create parameterized queries and UDF functions from these examples.`;
       ddl: String(f.ddl ?? ""),
       description: String(f.description ?? ""),
     }))
-    .filter((f) => f.ddl.length > 0 && f.name.length > 0);
+    .filter((f) => f.ddl.length > 0 && f.name.length > 0)
+    .filter((f) => validateSqlExpression(allowlist, f.ddl, `trusted_fn:${f.name}`));
 
   return { queries, functions };
 }

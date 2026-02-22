@@ -241,6 +241,12 @@ export function assembleSerializedSpace(
       ? [{ id: makeId(seed, "instr", 0), content: instrContent }]
       : [];
 
+  const instrTotalChars = instrContent.reduce((sum, s) => sum + s.length, 0);
+  logger.info("Genie instruction size", { domain, totalChars: instrTotalChars, blocks: instrContent.length });
+  if (instrTotalChars > 3000) {
+    logger.warn("Genie instructions exceed recommended limit", { domain, totalChars: instrTotalChars });
+  }
+
   // 9. Benchmarks -- each phrasing gets its own entry sharing the same answer
   const benchmarks: BenchmarkQuestion[] = [];
   let benchIdx = 0;

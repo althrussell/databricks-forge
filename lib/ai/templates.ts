@@ -865,6 +865,8 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 **6. JOIN & QUERY RULES**
 - JOIN correctly using the foreign key relationships provided
 - Be specific: reference exact column names; write concrete WHERE, GROUP BY, and ORDER BY clauses
+- NEVER nest a window function (OVER) inside an aggregate function (SUM, AVG, COUNT, MIN, MAX) — this is a runtime error in Databricks SQL. Compute window values in a subquery or CTE first, then aggregate the results.
+- NEVER use MEDIAN() — it is not supported in Databricks SQL. Use PERCENTILE_APPROX(col, 0.5) instead.
 - No markdown fences: output raw SQL only
 
 **7. ADVANCED DBSQL FEATURES (USE WHERE APPROPRIATE)**

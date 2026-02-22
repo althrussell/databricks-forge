@@ -13,9 +13,16 @@ import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 
-const TEMPERATURE = 0.3;
+const TEMPERATURE = 0.1;
 const BENCHMARKS_PER_BATCH = 5;
 const BATCH_SIZE = 4;
+
+interface JoinSpecInput {
+  leftTable: string;
+  rightTable: string;
+  sql: string;
+  relationshipType: string;
+}
 
 export interface BenchmarkGenerationInput {
   tableFqns: string[];
@@ -24,6 +31,7 @@ export interface BenchmarkGenerationInput {
   useCases: UseCase[];
   entityCandidates: EntityMatchingCandidate[];
   customerBenchmarks: BenchmarkInput[];
+  joinSpecs: JoinSpecInput[];
   endpoint: string;
 }
 
@@ -36,10 +44,16 @@ export async function runBenchmarkGeneration(
 ): Promise<BenchmarkGenerationOutput> {
   const {
     tableFqns, metadata, allowlist, useCases,
-    entityCandidates, customerBenchmarks, endpoint,
+    entityCandidates, customerBenchmarks, joinSpecs, endpoint,
   } = input;
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
+
+  const joinBlock = joinSpecs.length > 0
+    ? `### TABLE RELATIONSHIPS (use these exact join conditions in expectedSql)\n${
+        joinSpecs.map((j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql} (${j.relationshipType})`).join("\n")
+      }`
+    : "";
 
   const entityBlock = entityCandidates
     .filter((c) => c.sampleValues.length > 0)
@@ -70,7 +84,7 @@ export async function runBenchmarkGeneration(
   for (const batch of batches) {
     try {
       const batchResult = await processBenchmarkBatch(
-        batch, schemaBlock, entityBlock, allowlist, endpoint
+        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint
       );
       allBenchmarks.push(...batchResult);
     } catch (err) {
@@ -95,11 +109,12 @@ async function processBenchmarkBatch(
   batch: UseCase[],
   schemaBlock: string,
   entityBlock: string,
+  joinBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
 ): Promise<BenchmarkInput[]> {
   const useCaseContext = batch
-    .map((uc) => `Use case: ${uc.name}\nQuestion: ${uc.statement}\nSQL: ${uc.sqlCode}`)
+    .map((uc) => `Use case: ${uc.name}\nQuestion: ${uc.statement}\nGROUND TRUTH SQL (use this as the expectedSql, do NOT simplify):\n${uc.sqlCode}`)
     .join("\n\n---\n\n");
 
   const systemMessage = `You are a QA expert creating benchmark questions for a Databricks Genie space.
@@ -121,12 +136,20 @@ SQL rules for expectedSql:
 - For top-N queries (e.g. "top 10 customers"), ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() because ties can return more than N rows.
 - Always include human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT alongside IDs and metrics when the query is entity-level.
 
+SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
+- The expectedSql MUST faithfully reproduce the full analytical complexity of the source use case SQL. Do NOT simplify CTEs, remove scoring logic, drop statistical functions, or reduce the number of output columns.
+- PRESERVE exact thresholds (LIMIT values, WHERE filter conditions, minimum row counts). The ground truth SQL specifies these for a reason.
+- PRESERVE all window function ORDER BY directions exactly (ASC vs DESC). NTILE(5) OVER (ORDER BY x ASC) assigns quintile 5 to the highest values. NTILE(5) OVER (ORDER BY x DESC) assigns quintile 1 to the highest values. Reversing the direction reverses tier/segment assignments.
+- PRESERVE all advanced analytics: CORR, REGR_SLOPE, REGR_INTERCEPT, PERCENTILE_APPROX, SKEWNESS, KURTOSIS, CUME_DIST, cross-join correlation CTEs, revenue share calculations.
+- Do NOT add columns not present in the source SQL (e.g., do not add "country" if the source SQL does not include it).
+- Do NOT remove columns present in the source SQL (e.g., do not drop email_address, scoring columns, or percentile baselines).
+
 Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "alternatePhrasings": ["..."] }] }`;
 
   const userMessage = `${schemaBlock}
 
 ${entityBlock ? `### ENTITY MATCHING VALUES\n${entityBlock}\n` : ""}
-
+${joinBlock ? `${joinBlock}\n` : ""}
 ### USE CASES WITH SQL
 ${useCaseContext || "(no use case SQL available)"}
 
@@ -141,7 +164,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 4096,
+    maxTokens: 8192,
     responseFormat: "json_object",
   });
 

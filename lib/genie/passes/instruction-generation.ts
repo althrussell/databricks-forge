@@ -16,11 +16,22 @@ import type {
 } from "../types";
 
 const TEMPERATURE = 0.3;
+const MAX_INSTRUCTION_CHARS = 3000;
+const MAX_GLOSSARY_ENTRIES = 10;
+const MAX_CLARIFICATION_RULES = 5;
+const MAX_FIELD_CHARS = 200;
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+
+interface JoinSpecInput {
+  leftTable: string;
+  rightTable: string;
+  sql: string;
+  relationshipType: string;
+}
 
 export interface InstructionGenerationInput {
   domain: string;
@@ -29,6 +40,7 @@ export interface InstructionGenerationInput {
   businessContext: BusinessContext | null;
   config: GenieEngineConfig;
   entityCandidates: EntityMatchingCandidate[];
+  joinSpecs: JoinSpecInput[];
   endpoint: string;
 }
 
@@ -39,7 +51,7 @@ export interface InstructionGenerationOutput {
 export async function runInstructionGeneration(
   input: InstructionGenerationInput
 ): Promise<InstructionGenerationOutput> {
-  const { domain, subdomains, businessName, businessContext, config, entityCandidates, endpoint } = input;
+  const { domain, subdomains, businessName, businessContext, config, entityCandidates, joinSpecs, endpoint } = input;
 
   const instructions: string[] = [];
 
@@ -48,11 +60,20 @@ export async function runInstructionGeneration(
     domain, subdomains, businessName, businessContext
   ));
 
-  // 2. Entity matching guidance
-  const entityGuidance = buildEntityMatchingGuidance(entityCandidates);
-  if (entityGuidance) instructions.push(entityGuidance);
+  // 2. Entity matching -- detailed per-column guidance lives in table
+  //    descriptions via column enrichments; a short hint is sufficient here.
+  if (entityCandidates.some((c) => c.sampleValues.length > 0)) {
+    instructions.push(
+      "When users refer to coded values by their full names or descriptions, " +
+      "use the column synonyms and descriptions provided in the table metadata to map to stored codes."
+    );
+  }
 
-  // 3. Time period guidance
+  // 3. Table relationship guidance
+  const joinInstruction = buildJoinInstruction(joinSpecs);
+  if (joinInstruction) instructions.push(joinInstruction);
+
+  // 4. Time period guidance
   if (config.autoTimePeriods) {
     const fyMonth = MONTH_NAMES[config.fiscalYearStartMonth] || "January";
     instructions.push(
@@ -62,20 +83,20 @@ export async function runInstructionGeneration(
     );
   }
 
-  // 4. Clarification rules
+  // 5. Clarification rules
   const clarificationInstr = buildClarificationInstruction(config.clarificationRules);
   if (clarificationInstr) instructions.push(clarificationInstr);
 
-  // 5. Summary customization
+  // 6. Summary customization
   if (config.summaryInstructions.trim()) {
     instructions.push(
       `Instructions you must follow when providing summaries:\n${config.summaryInstructions}`
     );
   }
 
-  // 6. Glossary-based instruction
+  // 7. Glossary-based instruction (capped to avoid bloating context)
   if (config.glossary.length > 0) {
-    const glossaryLines = config.glossary.map(
+    const glossaryLines = config.glossary.slice(0, MAX_GLOSSARY_ENTRIES).map(
       (g) => `- "${g.term}" means: ${g.definition}${g.synonyms.length > 0 ? ` (also called: ${g.synonyms.join(", ")})` : ""}`
     );
     instructions.push(
@@ -83,35 +104,108 @@ export async function runInstructionGeneration(
     );
   }
 
-  // 7. Global instructions from customer
+  // 8. Global instructions from customer
   if (config.globalInstructions.trim()) {
     instructions.push(config.globalInstructions);
   }
 
-  // 8. SQL output quality rules
+  // 9. SQL output quality rules
   instructions.push(
     `SQL output rules: ` +
     `(1) Always include human-readable identifying columns (e.g. customer name, email address, product name) in query results -- ` +
     `never return only IDs or surrogate keys without the corresponding descriptive columns. ` +
     `(2) For "top N" queries, use ORDER BY ... LIMIT N to guarantee exactly N rows. ` +
-    `Do not use RANK() or DENSE_RANK() for top-N because ties can return more than N rows.`
+    `Do not use RANK() or DENSE_RANK() for top-N because ties can return more than N rows. ` +
+    `(3) When the question implies analytical scoring, segmentation, or risk classification, ` +
+    `produce the full scoring formula as a CTE -- do not simplify to a single WHERE filter. ` +
+    `(4) Preserve exact NTILE/RANK window function ordering. NTILE with ORDER BY ASC assigns ` +
+    `higher quintile numbers to higher values. Do not reverse sort direction. ` +
+    `(5) When computing percentile baselines (e.g. P20, P50), use PERCENTILE_APPROX with ` +
+    `the correct percentile value and include it as a named column in the output. ` +
+    `(6) Include advanced statistical functions (CORR, REGR_SLOPE, STDDEV, SKEWNESS, KURTOSIS) ` +
+    `when the question involves trend analysis, correlation, or distribution profiling. ` +
+    `(7) Match the exact column list from the example queries. Do not add extra GROUP BY ` +
+    `columns (e.g. country) that could split aggregations and alter results.`
   );
 
-  // 9. LLM-refined instruction (if enabled)
+  // 10. LLM-refined instruction (if enabled) -- tracked separately so it
+  //    can be dropped first when the total exceeds the character budget.
+  let llmRefined: string | null = null;
   if (config.llmRefinement && businessContext) {
     try {
-      const refined = await generateLLMInstruction(
+      llmRefined = await generateLLMInstruction(
         domain, subdomains, businessName, businessContext, endpoint
       );
-      if (refined) instructions.push(refined);
     } catch (err) {
       logger.warn("LLM instruction generation failed", {
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
+  if (llmRefined) instructions.push(llmRefined);
 
-  return { instructions };
+  return { instructions: applyCharBudget(instructions, llmRefined, config) };
+}
+
+function totalChars(blocks: string[]): number {
+  return blocks.reduce((sum, s) => sum + s.length, 0);
+}
+
+/**
+ * Progressively trim instructions to stay within MAX_INSTRUCTION_CHARS.
+ * Priority (lowest-value dropped first):
+ *   1. LLM-refined instruction
+ *   2. Glossary reduced to 5 entries
+ *   3. Clarification rules reduced to 3
+ */
+function applyCharBudget(
+  instructions: string[],
+  llmRefined: string | null,
+  config: GenieEngineConfig
+): string[] {
+  if (totalChars(instructions) <= MAX_INSTRUCTION_CHARS) return instructions;
+
+  let trimmed = [...instructions];
+
+  // Pass 1: drop LLM-refined block
+  if (llmRefined) {
+    trimmed = trimmed.filter((s) => s !== llmRefined);
+    logger.debug("Instruction budget: dropped LLM-refined block");
+    if (totalChars(trimmed) <= MAX_INSTRUCTION_CHARS) return trimmed;
+  }
+
+  // Pass 2: reduce glossary to 5
+  if (config.glossary.length > 5) {
+    const reducedGlossary = config.glossary.slice(0, 5).map(
+      (g) => `- "${g.term}" means: ${g.definition}${g.synonyms.length > 0 ? ` (also called: ${g.synonyms.join(", ")})` : ""}`
+    );
+    const header = "Business terminology for this space:";
+    trimmed = trimmed.map((s) =>
+      s.startsWith(header) ? `${header}\n${reducedGlossary.join("\n")}` : s
+    );
+    logger.debug("Instruction budget: reduced glossary to 5 entries");
+    if (totalChars(trimmed) <= MAX_INSTRUCTION_CHARS) return trimmed;
+  }
+
+  // Pass 3: reduce clarification rules to 3
+  if (config.clarificationRules.length > 3) {
+    const reducedRules = config.clarificationRules.slice(0, 3).map((r) =>
+      `When users ask about ${r.topic} but don't include ${r.missingDetails.join(" or ")}, ` +
+      `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`
+    );
+    const header = "Clarification rules:";
+    trimmed = trimmed.map((s) =>
+      s.startsWith(header) ? `${header}\n${reducedRules.join("\n")}` : s
+    );
+    logger.debug("Instruction budget: reduced clarification rules to 3");
+  }
+
+  return trimmed;
+}
+
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 1) + "…";
 }
 
 function buildBusinessContextInstruction(
@@ -126,9 +220,9 @@ function buildBusinessContextInstruction(
 
   if (bc) {
     if (bc.industries) lines.push(`Industry: ${bc.industries}.`);
-    if (bc.strategicGoals) lines.push(`Strategic goals: ${bc.strategicGoals}`);
-    if (bc.businessPriorities) lines.push(`Business priorities: ${bc.businessPriorities}`);
-    if (bc.valueChain) lines.push(`Value chain: ${bc.valueChain}`);
+    if (bc.strategicGoals) lines.push(`Strategic goals: ${truncate(bc.strategicGoals, MAX_FIELD_CHARS)}`);
+    if (bc.businessPriorities) lines.push(`Business priorities: ${truncate(bc.businessPriorities, MAX_FIELD_CHARS)}`);
+    if (bc.valueChain) lines.push(`Value chain: ${truncate(bc.valueChain, MAX_FIELD_CHARS)}`);
   }
 
   if (subdomains.length > 0) {
@@ -138,23 +232,22 @@ function buildBusinessContextInstruction(
   return lines.join("\n");
 }
 
-function buildEntityMatchingGuidance(candidates: EntityMatchingCandidate[]): string | null {
-  const withValues = candidates.filter((c) => c.sampleValues.length > 0);
-  if (withValues.length === 0) return null;
+function buildJoinInstruction(joinSpecs: JoinSpecInput[]): string | null {
+  if (joinSpecs.length === 0) return null;
 
-  const lines = withValues.slice(0, 15).map((c) => {
-    const colRef = `${c.tableFqn}.${c.columnName}`;
-    const vals = c.sampleValues.slice(0, 10).join(", ");
-    return `- Column ${colRef} stores coded values: [${vals}]. When users refer to these using full names or descriptions, map to the stored codes.`;
+  const lines = joinSpecs.slice(0, 15).map((j) => {
+    const leftShort = j.leftTable.split(".").pop() ?? j.leftTable;
+    const rightShort = j.rightTable.split(".").pop() ?? j.rightTable;
+    return `- ${leftShort} joins to ${rightShort} on ${j.sql} (${j.relationshipType})`;
   });
 
-  return `Entity matching guidance:\n${lines.join("\n")}`;
+  return `Table relationships for SQL generation:\n${lines.join("\n")}\nAlways use these join conditions when combining these tables.`;
 }
 
 function buildClarificationInstruction(rules: ClarificationRule[]): string | null {
   if (rules.length === 0) return null;
 
-  const ruleLines = rules.map((r) =>
+  const ruleLines = rules.slice(0, MAX_CLARIFICATION_RULES).map((r) =>
     `When users ask about ${r.topic} but don't include ${r.missingDetails.join(" or ")}, ` +
     `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`
   );
