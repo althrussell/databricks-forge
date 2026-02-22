@@ -63,16 +63,35 @@ export function getColumnType(allowlist: SchemaAllowlist, tableFqn: string, colu
 /**
  * Extract table.column references from a SQL string and validate each against
  * the allowlist. Returns identifiers that are NOT in the allowlist.
+ *
+ * Excludes FQNs that are the target of CREATE statements (FUNCTION, VIEW, TABLE)
+ * since those are being defined, not referenced.
  */
 export function findInvalidIdentifiers(allowlist: SchemaAllowlist, sql: string): string[] {
   const invalid: string[] = [];
+
+  // Collect FQNs that are targets of CREATE statements (these are being defined, not referenced)
+  const createTargets = new Set<string>();
+  const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
+  let createMatch: RegExpExecArray | null;
+  while ((createMatch = createRegex.exec(sql)) !== null) {
+    const fqnMatch = createMatch[0].match(/(?:`([^`]+)`|([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*))$/);
+    if (fqnMatch) {
+      const fqn = (fqnMatch[1] ?? fqnMatch[2]).replace(/`/g, "");
+      createTargets.add(fqn.toLowerCase());
+    }
+  }
 
   // Match three-part FQNs: catalog.schema.table
   const fqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\b/g;
   let match: RegExpExecArray | null;
   while ((match = fqnRegex.exec(sql)) !== null) {
     const fqn = match[1];
-    if (!isValidTable(allowlist, fqn) && !allowlist.metricViews.has(fqn.toLowerCase())) {
+    if (
+      !isValidTable(allowlist, fqn) &&
+      !allowlist.metricViews.has(fqn.toLowerCase()) &&
+      !createTargets.has(fqn.toLowerCase())
+    ) {
       invalid.push(fqn);
     }
   }

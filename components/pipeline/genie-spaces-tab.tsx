@@ -940,14 +940,19 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-1 text-xs">
-                          {detailParsed.instructions.join_specs.map((j) => (
-                            <div key={j.id} className="flex items-baseline gap-2 py-0.5">
-                              <span className="truncate font-mono text-muted-foreground">{j.sql.join(" ")}</span>
-                              {j.relationship_type && (
-                                <Badge variant="outline" className="shrink-0 text-[9px]">{j.relationship_type}</Badge>
-                              )}
-                            </div>
-                          ))}
+                          {detailParsed.instructions.join_specs.map((j) => {
+                            const rtMatch = j.sql.find((s: string) => s.startsWith("--rt="))?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
+                            const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
+                            const sqlDisplay = j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ");
+                            return (
+                              <div key={j.id} className="flex items-baseline gap-2 py-0.5">
+                                <span className="truncate font-mono text-muted-foreground">{sqlDisplay}</span>
+                                {rt && (
+                                  <Badge variant="outline" className="shrink-0 text-[9px]">{rt}</Badge>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </AccordionContent>
                     </AccordionItem>

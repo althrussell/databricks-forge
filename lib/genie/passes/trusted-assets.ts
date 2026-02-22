@@ -19,7 +19,7 @@ import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } 
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
 const TEMPERATURE = 0.2;
-const BATCH_SIZE = 3;
+const BATCH_SIZE = 2;
 
 export interface JoinSpecInput {
   leftTable: string;

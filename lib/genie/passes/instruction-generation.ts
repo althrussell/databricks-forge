@@ -9,7 +9,7 @@
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import type { BusinessContext } from "@/lib/domain/types";
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import type {
   GenieEngineConfig,
   EntityMatchingCandidate,
@@ -110,18 +110,13 @@ export async function runInstructionGeneration(
     instructions.push(config.globalInstructions);
   }
 
-  // 9. SQL output quality rules (shared + instruction-specific)
+  // 9. SQL output quality rules (compact for runtime + instruction-specific)
   instructions.push(
-    `SQL output rules:\n${DATABRICKS_SQL_RULES}\n\n` +
-    `Additional analytical rules:\n` +
-    `- When the question implies analytical scoring, segmentation, or risk classification, ` +
-    `produce the full scoring formula as a CTE -- do not simplify to a single WHERE filter.\n` +
-    `- Preserve exact NTILE/RANK window function ordering. NTILE with ORDER BY ASC assigns ` +
-    `higher quintile numbers to higher values. Do not reverse sort direction.\n` +
-    `- Include advanced statistical functions (CORR, REGR_SLOPE, STDDEV, SKEWNESS, KURTOSIS) ` +
-    `when the question involves trend analysis, correlation, or distribution profiling.\n` +
-    `- Match the exact column list from the example queries. Do not add extra GROUP BY ` +
-    `columns (e.g. country) that could split aggregations and alter results.`
+    `SQL output rules:\n${DATABRICKS_SQL_RULES_COMPACT}\n` +
+    `- For top-N queries, use ORDER BY ... LIMIT N (not RANK/DENSE_RANK). ` +
+    `- Always include identifying columns (name, email) alongside IDs. ` +
+    `- Preserve NTILE/RANK ordering direction exactly. ` +
+    `- Match the column list from example queries -- do not add extra GROUP BY columns.`
   );
 
   // 10. LLM-refined instruction (if enabled) -- tracked separately so it

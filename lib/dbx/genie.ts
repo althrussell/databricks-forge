@@ -141,6 +141,14 @@ export function sanitizeSerializedSpace(raw: string): string {
       }
     }
 
+    // Strip unsupported `relationship_type` from join_specs
+    const joinSpecs = parsed?.instructions?.join_specs;
+    if (Array.isArray(joinSpecs)) {
+      for (const js of joinSpecs) {
+        delete js.relationship_type;
+      }
+    }
+
     return JSON.stringify(parsed);
   } catch {
     return raw;

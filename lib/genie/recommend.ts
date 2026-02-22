@@ -259,12 +259,17 @@ export function generateGenieRecommendations(
     let joinIdx = 0;
     for (const fk of metadata.foreignKeys) {
       if (tableSet.has(fk.tableFqn) && tableSet.has(fk.referencedTableFqn)) {
+        const leftAlias = fk.tableFqn.split(".").pop() ?? fk.tableFqn;
+        let rightAlias = fk.referencedTableFqn.split(".").pop() ?? fk.referencedTableFqn;
+        if (rightAlias === leftAlias) rightAlias = `${rightAlias}_2`;
+
+        const sqlCondition = `\`${leftAlias}\`.\`${fk.columnName}\` = \`${rightAlias}\`.\`${fk.referencedColumnName}\``;
+
         joinSpecs.push({
           id: makeId(run.runId, `${domain}_join`, joinIdx++),
-          left: { identifier: fk.tableFqn },
-          right: { identifier: fk.referencedTableFqn },
-          sql: [`${fk.tableFqn}.${fk.columnName} = ${fk.referencedTableFqn}.${fk.referencedColumnName}`],
-          relationship_type: "many_to_one",
+          left: { identifier: fk.tableFqn, alias: leftAlias },
+          right: { identifier: fk.referencedTableFqn, alias: rightAlias },
+          sql: [sqlCondition, "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"],
         });
       }
     }

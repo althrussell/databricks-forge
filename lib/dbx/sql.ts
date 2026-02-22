@@ -158,7 +158,7 @@ export async function executeSQL(
   }
 
   const columns: SqlColumn[] =
-    result.manifest?.schema.columns.map((c) => ({
+    result.manifest?.schema?.columns?.map((c) => ({
       name: c.name,
       typeName: c.type_name,
       position: c.position,
