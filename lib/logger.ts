@@ -4,6 +4,8 @@
  * Outputs JSON in production for log aggregation, and human-readable
  * formatted output in development.
  *
+ * Every log entry includes the app version (`v`) for deployment tracing.
+ *
  * Usage:
  *   import { logger } from "@/lib/logger";
  *   logger.info("Step complete", { runId, step: "scoring", count: 42 });
@@ -11,15 +13,19 @@
  *   logger.error("Pipeline failed", { runId, error: err.message });
  */
 
+import packageJson from "@/package.json";
+
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {
   level: LogLevel;
   message: string;
   timestamp: string;
+  v: string;
   [key: string]: unknown;
 }
 
+const APP_VERSION = packageJson.version;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const LEVEL_PRIORITY: Record<LogLevel, number> = {
@@ -37,11 +43,11 @@ function shouldLog(level: LogLevel): boolean {
 }
 
 function formatDev(entry: LogEntry): string {
-  const { level, message, timestamp, ...rest } = entry;
+  const { level, message, timestamp, v, ...rest } = entry;
   const prefix = `[${level.toUpperCase().padEnd(5)}]`;
   const time = timestamp.split("T")[1]?.replace("Z", "") ?? timestamp;
   const extra = Object.keys(rest).length > 0 ? ` ${JSON.stringify(rest)}` : "";
-  return `${time} ${prefix} ${message}${extra}`;
+  return `${time} ${prefix} [v${v}] ${message}${extra}`;
 }
 
 function emit(level: LogLevel, message: string, meta?: Record<string, unknown>) {
@@ -51,6 +57,7 @@ function emit(level: LogLevel, message: string, meta?: Record<string, unknown>) 
     level,
     message,
     timestamp: new Date().toISOString(),
+    v: APP_VERSION,
     ...meta,
   };
 
@@ -75,3 +82,7 @@ export const logger = {
   warn: (message: string, meta?: Record<string, unknown>) => emit("warn", message, meta),
   error: (message: string, meta?: Record<string, unknown>) => emit("error", message, meta),
 };
+
+if (IS_PRODUCTION) {
+  emit("info", `Databricks Forge AI v${APP_VERSION} starting`);
+}
