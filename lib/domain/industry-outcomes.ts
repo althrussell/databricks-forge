@@ -858,6 +858,7 @@ const RCG: IndustryOutcome = {
     "Consumer Goods / CPG",
     "Grocery Retail",
     "Fashion & Apparel",
+    "Specialty & Multi-Brand Retail",
     "E-Commerce",
     "Travel & Hospitality",
   ],
@@ -865,6 +866,8 @@ const RCG: IndustryOutcome = {
     "Supply Chain",
     "Marketing",
     "Customer Experience",
+    "Omni-Channel",
+    "Store Operations",
     "Operations",
     "Sales",
     "Sustainability",
@@ -897,11 +900,19 @@ const RCG: IndustryOutcome = {
               description:
                 "Score and rank suppliers on quality, delivery, cost, and sustainability metrics to optimize sourcing decisions.",
             },
+            {
+              name: "Product & Supplier ESG Analytics",
+              description:
+                "Measure and report sustainability attributes such as materials provenance, recyclability, and ethical sourcing at product, category, and supplier level to support sustainability frameworks and UNGC commitments.",
+              businessValue:
+                "Improved ESG reporting accuracy, reduced reputational risk, stronger supplier accountability.",
+            },
           ],
           kpis: [
             "Supplier risk score",
             "Disruption response time",
             "Supplier diversification index",
+            "Supplier ESG compliance rate",
           ],
           personas: [
             "Chief Supply Chain Officer",
@@ -927,7 +938,14 @@ const RCG: IndustryOutcome = {
             {
               name: "Markdown and Pricing Optimization",
               description:
-                "Use ML to optimize markdown timing and pricing strategies to maximize revenue recovery on slow-moving inventory.",
+                "Use ML to optimize markdown timing and pricing strategies across multi-channel promotional calendars and gross-margin targets for distinct retail formats, maximizing revenue recovery on slow-moving inventory.",
+            },
+            {
+              name: "Category & Pricing Architecture Analytics",
+              description:
+                "Identify Key Value Items, analyse traffic drivers and cross-seller relationships, and measure promotional effectiveness across categories and brands to inform assortment and pricing decisions.",
+              businessValue:
+                "Improved promotional ROI, better category margin mix, reduced cannibalisation.",
             },
           ],
           kpis: [
@@ -969,6 +987,34 @@ const RCG: IndustryOutcome = {
             "VP Supply Chain",
           ],
         },
+        {
+          name: "Omni-Channel Fulfilment Optimization",
+          useCases: [
+            {
+              name: "Unified Inventory Visibility & Order Routing",
+              description:
+                "Optimize order routing across DCs, stores, ship-from-store, and click-and-collect channels using real-time inventory positions to minimise fulfilment cost and meet delivery promise times.",
+              businessValue:
+                "15-25% reduction in fulfilment cost, improved on-time delivery rates.",
+            },
+            {
+              name: "DC-to-Store Replenishment Optimization",
+              description:
+                "Optimise slotting and DC-to-store replenishment cycles for promotional and seasonal peaks such as Black Friday, Christmas, and key sporting seasons.",
+            },
+          ],
+          kpis: [
+            "Fulfilment cost per order",
+            "Click-and-collect SLA attainment",
+            "Ship-from-store utilisation",
+            "Order promise accuracy",
+          ],
+          personas: [
+            "Head of Omni Fulfilment",
+            "GM DC Operations",
+            "Head of Transport",
+          ],
+        },
       ],
     },
     {
@@ -982,7 +1028,7 @@ const RCG: IndustryOutcome = {
             {
               name: "Customer Data Platform",
               description:
-                "Build unified customer profiles from transactional, behavioral, and demographic data across all touchpoints.",
+                "Build a group-wide CDP with cross-brand identity resolution across multiple retail banners, unifying transactional, behavioural, and demographic data into a single customer view.",
             },
             {
               name: "Real-Time Personalization",
@@ -994,15 +1040,24 @@ const RCG: IndustryOutcome = {
               description:
                 "Optimize loyalty program design and rewards using data analytics to maximize customer retention and lifetime value.",
             },
+            {
+              name: "Multi-Brand Loyalty & Offer Optimization",
+              description:
+                "Design offers and benefits that optimise engagement and value across multiple retail brands, targeting cross-brand shoppers to increase share of wallet and program ROI.",
+              businessValue:
+                "Higher cross-brand conversion, increased loyalty member spend, improved offer redemption rates.",
+            },
           ],
           kpis: [
             "Customer lifetime value",
             "Personalization engagement rate",
             "Loyalty program ROI",
+            "Cross-brand engagement rate",
           ],
           personas: [
             "Chief Marketing Officer",
             "Head of CRM",
+            "Head of Loyalty",
             "Head of E-Commerce",
           ],
         },
@@ -1061,6 +1116,34 @@ const RCG: IndustryOutcome = {
             "Chief Human Resources Officer",
             "VP Field Operations",
             "Head of IT",
+          ],
+        },
+        {
+          name: "Store Operations & Workforce Optimization",
+          useCases: [
+            {
+              name: "Store Labour Forecasting & Rostering",
+              description:
+                "Forecast and optimise store staffing levels using foot traffic, sales patterns, seasonality, local events, and promotional calendars to reduce labour cost while maintaining service levels.",
+              businessValue:
+                "5-10% reduction in labour cost as a percentage of sales, improved roster accuracy.",
+            },
+            {
+              name: "In-Store Execution Analytics",
+              description:
+                "Monitor planogram compliance, click-and-collect pick efficiency, and service queue wait times to drive consistent execution across the store network.",
+            },
+          ],
+          kpis: [
+            "Labour cost as % of sales",
+            "Roster accuracy",
+            "Task completion rate",
+            "Click-and-collect pick efficiency",
+          ],
+          personas: [
+            "Head of Retail Operations",
+            "Regional Manager",
+            "Workforce Planning Manager",
           ],
         },
       ],
