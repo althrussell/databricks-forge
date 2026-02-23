@@ -49,7 +49,7 @@ All LLM calls use direct REST calls to Databricks Model Serving (chat completion
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          DATABRICKS INSPIRE AI                         │
+│                          DATABRICKS FORGE AI                           │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌──────────┐    ┌──────────────┐    ┌──────────────┐                  │
