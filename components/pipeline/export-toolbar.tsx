@@ -1,7 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 interface ExportToolbarProps {
@@ -13,6 +24,26 @@ interface ExportToolbarProps {
 export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolbarProps) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [notebookUrl, setNotebookUrl] = useState<string | null>(null);
+  const [hasDeployed, setHasDeployed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/runs/${runId}/exports`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.exports) return;
+        const nb = data.exports.find(
+          (e: { format: string; filePath?: string | null }) =>
+            e.format === "notebooks" && e.filePath
+        );
+        if (nb?.filePath) {
+          setNotebookUrl(nb.filePath);
+          setHasDeployed(true);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [runId]);
 
   const handleExport = async (format: string) => {
     setExporting(format);
@@ -21,7 +52,10 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
         const res = await fetch(`/api/export/${runId}?format=notebooks`);
         if (!res.ok) throw new Error("Export failed");
         const data = await res.json();
-        if (data.url) setNotebookUrl(data.url);
+        if (data.url) {
+          setNotebookUrl(data.url);
+          setHasDeployed(true);
+        }
         toast.success(`Deployed ${data.count ?? 0} notebooks to workspace`);
         return;
       }
@@ -29,7 +63,6 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
       const res = await fetch(`/api/export/${runId}?format=${format}`);
       if (!res.ok) throw new Error("Export failed");
 
-      // Download the file
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -88,13 +121,42 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
           Deploy Genie
         </Button>
       )}
-      {notebookUrl ? (
-        <Button
-          size="sm"
-          onClick={() => window.open(notebookUrl, "_blank")}
-        >
-          Open Notebooks
-        </Button>
+      {hasDeployed ? (
+        <>
+          <Button
+            size="sm"
+            onClick={() => window.open(notebookUrl!, "_blank")}
+          >
+            Open Notebooks
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!!exporting}
+              >
+                {exporting === "notebooks" ? "Deploying..." : "Redeploy"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Redeploy notebooks?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will overwrite all previously deployed notebooks in the
+                  workspace. Any manual edits made to those notebooks will be
+                  lost.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => handleExport("notebooks")}>
+                  Redeploy
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       ) : (
         <Button
           size="sm"

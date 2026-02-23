@@ -118,7 +118,7 @@ export async function GET(
         const result = await generateNotebooks(run, useCases, userEmail, lineageDiscoveredFqns);
         const { host } = getConfig();
         const workspaceUrl = `${host}/#workspace${result.path}`;
-        insertExportRecord(runId, "notebooks", result.path);
+        insertExportRecord(runId, "notebooks", workspaceUrl);
         logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "notebooks", businessName: run.config.businessName, path: result.path } });
         return NextResponse.json({ ...result, url: workspaceUrl });
       }
