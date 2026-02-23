@@ -352,26 +352,41 @@ export default function EstatePage() {
     [fetchAggregate, fetchAggregateErd, loadSingleScan]
   );
 
-  // Export (single scan only)
-  const handleExport = useCallback(async () => {
-    if (!selectedScan) return;
+  const [exporting, setExporting] = useState(false);
+
+  const downloadExcel = useCallback(async (url: string, filename: string) => {
+    setExporting(true);
     try {
-      const resp = await fetch(
-        `/api/environment-scan/${selectedScan.scanId}/export?format=excel`
-      );
+      const resp = await fetch(url);
       if (!resp.ok) throw new Error("Export failed");
       const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `estate-report-${selectedScan.scanId.slice(0, 8)}.xlsx`;
+      a.href = blobUrl;
+      a.download = filename;
       a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Estate report downloaded");
+      URL.revokeObjectURL(blobUrl);
+      toast.success("Environment report downloaded");
     } catch {
       toast.error("Failed to export report");
+    } finally {
+      setExporting(false);
     }
-  }, [selectedScan]);
+  }, []);
+
+  const handleExport = useCallback(() => {
+    if (viewMode === "single-scan" && selectedScan) {
+      downloadExcel(
+        `/api/environment-scan/${selectedScan.scanId}/export?format=excel`,
+        `estate-report-${selectedScan.scanId.slice(0, 8)}.xlsx`
+      );
+    } else {
+      downloadExcel(
+        `/api/environment/aggregate/export?format=excel`,
+        `estate-report-aggregate.xlsx`
+      );
+    }
+  }, [viewMode, selectedScan, downloadExcel]);
 
   const humanSize = (bytes: string | number | null): string => {
     if (!bytes) return "—";
@@ -480,17 +495,38 @@ export default function EstatePage() {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          onClick={() =>
-            viewMode === "new-scan"
-              ? setViewMode("aggregate")
-              : setViewMode("new-scan")
-          }
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          New Scan
-        </Button>
+        <div className="flex items-center gap-2">
+          {(viewMode === "single-scan" || (aggregate && aggregate.stats.totalScans > 0)) && (
+            <Button
+              variant="outline"
+              disabled={exporting}
+              onClick={handleExport}
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Environment Report
+                </>
+              )}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() =>
+              viewMode === "new-scan"
+                ? setViewMode("aggregate")
+                : setViewMode("new-scan")
+            }
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Scan
+          </Button>
+        </div>
       </div>
 
       {/* New Scan Form with Catalog Browser */}
@@ -786,7 +822,7 @@ export default function EstatePage() {
           )}
 
           {/* Export (single scan only) */}
-          {viewMode === "single-scan" && (
+          {viewMode === "single-scan" && selectedScan && (
             <TabsContent value="export" className="space-y-4">
               <Card>
                 <CardHeader>
@@ -802,9 +838,21 @@ export default function EstatePage() {
                     PII analysis, implicit relationships, redundancy report,
                     governance scorecard, table health, lineage, and more.
                   </p>
-                  <Button onClick={handleExport}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Excel Report
+                  <Button
+                    disabled={exporting}
+                    onClick={handleExport}
+                  >
+                    {exporting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Excel Report
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </Card>

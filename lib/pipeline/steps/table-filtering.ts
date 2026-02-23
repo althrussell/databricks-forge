@@ -7,6 +7,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage, updateRunFilteredTables } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { ColumnInfo, PipelineContext, TableInfo } from "@/lib/domain/types";
@@ -84,7 +85,7 @@ export async function runTableFiltering(
     const batch = tables.slice(i, i + BATCH_SIZE);
     if (runId) await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
     try {
-      const { filteredFqns, classifications } = await filterBatch(batch, columnIndex, run.config.businessName, run.businessContext, run.config.aiModel, runId);
+      const { filteredFqns, classifications } = await filterBatch(batch, columnIndex, run.config.businessName, run.businessContext, getFastServingEndpoint(), runId);
       businessTables.push(...filteredFqns);
       allClassifications.push(...classifications);
     } catch (error) {

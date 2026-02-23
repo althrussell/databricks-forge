@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type { ExportFormat } from "@/lib/domain/types";
 
@@ -36,14 +36,15 @@ export async function insertExportRecord(
   filePath?: string | null
 ): Promise<void> {
   try {
-    const prisma = await getPrisma();
-    await prisma.forgeExport.create({
-      data: {
-        exportId: randomUUID(),
-        runId,
-        format,
-        filePath: filePath ?? null,
-      },
+    await withPrisma(async (prisma) => {
+      await prisma.forgeExport.create({
+        data: {
+          exportId: randomUUID(),
+          runId,
+          format,
+          filePath: filePath ?? null,
+        },
+      });
     });
   } catch (error) {
     logger.warn("Failed to insert export record", {
@@ -64,16 +65,17 @@ export async function insertExportRecord(
 export async function getExportsByRunId(
   runId: string
 ): Promise<ExportRecordRow[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeExport.findMany({
-    where: { runId },
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeExport.findMany({
+      where: { runId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map((row) => ({
+      exportId: row.exportId,
+      runId: row.runId,
+      format: row.format as ExportFormat,
+      filePath: row.filePath,
+      createdAt: row.createdAt.toISOString(),
+    }));
   });
-  return rows.map((row) => ({
-    exportId: row.exportId,
-    runId: row.runId,
-    format: row.format as ExportFormat,
-    filePath: row.filePath,
-    createdAt: row.createdAt.toISOString(),
-  }));
 }

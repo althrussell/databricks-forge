@@ -165,7 +165,8 @@ DATABASE_URL="postgresql://..." npx prisma db push
 - A **Databricks workspace** with:
   - A running **SQL Warehouse** (Serverless or Pro)
   - Access to **Unity Catalog** metadata you want to analyse
-  - A **Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
+  - A **Model Serving endpoint** for premium tasks (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
+  - A **Model Serving endpoint** for fast tasks (e.g. `databricks-claude-haiku-3-5`) -- optional but recommended for cost optimisation; falls back to premium if not set
 - A **Databricks Personal Access Token (PAT)**
 - A **Lakebase Autoscaling** project (for local dev -- see [Lakebase setup](#lakebase-zero-touch-auto-provisioning); when deployed as a Databricks App this is created automatically)
 
@@ -190,6 +191,7 @@ DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 DATABRICKS_TOKEN=dapi_your_personal_access_token
 DATABRICKS_WAREHOUSE_ID=abc123def456
 DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5
+DATABRICKS_SERVING_ENDPOINT_FAST=databricks-claude-haiku-3-5  # optional
 ```
 
 | Variable | Where to find it |
@@ -198,7 +200,8 @@ DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-5
 | `DATABRICKS_HOST` | Your workspace URL |
 | `DATABRICKS_TOKEN` | User Settings > Developer > Access Tokens > Generate New Token |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouses > click your warehouse > Connection Details |
-| `DATABRICKS_SERVING_ENDPOINT` | The Model Serving endpoint name (e.g. `databricks-claude-sonnet-4-5`) |
+| `DATABRICKS_SERVING_ENDPOINT` | The premium Model Serving endpoint name (e.g. `databricks-claude-sonnet-4-5`) |
+| `DATABRICKS_SERVING_ENDPOINT_FAST` | Optional fast Model Serving endpoint for classification/enrichment tasks (e.g. `databricks-claude-haiku-3-5`). Falls back to premium if not set |
 
 ### 3. Generate Prisma client
 
@@ -232,7 +235,8 @@ Before you start, ensure you have:
 
 - [ ] **A Databricks workspace** with Unity Catalog enabled
 - [ ] **A SQL Warehouse** (Serverless or Pro) running in that workspace
-- [ ] **A Model Serving endpoint** (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
+- [ ] **A Model Serving endpoint** for premium tasks (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
+- [ ] **A Model Serving endpoint** for fast tasks (e.g. `databricks-claude-haiku-3-5`) -- optional but recommended for cost savings
 - [ ] **Workspace previews enabled**: Both **Databricks Apps - On-Behalf-Of User Authorization** and **Databricks Apps - Install Apps from Git** must be turned on in your workspace Admin Settings under Previews
 
 > **Lakebase is auto-provisioned.** The app creates its own Lakebase Autoscale project on first boot -- no manual database setup, no secret scopes, no resource bindings for the database.
@@ -279,12 +283,13 @@ databricks apps deploy databricks-forge --source-code-path . --branch main
 
 ### Step 2: Configure app resources
 
-The app requires two Databricks resource bindings. Configure them in the app's **Configure** page:
+The app requires three Databricks resource bindings (two required, one recommended). Configure them in the app's **Configure** page:
 
 | # | Resource type | Resource key | Configuration |
 | --- | --- | --- | --- |
 | 1 | **SQL Warehouse** | `sql-warehouse` | Select your warehouse. Permission: **Can use** |
-| 2 | **Serving Endpoint** | `serving-endpoint` | Select your Model Serving endpoint. Permission: **Can query** |
+| 2 | **Serving Endpoint** | `serving-endpoint` | Premium model for generation/scoring (e.g. `databricks-claude-sonnet-4-5`). Permission: **Can query** |
+| 3 | **Serving Endpoint** | `serving-endpoint-fast` | Fast model for classification/enrichment (e.g. `databricks-claude-haiku-3-5`). Permission: **Can query**. Optional -- falls back to premium if not set |
 
 <p align="center">
   <img src="docs/images/app-resources.png" alt="App resources — configured SQL Warehouse and Serving Endpoint" width="700" />
@@ -301,7 +306,7 @@ In the app's **Configure** page, under **User authorization**, add these scopes:
 | Scope | Description |
 | --- | --- |
 | `sql` | Execute SQL and manage SQL resources |
-| `files.files` | Manage files and directories (for notebook export) |
+| `files.files` | Manage files and directories |
 | `catalog.tables:read` | Read tables in Unity Catalog |
 | `catalog.schemas:read` | Read schemas in Unity Catalog |
 | `catalog.catalogs:read` | Read catalogs in Unity Catalog |
@@ -388,9 +393,11 @@ The app uses two config files that map resources to environment variables:
 apps:
   databricks-forge:
     resources:
-      - name: sql-warehouse        # → DATABRICKS_WAREHOUSE_ID
+      - name: sql-warehouse           # → DATABRICKS_WAREHOUSE_ID
         type: sql_warehouse
-      - name: serving-endpoint     # → DATABRICKS_SERVING_ENDPOINT
+      - name: serving-endpoint        # → DATABRICKS_SERVING_ENDPOINT
+        type: serving_endpoint
+      - name: serving-endpoint-fast   # → DATABRICKS_SERVING_ENDPOINT_FAST
         type: serving_endpoint
 ```
 
@@ -406,6 +413,8 @@ env:
     valueFrom: sql-warehouse
   - name: DATABRICKS_SERVING_ENDPOINT
     valueFrom: serving-endpoint
+  - name: DATABRICKS_SERVING_ENDPOINT_FAST
+    valueFrom: serving-endpoint-fast
 ```
 
 ### Environment variables at runtime
@@ -416,7 +425,8 @@ env:
 | `DATABRICKS_CLIENT_ID` | Service principal OAuth client ID | Auto-injected by platform |
 | `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret | Auto-injected by platform |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | From `sql-warehouse` resource binding |
-| `DATABRICKS_SERVING_ENDPOINT` | Model Serving endpoint name | From `serving-endpoint` resource binding |
+| `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | From `serving-endpoint` resource binding |
+| `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast Model Serving endpoint name | From `serving-endpoint-fast` resource binding (optional) |
 | `DATABASE_URL` | Lakebase connection string | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 
 > `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically. `DATABASE_URL` is generated dynamically. You never set these manually.
@@ -432,7 +442,7 @@ The app uses **two complementary auth models** ([docs](https://docs.databricks.c
 | API | Scope | What runs as the user |
 | --- | --- | --- |
 | SQL Statement Execution | `sql` | All metadata queries, generated SQL, health check |
-| Workspace REST API | `files.files` | Notebook export to `/Workspace/Users/<email>/` |
+| Workspace REST API | -- | Notebook export runs as the app service principal (see below) |
 | Unity Catalog metadata | `catalog.catalogs:read`, `catalog.schemas:read`, `catalog.tables:read` | `SHOW CATALOGS/SCHEMAS/TABLES`, `information_schema` |
 
 **App authorization (service principal)** -- the app's own identity for background operations:
@@ -440,7 +450,9 @@ The app uses **two complementary auth models** ([docs](https://docs.databricks.c
 | Resource | Permission | What runs as the SP |
 | --- | --- | --- |
 | SQL Warehouse | **Can use** | Background pipeline tasks |
-| Model Serving endpoint | **Can query** | All LLM inference requests |
+| Model Serving endpoint (premium) | **Can query** | Use case generation, scoring, SQL generation |
+| Model Serving endpoint (fast) | **Can query** | Business context, table filtering, domain clustering, deduplication |
+| Workspace REST API | **Can manage** | Notebook export (mkdirs + import to `/Shared/forge_gen/`) |
 | Unity Catalog | **USE CATALOG / USE SCHEMA / SELECT** | Background metadata queries |
 | `system.access.table_lineage` | **SELECT** | Lineage graph walking |
 | Genie Spaces | **Can manage** | Create, update, and trash Genie Spaces |
@@ -456,7 +468,7 @@ The app uses **two complementary auth models** ([docs](https://docs.databricks.c
 | "Create project failed (403)" | Lakebase Autoscale not available in region | Check [supported regions](https://docs.databricks.com/aws/en/oltp/projects/authentication); fall back to manual `DATABASE_URL` |
 | Schema push fails at startup | Lakebase compute still waking from scale-to-zero | Restart the app -- compute wakes automatically and retries succeed |
 | "Failed to connect to warehouse" | Warehouse binding missing or stopped | Verify `sql-warehouse` resource is configured and warehouse is running |
-| "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured (Step 2) |
+| "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured (Step 2). If fast tasks fail, check `serving-endpoint-fast` or remove it to fall back to premium |
 | "USE CATALOG denied" on discovery | User or SP lacks UC grants | The logged-in user and SP both need `USE CATALOG` / `USE SCHEMA` / `SELECT` |
 | Lineage discovery returns 0 tables | Missing lineage permissions | Grant `SELECT` on `system.access.table_lineage` to the user and/or SP |
 
@@ -475,10 +487,12 @@ databricks apps logs databricks-forge --follow
 [ ] 2. App created from Git (Compute > Apps > Create app > From Git)
 [ ] 3. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
 [ ] 4. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
-[ ] 5. User authorization scopes: sql, files.files, catalog.catalogs:read,
+[ ] 5. Fast Serving Endpoint resource bound (key: serving-endpoint-fast, permission: Can query)
+       — optional but recommended for cost savings
+[ ] 6. User authorization scopes: sql, files.files, catalog.catalogs:read,
        catalog.schemas:read, catalog.tables:read
-[ ] 6. UC grants applied to the app's service principal
-[ ] 7. Deployed and health check passes: <app-url>/api/health
+[ ] 7. UC grants applied to the app's service principal
+[ ] 8. Deployed and health check passes: <app-url>/api/health
 ```
 
 > Lakebase is auto-provisioned on first deploy -- no manual database setup needed.
@@ -526,7 +540,7 @@ All API routes are server-side only. The frontend calls them via `fetch()`.
 | **Excel** | exceljs | 3-sheet workbook: Summary, Use Cases (filterable), Domains |
 | **PowerPoint** | pptxgenjs | Title slide, executive summary, domain breakdown, top 10 use cases |
 | **PDF** | pdfkit | Databricks-branded A4 landscape report with cover page, executive summary, domain breakdown, and individual use case pages |
-| **Notebooks** | Workspace REST API | One SQL notebook per use case, organised by domain, deployed to the user's workspace folder (via OBO auth) |
+| **Notebooks** | Workspace REST API | One SQL notebook per domain, deployed to `/Shared/forge_gen/` via the app service principal |
 
 ---
 

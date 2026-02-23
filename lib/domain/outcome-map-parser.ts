@@ -7,7 +7,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "./industry-outcomes";
 
@@ -34,7 +34,7 @@ export async function parseOutcomeMapWithAI(
   markdown: string,
   aiModel?: string
 ): Promise<ParseResult> {
-  const endpoint = aiModel || getServingEndpoint();
+  const endpoint = aiModel || getFastServingEndpoint();
   // Truncate very large documents to avoid exceeding context windows
   const MAX_CHARS = 80_000;
   const truncated =
@@ -140,19 +140,30 @@ function normalizeUseCase(raw: unknown): {
   name: string;
   description: string;
   businessValue?: string;
+  typicalDataEntities?: string[];
+  typicalSourceSystems?: string[];
 } {
   if (typeof raw !== "object" || raw === null) {
     return { name: "Unknown", description: "" };
   }
   const obj = raw as Record<string, unknown>;
-  const result: { name: string; description: string; businessValue?: string } =
-    {
-      name: String(obj.name ?? "Unknown"),
-      description: String(obj.description ?? ""),
-    };
+  const result: {
+    name: string;
+    description: string;
+    businessValue?: string;
+    typicalDataEntities?: string[];
+    typicalSourceSystems?: string[];
+  } = {
+    name: String(obj.name ?? "Unknown"),
+    description: String(obj.description ?? ""),
+  };
   if (obj.businessValue && String(obj.businessValue).trim()) {
     result.businessValue = String(obj.businessValue);
   }
+  const entities = normalizeStringArray(obj.typicalDataEntities);
+  if (entities.length > 0) result.typicalDataEntities = entities;
+  const systems = normalizeStringArray(obj.typicalSourceSystems);
+  if (systems.length > 0) result.typicalSourceSystems = systems;
   return result;
 }
 

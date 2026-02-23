@@ -8,11 +8,12 @@
  * All inferred joins are validated against the schema allowlist.
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot } from "@/lib/domain/types";
-import { buildSchemaContextBlock, isValidTable, type SchemaAllowlist } from "../schema-allowlist";
+import { buildSchemaContextBlock, isValidTable, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 
 const TEMPERATURE = 0.1;
 
@@ -75,7 +76,7 @@ Identify additional table join relationships from column naming patterns.`;
     { role: "user", content: userMessage },
   ];
 
-  const result = await chatCompletion({
+  const result = await cachedChatCompletion({
     endpoint,
     messages,
     temperature: TEMPERATURE,
@@ -97,6 +98,7 @@ Identify additional table join relationships from column naming patterns.`;
     .filter((j) => {
       if (!j.leftTable || !j.rightTable || !j.sql) return false;
       if (!isValidTable(allowlist, j.leftTable) || !isValidTable(allowlist, j.rightTable)) return false;
+      if (!validateSqlExpression(allowlist, j.sql, `join:${j.leftTable}->${j.rightTable}`)) return false;
 
       const pairKey = `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`;
       const reverseKey = `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`;

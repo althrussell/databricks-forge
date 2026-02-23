@@ -25,7 +25,7 @@ import { runIntelligenceLayer, buildTableInputs } from "@/lib/ai/environment-int
 import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
 import { invalidatePrismaClient } from "@/lib/prisma";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { initScanProgress, updateScanProgress } from "@/lib/pipeline/scan-progress";
 import { logger } from "@/lib/logger";
 import type {
@@ -220,7 +220,7 @@ export async function runStandaloneEnrichment(
   });
   let intelligenceResult;
   try {
-    const endpoint = getServingEndpoint();
+    const endpoint = getFastServingEndpoint();
     const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
     intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
       endpoint,

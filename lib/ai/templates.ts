@@ -1107,11 +1107,12 @@ Your task is to parse the following markdown document into a structured JSON for
 2. **Objectives**: Identify the major strategic objectives (e.g., "Drive Growth", "Protect the Firm", "Optimize Operations"). These are the top-level groupings.
 3. **Strategic Priorities**: Within each objective, identify strategic priorities (e.g., "Hyper Personalization", "Risk Management").
 4. **Use Cases**: Within each priority, extract the core use cases with their name and description. If business value is mentioned, include it.
-5. **KPIs**: Extract Key Objectives / KPIs for each priority. These are measurable metrics.
-6. **Personas**: Extract Key Personas for each priority. These are job titles.
-7. **Why Change**: For each objective, extract the "Why Change" or "Why Now" narrative as a concise summary (2-3 sentences).
-8. **Suggested Domains**: Infer 4-6 suggested business domains based on the content.
-9. **Suggested Priorities**: Infer 4-5 suggested business priorities from: "Increase Revenue", "Reduce Cost", "Mitigate Risk", "Enhance Experience", "Optimize Operations", "Drive Innovation", "Achieve ESG", "Protect Revenue".
+5. **Data Gap Hints**: For each use case, infer 2-4 typicalDataEntities (the data models/tables typically needed, e.g. "Customer Profiles", "Transaction History") and 2-3 typicalSourceSystems (common source systems, e.g. "Salesforce CRM", "SAP S/4HANA", "Core Banking Platform"). These help customers identify what data to onboard.
+6. **KPIs**: Extract Key Objectives / KPIs for each priority. These are measurable metrics.
+7. **Personas**: Extract Key Personas for each priority. These are job titles.
+8. **Why Change**: For each objective, extract the "Why Change" or "Why Now" narrative as a concise summary (2-3 sentences).
+9. **Suggested Domains**: Infer 4-6 suggested business domains based on the content.
+10. **Suggested Priorities**: Infer 4-5 suggested business priorities from: "Increase Revenue", "Reduce Cost", "Mitigate Risk", "Enhance Experience", "Optimize Operations", "Drive Innovation", "Achieve ESG", "Protect Revenue".
 
 ### IMPORTANT
 
@@ -1126,7 +1127,7 @@ Your task is to parse the following markdown document into a structured JSON for
 
 Return a single valid JSON object matching this TypeScript interface:
 
-{"id": string, "name": string, "subVerticals": string[], "suggestedDomains": string[], "suggestedPriorities": string[], "objectives": [{"name": string, "whyChange": string, "priorities": [{"name": string, "useCases": [{"name": string, "description": string, "businessValue": string | undefined}], "kpis": string[], "personas": string[]}]}]}
+{"id": string, "name": string, "subVerticals": string[], "suggestedDomains": string[], "suggestedPriorities": string[], "objectives": [{"name": string, "whyChange": string, "priorities": [{"name": string, "useCases": [{"name": string, "description": string, "businessValue": string | undefined, "typicalDataEntities": string[], "typicalSourceSystems": string[]}], "kpis": string[], "personas": string[]}]}]}
 
 Return ONLY the JSON object. No markdown fences, no preamble, no explanation.`,
 } as const;

@@ -12,7 +12,7 @@
 import { NextResponse } from "next/server";
 import { getAggregateEstateView } from "@/lib/lakebase/environment-scans";
 import { logger } from "@/lib/logger";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 
 interface TableCoverageRow {
   tableFqn: string;
@@ -42,42 +42,43 @@ export async function GET() {
       return NextResponse.json({ tables: [], hasEstateData: false });
     }
 
-    // Get the latest completed run's use cases
-    const prisma = await getPrisma();
-    const latestRun = await prisma.forgeRun.findFirst({
-      where: { status: "completed" },
-      orderBy: { completedAt: "desc" },
-      select: { runId: true },
-    });
-
-    const useCasesByTable = new Map<string, TableCoverageRow["useCases"]>();
-    if (latestRun) {
-      const useCases = await prisma.forgeUseCase.findMany({
-        where: { runId: latestRun.runId },
-        orderBy: { overallScore: "desc" },
+    const useCasesByTable = await withPrisma(async (prisma) => {
+      const latestRun = await prisma.forgeRun.findFirst({
+        where: { status: "completed" },
+        orderBy: { completedAt: "desc" },
+        select: { runId: true },
       });
 
-      for (const uc of useCases) {
-        let tables: string[] = [];
-        try {
-          tables = JSON.parse(uc.tablesInvolved as string);
-        } catch {
-          tables = [];
-        }
-        for (const fqn of tables) {
-          const clean = fqn.replace(/`/g, "");
-          if (!useCasesByTable.has(clean)) useCasesByTable.set(clean, []);
-          useCasesByTable.get(clean)!.push({
-            id: uc.id,
-            name: uc.name ?? "",
-            type: uc.type ?? "",
-            domain: uc.domain ?? "",
-            overallScore: uc.overallScore ?? 0,
-            runId: uc.runId,
-          });
+      const map = new Map<string, TableCoverageRow["useCases"]>();
+      if (latestRun) {
+        const useCases = await prisma.forgeUseCase.findMany({
+          where: { runId: latestRun.runId },
+          orderBy: { overallScore: "desc" },
+        });
+
+        for (const uc of useCases) {
+          let tables: string[] = [];
+          try {
+            tables = JSON.parse(uc.tablesInvolved as string);
+          } catch {
+            tables = [];
+          }
+          for (const fqn of tables) {
+            const clean = fqn.replace(/`/g, "");
+            if (!map.has(clean)) map.set(clean, []);
+            map.get(clean)!.push({
+              id: uc.id,
+              name: uc.name ?? "",
+              type: uc.type ?? "",
+              domain: uc.domain ?? "",
+              overallScore: uc.overallScore ?? 0,
+              runId: uc.runId,
+            });
+          }
         }
       }
-    }
+      return map;
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tables: TableCoverageRow[] = aggregate.details.map((d: any) => ({

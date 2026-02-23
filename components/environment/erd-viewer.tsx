@@ -148,20 +148,13 @@ function TableNode({ data }: { data: TableNodeData }) {
         </div>
       )}
 
-      {/* Hover tooltip: description + full column list */}
+      {/* Hover tooltip: columns first, then truncated description */}
       {hovered && !data.expanded && (data.description || data.columns.length > 0) && (
         <div className="absolute z-50 left-full top-0 ml-2 w-[320px] max-h-[400px] overflow-y-auto rounded-lg border bg-popover text-popover-foreground shadow-lg p-3 text-xs">
           {/* FQN */}
           <p className="font-mono text-[10px] text-muted-foreground mb-1 break-all">
             {data.tableFqn}
           </p>
-
-          {/* Description */}
-          {data.description && (
-            <p className="text-sm text-foreground mb-2 leading-relaxed">
-              {data.description}
-            </p>
-          )}
 
           {/* Stats row */}
           <div className="flex items-center gap-3 text-muted-foreground mb-2 flex-wrap">
@@ -174,7 +167,7 @@ function TableNode({ data }: { data: TableNodeData }) {
             )}
           </div>
 
-          {/* Column list */}
+          {/* Column list (shown first so it's always visible) */}
           {data.columns.length > 0 && (
             <div className="border-t pt-2 space-y-1">
               {data.columns.slice(0, 30).map((col) => (
@@ -206,6 +199,15 @@ function TableNode({ data }: { data: TableNodeData }) {
                 </p>
               )}
             </div>
+          )}
+
+          {/* Description (truncated, shown after columns) */}
+          {data.description && (
+            <p className="border-t mt-2 pt-2 text-[11px] text-muted-foreground leading-relaxed">
+              {data.description.length > 200
+                ? data.description.slice(0, 200) + "\u2026"
+                : data.description}
+            </p>
           )}
         </div>
       )}

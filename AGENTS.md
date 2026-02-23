@@ -71,13 +71,13 @@ These are the core TypeScript types used throughout the app:
 
 The core pipeline runs these steps sequentially:
 
-1. **business-context** -- Generate business context via Model Serving (goals, priorities, value chain)
+1. **business-context** -- Generate business context via Model Serving (goals, priorities, value chain) **[fast]**
 2. **metadata-extraction** -- Query `information_schema` for catalogs, schemas, tables, columns
-3. **table-filtering** -- Classify tables as business vs technical via Model Serving (JSON mode)
-4. **usecase-generation** -- Generate use cases in parallel batches via Model Serving (JSON mode)
-5. **domain-clustering** -- Assign domains and subdomains via Model Serving (JSON mode)
-6. **scoring** -- Score, deduplicate (per-domain + cross-domain), calibrate, and rank use cases via Model Serving (JSON mode)
-7. **sql-generation** -- Generate bespoke SQL for each use case via Model Serving (streaming)
+3. **table-filtering** -- Classify tables as business vs technical via Model Serving (JSON mode) **[fast]**
+4. **usecase-generation** -- Generate use cases in parallel batches via Model Serving (JSON mode) **[premium]**
+5. **domain-clustering** -- Assign domains and subdomains via Model Serving (JSON mode) **[fast]**
+6. **scoring** -- Score **[premium]**, deduplicate **[fast]**, calibrate **[premium]**, and rank use cases
+7. **sql-generation** -- Generate bespoke SQL for each use case via Model Serving (streaming) **[premium]**
 
 Each step updates progress in Lakebase. The frontend polls for status.
 
@@ -97,6 +97,8 @@ Key modules:
 - `lib/genie/passes/parse-llm-json.ts` -- robust LLM JSON parsing utility
 - `lib/genie/recommend.ts` -- legacy (non-engine) Genie recommendation fallback
 - `lib/genie/engine-status.ts` -- in-memory progress tracker
+- `lib/genie/llm-cache.ts` -- in-memory LLM response cache with retry logic
+- `lib/genie/concurrency.ts` -- bounded-concurrency execution utility
 - `lib/ai/sql-rules.ts` -- shared Databricks SQL quality rules (`DATABRICKS_SQL_RULES`, `DATABRICKS_SQL_RULES_COMPACT`)
 - `lib/dbx/genie.ts` -- Databricks Genie REST API client (create/update/trash spaces, payload sanitization)
 - `lib/lakebase/genie-recommendations.ts` -- persistence for generated recommendations
@@ -137,6 +139,9 @@ Data model: `ForgeEnvironmentScan`, `ForgeTableDetail`, `ForgeTableHistorySummar
 | Health check       | `GET /api/health` -- DB + warehouse connectivity            |
 | Security headers   | Via `next.config.ts` `headers()` function                   |
 | Versioning         | `package.json` version in `/api/health`, sidebar, run metadata |
+| Model routing      | `getFastServingEndpoint()` routes classification/enrichment to fast model across all pipelines; falls back to premium if `serving-endpoint-fast` is not configured |
+| LLM cache + retry  | `lib/genie/llm-cache.ts` -- in-memory SHA-256-keyed cache (10min TTL) with 429/5xx retry |
+| Concurrency        | `lib/genie/concurrency.ts` -- bounded-concurrency utility for parallel domains and batches |
 
 ## Key Constraints
 

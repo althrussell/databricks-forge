@@ -5,7 +5,7 @@
  * pipeline runs and domains, so the UI can display status badges.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { TrackedDashboard, DashboardStatus } from "@/lib/dashboard/types";
 
 // ---------------------------------------------------------------------------
@@ -43,24 +43,26 @@ function dbRowToTracked(row: {
 export async function listTrackedDashboards(
   runId?: string
 ): Promise<TrackedDashboard[]> {
-  const prisma = await getPrisma();
-  const where = runId ? { runId } : {};
-  const rows = await prisma.forgeDashboard.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    const where = runId ? { runId } : {};
+    const rows = await prisma.forgeDashboard.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(dbRowToTracked);
   });
-  return rows.map(dbRowToTracked);
 }
 
 export async function getTrackedDashboardByRunDomain(
   runId: string,
   domain: string
 ): Promise<TrackedDashboard | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeDashboard.findUnique({
-    where: { runId_domain: { runId, domain } },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeDashboard.findUnique({
+      where: { runId_domain: { runId, domain } },
+    });
+    return row ? dbRowToTracked(row) : null;
   });
-  return row ? dbRowToTracked(row) : null;
 }
 
 export async function trackDashboardCreated(
@@ -71,34 +73,37 @@ export async function trackDashboardCreated(
   title: string,
   dashboardUrl: string | null
 ): Promise<TrackedDashboard> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeDashboard.upsert({
-    where: { runId_domain: { runId, domain } },
-    create: { id, dashboardId, runId, domain, title, status: "created", dashboardUrl },
-    update: { dashboardId, title, status: "created", dashboardUrl },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeDashboard.upsert({
+      where: { runId_domain: { runId, domain } },
+      create: { id, dashboardId, runId, domain, title, status: "created", dashboardUrl },
+      update: { dashboardId, title, status: "created", dashboardUrl },
+    });
+    return dbRowToTracked(row);
   });
-  return dbRowToTracked(row);
 }
 
 export async function trackDashboardUpdated(
   dashboardId: string,
   title?: string
 ): Promise<void> {
-  const prisma = await getPrisma();
-  const data: Record<string, unknown> = { status: "updated" };
-  if (title) data.title = title;
-  await prisma.forgeDashboard.updateMany({
-    where: { dashboardId },
-    data,
+  await withPrisma(async (prisma) => {
+    const data: Record<string, unknown> = { status: "updated" };
+    if (title) data.title = title;
+    await prisma.forgeDashboard.updateMany({
+      where: { dashboardId },
+      data,
+    });
   });
 }
 
 export async function trackDashboardTrashed(
   dashboardId: string
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeDashboard.updateMany({
-    where: { dashboardId },
-    data: { status: "trashed" },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeDashboard.updateMany({
+      where: { dashboardId },
+      data: { status: "trashed" },
+    });
   });
 }

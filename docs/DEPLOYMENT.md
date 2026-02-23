@@ -17,11 +17,13 @@ The app manifest declares:
 
 ### Resource Bindings
 
-| Resource | Type | Purpose |
-|----------|------|---------|
-| SQL Warehouse | `sql_warehouse` | Execute metadata queries and generated SQL |
+| Resource | Resource Key | Type | Purpose |
+|----------|-------------|------|---------|
+| SQL Warehouse | `sql-warehouse` | `sql_warehouse` | Execute metadata queries and generated SQL |
+| Serving Endpoint | `serving-endpoint` | `serving_endpoint` | Premium LLM (Claude Opus) for SQL-critical passes |
+| Fast Serving Endpoint | `serving-endpoint-fast` | `serving_endpoint` | Fast LLM (Claude Sonnet) for metadata/classification passes |
 
-The SQL Warehouse ID is injected via environment variables. Never hardcode it.
+Resource IDs are injected via environment variables. Never hardcode them.
 
 ### Environment Variables (Auto-injected)
 
@@ -31,6 +33,9 @@ The SQL Warehouse ID is injected via environment variables. Never hardcode it.
 | `DATABRICKS_CLIENT_ID` | OAuth client ID (app identity) |
 | `DATABRICKS_CLIENT_SECRET` | OAuth client secret |
 | `DATABRICKS_APP_PORT` | Port the app must listen on |
+| `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID (from `sql-warehouse` resource) |
+| `DATABRICKS_SERVING_ENDPOINT` | Premium model endpoint (from `serving-endpoint` resource) |
+| `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast model endpoint (from `serving-endpoint-fast` resource) |
 
 ### Deployment Steps
 
@@ -66,6 +71,9 @@ The SQL Warehouse ID is injected via environment variables. Never hardcode it.
    DATABRICKS_TOKEN=dapi_xxxxxxxxxxxxx
    DATABRICKS_WAREHOUSE_ID=your_warehouse_id
    DATABRICKS_APP_PORT=3000
+
+   # Optional: fast model for Genie Engine (defaults to databricks-claude-sonnet-4-6)
+   # DATABRICKS_SERVING_ENDPOINT_FAST=databricks-claude-sonnet-4-6
    ```
 4. Start the dev server:
    ```bash

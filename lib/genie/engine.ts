@@ -31,7 +31,11 @@ import { runMetricViewProposals } from "./passes/metric-view-proposals";
 import { runJoinInference } from "./passes/join-inference";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { isValidTable } from "./schema-allowlist";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { mapWithConcurrency } from "./concurrency";
 import { logger } from "@/lib/logger";
+
+const DOMAIN_CONCURRENCY = 3;
 
 export class EngineCancelledError extends Error {
   constructor() {
@@ -81,7 +85,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     onProgress,
   } = input;
 
-  const endpoint = run.config.aiModel;
+  const premiumEndpoint = run.config.aiModel;
+  const fastEndpoint = getFastServingEndpoint();
   const allowlist = buildSchemaAllowlist(metadata);
 
   logger.info("Genie Engine starting", {
@@ -90,6 +95,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     tableCount: metadata.tableCount,
     llmRefinement: config.llmRefinement,
     sampleDataAvailable: sampleData ? sampleData.size : 0,
+    premiumEndpoint,
+    fastEndpoint,
   });
 
   // Pass 0: Table Selection + Grouping
@@ -127,73 +134,76 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     domains: domainGroups.map((g) => `${g.domain} (${g.tables.length} tables)`),
   });
 
-  // Process each domain
-  const recommendations: GenieSpaceRecommendation[] = [];
-  const allPassOutputs: GenieEnginePassOutputs[] = [];
-  let completedDomainCount = 0;
+  // Process domains with bounded concurrency
   const totalDomainCount = domainGroups.length;
+  let completedDomainCount = 0;
 
   onProgress?.("Processing domains...", 10, 0, totalDomainCount);
 
-  for (let di = 0; di < domainGroups.length; di++) {
-    if (signal?.aborted) {
-      logger.info("Genie Engine cancelled before domain", {
-        runId: run.runId,
-        domainIndex: di,
-        completedDomains: completedDomainCount,
-        totalDomains: totalDomainCount,
-      });
-      throw new EngineCancelledError();
-    }
+  const domainResults = await mapWithConcurrency(
+    domainGroups.map((group) => async () => {
+      if (signal?.aborted) {
+        throw new EngineCancelledError();
+      }
 
-    const group = domainGroups[di];
-    const domainPct = Math.round(10 + (di / domainGroups.length) * 85);
+      if (group.tables.length === 0) {
+        logger.info("Skipping domain with no tables", { domain: group.domain });
+        completedDomainCount++;
+        return null;
+      }
 
-    if (group.tables.length === 0) {
-      logger.info("Skipping domain with no tables", { domain: group.domain });
-      completedDomainCount++;
-      continue;
-    }
+      const domainPct = Math.round(10 + (completedDomainCount / totalDomainCount) * 85);
 
-    try {
-      const outputs = await processDomain(
-        group, run, metadata, allowlist, config,
-        sampleData, piiClassifications, endpoint, signal,
-        (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct, completedDomainCount, totalDomainCount)
-      );
+      try {
+        const outputs = await processDomain(
+          group, run, metadata, allowlist, config,
+          sampleData, piiClassifications, premiumEndpoint, fastEndpoint, signal,
+          (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct, completedDomainCount, totalDomainCount)
+        );
 
-      allPassOutputs.push(outputs);
+        const space = assembleSerializedSpace(outputs, {
+          runId: run.runId,
+          businessName: run.config.businessName,
+          allowlist,
+          metadata,
+        });
 
-      // Assemble the SerializedSpace
-      const space = assembleSerializedSpace(outputs, {
-        runId: run.runId,
-        businessName: run.config.businessName,
-        allowlist,
-        metadata,
-      });
+        const rec = buildRecommendation(outputs, space, run.config.businessName);
+        rec.useCaseCount = group.useCases.length;
 
-      const rec = buildRecommendation(outputs, space, run.config.businessName);
-      rec.useCaseCount = group.useCases.length;
-      recommendations.push(rec);
+        completedDomainCount++;
+        onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount);
 
-      completedDomainCount++;
-      onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount);
+        logger.info("Domain processed", {
+          domain: group.domain,
+          tables: outputs.tables.length,
+          measures: outputs.measures.length,
+          filters: outputs.filters.length,
+          dimensions: outputs.dimensions.length,
+          benchmarks: outputs.benchmarkQuestions.length,
+          metricViews: outputs.metricViewProposals.length,
+        });
 
-      logger.info("Domain processed", {
-        domain: group.domain,
-        tables: outputs.tables.length,
-        measures: outputs.measures.length,
-        filters: outputs.filters.length,
-        dimensions: outputs.dimensions.length,
-        benchmarks: outputs.benchmarkQuestions.length,
-        metricViews: outputs.metricViewProposals.length,
-      });
-    } catch (err) {
-      completedDomainCount++;
-      logger.error("Failed to process domain", {
-        domain: group.domain,
-        error: err instanceof Error ? err.message : String(err),
-      });
+        return { rec, outputs };
+      } catch (err) {
+        if (err instanceof EngineCancelledError) throw err;
+        completedDomainCount++;
+        logger.error("Failed to process domain", {
+          domain: group.domain,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    }),
+    DOMAIN_CONCURRENCY,
+  );
+
+  const recommendations: GenieSpaceRecommendation[] = [];
+  const allPassOutputs: GenieEnginePassOutputs[] = [];
+  for (const result of domainResults) {
+    if (result) {
+      recommendations.push(result.rec);
+      allPassOutputs.push(result.outputs);
     }
   }
 
@@ -217,37 +227,37 @@ async function processDomain(
   config: GenieEngineConfig,
   sampleData: SampleDataCache | null,
   piiClassifications: SensitivityClassification[] | undefined,
-  endpoint: string,
+  premiumEndpoint: string,
+  fastEndpoint: string,
   signal: AbortSignal | undefined,
   onProgress: (msg: string) => void
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
 
-  // Pass 1: Column Intelligence
-  onProgress("Analyzing columns...");
-  const columnResult = await runColumnIntelligence({
-    tableFqns: tables,
-    metadata,
-    allowlist,
-    config,
-    sampleData,
-    piiClassifications,
-    endpoint,
-    signal,
-  });
-
-  // Pass 2: Semantic SQL Expressions
-  onProgress("Generating SQL expressions...");
-  const exprResult = await runSemanticExpressions({
-    tableFqns: tables,
-    metadata,
-    allowlist,
-    useCases,
-    businessContext: run.businessContext,
-    config,
-    endpoint,
-    signal,
-  });
+  // Pass 1 (fast) + Pass 2 (premium) run in parallel -- no shared dependencies
+  onProgress("Analyzing columns & generating SQL expressions...");
+  const [columnResult, exprResult] = await Promise.all([
+    runColumnIntelligence({
+      tableFqns: tables,
+      metadata,
+      allowlist,
+      config,
+      sampleData,
+      piiClassifications,
+      endpoint: fastEndpoint,
+      signal,
+    }),
+    runSemanticExpressions({
+      tableFqns: tables,
+      metadata,
+      allowlist,
+      useCases,
+      businessContext: run.businessContext,
+      config,
+      endpoint: premiumEndpoint,
+      signal,
+    }),
+  ]);
 
   // Build join specs from foreign keys, use case SQL, and LLM inference.
   // Computed before Passes 3-5 so all downstream passes have join context.
@@ -303,7 +313,7 @@ async function processDomain(
         metadata,
         allowlist,
         existingJoinKeys: allExistingKeys,
-        endpoint,
+        endpoint: fastEndpoint,
         signal,
       });
       llmInferredJoins = llmResult.joins;
@@ -324,9 +334,10 @@ async function processDomain(
     total: allJoins.length,
   });
 
-  // Pass 3: Trusted Asset Authoring (parallel with Pass 4)
-  onProgress("Creating trusted assets...");
-  const [trustedResult, instructionResult] = await Promise.all([
+  // Passes 3-6 all run in parallel -- all depend on Pass 1 + Pass 2 + joins
+  onProgress("Creating trusted assets, instructions, benchmarks & metric views...");
+  const [trustedResult, instructionResult, benchmarkResult, metricViewResult] = await Promise.all([
+    // Pass 3: Trusted Asset Authoring (premium -- SQL quality critical)
     config.generateTrustedAssets
       ? runTrustedAssetAuthoring({
           tableFqns: tables,
@@ -335,12 +346,12 @@ async function processDomain(
           useCases,
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
-          endpoint,
+          endpoint: premiumEndpoint,
           signal,
         })
       : Promise.resolve({ queries: [], functions: [] }),
 
-    // Pass 4: Instruction Generation (parallel with Pass 3)
+    // Pass 4: Instruction Generation (fast -- short text output)
     runInstructionGeneration({
       domain,
       subdomains,
@@ -349,14 +360,11 @@ async function processDomain(
       config,
       entityCandidates: columnResult.entityCandidates,
       joinSpecs: allJoins,
-      endpoint,
+      endpoint: fastEndpoint,
       signal,
     }),
-  ]);
 
-  // Pass 5: Benchmark Generation (parallel with Pass 6)
-  onProgress("Generating benchmarks & metric views...");
-  const [benchmarkResult, metricViewResult] = await Promise.all([
+    // Pass 5: Benchmark Generation (premium -- SQL quality critical)
     config.generateBenchmarks
       ? runBenchmarkGeneration({
           tableFqns: tables,
@@ -366,12 +374,12 @@ async function processDomain(
           entityCandidates: columnResult.entityCandidates,
           customerBenchmarks: config.benchmarkQuestions,
           joinSpecs: allJoins,
-          endpoint,
+          endpoint: premiumEndpoint,
           signal,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
 
-    // Pass 6: Metric View Proposals (parallel with Pass 5)
+    // Pass 6: Metric View Proposals (premium -- YAML + DDL quality critical)
     config.generateMetricViews
       ? runMetricViewProposals({
           domain,
@@ -383,7 +391,7 @@ async function processDomain(
           dimensions: exprResult.dimensions,
           joinSpecs: allJoins,
           columnEnrichments: columnResult.enrichments,
-          endpoint,
+          endpoint: premiumEndpoint,
           signal,
         })
       : Promise.resolve({ proposals: [] }),

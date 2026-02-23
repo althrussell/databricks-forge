@@ -6,6 +6,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
@@ -90,7 +91,7 @@ export async function runBusinessContext(
         type_label: "business organisation",
         industry_context: industryContext,
       },
-      modelEndpoint: config.aiModel,
+      modelEndpoint: getFastServingEndpoint(),
       responseFormat: "json_object",
       runId,
       step: "business-context",

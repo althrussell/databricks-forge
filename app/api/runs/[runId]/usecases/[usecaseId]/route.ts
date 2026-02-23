@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isValidUUID, isSafeId } from "@/lib/validation";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { computeOverallScore } from "@/lib/domain/scoring";
 
@@ -32,111 +32,112 @@ export async function PATCH(
     const body = await request.json();
     logger.info("[api/runs/usecases] PATCH body", { fields: Object.keys(body) });
 
-    const prisma = await getPrisma();
+    const errorResult = await withPrisma(async (prisma) => {
+      const existing = await prisma.forgeUseCase.findFirst({
+        where: { id: usecaseId, runId },
+        select: {
+          id: true,
+          priorityScore: true,
+          feasibilityScore: true,
+          impactScore: true,
+          userPriorityScore: true,
+          userFeasibilityScore: true,
+          userImpactScore: true,
+        },
+      });
 
-    // Verify the use case exists and belongs to the run
-    const existing = await prisma.forgeUseCase.findFirst({
-      where: { id: usecaseId, runId },
-      select: {
-        id: true,
-        priorityScore: true,
-        feasibilityScore: true,
-        impactScore: true,
-        userPriorityScore: true,
-        userFeasibilityScore: true,
-        userImpactScore: true,
-      },
-    });
+      if (!existing) {
+        logger.warn("[api/runs/usecases] Use case not found", { runId, usecaseId });
+        return { error: "Use case not found", status: 404 } as const;
+      }
 
-    if (!existing) {
-      logger.warn("[api/runs/usecases] Use case not found", { runId, usecaseId });
-      return NextResponse.json({ error: "Use case not found" }, { status: 404 });
-    }
+      const updateData: {
+        name?: string;
+        statement?: string;
+        tablesInvolved?: string;
+        userPriorityScore?: number | null;
+        userFeasibilityScore?: number | null;
+        userImpactScore?: number | null;
+        userOverallScore?: number | null;
+      } = {};
 
-    // Build typed update payload
-    const updateData: {
-      name?: string;
-      statement?: string;
-      tablesInvolved?: string;
-      userPriorityScore?: number | null;
-      userFeasibilityScore?: number | null;
-      userImpactScore?: number | null;
-      userOverallScore?: number | null;
-    } = {};
+      if (typeof body.name === "string" && body.name.trim()) {
+        updateData.name = body.name.trim();
+      }
+      if (typeof body.statement === "string" && body.statement.trim()) {
+        updateData.statement = body.statement.trim();
+      }
+      if (Array.isArray(body.tablesInvolved)) {
+        updateData.tablesInvolved = JSON.stringify(body.tablesInvolved);
+      }
 
-    // Text field edits
-    if (typeof body.name === "string" && body.name.trim()) {
-      updateData.name = body.name.trim();
-    }
-    if (typeof body.statement === "string" && body.statement.trim()) {
-      updateData.statement = body.statement.trim();
-    }
-    if (Array.isArray(body.tablesInvolved)) {
-      updateData.tablesInvolved = JSON.stringify(body.tablesInvolved);
-    }
+      if (body.resetScores === true) {
+        updateData.userPriorityScore = null;
+        updateData.userFeasibilityScore = null;
+        updateData.userImpactScore = null;
+        updateData.userOverallScore = null;
+      } else {
+        const scoreFields = [
+          "userPriorityScore",
+          "userFeasibilityScore",
+          "userImpactScore",
+          "userOverallScore",
+        ] as const;
 
-    // User-adjusted scores (0-1 range, or null to reset)
-    if (body.resetScores === true) {
-      updateData.userPriorityScore = null;
-      updateData.userFeasibilityScore = null;
-      updateData.userImpactScore = null;
-      updateData.userOverallScore = null;
-    } else {
-      const scoreFields = [
-        "userPriorityScore",
-        "userFeasibilityScore",
-        "userImpactScore",
-        "userOverallScore",
-      ] as const;
-
-      for (const field of scoreFields) {
-        if (field in body) {
-          const val = body[field];
-          if (val === null) {
-            updateData[field] = null;
-          } else if (typeof val === "number" && val >= 0 && val <= 1) {
-            updateData[field] = Number(val.toFixed(3));
+        for (const field of scoreFields) {
+          if (field in body) {
+            const val = body[field];
+            if (val === null) {
+              updateData[field] = null;
+            } else if (typeof val === "number" && val >= 0 && val <= 1) {
+              updateData[field] = Number(val.toFixed(3));
+            }
           }
+        }
+
+        if (
+          ("userPriorityScore" in body ||
+            "userFeasibilityScore" in body ||
+            "userImpactScore" in body) &&
+          !("userOverallScore" in body)
+        ) {
+          const p =
+            updateData.userPriorityScore ??
+            existing.userPriorityScore ??
+            existing.priorityScore ??
+            0;
+          const f =
+            updateData.userFeasibilityScore ??
+            existing.userFeasibilityScore ??
+            existing.feasibilityScore ??
+            0;
+          const i =
+            updateData.userImpactScore ??
+            existing.userImpactScore ??
+            existing.impactScore ??
+            0;
+          updateData.userOverallScore = computeOverallScore(p, f, i);
         }
       }
 
-      // Auto-compute overall if dimension scores changed but overall wasn't sent
-      if (
-        ("userPriorityScore" in body ||
-          "userFeasibilityScore" in body ||
-          "userImpactScore" in body) &&
-        !("userOverallScore" in body)
-      ) {
-        const p =
-          updateData.userPriorityScore ??
-          existing.userPriorityScore ??
-          existing.priorityScore ??
-          0;
-        const f =
-          updateData.userFeasibilityScore ??
-          existing.userFeasibilityScore ??
-          existing.feasibilityScore ??
-          0;
-        const i =
-          updateData.userImpactScore ??
-          existing.userImpactScore ??
-          existing.impactScore ??
-          0;
-        updateData.userOverallScore = computeOverallScore(p, f, i);
+      if (Object.keys(updateData).length === 0) {
+        logger.warn("[api/runs/usecases] No valid fields to update", { runId, usecaseId, bodyKeys: Object.keys(body) });
+        return { error: "No valid fields to update", status: 400 } as const;
       }
-    }
 
-    if (Object.keys(updateData).length === 0) {
-      logger.warn("[api/runs/usecases] No valid fields to update", { runId, usecaseId, bodyKeys: Object.keys(body) });
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-    }
+      await prisma.forgeUseCase.update({
+        where: { id: usecaseId },
+        data: updateData,
+      });
 
-    await prisma.forgeUseCase.update({
-      where: { id: usecaseId },
-      data: updateData,
+      return null;
     });
 
-    logger.info("[api/runs/usecases] Use case updated", { runId, usecaseId, fields: Object.keys(updateData) });
+    if (errorResult) {
+      return NextResponse.json({ error: errorResult.error }, { status: errorResult.status });
+    }
+
+    logger.info("[api/runs/usecases] Use case updated", { runId, usecaseId });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

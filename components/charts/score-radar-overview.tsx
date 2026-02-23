@@ -290,75 +290,82 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={340}>
-          <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-            <PolarGrid
-              stroke="var(--color-border)"
-              strokeOpacity={0.5}
-            />
-            <PolarAngleAxis
-              dataKey="metric"
-              tick={{ fontSize: 12, fontWeight: 600, fill: "var(--color-foreground)" }}
-            />
-            <PolarRadiusAxis
-              angle={90}
-              domain={[0, 100]}
-              tick={{ fontSize: 9, fill: "var(--color-muted-foreground)" }}
-              tickCount={5}
-              axisLine={false}
-            />
-            {displaySeries.map((s) => {
-              const color = seriesColorMap.get(s.key) ?? PALETTE[0];
-              return (
-                <Radar
-                  key={s.key}
-                  name={s.label}
-                  dataKey={s.key}
-                  stroke={color}
-                  fill={color}
-                  fillOpacity={0.05}
-                  strokeWidth={2}
-                  dot={displaySeries.length <= 5}
+        <div className="flex gap-6">
+          {/* Chart area */}
+          <div className="min-w-0 flex-[3]">
+            <ResponsiveContainer width="100%" height={280}>
+              <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+                <PolarGrid
+                  stroke="var(--color-border)"
+                  strokeOpacity={0.5}
                 />
-              );
-            })}
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--color-card)",
-                color: "var(--color-card-foreground)",
-                borderColor: "var(--color-border)",
-                borderRadius: "var(--radius)",
-                fontSize: 12,
-                maxWidth: 260,
-              }}
-              formatter={(value) => [`${value ?? 0}%`, undefined]}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
+                <PolarAngleAxis
+                  dataKey="metric"
+                  tick={{ fontSize: 12, fontWeight: 600, fill: "var(--color-foreground)" }}
+                />
+                <PolarRadiusAxis
+                  angle={90}
+                  domain={[0, 100]}
+                  tick={{ fontSize: 9, fill: "var(--color-muted-foreground)" }}
+                  tickCount={5}
+                  axisLine={false}
+                />
+                {displaySeries.map((s) => {
+                  const color = seriesColorMap.get(s.key) ?? PALETTE[0];
+                  return (
+                    <Radar
+                      key={s.key}
+                      name={s.label}
+                      dataKey={s.key}
+                      stroke={color}
+                      fill={color}
+                      fillOpacity={0.05}
+                      strokeWidth={2}
+                      dot={displaySeries.length <= 5}
+                    />
+                  );
+                })}
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "var(--color-card)",
+                    color: "var(--color-card-foreground)",
+                    borderColor: "var(--color-border)",
+                    borderRadius: "var(--radius)",
+                    fontSize: 12,
+                    maxWidth: 260,
+                  }}
+                  formatter={(value) => [`${value ?? 0}%`, undefined]}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
 
-        {/* Clickable legend -- click a name to toggle it on/off */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          {series.slice(0, 10).map((s) => {
-            const color = seriesColorMap.get(s.key) ?? PALETTE[0];
-            const isActive =
-              selectedIds.size === 0 || selectedIds.has(s.key);
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => handleLegendClick(s.key, series.map((item) => item.key))}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-normal transition-opacity ${
-                  isActive ? "opacity-100" : "opacity-40"
-                } ${viewMode !== "domain-avg" ? "cursor-pointer hover:opacity-80" : ""}`}
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
-                {s.label}
-              </button>
-            );
-          })}
+          {/* Legend sidebar */}
+          <div className="flex-[2] overflow-y-auto" style={{ maxHeight: 280 }}>
+            <div className="flex flex-col gap-1.5">
+              {series.slice(0, 10).map((s) => {
+                const color = seriesColorMap.get(s.key) ?? PALETTE[0];
+                const isActive =
+                  selectedIds.size === 0 || selectedIds.has(s.key);
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => handleLegendClick(s.key, series.map((item) => item.key))}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-normal transition-opacity ${
+                      isActive ? "opacity-100" : "opacity-40"
+                    } ${viewMode !== "domain-avg" ? "cursor-pointer hover:opacity-80" : ""}`}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="truncate text-left">{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -227,7 +227,19 @@ export async function runIntelligenceLayer(
   // Pass 3: Auto-Generated Descriptions
   try {
     progress("descriptions", 0);
-    const descTables = tables.filter((t) => !t.comment);
+    // Detect generic/shared comments: if multiple tables share the exact same
+    // comment, it's likely a catalog- or schema-level description, not specific
+    // to the table. Include those tables for LLM description generation.
+    const commentCounts = new Map<string, number>();
+    for (const t of tables) {
+      if (t.comment) {
+        commentCounts.set(t.comment, (commentCounts.get(t.comment) ?? 0) + 1);
+      }
+    }
+    const descTables = tables.filter((t) => {
+      if (!t.comment) return true;
+      return (commentCounts.get(t.comment) ?? 0) > 1;
+    });
     if (descTables.length > 0) {
       result.generatedDescriptions = await passAutoDescriptions(descTables, lineageGraph, options);
       passResults["descriptions"] = "success";

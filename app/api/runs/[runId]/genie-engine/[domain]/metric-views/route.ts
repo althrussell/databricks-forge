@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { executeSQL } from "@/lib/dbx/sql";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 
@@ -63,60 +63,61 @@ export async function POST(
       : body.name;
 
     // Add the metric view to the domain's serialized space
-    const prisma = await getPrisma();
-    const rec = await prisma.forgeGenieRecommendation.findFirst({
-      where: { runId, domain: decodedDomain },
-    });
+    await withPrisma(async (prisma) => {
+      const rec = await prisma.forgeGenieRecommendation.findFirst({
+        where: { runId, domain: decodedDomain },
+      });
 
-    if (rec) {
-      try {
-        const space = JSON.parse(rec.serializedSpace) as Record<string, unknown>;
-        const dataSources = space.data_sources as Record<string, unknown[]> | undefined;
+      if (rec) {
+        try {
+          const space = JSON.parse(rec.serializedSpace) as Record<string, unknown>;
+          const dataSources = space.data_sources as Record<string, unknown[]> | undefined;
 
-        if (dataSources) {
-          const metricViews = (dataSources.metric_views ?? []) as Array<{
-            identifier: string;
-            description?: string[];
-          }>;
+          if (dataSources) {
+            const metricViews = (dataSources.metric_views ?? []) as Array<{
+              identifier: string;
+              description?: string[];
+            }>;
 
-          const alreadyExists = metricViews.some(
-            (mv) => mv.identifier.toLowerCase() === metricViewFqn.toLowerCase()
-          );
+            const alreadyExists = metricViews.some(
+              (mv) => mv.identifier.toLowerCase() === metricViewFqn.toLowerCase()
+            );
 
-          if (!alreadyExists) {
-            metricViews.push({
-              identifier: metricViewFqn,
-              ...(body.description ? { description: [body.description] } : {}),
-            });
-            dataSources.metric_views = metricViews;
+            if (!alreadyExists) {
+              metricViews.push({
+                identifier: metricViewFqn,
+                ...(body.description ? { description: [body.description] } : {}),
+              });
+              dataSources.metric_views = metricViews;
 
-            const existingMvList: string[] = rec.metricViews
-              ? (JSON.parse(rec.metricViews as string) as string[])
-              : [];
-            const updatedMvList = [...existingMvList, metricViewFqn];
+              const existingMvList: string[] = rec.metricViews
+                ? (JSON.parse(rec.metricViews as string) as string[])
+                : [];
+              const updatedMvList = [...existingMvList, metricViewFqn];
 
-            await prisma.forgeGenieRecommendation.update({
-              where: { id: rec.id },
-              data: {
-                serializedSpace: JSON.stringify(space),
-                metricViewCount: updatedMvList.length,
-                metricViews: JSON.stringify(updatedMvList),
-              },
-            });
+              await prisma.forgeGenieRecommendation.update({
+                where: { id: rec.id },
+                data: {
+                  serializedSpace: JSON.stringify(space),
+                  metricViewCount: updatedMvList.length,
+                  metricViews: JSON.stringify(updatedMvList),
+                },
+              });
 
-            logger.info("Metric view added to serialized space", {
-              runId,
-              domain: decodedDomain,
-              metricViewFqn,
-            });
+              logger.info("Metric view added to serialized space", {
+                runId,
+                domain: decodedDomain,
+                metricViewFqn,
+              });
+            }
           }
+        } catch (parseErr) {
+          logger.warn("Failed to update serialized space with new metric view", {
+            error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          });
         }
-      } catch (parseErr) {
-        logger.warn("Failed to update serialized space with new metric view", {
-          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-        });
       }
-    }
+    });
 
     return NextResponse.json({
       success: true,

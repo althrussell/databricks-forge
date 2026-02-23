@@ -5,7 +5,8 @@
  * using the LLM, grounded to the physical schema and informed by sample data.
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, SensitivityClassification } from "@/lib/domain/types";
@@ -21,8 +22,10 @@ import {
   extractEntityCandidates,
   extractEntityCandidatesFromSchema,
 } from "../entity-extraction";
+import { mapWithConcurrency } from "../concurrency";
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 15;
+const BATCH_CONCURRENCY = 3;
 const TEMPERATURE = 0.2;
 
 export interface ColumnIntelligenceInput {
@@ -79,25 +82,30 @@ export async function runColumnIntelligence(
     return { enrichments, entityCandidates };
   }
 
-  // LLM pass for column intelligence
-  const enrichments: ColumnEnrichment[] = [];
-
-  // Process tables in batches
+  // LLM pass for column intelligence -- batches run with bounded concurrency
+  const batches: string[][] = [];
   for (let i = 0; i < tableFqns.length; i += BATCH_SIZE) {
-    const batch = tableFqns.slice(i, i + BATCH_SIZE);
-    try {
-      const batchEnrichments = await processColumnBatch(
-        batch, metadata, sampleData, entityCandidates, endpoint, signal
-      );
-      enrichments.push(...batchEnrichments);
-    } catch (err) {
-      logger.warn("Column intelligence batch failed, using basic enrichments", {
-        batch,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      enrichments.push(...buildBasicEnrichments(metadata, batch, config.columnOverrides));
-    }
+    batches.push(tableFqns.slice(i, i + BATCH_SIZE));
   }
+
+  const batchResults = await mapWithConcurrency(
+    batches.map((batch) => async () => {
+      try {
+        return await processColumnBatch(
+          batch, metadata, sampleData, entityCandidates, endpoint, signal
+        );
+      } catch (err) {
+        logger.warn("Column intelligence batch failed, using basic enrichments", {
+          batch,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return buildBasicEnrichments(metadata, batch, config.columnOverrides);
+      }
+    }),
+    BATCH_CONCURRENCY,
+  );
+
+  const enrichments: ColumnEnrichment[] = batchResults.flat();
 
   // Apply customer overrides (overrides always win)
   applyColumnOverrides(enrichments, config.columnOverrides);
@@ -170,7 +178,7 @@ Analyze ALL columns in the tables above and return the enrichment JSON array.`;
     { role: "user", content: userMessage },
   ];
 
-  const result = await chatCompletion({
+  const result = await cachedChatCompletion({
     endpoint,
     messages,
     temperature: TEMPERATURE,

@@ -227,6 +227,7 @@ export function assembleSerializedSpace(
   //    - sql uses backtick-quoted alias.column references
   //    - relationship_type is encoded as a SQL comment: --rt=FROM_RELATIONSHIP_TYPE_...--
   const joinSpecs: JoinSpec[] = outputs.joinSpecs
+    .filter((j) => validateSqlExpression(allowlist, j.sql, `asm_join:${j.leftTable}->${j.rightTable}`))
     .map((j, i) => {
       const leftAlias = fqnToAlias(j.leftTable);
       let rightAlias = fqnToAlias(j.rightTable);

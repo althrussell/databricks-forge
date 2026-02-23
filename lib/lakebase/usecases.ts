@@ -2,7 +2,7 @@
  * CRUD operations for use cases — backed by Lakebase (Prisma).
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { UseCase, UseCaseType } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
@@ -82,33 +82,32 @@ function dbRowToUseCase(row: {
 export async function insertUseCases(useCases: UseCase[]): Promise<void> {
   if (useCases.length === 0) return;
 
-  const prisma = await getPrisma();
-
-  // Prisma createMany for efficient batch inserts
-  await prisma.forgeUseCase.createMany({
-    data: useCases.map((uc) => ({
-      id: uc.id,
-      runId: uc.runId,
-      useCaseNo: uc.useCaseNo,
-      name: uc.name,
-      type: uc.type,
-      analyticsTechnique: uc.analyticsTechnique,
-      statement: uc.statement,
-      solution: uc.solution,
-      businessValue: uc.businessValue,
-      beneficiary: uc.beneficiary,
-      sponsor: uc.sponsor,
-      domain: uc.domain,
-      subdomain: uc.subdomain,
-      tablesInvolved: JSON.stringify(uc.tablesInvolved),
-      priorityScore: uc.priorityScore,
-      feasibilityScore: uc.feasibilityScore,
-      impactScore: uc.impactScore,
-      overallScore: uc.overallScore,
-      sqlCode: uc.sqlCode,
-      sqlStatus: uc.sqlStatus,
-    })),
-    skipDuplicates: true,
+  await withPrisma(async (prisma) => {
+    await prisma.forgeUseCase.createMany({
+      data: useCases.map((uc) => ({
+        id: uc.id,
+        runId: uc.runId,
+        useCaseNo: uc.useCaseNo,
+        name: uc.name,
+        type: uc.type,
+        analyticsTechnique: uc.analyticsTechnique,
+        statement: uc.statement,
+        solution: uc.solution,
+        businessValue: uc.businessValue,
+        beneficiary: uc.beneficiary,
+        sponsor: uc.sponsor,
+        domain: uc.domain,
+        subdomain: uc.subdomain,
+        tablesInvolved: JSON.stringify(uc.tablesInvolved),
+        priorityScore: uc.priorityScore,
+        feasibilityScore: uc.feasibilityScore,
+        impactScore: uc.impactScore,
+        overallScore: uc.overallScore,
+        sqlCode: uc.sqlCode,
+        sqlStatus: uc.sqlStatus,
+      })),
+      skipDuplicates: true,
+    });
   });
 }
 
@@ -116,12 +115,13 @@ export async function insertUseCases(useCases: UseCase[]): Promise<void> {
  * Get all use cases for a run, ordered by overall_score descending.
  */
 export async function getUseCasesByRunId(runId: string): Promise<UseCase[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeUseCase.findMany({
-    where: { runId },
-    orderBy: [{ overallScore: "desc" }, { useCaseNo: "asc" }],
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeUseCase.findMany({
+      where: { runId },
+      orderBy: [{ overallScore: "desc" }, { useCaseNo: "asc" }],
+    });
+    return rows.map(dbRowToUseCase);
   });
-  return rows.map(dbRowToUseCase);
 }
 
 /**
@@ -131,32 +131,35 @@ export async function getUseCasesByDomain(
   runId: string,
   domain: string
 ): Promise<UseCase[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeUseCase.findMany({
-    where: { runId, domain },
-    orderBy: { overallScore: "desc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeUseCase.findMany({
+      where: { runId, domain },
+      orderBy: { overallScore: "desc" },
+    });
+    return rows.map(dbRowToUseCase);
   });
-  return rows.map(dbRowToUseCase);
 }
 
 /**
  * Get distinct domains for a run.
  */
 export async function getDomainsForRun(runId: string): Promise<string[]> {
-  const prisma = await getPrisma();
-  const results = await prisma.forgeUseCase.findMany({
-    where: { runId },
-    select: { domain: true },
-    distinct: ["domain"],
-    orderBy: { domain: "asc" },
+  return withPrisma(async (prisma) => {
+    const results = await prisma.forgeUseCase.findMany({
+      where: { runId },
+      select: { domain: true },
+      distinct: ["domain"],
+      orderBy: { domain: "asc" },
+    });
+    return results.map((r: { domain: string | null }) => r.domain ?? "").filter(Boolean);
   });
-  return results.map((r: { domain: string | null }) => r.domain ?? "").filter(Boolean);
 }
 
 /**
  * Delete all use cases for a run (used when re-running).
  */
 export async function deleteUseCasesForRun(runId: string): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeUseCase.deleteMany({ where: { runId } });
+  await withPrisma(async (prisma) => {
+    await prisma.forgeUseCase.deleteMany({ where: { runId } });
+  });
 }

@@ -17,7 +17,8 @@
  * - Post-generation YAML validation against schema allowlist
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase } from "@/lib/domain/types";
@@ -30,6 +31,7 @@ import type {
 import {
   buildSchemaContextBlock,
   isValidTable,
+  isValidColumn,
   type SchemaAllowlist,
 } from "../schema-allowlist";
 
@@ -184,6 +186,84 @@ interface ValidationResult {
   issues: string[];
 }
 
+/**
+ * Build a map of alias -> table FQN from the YAML source + joins, then
+ * validate every `alias.column` reference in expr/on fields against the
+ * schema allowlist.
+ */
+function validateColumnReferences(
+  yaml: string,
+  allowlist: SchemaAllowlist,
+): string[] {
+  const issues: string[] = [];
+
+  // Primary source table -> implicit "source" alias
+  const sourceMatch = yaml.match(
+    /^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m,
+  );
+  if (!sourceMatch) return issues;
+  const sourceFqn = sourceMatch[1];
+
+  const aliasToTable = new Map<string, string>();
+  aliasToTable.set("source", sourceFqn);
+
+  // Parse join aliases from the joins: section.
+  // Isolate the joins block (indented lines after "joins:") to avoid
+  // matching the top-level source: field.
+  const joinsSectionMatch = yaml.match(/\bjoins:\s*\n((?:[\t ]+.*\n?)*)/);
+  if (joinsSectionMatch) {
+    const joinsText = joinsSectionMatch[1];
+    const names: string[] = [];
+    const sources: string[] = [];
+
+    const nameRe = /\bname:\s*(\w+)/g;
+    const srcRe = /\bsource:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/g;
+
+    let m: RegExpExecArray | null;
+    while ((m = nameRe.exec(joinsText)) !== null) names.push(m[1]);
+    while ((m = srcRe.exec(joinsText)) !== null) sources.push(m[1]);
+
+    const count = Math.min(names.length, sources.length);
+    for (let i = 0; i < count; i++) {
+      aliasToTable.set(names[i].toLowerCase(), sources[i]);
+    }
+  }
+
+  // Collect all expr: and on: field values
+  const fieldPattern = /\b(?:expr|on):\s*(.+)/g;
+  const expressions: string[] = [];
+  let fm: RegExpExecArray | null;
+  while ((fm = fieldPattern.exec(yaml)) !== null) {
+    expressions.push(fm[1]);
+  }
+
+  // Validate alias.column references against the allowlist
+  const colRefPattern = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
+  const reported = new Set<string>();
+
+  for (const expr of expressions) {
+    let cm: RegExpExecArray | null;
+    while ((cm = colRefPattern.exec(expr)) !== null) {
+      const alias = cm[1].toLowerCase();
+      const column = cm[2].toLowerCase();
+      const tableFqn = aliasToTable.get(alias);
+      if (!tableFqn) continue;
+
+      if (!isValidColumn(allowlist, tableFqn, column)) {
+        const key = `${alias}.${column}`;
+        if (!reported.has(key)) {
+          reported.add(key);
+          issues.push(
+            `Column \`${cm[1]}.${cm[2]}\` not found in table ${tableFqn}`,
+          );
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
 function validateMetricViewYaml(
   yaml: string,
   ddl: string,
@@ -239,6 +319,10 @@ function validateMetricViewYaml(
     }
   }
 
+  // Validate alias.column references (e.g. source.amount, supplier.name)
+  // against actual table schemas in the allowlist
+  issues.push(...validateColumnReferences(yaml, allowlist));
+
   if (!ddl.includes("WITH METRICS")) {
     issues.push("DDL missing WITH METRICS clause");
   }
@@ -250,7 +334,10 @@ function validateMetricViewYaml(
   }
 
   const hasCritical = issues.some((i) =>
-    i.startsWith("Missing required") || i.includes("not found in schema") || i.includes("Window function")
+    i.startsWith("Missing required") ||
+    i.includes("not found in schema") ||
+    i.includes("not found in table") ||
+    i.includes("Window function")
   );
 
   return {
@@ -408,7 +495,7 @@ Create metric view proposals for this domain.`;
   ];
 
   try {
-    const result = await chatCompletion({
+    const result = await cachedChatCompletion({
       endpoint,
       messages,
       temperature: TEMPERATURE,

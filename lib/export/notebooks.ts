@@ -95,9 +95,9 @@ function sanitizeName(name: string): string {
 /**
  * Generate and deploy Jupyter notebooks for each domain.
  *
- * When a user email is provided (via user authorization), notebooks are
- * placed in the user's home folder: `/Users/<email>/forge_gen/<biz>/`.
- * Otherwise falls back to the shared workspace path.
+ * Notebooks are deployed to `/Shared/forge_gen/<biz>/` using the app
+ * service principal (which has write access to /Shared/ but not to
+ * individual user home folders).
  */
 export async function generateNotebooks(
   run: PipelineRun,
@@ -107,10 +107,7 @@ export async function generateNotebooks(
 ): Promise<NotebookDeployResult> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const bizSlug = run.config.businessName.replace(/\s+/g, "_");
-  const root = userEmail
-    ? `/Users/${userEmail}/forge_gen`
-    : `/Shared/forge_gen`;
-  const basePath = `${root}/${bizSlug}/`;
+  const basePath = `/Shared/forge_gen/${bizSlug}/`;
 
   await mkdirs(basePath);
 

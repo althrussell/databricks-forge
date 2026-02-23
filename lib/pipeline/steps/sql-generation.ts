@@ -35,7 +35,15 @@ import type {
 // Configuration
 // ---------------------------------------------------------------------------
 
-const MAX_CONCURRENT_SQL = 3;
+const MAX_CONCURRENT_SQL = Math.max(
+  1,
+  parseInt(process.env.SQL_GEN_MAX_CONCURRENT ?? "3", 10) || 3,
+);
+
+const WAVE_DELAY_MS = Math.max(
+  0,
+  parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "2000", 10) || 0,
+);
 
 // ---------------------------------------------------------------------------
 // Main entry point
@@ -173,6 +181,11 @@ export async function runSqlGeneration(
           `SQL generation: ${completed}/${totalUseCases} complete (${failed} failed)`,
           currentProgress()
         );
+      }
+
+      // Cooldown between waves to spread output tokens across the rate-limit window
+      if (WAVE_DELAY_MS > 0 && completed < totalUseCases) {
+        await new Promise((resolve) => setTimeout(resolve, WAVE_DELAY_MS));
       }
     }
   }
@@ -332,8 +345,12 @@ async function generateSqlForUseCase(
  * Returns the error message on failure, or null on success.
  */
 async function trySqlExecution(sql: string): Promise<string | null> {
+  // Pipe syntax (|>) is valid Databricks SQL but not supported by EXPLAIN
+  if (/\|>/.test(sql)) {
+    logger.info("Skipping EXPLAIN validation for pipe-syntax query");
+    return null;
+  }
   try {
-    // Use EXPLAIN to validate without executing (avoids side effects and long queries)
     await executeSQL(`EXPLAIN ${sql}`);
     return null;
   } catch (error) {
@@ -449,7 +466,30 @@ function validateSqlOutput(
     const knownColumns = new Set(
       columns.map((c) => c.columnName.toLowerCase())
     );
-    // Add common SQL keywords/aliases that aren't column names
+
+    // Exclude catalog, schema, and table name parts from FQNs so
+    // `catalog.schema.table` references don't count as unknown columns.
+    const fqnParts = new Set<string>();
+    for (const fqn of tablesInvolved) {
+      for (const part of fqn.replace(/`/g, "").split(".")) {
+        fqnParts.add(part.toLowerCase());
+      }
+    }
+
+    // Detect table aliases: "FROM/JOIN <fqn> [AS] <alias>" patterns
+    const aliasSet = new Set<string>();
+    const tableAliasPattern = /(?:FROM|JOIN)\s+[`\w.]+\s+(?:AS\s+)?([a-z_]\w*)/gi;
+    let aliasMatch;
+    while ((aliasMatch = tableAliasPattern.exec(normalizedSql)) !== null) {
+      aliasSet.add(aliasMatch[1].toLowerCase());
+    }
+
+    // Detect column aliases: "AS <alias>" (computed columns, aggregations)
+    const colAliasPattern = /\bAS\s+([a-z_]\w*)/gi;
+    while ((aliasMatch = colAliasPattern.exec(normalizedSql)) !== null) {
+      aliasSet.add(aliasMatch[1].toLowerCase());
+    }
+
     const sqlKeywords = new Set([
       "select", "from", "where", "and", "or", "not", "in", "is", "null",
       "as", "on", "join", "left", "right", "inner", "outer", "full", "cross",
@@ -482,7 +522,12 @@ function validateSqlOutput(
     const unknownCols: string[] = [];
     while ((match = dotColPattern.exec(normalizedSql)) !== null) {
       const colName = match[1].toLowerCase();
-      if (!knownColumns.has(colName) && !sqlKeywords.has(colName)) {
+      if (
+        !knownColumns.has(colName) &&
+        !sqlKeywords.has(colName) &&
+        !fqnParts.has(colName) &&
+        !aliasSet.has(colName)
+      ) {
         unknownCols.push(match[1]);
       }
     }

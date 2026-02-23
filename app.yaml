@@ -4,6 +4,7 @@
 # Required app resources (configure in Databricks App UI):
 #   1. SQL Warehouse  — resource key: "sql-warehouse"
 #   2. Serving Endpoint — resource key: "serving-endpoint"
+#   3. Fast Serving Endpoint — resource key: "serving-endpoint-fast"
 #
 # Required user authorization scopes (configure in App UI → Configure → Add Scope):
 #   1. sql — SQL Statement Execution API (metadata queries, generated SQL)
@@ -27,3 +28,5 @@ env:
     valueFrom: sql-warehouse
   - name: DATABRICKS_SERVING_ENDPOINT
     valueFrom: serving-endpoint
+  - name: DATABRICKS_SERVING_ENDPOINT_FAST
+    valueFrom: serving-endpoint-fast

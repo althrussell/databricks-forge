@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -47,15 +47,16 @@ export async function logActivity(
   } = {}
 ): Promise<void> {
   try {
-    const prisma = await getPrisma();
-    await prisma.forgeActivityLog.create({
-      data: {
-        activityId: randomUUID(),
-        userId: opts.userId ?? null,
-        action,
-        resourceId: opts.resourceId ?? null,
-        metadata: opts.metadata ? JSON.stringify(opts.metadata) : null,
-      },
+    await withPrisma(async (prisma) => {
+      await prisma.forgeActivityLog.create({
+        data: {
+          activityId: randomUUID(),
+          userId: opts.userId ?? null,
+          action,
+          resourceId: opts.resourceId ?? null,
+          metadata: opts.metadata ? JSON.stringify(opts.metadata) : null,
+        },
+      });
     });
   } catch (error) {
     logger.warn("Failed to log activity", {
@@ -75,12 +76,13 @@ export async function logActivity(
 export async function getRecentActivity(
   limit = 20
 ): Promise<ActivityLogEntry[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeActivityLog.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeActivityLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    return rows.map(dbRowToActivity);
   });
-  return rows.map(dbRowToActivity);
 }
 
 /**
@@ -89,12 +91,13 @@ export async function getRecentActivity(
 export async function getActivityForResource(
   resourceId: string
 ): Promise<ActivityLogEntry[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeActivityLog.findMany({
-    where: { resourceId },
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeActivityLog.findMany({
+      where: { resourceId },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(dbRowToActivity);
   });
-  return rows.map(dbRowToActivity);
 }
 
 // ---------------------------------------------------------------------------

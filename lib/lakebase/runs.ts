@@ -2,7 +2,7 @@
  * CRUD operations for pipeline runs — backed by Lakebase (Prisma).
  */
 
-import { getPrisma, withPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import packageJson from "@/package.json";
 import type {
   PipelineRun,
@@ -157,47 +157,49 @@ export async function createRun(
   config: PipelineRunConfig,
   createdBy?: string | null
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeRun.create({
-    data: {
-      runId,
-      businessName: config.businessName,
-      ucMetadata: config.ucMetadata,
-      operation: config.operation,
-      businessPriorities: JSON.stringify(config.businessPriorities),
-      strategicGoals: config.strategicGoals,
-      businessDomains: config.businessDomains,
-      aiModel: config.aiModel,
-      languages: JSON.stringify(config.languages),
-      generationOptions: serializeGenerationOptions(config),
-      generationPath: config.generationPath,
-      createdBy: createdBy ?? null,
-      status: "pending",
-      progressPct: 0,
-    },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.create({
+      data: {
+        runId,
+        businessName: config.businessName,
+        ucMetadata: config.ucMetadata,
+        operation: config.operation,
+        businessPriorities: JSON.stringify(config.businessPriorities),
+        strategicGoals: config.strategicGoals,
+        businessDomains: config.businessDomains,
+        aiModel: config.aiModel,
+        languages: JSON.stringify(config.languages),
+        generationOptions: serializeGenerationOptions(config),
+        generationPath: config.generationPath,
+        createdBy: createdBy ?? null,
+        status: "pending",
+        progressPct: 0,
+      },
+    });
   });
 
-  // Archive current prompt templates (fire-and-forget, non-blocking)
   archiveCurrentPromptTemplates().catch(() => {});
 }
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeRun.findUnique({ where: { runId } });
-  return row ? dbRowToRun(row) : null;
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeRun.findUnique({ where: { runId } });
+    return row ? dbRowToRun(row) : null;
+  });
 }
 
 export async function listRuns(
   limit = 50,
   offset = 0
 ): Promise<PipelineRun[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeRun.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    skip: offset,
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeRun.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+    });
+    return rows.map(dbRowToRun);
   });
-  return rows.map(dbRowToRun);
 }
 
 export async function updateRunStatus(
@@ -255,8 +257,9 @@ export async function updateRunMessage(
  * database schema.
  */
 export async function deleteRun(runId: string): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeRun.delete({ where: { runId } });
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.delete({ where: { runId } });
+  });
 }
 
 export async function updateRunBusinessContext(

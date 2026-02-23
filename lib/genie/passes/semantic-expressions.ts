@@ -8,7 +8,8 @@
  * grounded to the physical schema allowlist.
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase, BusinessContext } from "@/lib/domain/types";
@@ -183,7 +184,7 @@ Generate measures, filters, and dimensions for a Genie space serving this domain
     { role: "user", content: userMessage },
   ];
 
-  const result = await chatCompletion({
+  const result = await cachedChatCompletion({
     endpoint,
     messages,
     temperature: TEMPERATURE,

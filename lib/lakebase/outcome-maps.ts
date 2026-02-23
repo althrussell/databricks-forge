@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 
@@ -46,30 +46,30 @@ export async function createOutcomeMap(opts: {
   parsedOutcome: IndustryOutcome;
   createdBy?: string | null;
 }): Promise<OutcomeMapRecord> {
-  const prisma = await getPrisma();
-  const id = randomUUID();
+  return withPrisma(async (prisma) => {
+    const id = randomUUID();
 
-  // Count total use cases across all objectives and priorities
-  const useCaseCount = opts.parsedOutcome.objectives.reduce(
-    (total, obj) =>
-      total +
-      obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
-    0
-  );
+    const useCaseCount = opts.parsedOutcome.objectives.reduce(
+      (total, obj) =>
+        total +
+        obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
+      0
+    );
 
-  const row = await prisma.forgeOutcomeMap.create({
-    data: {
-      id,
-      industryId: opts.industryId,
-      name: opts.name,
-      rawMarkdown: opts.rawMarkdown,
-      parsedJson: JSON.stringify(opts.parsedOutcome),
-      useCaseCount,
-      createdBy: opts.createdBy ?? null,
-    },
+    const row = await prisma.forgeOutcomeMap.create({
+      data: {
+        id,
+        industryId: opts.industryId,
+        name: opts.name,
+        rawMarkdown: opts.rawMarkdown,
+        parsedJson: JSON.stringify(opts.parsedOutcome),
+        useCaseCount,
+        createdBy: opts.createdBy ?? null,
+      },
+    });
+
+    return dbRowToRecord(row);
   });
-
-  return dbRowToRecord(row);
 }
 
 // ---------------------------------------------------------------------------
@@ -79,42 +79,45 @@ export async function createOutcomeMap(opts: {
 export async function getOutcomeMap(
   id: string
 ): Promise<OutcomeMapRecord | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeOutcomeMap.findUnique({ where: { id } });
-  return row ? dbRowToRecord(row) : null;
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeOutcomeMap.findUnique({ where: { id } });
+    return row ? dbRowToRecord(row) : null;
+  });
 }
 
 export async function getOutcomeMapByIndustryId(
   industryId: string
 ): Promise<OutcomeMapRecord | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeOutcomeMap.findUnique({
-    where: { industryId },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeOutcomeMap.findUnique({
+      where: { industryId },
+    });
+    return row ? dbRowToRecord(row) : null;
   });
-  return row ? dbRowToRecord(row) : null;
 }
 
 export async function listOutcomeMaps(): Promise<OutcomeMapSummary[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeOutcomeMap.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      industryId: true,
-      name: true,
-      useCaseCount: true,
-      createdBy: true,
-      createdAt: true,
-    },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeOutcomeMap.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        industryId: true,
+        name: true,
+        useCaseCount: true,
+        createdBy: true,
+        createdAt: true,
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      industryId: row.industryId,
+      name: row.name,
+      useCaseCount: row.useCaseCount,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt.toISOString(),
+    }));
   });
-  return rows.map((row) => ({
-    id: row.id,
-    industryId: row.industryId,
-    name: row.name,
-    useCaseCount: row.useCaseCount,
-    createdBy: row.createdBy,
-    createdAt: row.createdAt.toISOString(),
-  }));
 }
 
 /**
@@ -122,21 +125,22 @@ export async function listOutcomeMaps(): Promise<OutcomeMapSummary[]> {
  * Used by the registry to merge with built-in maps.
  */
 export async function loadAllCustomOutcomes(): Promise<IndustryOutcome[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeOutcomeMap.findMany({
-    select: { parsedJson: true },
-  });
-  const outcomes: IndustryOutcome[] = [];
-  for (const row of rows) {
-    try {
-      outcomes.push(JSON.parse(row.parsedJson) as IndustryOutcome);
-    } catch {
-      logger.warn("Skipping corrupt custom outcome map", {
-        parsedJson: row.parsedJson.slice(0, 100),
-      });
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeOutcomeMap.findMany({
+      select: { parsedJson: true },
+    });
+    const outcomes: IndustryOutcome[] = [];
+    for (const row of rows) {
+      try {
+        outcomes.push(JSON.parse(row.parsedJson) as IndustryOutcome);
+      } catch {
+        logger.warn("Skipping corrupt custom outcome map", {
+          parsedJson: row.parsedJson.slice(0, 100),
+        });
+      }
     }
-  }
-  return outcomes;
+    return outcomes;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -152,31 +156,31 @@ export async function updateOutcomeMap(
     parsedOutcome?: IndustryOutcome;
   }
 ): Promise<OutcomeMapRecord | null> {
-  const prisma = await getPrisma();
+  return withPrisma(async (prisma) => {
+    const data: Record<string, unknown> = {};
+    if (opts.name !== undefined) data.name = opts.name;
+    if (opts.industryId !== undefined) data.industryId = opts.industryId;
+    if (opts.rawMarkdown !== undefined) data.rawMarkdown = opts.rawMarkdown;
+    if (opts.parsedOutcome !== undefined) {
+      data.parsedJson = JSON.stringify(opts.parsedOutcome);
+      data.useCaseCount = opts.parsedOutcome.objectives.reduce(
+        (total, obj) =>
+          total +
+          obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
+        0
+      );
+    }
 
-  const data: Record<string, unknown> = {};
-  if (opts.name !== undefined) data.name = opts.name;
-  if (opts.industryId !== undefined) data.industryId = opts.industryId;
-  if (opts.rawMarkdown !== undefined) data.rawMarkdown = opts.rawMarkdown;
-  if (opts.parsedOutcome !== undefined) {
-    data.parsedJson = JSON.stringify(opts.parsedOutcome);
-    data.useCaseCount = opts.parsedOutcome.objectives.reduce(
-      (total, obj) =>
-        total +
-        obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
-      0
-    );
-  }
-
-  try {
-    const row = await prisma.forgeOutcomeMap.update({
-      where: { id },
-      data,
-    });
-    return dbRowToRecord(row);
-  } catch {
-    return null;
-  }
+    try {
+      const row = await prisma.forgeOutcomeMap.update({
+        where: { id },
+        data,
+      });
+      return dbRowToRecord(row);
+    } catch {
+      return null;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -184,13 +188,14 @@ export async function updateOutcomeMap(
 // ---------------------------------------------------------------------------
 
 export async function deleteOutcomeMap(id: string): Promise<boolean> {
-  const prisma = await getPrisma();
-  try {
-    await prisma.forgeOutcomeMap.delete({ where: { id } });
-    return true;
-  } catch {
-    return false;
-  }
+  return withPrisma(async (prisma) => {
+    try {
+      await prisma.forgeOutcomeMap.delete({ where: { id } });
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

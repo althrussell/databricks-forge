@@ -5,7 +5,7 @@
  * from environment scan runs.
  */
 
-import { getPrisma, withPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type {
   EnvironmentScan,
@@ -221,15 +221,16 @@ export async function saveEnvironmentScan(
  * Get a full environment scan with all related data.
  */
 export async function getEnvironmentScan(scanId: string) {
-  const prisma = await getPrisma();
-  return prisma.forgeEnvironmentScan.findUnique({
-    where: { scanId },
-    include: {
-      details: true,
-      histories: true,
-      lineage: true,
-      insights: true,
-    },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeEnvironmentScan.findUnique({
+      where: { scanId },
+      include: {
+        details: true,
+        histories: true,
+        lineage: true,
+        insights: true,
+      },
+    });
   });
 }
 
@@ -237,16 +238,17 @@ export async function getEnvironmentScan(scanId: string) {
  * Get environment scan linked to a pipeline run.
  */
 export async function getEnvironmentScanByRunId(runId: string) {
-  const prisma = await getPrisma();
-  return prisma.forgeEnvironmentScan.findFirst({
-    where: { runId },
-    include: {
-      details: true,
-      histories: true,
-      lineage: true,
-      insights: true,
-    },
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeEnvironmentScan.findFirst({
+      where: { runId },
+      include: {
+        details: true,
+        histories: true,
+        lineage: true,
+        insights: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
   });
 }
 
@@ -254,11 +256,12 @@ export async function getEnvironmentScanByRunId(runId: string) {
  * List recent environment scans (summary only, no related data).
  */
 export async function listEnvironmentScans(limit = 20, offset = 0) {
-  const prisma = await getPrisma();
-  return prisma.forgeEnvironmentScan.findMany({
-    take: limit,
-    skip: offset,
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeEnvironmentScan.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: "desc" },
+    });
   });
 }
 
@@ -299,9 +302,8 @@ export interface AggregateEstateView {
  * recent scan (by createdAt). Same for histories, lineage edges, and insights.
  */
 export async function getAggregateEstateView(): Promise<AggregateEstateView> {
-  const prisma = await getPrisma();
+  return withPrisma(async (prisma) => {
 
-  // Fetch all scans ordered by newest first
   const scans = await prisma.forgeEnvironmentScan.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -457,6 +459,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
       coverageByScope,
     },
   };
+  });
 }
 
 /**
@@ -466,12 +469,132 @@ export async function getInsightsByScanId(
   scanId: string,
   insightType?: string
 ) {
-  const prisma = await getPrisma();
-  return prisma.forgeTableInsight.findMany({
-    where: {
-      scanId,
-      ...(insightType ? { insightType } : {}),
-    },
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeTableInsight.findMany({
+      where: {
+        scanId,
+        ...(insightType ? { insightType } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate Estate — Excel-ready (preserves bigints for the Excel generator)
+// ---------------------------------------------------------------------------
+
+import type { ScanWithRelations } from "@/lib/export/environment-excel";
+
+/**
+ * Build an aggregate estate view suitable for the Excel export generator.
+ *
+ * Same merge logic as `getAggregateEstateView()` but returns data in the
+ * `ScanWithRelations` shape with bigints intact (no JSON serialisation).
+ * Returns null when no scans exist.
+ */
+export async function getAggregateForExcel(): Promise<ScanWithRelations | null> {
+  return withPrisma(async (prisma) => {
+    const scans = await prisma.forgeEnvironmentScan.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (scans.length === 0) return null;
+
+    // --- Details: latest per tableFqn ---
+    const allDetails = await prisma.forgeTableDetail.findMany({
+      include: { scan: { select: { createdAt: true } } },
+      orderBy: { scan: { createdAt: "desc" } },
+    });
+    const detailMap = new Map<string, typeof allDetails[number]>();
+    for (const d of allDetails) {
+      if (!detailMap.has(d.tableFqn)) detailMap.set(d.tableFqn, d);
+    }
+    const details = Array.from(detailMap.values());
+
+    // --- Histories: latest per tableFqn ---
+    const allHistories = await prisma.forgeTableHistorySummary.findMany({
+      include: { scan: { select: { createdAt: true } } },
+      orderBy: { scan: { createdAt: "desc" } },
+    });
+    const historyMap = new Map<string, typeof allHistories[number]>();
+    for (const h of allHistories) {
+      if (!historyMap.has(h.tableFqn)) historyMap.set(h.tableFqn, h);
+    }
+    const histories = Array.from(historyMap.values());
+
+    // --- Lineage: latest per (source, target) ---
+    const allLineage = await prisma.forgeTableLineage.findMany({
+      include: { scan: { select: { createdAt: true } } },
+      orderBy: { scan: { createdAt: "desc" } },
+    });
+    const lineageMap = new Map<string, typeof allLineage[number]>();
+    for (const l of allLineage) {
+      const key = `${l.sourceTableFqn}::${l.targetTableFqn}`;
+      if (!lineageMap.has(key)) lineageMap.set(key, l);
+    }
+    const lineage = Array.from(lineageMap.values());
+
+    // --- Insights: latest per (insightType, tableFqn) ---
+    const allInsights = await prisma.forgeTableInsight.findMany({
+      include: { scan: { select: { createdAt: true } } },
+      orderBy: { scan: { createdAt: "desc" } },
+    });
+    const insightMap = new Map<string, typeof allInsights[number]>();
+    for (const i of allInsights) {
+      const key = `${i.insightType}::${i.tableFqn ?? "null"}`;
+      if (!insightMap.has(key)) insightMap.set(key, i);
+    }
+    const insights = Array.from(insightMap.values());
+
+    // --- Aggregate scan-level stats ---
+    const domains = new Set(details.map((d) => d.dataDomain).filter(Boolean));
+    const piiCount = details.filter(
+      (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted"
+    ).length;
+    const govScores = details.filter((d) => d.governanceScore != null).map((d) => d.governanceScore!);
+    const avgGov = govScores.length > 0 ? govScores.reduce((a, b) => a + b, 0) / govScores.length : 0;
+    const totalSize = details.reduce((sum, d) => sum + (d.sizeInBytes ?? BigInt(0)), BigInt(0));
+    const totalFiles = details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0);
+    const redundancyCount = insights.filter((i) => i.insightType === "redundancy").length;
+    const dataProductCount = insights.filter((i) => i.insightType === "data_product").length;
+    const lineageDiscovered = details.filter((d) => d.discoveredVia === "lineage").length;
+    const streamingCount = histories.filter((h) => h.hasStreamingWrites).length;
+    const cdfCount = details.filter((d) => d.cdfEnabled).length;
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const needsOptimize = histories.filter(
+      (h) => !h.lastOptimizeTimestamp || h.lastOptimizeTimestamp < thirtyDaysAgo
+    ).length;
+    const needsVacuum = histories.filter(
+      (h) => !h.lastVacuumTimestamp || h.lastVacuumTimestamp < thirtyDaysAgo
+    ).length;
+
+    const ucPaths = [...new Set(scans.map((s) => s.ucPath))].join(", ");
+
+    return {
+      scanId: "aggregate",
+      ucPath: ucPaths || "All Scans (Aggregate)",
+      tableCount: details.length,
+      totalSizeBytes: totalSize,
+      totalFiles,
+      tablesWithStreaming: streamingCount,
+      tablesWithCDF: cdfCount,
+      tablesNeedingOptimize: needsOptimize,
+      tablesNeedingVacuum: needsVacuum,
+      lineageDiscoveredCount: lineageDiscovered,
+      domainCount: domains.size,
+      piiTablesCount: piiCount,
+      redundancyPairsCount: redundancyCount,
+      dataProductCount,
+      avgGovernanceScore: avgGov,
+      scanDurationMs: null,
+      passResultsJson: null,
+      createdAt: scans[0].createdAt,
+      details,
+      histories,
+      lineage,
+      insights,
+    };
   });
 }

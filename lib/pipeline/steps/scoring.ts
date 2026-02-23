@@ -7,6 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
@@ -62,7 +63,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     if (domainCases.length <= 2) continue;
 
     try {
-      const toRemove = await deduplicateDomain(domainCases, bcRecord, run.config.aiModel, runId);
+      const toRemove = await deduplicateDomain(domainCases, bcRecord, getFastServingEndpoint(), runId);
       removedCount += toRemove.size;
       scored = scored.filter((uc) => !toRemove.has(uc.useCaseNo));
     } catch (error) {
@@ -78,7 +79,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   if (scored.length > 5) {
     if (runId) await updateRunMessage(runId, `Cross-domain dedup: reviewing ${scored.length} use cases...`);
     try {
-      const crossDomainRemoved = await deduplicateCrossDomain(scored, bcRecord, run.config.aiModel, runId);
+      const crossDomainRemoved = await deduplicateCrossDomain(scored, bcRecord, getFastServingEndpoint(), runId);
       if (crossDomainRemoved.size > 0) {
         scored = scored.filter((uc) => !crossDomainRemoved.has(uc.useCaseNo));
         if (runId) {
