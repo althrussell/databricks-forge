@@ -104,7 +104,7 @@ export function buildERDGraph(
     return {
       tableFqn: d.tableFqn,
       displayName: d.tableName,
-      description: d.comment || d.generatedDescription || null,
+      description: d.generatedDescription || d.comment || null,
       columns,
       domain: d.dataDomain,
       tier: (d.dataTier as ERDNode["tier"]) ?? null,
