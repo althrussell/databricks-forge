@@ -66,6 +66,7 @@ export interface MetricViewProposalsInput {
   joinSpecs: JoinSpecInput[];
   columnEnrichments: ColumnEnrichment[];
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface MetricViewProposalsOutput {
@@ -285,7 +286,7 @@ export async function runMetricViewProposals(
 ): Promise<MetricViewProposalsOutput> {
   const {
     domain, tableFqns, metadata, allowlist, useCases,
-    measures, dimensions, joinSpecs, columnEnrichments, endpoint,
+    measures, dimensions, joinSpecs, columnEnrichments, endpoint, signal,
   } = input;
 
   if (tableFqns.length === 0 || measures.length === 0) {
@@ -412,6 +413,7 @@ Create metric view proposals for this domain.`;
       messages,
       temperature: TEMPERATURE,
       responseFormat: "json_object",
+      signal,
     });
 
     const content = result.content ?? "";

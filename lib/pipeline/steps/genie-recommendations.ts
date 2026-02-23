@@ -12,12 +12,13 @@ import { generateGenieRecommendations } from "@/lib/genie/recommend";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
+import { invalidatePrismaClient } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 export async function runGenieRecommendations(
   ctx: PipelineContext,
   runId: string,
-  onProgress?: (message: string, percent: number) => void,
+  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number) => void,
 ): Promise<number> {
   const metadata = ctx.metadata ?? (await loadMetadataForRun(runId));
   if (!metadata) {
@@ -43,6 +44,7 @@ export async function runGenieRecommendations(
       onProgress,
     });
 
+    await invalidatePrismaClient();
     await saveGenieRecommendations(runId, result.recommendations, result.passOutputs, version);
 
     logger.info("Genie Engine recommendations generated and persisted", {
@@ -66,6 +68,7 @@ export async function runGenieRecommendations(
       metadata
     );
 
+    await invalidatePrismaClient();
     await saveGenieRecommendations(runId, recommendations);
 
     logger.info("Legacy Genie recommendations generated (fallback)", {

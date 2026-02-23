@@ -1,5 +1,6 @@
 /**
- * Fetch wrapper with AbortController-based timeout.
+ * Fetch wrapper with AbortController-based timeout and optional external
+ * cancellation signal.
  *
  * Prevents indefinite hangs when Databricks APIs are unresponsive.
  */
@@ -11,17 +12,31 @@ export class FetchTimeoutError extends Error {
   }
 }
 
+export class FetchCancelledError extends Error {
+  constructor(url: string) {
+    super(`Request to ${new URL(url).pathname} was cancelled`);
+    this.name = "FetchCancelledError";
+  }
+}
+
 /**
  * Fetch with an automatic timeout. If the request doesn't complete within
  * `timeoutMs`, the request is aborted and a FetchTimeoutError is thrown.
+ *
+ * An optional `externalSignal` can be passed to allow the caller to cancel
+ * the request independently of the timeout (e.g. user-initiated cancellation).
  */
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
 
   try {
     const response = await fetch(url, {
@@ -30,12 +45,16 @@ export async function fetchWithTimeout(
     });
     return response;
   } catch (error) {
+    if (externalSignal?.aborted) {
+      throw new FetchCancelledError(url);
+    }
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new FetchTimeoutError(url, timeoutMs);
     }
     throw error;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", onExternalAbort);
   }
 }
 

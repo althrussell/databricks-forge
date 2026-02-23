@@ -5,7 +5,7 @@
  * so the UI can display them immediately without on-demand recomputation.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { GenieSpaceRecommendation, GenieEngineRecommendation, GenieEnginePassOutputs } from "@/lib/genie/types";
 
 // ---------------------------------------------------------------------------
@@ -98,12 +98,13 @@ function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
 export async function getGenieRecommendationsByRunId(
   runId: string
 ): Promise<GenieEngineRecommendation[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeGenieRecommendation.findMany({
-    where: { runId },
-    orderBy: { useCaseCount: "desc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeGenieRecommendation.findMany({
+      where: { runId },
+      orderBy: { useCaseCount: "desc" },
+    });
+    return rows.map(dbRowToRecommendation);
   });
-  return rows.map(dbRowToRecommendation);
 }
 
 // ---------------------------------------------------------------------------
@@ -123,8 +124,6 @@ export async function saveGenieRecommendations(
   engineConfigVersion?: number,
   replaceDomains?: string[],
 ): Promise<void> {
-  const prisma = await getPrisma();
-
   const outputsByDomain = new Map<string, GenieEnginePassOutputs>();
   if (passOutputs) {
     for (const po of passOutputs) {
@@ -132,49 +131,50 @@ export async function saveGenieRecommendations(
     }
   }
 
-  await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-    if (replaceDomains?.length) {
-      await tx.forgeGenieRecommendation.deleteMany({
-        where: { runId, domain: { in: replaceDomains } },
+  await withPrisma(async (prisma) => {
+    await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+      if (replaceDomains?.length) {
+        await tx.forgeGenieRecommendation.deleteMany({
+          where: { runId, domain: { in: replaceDomains } },
+        });
+      } else {
+        await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
+      }
+
+      if (recommendations.length === 0) return;
+
+      await tx.forgeGenieRecommendation.createMany({
+        data: recommendations.map((rec, idx) => {
+          const po = outputsByDomain.get(rec.domain);
+          const id = replaceDomains?.length
+            ? `${runId}_genie_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`
+            : `${runId}_genie_${idx}`;
+          return {
+            id,
+            runId,
+            domain: rec.domain,
+            subdomains: JSON.stringify(rec.subdomains),
+            title: rec.title,
+            description: rec.description,
+            tableCount: rec.tableCount,
+            metricViewCount: rec.metricViewCount,
+            useCaseCount: rec.useCaseCount,
+            sqlExampleCount: rec.sqlExampleCount,
+            joinCount: rec.joinCount,
+            measureCount: rec.measureCount,
+            filterCount: rec.filterCount,
+            dimensionCount: rec.dimensionCount,
+            tables: JSON.stringify(rec.tables),
+            metricViews: JSON.stringify(rec.metricViews),
+            serializedSpace: rec.serializedSpace,
+            benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
+            columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
+            metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
+            trustedFunctions: po ? JSON.stringify(po.trustedFunctions) : null,
+            engineConfigVersion: engineConfigVersion ?? 0,
+          };
+        }),
       });
-    } else {
-      await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
-    }
-
-    if (recommendations.length === 0) return;
-
-    // When merging, use domain-based IDs to avoid collisions with existing rows
-    await tx.forgeGenieRecommendation.createMany({
-      data: recommendations.map((rec, idx) => {
-        const po = outputsByDomain.get(rec.domain);
-        const id = replaceDomains?.length
-          ? `${runId}_genie_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`
-          : `${runId}_genie_${idx}`;
-        return {
-          id,
-          runId,
-          domain: rec.domain,
-          subdomains: JSON.stringify(rec.subdomains),
-          title: rec.title,
-          description: rec.description,
-          tableCount: rec.tableCount,
-          metricViewCount: rec.metricViewCount,
-          useCaseCount: rec.useCaseCount,
-          sqlExampleCount: rec.sqlExampleCount,
-          joinCount: rec.joinCount,
-          measureCount: rec.measureCount,
-          filterCount: rec.filterCount,
-          dimensionCount: rec.dimensionCount,
-          tables: JSON.stringify(rec.tables),
-          metricViews: JSON.stringify(rec.metricViews),
-          serializedSpace: rec.serializedSpace,
-          benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
-          columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
-          metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
-          trustedFunctions: po ? JSON.stringify(po.trustedFunctions) : null,
-          engineConfigVersion: engineConfigVersion ?? 0,
-        };
-      }),
     });
   });
 }

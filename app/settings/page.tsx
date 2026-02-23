@@ -82,7 +82,7 @@ export default function SettingsPage() {
   });
 
   const [genieDefaults, setGenieDefaults] = useState<GenieEngineDefaults>(() => {
-    if (typeof window === "undefined") return { engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" };
+    if (typeof window === "undefined") return { engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" };
     return loadSettings().genieEngineDefaults;
   });
 
@@ -126,7 +126,7 @@ export default function SettingsPage() {
       setNotebookPath("./forge_gen/");
       setDefaultDiscoveryDepth("balanced");
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
-      setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
+      setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       toast.success("Local settings cleared");
     }
   };
@@ -499,6 +499,30 @@ export default function SettingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Max auto spaces */}
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="maxAutoSpaces">Max spaces to auto-analyse</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="maxAutoSpaces"
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={genieDefaults.maxAutoSpaces}
+                  onChange={(e) =>
+                    setGenieDefaults((prev) => ({
+                      ...prev,
+                      maxAutoSpaces: Math.min(50, Math.max(0, parseInt(e.target.value) || 0)),
+                    }))
+                  }
+                  className="w-24"
+                />
+                <span className="text-xs text-muted-foreground">
+                  0 = all domains (default). Limits auto-generation; you can always regenerate more from the Genie Workbench.
+                </span>
               </div>
             </div>
 

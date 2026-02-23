@@ -56,6 +56,7 @@ export interface InstructionGenerationInput {
   entityCandidates: EntityMatchingCandidate[];
   joinSpecs: JoinSpecInput[];
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface InstructionGenerationOutput {
@@ -65,7 +66,7 @@ export interface InstructionGenerationOutput {
 export async function runInstructionGeneration(
   input: InstructionGenerationInput
 ): Promise<InstructionGenerationOutput> {
-  const { domain, subdomains, businessName, businessContext, config, entityCandidates, endpoint } = input;
+  const { domain, subdomains, businessName, businessContext, config, entityCandidates, endpoint, signal } = input;
 
   const instructions: string[] = [];
 
@@ -121,7 +122,7 @@ export async function runInstructionGeneration(
   if (config.llmRefinement && businessContext) {
     try {
       llmRefined = await generateLLMInstruction(
-        domain, subdomains, businessName, businessContext, endpoint
+        domain, subdomains, businessName, businessContext, endpoint, signal
       );
     } catch (err) {
       logger.warn("LLM instruction generation failed", {
@@ -224,7 +225,8 @@ async function generateLLMInstruction(
   subdomains: string[],
   businessName: string,
   bc: BusinessContext,
-  endpoint: string
+  endpoint: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const systemMessage = `You are writing a single concise text instruction for a Databricks Genie space. ` +
     `Write 1-2 sentences of domain-specific guidance that helps users ask better questions. ` +
@@ -248,6 +250,7 @@ Write one brief domain-specific instruction for users of this Genie space.`;
     messages,
     temperature: TEMPERATURE,
     maxTokens: 150,
+    signal,
   });
 
   const content = result.content?.trim();

@@ -33,6 +33,7 @@ export interface ColumnIntelligenceInput {
   sampleData: SampleDataCache | null;
   piiClassifications?: SensitivityClassification[];
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface ColumnIntelligenceOutput {
@@ -43,7 +44,7 @@ export interface ColumnIntelligenceOutput {
 export async function runColumnIntelligence(
   input: ColumnIntelligenceInput
 ): Promise<ColumnIntelligenceOutput> {
-  const { tableFqns, metadata, config, sampleData, piiClassifications, endpoint } = input;
+  const { tableFqns, metadata, config, sampleData, piiClassifications, endpoint, signal } = input;
 
   // Entity extraction from sample data (or schema fallback)
   let entityCandidates: EntityMatchingCandidate[];
@@ -86,7 +87,7 @@ export async function runColumnIntelligence(
     const batch = tableFqns.slice(i, i + BATCH_SIZE);
     try {
       const batchEnrichments = await processColumnBatch(
-        batch, metadata, sampleData, entityCandidates, endpoint
+        batch, metadata, sampleData, entityCandidates, endpoint, signal
       );
       enrichments.push(...batchEnrichments);
     } catch (err) {
@@ -109,7 +110,8 @@ async function processColumnBatch(
   metadata: MetadataSnapshot,
   sampleData: SampleDataCache | null,
   entityCandidates: EntityMatchingCandidate[],
-  endpoint: string
+  endpoint: string,
+  signal?: AbortSignal,
 ): Promise<ColumnEnrichment[]> {
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
@@ -173,6 +175,7 @@ Analyze ALL columns in the tables above and return the enrichment JSON array.`;
     messages,
     temperature: TEMPERATURE,
     responseFormat: "json_object",
+    signal,
   });
 
   const content = result.content ?? "";

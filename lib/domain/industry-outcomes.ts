@@ -1526,6 +1526,9 @@ const WATER_UTILITIES: IndustryOutcome = {
     "Water Retail",
     "Water Wholesale",
     "Integrated Water (Supply + Wastewater)",
+    "Bulk Water & Dam Operations",
+    "Irrigation & Scheme Water",
+    "Recycled Water & Resource Recovery",
   ],
   suggestedDomains: [
     "Network Operations",
@@ -1534,6 +1537,9 @@ const WATER_UTILITIES: IndustryOutcome = {
     "Environmental Compliance",
     "Water Quality",
     "Finance",
+    "Water Security & Climate Resilience",
+    "Bulk Water Operations",
+    "Circular Economy",
   ],
   suggestedPriorities: [
     "Optimize Operations",
@@ -1541,12 +1547,18 @@ const WATER_UTILITIES: IndustryOutcome = {
     "Improve Water Quality",
     "Mitigate Risk",
     "Achieve ESG",
+    "Ensure Water Security",
+    "Enable Digital & Smart Networks",
+    "Support Community Liveability",
   ],
   objectives: [
+    // ------------------------------------------------------------------
+    // Objective 1 -- Network & Bulk Water Operations
+    // ------------------------------------------------------------------
     {
-      name: "Optimize Network Operations",
+      name: "Optimize Network & Bulk Water Operations",
       whyChange:
-        "Water utilities lose an average of 20-30% of treated water to leakage and inefficiency. Data-driven network management, predictive asset maintenance, and demand forecasting deliver substantial cost savings, improve service reliability, and reduce supply interruptions.",
+        "Water utilities lose an average of 20-30% of treated water to leakage and inefficiency in distribution networks, while bulk water providers face growing pressure to optimise dam, pipeline, and scheme operations under climate variability. Data-driven network management, predictive asset maintenance, demand forecasting, and scheme optimisation deliver substantial cost savings, improve service reliability, and reduce supply interruptions.",
       priorities: [
         {
           name: "Leakage Reduction & Network Efficiency",
@@ -1571,7 +1583,7 @@ const WATER_UTILITIES: IndustryOutcome = {
           ],
           kpis: [
             "Leakage (Ml/d)",
-            "Supply interruptions (CML)",
+            "Supply interruptions (customer minutes lost)",
             "Burst rate per km of mains",
             "Non-revenue water (%)",
           ],
@@ -1592,9 +1604,9 @@ const WATER_UTILITIES: IndustryOutcome = {
             {
               name: "Capital Investment Optimisation",
               description:
-                "Prioritise mains renewal and asset replacement programmes to maximise risk reduction per pound of capital investment.",
+                "Prioritise mains renewal and asset replacement programmes to maximise risk reduction per dollar of capital investment.",
               businessValue:
-                "Improved capital efficiency by targeting highest-risk assets first across AMP planning cycles.",
+                "Improved capital efficiency by targeting highest-risk assets first across regulatory and planning cycles.",
             },
             {
               name: "Predictive Maintenance for Pumping Stations",
@@ -1614,12 +1626,76 @@ const WATER_UTILITIES: IndustryOutcome = {
             "Chief Asset Officer",
           ],
         },
+        {
+          name: "Bulk Water & Scheme Operations",
+          useCases: [
+            {
+              name: "Dam Operations Optimisation",
+              description:
+                "Optimise dam release schedules, storage levels, and transfer operations across interconnected schemes using inflow forecasts, demand projections, and environmental flow requirements.",
+              businessValue:
+                "Maximise water availability while meeting environmental obligations and minimising spill losses.",
+            },
+            {
+              name: "Channel Loss & Scheme Efficiency Monitoring",
+              description:
+                "Monitor and model conveyance losses across irrigation channels, pipelines, and open waterways to identify seepage, evaporation hotspots, and infrastructure upgrade priorities.",
+            },
+            {
+              name: "Regional Water Grid Optimisation",
+              description:
+                "Model inter-connected bulk water transfers across dams, treatment plants, and desalination assets to optimise whole-of-grid supply reliability and cost.",
+            },
+          ],
+          kpis: [
+            "Scheme delivery efficiency (%)",
+            "Conveyance loss (Ml/d)",
+            "Allocation reliability (%)",
+            "Storage utilisation vs capacity",
+          ],
+          personas: [
+            "Head of Water Resources",
+            "Bulk Water Operations Manager",
+            "Chief Operating Officer",
+          ],
+        },
+        {
+          name: "Dam Safety & Major Infrastructure Risk",
+          useCases: [
+            {
+              name: "Dam Safety Risk & Consequence-of-Failure Modelling",
+              description:
+                "Integrate structural condition, hydrology, seismicity, and downstream population data to model dam failure consequences and prioritise safety upgrade investments.",
+              businessValue:
+                "Proactive risk-based capital allocation for dam safety programmes, meeting regulatory guidelines and reducing residual risk.",
+            },
+            {
+              name: "Spillway & Major Asset Condition Assessment",
+              description:
+                "Combine inspection data, sensor telemetry, and environmental loading to assess spillway, embankment, and outlet condition and predict intervention timing.",
+            },
+          ],
+          kpis: [
+            "Dam safety compliance (%)",
+            "Overdue safety actions count",
+            "Consequence category rating",
+            "Major asset condition score",
+          ],
+          personas: [
+            "Head of Dam Safety",
+            "Chief Risk Officer",
+            "VP Engineering",
+          ],
+        },
       ],
     },
+    // ------------------------------------------------------------------
+    // Objective 2 -- Water Quality & Environmental Resilience
+    // ------------------------------------------------------------------
     {
-      name: "Protect Water Quality & Environment",
+      name: "Protect Water Quality & Environmental Resilience",
       whyChange:
-        "Regulatory scrutiny on water quality, pollution incidents, and environmental performance is intensifying. Data-driven monitoring and prediction enables proactive compliance, reduces pollution events, and supports net-zero carbon targets.",
+        "Regulatory scrutiny on water quality, pollution incidents, and environmental performance is intensifying globally. Climate variability increases source water risk and extreme weather events. Data-driven monitoring, catchment management, and predictive analytics enable proactive compliance, reduce pollution events, and support net-zero carbon targets.",
       priorities: [
         {
           name: "Water Quality Compliance",
@@ -1641,7 +1717,7 @@ const WATER_UTILITIES: IndustryOutcome = {
             },
           ],
           kpis: [
-            "DWI compliance (%)",
+            "Drinking water compliance (%)",
             "Coliform detection failures",
             "Taste and odour complaints",
             "Treatment cost per Ml",
@@ -1653,14 +1729,41 @@ const WATER_UTILITIES: IndustryOutcome = {
           ],
         },
         {
-          name: "Environmental & Sustainability Performance",
+          name: "Integrated Catchment & Source Management",
           useCases: [
             {
-              name: "Sewer Overflow (CSO) Prediction",
+              name: "Catchment Health Monitoring & Intervention Planning",
               description:
-                "Predict combined sewer overflow events from rainfall forecasts, network level sensors, and flow data to enable proactive spill prevention.",
+                "Integrate satellite imagery, land-use data, rainfall patterns, and water quality trends to monitor catchment health and prioritise intervention programmes across source water areas.",
               businessValue:
-                "Reduce CSO spill frequency and duration, directly impacting EPA/Ofwat performance commitments.",
+                "Proactive source protection reduces treatment complexity and cost while safeguarding long-term water quality.",
+            },
+            {
+              name: "Source Water Quality Trend Analysis",
+              description:
+                "Analyse long-term trends in raw water quality across reservoirs and river abstractions, correlating with land-use change, climate patterns, and upstream activity to anticipate emerging risks.",
+            },
+          ],
+          kpis: [
+            "Catchment health index",
+            "Source water quality trend (improving/stable/declining)",
+            "Intervention programme completion (%)",
+          ],
+          personas: [
+            "Head of Catchment Management",
+            "Head of Water Quality",
+            "Environmental Scientist",
+          ],
+        },
+        {
+          name: "Climate, Environment & Sustainability Performance",
+          useCases: [
+            {
+              name: "Sewer Overflow Prediction",
+              description:
+                "Predict sewer overflow events from rainfall forecasts, network level sensors, and flow data to enable proactive spill prevention.",
+              businessValue:
+                "Reduce overflow spill frequency and duration, directly impacting regulatory performance commitments.",
             },
             {
               name: "Carbon Emissions Tracking",
@@ -1670,30 +1773,45 @@ const WATER_UTILITIES: IndustryOutcome = {
             {
               name: "Pollution Incident Prevention",
               description:
-                "Identify high-risk discharge points using telemetry, event history, and network hydraulic models to prevent category 1-3 pollution incidents.",
+                "Identify high-risk discharge points using telemetry, event history, and network hydraulic models to prevent significant pollution incidents.",
+            },
+            {
+              name: "Climate Variability & Drought Scenario Modelling",
+              description:
+                "Model the impact of climate change scenarios on rainfall patterns, inflow projections, and demand to inform long-term infrastructure planning and drought response strategies.",
+            },
+            {
+              name: "Emissions Reduction & Net-Zero Pathway Analytics",
+              description:
+                "Track progress toward net-zero targets by modelling abatement options across energy use, process emissions, biogas capture, and renewable energy generation.",
             },
           ],
           kpis: [
-            "Pollution incidents (category 1-3)",
-            "CSO spill frequency and duration",
+            "Pollution incidents (by severity)",
+            "Sewer overflow frequency and duration",
             "Carbon intensity (kgCO2e/Ml)",
-            "Bathing water compliance",
+            "Recreational water quality compliance",
+            "Net-zero pathway progress (%)",
           ],
           personas: [
             "Head of Environment",
             "Chief Sustainability Officer",
+            "Head of Climate & Resilience",
             "VP Wastewater",
           ],
         },
       ],
     },
+    // ------------------------------------------------------------------
+    // Objective 3 -- Customer, Commercial & Wholesale Performance
+    // ------------------------------------------------------------------
     {
-      name: "Improve Customer & Commercial Performance",
+      name: "Improve Customer, Commercial & Wholesale Performance",
       whyChange:
-        "Water utilities face growing expectations around customer experience, affordability, and transparency. Smart metering and advanced analytics unlock personalised engagement, accurate billing, and identification of vulnerable customers who need additional support.",
+        "Water utilities serve diverse customer bases -- from residential end-consumers to wholesale retailer utilities, irrigators, and industrial users. Growing expectations around experience, affordability, transparency, and service reliability require analytics that span retail billing, wholesale joint planning, and irrigation scheme delivery.",
       priorities: [
         {
-          name: "Customer Experience & Billing",
+          name: "Retail Customer Experience & Billing",
           useCases: [
             {
               name: "Smart Meter Consumption Analytics",
@@ -1705,7 +1823,7 @@ const WATER_UTILITIES: IndustryOutcome = {
               description:
                 "Classify customers at risk of water poverty or requiring priority services using billing, demographic, and contact data to ensure targeted support.",
               businessValue:
-                "Improved C-MeX scores and reduced bad debt through proactive vulnerability management.",
+                "Improved customer satisfaction scores and reduced bad debt through proactive vulnerability management.",
             },
             {
               name: "Meter-to-Cash Accuracy",
@@ -1714,7 +1832,7 @@ const WATER_UTILITIES: IndustryOutcome = {
             },
           ],
           kpis: [
-            "C-MeX score",
+            "Customer satisfaction score",
             "Per capita consumption (PCC)",
             "Billing accuracy (%)",
             "Customer contacts per 1000 connections",
@@ -1723,6 +1841,233 @@ const WATER_UTILITIES: IndustryOutcome = {
             "VP Customer Experience",
             "Head of Retail",
             "Chief Commercial Officer",
+          ],
+        },
+        {
+          name: "Wholesale & Irrigation Customer Outcomes",
+          useCases: [
+            {
+              name: "Wholesale Customer Portal & Joint Planning Analytics",
+              description:
+                "Provide retailer utilities with shared demand forecasts, outage coordination dashboards, incident lessons-learnt reporting, and joint capital planning analytics through a collaborative portal.",
+              businessValue:
+                "Strengthened wholesale relationships, improved joint demand planning accuracy, and faster coordinated incident response.",
+            },
+            {
+              name: "Allocation Forecasting & Delivery Reliability Reporting",
+              description:
+                "Forecast seasonal water allocations per scheme using storage, inflow, and demand data, and report delivery reliability against announced allocations for irrigation and industrial customers.",
+            },
+            {
+              name: "Irrigator Self-Service & Scheme Performance Dashboards",
+              description:
+                "Give irrigators real-time visibility into their allocation balance, ordering status, channel delivery schedules, and historical usage via self-service dashboards.",
+            },
+          ],
+          kpis: [
+            "Allocation reliability (%)",
+            "Delivery reliability (%)",
+            "Wholesale customer satisfaction",
+            "Irrigator portal adoption rate",
+          ],
+          personas: [
+            "Irrigation Customer Manager",
+            "Head of Wholesale Partnerships",
+            "Chief Commercial Officer",
+          ],
+        },
+      ],
+    },
+    // ------------------------------------------------------------------
+    // Objective 4 -- Regional Water Security & Drought Resilience
+    // ------------------------------------------------------------------
+    {
+      name: "Ensure Regional Water Security & Drought Resilience",
+      whyChange:
+        "Climate change is increasing the frequency and severity of drought events, threatening water supply security for communities, agriculture, and industry. Bulk water providers and regional utilities must plan across interconnected schemes, optimise diverse supply sources (dams, desalination, groundwater, recycled water), and coordinate drought response to maintain reliable supply.",
+      priorities: [
+        {
+          name: "Water Security Planning & Grid Operations",
+          useCases: [
+            {
+              name: "Drought Scenario Planning & Restrictions Modelling",
+              description:
+                "Model drought scenarios against storage trajectories, demand forecasts, and supply augmentation options to inform restriction trigger levels and contingency planning.",
+              businessValue:
+                "Earlier, evidence-based restriction decisions that balance community impact with supply security.",
+            },
+            {
+              name: "Desalination Optimisation",
+              description:
+                "Optimise desalination plant dispatch, energy consumption, and maintenance scheduling based on grid demand, storage levels, and energy market conditions.",
+            },
+            {
+              name: "Inter-connected Scheme Optimisation",
+              description:
+                "Model transfers and balancing across multiple dams, treatment plants, and distribution zones within a regional water grid to maximise whole-of-system reliability.",
+            },
+            {
+              name: "Water Security Index Forecasting",
+              description:
+                "Calculate and forecast a composite water security index per scheme incorporating storage, inflow trends, demand growth, climate outlook, and supply augmentation capacity.",
+            },
+          ],
+          kpis: [
+            "Water security index / headroom by scheme",
+            "Storage levels vs trigger thresholds",
+            "Restrictions frequency and duration",
+            "Supply augmentation readiness (%)",
+          ],
+          personas: [
+            "Head of Water Resources",
+            "Chief Water Security Officer",
+            "Head of Climate & Resilience",
+          ],
+        },
+      ],
+    },
+    // ------------------------------------------------------------------
+    // Objective 5 -- Smart Networks & Regional Collaboration
+    // ------------------------------------------------------------------
+    {
+      name: "Advance Smart Networks & Regional Collaboration",
+      whyChange:
+        "Digital metering, IoT sensor networks, and smart water platforms are transforming how utilities detect leaks, manage pressure, and engage customers. Leading utilities are also sharing platforms and data with smaller regional councils to lift capability across the sector.",
+      priorities: [
+        {
+          name: "Digital & Smart Network Enablement",
+          useCases: [
+            {
+              name: "AMI Rollout Analytics & Telemetry Quality",
+              description:
+                "Monitor smart meter deployment progress, communication reliability, and data quality to ensure the AMI programme delivers full network visibility on schedule.",
+              businessValue:
+                "Accelerated realisation of smart metering benefits through early detection of telemetry gaps and meter faults.",
+            },
+            {
+              name: "Smart Network Event Correlation",
+              description:
+                "Correlate events across pressure, flow, acoustic, and meter telemetry to automatically detect, classify, and locate network anomalies such as bursts, leaks, and pressure transients.",
+            },
+            {
+              name: "Digital Twin for Network Simulation",
+              description:
+                "Build and maintain a hydraulic digital twin of the distribution or bulk water network to simulate operational scenarios, optimise pressure management, and plan capital interventions.",
+            },
+          ],
+          kpis: [
+            "Smart meter coverage (%)",
+            "Telemetry data completeness (%)",
+            "Digital event detection rate",
+            "Digital twin model accuracy",
+          ],
+          personas: [
+            "Head of Digital",
+            "Smart Network Program Manager",
+            "Chief Technology Officer",
+          ],
+        },
+        {
+          name: "Regional Shared Services & Collaboration",
+          useCases: [
+            {
+              name: "Shared Services & Data Hub for Regional Utilities",
+              description:
+                "Operate a shared analytics platform and data hub that enables smaller regional councils and utilities to access smart water capabilities without building bespoke infrastructure.",
+              businessValue:
+                "Economies of scale for smaller utilities and consistent data standards across the region.",
+            },
+            {
+              name: "Cross-utility Benchmarking Analytics",
+              description:
+                "Aggregate anonymised operational, financial, and customer metrics across participating utilities to enable peer benchmarking and identify best-practice improvement opportunities.",
+            },
+          ],
+          kpis: [
+            "Participating utilities count",
+            "Shared platform adoption rate",
+            "Benchmarking insight actions implemented",
+          ],
+          personas: [
+            "Head of Regional Partnerships",
+            "Chief Information Officer",
+            "VP Network Operations",
+          ],
+        },
+      ],
+    },
+    // ------------------------------------------------------------------
+    // Objective 6 -- Community Liveability & Circular Economy
+    // ------------------------------------------------------------------
+    {
+      name: "Support Community Liveability & Circular Economy",
+      whyChange:
+        "Water utilities play a central role in community liveability, public health, and the transition to a circular economy. Recycled water, biosolids reuse, energy recovery, and precinct-scale innovation create new value streams while reducing environmental impact. Utilities with strong social mandates must also demonstrate measurable community and affordability outcomes.",
+      priorities: [
+        {
+          name: "Recycled Water & Resource Recovery",
+          useCases: [
+            {
+              name: "Recycled Water Demand & Distribution Optimisation",
+              description:
+                "Forecast recycled water demand by customer segment and optimise production, storage, and distribution to maximise reuse rates and minimise discharge to waterways.",
+              businessValue:
+                "Increased recycled water revenue and reduced environmental discharge volumes.",
+            },
+            {
+              name: "Biosolids Reuse & Energy Recovery Analytics",
+              description:
+                "Track biosolids production, quality, and beneficial reuse pathways (agriculture, land rehabilitation, energy generation) to optimise resource recovery and regulatory compliance.",
+            },
+            {
+              name: "Precinct-scale Water Recycling Feasibility",
+              description:
+                "Model the financial and environmental viability of decentralised water recycling schemes for new precincts, factoring in demand density, treatment costs, and regulatory requirements.",
+            },
+          ],
+          kpis: [
+            "Recycled water reuse rate (%)",
+            "Biosolids beneficial reuse (%)",
+            "Energy recovered (MWh)",
+            "Resource recovery revenue ($)",
+          ],
+          personas: [
+            "Head of Circular Economy",
+            "Resource Recovery Manager",
+            "Chief Sustainability Officer",
+          ],
+        },
+        {
+          name: "Community & Social Value",
+          useCases: [
+            {
+              name: "Liveability Impact Assessment",
+              description:
+                "Measure and report the utility's contribution to community liveability through water quality, green space irrigation, recreational water, flood mitigation, and public amenity outcomes.",
+            },
+            {
+              name: "Hardship & Affordability Analytics",
+              description:
+                "Identify customers experiencing financial hardship using billing patterns, payment history, and demographic data to proactively offer support programmes and flexible payment arrangements.",
+              businessValue:
+                "Reduced bad debt and improved social outcomes through early intervention in hardship cases.",
+            },
+            {
+              name: "Emergent Market Identification",
+              description:
+                "Analyse trends in water reuse, waste-to-energy, nutrient recovery, and carbon markets to identify new revenue streams and circular economy business models.",
+            },
+          ],
+          kpis: [
+            "Community satisfaction score",
+            "Hardship programme participation rate",
+            "Social value generated ($)",
+            "New circular economy revenue streams",
+          ],
+          personas: [
+            "Head of Community & Social Impact",
+            "Chief Customer Officer",
+            "Head of Strategy",
           ],
         },
       ],
@@ -2433,10 +2778,11 @@ const RAIL_TRANSPORT: IndustryOutcome = {
   name: "Rail Transport & Logistics",
   subVerticals: [
     "Freight Rail",
+    "Heavy Haul & Bulk Freight",
     "Passenger Rail",
     "Rail Infrastructure & Signalling",
     "Intermodal Logistics",
-    "Urban Transit & Metro",
+    "Network Access & Regulation",
   ],
   suggestedDomains: [
     "Network Operations",
@@ -2445,6 +2791,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
     "Safety & Compliance",
     "Supply Chain",
     "Finance",
+    "ESG & Sustainability",
+    "Workforce & Remote Operations",
   ],
   suggestedPriorities: [
     "Optimize Operations",
@@ -2452,12 +2800,13 @@ const RAIL_TRANSPORT: IndustryOutcome = {
     "Increase Revenue",
     "Mitigate Risk",
     "Achieve ESG",
+    "Enhance Customer Experience",
   ],
   objectives: [
     {
       name: "Optimize Network & Train Operations",
       whyChange:
-        "Rail networks handle millions of train movements annually across complex, interdependent timetables. A single 5-minute delay cascades into hundreds of disrupted services. AI-driven scheduling, real-time operations management, and capacity optimization are essential to improve punctuality, throughput, and energy efficiency.",
+        "Heavy-haul and freight rail networks manage complex, interdependent train plans across export corridors (e.g., CQCN coal systems, Tarcoola–Darwin) and multi-user regulated infrastructure. A single delay cascades into reduced throughput, port berthing misses, and contractual penalties. AI-driven scheduling, real-time operations management, capacity optimization, and workforce planning are essential to improve punctuality, throughput, energy efficiency, and regulatory access compliance.",
       priorities: [
         {
           name: "Train Performance & Scheduling",
@@ -2477,9 +2826,11 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "20-30% reduction in secondary delay minutes through proactive intervention.",
             },
             {
-              name: "Platform & Station Capacity Optimization",
+              name: "Heavy-Haul Train Dynamics & Pathing",
               description:
-                "Model passenger flows through stations using ticketing, Wi-Fi, and sensor data to optimise dwell times, platform allocation, and crowd management during peak periods.",
+                "Optimise consist length, distributed power configuration, and speed profiles for long heavy-haul coal and bulk routes using gradient data, axle load limits, and corridor capacity models.",
+              businessValue:
+                "3-5% improvement in gross tonnage per train path through optimised consist planning.",
             },
             {
               name: "Energy-Efficient Driving Advisory",
@@ -2487,6 +2838,13 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise speed profiles using gradient data, timetable slack, and rolling stock characteristics to reduce traction energy consumption while maintaining punctuality.",
               businessValue:
                 "10-15% traction energy savings through optimised coasting and braking strategies.",
+            },
+            {
+              name: "Port Interface & Terminal Coordination",
+              description:
+                "Integrate ship schedules, stockpile levels, and corridor train plans to optimise the handoff between rail network and export terminals, reducing demurrage and improving port throughput.",
+              businessValue:
+                "10-20% reduction in port demurrage costs through coordinated rail-terminal scheduling.",
             },
           ],
           kpis: [
@@ -2524,16 +2882,87 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               description:
                 "Optimise crane scheduling, container stacking, and truck slot allocation at intermodal terminals using real-time data to reduce terminal dwell time and improve throughput.",
             },
+            {
+              name: "Contract-Aware Scheduling",
+              description:
+                "Build freight train paths that respect take-or-pay obligations, slot rights, and access undertaking constraints, ensuring contractual commitments are met while maximising network utilisation.",
+              businessValue:
+                "Reduce contractual penalty exposure and improve take-or-pay volume compliance by 5-10%.",
+            },
           ],
           kpis: [
             "Freight train reliability (%)",
             "Yard dwell time (hours)",
             "Wagon utilisation rate (%)",
             "Terminal throughput (lifts per hour)",
+            "Take-or-pay compliance (%)",
           ],
           personas: [
             "Head of Freight",
             "VP Terminal Operations",
+            "Chief Operating Officer",
+          ],
+        },
+        {
+          name: "Regulated Network Capacity & Access Management",
+          useCases: [
+            {
+              name: "Capacity Assessment & Queuing Analytics",
+              description:
+                "Model multi-user capacity on regulated corridors, queue and prioritise access requests, and report utilisation transparently to access holders and regulators.",
+              businessValue:
+                "Improved access request turnaround and 10-15% better capacity utilisation on constrained coal systems.",
+            },
+            {
+              name: "Performance Rebate & Access Charge Optimization",
+              description:
+                "Track corridor performance against access undertaking benchmarks, calculate rebate and penalty exposure in real time, and identify operational levers to optimise outcomes for network and above-rail operators.",
+            },
+            {
+              name: "Maintenance Window vs Throughput Scenario Planning",
+              description:
+                "Simulate the throughput impact of planned possessions and maintenance windows across coal systems and port interfaces, balancing asset renewal needs with contractual throughput obligations.",
+              businessValue:
+                "5-8% reduction in throughput loss during planned maintenance through optimised possession scheduling.",
+            },
+          ],
+          kpis: [
+            "System throughput (NTK)",
+            "Capacity utilisation (%)",
+            "Access request lead time (days)",
+            "Rebate / penalty exposure ($)",
+          ],
+          personas: [
+            "Head of Network",
+            "VP Regulatory & Access",
+            "Network Capacity Manager",
+          ],
+        },
+        {
+          name: "Workforce & Remote Operations",
+          useCases: [
+            {
+              name: "Crew Rostering & Fatigue Risk Optimization",
+              description:
+                "Optimise crew rosters for long-distance heavy-haul corridors, modelling fatigue risk, remote changeover logistics, and regulatory hours-of-work limits to maintain safety and crew wellbeing.",
+              businessValue:
+                "15-20% reduction in fatigue-related risk events through data-driven roster optimisation.",
+            },
+            {
+              name: "Remote Operations Centre Decision Support",
+              description:
+                "Provide AI copilots for train controllers and dispatchers managing remote corridors, surfacing real-time alerts, recommending recovery plans, and reducing cognitive load during complex operational scenarios.",
+            },
+          ],
+          kpis: [
+            "Fatigue risk incidents",
+            "Crew utilisation (%)",
+            "Remote corridor response time",
+            "Controller decision latency",
+          ],
+          personas: [
+            "Head of Workforce Planning",
+            "Remote Operations Manager",
             "Chief Operating Officer",
           ],
         },
@@ -2542,7 +2971,7 @@ const RAIL_TRANSPORT: IndustryOutcome = {
     {
       name: "Transform Asset Management & Maintenance",
       whyChange:
-        "Rail operators manage billions in infrastructure — track, signalling, bridges, tunnels — and rolling stock. Unplanned failures cause major disruptions and safety risks. 30-40% of maintenance budgets are spent on time-based rather than condition-based interventions. Predictive analytics can cut maintenance costs by 20-30% while improving asset reliability.",
+        "Rail operators manage billions in infrastructure — track, signalling, bridges, tunnels — and rolling stock, often across remote linear corridors subject to heavy axle loads and extreme environmental conditions. Unplanned failures cause major disruptions, safety risks, and contractual penalties. 30-40% of maintenance budgets are spent on time-based rather than condition-based interventions. Predictive analytics can cut maintenance costs by 20-30% while improving asset reliability and network availability.",
       priorities: [
         {
           name: "Rolling Stock Health",
@@ -2616,79 +3045,83 @@ const RAIL_TRANSPORT: IndustryOutcome = {
       ],
     },
     {
-      name: "Grow Passenger Revenue & Experience",
+      name: "Enhance Freight Customer Experience & Commercial Performance",
       whyChange:
-        "Passenger expectations are shaped by airline and ride-hailing experiences. Revenue management, real-time information, and personalised services are critical for growing ridership and optimising yield. Operators leveraging dynamic pricing see 5-15% revenue uplift. Post-pandemic recovery requires data-driven capacity and demand alignment.",
+        "Freight customers — miners, agribusiness, and logistics providers — demand reliable train slots, transparent performance data, ESG metrics per shipment, and simple digital access to information. Heavy-haul operators competing for modal share against road must deliver a B2B experience rivalling trucking on visibility, reliability, and cost transparency. Take-or-pay contract models and long-term haulage agreements require sophisticated commercial analytics to optimise revenue and customer retention.",
       priorities: [
         {
-          name: "Revenue Management",
+          name: "Shipper Portal & Digital Services",
           useCases: [
             {
-              name: "Dynamic Pricing & Yield Management",
+              name: "Real-Time Train & Consignment Tracking",
               description:
-                "Optimise fares by service, time of day, and demand using booking curves, competitor pricing, and elasticity models to maximise revenue per seat-km.",
+                "Provide shipper-facing dashboards with live train position, consignment status, and corridor disruption alerts via API and web portal, giving freight customers full visibility of their shipments.",
               businessValue:
-                "5-15% revenue uplift from dynamic pricing on key routes.",
+                "30-40% reduction in shipper enquiries through self-service tracking and proactive notifications.",
             },
             {
-              name: "Demand Forecasting for Capacity Planning",
+              name: "Self-Service Quoting & Lane Comparison",
               description:
-                "Forecast passenger volumes by route, day, and time using historical ridership, events, weather, and economic indicators to right-size train formations and reduce overcrowding.",
-              businessValue:
-                "15-25% improvement in load factor through demand-aligned capacity.",
+                "Enable shippers to compare rail vs road options by cost, transit time, and carbon emissions per lane, driving modal shift to rail through transparent, data-backed decision support.",
             },
             {
-              name: "Ancillary Revenue Optimization",
+              name: "Disruption Alerting & Recovery Communication",
               description:
-                "Personalise upsell offers for first-class upgrades, Wi-Fi packages, car parking, and onboard catering based on customer profiles and journey context.",
+                "Deliver proactive, automated notifications to freight customers with ETA revisions, alternative routing options, and recovery timelines when corridor disruptions occur.",
+              businessValue:
+                "50%+ improvement in average disruption notification lead time.",
+            },
+            {
+              name: "Shipper Performance Dashboard",
+              description:
+                "Provide per-customer views of on-time delivery, volume trends, SLA compliance, and ESG metrics, enabling shippers to monitor and report on their rail freight performance.",
             },
           ],
           kpis: [
-            "Revenue per seat-km",
-            "Load factor (%)",
-            "Yield per passenger",
-            "Ancillary revenue per journey",
-          ],
-          personas: [
-            "Chief Commercial Officer",
-            "Head of Revenue Management",
-            "VP Pricing",
-          ],
-        },
-        {
-          name: "Customer Experience & Engagement",
-          useCases: [
-            {
-              name: "Real-Time Passenger Information",
-              description:
-                "Deliver accurate, context-aware journey updates across apps, station screens, and announcements using live train data and disruption feeds.",
-            },
-            {
-              name: "Passenger Flow & Crowding Analytics",
-              description:
-                "Predict crowding by platform, carriage, and time using ticket sales, sensor data, and historical patterns to guide passengers toward less crowded options.",
-            },
-            {
-              name: "Customer Sentiment & Feedback Analytics",
-              description:
-                "Analyse complaints, social media, and survey responses using NLP to identify systemic service issues and prioritise improvements.",
-            },
-            {
-              name: "Disruption Communication Automation",
-              description:
-                "Auto-generate clear, consistent, and timely disruption messaging from control room data using AI, ensuring passengers receive accurate information across all channels.",
-            },
-          ],
-          kpis: [
-            "Passenger satisfaction score",
-            "NPS",
-            "Real-time information accuracy (%)",
-            "Complaints per million journeys",
+            "Shipper NPS",
+            "Digital channel adoption (%)",
+            "Quote-to-book conversion rate",
+            "Average notification lead time (minutes)",
           ],
           personas: [
             "Head of Customer Experience",
-            "VP Commercial",
-            "Chief Marketing Officer",
+            "VP Freight Commercial",
+            "Digital Product Manager",
+          ],
+        },
+        {
+          name: "Contract & Commercial Performance",
+          useCases: [
+            {
+              name: "Take-or-Pay & Contract Utilisation Analytics",
+              description:
+                "Track contracted vs actual volumes across long-term haulage agreements, flag under/over-utilisation risks, and model rebate and penalty scenarios to optimise contract performance.",
+              businessValue:
+                "5-10% improvement in contract utilisation through proactive volume management.",
+            },
+            {
+              name: "SLA & On-Time Performance Cockpit",
+              description:
+                "Provide real-time contract performance by lane with drill-down to root-cause delays, enabling proactive account management and data-driven SLA negotiations.",
+            },
+            {
+              name: "Modal Shift & Revenue Growth Analytics",
+              description:
+                "Identify road-to-rail conversion opportunities by corridor, commodity, and customer segment using freight market data, emissions comparisons, and capacity availability.",
+              businessValue:
+                "Target 2-5% incremental modal shift to rail through data-driven commercial targeting.",
+            },
+          ],
+          kpis: [
+            "Contract utilisation (%)",
+            "SLA compliance (%)",
+            "Revenue per NTK",
+            "Modal shift conversion rate (%)",
+          ],
+          personas: [
+            "Chief Commercial Officer",
+            "Head of Freight Sales",
+            "VP Customer Success",
           ],
         },
       ],
@@ -2696,7 +3129,7 @@ const RAIL_TRANSPORT: IndustryOutcome = {
     {
       name: "Strengthen Safety, Security & Compliance",
       whyChange:
-        "Rail safety is heavily regulated and public confidence is paramount. Signal Passed at Danger (SPAD) incidents, level crossing collisions, and infrastructure failures carry catastrophic consequences. Predictive risk modelling and automated compliance reporting reduce incidents by 20-40% and streamline regulatory obligations.",
+        "Rail safety is heavily regulated and public confidence is paramount. Signal Passed at Danger (SPAD) incidents, level crossing collisions, and infrastructure failures carry catastrophic consequences. In heavy-haul freight operations, road fleet and crew transport across remote regions add multi-modal safety risk. Predictive risk modelling, automated compliance reporting, and community safety analytics reduce incidents by 20-40% and streamline regulatory obligations.",
       priorities: [
         {
           name: "Safety Analytics",
@@ -2721,17 +3154,33 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               description:
                 "Analyse driver rosters, hours worked, shift patterns, and physiological indicators to identify and mitigate fatigue-related safety risk.",
             },
+            {
+              name: "Road Fleet Safety & Fatigue Analytics",
+              description:
+                "Monitor vehicle telematics, driving hours, and remote travel risk for road fleet and crew transport vehicles, aligned with multi-modal safety obligations in regions where rail crews drive long distances to reach worksites.",
+              businessValue:
+                "20-30% reduction in road-related safety incidents through telematics-driven intervention.",
+            },
+            {
+              name: "Corridor Community Risk Analytics",
+              description:
+                "Assess trespass and level-crossing risk across remote communities along heavy-haul freight corridors, prioritising engineering controls, community engagement programs, and education campaigns.",
+            },
           ],
           kpis: [
             "SPAD rate per million train-miles",
             "Workforce lost-time injuries",
             "Level crossing incidents",
             "Safety critical event rate",
+            "Road fleet incident rate",
+            "Community safety engagement score",
           ],
           personas: [
             "Head of Safety",
             "Chief Safety Officer",
             "VP Operations Risk",
+            "Head of Network Safety",
+            "Road Transport Safety Manager",
           ],
         },
         {
@@ -2752,16 +3201,38 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               description:
                 "Monitor and report noise levels, vibration, and environmental impacts along rail corridors for regulatory compliance and community engagement.",
             },
+            {
+              name: "Shipper Emissions Reporting & Modal Shift Analytics",
+              description:
+                "Provide per-customer GHG reporting showing rail vs road carbon savings per lane, powering customer-facing emissions calculators and supporting shipper sustainability targets.",
+              businessValue:
+                "Enable shippers to report 60-80% lower emissions per tonne-km vs road, driving modal shift.",
+            },
+            {
+              name: "Corridor Decarbonisation Planning",
+              description:
+                "Model traction energy mix, renewable sourcing, locomotive idling reduction, and electrification or hydrogen scenarios at the corridor level to support net-zero operational emissions targets.",
+            },
+            {
+              name: "Climate Resilience Analytics",
+              description:
+                "Assess flood, extreme heat, and cyclone exposure across network sections using climate projection models and historical event data, prioritising adaptation capex for long linear assets.",
+              businessValue:
+                "Reduce climate-related disruption costs by 15-25% through targeted infrastructure hardening.",
+            },
           ],
           kpis: [
             "Regulatory submission timeliness",
-            "Carbon intensity per passenger-km",
+            "Carbon intensity per NTK",
             "Environmental incident rate",
+            "Shipper emissions reports generated",
+            "Climate adaptation capex prioritisation score",
           ],
           personas: [
             "Head of Regulatory Affairs",
             "Chief Sustainability Officer",
             "VP Compliance",
+            "Head of Climate & Environment",
           ],
         },
       ],
@@ -2769,7 +3240,7 @@ const RAIL_TRANSPORT: IndustryOutcome = {
     {
       name: "Drive Freight & Supply Chain Intelligence",
       whyChange:
-        "Rail freight competes with road on reliability, visibility, and flexibility. Shippers demand real-time tracking, accurate ETAs, and seamless intermodal connectivity. Data-driven freight intelligence can increase rail modal share by 5-10% and improve operator margins by 10-20%.",
+        "Rail freight — particularly bulk commodities such as coal, minerals, and agricultural products across long-distance corridors like CQCN and Tarcoola–Darwin — competes with road on reliability, visibility, and flexibility. Shippers demand real-time tracking, accurate ETAs, and seamless intermodal connectivity. Data-driven freight intelligence can increase rail modal share by 5-10% and improve operator margins by 10-20%.",
       priorities: [
         {
           name: "Freight Visibility & Planning",
@@ -2796,12 +3267,20 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               description:
                 "Forecast commodity and lane-level freight demand using economic indicators, trade flows, and seasonal patterns to optimise capacity allocation and pricing.",
             },
+            {
+              name: "Heavy-Haul Corridor Throughput Analytics",
+              description:
+                "Monitor NTK throughput, train cycle times, and bottleneck dwell by corridor to optimise end-to-end coal and bulk supply chain velocity from mine to port.",
+              businessValue:
+                "5-10% improvement in corridor throughput through data-driven bottleneck identification and resolution.",
+            },
           ],
           kpis: [
             "Freight reliability (%)",
             "ETA accuracy (%)",
             "Rail modal share (%)",
             "Freight revenue per train-km",
+            "Corridor NTK throughput",
           ],
           personas: [
             "Head of Freight Commercial",

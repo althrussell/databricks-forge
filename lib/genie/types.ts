@@ -77,6 +77,7 @@ export interface GenieEngineConfig {
 
   tableGroupOverrides: TableGroupOverride[];
   maxTablesPerSpace: number;
+  maxAutoSpaces: number;
   joinOverrides: JoinOverride[];
 
   entityMatchingMode: "auto" | "manual" | "off";
@@ -106,6 +107,7 @@ export function defaultGenieEngineConfig(): GenieEngineConfig {
     timePeriodDateColumns: [],
     tableGroupOverrides: [],
     maxTablesPerSpace: 25,
+    maxAutoSpaces: 0,
     joinOverrides: [],
     entityMatchingMode: "auto",
     entityMatchingOverrides: [],

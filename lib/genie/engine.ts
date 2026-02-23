@@ -33,6 +33,13 @@ import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { isValidTable } from "./schema-allowlist";
 import { logger } from "@/lib/logger";
 
+export class EngineCancelledError extends Error {
+  constructor() {
+    super("Genie Engine generation was cancelled");
+    this.name = "EngineCancelledError";
+  }
+}
+
 export interface GenieEngineInput {
   run: PipelineRun;
   useCases: UseCase[];
@@ -42,7 +49,9 @@ export interface GenieEngineInput {
   piiClassifications?: SensitivityClassification[];
   /** When set, only regenerate the listed domains (partial run). */
   domainFilter?: string[];
-  onProgress?: (message: string, percent: number) => void;
+  /** Abort signal for user-initiated cancellation. */
+  signal?: AbortSignal;
+  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number) => void;
 }
 
 export interface GenieEngineResult {
@@ -68,6 +77,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     sampleData = null,
     piiClassifications,
     domainFilter,
+    signal,
     onProgress,
   } = input;
 
@@ -83,44 +93,73 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   });
 
   // Pass 0: Table Selection + Grouping
-  onProgress?.("Grouping tables into domains...", 5);
+  onProgress?.("Grouping tables into domains...", 5, 0, 0);
   const allDomainGroups = runTableSelection(useCases, metadata, config);
 
   // Apply domain filter for partial regeneration
-  const domainGroups = domainFilter?.length
+  const filteredGroups = domainFilter?.length
     ? allDomainGroups.filter((g) => domainFilter.includes(g.domain))
     : allDomainGroups;
+
+  // Apply maxAutoSpaces cap (0 = unlimited)
+  const domainGroups = config.maxAutoSpaces > 0
+    ? filteredGroups.slice(0, config.maxAutoSpaces)
+    : filteredGroups;
 
   if (domainGroups.length === 0) {
     logger.warn("No domain groups produced", { runId: run.runId, domainFilter });
     return { recommendations: [], passOutputs: [] };
   }
 
+  if (domainGroups.length < filteredGroups.length) {
+    logger.info("Domain count capped by maxAutoSpaces", {
+      maxAutoSpaces: config.maxAutoSpaces,
+      totalAvailable: filteredGroups.length,
+      processing: domainGroups.length,
+    });
+  }
+
   logger.info("Pass 0 complete: table selection", {
     domainCount: domainGroups.length,
     totalDomains: allDomainGroups.length,
     filtered: !!domainFilter?.length,
+    capped: domainGroups.length < filteredGroups.length,
     domains: domainGroups.map((g) => `${g.domain} (${g.tables.length} tables)`),
   });
 
   // Process each domain
   const recommendations: GenieSpaceRecommendation[] = [];
   const allPassOutputs: GenieEnginePassOutputs[] = [];
+  let completedDomainCount = 0;
+  const totalDomainCount = domainGroups.length;
+
+  onProgress?.("Processing domains...", 10, 0, totalDomainCount);
 
   for (let di = 0; di < domainGroups.length; di++) {
+    if (signal?.aborted) {
+      logger.info("Genie Engine cancelled before domain", {
+        runId: run.runId,
+        domainIndex: di,
+        completedDomains: completedDomainCount,
+        totalDomains: totalDomainCount,
+      });
+      throw new EngineCancelledError();
+    }
+
     const group = domainGroups[di];
     const domainPct = Math.round(10 + (di / domainGroups.length) * 85);
 
     if (group.tables.length === 0) {
       logger.info("Skipping domain with no tables", { domain: group.domain });
+      completedDomainCount++;
       continue;
     }
 
     try {
       const outputs = await processDomain(
         group, run, metadata, allowlist, config,
-        sampleData, piiClassifications, endpoint,
-        (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct)
+        sampleData, piiClassifications, endpoint, signal,
+        (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct, completedDomainCount, totalDomainCount)
       );
 
       allPassOutputs.push(outputs);
@@ -137,6 +176,9 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       rec.useCaseCount = group.useCases.length;
       recommendations.push(rec);
 
+      completedDomainCount++;
+      onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount);
+
       logger.info("Domain processed", {
         domain: group.domain,
         tables: outputs.tables.length,
@@ -147,6 +189,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         metricViews: outputs.metricViewProposals.length,
       });
     } catch (err) {
+      completedDomainCount++;
       logger.error("Failed to process domain", {
         domain: group.domain,
         error: err instanceof Error ? err.message : String(err),
@@ -154,7 +197,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     }
   }
 
-  onProgress?.("Genie Engine complete", 100);
+  onProgress?.("Genie Engine complete", 100, totalDomainCount, totalDomainCount);
 
   recommendations.sort((a, b) => b.useCaseCount - a.useCaseCount);
 
@@ -175,6 +218,7 @@ async function processDomain(
   sampleData: SampleDataCache | null,
   piiClassifications: SensitivityClassification[] | undefined,
   endpoint: string,
+  signal: AbortSignal | undefined,
   onProgress: (msg: string) => void
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
@@ -189,6 +233,7 @@ async function processDomain(
     sampleData,
     piiClassifications,
     endpoint,
+    signal,
   });
 
   // Pass 2: Semantic SQL Expressions
@@ -201,6 +246,7 @@ async function processDomain(
     businessContext: run.businessContext,
     config,
     endpoint,
+    signal,
   });
 
   // Build join specs from foreign keys, use case SQL, and LLM inference.
@@ -258,6 +304,7 @@ async function processDomain(
         allowlist,
         existingJoinKeys: allExistingKeys,
         endpoint,
+        signal,
       });
       llmInferredJoins = llmResult.joins;
     } catch (err) {
@@ -289,6 +336,7 @@ async function processDomain(
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
           endpoint,
+          signal,
         })
       : Promise.resolve({ queries: [], functions: [] }),
 
@@ -302,6 +350,7 @@ async function processDomain(
       entityCandidates: columnResult.entityCandidates,
       joinSpecs: allJoins,
       endpoint,
+      signal,
     }),
   ]);
 
@@ -318,6 +367,7 @@ async function processDomain(
           customerBenchmarks: config.benchmarkQuestions,
           joinSpecs: allJoins,
           endpoint,
+          signal,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
 
@@ -334,6 +384,7 @@ async function processDomain(
           joinSpecs: allJoins,
           columnEnrichments: columnResult.enrichments,
           endpoint,
+          signal,
         })
       : Promise.resolve({ proposals: [] }),
   ]);

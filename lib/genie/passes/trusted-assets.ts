@@ -36,6 +36,7 @@ export interface TrustedAssetsInput {
   entityCandidates: EntityMatchingCandidate[];
   joinSpecs: JoinSpecInput[];
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface TrustedAssetsOutput {
@@ -46,7 +47,7 @@ export interface TrustedAssetsOutput {
 export async function runTrustedAssetAuthoring(
   input: TrustedAssetsInput
 ): Promise<TrustedAssetsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, entityCandidates, joinSpecs, endpoint } = input;
+  const { tableFqns, metadata, allowlist, useCases, entityCandidates, joinSpecs, endpoint, signal } = input;
 
   const topUseCases = useCases
     .filter((uc) => uc.sqlCode && uc.sqlStatus === "generated")
@@ -77,7 +78,7 @@ export async function runTrustedAssetAuthoring(
   for (const batch of batches) {
     try {
       const result = await processTrustedAssetBatch(
-        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint
+        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
       );
       allQueries.push(...result.queries);
       allFunctions.push(...result.functions);
@@ -119,6 +120,7 @@ async function processTrustedAssetBatch(
   joinBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
+  signal?: AbortSignal,
 ): Promise<TrustedAssetsOutput> {
   const MAX_SQL_CHARS = 3000;
   const sqlExamples = batch
@@ -190,6 +192,7 @@ Create parameterized queries and UDF functions from these examples.`;
     temperature: TEMPERATURE,
     maxTokens: 8192,
     responseFormat: "json_object",
+    signal,
   });
 
   const content = result.content ?? "";

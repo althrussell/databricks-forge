@@ -25,6 +25,7 @@ import {
   refreshDbCredential,
   invalidateDbCredential,
 } from "@/lib/lakebase/provision";
+import { isAuthError } from "@/lib/lakebase/auth-errors";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -171,21 +172,6 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 // ---------------------------------------------------------------------------
 // Resilient wrapper with auth-error retry
 // ---------------------------------------------------------------------------
-
-const AUTH_ERROR_PATTERNS = [
-  "authentication failed",
-  "password authentication failed",
-  "provided database credentials",
-  "not valid",
-  "FATAL:  password",
-] as const;
-
-function isAuthError(err: unknown): boolean {
-  const msg =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "";
-  const lower = msg.toLowerCase();
-  return AUTH_ERROR_PATTERNS.some((p) => lower.includes(p));
-}
 
 /**
  * Execute a callback with a PrismaClient. If the call fails with a
