@@ -232,35 +232,37 @@ export async function startPipeline(runId: string): Promise<void> {
 
     // Persist use cases atomically (delete old + insert new in a transaction)
     logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
-    const prisma = await (await import("@/lib/prisma")).getPrisma();
-    await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-      await tx.forgeUseCase.deleteMany({ where: { runId } });
-      if (ctx.useCases.length > 0) {
-        await tx.forgeUseCase.createMany({
-          data: ctx.useCases.map((uc) => ({
-            id: uc.id,
-            runId: uc.runId,
-            useCaseNo: uc.useCaseNo,
-            name: uc.name,
-            type: uc.type,
-            analyticsTechnique: uc.analyticsTechnique,
-            statement: uc.statement,
-            solution: uc.solution,
-            businessValue: uc.businessValue,
-            beneficiary: uc.beneficiary,
-            sponsor: uc.sponsor,
-            domain: uc.domain,
-            subdomain: uc.subdomain,
-            tablesInvolved: JSON.stringify(uc.tablesInvolved),
-            priorityScore: uc.priorityScore,
-            feasibilityScore: uc.feasibilityScore,
-            impactScore: uc.impactScore,
-            overallScore: uc.overallScore,
-            sqlCode: uc.sqlCode,
-            sqlStatus: uc.sqlStatus,
-          })),
-        });
-      }
+    const { withPrisma } = await import("@/lib/prisma");
+    await withPrisma(async (prisma) => {
+      await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+        await tx.forgeUseCase.deleteMany({ where: { runId } });
+        if (ctx.useCases.length > 0) {
+          await tx.forgeUseCase.createMany({
+            data: ctx.useCases.map((uc) => ({
+              id: uc.id,
+              runId: uc.runId,
+              useCaseNo: uc.useCaseNo,
+              name: uc.name,
+              type: uc.type,
+              analyticsTechnique: uc.analyticsTechnique,
+              statement: uc.statement,
+              solution: uc.solution,
+              businessValue: uc.businessValue,
+              beneficiary: uc.beneficiary,
+              sponsor: uc.sponsor,
+              domain: uc.domain,
+              subdomain: uc.subdomain,
+              tablesInvolved: JSON.stringify(uc.tablesInvolved),
+              priorityScore: uc.priorityScore,
+              feasibilityScore: uc.feasibilityScore,
+              impactScore: uc.impactScore,
+              overallScore: uc.overallScore,
+              sqlCode: uc.sqlCode,
+              sqlStatus: uc.sqlStatus,
+            })),
+          });
+        }
+      });
     });
 
     // Mark as completed -- Genie Engine runs in the background

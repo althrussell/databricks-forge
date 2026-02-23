@@ -5,6 +5,10 @@
  * route to report it to the client.
  */
 
+import { isAuthErrorMessage } from "@/lib/lakebase/auth-errors";
+
+export type EngineErrorType = "auth" | "general" | null;
+
 export interface EngineJobStatus {
   runId: string;
   status: "generating" | "completed" | "failed";
@@ -13,6 +17,7 @@ export interface EngineJobStatus {
   startedAt: number;
   completedAt: number | null;
   error: string | null;
+  errorType: EngineErrorType;
   domainCount: number;
   completedDomains: number;
   totalDomains: number;
@@ -29,6 +34,7 @@ export function startJob(runId: string): void {
     startedAt: Date.now(),
     completedAt: null,
     error: null,
+    errorType: null,
     domainCount: 0,
     completedDomains: 0,
     totalDomains: 0,
@@ -73,6 +79,7 @@ export function failJob(runId: string, error: string): void {
     job.message = "Generation failed";
     job.completedAt = Date.now();
     job.error = error;
+    job.errorType = isAuthErrorMessage(error) ? "auth" : "general";
   }
 }
 

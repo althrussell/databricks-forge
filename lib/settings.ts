@@ -11,6 +11,8 @@ import { DISCOVERY_DEPTHS, DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 export interface GenieEngineDefaults {
   engineEnabled: boolean;
   maxTablesPerSpace: number;
+  /** Max domains to auto-analyse per run (0 = unlimited). */
+  maxAutoSpaces: number;
   llmRefinement: boolean;
   generateBenchmarks: boolean;
   generateMetricViews: boolean;
@@ -40,6 +42,7 @@ const STORAGE_KEY = "forge-ai-settings";
 const DEFAULT_GENIE_ENGINE: GenieEngineDefaults = {
   engineEnabled: true,
   maxTablesPerSpace: 25,
+  maxAutoSpaces: 0,
   llmRefinement: true,
   generateBenchmarks: true,
   generateMetricViews: true,
@@ -123,6 +126,7 @@ function parseGenieEngineDefaults(raw: unknown): GenieEngineDefaults {
   const obj = raw as Record<string, unknown>;
   if (typeof obj.engineEnabled === "boolean") result.engineEnabled = obj.engineEnabled;
   if (typeof obj.maxTablesPerSpace === "number") result.maxTablesPerSpace = obj.maxTablesPerSpace;
+  if (typeof obj.maxAutoSpaces === "number") result.maxAutoSpaces = obj.maxAutoSpaces;
   if (typeof obj.llmRefinement === "boolean") result.llmRefinement = obj.llmRefinement;
   if (typeof obj.generateBenchmarks === "boolean") result.generateBenchmarks = obj.generateBenchmarks;
   if (typeof obj.generateMetricViews === "boolean") result.generateMetricViews = obj.generateMetricViews;

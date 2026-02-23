@@ -11,6 +11,7 @@ import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
+import { invalidatePrismaClient } from "@/lib/prisma";
 import { runGenieEngine } from "@/lib/genie/engine";
 import { startJob, updateJob, updateJobDomainProgress, completeJob, failJob } from "@/lib/genie/engine-status";
 import { logger } from "@/lib/logger";
@@ -72,6 +73,7 @@ export async function POST(
       },
     })
       .then(async (result) => {
+        await invalidatePrismaClient();
         await saveGenieRecommendations(
           runId,
           result.recommendations,

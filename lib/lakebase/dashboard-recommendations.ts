@@ -5,7 +5,7 @@
  * so the UI can display them immediately without on-demand recomputation.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { DashboardRecommendation } from "@/lib/dashboard/types";
 
 // ---------------------------------------------------------------------------
@@ -47,12 +47,13 @@ function dbRowToRecommendation(row: DbRow): DashboardRecommendation {
 export async function getDashboardRecommendationsByRunId(
   runId: string
 ): Promise<DashboardRecommendation[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgeDashboardRecommendation.findMany({
-    where: { runId },
-    orderBy: { widgetCount: "desc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeDashboardRecommendation.findMany({
+      where: { runId },
+      orderBy: { widgetCount: "desc" },
+    });
+    return rows.map(dbRowToRecommendation);
   });
-  return rows.map(dbRowToRecommendation);
 }
 
 // ---------------------------------------------------------------------------
@@ -64,36 +65,36 @@ export async function saveDashboardRecommendations(
   recommendations: DashboardRecommendation[],
   replaceDomains?: string[]
 ): Promise<void> {
-  const prisma = await getPrisma();
+  await withPrisma(async (prisma) => {
+    await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+      if (replaceDomains?.length) {
+        await tx.forgeDashboardRecommendation.deleteMany({
+          where: { runId, domain: { in: replaceDomains } },
+        });
+      } else {
+        await tx.forgeDashboardRecommendation.deleteMany({ where: { runId } });
+      }
 
-  await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-    if (replaceDomains?.length) {
-      await tx.forgeDashboardRecommendation.deleteMany({
-        where: { runId, domain: { in: replaceDomains } },
+      if (recommendations.length === 0) return;
+
+      await tx.forgeDashboardRecommendation.createMany({
+        data: recommendations.map((rec) => {
+          const id = `${runId}_dash_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`;
+          return {
+            id,
+            runId,
+            domain: rec.domain,
+            subdomains: JSON.stringify(rec.subdomains),
+            title: rec.title,
+            description: rec.description,
+            datasetCount: rec.datasetCount,
+            widgetCount: rec.widgetCount,
+            useCaseIds: JSON.stringify(rec.useCaseIds),
+            serializedDashboard: rec.serializedDashboard,
+            dashboardDesign: JSON.stringify(rec.dashboardDesign),
+          };
+        }),
       });
-    } else {
-      await tx.forgeDashboardRecommendation.deleteMany({ where: { runId } });
-    }
-
-    if (recommendations.length === 0) return;
-
-    await tx.forgeDashboardRecommendation.createMany({
-      data: recommendations.map((rec) => {
-        const id = `${runId}_dash_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`;
-        return {
-          id,
-          runId,
-          domain: rec.domain,
-          subdomains: JSON.stringify(rec.subdomains),
-          title: rec.title,
-          description: rec.description,
-          datasetCount: rec.datasetCount,
-          widgetCount: rec.widgetCount,
-          useCaseIds: JSON.stringify(rec.useCaseIds),
-          serializedDashboard: rec.serializedDashboard,
-          dashboardDesign: JSON.stringify(rec.dashboardDesign),
-        };
-      }),
     });
   });
 }

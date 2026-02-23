@@ -11,6 +11,7 @@ import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { saveDashboardRecommendations } from "@/lib/lakebase/dashboard-recommendations";
+import { invalidatePrismaClient } from "@/lib/prisma";
 import { runDashboardEngine } from "@/lib/dashboard/engine";
 import {
   startDashboardJob,
@@ -77,6 +78,7 @@ export async function POST(
       onProgress: (message, percent) => updateDashboardJob(runId, message, percent),
     })
       .then(async (result) => {
+        await invalidatePrismaClient();
         await saveDashboardRecommendations(runId, result.recommendations, domains);
         completeDashboardJob(runId, result.recommendations.length);
         logger.info("Dashboard Engine generation complete (async)", {

@@ -87,19 +87,33 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   const allDomainGroups = runTableSelection(useCases, metadata, config);
 
   // Apply domain filter for partial regeneration
-  const domainGroups = domainFilter?.length
+  const filteredGroups = domainFilter?.length
     ? allDomainGroups.filter((g) => domainFilter.includes(g.domain))
     : allDomainGroups;
+
+  // Apply maxAutoSpaces cap (0 = unlimited)
+  const domainGroups = config.maxAutoSpaces > 0
+    ? filteredGroups.slice(0, config.maxAutoSpaces)
+    : filteredGroups;
 
   if (domainGroups.length === 0) {
     logger.warn("No domain groups produced", { runId: run.runId, domainFilter });
     return { recommendations: [], passOutputs: [] };
   }
 
+  if (domainGroups.length < filteredGroups.length) {
+    logger.info("Domain count capped by maxAutoSpaces", {
+      maxAutoSpaces: config.maxAutoSpaces,
+      totalAvailable: filteredGroups.length,
+      processing: domainGroups.length,
+    });
+  }
+
   logger.info("Pass 0 complete: table selection", {
     domainCount: domainGroups.length,
     totalDomains: allDomainGroups.length,
     filtered: !!domainFilter?.length,
+    capped: domainGroups.length < filteredGroups.length,
     domains: domainGroups.map((g) => `${g.domain} (${g.tables.length} tables)`),
   });
 

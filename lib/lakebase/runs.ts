@@ -2,7 +2,7 @@
  * CRUD operations for pipeline runs — backed by Lakebase (Prisma).
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { getPrisma, withPrisma } from "@/lib/prisma";
 import packageJson from "@/package.json";
 import type {
   PipelineRun,
@@ -204,8 +204,6 @@ export async function updateRunStatus(
   errorMessage?: string,
   statusMessage?: string
 ): Promise<void> {
-  const prisma = await getPrisma();
-
   const data: Record<string, unknown> = {
     status,
     currentStep: currentStep ?? null,
@@ -224,7 +222,9 @@ export async function updateRunStatus(
     data.completedAt = new Date();
   }
 
-  await prisma.forgeRun.update({ where: { runId }, data });
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.update({ where: { runId }, data });
+  });
 }
 
 /**
@@ -236,12 +236,13 @@ export async function updateRunMessage(
   statusMessage: string,
   progressPct?: number
 ): Promise<void> {
-  const prisma = await getPrisma();
   const data: Record<string, unknown> = { statusMessage };
   if (progressPct !== undefined) {
     data.progressPct = progressPct;
   }
-  await prisma.forgeRun.update({ where: { runId }, data });
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.update({ where: { runId }, data });
+  });
 }
 
 /**
@@ -258,10 +259,11 @@ export async function updateRunBusinessContext(
   runId: string,
   context: BusinessContext
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeRun.update({
-    where: { runId },
-    data: { businessContext: JSON.stringify(context) },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.update({
+      where: { runId },
+      data: { businessContext: JSON.stringify(context) },
+    });
   });
 }
 
@@ -273,10 +275,11 @@ export async function updateRunFilteredTables(
   runId: string,
   classifications: Array<{ fqn: string; classification: string; reason: string }>
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeRun.update({
-    where: { runId },
-    data: { filteredTablesJson: JSON.stringify(classifications) },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.update({
+      where: { runId },
+      data: { filteredTablesJson: JSON.stringify(classifications) },
+    });
   });
 }
 
@@ -288,10 +291,11 @@ export async function updateRunMetadataCacheKey(
   runId: string,
   cacheKey: string
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeRun.update({
-    where: { runId },
-    data: { metadataCacheKey: cacheKey },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.update({
+      where: { runId },
+      data: { metadataCacheKey: cacheKey },
+    });
   });
 }
 
@@ -307,24 +311,25 @@ export async function updateRunIndustry(
   industry: string,
   autoDetected: boolean = false
 ): Promise<void> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeRun.findUnique({
-    where: { runId },
-    select: { generationOptions: true },
-  });
+  await withPrisma(async (prisma) => {
+    const row = await prisma.forgeRun.findUnique({
+      where: { runId },
+      select: { generationOptions: true },
+    });
 
-  let genOpts: Record<string, unknown> = {};
-  try {
-    genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
-    if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
-  } catch { /* fall through */ }
+    let genOpts: Record<string, unknown> = {};
+    try {
+      genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
+      if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
+    } catch { /* fall through */ }
 
-  genOpts.industry = industry;
-  genOpts.industryAutoDetected = autoDetected;
+    genOpts.industry = industry;
+    genOpts.industryAutoDetected = autoDetected;
 
-  await prisma.forgeRun.update({
-    where: { runId },
-    data: { generationOptions: JSON.stringify(genOpts) },
+    await prisma.forgeRun.update({
+      where: { runId },
+      data: { generationOptions: JSON.stringify(genOpts) },
+    });
   });
 }
 
@@ -336,34 +341,34 @@ export async function updateRunStepLog(
   runId: string,
   entry: StepLogEntry
 ): Promise<void> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeRun.findUnique({
-    where: { runId },
-    select: { generationOptions: true },
-  });
+  await withPrisma(async (prisma) => {
+    const row = await prisma.forgeRun.findUnique({
+      where: { runId },
+      select: { generationOptions: true },
+    });
 
-  let genOpts: Record<string, unknown> = {};
-  try {
-    genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
-    if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
-  } catch { /* fall through */ }
+    let genOpts: Record<string, unknown> = {};
+    try {
+      genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
+      if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
+    } catch { /* fall through */ }
 
-  const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog)
-    ? genOpts.stepLog
-    : [];
+    const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog)
+      ? genOpts.stepLog
+      : [];
 
-  // Upsert: replace existing entry for the same step, or append
-  const existingIdx = stepLog.findIndex((e) => e.step === entry.step);
-  if (existingIdx >= 0) {
-    stepLog[existingIdx] = { ...stepLog[existingIdx], ...entry };
-  } else {
-    stepLog.push(entry);
-  }
+    const existingIdx = stepLog.findIndex((e) => e.step === entry.step);
+    if (existingIdx >= 0) {
+      stepLog[existingIdx] = { ...stepLog[existingIdx], ...entry };
+    } else {
+      stepLog.push(entry);
+    }
 
-  genOpts.stepLog = stepLog;
+    genOpts.stepLog = stepLog;
 
-  await prisma.forgeRun.update({
-    where: { runId },
-    data: { generationOptions: JSON.stringify(genOpts) },
+    await prisma.forgeRun.update({
+      where: { runId },
+      data: { generationOptions: JSON.stringify(genOpts) },
+    });
   });
 }

@@ -5,7 +5,7 @@
  * from environment scan runs.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { getPrisma, withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type {
   EnvironmentScan,
@@ -42,8 +42,6 @@ export async function saveEnvironmentScan(
   insights: InsightRecord[],
   columns: ColumnInfo[] = []
 ): Promise<void> {
-  const prisma = await getPrisma();
-
   // Build a per-table column lookup (lowercase FQN keys for case-insensitive matching)
   const columnsByTable = new Map<string, Array<{ name: string; type: string; nullable: boolean; comment: string | null }>>();
   for (const col of columns) {
@@ -58,7 +56,8 @@ export async function saveEnvironmentScan(
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await withPrisma(async (prisma) => {
+      await prisma.$transaction(async (tx) => {
       // 1. Upsert the scan record
       await tx.forgeEnvironmentScan.upsert({
         where: { scanId: scan.scanId },
@@ -195,6 +194,7 @@ export async function saveEnvironmentScan(
           skipDuplicates: true,
         });
       }
+      });
     });
 
     logger.info("[environment-scans] Saved scan", {

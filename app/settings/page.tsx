@@ -502,6 +502,30 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Max auto spaces */}
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="maxAutoSpaces">Max spaces to auto-analyse</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="maxAutoSpaces"
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={genieDefaults.maxAutoSpaces}
+                  onChange={(e) =>
+                    setGenieDefaults((prev) => ({
+                      ...prev,
+                      maxAutoSpaces: Math.min(50, Math.max(0, parseInt(e.target.value) || 0)),
+                    }))
+                  }
+                  className="w-24"
+                />
+                <span className="text-xs text-muted-foreground">
+                  0 = all domains (default). Limits auto-generation; you can always regenerate more from the Genie Workbench.
+                </span>
+              </div>
+            </div>
+
             {/* Entity matching */}
             <div className="mt-4 space-y-2">
               <Label>Entity Matching</Label>
