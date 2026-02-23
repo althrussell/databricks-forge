@@ -669,10 +669,15 @@ export async function fetchForeignKeysBatch(fqns: string[]): Promise<ForeignKey[
 /**
  * Build a schema markdown string for prompt injection.
  * Groups columns by table and formats as markdown.
+ *
+ * @param maxColumnsPerTable - Cap columns per table to prevent token overflow (default: 40).
+ * @param maxCommentLength   - Truncate column comments to this length (default: 80).
  */
 export function buildSchemaMarkdown(
   tables: TableInfo[],
-  columns: ColumnInfo[]
+  columns: ColumnInfo[],
+  maxColumnsPerTable: number = 40,
+  maxCommentLength: number = 80
 ): string {
   const columnsByTable: Record<string, ColumnInfo[]> = {};
   for (const col of columns) {
@@ -681,15 +686,23 @@ export function buildSchemaMarkdown(
   }
 
   const sections = tables.map((table) => {
-    const cols = columnsByTable[table.fqn] ?? [];
-    const colLines = cols
-      .map(
-        (c) =>
-          `  - ${c.columnName} (${c.dataType})${c.comment ? ` -- ${c.comment}` : ""}`
-      )
+    const allCols = columnsByTable[table.fqn] ?? [];
+    const displayCols = allCols.slice(0, maxColumnsPerTable);
+    const omitted = allCols.length - displayCols.length;
+
+    const colLines = displayCols
+      .map((c) => {
+        let comment = c.comment ?? "";
+        if (comment.length > maxCommentLength) {
+          comment = comment.slice(0, maxCommentLength - 3) + "...";
+        }
+        return `  - ${c.columnName} (${c.dataType})${comment ? ` -- ${comment}` : ""}`;
+      })
       .join("\n");
-    const comment = table.comment ? ` -- ${table.comment}` : "";
-    return `### ${table.fqn}${comment}\n${colLines || "  (no columns)"}`;
+
+    const omittedLine = omitted > 0 ? `\n  ... and ${omitted} more columns` : "";
+    const tableComment = table.comment ? ` -- ${table.comment}` : "";
+    return `### ${table.fqn}${tableComment}\n${colLines || "  (no columns)"}${omittedLine}`;
   });
 
   return sections.join("\n\n");

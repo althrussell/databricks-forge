@@ -6,6 +6,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import {
@@ -90,48 +91,53 @@ async function assignDomains(
   aiModel: string,
   runId?: string
 ): Promise<void> {
-  const useCasesCsv = useCases
-    .map(
-      (uc) =>
-        `${uc.useCaseNo}, "${uc.name}", "${uc.type}", "${uc.statement}"`
-    )
-    .join("\n");
-
   const targetDomainCount = Math.max(3, Math.min(25, Math.round(useCases.length / 10)));
 
-  const result = await executeAIQuery({
-    promptKey: "DOMAIN_FINDER_PROMPT",
-    variables: {
-      business_name: businessName,
-      industries: businessContext.industries,
-      business_context: JSON.stringify(businessContext),
-      use_cases_csv: useCasesCsv,
-      previous_violations: "None",
-      output_language: "English",
-      target_domain_count: String(targetDomainCount),
-    },
-    modelEndpoint: aiModel,
-    responseFormat: "json_object",
-    runId,
-    step: "domain-clustering",
-  });
+  const renderUseCase = (uc: UseCase) =>
+    `${uc.useCaseNo}, "${uc.name}", "${uc.type}", "${uc.statement}"`;
 
-  let rawItems: unknown[];
-  try {
-    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
-  } catch (parseErr) {
-    logger.warn("Failed to parse domain assignment JSON", {
-      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-    });
-    useCases.forEach((uc) => { uc.domain = "General"; });
-    return;
-  }
+  // Estimate base prompt overhead (everything except use_cases_csv)
+  const baseContextTokens = 1500; // template + business context overhead
+  const batches = buildTokenAwareBatches(useCases, renderUseCase, baseContextTokens);
 
-  const items = validateLLMArray(rawItems, DomainAssignmentSchema, "assignDomains");
   const domainMap = new Map<number, string>();
-  for (const item of items) {
-    if (!isNaN(item.no) && item.domain) {
-      domainMap.set(item.no, item.domain.trim());
+
+  for (const batch of batches) {
+    const useCasesCsv = batch.map(renderUseCase).join("\n");
+
+    const result = await executeAIQuery({
+      promptKey: "DOMAIN_FINDER_PROMPT",
+      variables: {
+        business_name: businessName,
+        industries: businessContext.industries,
+        business_context: JSON.stringify(businessContext),
+        use_cases_csv: useCasesCsv,
+        previous_violations: "None",
+        output_language: "English",
+        target_domain_count: String(targetDomainCount),
+      },
+      modelEndpoint: aiModel,
+      responseFormat: "json_object",
+      runId,
+      step: "domain-clustering",
+    });
+
+    let rawItems: unknown[];
+    try {
+      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse domain assignment JSON", {
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      batch.forEach((uc) => { uc.domain = "General"; });
+      continue;
+    }
+
+    const items = validateLLMArray(rawItems, DomainAssignmentSchema, "assignDomains");
+    for (const item of items) {
+      if (!isNaN(item.no) && item.domain) {
+        domainMap.set(item.no, item.domain.trim());
+      }
     }
   }
 
@@ -148,47 +154,51 @@ async function assignSubdomains(
   aiModel: string,
   runId?: string
 ): Promise<void> {
-  const useCasesCsv = domainCases
-    .map(
-      (uc) =>
-        `${uc.useCaseNo}, "${uc.name}", "${uc.type}", "${uc.statement}"`
-    )
-    .join("\n");
+  const renderUseCase = (uc: UseCase) =>
+    `${uc.useCaseNo}, "${uc.name}", "${uc.type}", "${uc.statement}"`;
 
-  const result = await executeAIQuery({
-    promptKey: "SUBDOMAIN_DETECTOR_PROMPT",
-    variables: {
-      domain_name: domainName,
-      business_name: businessName,
-      industries: businessContext.industries,
-      business_context: JSON.stringify(businessContext),
-      use_cases_csv: useCasesCsv,
-      previous_violations: "None",
-      output_language: "English",
-    },
-    modelEndpoint: aiModel,
-    responseFormat: "json_object",
-    runId,
-    step: "domain-clustering",
-  });
+  const baseContextTokens = 1200;
+  const batches = buildTokenAwareBatches(domainCases, renderUseCase, baseContextTokens);
 
-  let rawItems: unknown[];
-  try {
-    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
-  } catch (parseErr) {
-    logger.warn("Failed to parse subdomain assignment JSON", {
-      domain: domainName,
-      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-    });
-    domainCases.forEach((uc) => { uc.subdomain = "General"; });
-    return;
-  }
-
-  const items = validateLLMArray(rawItems, SubdomainAssignmentSchema, "assignSubdomains");
   const subdomainMap = new Map<number, string>();
-  for (const item of items) {
-    if (!isNaN(item.no) && item.subdomain) {
-      subdomainMap.set(item.no, item.subdomain.trim());
+
+  for (const batch of batches) {
+    const useCasesCsv = batch.map(renderUseCase).join("\n");
+
+    const result = await executeAIQuery({
+      promptKey: "SUBDOMAIN_DETECTOR_PROMPT",
+      variables: {
+        domain_name: domainName,
+        business_name: businessName,
+        industries: businessContext.industries,
+        business_context: JSON.stringify(businessContext),
+        use_cases_csv: useCasesCsv,
+        previous_violations: "None",
+        output_language: "English",
+      },
+      modelEndpoint: aiModel,
+      responseFormat: "json_object",
+      runId,
+      step: "domain-clustering",
+    });
+
+    let rawItems: unknown[];
+    try {
+      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse subdomain assignment JSON", {
+        domain: domainName,
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      batch.forEach((uc) => { uc.subdomain = "General"; });
+      continue;
+    }
+
+    const items = validateLLMArray(rawItems, SubdomainAssignmentSchema, "assignSubdomains");
+    for (const item of items) {
+      if (!isNaN(item.no) && item.subdomain) {
+        subdomainMap.set(item.no, item.subdomain.trim());
+      }
     }
   }
 
@@ -205,7 +215,6 @@ async function assignSubdomains(
   );
 
   if (singleItemSubdomains.size > 0) {
-    // Find the largest subdomain as the merge target
     const largestSubdomain = [...subdomainCounts.entries()]
       .filter(([name]) => !singleItemSubdomains.has(name))
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "General";

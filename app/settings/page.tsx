@@ -36,6 +36,7 @@ import {
   Sparkles,
   AlertTriangle,
   Loader2,
+  ScanLine,
 } from "lucide-react";
 import {
   DEFAULT_DEPTH_CONFIGS,
@@ -86,6 +87,11 @@ export default function SettingsPage() {
     return loadSettings().genieEngineDefaults;
   });
 
+  const [estateScanEnabled, setEstateScanEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return loadSettings().estateScanEnabled;
+  });
+
   const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
     setDepthConfigs((prev) => ({
       ...prev,
@@ -114,7 +120,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled });
     toast.success("Settings saved");
   };
 
@@ -127,6 +133,7 @@ export default function SettingsPage() {
       setDefaultDiscoveryDepth("balanced");
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
       setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
+      setEstateScanEnabled(false);
       toast.success("Local settings cleared");
     }
   };
@@ -254,6 +261,53 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Estate Scan */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ScanLine className="h-5 w-5" />
+            Estate Scan
+          </CardTitle>
+          <CardDescription>
+            Run environment intelligence (domain classification, PII detection,
+            health scoring, lineage enrichment) during pipeline runs. This
+            increases run time but provides a comprehensive estate view alongside
+            use case discovery.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              estateScanEnabled
+                ? "border-emerald-500/50 bg-emerald-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div>
+              <p className="text-sm font-medium">Estate Scan during pipeline runs</p>
+              <p className="text-xs text-muted-foreground">
+                {estateScanEnabled
+                  ? "Enabled — metadata extraction will include full environment intelligence enrichment"
+                  : "Disabled — pipeline runs will skip the estate scan enrichment pass (faster runs)"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEstateScanEnabled((prev) => !prev)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                estateScanEnabled ? "bg-emerald-500" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  estateScanEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
         </CardContent>
       </Card>

@@ -6,6 +6,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
@@ -146,56 +147,58 @@ async function scoreDomain(
   industryKpis: string = "",
   runId?: string
 ): Promise<void> {
-  const useCaseMarkdown = domainCases
-    .map(
-      (uc) =>
-        `| ${uc.useCaseNo} | ${uc.name} | ${uc.type} | ${uc.analyticsTechnique} | ${uc.statement} |`
-    )
-    .join("\n");
+  const renderScoreRow = (uc: UseCase) =>
+    `| ${uc.useCaseNo} | ${uc.name} | ${uc.type} | ${uc.analyticsTechnique} | ${uc.statement} |`;
 
-  const result = await executeAIQuery({
-    promptKey: "SCORE_USE_CASES_PROMPT",
-    variables: {
-      business_context: JSON.stringify(businessContext),
-      strategic_goals: businessContext.strategicGoals ?? "",
-      business_priorities: businessContext.businessPriorities ?? "",
-      strategic_initiative: businessContext.strategicInitiative ?? "",
-      value_chain: businessContext.valueChain ?? "",
-      revenue_model: businessContext.revenueModel ?? "",
-      industry_kpis: industryKpis,
-      use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
-    },
-    modelEndpoint: aiModel,
-    responseFormat: "json_object",
-    runId,
-    step: "scoring",
-  });
-
-  let rawItems: unknown[];
-  try {
-    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
-  } catch (parseErr) {
-    logger.warn("Failed to parse scoring response JSON", {
-      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-    });
-    return; // caller handles fallback scores
-  }
-
-  const items = validateLLMArray(rawItems, ScoreItemSchema, "scoreDomain");
+  const baseContextTokens = 2000; // template + business context overhead
+  const batches = buildTokenAwareBatches(domainCases, renderScoreRow, baseContextTokens);
 
   const scoreMap = new Map<
     number,
     { priority: number; feasibility: number; impact: number; overall: number }
   >();
 
-  for (const item of items) {
-    if (isNaN(item.no)) continue;
-    scoreMap.set(item.no, {
-      priority: clampScore(item.priority_score),
-      feasibility: clampScore(item.feasibility_score),
-      impact: clampScore(item.impact_score),
-      overall: clampScore(item.overall_score),
+  for (const batch of batches) {
+    const useCaseMarkdown = batch.map(renderScoreRow).join("\n");
+
+    const result = await executeAIQuery({
+      promptKey: "SCORE_USE_CASES_PROMPT",
+      variables: {
+        business_context: JSON.stringify(businessContext),
+        strategic_goals: businessContext.strategicGoals ?? "",
+        business_priorities: businessContext.businessPriorities ?? "",
+        strategic_initiative: businessContext.strategicInitiative ?? "",
+        value_chain: businessContext.valueChain ?? "",
+        revenue_model: businessContext.revenueModel ?? "",
+        industry_kpis: industryKpis,
+        use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
+      },
+      modelEndpoint: aiModel,
+      responseFormat: "json_object",
+      runId,
+      step: "scoring",
     });
+
+    let rawItems: unknown[];
+    try {
+      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse scoring response JSON", {
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      continue;
+    }
+
+    const items = validateLLMArray(rawItems, ScoreItemSchema, "scoreDomain");
+    for (const item of items) {
+      if (isNaN(item.no)) continue;
+      scoreMap.set(item.no, {
+        priority: clampScore(item.priority_score),
+        feasibility: clampScore(item.feasibility_score),
+        impact: clampScore(item.impact_score),
+        overall: clampScore(item.overall_score),
+      });
+    }
   }
 
   for (const uc of domainCases) {
@@ -220,44 +223,47 @@ async function deduplicateDomain(
   aiModel: string,
   runId?: string
 ): Promise<Set<number>> {
-  const useCaseMarkdown = domainCases
-    .map(
-      (uc) =>
-        `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} |`
-    )
-    .join("\n");
+  const renderDedupRow = (uc: UseCase) =>
+    `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} |`;
 
-  const result = await executeAIQuery({
-    promptKey: "REVIEW_USE_CASES_PROMPT",
-    variables: {
-      total_count: String(domainCases.length),
-      business_name: businessContext.businessName ?? "",
-      strategic_goals: businessContext.strategicGoals ?? "",
-      use_case_markdown: `| No | Domain | Name | Type | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
-    },
-    modelEndpoint: aiModel,
-    responseFormat: "json_object",
-    runId,
-    step: "scoring",
-  });
+  const baseContextTokens = 1500;
+  const batches = buildTokenAwareBatches(domainCases, renderDedupRow, baseContextTokens);
 
-  let rawItems: unknown[];
-  try {
-    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
-  } catch (parseErr) {
-    logger.warn("Failed to parse dedup response JSON", {
-      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-    });
-    return new Set();
-  }
-
-  const items = validateLLMArray(rawItems, DedupItemSchema, "deduplicateDomain");
   const toRemove = new Set<number>();
 
-  for (const item of items) {
-    const action = String(item.action ?? "").trim().toLowerCase();
-    if (!isNaN(item.no) && action === "remove") {
-      toRemove.add(item.no);
+  for (const batch of batches) {
+    const useCaseMarkdown = batch.map(renderDedupRow).join("\n");
+
+    const result = await executeAIQuery({
+      promptKey: "REVIEW_USE_CASES_PROMPT",
+      variables: {
+        total_count: String(batch.length),
+        business_name: businessContext.businessName ?? "",
+        strategic_goals: businessContext.strategicGoals ?? "",
+        use_case_markdown: `| No | Domain | Name | Type | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
+      },
+      modelEndpoint: aiModel,
+      responseFormat: "json_object",
+      runId,
+      step: "scoring",
+    });
+
+    let rawItems: unknown[];
+    try {
+      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse dedup response JSON", {
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      continue;
+    }
+
+    const items = validateLLMArray(rawItems, DedupItemSchema, "deduplicateDomain");
+    for (const item of items) {
+      const action = String(item.action ?? "").trim().toLowerCase();
+      if (!isNaN(item.no) && action === "remove") {
+        toRemove.add(item.no);
+      }
     }
   }
 
@@ -374,37 +380,11 @@ async function deduplicateCrossDomain(
   aiModel: string,
   runId?: string
 ): Promise<Set<number>> {
-  const useCaseMarkdown = useCases
-    .map(
-      (uc) =>
-        `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`
-    )
-    .join("\n");
+  const renderCrossDedupRow = (uc: UseCase) =>
+    `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`;
 
-  const result = await executeAIQuery({
-    promptKey: "CROSS_DOMAIN_DEDUP_PROMPT",
-    variables: {
-      business_name: businessContext.businessName ?? "",
-      strategic_goals: businessContext.strategicGoals ?? "",
-      use_case_markdown: `| No | Domain | Name | Type | Statement | Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
-    },
-    modelEndpoint: aiModel,
-    responseFormat: "json_object",
-    runId,
-    step: "scoring",
-  });
-
-  let rawItems: unknown[];
-  try {
-    rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
-  } catch (parseErr) {
-    logger.warn("Failed to parse cross-domain dedup response JSON", {
-      error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-    });
-    return new Set();
-  }
-
-  const items = validateLLMArray(rawItems, CrossDomainDedupItemSchema, "deduplicateCrossDomain");
+  const baseContextTokens = 1500;
+  const batches = buildTokenAwareBatches(useCases, renderCrossDedupRow, baseContextTokens);
 
   // Build score lookup for safety guard
   const scoreMap = new Map<number, number>();
@@ -414,36 +394,60 @@ async function deduplicateCrossDomain(
 
   const toRemove = new Set<number>();
 
-  for (const item of items) {
-    if (isNaN(item.no) || isNaN(item.duplicate_of)) continue;
+  for (const batch of batches) {
+    const useCaseMarkdown = batch.map(renderCrossDedupRow).join("\n");
 
-    // Safety guard: never remove both items in a duplicate pair.
-    // If the LLM says to remove A (duplicate of B), but B is already
-    // marked for removal, keep A instead.
-    if (toRemove.has(item.duplicate_of)) {
-      logger.warn("Cross-domain dedup: skipping removal — kept item already marked for removal", {
-        wouldRemove: item.no,
-        duplicateOf: item.duplicate_of,
+    const result = await executeAIQuery({
+      promptKey: "CROSS_DOMAIN_DEDUP_PROMPT",
+      variables: {
+        business_name: businessContext.businessName ?? "",
+        strategic_goals: businessContext.strategicGoals ?? "",
+        use_case_markdown: `| No | Domain | Name | Type | Statement | Score |\n|---|---|---|---|---|---|\n${useCaseMarkdown}`,
+      },
+      modelEndpoint: aiModel,
+      responseFormat: "json_object",
+      runId,
+      step: "scoring",
+    });
+
+    let rawItems: unknown[];
+    try {
+      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+    } catch (parseErr) {
+      logger.warn("Failed to parse cross-domain dedup response JSON", {
+        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
       });
       continue;
     }
 
-    // Additional guard: only remove the lower-scored item
-    const removeScore = scoreMap.get(item.no) ?? 0;
-    const keepScore = scoreMap.get(item.duplicate_of) ?? 0;
-    if (removeScore > keepScore) {
-      logger.warn("Cross-domain dedup: LLM suggested removing higher-scored item — swapping", {
-        suggested: item.no,
-        suggestedScore: removeScore,
-        duplicateOf: item.duplicate_of,
-        duplicateOfScore: keepScore,
-      });
-      // Remove the lower-scored one instead
-      if (!toRemove.has(item.no)) {
-        toRemove.add(item.duplicate_of);
+    const items = validateLLMArray(rawItems, CrossDomainDedupItemSchema, "deduplicateCrossDomain");
+
+    for (const item of items) {
+      if (isNaN(item.no) || isNaN(item.duplicate_of)) continue;
+
+      if (toRemove.has(item.duplicate_of)) {
+        logger.warn("Cross-domain dedup: skipping removal — kept item already marked for removal", {
+          wouldRemove: item.no,
+          duplicateOf: item.duplicate_of,
+        });
+        continue;
       }
-    } else {
-      toRemove.add(item.no);
+
+      const removeScore = scoreMap.get(item.no) ?? 0;
+      const keepScore = scoreMap.get(item.duplicate_of) ?? 0;
+      if (removeScore > keepScore) {
+        logger.warn("Cross-domain dedup: LLM suggested removing higher-scored item — swapping", {
+          suggested: item.no,
+          suggestedScore: removeScore,
+          duplicateOf: item.duplicate_of,
+          duplicateOfScore: keepScore,
+        });
+        if (!toRemove.has(item.no)) {
+          toRemove.add(item.duplicate_of);
+        }
+      } else {
+        toRemove.add(item.no);
+      }
     }
   }
 

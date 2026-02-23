@@ -71,6 +71,7 @@ function dbRowToRun(row: {
       generationPath: row.generationPath ?? "./forge_gen/",
       languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
+      estateScanEnabled: genOpts.estateScanEnabled,
     },
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
@@ -102,12 +103,13 @@ function parseGenerationOptions(raw: string | null): {
   industry: string;
   discoveryDepth: string;
   depthConfig: PipelineRunConfig["depthConfig"];
+  estateScanEnabled: boolean;
   industryAutoDetected: boolean;
   appVersion: string | null;
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", depthConfig: undefined as PipelineRunConfig["depthConfig"], industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", depthConfig: undefined as PipelineRunConfig["depthConfig"], estateScanEnabled: false, industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
@@ -121,6 +123,7 @@ function parseGenerationOptions(raw: string | null): {
         industry: parsed.industry ?? "",
         discoveryDepth: parsed.discoveryDepth ?? "balanced",
         depthConfig: parsed.depthConfig ?? undefined,
+        estateScanEnabled: parsed.estateScanEnabled === true,
         industryAutoDetected: parsed.industryAutoDetected === true,
         appVersion: parsed.appVersion ?? null,
         promptVersions: parsed.promptVersions ?? null,
@@ -138,6 +141,7 @@ function serializeGenerationOptions(config: PipelineRunConfig): string {
     industry: config.industry,
     discoveryDepth: config.discoveryDepth,
     depthConfig: config.depthConfig ?? null,
+    estateScanEnabled: config.estateScanEnabled,
     appVersion: packageJson.version,
     promptVersions: PROMPT_VERSIONS,
     stepLog: [],
