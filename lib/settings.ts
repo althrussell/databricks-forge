@@ -35,6 +35,8 @@ export interface AppSettings {
   discoveryDepthConfigs: Record<DiscoveryDepth, DiscoveryDepthConfig>;
   /** Global Genie Engine defaults applied to new runs */
   genieEngineDefaults: GenieEngineDefaults;
+  /** Whether to run estate scan (environment intelligence) during pipeline runs (default: false) */
+  estateScanEnabled: boolean;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -59,6 +61,7 @@ const DEFAULTS: AppSettings = {
   defaultDiscoveryDepth: "balanced",
   discoveryDepthConfigs: { ...DEFAULT_DEPTH_CONFIGS },
   genieEngineDefaults: { ...DEFAULT_GENIE_ENGINE },
+  estateScanEnabled: false,
 };
 
 export function loadSettings(): AppSettings {
@@ -87,6 +90,10 @@ export function loadSettings(): AppSettings {
           : DEFAULTS.defaultDiscoveryDepth,
       discoveryDepthConfigs: parseDepthConfigs(parsed.discoveryDepthConfigs),
       genieEngineDefaults: parseGenieEngineDefaults(parsed.genieEngineDefaults),
+      estateScanEnabled:
+        typeof parsed.estateScanEnabled === "boolean"
+          ? parsed.estateScanEnabled
+          : DEFAULTS.estateScanEnabled,
     };
   } catch {
     return { ...DEFAULTS };

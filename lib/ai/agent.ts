@@ -26,6 +26,7 @@ import {
   type StreamCallback,
   type TokenUsage,
 } from "@/lib/dbx/model-serving";
+import { assertWithinBudget, MAX_PROMPT_TOKENS } from "@/lib/ai/token-budget";
 import { logger } from "@/lib/logger";
 import { insertPromptLog } from "@/lib/lakebase/prompt-logs";
 import { formatPrompt, PROMPT_VERSIONS, PROMPT_SYSTEM_MESSAGES, type PromptKey } from "./templates";
@@ -100,6 +101,44 @@ export interface AIQueryResult {
 export type { TokenUsage } from "@/lib/dbx/model-serving";
 
 // ---------------------------------------------------------------------------
+// Global concurrency semaphore
+// ---------------------------------------------------------------------------
+
+const MAX_CONCURRENT_LLM_CALLS = 4;
+
+/**
+ * Simple async semaphore to cap total in-flight LLM calls across all
+ * pipeline steps. Prevents 429 rate-limit storms on customer workspaces.
+ */
+class Semaphore {
+  private current = 0;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(private readonly max: number) {}
+
+  async acquire(): Promise<void> {
+    if (this.current < this.max) {
+      this.current++;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.current++;
+        resolve();
+      });
+    });
+  }
+
+  release(): void {
+    this.current--;
+    const next = this.queue.shift();
+    if (next) next();
+  }
+}
+
+const llmSemaphore = new Semaphore(MAX_CONCURRENT_LLM_CALLS);
+
+// ---------------------------------------------------------------------------
 // Per-prompt temperature configuration
 // ---------------------------------------------------------------------------
 // Ported from the reference notebook's TECHNICAL_CONTEXT.
@@ -172,58 +211,78 @@ export async function executeAIQuery(
     ? formatPrompt(options.promptKey, options.variables)
     : "";
 
+  // Pre-flight token budget check
+  const preflightPrompt = renderedPrompt || formatPrompt(options.promptKey, options.variables);
+  assertWithinBudget(options.promptKey, preflightPrompt, MAX_PROMPT_TOKENS);
+
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      if (attempt > 0) {
-        const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
-        logger.info("FMAPI retrying", {
+  await llmSemaphore.acquire();
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+          logger.info("FMAPI retrying", {
+            promptKey: options.promptKey,
+            attempt,
+            maxRetries,
+            backoffMs,
+          });
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        }
+
+        const result = await executeAIQueryOnce(options, temperature, maxTokens);
+
+        // Fire-and-forget: log successful call
+        if (options.runId) {
+          insertPromptLog({
+            logId: randomUUID(),
+            runId: options.runId,
+            step: options.step ?? options.promptKey,
+            promptKey: options.promptKey,
+            promptVersion,
+            model: options.modelEndpoint,
+            temperature,
+            renderedPrompt,
+            rawResponse: result.rawResponse,
+            honestyScore: result.honestyScore,
+            durationMs: result.durationMs,
+            tokenUsage: result.tokenUsage,
+            success: true,
+            errorMessage: null,
+          });
+        }
+
+        return result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        logger.warn("FMAPI attempt failed", {
           promptKey: options.promptKey,
-          attempt,
+          attempt: attempt + 1,
           maxRetries,
-          backoffMs,
+          error: lastError.message,
         });
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
-      }
 
-      const result = await executeAIQueryOnce(options, temperature, maxTokens);
+        // 429 rate-limit: retryable with longer backoff
+        if (isRateLimitError(lastError)) {
+          const retryAfterMs = extractRetryAfterMs(lastError) ?? 60_000;
+          logger.warn("FMAPI rate-limited (429), backing off", {
+            promptKey: options.promptKey,
+            retryAfterMs,
+          });
+          await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+          continue;
+        }
 
-      // Fire-and-forget: log successful call
-      if (options.runId) {
-        insertPromptLog({
-          logId: randomUUID(),
-          runId: options.runId,
-          step: options.step ?? options.promptKey,
-          promptKey: options.promptKey,
-          promptVersion,
-          model: options.modelEndpoint,
-          temperature,
-          renderedPrompt,
-          rawResponse: result.rawResponse,
-          honestyScore: result.honestyScore,
-          durationMs: result.durationMs,
-          tokenUsage: result.tokenUsage,
-          success: true,
-          errorMessage: null,
-        });
-      }
-
-      return result;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      logger.warn("FMAPI attempt failed", {
-        promptKey: options.promptKey,
-        attempt: attempt + 1,
-        maxRetries,
-        error: lastError.message,
-      });
-
-      // Don't retry on client errors (4xx) -- these are non-retryable
-      if (isNonRetryableError(lastError)) {
-        break;
+        // Don't retry on other client errors (4xx) -- these are non-retryable
+        if (isNonRetryableError(lastError)) {
+          break;
+        }
       }
     }
+  } finally {
+    llmSemaphore.release();
   }
 
   // Fire-and-forget: log failed call (after all retries exhausted)
@@ -250,10 +309,32 @@ export async function executeAIQuery(
 }
 
 /**
- * Check if an error is non-retryable (4xx client errors).
- * Only retry on 5xx, timeouts, and network errors.
+ * Check if an error is a 429 rate-limit error (retryable with backoff).
+ */
+function isRateLimitError(error: Error): boolean {
+  if (error instanceof ModelServingError) {
+    return error.statusCode === 429;
+  }
+  return error.message.includes("(429)") || error.message.includes("REQUEST_LIMIT_EXCEEDED");
+}
+
+/**
+ * Extract Retry-After delay from error message or default to null.
+ */
+function extractRetryAfterMs(error: Error): number | null {
+  const match = error.message.match(/retry[- ]?after[:\s]*(\d+)/i);
+  if (match) return parseInt(match[1], 10) * 1000;
+  return null;
+}
+
+/**
+ * Check if an error is non-retryable (4xx client errors, excluding 429).
+ * Only retry on 5xx, 429, timeouts, and network errors.
  */
 function isNonRetryableError(error: Error): boolean {
+  // 429 is retryable -- handled separately
+  if (isRateLimitError(error)) return false;
+
   // Direct status code check for ModelServingError
   if (error instanceof ModelServingError) {
     return error.statusCode >= 400 && error.statusCode < 500;
@@ -264,6 +345,7 @@ function isNonRetryableError(error: Error): boolean {
   const httpStatusMatch = msg.match(/\((\d{3})\)/);
   if (httpStatusMatch) {
     const status = parseInt(httpStatusMatch[1], 10);
+    if (status === 429) return false; // retryable
     if (status >= 400 && status < 500) return true;
   }
   // Check for specific non-retryable error patterns
@@ -384,6 +466,9 @@ export async function executeAIQueryStream(
   const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
   const prompt = formatPrompt(options.promptKey, options.variables);
 
+  // Pre-flight token budget check
+  assertWithinBudget(options.promptKey, prompt, MAX_PROMPT_TOKENS);
+
   const messages: ChatMessage[] = [];
   if (options.systemMessage) {
     messages.push({ role: "system", content: options.systemMessage });
@@ -400,6 +485,7 @@ export async function executeAIQueryStream(
     temperature,
   });
 
+  await llmSemaphore.acquire();
   const response = await chatCompletionStream(
     {
       endpoint: options.modelEndpoint,
@@ -409,7 +495,7 @@ export async function executeAIQueryStream(
       responseFormat: options.responseFormat,
     },
     onChunk
-  );
+  ).finally(() => llmSemaphore.release());
 
   const rawResponse = response.content;
   const durationMs = Date.now() - startTime;

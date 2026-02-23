@@ -112,6 +112,7 @@ export interface PipelineRunConfig {
   industry: string; // industry outcome map id, empty = not selected
   discoveryDepth: DiscoveryDepth; // controls generation volume, quality floor, and adaptive cap
   depthConfig?: DiscoveryDepthConfig; // resolved parameters for the selected depth (from settings or defaults)
+  estateScanEnabled: boolean; // run estate scan (environment intelligence enrichment) during metadata extraction
 }
 
 /** Per-step timing and metadata logged during pipeline execution. */

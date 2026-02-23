@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Keyboard, X, Plus, Building2, Target, Scale, Layers } from "lucide-react";
+import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
@@ -87,6 +87,10 @@ export function ConfigForm() {
   const [discoveryDepth, setDiscoveryDepth] = useState<DiscoveryDepth>(() => {
     if (typeof window === "undefined") return "balanced";
     return loadSettings().defaultDiscoveryDepth ?? "balanced";
+  });
+  const [estateScanEnabled, setEstateScanEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return loadSettings().estateScanEnabled;
   });
   const [businessName, setBusinessName] = useState("");
   const [industry, setIndustry] = useState("");
@@ -216,6 +220,7 @@ export function ConfigForm() {
           sampleRowsPerTable: appSettings.sampleRowsPerTable,
           discoveryDepth,
           depthConfig: appSettings.discoveryDepthConfigs[discoveryDepth],
+          estateScanEnabled,
         }),
       });
 
@@ -567,6 +572,38 @@ export function ConfigForm() {
                 </label>
               ))}
             </div>
+          </div>
+
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              estateScanEnabled
+                ? "border-emerald-500/50 bg-emerald-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <ScanLine className={`mt-0.5 h-4 w-4 shrink-0 ${estateScanEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
+              <div>
+                <p className="text-sm font-medium">Estate Scan</p>
+                <p className="text-xs text-muted-foreground">
+                  Run environment intelligence (domain classification, PII
+                  detection, health scoring, lineage) during this run
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEstateScanEnabled((prev) => !prev)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                estateScanEnabled ? "bg-emerald-500" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  estateScanEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
         </CardContent>
       </Card>

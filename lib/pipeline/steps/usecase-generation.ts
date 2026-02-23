@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
@@ -20,8 +21,7 @@ import type { PipelineContext, UseCase, UseCaseType, LineageGraph } from "@/lib/
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
-const MAX_TABLES_PER_BATCH = 20;
-const MAX_CONCURRENT_BATCHES = 3;
+const MAX_CONCURRENT_BATCHES = 2;
 
 /** Shape of each use case object in the JSON array returned by the LLM. */
 interface UseCaseItem {
@@ -54,13 +54,52 @@ export async function runUsecaseGeneration(
     filteredTables.includes(c.tableFqn)
   );
 
-  // Create batches of tables
-  const batches: typeof tables[] = [];
-  for (let i = 0; i < tables.length; i += MAX_TABLES_PER_BATCH) {
-    batches.push(tables.slice(i, i + MAX_TABLES_PER_BATCH));
+  const sampleRows = run.config.sampleRowsPerTable ?? 0;
+
+  // Build shared context that goes into every prompt (used for base token calc)
+  const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
+  const depth = run.config.discoveryDepth ?? "balanced";
+  const dc = run.config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
+  const targetRange = { min: dc.batchTargetMin, max: dc.batchTargetMax };
+
+  const lineageContext = ctx.lineageGraph
+    ? buildFilteredLineageSummary(ctx.lineageGraph, filteredTables, 30)
+    : "";
+
+  const focusAreasInstruction = run.config.businessDomains
+    ? `**FOCUS AREAS**: Focus your use cases on these business areas: ${run.config.businessDomains}. At least 60% of generated use cases should directly address these domains.`
+    : "";
+
+  const industryReferenceUseCases = run.config.industry
+    ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
+    : "";
+
+  // Estimate base token cost (everything except schema_markdown which varies per batch)
+  const sharedContextTokens = estimateTokens(
+    JSON.stringify(bc) +
+    fkMarkdown +
+    lineageContext +
+    focusAreasInstruction +
+    industryReferenceUseCases +
+    generateAIFunctionsSummary() +
+    generateGeospatialFunctionsSummary()
+  );
+  // Add overhead for the prompt template itself (~2000 tokens)
+  const baseTokens = sharedContextTokens + 2000;
+
+  // Token-aware batching: renderItem estimates the per-table schema size
+  const columnsByTable = new Map<string, typeof columns>();
+  for (const col of columns) {
+    const existing = columnsByTable.get(col.tableFqn) ?? [];
+    existing.push(col);
+    columnsByTable.set(col.tableFqn, existing);
   }
 
-  const sampleRows = run.config.sampleRowsPerTable ?? 0;
+  const batches = buildTokenAwareBatches(
+    tables,
+    (table) => buildSchemaMarkdown([table], columnsByTable.get(table.fqn) ?? []),
+    baseTokens
+  );
 
   logger.info("Use case generation starting", {
     tableCount: tables.length,
@@ -69,25 +108,6 @@ export async function runUsecaseGeneration(
   });
 
   const allUseCases: UseCase[] = [];
-  const fkMarkdown = buildForeignKeyMarkdown(metadata.foreignKeys);
-  const depth = run.config.discoveryDepth ?? "balanced";
-  const dc = run.config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
-  const targetRange = { min: dc.batchTargetMin, max: dc.batchTargetMax };
-
-  // Build lineage context for prompt injection
-  const lineageContext = ctx.lineageGraph
-    ? buildFilteredLineageSummary(ctx.lineageGraph, filteredTables, 30)
-    : "";
-
-  // Build focus areas instruction from config if business domains provided
-  const focusAreasInstruction = run.config.businessDomains
-    ? `**FOCUS AREAS**: Focus your use cases on these business areas: ${run.config.businessDomains}. At least 60% of generated use cases should directly address these domains.`
-    : "";
-
-  // Build industry reference use cases for prompt injection
-  const industryReferenceUseCases = run.config.industry
-    ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
-    : "";
 
   // Process batches with controlled concurrency and cross-batch feedback
   let batchGroupIdx = 0;

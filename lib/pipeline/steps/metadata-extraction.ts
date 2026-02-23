@@ -162,29 +162,33 @@ export async function runMetadataExtraction(
     `[metadata-extraction] Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns, ${allMetricViews.length} metric views`
   );
 
-  // --- Phase 2: Enrichment pass ---
+  // --- Phase 2: Enrichment pass (estate scan) ---
 
   let lineageGraph: LineageGraph | null = null;
-  try {
-    const depth = config.discoveryDepth ?? "balanced";
-    const dc = config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
-    lineageGraph = await runEnrichmentPass(
-      snapshot,
-      allTables,
-      allColumns,
-      allFKs,
-      scopes,
-      dc,
-      runId
-    );
-  } catch (error) {
-    logger.error("[metadata-extraction] Enrichment pass failed (non-fatal)", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  if (config.estateScanEnabled) {
+    try {
+      const depth = config.discoveryDepth ?? "balanced";
+      const dc = config.depthConfig ?? DEFAULT_DEPTH_CONFIGS[depth];
+      lineageGraph = await runEnrichmentPass(
+        snapshot,
+        allTables,
+        allColumns,
+        allFKs,
+        scopes,
+        dc,
+        runId
+      );
+    } catch (error) {
+      logger.error("[metadata-extraction] Enrichment pass failed (non-fatal)", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
-  const enrichmentMs = Date.now() - enrichmentStart;
-  logger.info("[metadata-extraction] Enrichment pass duration", { durationMs: enrichmentMs });
+    const enrichmentMs = Date.now() - enrichmentStart;
+    logger.info("[metadata-extraction] Enrichment pass duration", { durationMs: enrichmentMs });
+  } else {
+    logger.info("[metadata-extraction] Estate scan disabled -- skipping enrichment pass");
+  }
 
   return { snapshot, lineageGraph };
 }

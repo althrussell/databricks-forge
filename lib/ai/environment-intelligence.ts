@@ -2,8 +2,8 @@
  * LLM Intelligence Layer for Environment Scans.
  *
  * Orchestrates 7 analysis passes + 1 composite governance pass using the
- * FMAPI client. Each pass processes tables in batches, uses JSON mode,
- * and runs independently with graceful error handling.
+ * FMAPI client. Each pass processes tables in token-aware adaptive batches,
+ * uses JSON mode, and runs independently with graceful error handling.
  *
  * Passes:
  *   1. Domain Categorisation
@@ -21,6 +21,11 @@ import {
   type ChatMessage,
 } from "@/lib/dbx/model-serving";
 import { formatPrompt } from "@/lib/ai/templates";
+import {
+  buildTokenAwareBatches,
+  estimateTokens,
+  truncateColumns,
+} from "@/lib/ai/token-budget";
 import { logger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
 import type {
@@ -65,8 +70,100 @@ export interface TableInput {
 // Constants
 // ---------------------------------------------------------------------------
 
-const BATCH_SIZE = 40;
 const TEMPERATURE = 0.2;
+
+/** Max columns to include in PII pass (all columns with types -- expensive). */
+const MAX_COLS_PII = 30;
+/** Max columns to include in redundancy pass (names only). */
+const MAX_COLS_REDUNDANCY = 20;
+/** Max columns to include in relationship pass (names with types). */
+const MAX_COLS_RELATIONSHIPS = 25;
+/** Max columns to include in domain categorisation pass. */
+const MAX_COLS_DOMAIN = 10;
+/** Max columns to include in descriptions pass. */
+const MAX_COLS_DESCRIPTIONS = 15;
+
+// ---------------------------------------------------------------------------
+// Rendering helpers (used for both prompt building and token estimation)
+// ---------------------------------------------------------------------------
+
+function renderDomainTable(t: TableInput): string {
+  const cols = t.columns.slice(0, MAX_COLS_DOMAIN).map((c) => c.name).join(", ");
+  return `- ${t.fqn}: columns=[${cols}]${t.comment ? ` comment="${t.comment}"` : ""}${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`;
+}
+
+function renderPIITable(t: TableInput): string {
+  const { truncated, omitted } = truncateColumns(t.columns, MAX_COLS_PII);
+  const colStr = truncated.map((c) => `${c.name}(${c.type})`).join(", ");
+  const suffix = omitted > 0 ? `, ... +${omitted} more` : "";
+  return `- ${t.fqn}: [${colStr}${suffix}]`;
+}
+
+function renderDescriptionTable(t: TableInput): string {
+  const cols = t.columns.slice(0, MAX_COLS_DESCRIPTIONS).map((c) => c.name).join(", ");
+  return `- ${t.fqn}: columns=[${cols}]${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`;
+}
+
+function renderRedundancyTable(t: TableInput): string {
+  const { truncated, omitted } = truncateColumns(t.columns, MAX_COLS_REDUNDANCY);
+  const colStr = truncated.map((c) => c.name).join(", ");
+  const suffix = omitted > 0 ? `, ... +${omitted} more` : "";
+  return `- ${t.fqn}: [${colStr}${suffix}]`;
+}
+
+function renderRelationshipTable(t: TableInput): string {
+  const { truncated, omitted } = truncateColumns(t.columns, MAX_COLS_RELATIONSHIPS);
+  const colStr = truncated.map((c) => `${c.name}(${c.type})`).join(", ");
+  const suffix = omitted > 0 ? `, ... +${omitted} more` : "";
+  return `- ${t.fqn}: [${colStr}${suffix}]`;
+}
+
+function renderTierTable(t: TableInput): string {
+  const colCount = t.columns.length;
+  const nameParts = t.fqn.split(".");
+  return `- ${t.fqn}: ${colCount} columns${t.comment ? `, "${t.comment}"` : ""}${t.tags.length > 0 ? `, tags=[${t.tags.join(",")}]` : ""}, schema=${nameParts[1] ?? ""}`;
+}
+
+function renderProductTable(t: TableInput): string {
+  return `- ${t.fqn}${t.detail?.owner ? ` (owner: ${t.detail.owner})` : ""}`;
+}
+
+function renderGovernanceTable(
+  t: TableInput,
+  sensitiveTableSet: Set<string>,
+  lineagedTables: Set<string>
+): string {
+  const gaps: string[] = [];
+  if (!t.comment) gaps.push("no_description");
+  if (!t.detail?.owner) gaps.push("no_owner");
+  if (t.tags.length === 0) gaps.push("no_tags");
+  if (sensitiveTableSet.has(t.fqn) && !t.tags.some((tag) => tag.toLowerCase().includes("pii") || tag.toLowerCase().includes("sensitive"))) {
+    gaps.push("pii_untagged");
+  }
+  if (!lineagedTables.has(t.fqn)) gaps.push("no_lineage");
+  if (t.history) {
+    const dOptimize = t.history.lastOptimizeTimestamp ? daysSince(t.history.lastOptimizeTimestamp) : 999;
+    const dVacuum = t.history.lastVacuumTimestamp ? daysSince(t.history.lastVacuumTimestamp) : 999;
+    const dWrite = t.history.lastWriteTimestamp ? daysSince(t.history.lastWriteTimestamp) : 999;
+    if (dOptimize > 30) gaps.push("stale_optimize");
+    if (dVacuum > 30) gaps.push("stale_vacuum");
+    if (dWrite > 90) gaps.push("stale_data");
+  }
+  return `- ${t.fqn}: detected_gaps=[${gaps.join(",")}]`;
+}
+
+/**
+ * Compute the base token cost of a prompt template (everything except the
+ * `{table_list}` placeholder content).
+ */
+function basePromptTokens(
+  templateKey: string,
+  extraVars: Record<string, string> = {}
+): number {
+  const vars: Record<string, string> = { table_list: "", ...extraVars };
+  const prompt = formatPrompt(templateKey as never, vars);
+  return estimateTokens(prompt);
+}
 
 // ---------------------------------------------------------------------------
 // Main Orchestrator
@@ -236,11 +333,15 @@ async function passDomainCategorisation(
   const allAssignments: Array<{ table_fqn: string; domain: string; subdomain: string }> = [];
   const lineageSummary = buildLineageSummary(lineageGraph, 20);
 
-  for (let i = 0; i < tables.length; i += BATCH_SIZE) {
-    const batch = tables.slice(i, i + BATCH_SIZE);
-    const tableList = batch.map((t) =>
-      `- ${t.fqn}: columns=[${t.columns.slice(0, 10).map((c) => c.name).join(", ")}]${t.comment ? ` comment="${t.comment}"` : ""}${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`
-    ).join("\n");
+  const base = basePromptTokens("ENV_DOMAIN_CATEGORISATION_PROMPT", {
+    lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
+    business_name_line: options.businessName ? `Business: ${options.businessName}` : "",
+  });
+
+  const batches = buildTokenAwareBatches(tables, renderDomainTable, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderDomainTable).join("\n");
 
     const prompt = formatPrompt("ENV_DOMAIN_CATEGORISATION_PROMPT", {
       table_list: tableList,
@@ -291,11 +392,11 @@ async function passPIIDetection(
   // Phase 2: LLM pass for nuanced detection (deduplicate against rule results)
   const allClassifications: SensitivityClassification[] = [...ruleResults];
 
-  for (let i = 0; i < tables.length; i += BATCH_SIZE) {
-    const batch = tables.slice(i, i + BATCH_SIZE);
-    const tableList = batch.map((t) =>
-      `- ${t.fqn}: [${t.columns.map((c) => `${c.name}(${c.type})`).join(", ")}]`
-    ).join("\n");
+  const base = basePromptTokens("ENV_PII_DETECTION_PROMPT");
+  const batches = buildTokenAwareBatches(tables, renderPIITable, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderPIITable).join("\n");
 
     const prompt = formatPrompt("ENV_PII_DETECTION_PROMPT", {
       table_list: tableList,
@@ -303,7 +404,6 @@ async function passPIIDetection(
 
     const result = await callLLM(prompt, options.endpoint);
     const parsed = safeParseArray<SensitivityClassification>(result);
-    // Only add LLM classifications not already caught by rules
     for (const p of parsed) {
       const key = `${p.tableFqn}::${p.columnName}`;
       if (!ruleKeys.has(key)) {
@@ -328,11 +428,13 @@ async function passAutoDescriptions(
   const descriptions = new Map<string, string>();
   const lineageSummary = buildLineageSummary(lineageGraph, 15);
 
-  for (let i = 0; i < tables.length; i += BATCH_SIZE) {
-    const batch = tables.slice(i, i + BATCH_SIZE);
-    const tableList = batch.map((t) =>
-      `- ${t.fqn}: columns=[${t.columns.slice(0, 15).map((c) => c.name).join(", ")}]${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`
-    ).join("\n");
+  const base = basePromptTokens("ENV_AUTO_DESCRIPTIONS_PROMPT", {
+    lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
+  });
+  const batches = buildTokenAwareBatches(tables, renderDescriptionTable, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderDescriptionTable).join("\n");
 
     const prompt = formatPrompt("ENV_AUTO_DESCRIPTIONS_PROMPT", {
       table_list: tableList,
@@ -359,13 +461,11 @@ async function passRedundancyDetection(
 ): Promise<RedundancyPair[]> {
   const allPairs: RedundancyPair[] = [];
 
-  // Send all tables in larger batches for cross-comparison
-  const largeBatch = 80;
-  for (let i = 0; i < tables.length; i += largeBatch) {
-    const batch = tables.slice(i, i + largeBatch);
-    const tableList = batch.map((t) =>
-      `- ${t.fqn}: [${t.columns.map((c) => c.name).join(", ")}]`
-    ).join("\n");
+  const base = basePromptTokens("ENV_REDUNDANCY_DETECTION_PROMPT");
+  const batches = buildTokenAwareBatches(tables, renderRedundancyTable, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderRedundancyTable).join("\n");
 
     const prompt = formatPrompt("ENV_REDUNDANCY_DETECTION_PROMPT", {
       table_list: tableList,
@@ -389,12 +489,11 @@ async function passImplicitRelationships(
 ): Promise<ImplicitRelationship[]> {
   const allRels: ImplicitRelationship[] = [];
 
-  const largeBatch = 60;
-  for (let i = 0; i < tables.length; i += largeBatch) {
-    const batch = tables.slice(i, i + largeBatch);
-    const tableList = batch.map((t) =>
-      `- ${t.fqn}: [${t.columns.map((c) => `${c.name}(${c.type})`).join(", ")}]`
-    ).join("\n");
+  const base = basePromptTokens("ENV_IMPLICIT_RELATIONSHIPS_PROMPT");
+  const batches = buildTokenAwareBatches(tables, renderRelationshipTable, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderRelationshipTable).join("\n");
 
     const prompt = formatPrompt("ENV_IMPLICIT_RELATIONSHIPS_PROMPT", {
       table_list: tableList,
@@ -420,13 +519,13 @@ async function passMedallionTier(
   const assignments = new Map<string, { tier: DataTier; reasoning: string }>();
   const lineageSummary = buildLineageSummary(lineageGraph, 20);
 
-  for (let i = 0; i < tables.length; i += BATCH_SIZE) {
-    const batch = tables.slice(i, i + BATCH_SIZE);
-    const tableList = batch.map((t) => {
-      const colCount = t.columns.length;
-      const nameParts = t.fqn.split(".");
-      return `- ${t.fqn}: ${colCount} columns${t.comment ? `, "${t.comment}"` : ""}${t.tags.length > 0 ? `, tags=[${t.tags.join(",")}]` : ""}, schema=${nameParts[1] ?? ""}`;
-    }).join("\n");
+  const base = basePromptTokens("ENV_MEDALLION_TIER_PROMPT", {
+    lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
+  });
+  const batches = buildTokenAwareBatches(tables, renderTierTable, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderTierTable).join("\n");
 
     const prompt = formatPrompt("ENV_MEDALLION_TIER_PROMPT", {
       table_list: tableList,
@@ -446,7 +545,7 @@ async function passMedallionTier(
 }
 
 // ---------------------------------------------------------------------------
-// Pass 7: Data Product Identification
+// Pass 7: Data Product Identification (now batched)
 // ---------------------------------------------------------------------------
 
 async function passDataProducts(
@@ -460,18 +559,27 @@ async function passDataProducts(
     `- ${d.domain}/${d.subdomain}: [${d.tables.slice(0, 10).join(", ")}${d.tables.length > 10 ? ` +${d.tables.length - 10} more` : ""}]`
   ).join("\n");
 
-  const tableList = tables.map((t) =>
-    `- ${t.fqn}${t.detail?.owner ? ` (owner: ${t.detail.owner})` : ""}`
-  ).join("\n");
-
-  const prompt = formatPrompt("ENV_DATA_PRODUCTS_PROMPT", {
-    table_list: tableList,
+  const base = basePromptTokens("ENV_DATA_PRODUCTS_PROMPT", {
     domain_summary: domainSummary ? `Domain assignments:\n${domainSummary}` : "",
     lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
   });
+  const batches = buildTokenAwareBatches(tables, renderProductTable, base);
 
-  const result = await callLLM(prompt, options.endpoint);
-  return safeParseArray<DataProduct>(result);
+  const allProducts: DataProduct[] = [];
+  for (const batch of batches) {
+    const tableList = batch.map(renderProductTable).join("\n");
+
+    const prompt = formatPrompt("ENV_DATA_PRODUCTS_PROMPT", {
+      table_list: tableList,
+      domain_summary: domainSummary ? `Domain assignments:\n${domainSummary}` : "",
+      lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
+    });
+
+    const result = await callLLM(prompt, options.endpoint);
+    allProducts.push(...safeParseArray<DataProduct>(result));
+  }
+
+  return allProducts;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,7 +590,7 @@ async function passGovernanceGaps(
   tables: TableInput[],
   lineageGraph: LineageGraph,
   sensitivities: SensitivityClassification[],
-  domains: DataDomain[],
+  _domains: DataDomain[],
   options: IntelligenceOptions
 ): Promise<GovernanceGap[]> {
   const allGaps: GovernanceGap[] = [];
@@ -492,33 +600,13 @@ async function passGovernanceGaps(
     ...lineageGraph.edges.map((e) => e.targetTableFqn),
   ]);
 
-  for (let i = 0; i < tables.length; i += BATCH_SIZE) {
-    const batch = tables.slice(i, i + BATCH_SIZE);
-    const tableList = batch.map((t) => {
-      const gaps: string[] = [];
-      if (!t.comment) gaps.push("no_description");
-      if (!t.detail?.owner) gaps.push("no_owner");
-      if (t.tags.length === 0) gaps.push("no_tags");
-      if (sensitiveTableSet.has(t.fqn) && !t.tags.some((tag) => tag.toLowerCase().includes("pii") || tag.toLowerCase().includes("sensitive"))) {
-        gaps.push("pii_untagged");
-      }
-      if (!lineagedTables.has(t.fqn)) gaps.push("no_lineage");
-      if (t.history) {
-        const daysSinceOptimize = t.history.lastOptimizeTimestamp
-          ? daysSince(t.history.lastOptimizeTimestamp)
-          : 999;
-        const daysSinceVacuum = t.history.lastVacuumTimestamp
-          ? daysSince(t.history.lastVacuumTimestamp)
-          : 999;
-        const daysSinceWrite = t.history.lastWriteTimestamp
-          ? daysSince(t.history.lastWriteTimestamp)
-          : 999;
-        if (daysSinceOptimize > 30) gaps.push("stale_optimize");
-        if (daysSinceVacuum > 30) gaps.push("stale_vacuum");
-        if (daysSinceWrite > 90) gaps.push("stale_data");
-      }
-      return `- ${t.fqn}: detected_gaps=[${gaps.join(",")}]`;
-    }).join("\n");
+  const renderGov = (t: TableInput) => renderGovernanceTable(t, sensitiveTableSet, lineagedTables);
+
+  const base = basePromptTokens("ENV_GOVERNANCE_GAPS_PROMPT");
+  const batches = buildTokenAwareBatches(tables, renderGov, base);
+
+  for (const batch of batches) {
+    const tableList = batch.map(renderGov).join("\n");
 
     const prompt = formatPrompt("ENV_GOVERNANCE_GAPS_PROMPT", {
       table_list: tableList,

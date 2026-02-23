@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       industry: body.industry ?? "",
       discoveryDepth: (body.discoveryDepth ?? "balanced") as DiscoveryDepth,
       depthConfig: body.depthConfig ?? DEFAULT_DEPTH_CONFIGS[(body.discoveryDepth ?? "balanced") as DiscoveryDepth],
+      estateScanEnabled: body.estateScanEnabled ?? false,
     };
 
     const userEmail = await getCurrentUserEmail();
