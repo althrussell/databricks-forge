@@ -179,6 +179,26 @@ Each expression includes `synonyms` (colloquial names users might type) and
 **Output:** `EnrichedSqlSnippetMeasure[]`, `EnrichedSqlSnippetFilter[]`,
 `EnrichedSqlSnippetDimension[]`.
 
+### Pass 2.5: Join Inference (config-gated)
+
+**Module:** `lib/genie/passes/join-inference.ts`
+
+An LLM-driven pass that discovers implicit table relationships from schema
+and column naming conventions. Runs only when fewer than 2 joins are found
+from FK metadata + overrides + SQL inference (avoids redundant calls when
+relationships are already well-defined).
+
+**Sources of join relationships (in priority order):**
+
+1. **Foreign key metadata** -- from `information_schema` constraints
+2. **Config overrides** -- manually specified `joinOverrides`
+3. **SQL-inferred joins** -- regex-extracted from use case SQL (`inferJoinsFromUseCaseSql()`)
+4. **LLM-inferred joins** -- this pass, schema pattern matching
+
+All joins are assembled into `allJoins` and threaded to Passes 3, 4, 5, and 6.
+
+**Output:** `JoinInferenceOutput` with discovered join conditions.
+
 ### Pass 3: Trusted Asset Authoring
 
 **Module:** `lib/genie/passes/trusted-assets.ts`
@@ -193,6 +213,14 @@ comments, and default values. They become `example_question_sqls` with
 **Trusted functions** are UDF DDL definitions that become
 `instructions.sql_functions` in the serialized space.
 
+**Constraints applied to generated SQL:**
+
+- Shared Databricks SQL quality rules (`DATABRICKS_SQL_RULES_COMPACT`)
+- SQL preservation rules (must faithfully reproduce source SQL complexity)
+- LIMIT values must be integer literals (not parameters)
+- Batch size: 2 use cases per LLM call (prevents output truncation)
+- SQL examples capped at 3000 chars per use case
+
 **Output:** `TrustedAssetQuery[]` and `TrustedAssetFunction[]`.
 
 ### Pass 4: Instruction Generation
@@ -200,19 +228,31 @@ comments, and default values. They become `example_question_sqls` with
 **Module:** `lib/genie/passes/instruction-generation.ts`
 
 Builds the `text_instructions` array for the space. Runs in parallel with
-Pass 3.
+Pass 3. Follows [Databricks best practices](https://docs.databricks.com/aws/en/genie/best-practices):
+text instructions are a **last resort**, used only for behavioural guidance
+that cannot be expressed through SQL expressions or example queries.
 
-**Instruction sources:**
+**What is included (behavioural guidance):**
 
-- Business context (industry, goals, priorities, value chain)
-- Domain and subdomain descriptions
-- Entity matching guidance (e.g. "Florida" -> "FL")
-- Time period guidance (fiscal year conventions)
-- Clarification rules from config
-- Summary instructions from config
-- Business glossary terms
-- Global instructions from config
-- Optional LLM refinement to improve clarity
+- Short domain identity (domain + business name + industry + subdomains)
+- Entity matching hint (map coded values to user language)
+- Fiscal year / time period conventions
+- Clarification question rules from config
+- Summary customisation from config
+- Business glossary terms from config
+- Customer global instructions from config
+- Optional LLM-refined domain guidance (1-2 sentences, capped at 150 tokens)
+
+**What is NOT included (handled by structured API fields):**
+
+- SQL quality rules (taught via example SQL queries in `example_question_sqls`)
+- Join relationships (structured `join_specs` in SerializedSpace)
+- Full business context / strategic goals / value chain
+- Measures, filters, dimensions (SQL expressions in knowledge store)
+
+**Character budget:** 3000 chars max. If exceeded, the LLM-refined block
+is dropped first, then glossary is reduced to 5 entries, then clarification
+rules to 3.
 
 **Output:** `string[]` (text instruction content blocks).
 
@@ -225,11 +265,14 @@ accuracy. Runs in parallel with Pass 6.
 
 **Features:**
 
-- ~15 auto-generated benchmarks per domain
+- ~9 auto-generated benchmarks per domain (3 per batch, 2 use cases per batch)
 - Alternate phrasings per question (2-4 variants)
 - Time-period variant questions
 - Entity-matching test questions
 - Customer-provided benchmarks from config are merged in
+- Shared Databricks SQL quality rules (`DATABRICKS_SQL_RULES_COMPACT`)
+- SQL examples capped at 3000 chars per use case to prevent truncation
+- Maximum 10 benchmarks included in the final SerializedSpace
 
 Each phrasing is emitted as its own entry in the serialized space with a
 shared SQL answer, matching how Databricks evaluates per-phrasing accuracy.
@@ -260,12 +303,13 @@ Runs in parallel with Pass 5.
   `SUM(amount) FILTER (WHERE status = 'OPEN')`)
 - Ratio measures that safely re-aggregate (e.g.
   `SUM(revenue) / COUNT(DISTINCT customer_id)`)
-- Window measures (running totals, period-over-period, YTD) when date
-  columns are present
 - Seed YAML from Pass 2 measures/dimensions as a starting point for the LLM
 - Column enrichment descriptions propagated as YAML `comment` fields
 - Materialization recommendations for domains with >10 tables or >3 joins
 - Post-generation YAML validation against the schema allowlist
+- **Window function prohibition** -- `OVER()` in measure expressions is
+  detected during validation and marked as `validationStatus: "error"`
+- **MEDIAN() prohibition** -- `PERCENTILE_APPROX(col, 0.5)` must be used
 
 **Output:** `MetricViewProposal[]` -- each with:
 
@@ -309,7 +353,9 @@ The allowlist contains:
 - `isValidColumn(allowlist, fqn)` -- exact match
 - `validateSqlExpression(allowlist, sql, context)` -- checks that table/column
   references in SQL are in the allowlist
-- `findInvalidIdentifiers(allowlist, identifiers)` -- batch check
+- `findInvalidIdentifiers(allowlist, identifiers)` -- batch check; automatically
+  excludes FQNs that are the target of `CREATE FUNCTION/VIEW/TABLE` statements
+  (being defined, not referenced)
 
 **LLM prompt grounding:** `buildSchemaContextBlock(allowlist)` generates a
 markdown block listing all tables and columns that is included in every LLM
@@ -364,10 +410,12 @@ Genie API.
     "sql_functions": [{ "id": "...", "identifier": "udf_name" }],
     "join_specs": [{
       "id": "...",
-      "left": { "identifier": "catalog.schema.left_table" },
-      "right": { "identifier": "catalog.schema.right_table" },
-      "sql": ["left.id = right.id"],
-      "relationship_type": "many_to_one"
+      "left": { "identifier": "catalog.schema.left_table", "alias": "left_table" },
+      "right": { "identifier": "catalog.schema.right_table", "alias": "right_table" },
+      "sql": [
+        "`left_table`.`id` = `right_table`.`id`",
+        "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+      ]
     }],
     "sql_snippets": {
       "measures": [{
@@ -411,6 +459,12 @@ Genie API.
 - Table descriptions include relationship context from join specs
 - `format_assistance: true` is set on monetary/percentage columns
 - `text_instructions` are collapsed into a single entry (API limit)
+- Join SQL is rewritten to use backtick-quoted alias references
+  (`` `alias`.`column` ``), not FQN format
+- Self-joins use `_2` suffix on the right alias
+- Relationship type is encoded as a SQL comment in `join_specs.sql`
+- Benchmark questions are capped at 10 per space
+- `sql_functions` are sorted by `(id, identifier)` before serialization
 
 ### Payload Sanitization
 
@@ -425,6 +479,21 @@ sanitized to fix known compatibility issues:
 2. **Text instructions collapse** -- the API allows at most one
    `text_instructions` entry. If multiple entries exist, they are
    merged into a single entry with all content concatenated.
+3. **Join spec alias injection** -- adds `alias` fields to `left`/`right`
+   objects if missing (derived from the last segment of the FQN). Handles
+   self-joins by appending `_2` to the right alias.
+4. **Join SQL rewriting** -- rewrites FQN-based join conditions
+   (`catalog.schema.table.column`) to backtick-quoted alias format
+   (`` `alias`.`column` ``).
+5. **Relationship type encoding** -- the Genie API protobuf does not
+   support a `relationship_type` field on `JoinSpec`. The assembler
+   encodes it as a SQL comment `"--rt=FROM_RELATIONSHIP_TYPE_...--"` in
+   the `sql` array. Sanitization strips any standalone `relationship_type`
+   field and ensures the comment is present.
+6. **SQL function sorting** -- `instructions.sql_functions` must be sorted
+   by `(id, identifier)` per Genie API requirements.
+7. **SQL function ID format** -- IDs must be lowercase 32-hex UUIDs
+   without hyphens (generated via `uuidv4().replace(/-/g, "")`).
 
 ---
 
@@ -773,9 +842,9 @@ Genie Conversation API. The client provides:
 The **Test Space** button in the Genie Spaces tab runs 3-5 sample questions
 from the space against the deployed Genie space and reports results.
 
-The **Run Benchmarks** feature executes benchmark questions against the
-deployed space via the Conversation API and shows pass/fail per question
-with the SQL that Genie generated vs the expected SQL.
+> **Note:** Benchmark evaluation is planned for a future release using the
+> Databricks Evaluation API (currently unreleased). The benchmarks are
+> generated and stored for future use but are not executed in-app.
 
 API endpoint:
 
@@ -928,9 +997,8 @@ periods will align with your reporting calendar.
 ### 10. Test After Deploying
 
 After deploying a space, use the **Test Space** button to run sample
-questions against the live space. Use the **Run Benchmarks** button to
-execute benchmark questions and check pass/fail rates. Fix underperforming
-areas by editing instructions, measures, or adding more trusted queries.
+questions against the live space. Fix underperforming areas by editing
+instructions, measures, or adding more trusted queries.
 
 ### 11. Deploy Functions Before Deploying Spaces
 
@@ -976,6 +1044,61 @@ expected and harmless -- the assembler simply skips it.
 
 Reduce `maxTablesPerSpace` or use `tableGroupOverrides` to split the domain.
 
+### Genie API Rejects `relationship_type`
+
+**Symptom:** `Cannot find field: relationship_type in message
+databricks.datarooms.export.JoinSpec`
+
+The Genie API protobuf does not support a standalone `relationship_type`
+field. The assembler encodes it as a SQL comment in the `sql` array. If
+you see this error, `sanitizeSerializedSpace` should handle it
+automatically. Check that the sanitization runs before the API call.
+
+### Invalid `sql_function.id` Format
+
+**Symptom:** `Expected lowercase 32-hex UUID without hyphens`
+
+Function IDs must be 32-character lowercase hex strings (UUID v4 with
+hyphens removed). The deploy route generates these via
+`uuidv4().replace(/-/g, "")`.
+
+### `sql_functions Must Be Sorted`
+
+**Symptom:** `instructions.sql_functions must be sorted by (id, identifier)`
+
+The Genie API requires `sql_functions` to be sorted. Both the deploy route
+and `sanitizeSerializedSpace` apply sorting as a safety net.
+
+### LIMIT Expression Must Be Constant
+
+**Symptom:** `The limit like expression ... is invalid. The limit expression
+must evaluate to a constant value.`
+
+Databricks SQL does not allow parameterized `LIMIT` clauses in UDFs. The
+trusted assets pass includes a rule to generate integer literal limits only.
+If a UDF fails deployment for this reason, edit the DDL manually.
+
+### Metric View Window Function Error
+
+**Symptom:** `METRIC_VIEW_WINDOW_FUNCTION_NOT_SUPPORTED`
+
+Metric view measure expressions cannot contain `OVER()` clauses. Pass 6
+validates for this and marks affected proposals as `error`. If a proposal
+slips through, remove the window function from the measure expression.
+
+### LLM Output Truncation
+
+**Symptom:** `parseLLMJson: recovered truncated JSON output` in logs.
+
+The LLM is running out of output tokens. This is mitigated by:
+
+- Using `DATABRICKS_SQL_RULES_COMPACT` (not the full rules) in batch passes
+- Small batch sizes (2 use cases per call)
+- SQL example truncation at 3000 chars
+- `maxTokens: 8192` on batch LLM calls
+
+If truncation persists, reduce batch sizes further in the pass config.
+
 ### Empty Measures or Filters
 
 If LLM refinement is off and no custom expressions are defined, the only
@@ -999,6 +1122,7 @@ LLM refinement or add custom SQL expressions.
 | `lib/genie/engine-status.ts` | In-memory async job status tracker |
 | `lib/genie/recommend.ts` | Legacy deterministic fallback generator |
 | `lib/genie/benchmark-runner.ts` | Benchmark execution via Conversation API |
+| `lib/ai/sql-rules.ts` | Shared Databricks SQL quality rules (full + compact) |
 
 ### Engine Passes
 
