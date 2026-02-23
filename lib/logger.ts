@@ -83,6 +83,8 @@ export const logger = {
   error: (message: string, meta?: Record<string, unknown>) => emit("error", message, meta),
 };
 
-if (IS_PRODUCTION) {
+const _g = globalThis as unknown as { __forgeStartupLogged?: boolean };
+if (IS_PRODUCTION && !_g.__forgeStartupLogged) {
+  _g.__forgeStartupLogged = true;
   emit("info", `Databricks Forge AI v${APP_VERSION} starting`);
 }

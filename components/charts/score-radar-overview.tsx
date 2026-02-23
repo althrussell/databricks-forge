@@ -66,26 +66,13 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     });
   };
 
-  const handleLegendClick = (key: string, allKeys: string[]) => {
+  const handleLegendClick = (key: string) => {
     if (viewMode === "domain-avg") return;
     setSelectedIds((prev) => {
-      if (prev.size === 0) {
-        // No filter active -- hide the clicked item by selecting all others
-        const next = new Set(allKeys);
-        next.delete(key);
-        return next;
+      if (prev.size === 1 && prev.has(key)) {
+        return new Set();
       }
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-        // If nothing left, clear filter entirely (shows all)
-        if (next.size === 0) return new Set();
-      } else {
-        next.add(key);
-        // If all are now selected, clear filter (same as showing all)
-        if (next.size >= allKeys.length) return new Set();
-      }
-      return next;
+      return new Set([key]);
     });
   };
 
@@ -144,7 +131,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
         const eff = effectiveScores(uc);
         return {
           key: uc.id,
-          label: uc.name.length > 35 ? uc.name.slice(0, 32) + "..." : uc.name,
+          label: uc.name,
           priority: Math.round(eff.priority * 100),
           feasibility: Math.round(eff.feasibility * 100),
           impact: Math.round(eff.impact * 100),
@@ -351,7 +338,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                   <button
                     key={s.key}
                     type="button"
-                    onClick={() => handleLegendClick(s.key, series.map((item) => item.key))}
+                    onClick={() => handleLegendClick(s.key)}
                     className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-normal transition-opacity ${
                       isActive ? "opacity-100" : "opacity-40"
                     } ${viewMode !== "domain-avg" ? "cursor-pointer hover:opacity-80" : ""}`}
@@ -360,7 +347,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: color }}
                     />
-                    <span className="truncate text-left">{s.label}</span>
+                    <span className="truncate text-left" title={s.label}>{s.label}</span>
                   </button>
                 );
               })}
