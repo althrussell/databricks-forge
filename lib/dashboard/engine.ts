@@ -23,6 +23,7 @@ import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
+import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { logger } from "@/lib/logger";
 
 const TEMPERATURE = 0.3;
@@ -158,6 +159,26 @@ async function processDomain(
 
   if (!parsed.datasets || !parsed.widgets || parsed.datasets.length === 0) {
     logger.warn("Dashboard Engine: LLM returned empty design", {
+      domain: group.domain,
+    });
+    return null;
+  }
+
+  // Validate dataset SQL against the metadata schema
+  const dashAllowlist = buildSchemaAllowlist(metadata);
+  const originalCount = parsed.datasets.length;
+  parsed.datasets = parsed.datasets.filter((ds) =>
+    validateSqlExpression(dashAllowlist, ds.sql, `dashboard:${ds.name}`)
+  );
+  if (parsed.datasets.length < originalCount) {
+    logger.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
+      domain: group.domain,
+      dropped: originalCount - parsed.datasets.length,
+      remaining: parsed.datasets.length,
+    });
+  }
+  if (parsed.datasets.length === 0) {
+    logger.warn("Dashboard Engine: all datasets had invalid SQL references", {
       domain: group.domain,
     });
     return null;

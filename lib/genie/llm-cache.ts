@@ -6,8 +6,12 @@
  * re-running the engine with the same schema/config -- identical prompts
  * return instantly from cache instead of hitting Model Serving again.
  *
- * Retry: 2 retries with exponential backoff (1s, 2s) on 429 (rate limit)
- * and 5xx (server error). Other errors fail immediately.
+ * Retry: up to 3 retries for transient errors (5xx, network) with short
+ * exponential backoff (1s, 2s, 4s), and up to 4 retries for 429 rate-limit
+ * errors with a longer backoff (60s default or Retry-After from response).
+ *
+ * Concurrency: capped via an internal semaphore (default 3, configurable
+ * via GENIE_MAX_CONCURRENT_LLM env var) to prevent burst overload.
  *
  * TTL: 10 minutes (covers a single iteration session).
  */
@@ -22,8 +26,51 @@ import {
 import { logger } from "@/lib/logger";
 
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 3;
+const MAX_429_RETRIES = 4;
 const INITIAL_BACKOFF_MS = 1_000;
+const DEFAULT_429_BACKOFF_MS = 60_000;
+
+const MAX_GENIE_CONCURRENT = Math.max(
+  1,
+  parseInt(process.env.GENIE_MAX_CONCURRENT_LLM ?? "3", 10) || 3,
+);
+
+// ---------------------------------------------------------------------------
+// Concurrency semaphore
+// ---------------------------------------------------------------------------
+
+class Semaphore {
+  private current = 0;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(private readonly max: number) {}
+
+  async acquire(): Promise<void> {
+    if (this.current < this.max) {
+      this.current++;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.current++;
+        resolve();
+      });
+    });
+  }
+
+  release(): void {
+    this.current--;
+    const next = this.queue.shift();
+    if (next) next();
+  }
+}
+
+const genieSemaphore = new Semaphore(MAX_GENIE_CONCURRENT);
+
+// ---------------------------------------------------------------------------
+// Cache
+// ---------------------------------------------------------------------------
 
 interface CacheEntry {
   response: ChatCompletionResponse;
@@ -51,32 +98,89 @@ function evictExpired(): void {
   }
 }
 
-function isRetryableError(error: unknown): boolean {
+// ---------------------------------------------------------------------------
+// Error classification
+// ---------------------------------------------------------------------------
+
+function isRateLimitError(error: unknown): boolean {
   if (error instanceof ModelServingError) {
-    return error.statusCode === 429 || error.statusCode >= 500;
+    return error.statusCode === 429;
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes("(429)") || msg.includes("REQUEST_LIMIT_EXCEEDED");
+}
+
+function isRetryableError(error: unknown): boolean {
+  if (isRateLimitError(error)) return true;
+  if (error instanceof ModelServingError) {
+    return error.statusCode >= 500;
   }
   const msg = error instanceof Error ? error.message : String(error);
   return msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") || msg.includes("fetch failed");
 }
 
+function extractRetryAfterMs(error: Error): number | null {
+  const match = error.message.match(/retry[- ]?after[:\s]*(\d+)/i);
+  if (match) return parseInt(match[1], 10) * 1000;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Retry wrapper
+// ---------------------------------------------------------------------------
+
 async function chatCompletionWithRetry(
   options: ChatCompletionOptions,
 ): Promise<ChatCompletionResponse> {
   let lastError: Error | null = null;
+  let rateLimitHits = 0;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  const maxAttempts = MAX_429_RETRIES + 1; // upper bound; per-error-type caps checked below
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       if (attempt > 0) {
-        const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-        logger.info("LLM retry", { attempt, maxRetries: MAX_RETRIES, backoffMs, endpoint: options.endpoint });
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        if (isRateLimitError(lastError)) {
+          const retryAfterMs = (lastError && extractRetryAfterMs(lastError)) ?? DEFAULT_429_BACKOFF_MS;
+          logger.warn("LLM rate-limited (429), backing off", {
+            attempt,
+            retryAfterMs,
+            endpoint: options.endpoint,
+          });
+          await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+        } else {
+          const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+          logger.info("LLM retry", { attempt, backoffMs, endpoint: options.endpoint });
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        }
       }
-      return await chatCompletion(options);
+
+      await genieSemaphore.acquire();
+      try {
+        return await chatCompletion(options);
+      } finally {
+        genieSemaphore.release();
+      }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      if (!isRetryableError(error) || attempt === MAX_RETRIES) {
+
+      if (isRateLimitError(error)) {
+        rateLimitHits++;
+        if (rateLimitHits > MAX_429_RETRIES) {
+          throw lastError;
+        }
+        logger.warn("LLM call failed (will retry)", {
+          attempt: attempt + 1,
+          endpoint: options.endpoint,
+          error: lastError.message,
+        });
+        continue;
+      }
+
+      if (!isRetryableError(error) || attempt >= MAX_RETRIES) {
         throw lastError;
       }
+
       logger.warn("LLM call failed (will retry)", {
         attempt: attempt + 1,
         endpoint: options.endpoint,

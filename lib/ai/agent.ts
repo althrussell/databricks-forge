@@ -104,11 +104,15 @@ export type { TokenUsage } from "@/lib/dbx/model-serving";
 // Global concurrency semaphore
 // ---------------------------------------------------------------------------
 
-const MAX_CONCURRENT_LLM_CALLS = 4;
+const MAX_CONCURRENT_LLM_CALLS = Math.max(
+  1,
+  parseInt(process.env.LLM_MAX_CONCURRENT ?? "4", 10) || 4,
+);
 
 /**
  * Simple async semaphore to cap total in-flight LLM calls across all
  * pipeline steps. Prevents 429 rate-limit storms on customer workspaces.
+ * Override with LLM_MAX_CONCURRENT env var (default: 4).
  */
 class Semaphore {
   private current = 0;
@@ -454,8 +458,8 @@ async function executeAIQueryOnce(
  * for each content delta. Useful for long-running generations (e.g. SQL)
  * where incremental progress is valuable.
  *
- * Does NOT retry -- streaming calls are typically for single attempts.
- * The caller should handle failures and fall back to non-streaming if needed.
+ * Retries on 429 rate-limit errors with a 60s backoff (up to 2 retries).
+ * Other errors are not retried since streaming calls are expensive to restart.
  */
 export async function executeAIQueryStream(
   options: AIQueryOptions,
@@ -470,58 +474,115 @@ export async function executeAIQueryStream(
   assertWithinBudget(options.promptKey, prompt, MAX_PROMPT_TOKENS);
 
   const messages: ChatMessage[] = [];
-  if (options.systemMessage) {
-    messages.push({ role: "system", content: options.systemMessage });
+  const systemMsg = options.systemMessage ?? PROMPT_SYSTEM_MESSAGES[options.promptKey];
+  if (systemMsg) {
+    messages.push({ role: "system", content: systemMsg });
   }
   messages.push({ role: "user", content: prompt });
 
-  const startTime = Date.now();
-
-  logger.info("FMAPI streaming executing", {
-    promptKey: options.promptKey,
-    promptVersion,
-    model: options.modelEndpoint,
-    promptChars: prompt.length,
+  const streamOpts = {
+    endpoint: options.modelEndpoint,
+    messages,
     temperature,
-  });
+    maxTokens,
+    responseFormat: options.responseFormat,
+  };
 
-  await llmSemaphore.acquire();
-  const response = await chatCompletionStream(
-    {
-      endpoint: options.modelEndpoint,
-      messages,
+  const maxStreamRetries = 2;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxStreamRetries; attempt++) {
+    const startTime = Date.now();
+
+    if (attempt > 0 && lastError) {
+      if (!isRateLimitError(lastError)) break;
+      const retryAfterMs = extractRetryAfterMs(lastError) ?? 60_000;
+      logger.warn("FMAPI streaming rate-limited (429), backing off", {
+        promptKey: options.promptKey,
+        attempt,
+        retryAfterMs,
+      });
+      await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+    }
+
+    logger.info("FMAPI streaming executing", {
+      promptKey: options.promptKey,
+      promptVersion,
+      model: options.modelEndpoint,
+      promptChars: prompt.length,
       temperature,
-      maxTokens,
-      responseFormat: options.responseFormat,
-    },
-    onChunk
-  ).finally(() => llmSemaphore.release());
+      ...(attempt > 0 && { attempt }),
+    });
 
-  const rawResponse = response.content;
-  const durationMs = Date.now() - startTime;
+    try {
+      await llmSemaphore.acquire();
+      const response = await chatCompletionStream(streamOpts, onChunk)
+        .finally(() => llmSemaphore.release());
 
-  if (!rawResponse) {
-    throw new Error(`FMAPI streaming returned empty response for ${options.promptKey}`);
+      const rawResponse = response.content;
+      const durationMs = Date.now() - startTime;
+
+      if (!rawResponse) {
+        throw new Error(`FMAPI streaming returned empty response for ${options.promptKey}`);
+      }
+
+      const honestyScore = extractHonestyScore(rawResponse);
+
+      logger.info("FMAPI streaming response complete", {
+        promptKey: options.promptKey,
+        promptVersion,
+        model: response.model || options.modelEndpoint,
+        responseChars: rawResponse.length,
+        durationMs,
+        finishReason: response.finishReason,
+        ...(response.usage && {
+          promptTokens: response.usage.promptTokens,
+          completionTokens: response.usage.completionTokens,
+          totalTokens: response.usage.totalTokens,
+        }),
+      });
+
+      if (options.runId) {
+        insertPromptLog({
+          logId: randomUUID(),
+          runId: options.runId,
+          step: options.step ?? options.promptKey,
+          promptKey: options.promptKey,
+          promptVersion,
+          model: options.modelEndpoint,
+          temperature,
+          renderedPrompt: prompt,
+          rawResponse,
+          honestyScore,
+          durationMs,
+          tokenUsage: response.usage,
+          success: true,
+          errorMessage: null,
+        });
+      }
+
+      return {
+        rawResponse,
+        honestyScore,
+        promptVersion,
+        durationMs,
+        tokenUsage: response.usage,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      logger.warn("FMAPI streaming attempt failed", {
+        promptKey: options.promptKey,
+        attempt: attempt + 1,
+        error: lastError.message,
+      });
+
+      if (!isRateLimitError(lastError)) {
+        break;
+      }
+    }
   }
 
-  const honestyScore = extractHonestyScore(rawResponse);
-
-  logger.info("FMAPI streaming response complete", {
-    promptKey: options.promptKey,
-    promptVersion,
-    model: response.model || options.modelEndpoint,
-    responseChars: rawResponse.length,
-    durationMs,
-    finishReason: response.finishReason,
-    ...(response.usage && {
-      promptTokens: response.usage.promptTokens,
-      completionTokens: response.usage.completionTokens,
-      totalTokens: response.usage.totalTokens,
-    }),
-  });
-
-  // Log to prompt audit trail
-  if (options.runId) {
+  if (options.runId && lastError) {
     insertPromptLog({
       logId: randomUUID(),
       runId: options.runId,
@@ -531,22 +592,16 @@ export async function executeAIQueryStream(
       model: options.modelEndpoint,
       temperature,
       renderedPrompt: prompt,
-      rawResponse,
-      honestyScore,
-      durationMs,
-      tokenUsage: response.usage,
-      success: true,
-      errorMessage: null,
+      rawResponse: null,
+      honestyScore: null,
+      durationMs: null,
+      tokenUsage: null,
+      success: false,
+      errorMessage: lastError.message,
     });
   }
 
-  return {
-    rawResponse,
-    honestyScore,
-    promptVersion,
-    durationMs,
-    tokenUsage: response.usage,
-  };
+  throw lastError ?? new Error(`FMAPI streaming call failed for ${options.promptKey}`);
 }
 
 // ---------------------------------------------------------------------------

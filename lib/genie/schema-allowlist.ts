@@ -61,8 +61,12 @@ export function getColumnType(allowlist: SchemaAllowlist, tableFqn: string, colu
 }
 
 /**
- * Extract table.column references from a SQL string and validate each against
- * the allowlist. Returns identifiers that are NOT in the allowlist.
+ * Extract table and column references from a SQL string and validate each
+ * against the allowlist. Returns identifiers that are NOT in the allowlist.
+ *
+ * Checks both:
+ * - 3-part FQNs (`catalog.schema.table`) for invalid table references
+ * - 4-part FQNs (`catalog.schema.table.column`) for invalid column references
  *
  * Excludes FQNs that are the target of CREATE statements (FUNCTION, VIEW, TABLE)
  * since those are being defined, not referenced.
@@ -82,9 +86,24 @@ export function findInvalidIdentifiers(allowlist: SchemaAllowlist, sql: string):
     }
   }
 
+  // Match four-part FQN column refs: catalog.schema.table.column
+  // Only flag when the table IS valid but the column is NOT.
+  const colFqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = colFqnRegex.exec(sql)) !== null) {
+    const tableFqn = match[1];
+    const column = match[2];
+    if (
+      !createTargets.has(tableFqn.toLowerCase()) &&
+      isValidTable(allowlist, tableFqn) &&
+      !isValidColumn(allowlist, tableFqn, column)
+    ) {
+      invalid.push(`${tableFqn}.${column}`);
+    }
+  }
+
   // Match three-part FQNs: catalog.schema.table
   const fqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\b/g;
-  let match: RegExpExecArray | null;
   while ((match = fqnRegex.exec(sql)) !== null) {
     const fqn = match[1];
     if (
