@@ -6,7 +6,7 @@
  * metadata extraction queries.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 
 /**
@@ -15,21 +15,22 @@ import type { MetadataSnapshot } from "@/lib/domain/types";
 export async function saveMetadataSnapshot(
   snapshot: MetadataSnapshot
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeMetadataCache.upsert({
-    where: { cacheKey: snapshot.cacheKey },
-    create: {
-      cacheKey: snapshot.cacheKey,
-      ucPath: snapshot.ucPath,
-      metadataJson: JSON.stringify(snapshot),
-      tableCount: snapshot.tableCount,
-      columnCount: snapshot.columnCount,
-    },
-    update: {
-      metadataJson: JSON.stringify(snapshot),
-      tableCount: snapshot.tableCount,
-      columnCount: snapshot.columnCount,
-    },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeMetadataCache.upsert({
+      where: { cacheKey: snapshot.cacheKey },
+      create: {
+        cacheKey: snapshot.cacheKey,
+        ucPath: snapshot.ucPath,
+        metadataJson: JSON.stringify(snapshot),
+        tableCount: snapshot.tableCount,
+        columnCount: snapshot.columnCount,
+      },
+      update: {
+        metadataJson: JSON.stringify(snapshot),
+        tableCount: snapshot.tableCount,
+        columnCount: snapshot.columnCount,
+      },
+    });
   });
 }
 
@@ -40,26 +41,26 @@ export async function saveMetadataSnapshot(
 export async function loadMetadataSnapshot(
   cacheKey: string
 ): Promise<MetadataSnapshot | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeMetadataCache.findUnique({
-    where: { cacheKey },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeMetadataCache.findUnique({
+      where: { cacheKey },
+    });
+
+    if (!row?.metadataJson) return null;
+
+    try {
+      const snapshot = JSON.parse(row.metadataJson) as MetadataSnapshot;
+      if (!snapshot.metricViews) {
+        snapshot.metricViews = [];
+      }
+      if (!snapshot.lineageDiscoveredFqns) {
+        snapshot.lineageDiscoveredFqns = [];
+      }
+      return snapshot;
+    } catch {
+      return null;
+    }
   });
-
-  if (!row?.metadataJson) return null;
-
-  try {
-    const snapshot = JSON.parse(row.metadataJson) as MetadataSnapshot;
-    // Ensure backward compatibility for snapshots that predate metricViews
-    if (!snapshot.metricViews) {
-      snapshot.metricViews = [];
-    }
-    if (!snapshot.lineageDiscoveredFqns) {
-      snapshot.lineageDiscoveredFqns = [];
-    }
-    return snapshot;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -68,12 +69,14 @@ export async function loadMetadataSnapshot(
 export async function loadMetadataForRun(
   runId: string
 ): Promise<MetadataSnapshot | null> {
-  const prisma = await getPrisma();
-  const run = await prisma.forgeRun.findUnique({
-    where: { runId },
-    select: { metadataCacheKey: true },
+  const cacheKey = await withPrisma(async (prisma) => {
+    const run = await prisma.forgeRun.findUnique({
+      where: { runId },
+      select: { metadataCacheKey: true },
+    });
+    return run?.metadataCacheKey ?? null;
   });
 
-  if (!run?.metadataCacheKey) return null;
-  return loadMetadataSnapshot(run.metadataCacheKey);
+  if (!cacheKey) return null;
+  return loadMetadataSnapshot(cacheKey);
 }

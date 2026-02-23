@@ -5,7 +5,7 @@
  * from environment scan runs.
  */
 
-import { getPrisma, withPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type {
   EnvironmentScan,
@@ -221,15 +221,16 @@ export async function saveEnvironmentScan(
  * Get a full environment scan with all related data.
  */
 export async function getEnvironmentScan(scanId: string) {
-  const prisma = await getPrisma();
-  return prisma.forgeEnvironmentScan.findUnique({
-    where: { scanId },
-    include: {
-      details: true,
-      histories: true,
-      lineage: true,
-      insights: true,
-    },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeEnvironmentScan.findUnique({
+      where: { scanId },
+      include: {
+        details: true,
+        histories: true,
+        lineage: true,
+        insights: true,
+      },
+    });
   });
 }
 
@@ -237,16 +238,17 @@ export async function getEnvironmentScan(scanId: string) {
  * Get environment scan linked to a pipeline run.
  */
 export async function getEnvironmentScanByRunId(runId: string) {
-  const prisma = await getPrisma();
-  return prisma.forgeEnvironmentScan.findFirst({
-    where: { runId },
-    include: {
-      details: true,
-      histories: true,
-      lineage: true,
-      insights: true,
-    },
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeEnvironmentScan.findFirst({
+      where: { runId },
+      include: {
+        details: true,
+        histories: true,
+        lineage: true,
+        insights: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
   });
 }
 
@@ -254,11 +256,12 @@ export async function getEnvironmentScanByRunId(runId: string) {
  * List recent environment scans (summary only, no related data).
  */
 export async function listEnvironmentScans(limit = 20, offset = 0) {
-  const prisma = await getPrisma();
-  return prisma.forgeEnvironmentScan.findMany({
-    take: limit,
-    skip: offset,
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeEnvironmentScan.findMany({
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: "desc" },
+    });
   });
 }
 
@@ -299,9 +302,8 @@ export interface AggregateEstateView {
  * recent scan (by createdAt). Same for histories, lineage edges, and insights.
  */
 export async function getAggregateEstateView(): Promise<AggregateEstateView> {
-  const prisma = await getPrisma();
+  return withPrisma(async (prisma) => {
 
-  // Fetch all scans ordered by newest first
   const scans = await prisma.forgeEnvironmentScan.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -457,6 +459,7 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
       coverageByScope,
     },
   };
+  });
 }
 
 /**
@@ -466,12 +469,13 @@ export async function getInsightsByScanId(
   scanId: string,
   insightType?: string
 ) {
-  const prisma = await getPrisma();
-  return prisma.forgeTableInsight.findMany({
-    where: {
-      scanId,
-      ...(insightType ? { insightType } : {}),
-    },
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    return prisma.forgeTableInsight.findMany({
+      where: {
+        scanId,
+        ...(insightType ? { insightType } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
   });
 }

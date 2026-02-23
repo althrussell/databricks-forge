@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 
@@ -29,91 +29,95 @@ export async function PATCH(
       return NextResponse.json({ error: "Missing type or id" }, { status: 400 });
     }
 
-    const prisma = await getPrisma();
-    const rec = await prisma.forgeGenieRecommendation.findFirst({
-      where: { runId, domain: decodedDomain },
+    const result = await withPrisma(async (prisma) => {
+      const rec = await prisma.forgeGenieRecommendation.findFirst({
+        where: { runId, domain: decodedDomain },
+      });
+
+      if (!rec) {
+        return { error: `No recommendation found for domain "${decodedDomain}"`, status: 404 } as const;
+      }
+
+      let space: Record<string, unknown>;
+      try {
+        space = JSON.parse(rec.serializedSpace);
+      } catch {
+        return { error: "Invalid serialized space", status: 500 } as const;
+      }
+
+      const instructions = space.instructions as Record<string, unknown> | undefined;
+      const config = space.config as Record<string, unknown> | undefined;
+      const snippets = (instructions?.sql_snippets ?? {}) as Record<string, unknown[]>;
+
+      let modified = false;
+
+      switch (body.type) {
+        case "update_measure":
+          modified = updateInArray(snippets.measures, body.id, {
+            alias: body.alias as string | undefined,
+            sql: body.sql as string[] | undefined,
+          });
+          break;
+        case "update_filter":
+          modified = updateInArray(snippets.filters, body.id, {
+            display_name: body.display_name as string | undefined,
+            sql: body.sql as string[] | undefined,
+          });
+          break;
+        case "update_expression":
+          modified = updateInArray(snippets.expressions, body.id, {
+            alias: body.alias as string | undefined,
+            sql: body.sql as string[] | undefined,
+          });
+          break;
+        case "update_instruction":
+          modified = updateInArray(
+            (instructions?.text_instructions ?? []) as unknown[],
+            body.id,
+            { content: body.content as string[] | undefined }
+          );
+          break;
+        case "update_question":
+          modified = updateInArray(
+            ((config?.sample_questions ?? []) as unknown[]),
+            body.id,
+            { question: body.question as string[] | undefined }
+          );
+          break;
+        case "remove_measure":
+          modified = removeFromArray(snippets, "measures", body.id);
+          break;
+        case "remove_filter":
+          modified = removeFromArray(snippets, "filters", body.id);
+          break;
+        case "remove_expression":
+          modified = removeFromArray(snippets, "expressions", body.id);
+          break;
+        case "remove_instruction":
+          modified = removeFromObject(instructions, "text_instructions", body.id);
+          break;
+        case "remove_question":
+          modified = removeFromObject(config, "sample_questions", body.id);
+          break;
+        default:
+          return { error: `Unknown edit type: ${body.type}`, status: 400 } as const;
+      }
+
+      if (!modified) {
+        return { error: "Element not found", status: 404 } as const;
+      }
+
+      await prisma.forgeGenieRecommendation.update({
+        where: { id: rec.id },
+        data: { serializedSpace: JSON.stringify(space) },
+      });
+
+      return null;
     });
 
-    if (!rec) {
-      return NextResponse.json(
-        { error: `No recommendation found for domain "${decodedDomain}"` },
-        { status: 404 }
-      );
+    if (result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
-
-    let space: Record<string, unknown>;
-    try {
-      space = JSON.parse(rec.serializedSpace);
-    } catch {
-      return NextResponse.json({ error: "Invalid serialized space" }, { status: 500 });
-    }
-
-    const instructions = space.instructions as Record<string, unknown> | undefined;
-    const config = space.config as Record<string, unknown> | undefined;
-    const snippets = (instructions?.sql_snippets ?? {}) as Record<string, unknown[]>;
-
-    let modified = false;
-
-    switch (body.type) {
-      case "update_measure":
-        modified = updateInArray(snippets.measures, body.id, {
-          alias: body.alias as string | undefined,
-          sql: body.sql as string[] | undefined,
-        });
-        break;
-      case "update_filter":
-        modified = updateInArray(snippets.filters, body.id, {
-          display_name: body.display_name as string | undefined,
-          sql: body.sql as string[] | undefined,
-        });
-        break;
-      case "update_expression":
-        modified = updateInArray(snippets.expressions, body.id, {
-          alias: body.alias as string | undefined,
-          sql: body.sql as string[] | undefined,
-        });
-        break;
-      case "update_instruction":
-        modified = updateInArray(
-          (instructions?.text_instructions ?? []) as unknown[],
-          body.id,
-          { content: body.content as string[] | undefined }
-        );
-        break;
-      case "update_question":
-        modified = updateInArray(
-          ((config?.sample_questions ?? []) as unknown[]),
-          body.id,
-          { question: body.question as string[] | undefined }
-        );
-        break;
-      case "remove_measure":
-        modified = removeFromArray(snippets, "measures", body.id);
-        break;
-      case "remove_filter":
-        modified = removeFromArray(snippets, "filters", body.id);
-        break;
-      case "remove_expression":
-        modified = removeFromArray(snippets, "expressions", body.id);
-        break;
-      case "remove_instruction":
-        modified = removeFromObject(instructions, "text_instructions", body.id);
-        break;
-      case "remove_question":
-        modified = removeFromObject(config, "sample_questions", body.id);
-        break;
-      default:
-        return NextResponse.json({ error: `Unknown edit type: ${body.type}` }, { status: 400 });
-    }
-
-    if (!modified) {
-      return NextResponse.json({ error: "Element not found" }, { status: 404 });
-    }
-
-    await prisma.forgeGenieRecommendation.update({
-      where: { id: rec.id },
-      data: { serializedSpace: JSON.stringify(space) },
-    });
 
     logger.info("Genie space inline edit applied", {
       runId,

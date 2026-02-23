@@ -12,7 +12,7 @@ import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { generateGapReportExcel } from "@/lib/export/gap-report-excel";
-import { computeIndustryCoverage } from "@/components/pipeline/run-detail/industry-coverage-card";
+import { computeIndustryCoverage } from "@/lib/domain/industry-coverage";
 import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
 
 export async function GET(

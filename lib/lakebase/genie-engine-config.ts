@@ -5,7 +5,7 @@
  * to track which config produced which recommendations.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { GenieEngineConfig } from "@/lib/genie/types";
 import { defaultGenieEngineConfig } from "@/lib/genie/types";
 import { v4 as uuidv4 } from "uuid";
@@ -16,48 +16,49 @@ interface StoredConfig {
 }
 
 export async function getGenieEngineConfig(runId: string): Promise<StoredConfig> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeGenieEngineConfig.findUnique({
-    where: { runId },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeGenieEngineConfig.findUnique({
+      where: { runId },
+    });
+
+    if (!row) {
+      return { config: defaultGenieEngineConfig(), version: 0 };
+    }
+
+    try {
+      const config = JSON.parse(row.config) as GenieEngineConfig;
+      return { config, version: row.version };
+    } catch {
+      return { config: defaultGenieEngineConfig(), version: row.version };
+    }
   });
-
-  if (!row) {
-    return { config: defaultGenieEngineConfig(), version: 0 };
-  }
-
-  try {
-    const config = JSON.parse(row.config) as GenieEngineConfig;
-    return { config, version: row.version };
-  } catch {
-    return { config: defaultGenieEngineConfig(), version: row.version };
-  }
 }
 
 export async function saveGenieEngineConfig(
   runId: string,
   config: GenieEngineConfig
 ): Promise<number> {
-  const prisma = await getPrisma();
+  return withPrisma(async (prisma) => {
+    const existing = await prisma.forgeGenieEngineConfig.findUnique({
+      where: { runId },
+    });
 
-  const existing = await prisma.forgeGenieEngineConfig.findUnique({
-    where: { runId },
+    const newVersion = (existing?.version ?? 0) + 1;
+
+    await prisma.forgeGenieEngineConfig.upsert({
+      where: { runId },
+      create: {
+        id: uuidv4(),
+        runId,
+        version: newVersion,
+        config: JSON.stringify(config),
+      },
+      update: {
+        version: newVersion,
+        config: JSON.stringify(config),
+      },
+    });
+
+    return newVersion;
   });
-
-  const newVersion = (existing?.version ?? 0) + 1;
-
-  await prisma.forgeGenieEngineConfig.upsert({
-    where: { runId },
-    create: {
-      id: uuidv4(),
-      runId,
-      version: newVersion,
-      config: JSON.stringify(config),
-    },
-    update: {
-      version: newVersion,
-      config: JSON.stringify(config),
-    },
-  });
-
-  return newVersion;
 }

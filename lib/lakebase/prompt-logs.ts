@@ -6,7 +6,7 @@
  * and prompt regression detection.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -48,26 +48,27 @@ export interface PromptLogEntry {
  */
 export async function insertPromptLog(entry: PromptLogEntry): Promise<void> {
   try {
-    const prisma = await getPrisma();
-    await prisma.forgePromptLog.create({
-      data: {
-        logId: entry.logId,
-        runId: entry.runId,
-        step: entry.step,
-        promptKey: entry.promptKey,
-        promptVersion: entry.promptVersion,
-        model: entry.model,
-        temperature: entry.temperature,
-        renderedPrompt: entry.renderedPrompt,
-        rawResponse: entry.rawResponse,
-        honestyScore: entry.honestyScore,
-        durationMs: entry.durationMs,
-        promptTokens: entry.tokenUsage?.promptTokens ?? null,
-        completionTokens: entry.tokenUsage?.completionTokens ?? null,
-        totalTokens: entry.tokenUsage?.totalTokens ?? null,
-        success: entry.success,
-        errorMessage: entry.errorMessage,
-      },
+    await withPrisma(async (prisma) => {
+      await prisma.forgePromptLog.create({
+        data: {
+          logId: entry.logId,
+          runId: entry.runId,
+          step: entry.step,
+          promptKey: entry.promptKey,
+          promptVersion: entry.promptVersion,
+          model: entry.model,
+          temperature: entry.temperature,
+          renderedPrompt: entry.renderedPrompt,
+          rawResponse: entry.rawResponse,
+          honestyScore: entry.honestyScore,
+          durationMs: entry.durationMs,
+          promptTokens: entry.tokenUsage?.promptTokens ?? null,
+          completionTokens: entry.tokenUsage?.completionTokens ?? null,
+          totalTokens: entry.tokenUsage?.totalTokens ?? null,
+          success: entry.success,
+          errorMessage: entry.errorMessage,
+        },
+      });
     });
   } catch (error) {
     logger.warn("Failed to insert prompt log entry", {
@@ -86,12 +87,13 @@ export async function insertPromptLog(entry: PromptLogEntry): Promise<void> {
  * Get all prompt log entries for a run, ordered by creation time.
  */
 export async function getPromptLogsByRunId(runId: string): Promise<PromptLogEntry[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgePromptLog.findMany({
-    where: { runId },
-    orderBy: { createdAt: "asc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgePromptLog.findMany({
+      where: { runId },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(dbRowToPromptLog);
   });
-  return rows.map(dbRowToPromptLog);
 }
 
 /**
@@ -101,12 +103,13 @@ export async function getPromptLogsByStep(
   runId: string,
   step: string
 ): Promise<PromptLogEntry[]> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgePromptLog.findMany({
-    where: { runId, step },
-    orderBy: { createdAt: "asc" },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgePromptLog.findMany({
+      where: { runId, step },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(dbRowToPromptLog);
   });
-  return rows.map(dbRowToPromptLog);
 }
 
 /**
@@ -122,38 +125,39 @@ export async function getPromptLogStats(runId: string): Promise<{
   totalCompletionTokens: number;
   totalTokens: number;
 }> {
-  const prisma = await getPrisma();
-  const rows = await prisma.forgePromptLog.findMany({
-    where: { runId },
-    select: {
-      success: true,
-      durationMs: true,
-      promptTokens: true,
-      completionTokens: true,
-      totalTokens: true,
-    },
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgePromptLog.findMany({
+      where: { runId },
+      select: {
+        success: true,
+        durationMs: true,
+        promptTokens: true,
+        completionTokens: true,
+        totalTokens: true,
+      },
+    });
+
+    const totalCalls = rows.length;
+    const successCount = rows.filter((r) => r.success).length;
+    const failureCount = totalCalls - successCount;
+    const durations = rows.map((r) => r.durationMs ?? 0);
+    const totalDurationMs = durations.reduce((a, b) => a + b, 0);
+    const avgDurationMs = totalCalls > 0 ? Math.round(totalDurationMs / totalCalls) : 0;
+    const totalPromptTokens = rows.reduce((a, r) => a + (r.promptTokens ?? 0), 0);
+    const totalCompletionTokens = rows.reduce((a, r) => a + (r.completionTokens ?? 0), 0);
+    const totalTokens = rows.reduce((a, r) => a + (r.totalTokens ?? 0), 0);
+
+    return {
+      totalCalls,
+      successCount,
+      failureCount,
+      totalDurationMs,
+      avgDurationMs,
+      totalPromptTokens,
+      totalCompletionTokens,
+      totalTokens,
+    };
   });
-
-  const totalCalls = rows.length;
-  const successCount = rows.filter((r) => r.success).length;
-  const failureCount = totalCalls - successCount;
-  const durations = rows.map((r) => r.durationMs ?? 0);
-  const totalDurationMs = durations.reduce((a, b) => a + b, 0);
-  const avgDurationMs = totalCalls > 0 ? Math.round(totalDurationMs / totalCalls) : 0;
-  const totalPromptTokens = rows.reduce((a, r) => a + (r.promptTokens ?? 0), 0);
-  const totalCompletionTokens = rows.reduce((a, r) => a + (r.completionTokens ?? 0), 0);
-  const totalTokens = rows.reduce((a, r) => a + (r.totalTokens ?? 0), 0);
-
-  return {
-    totalCalls,
-    successCount,
-    failureCount,
-    totalDurationMs,
-    avgDurationMs,
-    totalPromptTokens,
-    totalCompletionTokens,
-    totalTokens,
-  };
 }
 
 // ---------------------------------------------------------------------------

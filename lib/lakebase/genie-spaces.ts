@@ -5,7 +5,7 @@
  * pipeline runs and domains, so the UI can display status badges.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import type { TrackedGenieSpace, GenieSpaceStatus } from "@/lib/genie/types";
 
 // ---------------------------------------------------------------------------
@@ -42,24 +42,26 @@ function dbRowToTracked(row: {
 export async function listTrackedGenieSpaces(
   runId?: string
 ): Promise<TrackedGenieSpace[]> {
-  const prisma = await getPrisma();
-  const where = runId ? { runId } : {};
-  const rows = await prisma.forgeGenieSpace.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
+  return withPrisma(async (prisma) => {
+    const where = runId ? { runId } : {};
+    const rows = await prisma.forgeGenieSpace.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(dbRowToTracked);
   });
-  return rows.map(dbRowToTracked);
 }
 
 /** Get a tracked space by its Databricks space ID. */
 export async function getTrackedBySpaceId(
   spaceId: string
 ): Promise<TrackedGenieSpace | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeGenieSpace.findFirst({
-    where: { spaceId },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeGenieSpace.findFirst({
+      where: { spaceId },
+    });
+    return row ? dbRowToTracked(row) : null;
   });
-  return row ? dbRowToTracked(row) : null;
 }
 
 /** Get a tracked space by run + domain. */
@@ -67,11 +69,12 @@ export async function getTrackedByRunDomain(
   runId: string,
   domain: string
 ): Promise<TrackedGenieSpace | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeGenieSpace.findUnique({
-    where: { runId_domain: { runId, domain } },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeGenieSpace.findUnique({
+      where: { runId_domain: { runId, domain } },
+    });
+    return row ? dbRowToTracked(row) : null;
   });
-  return row ? dbRowToTracked(row) : null;
 }
 
 /** Record a newly created Genie space. */
@@ -82,13 +85,14 @@ export async function trackGenieSpaceCreated(
   domain: string,
   title: string
 ): Promise<TrackedGenieSpace> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgeGenieSpace.upsert({
-    where: { runId_domain: { runId, domain } },
-    create: { id, spaceId, runId, domain, title, status: "created" },
-    update: { spaceId, title, status: "created" },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeGenieSpace.upsert({
+      where: { runId_domain: { runId, domain } },
+      create: { id, spaceId, runId, domain, title, status: "created" },
+      update: { spaceId, title, status: "created" },
+    });
+    return dbRowToTracked(row);
   });
-  return dbRowToTracked(row);
 }
 
 /** Mark a tracked space as updated. */
@@ -96,12 +100,13 @@ export async function trackGenieSpaceUpdated(
   spaceId: string,
   title?: string
 ): Promise<void> {
-  const prisma = await getPrisma();
-  const data: Record<string, unknown> = { status: "updated" };
-  if (title) data.title = title;
-  await prisma.forgeGenieSpace.updateMany({
-    where: { spaceId },
-    data,
+  await withPrisma(async (prisma) => {
+    const data: Record<string, unknown> = { status: "updated" };
+    if (title) data.title = title;
+    await prisma.forgeGenieSpace.updateMany({
+      where: { spaceId },
+      data,
+    });
   });
 }
 
@@ -109,9 +114,10 @@ export async function trackGenieSpaceUpdated(
 export async function trackGenieSpaceTrashed(
   spaceId: string
 ): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.forgeGenieSpace.updateMany({
-    where: { spaceId },
-    data: { status: "trashed" },
+  await withPrisma(async (prisma) => {
+    await prisma.forgeGenieSpace.updateMany({
+      where: { spaceId },
+      data: { status: "trashed" },
+    });
   });
 }

@@ -6,7 +6,7 @@
  * retrieval and cross-run comparison.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { PROMPT_TEMPLATES, PROMPT_VERSIONS, type PromptKey } from "@/lib/ai/templates";
 
@@ -17,30 +17,31 @@ import { PROMPT_TEMPLATES, PROMPT_VERSIONS, type PromptKey } from "@/lib/ai/temp
  */
 export async function archiveCurrentPromptTemplates(): Promise<void> {
   try {
-    const prisma = await getPrisma();
-    const entries = Object.entries(PROMPT_TEMPLATES) as [PromptKey, string][];
+    await withPrisma(async (prisma) => {
+      const entries = Object.entries(PROMPT_TEMPLATES) as [PromptKey, string][];
 
-    for (const [key, text] of entries) {
-      const hash = PROMPT_VERSIONS[key];
-      try {
-        await prisma.forgePromptTemplate.upsert({
-          where: { versionHash: hash },
-          create: {
-            versionHash: hash,
+      for (const [key, text] of entries) {
+        const hash = PROMPT_VERSIONS[key];
+        try {
+          await prisma.forgePromptTemplate.upsert({
+            where: { versionHash: hash },
+            create: {
+              versionHash: hash,
+              promptKey: key,
+              templateText: text,
+              charCount: text.length,
+            },
+            update: {},
+          });
+        } catch (err) {
+          logger.warn("Failed to archive prompt template", {
             promptKey: key,
-            templateText: text,
-            charCount: text.length,
-          },
-          update: {},
-        });
-      } catch (err) {
-        logger.warn("Failed to archive prompt template", {
-          promptKey: key,
-          versionHash: hash,
-          error: err instanceof Error ? err.message : String(err),
-        });
+            versionHash: hash,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
-    }
+    });
   } catch (error) {
     logger.warn("Failed to archive prompt templates", {
       error: error instanceof Error ? error.message : String(error),
@@ -54,16 +55,17 @@ export async function archiveCurrentPromptTemplates(): Promise<void> {
 export async function getPromptTemplate(
   versionHash: string
 ): Promise<{ promptKey: string; templateText: string; charCount: number } | null> {
-  const prisma = await getPrisma();
-  const row = await prisma.forgePromptTemplate.findUnique({
-    where: { versionHash },
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgePromptTemplate.findUnique({
+      where: { versionHash },
+    });
+    if (!row) return null;
+    return {
+      promptKey: row.promptKey,
+      templateText: row.templateText,
+      charCount: row.charCount,
+    };
   });
-  if (!row) return null;
-  return {
-    promptKey: row.promptKey,
-    templateText: row.templateText,
-    charCount: row.charCount,
-  };
 }
 
 /**
@@ -73,16 +75,17 @@ export async function getPromptTemplatesBatch(
   versionHashes: string[]
 ): Promise<Map<string, { promptKey: string; templateText: string }>> {
   if (versionHashes.length === 0) return new Map();
-  const prisma = await getPrisma();
-  const rows = await prisma.forgePromptTemplate.findMany({
-    where: { versionHash: { in: versionHashes } },
-  });
-  const map = new Map<string, { promptKey: string; templateText: string }>();
-  for (const row of rows) {
-    map.set(row.versionHash, {
-      promptKey: row.promptKey,
-      templateText: row.templateText,
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgePromptTemplate.findMany({
+      where: { versionHash: { in: versionHashes } },
     });
-  }
-  return map;
+    const map = new Map<string, { promptKey: string; templateText: string }>();
+    for (const row of rows) {
+      map.set(row.versionHash, {
+        promptKey: row.promptKey,
+        templateText: row.templateText,
+      });
+    }
+    return map;
+  });
 }

@@ -6,15 +6,16 @@
  * The four standalone tables are wiped explicitly.
  */
 
-import { getPrisma } from "@/lib/prisma";
+import { withPrisma } from "@/lib/prisma";
 
 export async function deleteAllData(): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.$transaction([
-    prisma.forgeRun.deleteMany(),
-    prisma.forgeMetadataCache.deleteMany(),
-    prisma.forgePromptTemplate.deleteMany(),
-    prisma.forgeActivityLog.deleteMany(),
-    prisma.forgeOutcomeMap.deleteMany(),
-  ]);
+  await withPrisma(async (prisma) => {
+    await prisma.$transaction([
+      prisma.forgeRun.deleteMany(),
+      prisma.forgeMetadataCache.deleteMany(),
+      prisma.forgePromptTemplate.deleteMany(),
+      prisma.forgeActivityLog.deleteMany(),
+      prisma.forgeOutcomeMap.deleteMany(),
+    ]);
+  });
 }
