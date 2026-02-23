@@ -6,7 +6,8 @@
  * All SQL is validated against the schema allowlist.
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
@@ -17,9 +18,11 @@ import type {
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { mapWithConcurrency } from "../concurrency";
 
 const TEMPERATURE = 0.2;
-const BATCH_SIZE = 2;
+const BATCH_SIZE = 3;
+const BATCH_CONCURRENCY = 3;
 
 export interface JoinSpecInput {
   leftTable: string;
@@ -72,23 +75,29 @@ export async function runTrustedAssetAuthoring(
     batchSize: BATCH_SIZE,
   });
 
+  const batchResults = await mapWithConcurrency(
+    batches.map((batch) => async () => {
+      try {
+        return await processTrustedAssetBatch(
+          batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
+        );
+      } catch (err) {
+        logger.warn("Trusted asset batch failed, continuing with remaining batches", {
+          batchSize: batch.length,
+          batchUseCases: batch.map((uc) => uc.name),
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return { queries: [] as TrustedAssetQuery[], functions: [] as TrustedAssetFunction[] };
+      }
+    }),
+    BATCH_CONCURRENCY,
+  );
+
   const allQueries: TrustedAssetQuery[] = [];
   const allFunctions: TrustedAssetFunction[] = [];
-
-  for (const batch of batches) {
-    try {
-      const result = await processTrustedAssetBatch(
-        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
-      );
-      allQueries.push(...result.queries);
-      allFunctions.push(...result.functions);
-    } catch (err) {
-      logger.warn("Trusted asset batch failed, continuing with remaining batches", {
-        batchSize: batch.length,
-        batchUseCases: batch.map((uc) => uc.name),
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+  for (const result of batchResults) {
+    allQueries.push(...result.queries);
+    allFunctions.push(...result.functions);
   }
 
   return { queries: allQueries, functions: allFunctions };
@@ -186,7 +195,7 @@ Create parameterized queries and UDF functions from these examples.`;
     { role: "user", content: userMessage },
   ];
 
-  const result = await chatCompletion({
+  const result = await cachedChatCompletion({
     endpoint,
     messages,
     temperature: TEMPERATURE,

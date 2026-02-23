@@ -79,7 +79,6 @@ export function getConfig(): DatabricksConfig {
 }
 
 const DEFAULT_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
-
 /**
  * Returns the Model Serving endpoint name.
  *
@@ -92,6 +91,23 @@ const DEFAULT_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
  */
 export function getServingEndpoint(): string {
   return process.env.DATABRICKS_SERVING_ENDPOINT || DEFAULT_SERVING_ENDPOINT;
+}
+
+/**
+ * Returns the fast Model Serving endpoint name for low-complexity passes.
+ *
+ * Used across all pipelines for passes that need structured output but not
+ * maximum reasoning (classification, metadata enrichment, domain assignment,
+ * deduplication, column intelligence, join inference, instructions).
+ *
+ * Resolution order:
+ *   1. `DATABRICKS_SERVING_ENDPOINT_FAST` env var (set via app resource
+ *      binding `serving-endpoint-fast`, or .env.local for local dev).
+ *   2. Falls back to `getServingEndpoint()` (premium model) -- so if the
+ *      fast resource is not configured, everything uses the primary model.
+ */
+export function getFastServingEndpoint(): string {
+  return process.env.DATABRICKS_SERVING_ENDPOINT_FAST || getServingEndpoint();
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,8 @@
  *   - Full business context / value chain / strategic goals
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import type { BusinessContext } from "@/lib/domain/types";
 import type {
@@ -245,7 +246,7 @@ Write one brief domain-specific instruction for users of this Genie space.`;
     { role: "user", content: userMessage },
   ];
 
-  const result = await chatCompletion({
+  const result = await cachedChatCompletion({
     endpoint,
     messages,
     temperature: TEMPERATURE,

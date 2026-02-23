@@ -14,25 +14,26 @@ benchmarks, and metric view proposals -- all grounded to the physical schema.
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Pipeline Integration](#pipeline-integration)
-3. [Engine Passes (0-6)](#engine-passes)
-4. [Schema Grounding](#schema-grounding)
-5. [Assembler & SerializedSpace v2](#assembler--serializedspace-v2)
-6. [Configuration](#configuration)
-7. [Global Settings vs Per-Run Config](#global-settings-vs-per-run-config)
-8. [Adding Business Context](#adding-business-context)
-9. [Entity Matching & Sample Data](#entity-matching--sample-data)
-10. [Time Periods & Fiscal Year](#time-periods--fiscal-year)
-11. [Trusted Assets](#trusted-assets)
-12. [Metric Views](#metric-views)
-13. [Benchmarks](#benchmarks)
-14. [Conversation API & Testing](#conversation-api--testing)
-15. [Deployment](#deployment)
-16. [Inline Editing](#inline-editing)
-17. [Legacy Fallback](#legacy-fallback)
-18. [Best Practices](#best-practices)
-19. [Troubleshooting](#troubleshooting)
-20. [File Reference](#file-reference)
+2. [Model Routing](#model-routing)
+3. [Pipeline Integration](#pipeline-integration)
+4. [Engine Passes (0-6)](#engine-passes)
+5. [Schema Grounding](#schema-grounding)
+6. [Assembler & SerializedSpace v2](#assembler--serializedspace-v2)
+7. [Configuration](#configuration)
+8. [Global Settings vs Per-Run Config](#global-settings-vs-per-run-config)
+9. [Adding Business Context](#adding-business-context)
+10. [Entity Matching & Sample Data](#entity-matching--sample-data)
+11. [Time Periods & Fiscal Year](#time-periods--fiscal-year)
+12. [Trusted Assets](#trusted-assets)
+13. [Metric Views](#metric-views)
+14. [Benchmarks](#benchmarks)
+15. [Conversation API & Testing](#conversation-api--testing)
+16. [Deployment](#deployment)
+17. [Inline Editing](#inline-editing)
+18. [Legacy Fallback](#legacy-fallback)
+19. [Best Practices](#best-practices)
+20. [Troubleshooting](#troubleshooting)
+21. [File Reference](#file-reference)
 
 ---
 
@@ -75,6 +76,77 @@ benchmarks, and metric view proposals -- all grounded to the physical schema.
 The engine produces **one Genie Space per business domain**. Domains are
 derived from the use cases generated in earlier pipeline steps. Each space
 contains every knowledge store object the Databricks Genie API supports.
+
+---
+
+## Model Routing
+
+All pipelines in Forge AI use a **dual-endpoint strategy** to balance quality
+and speed. SQL-critical and creatively demanding passes run on the premium
+model (Claude Opus) while classification, enrichment, and metadata passes run
+on a faster model (Claude Sonnet) at 3-5x lower latency.
+
+### Endpoint Configuration
+
+| Env Variable | Resource Key | Default | Purpose |
+|---|---|---|---|
+| `DATABRICKS_SERVING_ENDPOINT` | `serving-endpoint` | `databricks-claude-opus-4-6` | Premium model for SQL generation and quality-critical tasks |
+| `DATABRICKS_SERVING_ENDPOINT_FAST` | `serving-endpoint-fast` | Falls back to premium | Fast model for classification and enrichment tasks |
+
+The fast endpoint is **opt-in**: if `serving-endpoint-fast` is not configured
+as an app resource, `getFastServingEndpoint()` returns the premium endpoint and
+all pipelines behave identically to before. Speed optimization is unlocked
+simply by adding the resource binding.
+
+The premium endpoint is set per-run via `run.config.aiModel`. The fast
+endpoint is resolved from the `DATABRICKS_SERVING_ENDPOINT_FAST` env var
+(injected from the `serving-endpoint-fast` app resource binding).
+
+### Pipeline-Wide Routing Summary
+
+| Pipeline | Steps on Fast | Steps on Premium |
+|---|---|---|
+| Discovery | Business context, table filtering, domain clustering, dedup | Use case generation, scoring, calibration, SQL generation |
+| Estate Scan | All 8 intelligence passes | -- |
+| Genie Engine | Column intelligence, join inference, instructions | Semantic expressions, trusted assets, benchmarks, metric views |
+| Dashboard Engine | -- | All (quality-critical) |
+| Outcome Map Parser | All (structural parsing) | -- |
+
+See [PIPELINE.md](PIPELINE.md#model-routing) for the full discovery pipeline
+routing table.
+
+### Pass-to-Model Assignment
+
+| Pass | Model | Rationale |
+|---|---|---|
+| Pass 0 (Table Selection) | None (CPU) | Deterministic grouping |
+| Pass 1 (Column Intelligence) | **Fast** | Structured metadata enrichment |
+| Pass 2 (Semantic Expressions) | **Premium** | Complex SQL generation |
+| Pass 2.5 (Join Inference) | **Fast** | Column name pattern matching |
+| Pass 3 (Trusted Assets) | **Premium** | SQL parameterization must preserve CTE structure |
+| Pass 4 (Instructions) | **Fast** | Short text generation (1-2 sentences) |
+| Pass 5 (Benchmarks) | **Premium** | SQL generation with expected answers |
+| Pass 6 (Metric Views) | **Premium** | YAML + DDL generation |
+
+### Concurrency Architecture
+
+Domains are processed with bounded concurrency (up to 3 in parallel).
+Within each domain, the pass dependency graph is optimized for maximum
+parallelism:
+
+```
+[Pass 1 (fast) || Pass 2 (premium)]
+              |
+         Join Assembly (CPU)
+              |
+[Pass 3 (premium) || Pass 4 (fast) || Pass 5 (premium) || Pass 6 (premium)]
+```
+
+Within-pass batches (column intelligence, trusted assets, benchmarks) also
+run with bounded concurrency (up to 3 batches in parallel).
+
+All LLM calls are cached in-memory (10-minute TTL) and retried on 429/5xx
+errors with exponential backoff (2 retries, 1s/2s backoff).
 
 ---
 
@@ -1120,6 +1192,8 @@ LLM refinement or add custom SQL expressions.
 | `lib/genie/time-periods.ts` | Auto date filter/dimension generation |
 | `lib/genie/entity-extraction.ts` | Entity matching candidate identification |
 | `lib/genie/engine-status.ts` | In-memory async job status tracker |
+| `lib/genie/llm-cache.ts` | In-memory LLM response cache + retry logic |
+| `lib/genie/concurrency.ts` | Bounded-concurrency execution utility |
 | `lib/genie/recommend.ts` | Legacy deterministic fallback generator |
 | `lib/genie/benchmark-runner.ts` | Benchmark execution via Conversation API |
 | `lib/ai/sql-rules.ts` | Shared Databricks SQL quality rules (full + compact) |

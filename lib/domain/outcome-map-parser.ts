@@ -7,7 +7,7 @@
  */
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "./industry-outcomes";
 
@@ -34,7 +34,7 @@ export async function parseOutcomeMapWithAI(
   markdown: string,
   aiModel?: string
 ): Promise<ParseResult> {
-  const endpoint = aiModel || getServingEndpoint();
+  const endpoint = aiModel || getFastServingEndpoint();
   // Truncate very large documents to avoid exceeding context windows
   const MAX_CHARS = 80_000;
   const truncated =

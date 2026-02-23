@@ -6,17 +6,20 @@
  * variants, and entity-matching test questions.
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { mapWithConcurrency } from "../concurrency";
 
 const TEMPERATURE = 0.1;
-const BENCHMARKS_PER_BATCH = 3;
-const BATCH_SIZE = 2;
+const BENCHMARKS_PER_BATCH = 4;
+const BATCH_SIZE = 3;
+const BATCH_CONCURRENCY = 3;
 
 interface JoinSpecInput {
   leftTable: string;
@@ -81,21 +84,24 @@ export async function runBenchmarkGeneration(
     benchmarksPerBatch: BENCHMARKS_PER_BATCH,
   });
 
-  const allBenchmarks: BenchmarkInput[] = [];
+  const batchResults = await mapWithConcurrency(
+    batches.map((batch) => async () => {
+      try {
+        return await processBenchmarkBatch(
+          batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
+        );
+      } catch (err) {
+        logger.warn("Benchmark batch failed, continuing with remaining batches", {
+          batchSize: batch.length,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return [] as BenchmarkInput[];
+      }
+    }),
+    BATCH_CONCURRENCY,
+  );
 
-  for (const batch of batches) {
-    try {
-      const batchResult = await processBenchmarkBatch(
-        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
-      );
-      allBenchmarks.push(...batchResult);
-    } catch (err) {
-      logger.warn("Benchmark batch failed, continuing with remaining batches", {
-        batchSize: batch.length,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  const allBenchmarks: BenchmarkInput[] = batchResults.flat();
 
   const customerQuestions = new Set(customerBenchmarks.map((b) => b.question.toLowerCase()));
   const deduped = dedup(allBenchmarks, (b) => b.question.toLowerCase());
@@ -171,7 +177,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     { role: "user", content: userMessage },
   ];
 
-  const result = await chatCompletion({
+  const result = await cachedChatCompletion({
     endpoint,
     messages,
     temperature: TEMPERATURE,

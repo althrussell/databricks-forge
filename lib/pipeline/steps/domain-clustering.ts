@@ -7,6 +7,7 @@
 
 import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
+import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import {
@@ -32,7 +33,7 @@ export async function runDomainClustering(
   // Step 5a: Assign domains
   if (runId) await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
-    await assignDomains(updatedCases, run.config.businessName, bc, run.config.aiModel, runId);
+    await assignDomains(updatedCases, run.config.businessName, bc, getFastServingEndpoint(), runId);
   } catch (error) {
     logger.error("Domain assignment failed", { error: error instanceof Error ? error.message : String(error) });
     // Fallback: assign all to "General"
@@ -50,7 +51,7 @@ export async function runDomainClustering(
 
     if (runId) await updateRunMessage(runId, `Assigning subdomains for domain: ${domain} (${di + 1}/${domains.length})...`);
     try {
-      await assignSubdomains(domainCases, domain, run.config.businessName, bc, run.config.aiModel, runId);
+      await assignSubdomains(domainCases, domain, run.config.businessName, bc, getFastServingEndpoint(), runId);
     } catch (error) {
       logger.warn("Subdomain assignment failed", { domain, error: error instanceof Error ? error.message : String(error) });
       domainCases.forEach((uc) => {
@@ -71,7 +72,7 @@ export async function runDomainClustering(
     await updateRunMessage(runId, `Merging ${smallDomainCount} small domains...`);
   }
   try {
-    await mergeSmallDomains(updatedCases, run.config.aiModel, runId);
+    await mergeSmallDomains(updatedCases, getFastServingEndpoint(), runId);
   } catch (error) {
     logger.warn("Domain merge failed", { error: error instanceof Error ? error.message : String(error) });
   }

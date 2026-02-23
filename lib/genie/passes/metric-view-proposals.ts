@@ -17,7 +17,8 @@
  * - Post-generation YAML validation against schema allowlist
  */
 
-import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase } from "@/lib/domain/types";
@@ -408,7 +409,7 @@ Create metric view proposals for this domain.`;
   ];
 
   try {
-    const result = await chatCompletion({
+    const result = await cachedChatCompletion({
       endpoint,
       messages,
       temperature: TEMPERATURE,

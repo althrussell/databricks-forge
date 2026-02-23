@@ -31,6 +31,32 @@ The pipeline runs 7 core steps sequentially (plus an optional 8th Genie Engine s
 
 ---
 
+## Model Routing
+
+The discovery pipeline uses a **dual-endpoint strategy** to balance quality and
+speed. Steps that involve creative generation or nuanced judgment run on the
+premium model (via `run.config.aiModel`), while classification and enrichment
+steps run on the fast model (via `getFastServingEndpoint()`).
+
+If the `serving-endpoint-fast` app resource is **not configured**, the fast
+endpoint falls back to the premium endpoint -- all behaviour is unchanged.
+
+| Step | Model | Rationale |
+|---|---|---|
+| 1. Business Context | **Fast** | Structured JSON output (industries, goals, priorities) |
+| 2. Metadata Extraction | None (SQL) | Pure SQL queries against `information_schema` |
+| 3. Table Filtering | **Fast** | Binary classification (business vs technical) |
+| 4. Use Case Generation | **Premium** | Creative generation with schema grounding -- quality-critical |
+| 5. Domain Clustering | **Fast** | Taxonomy assignment (3 sub-passes: domain, subdomain, merge) |
+| 6a. Scoring | **Premium** | Nuanced judgment on multiple scoring dimensions |
+| 6b. Dedup (per-domain) | **Fast** | Binary classification (keep vs remove) |
+| 6c. Dedup (cross-domain) | **Fast** | Binary classification (keep vs remove) |
+| 6d. Calibration | **Premium** | Global score adjustment requires contextual reasoning |
+| 7. SQL Generation | **Premium** | SQL correctness is critical |
+| 8. Genie Engine | Mixed | See [GENIE_ENGINE.md](GENIE_ENGINE.md#model-routing) |
+
+---
+
 ## Step 1: Business Context
 
 **File:** `lib/pipeline/steps/business-context.ts`
