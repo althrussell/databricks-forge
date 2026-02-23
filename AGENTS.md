@@ -88,16 +88,17 @@ recommendations from pipeline results. See `docs/GENIE_ENGINE.md` for full docum
 
 Key modules:
 - `lib/genie/engine.ts` -- orchestrator (table selection + up to 8 LLM passes)
-- `lib/genie/assembler.ts` -- assembles pass outputs into `SerializedSpace` v2 payload
+- `lib/genie/assembler.ts` -- assembles pass outputs into `SerializedSpace` v2 payload (alias-based join SQL, relationship type encoding)
 - `lib/genie/types.ts` -- all Genie types (`GenieEngineConfig`, `SerializedSpace`, etc.)
 - `lib/genie/time-periods.ts` -- auto-generated date filters/dimensions with fiscal year support
 - `lib/genie/entity-extraction.ts` -- sample-data-driven entity matching
-- `lib/genie/schema-allowlist.ts` -- grounded generation (only scraped columns/tables)
+- `lib/genie/schema-allowlist.ts` -- grounded generation (only scraped columns/tables, CREATE DDL exclusion)
 - `lib/genie/passes/` -- individual LLM pass modules (column intelligence, semantic expressions, trusted assets, benchmarks, metric views)
 - `lib/genie/passes/parse-llm-json.ts` -- robust LLM JSON parsing utility
 - `lib/genie/recommend.ts` -- legacy (non-engine) Genie recommendation fallback
 - `lib/genie/engine-status.ts` -- in-memory progress tracker
-- `lib/dbx/genie.ts` -- Databricks Genie REST API client (create/update/trash spaces)
+- `lib/ai/sql-rules.ts` -- shared Databricks SQL quality rules (`DATABRICKS_SQL_RULES`, `DATABRICKS_SQL_RULES_COMPACT`)
+- `lib/dbx/genie.ts` -- Databricks Genie REST API client (create/update/trash spaces, payload sanitization)
 - `lib/lakebase/genie-recommendations.ts` -- persistence for generated recommendations
 - `lib/lakebase/genie-engine-config.ts` -- versioned engine config per run
 - `lib/lakebase/genie-spaces.ts` -- deployed space tracking
@@ -144,6 +145,7 @@ Data model: `ForgeEnvironmentScan`, `ForgeTableDetail`, `ForgeTableHistorySummar
 - **Loading/empty/error states** on every page and async component (rule 00)
 - **Primary CTA per page** must be visually dominant (rule 02, rule 06)
 - **Prompt templates** must include business context, metadata scope, and output format spec
+- **SQL quality rules** -- all SQL-generating prompts must import rules from `lib/ai/sql-rules.ts` (never inline ad-hoc rules)
 - **Privacy** -- only metadata (schemas, table/column names) is read; no row-level data access
 
 ## Testing Expectations

@@ -345,6 +345,7 @@ simulation, geospatial, trend analysis, etc.)
 **Purpose:** Generates production-grade Databricks SQL for a single use case.
 
 **Key features (major upgrade):**
+- **Shared SQL quality rules** — imports `DATABRICKS_SQL_RULES` from `lib/ai/sql-rules.ts`
 - **SELECT DISTINCT first-CTE rule** — mandatory deduplication before analysis
 - **Persona enrichment for ai_query** — every AI persona must include business_name, context, goals, priorities
 - **ai_sys_prompt column** — mandatory last column capturing the exact prompt for auditability
@@ -461,6 +462,33 @@ Used in statistical use case generation prompts:
 | Ranking | CUME_DIST, NTILE, DENSE_RANK, ROW_NUMBER |
 | Time Series | LAG, LEAD, RUNNING_SUM, MOVING_AVG |
 | OLAP | ROLLUP, CUBE, PIVOT |
+
+---
+
+## Shared SQL Quality Rules
+
+**Module:** `lib/ai/sql-rules.ts`
+
+All SQL-generating prompts share a centralised set of Databricks SQL quality
+rules to ensure consistency across pipeline SQL, Genie trusted assets,
+benchmarks, and dashboard queries.
+
+### `DATABRICKS_SQL_RULES` (comprehensive)
+
+Used by prompts that generate complete SQL queries (e.g. `USE_CASE_SQL_GEN_PROMPT`,
+dashboard prompts). Covers:
+
+- **Syntax safety**: No `MEDIAN()` (use `PERCENTILE_APPROX`), no nested
+  window functions in aggregates, `DECIMAL(18,2)` for financials
+- **Query structure**: `ORDER BY ... LIMIT N` for top-N (not `RANK`),
+  `QUALIFY` for per-group dedup, explicit column lists, filter early
+- **Databricks features**: `COLLATE UTF8_LCASE`, pipe syntax, native
+  functions over UDFs
+
+### `DATABRICKS_SQL_RULES_COMPACT` (abbreviated)
+
+Used by Genie engine passes where context budget is tight (trusted assets,
+benchmarks, metric views). Contains the most critical rules only.
 
 ---
 

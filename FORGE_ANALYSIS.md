@@ -579,6 +579,10 @@ The SQL generation prompt includes:
 
 ### SQL generation rules enforced via prompt
 
+All SQL generation imports shared rules from `lib/ai/sql-rules.ts`
+(`DATABRICKS_SQL_RULES`) to ensure consistency across pipeline SQL, Genie
+trusted assets, benchmarks, and dashboard queries.
+
 | Rule | Why |
 | --- | --- |
 | Use only columns that exist in the provided schema | Prevents hallucinated column names |
@@ -587,6 +591,10 @@ The SQL generation prompt includes:
 | Correct JOIN syntax with proper ON clauses | Ensures valid multi-table queries |
 | For AI use cases: use `ai_query()` with proper `modelParameters` | Leverages Databricks Model Serving |
 | Output raw SQL only -- no markdown, no explanation | Clean output for notebook cells |
+| Never use `MEDIAN()` -- use `PERCENTILE_APPROX(col, 0.5)` | Not supported in Databricks SQL |
+| Use `DECIMAL(18,2)` for financial calculations | Avoids floating-point precision errors |
+| Use `ORDER BY ... LIMIT N` for top-N (not RANK) | RANK ties can return more than N rows |
+| Filter early, aggregate late | Better query performance |
 
 ### Output
 

@@ -5,6 +5,44 @@ All notable changes to Databricks Forge AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-22
+
+### Added
+
+- `lib/ai/sql-rules.ts` -- centralised Databricks SQL quality rules (`DATABRICKS_SQL_RULES` and `DATABRICKS_SQL_RULES_COMPACT`) shared across all SQL-generating prompts for consistency.
+- Join spec alias injection and SQL rewriting in `lib/genie/assembler.ts` -- generates backtick-quoted alias-based join conditions (`` `alias`.`column` ``) and handles self-joins with `_2` suffix.
+- Relationship type encoding as SQL comment (`--rt=FROM_RELATIONSHIP_TYPE_...--`) in join spec `sql` array, working around Genie API protobuf limitation.
+- Comprehensive payload sanitisation in `lib/dbx/genie.ts` -- alias injection, join SQL rewriting, relationship type encoding, and `sql_functions` sorting as a universal safety net.
+- Window function validation in `lib/genie/passes/metric-view-proposals.ts` -- detects `OVER()` clauses in measure expressions and marks proposals as `error`.
+- `CREATE FUNCTION/VIEW/TABLE` exclusion in `lib/genie/schema-allowlist.ts` -- FQNs being defined are no longer flagged as unknown references.
+- SQL identifier safety in `lib/queries/metadata.ts` -- `validateIdentifier()` applied to each FQN part in `buildFqnWhereClause`.
+
+### Changed
+
+- **Genie instruction generation** (`lib/genie/passes/instruction-generation.ts`): Rewritten to produce concise behavioural guidance per Databricks best practices. Removed verbose business context, SQL rules, and join instructions from text instructions (these are now handled by structured API fields).
+- **Trusted asset authoring** (`lib/genie/passes/trusted-assets.ts`): Reduced batch size to 2, added SQL truncation at 3000 chars, added LIMIT literal rule for UDFs.
+- **Benchmark generation** (`lib/genie/passes/benchmark-generation.ts`): Reduced batch size to 2, benchmarks per batch to 3, added SQL truncation, capped benchmarks at 10 per space.
+- **Metric view proposals** (`lib/genie/passes/metric-view-proposals.ts`): Added window function and MEDIAN() prohibition rules.
+- **Dashboard prompts** (`lib/dashboard/prompts.ts`): Now imports shared `DATABRICKS_SQL_RULES`.
+- **SQL generation prompt** (`lib/ai/templates.ts`): Now imports shared `DATABRICKS_SQL_RULES`.
+- **Deploy route** (`app/api/runs/[runId]/genie-deploy/route.ts`): Function IDs now use 32-hex UUIDs; sql_functions sorted after patching.
+- **SQL execution** (`lib/dbx/sql.ts`): Added optional chaining for DDL statements where `manifest.schema.columns` may be undefined.
+- Removed `relationship_type` field from `JoinSpec` type in `lib/genie/types.ts`.
+- Removed "Run Benchmark" button from Genie Spaces UI (awaiting Databricks Evaluation API).
+
+### Fixed
+
+- `Cannot find field: relationship_type` -- Genie API protobuf rejects standalone relationship_type field.
+- `Cannot read properties of undefined (reading 'map')` -- DDL statements returning null column manifest.
+- `Invalid id for sql_function.id` -- function IDs now use lowercase 32-hex UUIDs.
+- `INVALID_LIMIT_LIKE_EXPRESSION` -- UDF LIMIT clauses now use integer literals.
+- `sql_functions must be sorted by (id, identifier)` -- sorting applied in deploy route and sanitisation.
+- `METRIC_VIEW_WINDOW_FUNCTION_NOT_SUPPORTED` -- window functions detected and blocked in metric view proposals.
+- `SQL expression references unknown identifiers` -- CREATE DDL targets excluded from validation.
+- LLM output truncation in trusted assets and benchmark passes -- reduced batch sizes and SQL input length.
+- Join conditions in text instructions displayed FQN format -- now use short alias format.
+- Text instructions were too verbose (2900+ chars) -- rewritten to concise behavioural guidance.
+
 ## [0.3.0] - 2026-02-17
 
 ### Changed
