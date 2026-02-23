@@ -3,8 +3,8 @@
  *
  * Used for creating/importing notebooks into the Databricks workspace.
  * Uses getAppHeaders() (service principal) because the Workspace REST API
- * requires the `workspace` scope which is not available on user OBO tokens
- * unless explicitly configured. The SP token has `all-apis` scope.
+ * requires a scope not available on user OBO tokens. The SP token is
+ * obtained with `all-apis` scope which covers workspace operations.
  */
 
 import { getConfig, getAppHeaders } from "./client";
