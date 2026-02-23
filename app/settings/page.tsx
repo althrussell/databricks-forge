@@ -34,6 +34,8 @@ import {
   Scale,
   Layers,
   Sparkles,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import {
   DEFAULT_DEPTH_CONFIGS,
@@ -126,6 +128,25 @@ export default function SettingsPage() {
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
       setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       toast.success("Local settings cleared");
+    }
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAllData = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/data", { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Request failed (${res.status})`);
+      }
+      handleClearLocalData();
+      toast.success("All data deleted — app has been reset");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete data");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -644,6 +665,53 @@ export default function SettingsPage() {
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction onClick={handleClearLocalData}>
                     Clear Settings
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between rounded-md border border-destructive/50 bg-destructive/5 p-3">
+            <div>
+              <p className="text-sm font-medium text-destructive">
+                Delete all data
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Permanently delete all pipeline runs, use cases, environment
+                scans, Genie spaces, exports, and cached data. This cannot be
+                undone.
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={deleting}>
+                  {deleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                  )}
+                  {deleting ? "Deleting…" : "Delete All"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all application data?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all pipeline runs, use cases,
+                    environment scans, Genie recommendations, dashboards,
+                    exports, prompt logs, and cached metadata. Local settings
+                    will also be reset. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAllData}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete Everything
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

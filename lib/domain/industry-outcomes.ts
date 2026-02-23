@@ -1517,6 +1517,219 @@ const ENERGY_UTILITIES: IndustryOutcome = {
   ],
 };
 
+const WATER_UTILITIES: IndustryOutcome = {
+  id: "water-utilities",
+  name: "Water Utilities",
+  subVerticals: [
+    "Clean Water Supply",
+    "Wastewater & Sewerage",
+    "Water Retail",
+    "Water Wholesale",
+    "Integrated Water (Supply + Wastewater)",
+  ],
+  suggestedDomains: [
+    "Network Operations",
+    "Asset Management",
+    "Customer Experience",
+    "Environmental Compliance",
+    "Water Quality",
+    "Finance",
+  ],
+  suggestedPriorities: [
+    "Optimize Operations",
+    "Reduce Leakage",
+    "Improve Water Quality",
+    "Mitigate Risk",
+    "Achieve ESG",
+  ],
+  objectives: [
+    {
+      name: "Optimize Network Operations",
+      whyChange:
+        "Water utilities lose an average of 20-30% of treated water to leakage and inefficiency. Data-driven network management, predictive asset maintenance, and demand forecasting deliver substantial cost savings, improve service reliability, and reduce supply interruptions.",
+      priorities: [
+        {
+          name: "Leakage Reduction & Network Efficiency",
+          useCases: [
+            {
+              name: "Non-Revenue Water Detection",
+              description:
+                "Classify and locate leakage using sensor, DMA flow, and pressure data to prioritise repair and pressure management interventions.",
+              businessValue:
+                "Typical 10-15% reduction in leakage volumes, saving millions in treatment and pumping costs.",
+            },
+            {
+              name: "Pipe Burst Prediction",
+              description:
+                "Predict burst risk from pipe age, material, soil conditions, weather, and historical failure patterns to enable proactive intervention.",
+            },
+            {
+              name: "Demand Forecasting",
+              description:
+                "Forecast water demand by DMA using weather, seasonality, population, and consumption patterns to optimise pumping schedules and reservoir levels.",
+            },
+          ],
+          kpis: [
+            "Leakage (Ml/d)",
+            "Supply interruptions (CML)",
+            "Burst rate per km of mains",
+            "Non-revenue water (%)",
+          ],
+          personas: [
+            "Head of Leakage",
+            "VP Network Operations",
+            "Chief Operating Officer",
+          ],
+        },
+        {
+          name: "Asset Management & Investment Planning",
+          useCases: [
+            {
+              name: "Asset Deterioration Modelling",
+              description:
+                "Model remaining useful life of pipes, pumps, and treatment assets using age, material, condition, and operational history.",
+            },
+            {
+              name: "Capital Investment Optimisation",
+              description:
+                "Prioritise mains renewal and asset replacement programmes to maximise risk reduction per pound of capital investment.",
+              businessValue:
+                "Improved capital efficiency by targeting highest-risk assets first across AMP planning cycles.",
+            },
+            {
+              name: "Predictive Maintenance for Pumping Stations",
+              description:
+                "Predict pump and motor failures from SCADA telemetry, vibration data, and energy consumption patterns to reduce unplanned outages.",
+            },
+          ],
+          kpis: [
+            "Asset health grade",
+            "Cost per property",
+            "Unplanned outage rate",
+            "Capital efficiency ratio",
+          ],
+          personas: [
+            "Head of Asset Strategy",
+            "VP Engineering",
+            "Chief Asset Officer",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Protect Water Quality & Environment",
+      whyChange:
+        "Regulatory scrutiny on water quality, pollution incidents, and environmental performance is intensifying. Data-driven monitoring and prediction enables proactive compliance, reduces pollution events, and supports net-zero carbon targets.",
+      priorities: [
+        {
+          name: "Water Quality Compliance",
+          useCases: [
+            {
+              name: "Water Quality Anomaly Detection",
+              description:
+                "Detect quality exceedances at treatment works and in-network using continuous monitoring data, triggering early intervention before compliance breaches.",
+            },
+            {
+              name: "Chemical Dosing Optimisation",
+              description:
+                "Optimise coagulant, chlorine, and pH dosing using source water quality and flow data to reduce chemical costs while maintaining compliance.",
+            },
+            {
+              name: "Catchment Risk Assessment",
+              description:
+                "Assess raw water quality risk from agricultural run-off, industrial discharges, and climate factors to inform catchment management programmes.",
+            },
+          ],
+          kpis: [
+            "DWI compliance (%)",
+            "Coliform detection failures",
+            "Taste and odour complaints",
+            "Treatment cost per Ml",
+          ],
+          personas: [
+            "Head of Water Quality",
+            "Chief Scientist",
+            "Regulatory Director",
+          ],
+        },
+        {
+          name: "Environmental & Sustainability Performance",
+          useCases: [
+            {
+              name: "Sewer Overflow (CSO) Prediction",
+              description:
+                "Predict combined sewer overflow events from rainfall forecasts, network level sensors, and flow data to enable proactive spill prevention.",
+              businessValue:
+                "Reduce CSO spill frequency and duration, directly impacting EPA/Ofwat performance commitments.",
+            },
+            {
+              name: "Carbon Emissions Tracking",
+              description:
+                "Automate Scope 1, 2, and 3 emissions reporting across pumping, treatment, transport, and fleet operations.",
+            },
+            {
+              name: "Pollution Incident Prevention",
+              description:
+                "Identify high-risk discharge points using telemetry, event history, and network hydraulic models to prevent category 1-3 pollution incidents.",
+            },
+          ],
+          kpis: [
+            "Pollution incidents (category 1-3)",
+            "CSO spill frequency and duration",
+            "Carbon intensity (kgCO2e/Ml)",
+            "Bathing water compliance",
+          ],
+          personas: [
+            "Head of Environment",
+            "Chief Sustainability Officer",
+            "VP Wastewater",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Improve Customer & Commercial Performance",
+      whyChange:
+        "Water utilities face growing expectations around customer experience, affordability, and transparency. Smart metering and advanced analytics unlock personalised engagement, accurate billing, and identification of vulnerable customers who need additional support.",
+      priorities: [
+        {
+          name: "Customer Experience & Billing",
+          useCases: [
+            {
+              name: "Smart Meter Consumption Analytics",
+              description:
+                "Segment customers by usage pattern, identify leaks on customer supply pipes, and detect meter under-registration using high-frequency smart meter data.",
+            },
+            {
+              name: "Customer Vulnerability Identification",
+              description:
+                "Classify customers at risk of water poverty or requiring priority services using billing, demographic, and contact data to ensure targeted support.",
+              businessValue:
+                "Improved C-MeX scores and reduced bad debt through proactive vulnerability management.",
+            },
+            {
+              name: "Meter-to-Cash Accuracy",
+              description:
+                "Detect billing anomalies, estimated-read drift, and unbilled consumption to improve revenue assurance and customer trust.",
+            },
+          ],
+          kpis: [
+            "C-MeX score",
+            "Per capita consumption (PCC)",
+            "Billing accuracy (%)",
+            "Customer contacts per 1000 connections",
+          ],
+          personas: [
+            "VP Customer Experience",
+            "Head of Retail",
+            "Chief Commercial Officer",
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 const COMMUNICATIONS: IndustryOutcome = {
   id: "communications",
   name: "Communications & Telecom",
@@ -2215,6 +2428,423 @@ const GAMES: IndustryOutcome = {
   ],
 };
 
+const RAIL_TRANSPORT: IndustryOutcome = {
+  id: "rail-transport",
+  name: "Rail Transport & Logistics",
+  subVerticals: [
+    "Freight Rail",
+    "Passenger Rail",
+    "Rail Infrastructure & Signalling",
+    "Intermodal Logistics",
+    "Urban Transit & Metro",
+  ],
+  suggestedDomains: [
+    "Network Operations",
+    "Asset Management",
+    "Customer Experience",
+    "Safety & Compliance",
+    "Supply Chain",
+    "Finance",
+  ],
+  suggestedPriorities: [
+    "Optimize Operations",
+    "Reduce Cost",
+    "Increase Revenue",
+    "Mitigate Risk",
+    "Achieve ESG",
+  ],
+  objectives: [
+    {
+      name: "Optimize Network & Train Operations",
+      whyChange:
+        "Rail networks handle millions of train movements annually across complex, interdependent timetables. A single 5-minute delay cascades into hundreds of disrupted services. AI-driven scheduling, real-time operations management, and capacity optimization are essential to improve punctuality, throughput, and energy efficiency.",
+      priorities: [
+        {
+          name: "Train Performance & Scheduling",
+          useCases: [
+            {
+              name: "Timetable Optimization",
+              description:
+                "Use ML-based conflict resolution to generate optimised timetables that maximise path utilisation across complex network topologies while respecting infrastructure and rolling stock constraints.",
+              businessValue:
+                "5-10% increase in train paths utilised per hour on constrained corridors.",
+            },
+            {
+              name: "Real-Time Delay Prediction & Management",
+              description:
+                "Predict knock-on delays across the network using real-time train positions, infrastructure status, and historical delay propagation patterns, recommending recovery actions to controllers.",
+              businessValue:
+                "20-30% reduction in secondary delay minutes through proactive intervention.",
+            },
+            {
+              name: "Platform & Station Capacity Optimization",
+              description:
+                "Model passenger flows through stations using ticketing, Wi-Fi, and sensor data to optimise dwell times, platform allocation, and crowd management during peak periods.",
+            },
+            {
+              name: "Energy-Efficient Driving Advisory",
+              description:
+                "Optimise speed profiles using gradient data, timetable slack, and rolling stock characteristics to reduce traction energy consumption while maintaining punctuality.",
+              businessValue:
+                "10-15% traction energy savings through optimised coasting and braking strategies.",
+            },
+          ],
+          kpis: [
+            "PPM / on-time performance (%)",
+            "Minutes of delay per incident",
+            "Train paths utilised per hour",
+            "Energy consumption per train-km",
+          ],
+          personas: [
+            "Head of Operations",
+            "VP Train Planning",
+            "Chief Operating Officer",
+          ],
+        },
+        {
+          name: "Freight Operations & Yard Management",
+          useCases: [
+            {
+              name: "Freight Train Scheduling Optimization",
+              description:
+                "Balance freight and passenger train paths across capacity-constrained corridors using AI to maximise freight throughput without degrading passenger performance.",
+            },
+            {
+              name: "Yard Operations Automation",
+              description:
+                "Optimise shunting movements, marshalling sequences, and wagon sorting using real-time yard telemetry and ML to reduce dwell time and increase throughput.",
+            },
+            {
+              name: "Wagon Utilisation Analytics",
+              description:
+                "Track empty running, dwell time, and turnaround cycles to identify underutilised assets and maximise wagon productivity across the fleet.",
+            },
+            {
+              name: "Intermodal Terminal Optimization",
+              description:
+                "Optimise crane scheduling, container stacking, and truck slot allocation at intermodal terminals using real-time data to reduce terminal dwell time and improve throughput.",
+            },
+          ],
+          kpis: [
+            "Freight train reliability (%)",
+            "Yard dwell time (hours)",
+            "Wagon utilisation rate (%)",
+            "Terminal throughput (lifts per hour)",
+          ],
+          personas: [
+            "Head of Freight",
+            "VP Terminal Operations",
+            "Chief Operating Officer",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Transform Asset Management & Maintenance",
+      whyChange:
+        "Rail operators manage billions in infrastructure — track, signalling, bridges, tunnels — and rolling stock. Unplanned failures cause major disruptions and safety risks. 30-40% of maintenance budgets are spent on time-based rather than condition-based interventions. Predictive analytics can cut maintenance costs by 20-30% while improving asset reliability.",
+      priorities: [
+        {
+          name: "Rolling Stock Health",
+          useCases: [
+            {
+              name: "Predictive Maintenance for Fleet",
+              description:
+                "Predict component failures from onboard sensors, SCADA telemetry, and maintenance history using ML models, shifting from time-based to condition-based maintenance regimes.",
+              businessValue:
+                "$30-50M annual savings for major operators through reduced unplanned maintenance and improved fleet availability.",
+            },
+            {
+              name: "Wheel & Bogie Condition Monitoring",
+              description:
+                "Detect wheel flats, bearing degradation, and bogie faults using wayside acoustic and vibration monitoring systems, triggering maintenance before failures cause service disruption.",
+            },
+            {
+              name: "Fleet Availability Optimization",
+              description:
+                "Optimise maintenance rostering, depot scheduling, and spare parts allocation to maximise the number of trains available for service each day.",
+            },
+          ],
+          kpis: [
+            "Miles per technical incident (MTIN)",
+            "Fleet availability (%)",
+            "Unplanned maintenance ratio",
+            "Mean distance between failures",
+          ],
+          personas: [
+            "Head of Fleet Engineering",
+            "VP Rolling Stock",
+            "Chief Mechanical Officer",
+          ],
+        },
+        {
+          name: "Infrastructure & Track",
+          useCases: [
+            {
+              name: "Track Geometry Deterioration Prediction",
+              description:
+                "Predict track geometry degradation from measurement train data, traffic tonnage, subgrade conditions, and environmental factors to optimise tamping and renewal schedules.",
+            },
+            {
+              name: "Signalling System Health Monitoring",
+              description:
+                "Detect signalling equipment degradation before failure using equipment telemetry, event logs, and environmental data to prevent service-affecting faults.",
+            },
+            {
+              name: "Bridge & Tunnel Structural Health Monitoring",
+              description:
+                "Continuously assess structural condition using sensor data, inspection records, and environmental loading models to prioritise maintenance and avoid costly emergency interventions.",
+            },
+            {
+              name: "Vegetation & Lineside Management",
+              description:
+                "Prioritise vegetation clearance using satellite imagery, growth rate models, and leaf-fall incident history to reduce adhesion delays and lineside encroachment.",
+            },
+          ],
+          kpis: [
+            "Track quality index",
+            "Signalling failure rate",
+            "Temporary speed restrictions (count)",
+            "Infrastructure cost per track-km",
+          ],
+          personas: [
+            "Head of Infrastructure",
+            "VP Asset Strategy",
+            "Chief Engineer",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Grow Passenger Revenue & Experience",
+      whyChange:
+        "Passenger expectations are shaped by airline and ride-hailing experiences. Revenue management, real-time information, and personalised services are critical for growing ridership and optimising yield. Operators leveraging dynamic pricing see 5-15% revenue uplift. Post-pandemic recovery requires data-driven capacity and demand alignment.",
+      priorities: [
+        {
+          name: "Revenue Management",
+          useCases: [
+            {
+              name: "Dynamic Pricing & Yield Management",
+              description:
+                "Optimise fares by service, time of day, and demand using booking curves, competitor pricing, and elasticity models to maximise revenue per seat-km.",
+              businessValue:
+                "5-15% revenue uplift from dynamic pricing on key routes.",
+            },
+            {
+              name: "Demand Forecasting for Capacity Planning",
+              description:
+                "Forecast passenger volumes by route, day, and time using historical ridership, events, weather, and economic indicators to right-size train formations and reduce overcrowding.",
+              businessValue:
+                "15-25% improvement in load factor through demand-aligned capacity.",
+            },
+            {
+              name: "Ancillary Revenue Optimization",
+              description:
+                "Personalise upsell offers for first-class upgrades, Wi-Fi packages, car parking, and onboard catering based on customer profiles and journey context.",
+            },
+          ],
+          kpis: [
+            "Revenue per seat-km",
+            "Load factor (%)",
+            "Yield per passenger",
+            "Ancillary revenue per journey",
+          ],
+          personas: [
+            "Chief Commercial Officer",
+            "Head of Revenue Management",
+            "VP Pricing",
+          ],
+        },
+        {
+          name: "Customer Experience & Engagement",
+          useCases: [
+            {
+              name: "Real-Time Passenger Information",
+              description:
+                "Deliver accurate, context-aware journey updates across apps, station screens, and announcements using live train data and disruption feeds.",
+            },
+            {
+              name: "Passenger Flow & Crowding Analytics",
+              description:
+                "Predict crowding by platform, carriage, and time using ticket sales, sensor data, and historical patterns to guide passengers toward less crowded options.",
+            },
+            {
+              name: "Customer Sentiment & Feedback Analytics",
+              description:
+                "Analyse complaints, social media, and survey responses using NLP to identify systemic service issues and prioritise improvements.",
+            },
+            {
+              name: "Disruption Communication Automation",
+              description:
+                "Auto-generate clear, consistent, and timely disruption messaging from control room data using AI, ensuring passengers receive accurate information across all channels.",
+            },
+          ],
+          kpis: [
+            "Passenger satisfaction score",
+            "NPS",
+            "Real-time information accuracy (%)",
+            "Complaints per million journeys",
+          ],
+          personas: [
+            "Head of Customer Experience",
+            "VP Commercial",
+            "Chief Marketing Officer",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Strengthen Safety, Security & Compliance",
+      whyChange:
+        "Rail safety is heavily regulated and public confidence is paramount. Signal Passed at Danger (SPAD) incidents, level crossing collisions, and infrastructure failures carry catastrophic consequences. Predictive risk modelling and automated compliance reporting reduce incidents by 20-40% and streamline regulatory obligations.",
+      priorities: [
+        {
+          name: "Safety Analytics",
+          useCases: [
+            {
+              name: "SPAD Risk Prediction",
+              description:
+                "Predict Signal Passed at Danger likelihood from driver behaviour patterns, route geometry, signalling layout, and environmental conditions to target interventions at highest-risk locations.",
+            },
+            {
+              name: "Level Crossing Risk Assessment",
+              description:
+                "Score level crossing risk using road traffic volumes, sighting distances, near-miss history, and population density to prioritise upgrades and closures.",
+            },
+            {
+              name: "Worker Safety & Track Access Monitoring",
+              description:
+                "Track possessions, safe systems of work compliance, and near-miss events to prevent workforce injuries and improve track access planning.",
+            },
+            {
+              name: "Fatigue & Human Factors Analytics",
+              description:
+                "Analyse driver rosters, hours worked, shift patterns, and physiological indicators to identify and mitigate fatigue-related safety risk.",
+            },
+          ],
+          kpis: [
+            "SPAD rate per million train-miles",
+            "Workforce lost-time injuries",
+            "Level crossing incidents",
+            "Safety critical event rate",
+          ],
+          personas: [
+            "Head of Safety",
+            "Chief Safety Officer",
+            "VP Operations Risk",
+          ],
+        },
+        {
+          name: "Regulatory Compliance & ESG",
+          useCases: [
+            {
+              name: "Automated Safety Reporting",
+              description:
+                "Generate ORR/ERA and national safety authority reports from operational data pipelines with minimal manual effort, ensuring accuracy and timeliness.",
+            },
+            {
+              name: "Carbon Emissions & Energy Reporting",
+              description:
+                "Automate Scope 1, 2, and 3 emissions tracking across traction energy, stations, depots, and fleet operations for net-zero target monitoring.",
+            },
+            {
+              name: "Noise & Environmental Impact Monitoring",
+              description:
+                "Monitor and report noise levels, vibration, and environmental impacts along rail corridors for regulatory compliance and community engagement.",
+            },
+          ],
+          kpis: [
+            "Regulatory submission timeliness",
+            "Carbon intensity per passenger-km",
+            "Environmental incident rate",
+          ],
+          personas: [
+            "Head of Regulatory Affairs",
+            "Chief Sustainability Officer",
+            "VP Compliance",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Drive Freight & Supply Chain Intelligence",
+      whyChange:
+        "Rail freight competes with road on reliability, visibility, and flexibility. Shippers demand real-time tracking, accurate ETAs, and seamless intermodal connectivity. Data-driven freight intelligence can increase rail modal share by 5-10% and improve operator margins by 10-20%.",
+      priorities: [
+        {
+          name: "Freight Visibility & Planning",
+          useCases: [
+            {
+              name: "End-to-End Shipment Tracking",
+              description:
+                "Provide real-time consignment visibility from origin to destination across rail and intermodal legs using GPS, RFID, and network event data.",
+            },
+            {
+              name: "ETA Prediction for Freight",
+              description:
+                "Predict freight train arrival times using current network state, weather conditions, and historical performance data to provide shippers with reliable delivery windows.",
+              businessValue:
+                "90%+ ETA accuracy, reducing shipper buffer stock and improving supply chain planning.",
+            },
+            {
+              name: "Route & Mode Optimization",
+              description:
+                "Recommend optimal rail, road, or intermodal routing for each shipment based on cost, transit time, carbon impact, and real-time capacity availability.",
+            },
+            {
+              name: "Freight Demand Forecasting",
+              description:
+                "Forecast commodity and lane-level freight demand using economic indicators, trade flows, and seasonal patterns to optimise capacity allocation and pricing.",
+            },
+          ],
+          kpis: [
+            "Freight reliability (%)",
+            "ETA accuracy (%)",
+            "Rail modal share (%)",
+            "Freight revenue per train-km",
+          ],
+          personas: [
+            "Head of Freight Commercial",
+            "VP Logistics",
+            "Chief Operating Officer",
+          ],
+        },
+        {
+          name: "Customer & Commercial Analytics",
+          useCases: [
+            {
+              name: "Freight Customer Segmentation",
+              description:
+                "Segment shippers by volume, profitability, modal shift potential, and service requirements to tailor commercial strategies and account management.",
+            },
+            {
+              name: "Dynamic Freight Pricing",
+              description:
+                "Optimise freight rates by corridor, commodity type, and demand intensity using ML-driven pricing models that respond to market conditions in real time.",
+            },
+            {
+              name: "Contract & SLA Performance Analytics",
+              description:
+                "Track contract performance, SLA compliance, and penalty exposure across the freight customer portfolio to improve commercial outcomes and retention.",
+            },
+          ],
+          kpis: [
+            "Customer retention rate (%)",
+            "Contract profitability",
+            "SLA compliance rate (%)",
+            "Revenue growth per account",
+          ],
+          personas: [
+            "Head of Freight Sales",
+            "Chief Commercial Officer",
+            "VP Customer Success",
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 // ---------------------------------------------------------------------------
 // Registry -- Built-in (static) outcome maps
 // ---------------------------------------------------------------------------
@@ -2227,10 +2857,12 @@ export const INDUSTRY_OUTCOMES: IndustryOutcome[] = [
   RCG,
   MANUFACTURING,
   ENERGY_UTILITIES,
+  WATER_UTILITIES,
   COMMUNICATIONS,
   MEDIA_ADVERTISING,
   DIGITAL_NATIVES,
   GAMES,
+  RAIL_TRANSPORT,
 ];
 
 /**
