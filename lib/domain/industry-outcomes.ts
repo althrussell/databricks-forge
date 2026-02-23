@@ -17,6 +17,10 @@ export interface ReferenceUseCase {
   name: string;
   description: string;
   businessValue?: string;
+  /** Typical data entities/models needed to enable this use case */
+  typicalDataEntities?: string[];
+  /** Common source systems where this data typically resides */
+  typicalSourceSystems?: string[];
 }
 
 export interface StrategicPriority {
@@ -86,21 +90,29 @@ const BANKING: IndustryOutcome = {
                 "Utilize data analytics to identify potential customers and tailor marketing campaigns that resonate with their needs, enhancing engagement and conversion rates.",
               businessValue:
                 "Increased customer acquisition through targeted campaigns.",
+              typicalDataEntities: ["Customer Demographics", "Campaign Interactions", "Lead Scores", "Product Holdings"],
+              typicalSourceSystems: ["Salesforce CRM", "Adobe Campaign", "Core Banking Platform"],
             },
             {
               name: "Hyper Personalized Banking",
               description:
                 "Leverage AI and customer data to deliver tailored banking experiences, improving customer satisfaction and loyalty through personalized insights and recommendations.",
+              typicalDataEntities: ["Customer Profiles", "Transaction History", "Product Holdings", "Channel Interactions"],
+              typicalSourceSystems: ["Core Banking Platform", "CRM", "Digital Banking Platform"],
             },
             {
               name: "Cross Sell and Upsell Products",
               description:
                 "Implement targeted strategies to offer complementary or upgraded products to existing customers, boosting revenue and customer retention.",
+              typicalDataEntities: ["Customer Profiles", "Product Catalog", "Transaction History", "Propensity Scores"],
+              typicalSourceSystems: ["Core Banking Platform", "Product Management System", "CRM"],
             },
             {
               name: "Churn Prediction and Customer Segmentation",
               description:
                 "Use ML models to predict customer churn and segment the customer base effectively, enabling proactive retention efforts and tailored service offerings.",
+              typicalDataEntities: ["Customer Profiles", "Transaction History", "Engagement Metrics", "Churn Risk Scores"],
+              typicalSourceSystems: ["Core Banking Platform", "CRM", "Digital Banking Platform"],
             },
           ],
           kpis: [
@@ -122,21 +134,29 @@ const BANKING: IndustryOutcome = {
               name: "Partner Offers and Rewards",
               description:
                 "Leverage customer transaction data to deliver personalized offers, rewards, and cashback opportunities in collaboration with partner merchants.",
+              typicalDataEntities: ["Transaction History", "Merchant Data", "Reward Programs", "Customer Preferences"],
+              typicalSourceSystems: ["Core Banking Platform", "Card Network", "Loyalty Platform"],
             },
             {
               name: "Transaction Enrichment",
               description:
                 "Automate the classification of merchants from transaction data to deliver clearer insights into spending patterns.",
+              typicalDataEntities: ["Transaction Data", "Merchant Classifications", "Spending Categories", "Customer Profiles"],
+              typicalSourceSystems: ["Core Banking Platform", "Card Network", "Merchant Directory"],
             },
             {
               name: "Open Banking Integration",
               description:
                 "Create seamless data-sharing ecosystems between market participants and banking aggregators through APIs and data sharing.",
+              typicalDataEntities: ["Account Data", "Transaction History", "Consent Records", "API Usage Logs"],
+              typicalSourceSystems: ["Core Banking Platform", "Open Banking Gateway", "API Management Platform"],
             },
             {
               name: "Data Monetization",
               description:
                 "Generate new revenue streams by leveraging anonymized customer data to deliver insights and create value for third-party partners.",
+              typicalDataEntities: ["Aggregated Customer Data", "Market Insights", "Consent Records", "Usage Analytics"],
+              typicalSourceSystems: ["Core Banking Platform", "Data Marketplace", "API Gateway"],
             },
           ],
           kpis: [
@@ -160,11 +180,15 @@ const BANKING: IndustryOutcome = {
                 "Streamline and automate loan onboarding and origination processes, reducing operational costs by 30-70% while enhancing the customer experience through faster approvals.",
               businessValue:
                 "Up to 45% increase in conversion rates for loan offerings.",
+              typicalDataEntities: ["Loan Applications", "Credit Reports", "Income Verification", "Property Valuations"],
+              typicalSourceSystems: ["Loan Origination System", "Credit Bureau", "Core Banking Platform"],
             },
             {
               name: "SMB and Corporate Banking Innovation",
               description:
                 "Leverage data and AI to provide tailored financial products and services for small and medium businesses.",
+              typicalDataEntities: ["Business Profiles", "Cash Flow Data", "Industry Benchmarks", "Product Suitability"],
+              typicalSourceSystems: ["Core Banking Platform", "Treasury Management", "ERP Systems"],
             },
           ],
           kpis: [
@@ -192,21 +216,29 @@ const BANKING: IndustryOutcome = {
               name: "Dynamic Pricing",
               description:
                 "Implement dynamic pricing strategies to adjust loan rates based on real-time risk assessments and customer profiles.",
+              typicalDataEntities: ["Customer Risk Profiles", "Market Rates", "Product Terms", "Competitive Intelligence"],
+              typicalSourceSystems: ["Core Banking Platform", "Risk Engine", "Pricing System"],
             },
             {
               name: "Credit Decisioning",
               description:
                 "Utilize advanced analytics and ML to streamline credit decisioning, improving accuracy in assessing borrower risk.",
+              typicalDataEntities: ["Credit Reports", "Application Data", "Payment History", "Bureau Scores"],
+              typicalSourceSystems: ["Core Banking Platform", "Credit Bureau", "Loan Origination System"],
             },
             {
               name: "Credit Limit Management",
               description:
                 "Leverage data-driven insights to proactively assess and adjust credit limits based on customer behavior and creditworthiness.",
+              typicalDataEntities: ["Credit Utilization", "Payment History", "Income Data", "Risk Scores"],
+              typicalSourceSystems: ["Core Banking Platform", "Credit Bureau", "Risk Engine"],
             },
             {
               name: "Debt Collection Optimization",
               description:
                 "Employ predictive analytics to optimize debt collection strategies, identifying the most effective approaches for different customer segments.",
+              typicalDataEntities: ["Delinquency History", "Customer Contact Data", "Payment Propensity", "Collection Outcomes"],
+              typicalSourceSystems: ["Core Banking Platform", "Collections System", "CRM"],
             },
           ],
           kpis: [
@@ -227,16 +259,22 @@ const BANKING: IndustryOutcome = {
               name: "AML/KYC Automation",
               description:
                 "Automate anti-money laundering and know-your-customer processes using AI to improve detection accuracy and reduce false positives.",
+              typicalDataEntities: ["Customer Identity Data", "Transaction History", "Watchlist Matches", "Suspicious Activity Reports"],
+              typicalSourceSystems: ["Core Banking Platform", "AML/KYC Platform", "Identity Verification Services"],
             },
             {
               name: "Regulatory Reporting Automation",
               description:
                 "Streamline regulatory reporting processes with automated data pipelines, ensuring accuracy and timeliness of submissions.",
+              typicalDataEntities: ["Regulatory Data", "General Ledger", "Risk Exposures", "Transaction Summaries"],
+              typicalSourceSystems: ["Core Banking Platform", "ERP", "Regulatory Reporting System"],
             },
             {
               name: "Compliance Monitoring",
               description:
                 "Implement real-time compliance monitoring systems that detect potential violations before they escalate.",
+              typicalDataEntities: ["Transaction Logs", "Policy Rules", "Employee Actions", "Exception Reports"],
+              typicalSourceSystems: ["Core Banking Platform", "Compliance Management System", "Audit Logs"],
             },
           ],
           kpis: [
@@ -257,16 +295,22 @@ const BANKING: IndustryOutcome = {
               name: "Real-Time Transaction Monitoring",
               description:
                 "Monitor transactions in real-time to detect fraud and anomalies using AI models, reducing financial losses.",
+              typicalDataEntities: ["Transaction Stream", "Customer Profiles", "Device Data", "Historical Patterns"],
+              typicalSourceSystems: ["Core Banking Platform", "Fraud Detection Engine", "Card Network"],
             },
             {
               name: "Identity Fraud Detection",
               description:
                 "Use ML to detect identity fraud and synthetic identities during account opening and transactions.",
+              typicalDataEntities: ["Identity Documents", "Application Data", "Device Fingerprints", "Behavioral Biometrics"],
+              typicalSourceSystems: ["Core Banking Platform", "Identity Verification Services", "Fraud Detection Engine"],
             },
             {
               name: "Network Fraud Analysis",
               description:
                 "Apply graph analytics to uncover fraud rings and complex fraud networks across customer relationships.",
+              typicalDataEntities: ["Customer Relationships", "Transaction Networks", "Account Linkages", "Shared Attributes"],
+              typicalSourceSystems: ["Core Banking Platform", "Fraud Detection Engine", "Graph Analytics Platform"],
             },
           ],
           kpis: [
@@ -294,11 +338,15 @@ const BANKING: IndustryOutcome = {
               name: "Financial Reporting Automation",
               description:
                 "Automate financial reporting with real-time data pipelines, improving accuracy and reducing manual effort.",
+              typicalDataEntities: ["General Ledger", "Trial Balance", "Chart of Accounts", "Reconciliation Data"],
+              typicalSourceSystems: ["Core Banking Platform", "ERP", "Financial Consolidation System"],
             },
             {
               name: "Liquidity Management",
               description:
                 "Use predictive models to optimize liquidity management and cash flow forecasting across the organization.",
+              typicalDataEntities: ["Cash Positions", "Funding Sources", "Liquidity Buffers", "Stress Scenarios"],
+              typicalSourceSystems: ["Core Banking Platform", "Treasury Management System", "ALM Platform"],
             },
           ],
           kpis: [
@@ -319,11 +367,15 @@ const BANKING: IndustryOutcome = {
               name: "Intelligent Document Processing",
               description:
                 "Use AI to extract, classify, and process information from unstructured documents like contracts, applications, and correspondence.",
+              typicalDataEntities: ["Document Metadata", "Extracted Fields", "Classification Labels", "Workflow State"],
+              typicalSourceSystems: ["Document Management System", "Core Banking Platform", "Content Repository"],
             },
             {
               name: "Process Mining and Optimization",
               description:
                 "Analyze operational processes to identify bottlenecks and optimize workflows across back and middle office functions.",
+              typicalDataEntities: ["Process Event Logs", "Workflow State", "Task Durations", "Resource Utilization"],
+              typicalSourceSystems: ["Core Banking Platform", "BPM/Workflow System", "ERP"],
             },
           ],
           kpis: [
@@ -344,11 +396,15 @@ const BANKING: IndustryOutcome = {
               name: "Customer Service AI Agent",
               description:
                 "Deploy AI agents to handle routine customer inquiries, reducing wait times and freeing human agents for complex issues.",
+              typicalDataEntities: ["Customer Profiles", "Account Data", "Interaction History", "Knowledge Base"],
+              typicalSourceSystems: ["Core Banking Platform", "CRM", "Contact Center Platform"],
             },
             {
               name: "Channel Performance Analytics",
               description:
                 "Analyze performance across digital and physical channels to optimize resource allocation and customer experience.",
+              typicalDataEntities: ["Channel Interactions", "Transaction Volumes", "Customer Journeys", "Conversion Funnels"],
+              typicalSourceSystems: ["Digital Banking Platform", "Branch Systems", "CRM"],
             },
           ],
           kpis: [
@@ -405,16 +461,22 @@ const INSURANCE: IndustryOutcome = {
               name: "Distribution Data Model",
               description:
                 "Consolidate data from multiple brokerage systems into a common data model for unified reporting and insights.",
+              typicalDataEntities: ["Producer Data", "Commission Records", "Policy Placements", "Channel Performance"],
+              typicalSourceSystems: ["Agency Management System", "Broker Portals", "Policy Admin System"],
             },
             {
               name: "Producer Analysis",
               description:
                 "Analyze broker and agent performance to optimize sales channel effectiveness and commission structures.",
+              typicalDataEntities: ["Producer Profiles", "Sales Metrics", "Commission Data", "Policy Production"],
+              typicalSourceSystems: ["Agency Management System", "Policy Admin System", "Commission System"],
             },
             {
               name: "Client New/Lost Business Analysis",
               description:
                 "Track and analyze new business acquisition and client attrition patterns across distribution channels.",
+              typicalDataEntities: ["Policy Inforce", "New Business", "Lapse Data", "Renewal History"],
+              typicalSourceSystems: ["Policy Admin System", "Agency Management System", "CRM"],
             },
           ],
           kpis: [
@@ -437,21 +499,29 @@ const INSURANCE: IndustryOutcome = {
                 "Automate submission review and triage using AI to speed up underwriting decisions and improve risk selection.",
               businessValue:
                 "33% increase in policy origination, 25% increase in productivity.",
+              typicalDataEntities: ["Submission Data", "Risk Attributes", "Historical Decisions", "Loss History"],
+              typicalSourceSystems: ["Policy Admin System", "Underwriting Workstation", "External Data Providers"],
             },
             {
               name: "Touchless Underwriting",
               description:
                 "Enable end-to-end digital underwriting for standard risks, reducing manual intervention by over 25%.",
+              typicalDataEntities: ["Application Data", "Risk Scores", "Product Rules", "Automated Decisions"],
+              typicalSourceSystems: ["Policy Admin System", "Underwriting Engine", "External Data Providers"],
             },
             {
               name: "Telematics-Based Pricing",
               description:
                 "Leverage IoT and telematics data for usage-based insurance pricing that rewards good behavior.",
+              typicalDataEntities: ["Driving Behavior Data", "Mileage", "Trip Patterns", "Risk Scores"],
+              typicalSourceSystems: ["Telematics Platform", "Policy Admin System", "Claims Management System"],
             },
             {
               name: "Actuarial Modeling Automation",
               description:
                 "Accelerate actuarial modeling with ML to improve pricing accuracy and reduce time to market for new products.",
+              typicalDataEntities: ["Loss Triangles", "Exposure Data", "Rating Factors", "Model Outputs"],
+              typicalSourceSystems: ["Policy Admin System", "Actuarial Platform", "Claims Management System"],
             },
           ],
           kpis: [
@@ -472,16 +542,22 @@ const INSURANCE: IndustryOutcome = {
               name: "Customer 360 for Insurance",
               description:
                 "Build unified customer profiles across all lines of business to enable personalized product recommendations and next-best-action.",
+              typicalDataEntities: ["Customer Profiles", "Policy Holdings", "Interaction History", "Product Affinity"],
+              typicalSourceSystems: ["Policy Admin System", "CRM", "Claims Management System"],
             },
             {
               name: "Churn Prediction and Retention",
               description:
                 "Use ML models to predict policy churn and implement proactive retention strategies.",
+              typicalDataEntities: ["Policy Inforce", "Renewal History", "Engagement Metrics", "Churn Risk Scores"],
+              typicalSourceSystems: ["Policy Admin System", "CRM", "Customer Portal"],
             },
             {
               name: "Cross-Sell and Upsell",
               description:
                 "Identify cross-sell and upsell opportunities across insurance product lines using behavioral analytics.",
+              typicalDataEntities: ["Policy Holdings", "Customer Demographics", "Propensity Scores", "Product Catalog"],
+              typicalSourceSystems: ["Policy Admin System", "CRM", "Product Management System"],
             },
           ],
           kpis: [
@@ -509,11 +585,15 @@ const INSURANCE: IndustryOutcome = {
               name: "Claims Fraud Detection",
               description:
                 "Use ML and network analytics to detect fraudulent claims patterns and reduce loss ratios.",
+              typicalDataEntities: ["Claims History", "Policy Details", "Customer Profiles", "Provider Networks"],
+              typicalSourceSystems: ["Claims Management System", "Policy Admin System", "Fraud Detection Engine"],
             },
             {
               name: "Automated Claims Processing",
               description:
                 "Automate claims intake, assessment, and settlement using AI to reduce processing time and improve accuracy.",
+              typicalDataEntities: ["Claims Data", "Policy Coverage", "Damage Assessments", "Settlement History"],
+              typicalSourceSystems: ["Claims Management System", "Policy Admin System", "Document Management"],
             },
             {
               name: "Subrogation Recovery Optimization",
@@ -539,11 +619,15 @@ const INSURANCE: IndustryOutcome = {
               name: "Regulatory Reporting Automation",
               description:
                 "Automate regulatory submissions and reporting processes across multiple jurisdictions.",
+              typicalDataEntities: ["Regulatory Data", "Policy Summaries", "Claims Data", "Financial Reports"],
+              typicalSourceSystems: ["Policy Admin System", "Claims Management System", "Financial Consolidation"],
             },
             {
               name: "Solvency Monitoring",
               description:
                 "Monitor solvency ratios and capital adequacy in real-time to ensure compliance with Solvency II and local regulations.",
+              typicalDataEntities: ["Capital Positions", "Risk Exposures", "Asset Liability Data", "Regulatory Ratios"],
+              typicalSourceSystems: ["General Ledger", "Asset Management", "Risk Management Platform"],
             },
           ],
           kpis: [
@@ -634,16 +718,22 @@ const HLS: IndustryOutcome = {
                 "Use genomics data and computational biology to identify promising drug targets with higher probability of clinical success.",
               businessValue:
                 "$75.5M value attributed to accelerated genomics access and population-scale analytics.",
+              typicalDataEntities: ["Genomic Data", "Target Pathways", "Literature Evidence", "Experimental Results"],
+              typicalSourceSystems: ["Genomics Platform", "Research Data Lake", "Scientific Literature DB"],
             },
             {
               name: "QSAR Modeling",
               description:
                 "Quantitative Structure-Activity Relationship modeling to predict molecular properties and optimize drug candidates.",
+              typicalDataEntities: ["Molecular Structures", "Activity Data", "Chemical Properties", "ADMET Profiles"],
+              typicalSourceSystems: ["ELN", "Compound Management", "Research Data Lake"],
             },
             {
               name: "Digital Pathology Image Classification",
               description:
                 "Apply computer vision to classify pathology images for disease diagnosis and drug response prediction.",
+              typicalDataEntities: ["Pathology Images", "Annotations", "Clinical Outcomes", "Biomarker Data"],
+              typicalSourceSystems: ["PACS", "LIMS", "Electronic Health Records"],
             },
           ],
           kpis: [
@@ -664,21 +754,29 @@ const HLS: IndustryOutcome = {
               name: "Clinical Trial Protocol Design",
               description:
                 "Use AI to optimize clinical trial protocols, improving patient recruitment and reducing trial duration.",
+              typicalDataEntities: ["Clinical Trial Data", "Patient Demographics", "Historical Protocols", "Site Data"],
+              typicalSourceSystems: ["CTMS", "Electronic Health Records", "Clinical Data Warehouse"],
             },
             {
               name: "Clinical Trial Site Selection",
               description:
                 "Leverage analytics to identify optimal trial sites based on patient populations, investigator experience, and historical performance.",
+              typicalDataEntities: ["Site Performance", "Patient Populations", "Investigator Profiles", "Enrollment History"],
+              typicalSourceSystems: ["CTMS", "Site Feasibility Platform", "Electronic Health Records"],
             },
             {
               name: "Drug Repurposing",
               description:
                 "Use AI to identify new therapeutic applications for existing approved drugs, reducing development time and cost.",
+              typicalDataEntities: ["Drug Profiles", "Disease Ontologies", "Clinical Outcomes", "Literature Evidence"],
+              typicalSourceSystems: ["Clinical Data Warehouse", "Scientific Literature DB", "Pharmacovigilance DB"],
             },
             {
               name: "Clinical Data Quality Assurance",
               description:
                 "Automate QA of clinical data pipelines using AI to ensure data integrity and regulatory compliance.",
+              typicalDataEntities: ["Clinical Trial Data", "Edit Checks", "Source Data", "Reconciliation Logs"],
+              typicalSourceSystems: ["EDC", "CTMS", "Clinical Data Warehouse"],
             },
           ],
           kpis: [
@@ -699,11 +797,15 @@ const HLS: IndustryOutcome = {
               name: "R&D Knowledge Graph",
               description:
                 "Build knowledge graphs connecting research data, literature, and experimental results to accelerate scientific discovery.",
+              typicalDataEntities: ["Research Data", "Literature", "Experimental Results", "Entity Relationships"],
+              typicalSourceSystems: ["ELN", "Research Data Lake", "Scientific Literature DB"],
             },
             {
               name: "Research Assistant AI",
               description:
                 "Deploy AI assistants to help researchers navigate scientific literature and internal research data.",
+              typicalDataEntities: ["Scientific Literature", "Research Data", "Patent Data", "Internal Reports"],
+              typicalSourceSystems: ["Scientific Literature DB", "Research Data Lake", "ELN"],
             },
           ],
           kpis: [
@@ -731,11 +833,15 @@ const HLS: IndustryOutcome = {
               name: "Demand Forecasting for Pharmaceuticals",
               description:
                 "Predict drug demand across markets using ML models accounting for seasonality, epidemiology, and market dynamics.",
+              typicalDataEntities: ["Sales History", "Epidemiology Data", "Market Data", "Inventory Levels"],
+              typicalSourceSystems: ["ERP", "Demand Planning", "Market Intelligence"],
             },
             {
               name: "Inventory Optimization",
               description:
                 "Optimize inventory levels across the distribution network balancing service levels with expiration risk.",
+              typicalDataEntities: ["Inventory Levels", "Demand Forecasts", "Expiration Dates", "Distribution Network"],
+              typicalSourceSystems: ["ERP", "WMS", "Demand Planning"],
             },
           ],
           kpis: [
@@ -756,16 +862,22 @@ const HLS: IndustryOutcome = {
               name: "Predictive Maintenance for Pharma Equipment",
               description:
                 "Predict equipment failures in manufacturing facilities to minimize downtime and maintain GMP compliance.",
+              typicalDataEntities: ["Sensor Data", "Maintenance History", "Equipment Metadata", "Batch Records"],
+              typicalSourceSystems: ["MES", "CMMS", "SCADA"],
             },
             {
               name: "Overall Equipment Effectiveness (OEE)",
               description:
                 "Monitor and optimize manufacturing equipment effectiveness using real-time analytics.",
+              typicalDataEntities: ["Equipment Runtime", "Production Output", "Quality Metrics", "Downtime Events"],
+              typicalSourceSystems: ["MES", "SCADA", "Quality Management System"],
             },
             {
               name: "Digital Twins for Manufacturing",
               description:
                 "Create digital twins of manufacturing processes for simulation, optimization, and quality assurance.",
+              typicalDataEntities: ["Process Parameters", "Equipment State", "Batch Data", "Quality Attributes"],
+              typicalSourceSystems: ["MES", "SCADA", "LIMS"],
             },
           ],
           kpis: [
@@ -793,11 +905,15 @@ const HLS: IndustryOutcome = {
               name: "Data Standardization with OMOP",
               description:
                 "Standardize clinical data using OMOP common data model to enable cross-institutional analysis and real-world evidence generation.",
+              typicalDataEntities: ["Clinical Data", "EHR Data", "Claims Data", "OMOP Mappings"],
+              typicalSourceSystems: ["Electronic Health Records", "Claims Adjudication", "Clinical Data Warehouse"],
             },
             {
               name: "Pharmacovigilance & Adverse Event Detection",
               description:
                 "Monitor drug safety using AI to detect adverse events from multiple data sources including social media and EHR data.",
+              typicalDataEntities: ["Adverse Event Reports", "Safety Signals", "Patient Data", "Product Labels"],
+              typicalSourceSystems: ["Safety Database", "Electronic Health Records", "Social Listening Platform"],
             },
             {
               name: "Patient Cohorting & Propensity Matching",
@@ -823,16 +939,22 @@ const HLS: IndustryOutcome = {
               name: "Provider Segmentation & Analytics",
               description:
                 "Segment healthcare providers by prescribing behavior, influence, and responsiveness to optimize engagement strategies.",
+              typicalDataEntities: ["Prescribing Data", "Provider Profiles", "Engagement History", "Market Share"],
+              typicalSourceSystems: ["Sales Force Automation", "Claims Data", "CRM"],
             },
             {
               name: "Next-Best-Action Recommendations",
               description:
                 "Use ML to recommend the optimal next interaction with each provider across omnichannel touchpoints.",
+              typicalDataEntities: ["Provider Profiles", "Interaction History", "Propensity Scores", "Channel Preferences"],
+              typicalSourceSystems: ["Sales Force Automation", "CRM", "Marketing Automation"],
             },
             {
               name: "Sales Rep AI Assistant",
               description:
                 "Deploy AI assistants for field sales teams to prepare for provider interactions with relevant insights and talking points.",
+              typicalDataEntities: ["Provider Profiles", "Prescribing Data", "Product Information", "Call History"],
+              typicalSourceSystems: ["Sales Force Automation", "CRM", "Medical Information System"],
             },
           ],
           kpis: [
@@ -894,11 +1016,15 @@ const RCG: IndustryOutcome = {
                 "Monitor supplier risk across multiple tiers in real-time using financial, geopolitical, and ESG data to identify vulnerabilities before disruptions occur.",
               businessValue:
                 "40% fewer supply chain disruptions, 65% faster risk response times.",
+              typicalDataEntities: ["Supplier Master Data", "Financial Health Indicators", "Geopolitical Risk Index", "ESG Compliance Scores"],
+              typicalSourceSystems: ["ERP", "Supplier Risk Platforms", "Third-Party Risk Data Providers"],
             },
             {
               name: "Supplier Performance Scoring",
               description:
                 "Score and rank suppliers on quality, delivery, cost, and sustainability metrics to optimize sourcing decisions.",
+              typicalDataEntities: ["Purchase Orders", "Goods Receipt Records", "Quality Inspections", "Supplier Master"],
+              typicalSourceSystems: ["ERP", "SRM", "Quality Management System"],
             },
             {
               name: "Product & Supplier ESG Analytics",
@@ -906,6 +1032,8 @@ const RCG: IndustryOutcome = {
                 "Measure and report sustainability attributes such as materials provenance, recyclability, and ethical sourcing at product, category, and supplier level to support sustainability frameworks and UNGC commitments.",
               businessValue:
                 "Improved ESG reporting accuracy, reduced reputational risk, stronger supplier accountability.",
+              typicalDataEntities: ["Product BOM", "Materials Provenance", "Supplier Sustainability Certifications", "Recyclability Attributes"],
+              typicalSourceSystems: ["PLM", "ERP", "Supplier Sustainability Platforms"],
             },
           ],
           kpis: [
@@ -929,16 +1057,22 @@ const RCG: IndustryOutcome = {
                 "Use ML models incorporating weather, events, social media, and economic indicators to forecast demand with 30-50% higher accuracy.",
               businessValue:
                 "20-30% reduction in carrying costs, 18% reduction in stockouts.",
+              typicalDataEntities: ["Sales Transactions", "Inventory Levels", "Promotional Calendar", "Weather Data"],
+              typicalSourceSystems: ["POS System", "ERP", "Demand Planning System"],
             },
             {
               name: "Inventory Optimization",
               description:
                 "Optimize inventory levels across the supply network using AI to balance service levels with carrying costs.",
+              typicalDataEntities: ["Inventory Positions", "Demand Forecasts", "Lead Times", "Safety Stock Parameters"],
+              typicalSourceSystems: ["ERP", "WMS", "Demand Planning System"],
             },
             {
               name: "Markdown and Pricing Optimization",
               description:
                 "Use ML to optimize markdown timing and pricing strategies across multi-channel promotional calendars and gross-margin targets for distinct retail formats, maximizing revenue recovery on slow-moving inventory.",
+              typicalDataEntities: ["Inventory Positions", "Sales History", "Promotional Calendar", "Margin Targets"],
+              typicalSourceSystems: ["ERP", "POS System", "Merchandising System"],
             },
             {
               name: "Category & Pricing Architecture Analytics",
@@ -946,6 +1080,8 @@ const RCG: IndustryOutcome = {
                 "Identify Key Value Items, analyse traffic drivers and cross-seller relationships, and measure promotional effectiveness across categories and brands to inform assortment and pricing decisions.",
               businessValue:
                 "Improved promotional ROI, better category margin mix, reduced cannibalisation.",
+              typicalDataEntities: ["Category Sales", "Product Assortment", "Promotional Events", "Cross-Sell Matrices"],
+              typicalSourceSystems: ["POS System", "ERP", "Merchandising System"],
             },
           ],
           kpis: [
@@ -967,6 +1103,8 @@ const RCG: IndustryOutcome = {
               name: "Collaborative Planning and Replenishment",
               description:
                 "Enable real-time data sharing between retailers and suppliers for coordinated demand planning and replenishment.",
+              typicalDataEntities: ["Demand Forecasts", "Inventory Positions", "Purchase Orders", "Shipment Schedules"],
+              typicalSourceSystems: ["ERP", "EDI/VAN", "Demand Planning System"],
             },
             {
               name: "Category Performance Analytics",
@@ -974,6 +1112,8 @@ const RCG: IndustryOutcome = {
                 "Analyze category performance collaboratively with trading partners to optimize assortment and promotions.",
               businessValue:
                 "72-hour category review cycles versus six weeks with manual methods.",
+              typicalDataEntities: ["Category Sales", "Market Share", "Assortment Mix", "Promotional Performance"],
+              typicalSourceSystems: ["POS System", "Retail Data Syndication", "ERP"],
             },
           ],
           kpis: [
@@ -996,11 +1136,15 @@ const RCG: IndustryOutcome = {
                 "Optimize order routing across DCs, stores, ship-from-store, and click-and-collect channels using real-time inventory positions to minimise fulfilment cost and meet delivery promise times.",
               businessValue:
                 "15-25% reduction in fulfilment cost, improved on-time delivery rates.",
+              typicalDataEntities: ["Inventory Positions", "Order Events", "Store Capacity", "Delivery Zones"],
+              typicalSourceSystems: ["WMS", "OMS", "Store Inventory System"],
             },
             {
               name: "DC-to-Store Replenishment Optimization",
               description:
                 "Optimise slotting and DC-to-store replenishment cycles for promotional and seasonal peaks such as Black Friday, Christmas, and key sporting seasons.",
+              typicalDataEntities: ["Demand Forecasts", "DC Inventory", "Store Sales", "Promotional Calendar"],
+              typicalSourceSystems: ["WMS", "ERP", "Demand Planning System"],
             },
           ],
           kpis: [
@@ -1029,16 +1173,22 @@ const RCG: IndustryOutcome = {
               name: "Customer Data Platform",
               description:
                 "Build a group-wide CDP with cross-brand identity resolution across multiple retail banners, unifying transactional, behavioural, and demographic data into a single customer view.",
+              typicalDataEntities: ["Customer Profiles", "Transaction History", "Behavioural Events", "Demographic Attributes"],
+              typicalSourceSystems: ["POS System", "E-Commerce Platform", "CRM", "Loyalty Platform"],
             },
             {
               name: "Real-Time Personalization",
               description:
                 "Deliver personalized product recommendations, offers, and content in real-time across digital and physical channels.",
+              typicalDataEntities: ["Customer Profiles", "Real-Time Behavioural Events", "Product Catalog", "Recommendation Models"],
+              typicalSourceSystems: ["CDP", "E-Commerce Platform", "POS System"],
             },
             {
               name: "Loyalty Program Optimization",
               description:
                 "Optimize loyalty program design and rewards using data analytics to maximize customer retention and lifetime value.",
+              typicalDataEntities: ["Loyalty Transactions", "Member Profiles", "Redemption History", "Segment Performance"],
+              typicalSourceSystems: ["Loyalty Platform", "POS System", "CRM"],
             },
             {
               name: "Multi-Brand Loyalty & Offer Optimization",
@@ -1046,6 +1196,8 @@ const RCG: IndustryOutcome = {
                 "Design offers and benefits that optimise engagement and value across multiple retail brands, targeting cross-brand shoppers to increase share of wallet and program ROI.",
               businessValue:
                 "Higher cross-brand conversion, increased loyalty member spend, improved offer redemption rates.",
+              typicalDataEntities: ["Loyalty Transactions", "Cross-Brand Purchase History", "Offer Redemptions", "Member Segments"],
+              typicalSourceSystems: ["Loyalty Platform", "POS System", "E-Commerce Platform"],
             },
           ],
           kpis: [
@@ -1068,11 +1220,15 @@ const RCG: IndustryOutcome = {
               name: "Competitive Intelligence Analytics",
               description:
                 "Monitor competitor pricing, promotions, and market share using AI to inform strategic decisions.",
+              typicalDataEntities: ["Competitor Pricing", "Market Share Data", "Promotional Activity", "Category Benchmarks"],
+              typicalSourceSystems: ["Retail Data Syndication", "Web Scraping", "Third-Party Market Data"],
             },
             {
               name: "Consumer Sentiment Analysis",
               description:
                 "Analyze social media, reviews, and surveys to understand consumer sentiment and emerging trends.",
+              typicalDataEntities: ["Social Media Posts", "Product Reviews", "Survey Responses", "Brand Mentions"],
+              typicalSourceSystems: ["Social Listening Platform", "E-Commerce Platform", "Survey Tool"],
             },
           ],
           kpis: [
@@ -1127,11 +1283,15 @@ const RCG: IndustryOutcome = {
                 "Forecast and optimise store staffing levels using foot traffic, sales patterns, seasonality, local events, and promotional calendars to reduce labour cost while maintaining service levels.",
               businessValue:
                 "5-10% reduction in labour cost as a percentage of sales, improved roster accuracy.",
+              typicalDataEntities: ["Foot Traffic", "Sales History", "Promotional Calendar", "Employee Availability"],
+              typicalSourceSystems: ["POS System", "Workforce Management", "Store Traffic Sensors"],
             },
             {
               name: "In-Store Execution Analytics",
               description:
                 "Monitor planogram compliance, click-and-collect pick efficiency, and service queue wait times to drive consistent execution across the store network.",
+              typicalDataEntities: ["Planogram Definitions", "Shelf Images", "Pick Times", "Queue Metrics"],
+              typicalSourceSystems: ["Merchandising System", "OMS", "Store Operations App"],
             },
           ],
           kpis: [
@@ -1191,16 +1351,22 @@ const MANUFACTURING: IndustryOutcome = {
                 "Use sensor data to predict equipment failures and schedule proactive maintenance, reducing downtime and extending asset life.",
               businessValue:
                 "$30-35M bottom line impact through real-time machine data access for predicting issues.",
+              typicalDataEntities: ["IoT Sensor Readings", "Equipment Maintenance History", "Asset Registry"],
+              typicalSourceSystems: ["SCADA/Historian", "CMMS", "ERP"],
             },
             {
               name: "Remote Monitoring and Diagnostics",
               description:
                 "Enable real-time monitoring and diagnostics of products in the field, reducing service costs and improving uptime.",
+              typicalDataEntities: ["Telemetry Data", "Fault Codes", "Asset Configuration", "Service History"],
+              typicalSourceSystems: ["IoT Platform", "Product Cloud", "CMMS"],
             },
             {
               name: "Product Feature Usage Analytics",
               description:
                 "Analyze how customers use products to inform design improvements and tailor offerings.",
+              typicalDataEntities: ["Feature Usage Events", "Product Configuration", "Customer Segments", "Usage Aggregates"],
+              typicalSourceSystems: ["Product Cloud", "IoT Platform", "CRM"],
             },
             {
               name: "Warranty Cost Optimization",
@@ -1236,6 +1402,8 @@ const MANUFACTURING: IndustryOutcome = {
                 "Detect and mitigate product defects in real-time during manufacturing using advanced analytics and computer vision.",
               businessValue:
                 "20-40% reduction in defect rate.",
+              typicalDataEntities: ["In-Line Sensor Data", "Quality Inspections", "Process Parameters", "Defect Classifications"],
+              typicalSourceSystems: ["MES", "SCADA", "Quality Management System"],
             },
             {
               name: "Root Cause Analysis",
@@ -1288,6 +1456,8 @@ const MANUFACTURING: IndustryOutcome = {
                 "Analyze historical data and market trends to accurately predict future product demand using ML models.",
               businessValue:
                 "30-50% improvement in forecast accuracy.",
+              typicalDataEntities: ["Sales History", "Order Book", "Market Indicators", "Seasonality"],
+              typicalSourceSystems: ["ERP", "Demand Planning System", "CRM"],
             },
             {
               name: "Inventory Optimization",
@@ -1340,11 +1510,15 @@ const MANUFACTURING: IndustryOutcome = {
               name: "Design Space Exploration",
               description:
                 "Optimize product design by evaluating multiple parameters and constraints using simulations, generative design, and predictive analytics.",
+              typicalDataEntities: ["Design Parameters", "Simulation Results", "Material Properties", "Constraints"],
+              typicalSourceSystems: ["PLM", "CAD", "Simulation Platform"],
             },
             {
               name: "Product Testing Optimization",
               description:
                 "Use ML to optimize testing strategies, reduce test cycles, and predict product performance from simulated data.",
+              typicalDataEntities: ["Test Results", "Test Plans", "Simulation Outputs", "Performance Specs"],
+              typicalSourceSystems: ["PLM", "Test Management System", "Simulation Platform"],
             },
             {
               name: "Proprietary Coding Assistants",
@@ -1377,16 +1551,22 @@ const MANUFACTURING: IndustryOutcome = {
               name: "Customer 360 for Manufacturing",
               description:
                 "Build unified customer profiles combining product, transaction, service, and engagement data beyond just CRM.",
+              typicalDataEntities: ["Customer Profiles", "Order History", "Service Records", "Product Usage"],
+              typicalSourceSystems: ["CRM", "ERP", "Service Management", "IoT Platform"],
             },
             {
               name: "Next Best Commercial Offer",
               description:
                 "Use AI to identify the optimal offer for each customer based on purchase history, product usage, and lifecycle stage.",
+              typicalDataEntities: ["Customer Profiles", "Purchase History", "Product Catalog", "Propensity Scores"],
+              typicalSourceSystems: ["CRM", "ERP", "Product Cloud"],
             },
             {
               name: "Churn Modeling",
               description:
                 "Predict customer churn and implement proactive retention strategies based on engagement patterns.",
+              typicalDataEntities: ["Customer Profiles", "Engagement Metrics", "Contract Data", "Churn Risk Scores"],
+              typicalSourceSystems: ["CRM", "ERP", "Service Management"],
             },
           ],
           kpis: [
@@ -1444,22 +1624,30 @@ const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Production Optimization",
               description:
                 "Optimize energy production processes using real-time analytics and AI to maximize output and minimize waste.",
+              typicalDataEntities: ["Production Output", "Process Parameters", "Fuel Consumption", "Efficiency Metrics"],
+              typicalSourceSystems: ["SCADA", "Historian", "DCS"],
             },
             {
               name: "Predictive Maintenance for Energy Assets",
               description:
                 "Predict equipment failures across generation, transmission, and distribution assets to reduce unplanned downtime.",
               businessValue: "$6M infrastructure cost savings (Viessmann case).",
+              typicalDataEntities: ["IoT Sensor Readings", "Equipment Maintenance History", "Asset Registry"],
+              typicalSourceSystems: ["SCADA", "CMMS", "Asset Management System"],
             },
             {
               name: "Grid Optimization",
               description:
                 "Optimize electricity transmission and distribution networks for efficiency, reliability, and renewable integration.",
+              typicalDataEntities: ["Smart Meter Data", "Grid Topology", "Weather Forecasts"],
+              typicalSourceSystems: ["ADMS", "Smart Meter Infrastructure", "SCADA"],
             },
             {
               name: "Well Performance Optimization",
               description:
                 "Use subsurface data interpretation and ML to optimize oil and gas well performance and production rates.",
+              typicalDataEntities: ["Well Production Data", "Subsurface Logs", "Reservoir Models", "Completion Data"],
+              typicalSourceSystems: ["Historian", "Petroleum Data Management", "Reservoir Simulation"],
             },
           ],
           kpis: [
@@ -1481,6 +1669,8 @@ const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Asset Health Monitoring",
               description:
                 "Monitor the condition of critical assets in real-time using IoT sensors and AI to prevent failures.",
+              typicalDataEntities: ["Sensor Readings", "Asset Configuration", "Condition Indicators", "Alarm History"],
+              typicalSourceSystems: ["SCADA", "IoT Platform", "Asset Management System"],
             },
             {
               name: "Safety Event Prediction",
@@ -1488,11 +1678,15 @@ const ENERGY_UTILITIES: IndustryOutcome = {
                 "Use ML models to predict safety incidents and enable preventive interventions.",
               businessValue:
                 "Predict dangerous well-bore influxes 45 minutes before they occur (NOV case).",
+              typicalDataEntities: ["Sensor Readings", "Operational Parameters", "Historical Incidents", "Risk Indicators"],
+              typicalSourceSystems: ["SCADA", "DCS", "HSE System"],
             },
             {
               name: "Environmental Monitoring",
               description:
                 "Monitor emissions, leaks, and environmental impact in real-time for compliance and sustainability.",
+              typicalDataEntities: ["Emissions Readings", "Leak Detection Data", "Environmental Sensors", "Compliance Thresholds"],
+              typicalSourceSystems: ["CEMS", "SCADA", "Environmental Management System"],
             },
           ],
           kpis: [
@@ -1520,11 +1714,15 @@ const ENERGY_UTILITIES: IndustryOutcome = {
               name: "ESG & Emissions Reporting",
               description:
                 "Automate Scope 1, 2, and 3 emissions tracking and ESG reporting using integrated data pipelines.",
+              typicalDataEntities: ["Emissions Data", "Energy Consumption", "Supply Chain Footprint", "ESG Metrics"],
+              typicalSourceSystems: ["CEMS", "ERP", "Sustainability Platform"],
             },
             {
               name: "Regulatory Compliance Automation",
               description:
                 "Automate compliance with energy regulations across jurisdictions, reducing manual effort and risk.",
+              typicalDataEntities: ["Regulatory Requirements", "Compliance Evidence", "Audit Logs", "Reporting Schedules"],
+              typicalSourceSystems: ["ERP", "GRC Platform", "Regulatory Data Sources"],
             },
           ],
           kpis: [
@@ -1545,11 +1743,15 @@ const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Energy Trading Analytics",
               description:
                 "Provide real-time analytics for energy trading decisions, incorporating market data, weather, and demand forecasts.",
+              typicalDataEntities: ["Market Prices", "Position Data", "Weather Forecasts", "Demand Forecasts"],
+              typicalSourceSystems: ["Trading Platform", "Market Data Feeds", "EMS"],
             },
             {
               name: "Financial Planning & Forecasting",
               description:
                 "Improve financial planning accuracy with AI-driven forecasting incorporating operational and market data.",
+              typicalDataEntities: ["Financial Actuals", "Operational Metrics", "Market Indicators", "Budget Plans"],
+              typicalSourceSystems: ["ERP", "Trading Platform", "Planning System"],
             },
           ],
           kpis: [
@@ -1577,11 +1779,15 @@ const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Customer Demand Response",
               description:
                 "Optimize demand response programs using smart meter data and AI to balance grid load and reward customers.",
+              typicalDataEntities: ["Smart Meter Data", "Demand Response Events", "Customer Participation", "Grid Load"],
+              typicalSourceSystems: ["MDM", "Demand Response Platform", "SCADA"],
             },
             {
               name: "Personalized Energy Recommendations",
               description:
                 "Provide personalized energy-saving recommendations to customers based on consumption patterns and building data.",
+              typicalDataEntities: ["Consumption History", "Building Attributes", "Weather Data", "Benchmark Comparisons"],
+              typicalSourceSystems: ["MDM", "CRM", "Billing System"],
             },
           ],
           kpis: [
@@ -1652,16 +1858,22 @@ const WATER_UTILITIES: IndustryOutcome = {
                 "Classify and locate leakage using sensor, DMA flow, and pressure data to prioritise repair and pressure management interventions.",
               businessValue:
                 "Typical 10-15% reduction in leakage volumes, saving millions in treatment and pumping costs.",
+              typicalDataEntities: ["Pressure Sensor Data", "Flow Meter Readings", "DMA Flow Data", "Pipe Network GIS"],
+              typicalSourceSystems: ["SCADA", "GIS Platform", "Asset Management System"],
             },
             {
               name: "Pipe Burst Prediction",
               description:
                 "Predict burst risk from pipe age, material, soil conditions, weather, and historical failure patterns to enable proactive intervention.",
+              typicalDataEntities: ["Pipe Asset Register", "Soil Condition Data", "Weather Records", "Historical Failure Logs"],
+              typicalSourceSystems: ["Asset Management System", "GIS Platform", "CMMS"],
             },
             {
               name: "Demand Forecasting",
               description:
                 "Forecast water demand by DMA using weather, seasonality, population, and consumption patterns to optimise pumping schedules and reservoir levels.",
+              typicalDataEntities: ["Historical Consumption by DMA", "Weather Forecasts", "Population Data", "Reservoir Levels"],
+              typicalSourceSystems: ["SCADA", "Billing System", "Meter Data Management"],
             },
           ],
           kpis: [
@@ -1683,6 +1895,8 @@ const WATER_UTILITIES: IndustryOutcome = {
               name: "Asset Deterioration Modelling",
               description:
                 "Model remaining useful life of pipes, pumps, and treatment assets using age, material, condition, and operational history.",
+              typicalDataEntities: ["Asset Register", "Condition Assessment Records", "Operational History", "Maintenance Logs"],
+              typicalSourceSystems: ["Asset Management System", "CMMS", "SCADA"],
             },
             {
               name: "Capital Investment Optimisation",
@@ -1787,16 +2001,22 @@ const WATER_UTILITIES: IndustryOutcome = {
               name: "Water Quality Anomaly Detection",
               description:
                 "Detect quality exceedances at treatment works and in-network using continuous monitoring data, triggering early intervention before compliance breaches.",
+              typicalDataEntities: ["Continuous Monitoring Data", "Quality Thresholds", "Treatment Works Parameters", "Compliance Limits"],
+              typicalSourceSystems: ["SCADA", "Laboratory Information System", "Water Quality Monitoring"],
             },
             {
               name: "Chemical Dosing Optimisation",
               description:
                 "Optimise coagulant, chlorine, and pH dosing using source water quality and flow data to reduce chemical costs while maintaining compliance.",
+              typicalDataEntities: ["Source Water Quality", "Flow Rates", "Chemical Dosage Records", "Compliance Results"],
+              typicalSourceSystems: ["SCADA", "Laboratory Information System", "Treatment Plant DCS"],
             },
             {
               name: "Catchment Risk Assessment",
               description:
                 "Assess raw water quality risk from agricultural run-off, industrial discharges, and climate factors to inform catchment management programmes.",
+              typicalDataEntities: ["Land Use Data", "Discharge Permits", "Rainfall Patterns", "Raw Water Quality Trends"],
+              typicalSourceSystems: ["GIS Platform", "Environmental Compliance System", "Laboratory Information System"],
             },
           ],
           kpis: [
@@ -1820,11 +2040,15 @@ const WATER_UTILITIES: IndustryOutcome = {
                 "Integrate satellite imagery, land-use data, rainfall patterns, and water quality trends to monitor catchment health and prioritise intervention programmes across source water areas.",
               businessValue:
                 "Proactive source protection reduces treatment complexity and cost while safeguarding long-term water quality.",
+              typicalDataEntities: ["Satellite Imagery", "Land Use Data", "Rainfall Records", "Water Quality Trends"],
+              typicalSourceSystems: ["GIS Platform", "Environmental Monitoring", "Laboratory Information System"],
             },
             {
               name: "Source Water Quality Trend Analysis",
               description:
                 "Analyse long-term trends in raw water quality across reservoirs and river abstractions, correlating with land-use change, climate patterns, and upstream activity to anticipate emerging risks.",
+              typicalDataEntities: ["Raw Water Quality Records", "Land Use Change Data", "Climate Patterns", "Upstream Discharge Records"],
+              typicalSourceSystems: ["Laboratory Information System", "GIS Platform", "Environmental Monitoring"],
             },
           ],
           kpis: [
@@ -1847,21 +2071,29 @@ const WATER_UTILITIES: IndustryOutcome = {
                 "Predict sewer overflow events from rainfall forecasts, network level sensors, and flow data to enable proactive spill prevention.",
               businessValue:
                 "Reduce overflow spill frequency and duration, directly impacting regulatory performance commitments.",
+              typicalDataEntities: ["Rainfall Forecasts", "Network Level Sensors", "Flow Data", "CSO Event History"],
+              typicalSourceSystems: ["SCADA", "Weather Services", "Wastewater Management System"],
             },
             {
               name: "Carbon Emissions Tracking",
               description:
                 "Automate Scope 1, 2, and 3 emissions reporting across pumping, treatment, transport, and fleet operations.",
+              typicalDataEntities: ["Energy Consumption", "Fleet Fuel Records", "Treatment Process Data", "Supply Chain Emissions"],
+              typicalSourceSystems: ["SCADA", "Fleet Management System", "ERP", "Energy Management System"],
             },
             {
               name: "Pollution Incident Prevention",
               description:
                 "Identify high-risk discharge points using telemetry, event history, and network hydraulic models to prevent significant pollution incidents.",
+              typicalDataEntities: ["Discharge Telemetry", "Event History", "Network Hydraulic Model", "Risk Assessments"],
+              typicalSourceSystems: ["SCADA", "Wastewater Management System", "GIS Platform"],
             },
             {
               name: "Climate Variability & Drought Scenario Modelling",
               description:
                 "Model the impact of climate change scenarios on rainfall patterns, inflow projections, and demand to inform long-term infrastructure planning and drought response strategies.",
+              typicalDataEntities: ["Climate Scenarios", "Rainfall Projections", "Inflow Forecasts", "Demand Projections"],
+              typicalSourceSystems: ["Climate Modelling", "Hydrological Modelling", "Billing System", "Bulk Water Planning"],
             },
             {
               name: "Emissions Reduction & Net-Zero Pathway Analytics",
@@ -1978,21 +2210,29 @@ const WATER_UTILITIES: IndustryOutcome = {
                 "Model drought scenarios against storage trajectories, demand forecasts, and supply augmentation options to inform restriction trigger levels and contingency planning.",
               businessValue:
                 "Earlier, evidence-based restriction decisions that balance community impact with supply security.",
+              typicalDataEntities: ["Storage Trajectories", "Demand Forecasts", "Supply Augmentation Options", "Restriction Triggers"],
+              typicalSourceSystems: ["Bulk Water Planning", "SCADA", "Hydrological Modelling"],
             },
             {
               name: "Desalination Optimisation",
               description:
                 "Optimise desalination plant dispatch, energy consumption, and maintenance scheduling based on grid demand, storage levels, and energy market conditions.",
+              typicalDataEntities: ["Grid Demand", "Storage Levels", "Energy Market Prices", "Plant Capacity"],
+              typicalSourceSystems: ["SCADA", "Desalination Plant DCS", "Energy Market Data"],
             },
             {
               name: "Inter-connected Scheme Optimisation",
               description:
                 "Model transfers and balancing across multiple dams, treatment plants, and distribution zones within a regional water grid to maximise whole-of-system reliability.",
+              typicalDataEntities: ["Transfer Capacity", "Treatment Output", "Storage Levels", "Zone Demand"],
+              typicalSourceSystems: ["SCADA", "Bulk Water Planning", "Asset Management System"],
             },
             {
               name: "Water Security Index Forecasting",
               description:
                 "Calculate and forecast a composite water security index per scheme incorporating storage, inflow trends, demand growth, climate outlook, and supply augmentation capacity.",
+              typicalDataEntities: ["Storage Levels", "Inflow Trends", "Demand Growth", "Climate Outlook"],
+              typicalSourceSystems: ["SCADA", "Bulk Water Planning", "Climate Modelling"],
             },
           ],
           kpis: [
@@ -2026,11 +2266,15 @@ const WATER_UTILITIES: IndustryOutcome = {
                 "Monitor smart meter deployment progress, communication reliability, and data quality to ensure the AMI programme delivers full network visibility on schedule.",
               businessValue:
                 "Accelerated realisation of smart metering benefits through early detection of telemetry gaps and meter faults.",
+              typicalDataEntities: ["Deployment Progress", "Communication Reliability", "Data Quality Metrics", "Meter Fault Records"],
+              typicalSourceSystems: ["AMI Head-End", "Meter Data Management", "Asset Management System"],
             },
             {
               name: "Smart Network Event Correlation",
               description:
                 "Correlate events across pressure, flow, acoustic, and meter telemetry to automatically detect, classify, and locate network anomalies such as bursts, leaks, and pressure transients.",
+              typicalDataEntities: ["Pressure Telemetry", "Flow Data", "Acoustic Logs", "Meter Events"],
+              typicalSourceSystems: ["SCADA", "AMI Head-End", "GIS Platform"],
             },
             {
               name: "Digital Twin for Network Simulation",
@@ -2059,11 +2303,15 @@ const WATER_UTILITIES: IndustryOutcome = {
                 "Operate a shared analytics platform and data hub that enables smaller regional councils and utilities to access smart water capabilities without building bespoke infrastructure.",
               businessValue:
                 "Economies of scale for smaller utilities and consistent data standards across the region.",
+              typicalDataEntities: ["Operational Metrics", "Asset Data", "Customer Data", "Quality Standards"],
+              typicalSourceSystems: ["Data Hub", "Shared Analytics Platform", "Participating Utility Systems"],
             },
             {
               name: "Cross-utility Benchmarking Analytics",
               description:
                 "Aggregate anonymised operational, financial, and customer metrics across participating utilities to enable peer benchmarking and identify best-practice improvement opportunities.",
+              typicalDataEntities: ["Operational KPIs", "Financial Metrics", "Customer Satisfaction", "Asset Performance"],
+              typicalSourceSystems: ["Data Hub", "Participating Utility Systems", "Regulatory Reporting"],
             },
           ],
           kpis: [
@@ -2101,6 +2349,8 @@ const WATER_UTILITIES: IndustryOutcome = {
               name: "Biosolids Reuse & Energy Recovery Analytics",
               description:
                 "Track biosolids production, quality, and beneficial reuse pathways (agriculture, land rehabilitation, energy generation) to optimise resource recovery and regulatory compliance.",
+              typicalDataEntities: ["Biosolids Production", "Quality Test Results", "Reuse Pathways", "Energy Recovery"],
+              typicalSourceSystems: ["Treatment Plant DCS", "Laboratory Information System", "Waste Management System"],
             },
             {
               name: "Precinct-scale Water Recycling Feasibility",
@@ -2269,6 +2519,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Calculate and segment customers by predicted CLV using tenure, ARPU, product mix, and engagement data. Finance and marketing teams use this to allocate retention spend and tailor service levels.",
               businessValue:
                 "Optimise retention investment by focusing on highest-CLV segments.",
+              typicalDataEntities: ["Tenure Data", "ARPU History", "Product Mix", "Engagement Metrics"],
+              typicalSourceSystems: ["BSS/OSS", "Billing Platform", "CRM", "Product Analytics"],
             },
             {
               name: "Win-Back & Re-Acquisition Targeting",
@@ -2349,6 +2601,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Use AI to analyze customer communications, understand context and sentiment, and prepare tailored responses for first-point resolution.",
               businessValue:
                 "20%+ reduction in care call volume, 10%+ reduction in handling time.",
+              typicalDataEntities: ["Customer Communications", "Interaction History", "Product Holdings", "Resolution Scripts"],
+              typicalSourceSystems: ["Contact Center Platform", "CRM", "BSS/OSS"],
             },
             {
               name: "Churn Prediction and Retention",
@@ -2356,6 +2610,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Advanced ML models to predict churn by analyzing behavior, complaints, billing issues, renewal dates, and NPS scores.",
               businessValue:
                 "1% churn reduction can increase profits by tens of millions annually.",
+              typicalDataEntities: ["Usage Records", "Billing History", "Customer Interactions", "Service Tickets"],
+              typicalSourceSystems: ["BSS/OSS", "CRM", "Billing Platform"],
             },
             {
               name: "Intelligent Bill Analysis",
@@ -2363,6 +2619,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "AI compares bills over time, explaining variations to customers and automating credit adjustments within designated limits.",
               businessValue:
                 "Reduce billing-related support contacts by 25-35%.",
+              typicalDataEntities: ["Bill History", "Usage Records", "Rate Plans", "Credit Rules"],
+              typicalSourceSystems: ["Billing Platform", "BSS/OSS", "CRM"],
             },
             {
               name: "Hyper Personalized Offers",
@@ -2370,6 +2628,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Create hyper-personalized offers including cybersecurity products, network slicing, and additional bandwidth based on usage insights.",
               businessValue:
                 "Increase offer acceptance rates by 20-30% compared to untargeted campaigns.",
+              typicalDataEntities: ["Usage Patterns", "Product Holdings", "Customer Segments", "Offer Catalog"],
+              typicalSourceSystems: ["BSS/OSS", "CRM", "Product Catalog", "Marketing Platform"],
             },
             {
               name: "Self-Service Diagnostics & Speed-Test Intelligence",
@@ -2377,6 +2637,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Enable customers to run in-app diagnostics (speed test, latency check, WiFi optimisation) with AI-driven root cause analysis and automated remediation suggestions. Reduces inbound support contacts and improves perceived control.",
               businessValue:
                 "Deflect 15-20% of support contacts through self-service resolution.",
+              typicalDataEntities: ["Speed Test Results", "Network Diagnostics", "CPE Data", "Service Configuration"],
+              typicalSourceSystems: ["Network Analytics", "BSS/OSS", "CPE Management", "Customer App"],
             },
             {
               name: "Proactive Outage Detection & Customer Comms",
@@ -2384,6 +2646,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Detect localised outages from network telemetry and customer-reported symptoms, automatically notify affected customers with ETA and status updates via app/SMS. CX teams use this to get ahead of complaint spikes.",
               businessValue:
                 "Reduce inbound outage calls by 30-40% and improve NPS during incidents.",
+              typicalDataEntities: ["Network Telemetry", "Fault Records", "Customer Service Links", "Outage Status"],
+              typicalSourceSystems: ["NOC/Network OSS", "Fault Management", "CRM", "Notification Platform"],
             },
             {
               name: "Agent Support Copilot",
@@ -2391,6 +2655,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Equip contact centre agents with an AI copilot that surfaces customer history, diagnoses issues from network data, recommends next-best-action, and drafts responses. Support teams use this to improve first-call resolution and reduce handle time.",
               businessValue:
                 "Improve first-call resolution by 20% and reduce average handle time by 25%.",
+              typicalDataEntities: ["Customer History", "Network Diagnostics", "Product Configuration", "Resolution Knowledge"],
+              typicalSourceSystems: ["Contact Center Platform", "CRM", "BSS/OSS", "Network OSS"],
             },
           ],
           kpis: [
@@ -2417,6 +2683,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Analyse NPS survey responses with NLP to identify key satisfaction drivers and detractors, then route actionable insights to responsible teams with SLA for follow-up. CX leadership uses this to close the loop on experience issues systematically.",
               businessValue:
                 "Improve NPS by 10-15 points through systematic driver resolution.",
+              typicalDataEntities: ["NPS Survey Responses", "Driver Themes", "Action Items", "Follow-up Status"],
+              typicalSourceSystems: ["Survey Platform", "CRM", "Contact Center Platform"],
             },
             {
               name: "Customer Journey Analytics",
@@ -2749,6 +3017,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Predict equipment failures and dispatch field technicians proactively before service is affected, using telemetry from CPE, ONTs, and network equipment.",
               businessValue:
                 "Reduce truck rolls by 20-25% through predictive dispatch.",
+              typicalDataEntities: ["CPE Telemetry", "ONT Data", "Equipment Health", "Failure Predictions"],
+              typicalSourceSystems: ["Network OSS", "CPE Management", "Field Service Management"],
             },
           ],
           kpis: [
@@ -2782,6 +3052,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Detect and prevent fraud including subscription fraud, international revenue share fraud, and account takeover using ML pattern detection across billing, usage, and identity data.",
               businessValue:
                 "Reduce fraud losses by 40-60% through real-time detection.",
+              typicalDataEntities: ["Usage Records", "Billing History", "Identity Data", "Fraud Patterns"],
+              typicalSourceSystems: ["BSS/OSS", "Billing Platform", "Identity Verification", "Fraud Detection Engine"],
             },
             {
               name: "Robo-calling & Bot Detection",
@@ -2826,6 +3098,8 @@ const COMMUNICATIONS: IndustryOutcome = {
                 "Automate compliance monitoring and reporting for telecommunications obligations, privacy regulations, and critical infrastructure requirements. Compliance and legal teams use this to reduce manual audit burden and ensure continuous compliance.",
               businessValue:
                 "Reduce compliance reporting effort by 50-60% and eliminate overdue findings.",
+              typicalDataEntities: ["Compliance Obligations", "Audit Evidence", "Policy State", "Finding Records"],
+              typicalSourceSystems: ["GRC Platform", "BSS/OSS", "Network OSS", "Document Management"],
             },
           ],
           kpis: [
@@ -2884,21 +3158,29 @@ const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "First-Party Identity Spine",
               description:
                 "Build a unified first-party identity framework storing and organizing PII data at household, person, and device levels.",
+              typicalDataEntities: ["Household Profiles", "Person Identity Records", "Device Identifiers", "Identity Link Graph"],
+              typicalSourceSystems: ["CDP", "Website Analytics", "App Analytics", "CRM"],
             },
             {
               name: "Household Device Graphing",
               description:
                 "Link multiple devices to individual households using first-party signals to dramatically augment identity coverage.",
+              typicalDataEntities: ["Device Fingerprints", "Household Clusters", "Cross-Device Signals", "Login Graph"],
+              typicalSourceSystems: ["CDP", "Ad Server", "Streaming Platform", "Analytics Platform"],
             },
             {
               name: "Customer Profile Enrichment",
               description:
                 "Aggregate data from multiple touchpoints to create rich profiles of audience interests, preferences, demographics, and psychographics.",
+              typicalDataEntities: ["Customer Profiles", "Engagement History", "Demographic Attributes", "Interest Signals"],
+              typicalSourceSystems: ["CDP", "Content CMS", "Analytics Platform", "CRM"],
             },
             {
               name: "Audience Segmentation",
               description:
                 "ML-driven algorithms to create dynamic audience segments based on behavioral patterns, content preferences, and demographics.",
+              typicalDataEntities: ["Audience Segments", "Behavioral Events", "Content Preferences", "Demographic Attributes"],
+              typicalSourceSystems: ["CDP", "Content CMS", "Analytics Platform", "Ad Server"],
             },
           ],
           kpis: [
@@ -2936,6 +3218,8 @@ const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "Campaign Attribution & Optimization",
               description:
                 "Measure marketing campaign effectiveness across channels with multi-touch attribution modeling.",
+              typicalDataEntities: ["Campaign Events", "Touchpoint Data", "Conversion Events", "Channel Performance"],
+              typicalSourceSystems: ["Marketing Platform", "Ad Server", "Analytics Platform", "CRM"],
             },
           ],
           kpis: [
@@ -2963,16 +3247,22 @@ const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "Programmatic Ad Targeting",
               description:
                 "Enable precise, privacy-compliant ad targeting using first-party audience data and ML-driven lookalike modeling.",
+              typicalDataEntities: ["Audience Segments", "Ad Inventory", "Bid Data", "Conversion Events"],
+              typicalSourceSystems: ["CDP", "Ad Server", "DSP", "Analytics Platform"],
             },
             {
               name: "Yield Optimization",
               description:
                 "Optimize ad inventory yield by predicting CPMs and dynamically adjusting pricing and placement strategies.",
+              typicalDataEntities: ["Ad Inventory", "CPM Forecasts", "Placement Performance", "Fill Rates"],
+              typicalSourceSystems: ["Ad Server", "SSP", "Analytics Platform", "Programmatic Platform"],
             },
             {
               name: "Ad Measurement & Attribution",
               description:
                 "Provide advertisers with accurate cross-platform measurement and attribution to prove ad effectiveness.",
+              typicalDataEntities: ["Ad Impressions", "Viewability Data", "Conversion Events", "Attribution Models"],
+              typicalSourceSystems: ["Ad Server", "Analytics Platform", "DMP", "CRM"],
             },
           ],
           kpis: [
@@ -2993,11 +3283,15 @@ const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "Content Performance Analytics",
               description:
                 "Analyze content performance across platforms to optimize content investment, scheduling, and licensing decisions.",
+              typicalDataEntities: ["Content Catalog", "Viewership Metrics", "Platform Performance", "Licensing Data"],
+              typicalSourceSystems: ["Content CMS", "Streaming Platform", "Analytics Platform", "Rights Management"],
             },
             {
               name: "AI-Powered Content Metadata",
               description:
                 "Use AI to automatically tag, classify, and enrich content metadata for improved discoverability and recommendations.",
+              typicalDataEntities: ["Content Catalog", "Raw Media Assets", "Tag Taxonomy", "Enriched Metadata"],
+              typicalSourceSystems: ["Content CMS", "MAM", "Transcription Service", "Analytics Platform"],
             },
           ],
           kpis: [
@@ -3053,11 +3347,15 @@ const DIGITAL_NATIVES: IndustryOutcome = {
               name: "Customer Data Enrichment",
               description:
                 "Continuously update and enhance customer profiles with real-time behavioral and transactional data.",
+              typicalDataEntities: ["Customer Profiles", "Behavioral Events", "Transaction History", "Enrichment Attributes"],
+              typicalSourceSystems: ["CDP", "Product Analytics", "Billing System", "CRM"],
             },
             {
               name: "Identity Resolution",
               description:
                 "Recognize users across multiple platforms and touchpoints to create a unified customer view.",
+              typicalDataEntities: ["Identity Graph", "Device Identifiers", "Cross-Platform Events", "User Profiles"],
+              typicalSourceSystems: ["CDP", "Product Analytics", "Auth System", "Marketing Platform"],
             },
             {
               name: "Real-Time Personalization",
@@ -3155,21 +3453,29 @@ const GAMES: IndustryOutcome = {
                 "Create a unified view of the player spanning multiple games, studios, and ecosystems including play sessions, efficacy, preferences, and purchase propensity.",
               businessValue:
                 "Foundational for all engagement, acquisition, and monetization use cases.",
+              typicalDataEntities: ["Player Profiles", "Session Data", "Purchase History", "Cross-Game Activity"],
+              typicalSourceSystems: ["Game Telemetry System", "Player Database", "Payment Platform", "Analytics Platform"],
             },
             {
               name: "Churn Mitigation",
               description:
                 "Understand and mitigate player churn across the player lifecycle using behavioral analytics and ML models.",
+              typicalDataEntities: ["Player Session Data", "In-Game Events", "Engagement Metrics", "Churn Risk Scores"],
+              typicalSourceSystems: ["Game Telemetry System", "Player Database", "Analytics Platform", "CRM"],
             },
             {
               name: "Player Segmentation",
               description:
                 "Better understand player behavior through ML-driven clustering to drive more impactful engagement and retention strategies.",
+              typicalDataEntities: ["Player Clusters", "Behavioral Attributes", "Engagement Scores", "Segment Definitions"],
+              typicalSourceSystems: ["Game Telemetry System", "Player Database", "Analytics Platform", "Marketing Platform"],
             },
             {
               name: "Player Identity Resolution",
               description:
                 "Identify players across their entire engagement journey from web to ad targeting to in-game across multiple platforms and titles.",
+              typicalDataEntities: ["Identity Graph", "Device Identifiers", "Cross-Platform Events", "Login Records"],
+              typicalSourceSystems: ["Auth System", "Game Telemetry System", "Ad Platform", "Analytics Platform"],
             },
           ],
           kpis: [
@@ -3254,16 +3560,22 @@ const GAMES: IndustryOutcome = {
               name: "Live Event Performance Analytics",
               description:
                 "Monitor and optimize live events, seasonal content, and game updates in real-time to maximize player engagement.",
+              typicalDataEntities: ["Event Definitions", "Participation Metrics", "Engagement Rates", "Revenue per Event"],
+              typicalSourceSystems: ["Game Telemetry System", "Live Ops Platform", "Analytics Platform", "Content CMS"],
             },
             {
               name: "Game Balance Optimization",
               description:
                 "Use analytics to continuously monitor and adjust game balance, economy, and difficulty to maintain player satisfaction.",
+              typicalDataEntities: ["Economy Metrics", "Win Rates", "Item Usage", "Difficulty Progression"],
+              typicalSourceSystems: ["Game Telemetry System", "Economy Config", "Analytics Platform", "A/B Testing Platform"],
             },
             {
               name: "Content Pipeline Optimization",
               description:
                 "Optimize content delivery scheduling based on player engagement patterns and seasonal trends.",
+              typicalDataEntities: ["Content Calendar", "Engagement Patterns", "Release Metrics", "Seasonal Trends"],
+              typicalSourceSystems: ["Content CMS", "Game Telemetry System", "Analytics Platform", "Live Ops Platform"],
             },
           ],
           kpis: [
@@ -3291,6 +3603,8 @@ const GAMES: IndustryOutcome = {
               name: "Infrastructure Cost Optimization",
               description:
                 "Optimize cloud and backend infrastructure costs using analytics to rightsize resources and reduce waste.",
+              typicalDataEntities: ["Resource Utilization", "Cost by Service", "DAU/MAU Metrics", "Peak Load Patterns"],
+              typicalSourceSystems: ["Cloud Platform", "APM", "Billing System", "Game Telemetry System"],
             },
             {
               name: "Data Democratization",
@@ -3358,6 +3672,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Use ML-based conflict resolution to generate optimised timetables that maximise path utilisation across complex network topologies while respecting infrastructure and rolling stock constraints.",
               businessValue:
                 "5-10% increase in train paths utilised per hour on constrained corridors.",
+              typicalDataEntities: ["Network Topology", "Path Constraints", "Rolling Stock Availability", "Conflict Matrix"],
+              typicalSourceSystems: ["Timetabling System", "Asset Management System", "SCADA", "ERP"],
             },
             {
               name: "Real-Time Delay Prediction & Management",
@@ -3365,6 +3681,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Predict knock-on delays across the network using real-time train positions, infrastructure status, and historical delay propagation patterns, recommending recovery actions to controllers.",
               businessValue:
                 "20-30% reduction in secondary delay minutes through proactive intervention.",
+              typicalDataEntities: ["Train Positions", "Infrastructure Status", "Delay History", "Recovery Actions"],
+              typicalSourceSystems: ["SCADA", "TMS", "Signalling System", "Asset Management System"],
             },
             {
               name: "Heavy-Haul Train Dynamics & Pathing",
@@ -3372,6 +3690,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise consist length, distributed power configuration, and speed profiles for long heavy-haul coal and bulk routes using gradient data, axle load limits, and corridor capacity models.",
               businessValue:
                 "3-5% improvement in gross tonnage per train path through optimised consist planning.",
+              typicalDataEntities: ["Gradient Data", "Axle Load Limits", "Corridor Capacity", "Consist Configuration"],
+              typicalSourceSystems: ["Asset Management System", "TMS", "Track Database", "SCADA"],
             },
             {
               name: "Energy-Efficient Driving Advisory",
@@ -3379,6 +3699,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise speed profiles using gradient data, timetable slack, and rolling stock characteristics to reduce traction energy consumption while maintaining punctuality.",
               businessValue:
                 "10-15% traction energy savings through optimised coasting and braking strategies.",
+              typicalDataEntities: ["Gradient Profiles", "Timetable Slack", "Rolling Stock Specs", "Energy Consumption"],
+              typicalSourceSystems: ["TMS", "Track Database", "Asset Management System", "Energy Management System"],
             },
             {
               name: "Port Interface & Terminal Coordination",
@@ -3386,6 +3708,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Integrate ship schedules, stockpile levels, and corridor train plans to optimise the handoff between rail network and export terminals, reducing demurrage and improving port throughput.",
               businessValue:
                 "10-20% reduction in port demurrage costs through coordinated rail-terminal scheduling.",
+              typicalDataEntities: ["Ship Schedules", "Stockpile Levels", "Train Plans", "Berth Availability"],
+              typicalSourceSystems: ["Port Management System", "TMS", "Terminal SCADA", "ERP"],
             },
           ],
           kpis: [
@@ -3407,6 +3731,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Freight Train Scheduling Optimization",
               description:
                 "Balance freight and passenger train paths across capacity-constrained corridors using AI to maximise freight throughput without degrading passenger performance.",
+              typicalDataEntities: ["Path Allocations", "Corridor Capacity", "Freight Demand", "Passenger Timetables"],
+              typicalSourceSystems: ["TMS", "Timetabling System", "Freight Management System", "SCADA"],
             },
             {
               name: "Yard Operations Automation",
@@ -3453,11 +3779,15 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Model multi-user capacity on regulated corridors, queue and prioritise access requests, and report utilisation transparently to access holders and regulators.",
               businessValue:
                 "Improved access request turnaround and 10-15% better capacity utilisation on constrained coal systems.",
+              typicalDataEntities: ["Corridor Capacity", "Access Requests", "Utilisation Reports", "Queue Priorities"],
+              typicalSourceSystems: ["TMS", "Access Management System", "SCADA", "Regulatory Reporting"],
             },
             {
               name: "Performance Rebate & Access Charge Optimization",
               description:
                 "Track corridor performance against access undertaking benchmarks, calculate rebate and penalty exposure in real time, and identify operational levers to optimise outcomes for network and above-rail operators.",
+              typicalDataEntities: ["Performance Benchmarks", "Rebate Calculations", "Penalty Exposure", "Access Charges"],
+              typicalSourceSystems: ["TMS", "Access Management System", "ERP", "Regulatory Reporting"],
             },
             {
               name: "Maintenance Window vs Throughput Scenario Planning",
@@ -3465,6 +3795,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Simulate the throughput impact of planned possessions and maintenance windows across coal systems and port interfaces, balancing asset renewal needs with contractual throughput obligations.",
               businessValue:
                 "5-8% reduction in throughput loss during planned maintenance through optimised possession scheduling.",
+              typicalDataEntities: ["Possession Schedule", "Throughput Models", "Contract Obligations", "Asset Renewal Plan"],
+              typicalSourceSystems: ["Asset Management System", "TMS", "Maintenance Planning", "ERP"],
             },
           ],
           kpis: [
@@ -3488,11 +3820,15 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise crew rosters for long-distance heavy-haul corridors, modelling fatigue risk, remote changeover logistics, and regulatory hours-of-work limits to maintain safety and crew wellbeing.",
               businessValue:
                 "15-20% reduction in fatigue-related risk events through data-driven roster optimisation.",
+              typicalDataEntities: ["Crew Rosters", "Fatigue Risk Scores", "Hours of Work", "Changeover Locations"],
+              typicalSourceSystems: ["Crew Management System", "HR System", "TMS", "Safety Management System"],
             },
             {
               name: "Remote Operations Centre Decision Support",
               description:
                 "Provide AI copilots for train controllers and dispatchers managing remote corridors, surfacing real-time alerts, recommending recovery plans, and reducing cognitive load during complex operational scenarios.",
+              typicalDataEntities: ["Real-Time Alerts", "Recovery Plans", "Network State", "Incident History"],
+              typicalSourceSystems: ["SCADA", "TMS", "Signalling System", "Asset Management System"],
             },
           ],
           kpis: [
@@ -3523,11 +3859,15 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Predict component failures from onboard sensors, SCADA telemetry, and maintenance history using ML models, shifting from time-based to condition-based maintenance regimes.",
               businessValue:
                 "$30-50M annual savings for major operators through reduced unplanned maintenance and improved fleet availability.",
+              typicalDataEntities: ["Asset Condition Data", "Maintenance History", "IoT Sensor Feeds", "Failure Predictions"],
+              typicalSourceSystems: ["Asset Management System", "SCADA", "ERP", "Onboard Telemetry"],
             },
             {
               name: "Wheel & Bogie Condition Monitoring",
               description:
                 "Detect wheel flats, bearing degradation, and bogie faults using wayside acoustic and vibration monitoring systems, triggering maintenance before failures cause service disruption.",
+              typicalDataEntities: ["Wayside Sensor Data", "Acoustic Signatures", "Vibration Patterns", "Bearing Condition"],
+              typicalSourceSystems: ["Wayside Monitoring Systems", "Asset Management System", "SCADA", "ERP"],
             },
             {
               name: "Fleet Availability Optimization",
@@ -3599,6 +3939,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Provide shipper-facing dashboards with live train position, consignment status, and corridor disruption alerts via API and web portal, giving freight customers full visibility of their shipments.",
               businessValue:
                 "30-40% reduction in shipper enquiries through self-service tracking and proactive notifications.",
+              typicalDataEntities: ["Train Positions", "Consignment Status", "Disruption Alerts", "ETA History"],
+              typicalSourceSystems: ["TMS", "Freight Management System", "SCADA", "Shipper Portal"],
             },
             {
               name: "Self-Service Quoting & Lane Comparison",
@@ -3611,11 +3953,15 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Deliver proactive, automated notifications to freight customers with ETA revisions, alternative routing options, and recovery timelines when corridor disruptions occur.",
               businessValue:
                 "50%+ improvement in average disruption notification lead time.",
+              typicalDataEntities: ["Disruption Events", "ETA Revisions", "Alternative Routes", "Recovery Timelines"],
+              typicalSourceSystems: ["TMS", "SCADA", "Freight Management System", "Notification Service"],
             },
             {
               name: "Shipper Performance Dashboard",
               description:
                 "Provide per-customer views of on-time delivery, volume trends, SLA compliance, and ESG metrics, enabling shippers to monitor and report on their rail freight performance.",
+              typicalDataEntities: ["Delivery Performance", "Volume Trends", "SLA Metrics", "ESG Data"],
+              typicalSourceSystems: ["Freight Management System", "TMS", "CRM", "Carbon Calculator"],
             },
           ],
           kpis: [
@@ -3639,11 +3985,15 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Track contracted vs actual volumes across long-term haulage agreements, flag under/over-utilisation risks, and model rebate and penalty scenarios to optimise contract performance.",
               businessValue:
                 "5-10% improvement in contract utilisation through proactive volume management.",
+              typicalDataEntities: ["Contract Volumes", "Actual Volumes", "Rebate Models", "Penalty Scenarios"],
+              typicalSourceSystems: ["Freight Management System", "CRM", "ERP", "TMS"],
             },
             {
               name: "SLA & On-Time Performance Cockpit",
               description:
                 "Provide real-time contract performance by lane with drill-down to root-cause delays, enabling proactive account management and data-driven SLA negotiations.",
+              typicalDataEntities: ["Lane Performance", "Root-Cause Delays", "SLA Status", "Contract Benchmarks"],
+              typicalSourceSystems: ["TMS", "Freight Management System", "CRM", "Incident Database"],
             },
             {
               name: "Modal Shift & Revenue Growth Analytics",
@@ -3651,6 +4001,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Identify road-to-rail conversion opportunities by corridor, commodity, and customer segment using freight market data, emissions comparisons, and capacity availability.",
               businessValue:
                 "Target 2-5% incremental modal shift to rail through data-driven commercial targeting.",
+              typicalDataEntities: ["Market Data", "Emissions Comparisons", "Capacity Availability", "Customer Segments"],
+              typicalSourceSystems: ["Freight Management System", "Market Data", "Carbon Calculator", "TMS"],
             },
           ],
           kpis: [
@@ -3679,16 +4031,22 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               name: "SPAD Risk Prediction",
               description:
                 "Predict Signal Passed at Danger likelihood from driver behaviour patterns, route geometry, signalling layout, and environmental conditions to target interventions at highest-risk locations.",
+              typicalDataEntities: ["Driver Behaviour", "Route Geometry", "Signalling Layout", "Environmental Data"],
+              typicalSourceSystems: ["Signalling System", "Driver Monitoring", "Track Database", "Weather Service"],
             },
             {
               name: "Level Crossing Risk Assessment",
               description:
                 "Score level crossing risk using road traffic volumes, sighting distances, near-miss history, and population density to prioritise upgrades and closures.",
+              typicalDataEntities: ["Traffic Volumes", "Sighting Distances", "Near-Miss History", "Population Data"],
+              typicalSourceSystems: ["Asset Management System", "Incident Database", "Traffic Data", "GIS Platform"],
             },
             {
               name: "Worker Safety & Track Access Monitoring",
               description:
                 "Track possessions, safe systems of work compliance, and near-miss events to prevent workforce injuries and improve track access planning.",
+              typicalDataEntities: ["Possession Records", "Safe Work Compliance", "Near-Miss Events", "Track Access Plans"],
+              typicalSourceSystems: ["Possession Management", "Safety Management System", "TMS", "HR System"],
             },
             {
               name: "Fatigue & Human Factors Analytics",
@@ -3753,6 +4111,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Corridor Decarbonisation Planning",
               description:
                 "Model traction energy mix, renewable sourcing, locomotive idling reduction, and electrification or hydrogen scenarios at the corridor level to support net-zero operational emissions targets.",
+              typicalDataEntities: ["Energy Mix", "Renewable Sourcing", "Idling Data", "Electrification Scenarios"],
+              typicalSourceSystems: ["Energy Management System", "TMS", "Asset Management System", "ERP"],
             },
             {
               name: "Climate Resilience Analytics",
@@ -3760,6 +4120,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Assess flood, extreme heat, and cyclone exposure across network sections using climate projection models and historical event data, prioritising adaptation capex for long linear assets.",
               businessValue:
                 "Reduce climate-related disruption costs by 15-25% through targeted infrastructure hardening.",
+              typicalDataEntities: ["Climate Projections", "Historical Events", "Network Sections", "Asset Exposure"],
+              typicalSourceSystems: ["Climate Data Service", "Asset Management System", "Incident Database", "GIS Platform"],
             },
           ],
           kpis: [
@@ -3790,6 +4152,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               name: "End-to-End Shipment Tracking",
               description:
                 "Provide real-time consignment visibility from origin to destination across rail and intermodal legs using GPS, RFID, and network event data.",
+              typicalDataEntities: ["Consignment Events", "GPS Positions", "RFID Reads", "Network Events"],
+              typicalSourceSystems: ["TMS", "Freight Management System", "Terminal Operating System", "Port Management System"],
             },
             {
               name: "ETA Prediction for Freight",
@@ -3797,6 +4161,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Predict freight train arrival times using current network state, weather conditions, and historical performance data to provide shippers with reliable delivery windows.",
               businessValue:
                 "90%+ ETA accuracy, reducing shipper buffer stock and improving supply chain planning.",
+              typicalDataEntities: ["Network State", "Weather Data", "Historical Performance", "Train Positions"],
+              typicalSourceSystems: ["TMS", "SCADA", "Weather Service", "Freight Management System"],
             },
             {
               name: "Route & Mode Optimization",
@@ -3807,6 +4173,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Freight Demand Forecasting",
               description:
                 "Forecast commodity and lane-level freight demand using economic indicators, trade flows, and seasonal patterns to optimise capacity allocation and pricing.",
+              typicalDataEntities: ["Economic Indicators", "Trade Flows", "Historical Demand", "Seasonal Patterns"],
+              typicalSourceSystems: ["Freight Management System", "ERP", "Market Data", "TMS"],
             },
             {
               name: "Heavy-Haul Corridor Throughput Analytics",
@@ -3814,6 +4182,8 @@ const RAIL_TRANSPORT: IndustryOutcome = {
                 "Monitor NTK throughput, train cycle times, and bottleneck dwell by corridor to optimise end-to-end coal and bulk supply chain velocity from mine to port.",
               businessValue:
                 "5-10% improvement in corridor throughput through data-driven bottleneck identification and resolution.",
+              typicalDataEntities: ["NTK Throughput", "Cycle Times", "Bottleneck Dwell", "Corridor Metrics"],
+              typicalSourceSystems: ["TMS", "Freight Management System", "SCADA", "ERP"],
             },
           ],
           kpis: [
@@ -3836,16 +4206,22 @@ const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Freight Customer Segmentation",
               description:
                 "Segment shippers by volume, profitability, modal shift potential, and service requirements to tailor commercial strategies and account management.",
+              typicalDataEntities: ["Customer Profiles", "Volume History", "Profitability", "Service Requirements"],
+              typicalSourceSystems: ["Freight Management System", "CRM", "ERP", "Billing System"],
             },
             {
               name: "Dynamic Freight Pricing",
               description:
                 "Optimise freight rates by corridor, commodity type, and demand intensity using ML-driven pricing models that respond to market conditions in real time.",
+              typicalDataEntities: ["Pricing History", "Demand Intensity", "Capacity", "Market Rates"],
+              typicalSourceSystems: ["Freight Management System", "ERP", "TMS", "Market Data"],
             },
             {
               name: "Contract & SLA Performance Analytics",
               description:
                 "Track contract performance, SLA compliance, and penalty exposure across the freight customer portfolio to improve commercial outcomes and retention.",
+              typicalDataEntities: ["Contract Terms", "SLA Metrics", "Penalty Exposure", "Performance History"],
+              typicalSourceSystems: ["Freight Management System", "CRM", "TMS", "ERP"],
             },
           ],
           kpis: [
@@ -3995,6 +4371,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use customer credit profile, vehicle selection, and behavioural data to recommend the optimal F&I product bundle (finance plan, GAP, service plan, tyre-and-rim) at the right moment in the purchase journey, whether online or in the business office.",
               businessValue:
                 "10–20% increase in F&I income per unit; higher product penetration rates.",
+              typicalDataEntities: ["Credit Profile", "Vehicle Selection", "F&I Product Catalog", "Penetration History"],
+              typicalSourceSystems: ["DMS", "F&I Platform", "Credit Bureau", "CRM"],
             },
             {
               name: "Credit Risk Pre-Qualification & Decisioning",
@@ -4002,6 +4380,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Integrate credit bureau data and internal payment history to pre-qualify customers for financing before they arrive at the dealership, reducing deal fallout and accelerating the approval cycle.",
               businessValue:
                 "25–35% reduction in finance approval cycle time; lower deal cancellation rate.",
+              typicalDataEntities: ["Credit Bureau Data", "Payment History", "Pre-Qualification Results", "Approval Workflow"],
+              typicalSourceSystems: ["Credit Bureau", "F&I Platform", "DMS", "Finance Company"],
             },
             {
               name: "F&I Compliance Monitoring",
@@ -4009,6 +4389,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Automatically audit every F&I transaction for regulatory compliance — rate mark-up limits, disclosure requirements, and fair-lending rules — flagging exceptions in real time to reduce legal and reputational risk.",
               businessValue:
                 "Significant reduction in compliance-related fines and audit remediation costs.",
+              typicalDataEntities: ["F&I Transactions", "Compliance Rules", "Audit Exceptions", "Disclosure Records"],
+              typicalSourceSystems: ["F&I Platform", "DMS", "Compliance System", "Regulatory Database"],
             },
           ],
           kpis: [
@@ -4041,6 +4423,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Forecast service demand by day, bay type, and technician skill using historical RO data, seasonal patterns, and connected-vehicle alerts to optimise appointment scheduling and reduce idle capacity.",
               businessValue:
                 "10–15% improvement in service bay utilization; reduced customer wait times.",
+              typicalDataEntities: ["Repair Order History", "Bay Capacity", "Technician Skills", "Connected Vehicle Alerts"],
+              typicalSourceSystems: ["DMS", "Service Scheduling", "Connected Vehicle Platform", "CRM"],
             },
             {
               name: "Digital Check-In & Vehicle Health Inspection",
@@ -4055,6 +4439,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Match repair orders to technicians based on certification, proficiency, and current workload, while tracking effective labour rate and hours-per-RO to identify coaching opportunities.",
               businessValue:
                 "5–10% increase in effective labour rate; improved technician retention.",
+              typicalDataEntities: ["Technician Certifications", "Repair Order Complexity", "Workload", "Labour Metrics"],
+              typicalSourceSystems: ["DMS", "HR System", "Service Scheduling", "Training Platform"],
             },
             {
               name: "Service Retention & Lifecycle Marketing",
@@ -4062,6 +4448,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Trigger personalised service reminders and offers based on vehicle age, mileage, warranty expiry, and past service history to retain customers beyond the warranty period and win back lapsed service customers.",
               businessValue:
                 "8–12% improvement in service retention rate beyond year three.",
+              typicalDataEntities: ["Vehicle Age", "Mileage", "Warranty Status", "Service History"],
+              typicalSourceSystems: ["DMS", "CRM", "Marketing Platform", "Warranty System"],
             },
           ],
           kpis: [
@@ -4087,6 +4475,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use historical consumption, VIN parc data, seasonal trends, and service booking forecasts to set optimal stocking levels at each location, minimising lost sales from stock-outs while reducing obsolescence.",
               businessValue:
                 "15–20% reduction in parts inventory carrying cost; 10% improvement in fill rate.",
+              typicalDataEntities: ["Consumption History", "VIN Parc Data", "Service Forecasts", "Inventory Levels"],
+              typicalSourceSystems: ["Parts System", "DMS", "OEM Parts Catalog", "ERP"],
             },
             {
               name: "Accessory Attachment & Bundling at Point of Sale",
@@ -4094,6 +4484,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Recommend accessories and protection products at vehicle handover using a propensity model trained on past attachment rates by model, trim, and customer segment, presenting bundles through the sales or online configurator workflow.",
               businessValue:
                 "20–30% increase in accessory revenue per vehicle sold.",
+              typicalDataEntities: ["Accessory Catalog", "Attachment Rates", "Model Trim Data", "Customer Segments"],
+              typicalSourceSystems: ["DMS", "Configurator", "Parts System", "CRM"],
             },
             {
               name: "Competitive Parts Pricing Intelligence",
@@ -4101,6 +4493,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Monitor aftermarket and online competitor pricing for high-volume part numbers, enabling dynamic price adjustments that protect margin while remaining competitive against independent alternatives.",
               businessValue:
                 "3–5% improvement in parts gross margin while maintaining market share.",
+              typicalDataEntities: ["Part Numbers", "Competitor Prices", "Cost Data", "Margin Targets"],
+              typicalSourceSystems: ["Parts System", "Pricing Intelligence", "ERP", "Competitor Scraping"],
             },
           ],
           kpis: [
@@ -4126,6 +4520,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Analyse warranty claim patterns across the dealer network to identify anomalous claim rates, repeat repairs, and potential fraud, enabling targeted audits and reducing warranty cost leakage.",
               businessValue:
                 "5–10% reduction in warranty cost per vehicle; faster audit resolution.",
+              typicalDataEntities: ["Warranty Claims", "Claim Patterns", "Repeat Repairs", "Dealer Metrics"],
+              typicalSourceSystems: ["Warranty System", "DMS", "OEM Portal", "ERP"],
             },
             {
               name: "Early Warning Quality Feedback Loop",
@@ -4133,6 +4529,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Aggregate field failure data, connected-vehicle DTCs, and customer complaint text to detect emerging quality issues weeks before they trigger formal recalls, enabling proactive containment and engineering fixes.",
               businessValue:
                 "30–50% faster defect detection; reduced recall scope and cost.",
+              typicalDataEntities: ["Field Failures", "DTC Codes", "Complaint Text", "Component History"],
+              typicalSourceSystems: ["Connected Vehicle Platform", "Warranty System", "CRM", "Quality System"],
             },
             {
               name: "Recall Completion Rate Optimization",
@@ -4140,6 +4538,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use owner contact data, vehicle location, and communication preference models to maximise recall completion rates through targeted outreach campaigns across mail, email, SMS, and app notifications.",
               businessValue:
                 "10–20% improvement in recall completion rate; reduced regulatory exposure.",
+              typicalDataEntities: ["Owner Contact Data", "Vehicle Location", "Communication Preferences", "Recall Status"],
+              typicalSourceSystems: ["CRM", "DMS", "Recall System", "Marketing Platform"],
             },
           ],
           kpis: [
@@ -4193,6 +4593,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use driver preference data, location context, and usage patterns to personalise infotainment recommendations, cabin settings, and contextual offers (charging, parking, drive-through), building engagement and brand stickiness.",
               businessValue:
                 "Improved NPS and brand loyalty; enabler for third-party partnership revenue.",
+              typicalDataEntities: ["Driver Preferences", "Location Context", "Usage Patterns", "Offer Catalog"],
+              typicalSourceSystems: ["Connected Vehicle Platform", "Infotainment System", "CRM", "Partner APIs"],
             },
           ],
           kpis: [
@@ -4225,6 +4627,8 @@ const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Provide fleet operators with dashboards covering utilisation, fuel/energy efficiency, driver safety scores, and geofencing, enabling operational optimisation and duty-of-care compliance.",
               businessValue:
                 "5–10% reduction in fleet operating costs; improved driver safety outcomes.",
+              typicalDataEntities: ["Utilisation Metrics", "Fuel Efficiency", "Driver Safety Scores", "Geofence Events"],
+              typicalSourceSystems: ["Fleet Telematics", "Connected Vehicle Platform", "Fleet Management System", "HR System"],
             },
             {
               name: "Vehicle Data Monetisation & Partner Ecosystem",
