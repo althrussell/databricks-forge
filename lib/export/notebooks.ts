@@ -2,7 +2,7 @@
  * Notebook deployment -- generates Jupyter (.ipynb) notebooks and deploys
  * them to the Databricks workspace via the Workspace REST API.
  *
- * Structure matches the reference notebook (databricks_inspire_v34):
+ * Structure matches the reference notebook (databricks_forge_v34):
  *
  *   - One notebook per domain, containing all use cases for that domain
  *   - Markdown cells for documentation (title, disclaimer, summary tables,
