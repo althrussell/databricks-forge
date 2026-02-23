@@ -82,7 +82,7 @@ export default function SettingsPage() {
   });
 
   const [genieDefaults, setGenieDefaults] = useState<GenieEngineDefaults>(() => {
-    if (typeof window === "undefined") return { engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" };
+    if (typeof window === "undefined") return { engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" };
     return loadSettings().genieEngineDefaults;
   });
 
@@ -126,7 +126,7 @@ export default function SettingsPage() {
       setNotebookPath("./forge_gen/");
       setDefaultDiscoveryDepth("balanced");
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
-      setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
+      setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       toast.success("Local settings cleared");
     }
   };
