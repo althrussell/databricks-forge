@@ -31,6 +31,7 @@ import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
 import {
   startJob,
   updateJob,
+  updateJobDomainProgress,
   completeJob,
   failJob,
 } from "@/lib/genie/engine-status";
@@ -311,7 +312,10 @@ function startGenieEngineBackground(
   runGenieRecommendations(
     ctx,
     runId,
-    (message, percent) => updateJob(runId, message, percent),
+    (message, percent, completedDomains, totalDomains) => {
+      updateJob(runId, message, percent);
+      updateJobDomainProgress(runId, completedDomains, totalDomains);
+    },
   )
     .then((count) => {
       completeJob(runId, count);

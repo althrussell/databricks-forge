@@ -14,6 +14,8 @@ export interface EngineJobStatus {
   completedAt: number | null;
   error: string | null;
   domainCount: number;
+  completedDomains: number;
+  totalDomains: number;
 }
 
 const jobs = new Map<string, EngineJobStatus>();
@@ -28,6 +30,8 @@ export function startJob(runId: string): void {
     completedAt: null,
     error: null,
     domainCount: 0,
+    completedDomains: 0,
+    totalDomains: 0,
   });
 }
 
@@ -36,6 +40,18 @@ export function updateJob(runId: string, message: string, percent: number): void
   if (job) {
     job.message = message;
     job.percent = Math.min(100, Math.max(0, percent));
+  }
+}
+
+export function updateJobDomainProgress(
+  runId: string,
+  completedDomains: number,
+  totalDomains: number
+): void {
+  const job = jobs.get(runId);
+  if (job) {
+    job.completedDomains = completedDomains;
+    job.totalDomains = totalDomains;
   }
 }
 

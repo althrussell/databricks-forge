@@ -17,7 +17,7 @@ import { logger } from "@/lib/logger";
 export async function runGenieRecommendations(
   ctx: PipelineContext,
   runId: string,
-  onProgress?: (message: string, percent: number) => void,
+  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number) => void,
 ): Promise<number> {
   const metadata = ctx.metadata ?? (await loadMetadataForRun(runId));
   if (!metadata) {

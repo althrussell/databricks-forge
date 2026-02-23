@@ -42,7 +42,7 @@ export interface GenieEngineInput {
   piiClassifications?: SensitivityClassification[];
   /** When set, only regenerate the listed domains (partial run). */
   domainFilter?: string[];
-  onProgress?: (message: string, percent: number) => void;
+  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number) => void;
 }
 
 export interface GenieEngineResult {
@@ -83,7 +83,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   });
 
   // Pass 0: Table Selection + Grouping
-  onProgress?.("Grouping tables into domains...", 5);
+  onProgress?.("Grouping tables into domains...", 5, 0, 0);
   const allDomainGroups = runTableSelection(useCases, metadata, config);
 
   // Apply domain filter for partial regeneration
@@ -106,6 +106,10 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   // Process each domain
   const recommendations: GenieSpaceRecommendation[] = [];
   const allPassOutputs: GenieEnginePassOutputs[] = [];
+  let completedDomainCount = 0;
+  const totalDomainCount = domainGroups.length;
+
+  onProgress?.("Processing domains...", 10, 0, totalDomainCount);
 
   for (let di = 0; di < domainGroups.length; di++) {
     const group = domainGroups[di];
@@ -113,6 +117,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
     if (group.tables.length === 0) {
       logger.info("Skipping domain with no tables", { domain: group.domain });
+      completedDomainCount++;
       continue;
     }
 
@@ -120,7 +125,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       const outputs = await processDomain(
         group, run, metadata, allowlist, config,
         sampleData, piiClassifications, endpoint,
-        (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct)
+        (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct, completedDomainCount, totalDomainCount)
       );
 
       allPassOutputs.push(outputs);
@@ -137,6 +142,9 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       rec.useCaseCount = group.useCases.length;
       recommendations.push(rec);
 
+      completedDomainCount++;
+      onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount);
+
       logger.info("Domain processed", {
         domain: group.domain,
         tables: outputs.tables.length,
@@ -147,6 +155,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         metricViews: outputs.metricViewProposals.length,
       });
     } catch (err) {
+      completedDomainCount++;
       logger.error("Failed to process domain", {
         domain: group.domain,
         error: err instanceof Error ? err.message : String(err),
@@ -154,7 +163,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     }
   }
 
-  onProgress?.("Genie Engine complete", 100);
+  onProgress?.("Genie Engine complete", 100, totalDomainCount, totalDomainCount);
 
   recommendations.sort((a, b) => b.useCaseCount - a.useCaseCount);
 

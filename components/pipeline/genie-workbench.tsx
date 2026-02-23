@@ -51,6 +51,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
   const [genMessage, setGenMessage] = useState("");
+  const [completedDomains, setCompletedDomains] = useState(0);
+  const [totalDomains, setTotalDomains] = useState(0);
   const [configDirty, setConfigDirty] = useState(false);
   const [domains, setDomains] = useState<string[]>([]);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
@@ -85,6 +87,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
         if (res.ok) {
           setGenProgress(data.percent ?? 0);
           setGenMessage(data.message ?? "");
+          setCompletedDomains(data.completedDomains ?? 0);
+          setTotalDomains(data.totalDomains ?? 0);
           if (data.status === "completed") {
             stopPolling();
             setGenerating(false);
@@ -120,6 +124,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             setGenerating(true);
             setGenProgress(data.percent ?? 0);
             setGenMessage(data.message ?? "");
+            setCompletedDomains(data.completedDomains ?? 0);
+            setTotalDomains(data.totalDomains ?? 0);
             startPolling();
           }
         }
@@ -183,6 +189,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
 
     setGenerating(true);
     setGenProgress(0);
+    setCompletedDomains(0);
+    setTotalDomains(0);
     setGenMessage(filterDomains?.length ? `Regenerating ${filterDomains.length} domain${filterDomains.length !== 1 ? "s" : ""}...` : "Starting...");
     try {
       const body = filterDomains?.length ? JSON.stringify({ domains: filterDomains }) : undefined;
@@ -304,7 +312,12 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
         {generating && (
           <div className="space-y-1">
             <Progress value={genProgress} className="h-2" />
-            <p className="text-[10px] text-muted-foreground">{genMessage}</p>
+            <p className="text-[10px] text-muted-foreground">
+              {totalDomains > 0 && (
+                <span className="font-medium">[{completedDomains} of {totalDomains} complete] </span>
+              )}
+              {genMessage}
+            </p>
           </div>
         )}
       </div>

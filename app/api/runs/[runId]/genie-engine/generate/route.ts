@@ -12,7 +12,7 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { runGenieEngine } from "@/lib/genie/engine";
-import { startJob, updateJob, completeJob, failJob } from "@/lib/genie/engine-status";
+import { startJob, updateJob, updateJobDomainProgress, completeJob, failJob } from "@/lib/genie/engine-status";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -66,7 +66,10 @@ export async function POST(
       config,
       sampleData: null,
       domainFilter: domains,
-      onProgress: (message, percent) => updateJob(runId, message, percent),
+      onProgress: (message, percent, completedDomains, totalDomains) => {
+        updateJob(runId, message, percent);
+        updateJobDomainProgress(runId, completedDomains, totalDomains);
+      },
     })
       .then(async (result) => {
         await saveGenieRecommendations(

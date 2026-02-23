@@ -30,6 +30,8 @@ export async function GET(
       message: job.message,
       percent: job.percent,
       domainCount: job.domainCount,
+      completedDomains: job.completedDomains,
+      totalDomains: job.totalDomains,
       error: job.error,
       elapsedMs: job.completedAt
         ? job.completedAt - job.startedAt
