@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { AlertTriangle, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, RefreshCw, Square, X } from "lucide-react";
 import { GenieSpacesTab } from "./genie-spaces-tab";
 import { GenieConfigEditor } from "./genie-config-editor";
 import { GenieSpacePreview } from "./genie-space-preview";
@@ -102,6 +102,12 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             setLastErrorType(null);
             fetchDomains();
             toast.success(`Genie Engine complete: ${data.domainCount} domain${data.domainCount !== 1 ? "s" : ""} generated`);
+          } else if (data.status === "cancelled") {
+            stopPolling();
+            setGenerating(false);
+            setLastError(null);
+            setLastErrorType(null);
+            toast.info("Generation cancelled");
           } else if (data.status === "failed") {
             stopPolling();
             setGenerating(false);
@@ -220,6 +226,23 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
     }
   }, [runId, configDirty, handleSaveConfig, startPolling]);
 
+  const handleCancel = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/runs/${runId}/genie-engine/generate/cancel`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        stopPolling();
+        setGenerating(false);
+        setLastError(null);
+        setLastErrorType(null);
+        toast.info("Generation cancelled");
+      }
+    } catch {
+      toast.error("Failed to cancel generation");
+    }
+  }, [runId, stopPolling]);
+
   if (configLoading) {
     return (
       <div className="space-y-3">
@@ -320,7 +343,18 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
 
         {generating && (
           <div className="space-y-1">
-            <Progress value={genProgress} className="h-2" />
+            <div className="flex items-center gap-2">
+              <Progress value={genProgress} className="h-2 flex-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                className="h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                title="Cancel generation"
+              >
+                <Square className="h-3 w-3" />
+              </Button>
+            </div>
             <p className="text-[10px] text-muted-foreground">
               {totalDomains > 0 && (
                 <span className="font-medium">[{completedDomains} of {totalDomains} complete] </span>

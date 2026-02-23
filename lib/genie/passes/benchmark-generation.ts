@@ -34,6 +34,7 @@ export interface BenchmarkGenerationInput {
   customerBenchmarks: BenchmarkInput[];
   joinSpecs: JoinSpecInput[];
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface BenchmarkGenerationOutput {
@@ -45,7 +46,7 @@ export async function runBenchmarkGeneration(
 ): Promise<BenchmarkGenerationOutput> {
   const {
     tableFqns, metadata, allowlist, useCases,
-    entityCandidates, customerBenchmarks, joinSpecs, endpoint,
+    entityCandidates, customerBenchmarks, joinSpecs, endpoint, signal,
   } = input;
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
@@ -85,7 +86,7 @@ export async function runBenchmarkGeneration(
   for (const batch of batches) {
     try {
       const batchResult = await processBenchmarkBatch(
-        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint
+        batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
       );
       allBenchmarks.push(...batchResult);
     } catch (err) {
@@ -113,6 +114,7 @@ async function processBenchmarkBatch(
   joinBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
+  signal?: AbortSignal,
 ): Promise<BenchmarkInput[]> {
   const MAX_SQL_CHARS = 3000;
   const useCaseContext = batch
@@ -175,6 +177,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     temperature: TEMPERATURE,
     maxTokens: 8192,
     responseFormat: "json_object",
+    signal,
   });
 
   const content = result.content ?? "";

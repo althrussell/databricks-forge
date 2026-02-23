@@ -12,8 +12,8 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { invalidatePrismaClient } from "@/lib/prisma";
-import { runGenieEngine } from "@/lib/genie/engine";
-import { startJob, updateJob, updateJobDomainProgress, completeJob, failJob } from "@/lib/genie/engine-status";
+import { runGenieEngine, EngineCancelledError } from "@/lib/genie/engine";
+import { startJob, getJobController, updateJob, updateJobDomainProgress, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -59,6 +59,7 @@ export async function POST(
     const { config, version } = await getGenieEngineConfig(runId);
 
     startJob(runId);
+    const controller = getJobController(runId);
 
     runGenieEngine({
       run,
@@ -67,12 +68,18 @@ export async function POST(
       config,
       sampleData: null,
       domainFilter: domains,
+      signal: controller?.signal,
       onProgress: (message, percent, completedDomains, totalDomains) => {
         updateJob(runId, message, percent);
         updateJobDomainProgress(runId, completedDomains, totalDomains);
       },
     })
       .then(async (result) => {
+        const job = getJobStatus(runId);
+        if (job?.status === "cancelled") {
+          logger.info("Genie Engine generation cancelled, skipping save", { runId });
+          return;
+        }
         await invalidatePrismaClient();
         await saveGenieRecommendations(
           runId,
@@ -90,6 +97,10 @@ export async function POST(
         });
       })
       .catch((err) => {
+        if (err instanceof EngineCancelledError) {
+          logger.info("Genie Engine generation cancelled (async)", { runId });
+          return;
+        }
         const errMsg = err instanceof Error ? err.message : String(err);
         failJob(runId, errMsg);
         logger.error("Genie Engine generation failed (async)", {

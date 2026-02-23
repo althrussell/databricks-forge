@@ -22,6 +22,7 @@ export interface JoinInferenceInput {
   allowlist: SchemaAllowlist;
   existingJoinKeys: Set<string>;
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface JoinInferenceOutput {
@@ -36,7 +37,7 @@ export interface JoinInferenceOutput {
 export async function runJoinInference(
   input: JoinInferenceInput
 ): Promise<JoinInferenceOutput> {
-  const { tableFqns, metadata, allowlist, existingJoinKeys, endpoint } = input;
+  const { tableFqns, metadata, allowlist, existingJoinKeys, endpoint, signal } = input;
 
   if (tableFqns.length < 2) {
     return { joins: [] };
@@ -80,6 +81,7 @@ Identify additional table join relationships from column naming patterns.`;
     temperature: TEMPERATURE,
     maxTokens: 2048,
     responseFormat: "json_object",
+    signal,
   });
 
   const content = result.content ?? "";

@@ -33,6 +33,13 @@ import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { isValidTable } from "./schema-allowlist";
 import { logger } from "@/lib/logger";
 
+export class EngineCancelledError extends Error {
+  constructor() {
+    super("Genie Engine generation was cancelled");
+    this.name = "EngineCancelledError";
+  }
+}
+
 export interface GenieEngineInput {
   run: PipelineRun;
   useCases: UseCase[];
@@ -42,6 +49,8 @@ export interface GenieEngineInput {
   piiClassifications?: SensitivityClassification[];
   /** When set, only regenerate the listed domains (partial run). */
   domainFilter?: string[];
+  /** Abort signal for user-initiated cancellation. */
+  signal?: AbortSignal;
   onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number) => void;
 }
 
@@ -68,6 +77,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     sampleData = null,
     piiClassifications,
     domainFilter,
+    signal,
     onProgress,
   } = input;
 
@@ -126,6 +136,16 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   onProgress?.("Processing domains...", 10, 0, totalDomainCount);
 
   for (let di = 0; di < domainGroups.length; di++) {
+    if (signal?.aborted) {
+      logger.info("Genie Engine cancelled before domain", {
+        runId: run.runId,
+        domainIndex: di,
+        completedDomains: completedDomainCount,
+        totalDomains: totalDomainCount,
+      });
+      throw new EngineCancelledError();
+    }
+
     const group = domainGroups[di];
     const domainPct = Math.round(10 + (di / domainGroups.length) * 85);
 
@@ -138,7 +158,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     try {
       const outputs = await processDomain(
         group, run, metadata, allowlist, config,
-        sampleData, piiClassifications, endpoint,
+        sampleData, piiClassifications, endpoint, signal,
         (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct, completedDomainCount, totalDomainCount)
       );
 
@@ -198,6 +218,7 @@ async function processDomain(
   sampleData: SampleDataCache | null,
   piiClassifications: SensitivityClassification[] | undefined,
   endpoint: string,
+  signal: AbortSignal | undefined,
   onProgress: (msg: string) => void
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
@@ -212,6 +233,7 @@ async function processDomain(
     sampleData,
     piiClassifications,
     endpoint,
+    signal,
   });
 
   // Pass 2: Semantic SQL Expressions
@@ -224,6 +246,7 @@ async function processDomain(
     businessContext: run.businessContext,
     config,
     endpoint,
+    signal,
   });
 
   // Build join specs from foreign keys, use case SQL, and LLM inference.
@@ -281,6 +304,7 @@ async function processDomain(
         allowlist,
         existingJoinKeys: allExistingKeys,
         endpoint,
+        signal,
       });
       llmInferredJoins = llmResult.joins;
     } catch (err) {
@@ -312,6 +336,7 @@ async function processDomain(
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
           endpoint,
+          signal,
         })
       : Promise.resolve({ queries: [], functions: [] }),
 
@@ -325,6 +350,7 @@ async function processDomain(
       entityCandidates: columnResult.entityCandidates,
       joinSpecs: allJoins,
       endpoint,
+      signal,
     }),
   ]);
 
@@ -341,6 +367,7 @@ async function processDomain(
           customerBenchmarks: config.benchmarkQuestions,
           joinSpecs: allJoins,
           endpoint,
+          signal,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
 
@@ -357,6 +384,7 @@ async function processDomain(
           joinSpecs: allJoins,
           columnEnrichments: columnResult.enrichments,
           endpoint,
+          signal,
         })
       : Promise.resolve({ proposals: [] }),
   ]);

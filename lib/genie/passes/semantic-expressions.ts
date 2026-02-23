@@ -33,6 +33,7 @@ export interface SemanticExpressionsInput {
   businessContext: BusinessContext | null;
   config: GenieEngineConfig;
   endpoint: string;
+  signal?: AbortSignal;
 }
 
 export interface SemanticExpressionsOutput {
@@ -44,7 +45,7 @@ export interface SemanticExpressionsOutput {
 export async function runSemanticExpressions(
   input: SemanticExpressionsInput
 ): Promise<SemanticExpressionsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, businessContext, config, endpoint } = input;
+  const { tableFqns, metadata, allowlist, useCases, businessContext, config, endpoint, signal } = input;
 
   // Phase A: auto-generate time periods
   let timeFilters: EnrichedSqlSnippetFilter[] = [];
@@ -69,7 +70,7 @@ export async function runSemanticExpressions(
   if (config.llmRefinement) {
     try {
       const llmResult = await generateLLMExpressions(
-        tableFqns, metadata, useCases, businessContext, config.glossary, endpoint
+        tableFqns, metadata, useCases, businessContext, config.glossary, endpoint, signal
       );
       llmMeasures = llmResult.measures.filter((m) =>
         validateSqlExpression(allowlist, m.sql, `measure:${m.name}`)
@@ -122,7 +123,8 @@ async function generateLLMExpressions(
   useCases: UseCase[],
   businessContext: BusinessContext | null,
   glossary: GlossaryEntry[],
-  endpoint: string
+  endpoint: string,
+  signal?: AbortSignal,
 ): Promise<{ measures: EnrichedSqlSnippetMeasure[]; filters: EnrichedSqlSnippetFilter[]; dimensions: EnrichedSqlSnippetDimension[] }> {
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
@@ -186,6 +188,7 @@ Generate measures, filters, and dimensions for a Genie space serving this domain
     messages,
     temperature: TEMPERATURE,
     responseFormat: "json_object",
+    signal,
   });
 
   const content = result.content ?? "";

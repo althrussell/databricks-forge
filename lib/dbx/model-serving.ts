@@ -47,6 +47,8 @@ export interface ChatCompletionOptions {
    * return valid JSON. The prompt must also mention JSON output.
    */
   responseFormat?: "text" | "json_object";
+  /** Optional abort signal for caller-initiated cancellation. */
+  signal?: AbortSignal;
 }
 
 /** Token usage statistics returned by the model. */
@@ -123,7 +125,8 @@ export async function chatCompletion(
       headers,
       body: JSON.stringify(body),
     },
-    LLM_TIMEOUT_MS
+    LLM_TIMEOUT_MS,
+    options.signal,
   );
 
   if (!resp.ok) {
@@ -176,7 +179,8 @@ export async function chatCompletionStream(
       headers,
       body: JSON.stringify(body),
     },
-    LLM_STREAM_TIMEOUT_MS
+    LLM_STREAM_TIMEOUT_MS,
+    options.signal,
   );
 
   if (!resp.ok) {
