@@ -345,8 +345,12 @@ async function generateSqlForUseCase(
  * Returns the error message on failure, or null on success.
  */
 async function trySqlExecution(sql: string): Promise<string | null> {
+  // Pipe syntax (|>) is valid Databricks SQL but not supported by EXPLAIN
+  if (/\|>/.test(sql)) {
+    logger.info("Skipping EXPLAIN validation for pipe-syntax query");
+    return null;
+  }
   try {
-    // Use EXPLAIN to validate without executing (avoids side effects and long queries)
     await executeSQL(`EXPLAIN ${sql}`);
     return null;
   } catch (error) {
