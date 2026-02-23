@@ -7,7 +7,7 @@
  */
 
 import ExcelJS from "exceljs";
-import type { CoverageResult } from "@/components/pipeline/run-detail/industry-coverage-card";
+import type { CoverageResult } from "@/lib/domain/industry-coverage";
 
 const DATABRICKS_BLUE = "FF003366";
 const WHITE = "FFFFFFFF";
