@@ -99,7 +99,7 @@ function safeJSON<T>(json: string | null | undefined, fallback: T): T {
 // Scan data types (matching Prisma include output)
 // ---------------------------------------------------------------------------
 
-interface ScanWithRelations {
+export interface ScanWithRelations {
   scanId: string;
   ucPath: string;
   tableCount: number;

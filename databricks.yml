@@ -13,7 +13,10 @@ apps:
         description: "SQL Warehouse for metadata queries and generated SQL execution"
       - name: serving-endpoint
         type: serving_endpoint
-        description: "Model Serving endpoint for LLM inference (FMAPI)"
+        description: "Model Serving endpoint for premium LLM tasks (use case generation, scoring, SQL generation)"
+      - name: serving-endpoint-fast
+        type: serving_endpoint
+        description: "Model Serving endpoint for fast LLM tasks (classification, enrichment, clustering)"
 
     env:
       - name: DATABRICKS_WAREHOUSE_ID
@@ -23,4 +26,8 @@ apps:
       - name: DATABRICKS_SERVING_ENDPOINT
         value_from:
           resource: serving-endpoint
+          key: name
+      - name: DATABRICKS_SERVING_ENDPOINT_FAST
+        value_from:
+          resource: serving-endpoint-fast
           key: name
