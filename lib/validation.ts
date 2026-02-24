@@ -86,7 +86,7 @@ export const CreateRunSchema = z.object({
   strategicGoals: z.string().max(5000).optional().default(""),
   generationOptions: z.array(z.string()).optional().default(["SQL Code"]),
   generationPath: z.string().max(500).optional().default("./forge_gen/"),
-  languages: z.array(z.string()).optional().default(["English"]),
+  languages: z.array(z.literal("English")).optional().default(["English"]),
   aiModel: z.string().max(200).optional().default("databricks-claude-opus-4-6"),
   sampleRowsPerTable: z
     .union([z.number(), z.string()])

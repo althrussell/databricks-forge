@@ -721,10 +721,6 @@ export default function RunDetailPage({
                           }
                         />
                         <ConfigField
-                          label="Languages"
-                          value={run.config.languages.join(", ")}
-                        />
-                        <ConfigField
                           label="Priorities"
                           value={
                             run.config.businessPriorities.length > 0

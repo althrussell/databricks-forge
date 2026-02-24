@@ -20,6 +20,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
   isAutoProvisionEnabled,
+  canAutoProvision,
   getLakebaseConnectionUrl,
   getCredentialGeneration,
   refreshDbCredential,
@@ -160,6 +161,15 @@ async function getStaticPrisma(): Promise<PrismaClient> {
   }
 
   const pool = new pg.Pool({ connectionString: url });
+
+  pool.on("error", (err) => {
+    logger.warn("pg Pool background error (static) — will recreate on next request", {
+      error: err.message,
+    });
+    globalForPrisma.__prisma = undefined;
+    globalForPrisma.__prismaTokenId = undefined;
+  });
+
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
@@ -178,6 +188,11 @@ async function getStaticPrisma(): Promise<PrismaClient> {
  * database authentication error (stale credential), the client and
  * credential are invalidated and the call is retried exactly once with
  * a freshly-provisioned connection.
+ *
+ * The retry fires whenever Databricks App SP credentials are available
+ * (canAutoProvision), even if the initial connection used a static
+ * DATABASE_URL. On retry, DATABASE_URL is cleared so the fresh client
+ * enters auto-provision mode with dynamic credential rotation.
  */
 export async function withPrisma<T>(
   fn: (prisma: PrismaClient) => Promise<T>
@@ -186,10 +201,12 @@ export async function withPrisma<T>(
   try {
     return await fn(prisma);
   } catch (err) {
-    if (isAuthError(err) && isAutoProvisionEnabled()) {
+    if (isAuthError(err) && canAutoProvision()) {
       logger.warn("Database auth error, rotating credentials and retrying", {
         error: err instanceof Error ? err.message : String(err),
       });
+      // Clear stale static URL so getPrisma() enters auto-provision mode
+      delete process.env.DATABASE_URL;
       await invalidatePrismaClient();
       const freshPrisma = await getPrisma();
       return fn(freshPrisma);

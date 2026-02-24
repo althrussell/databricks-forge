@@ -20,13 +20,14 @@ set -e
 # connection URL with an OAuth DB credential.
 # ---------------------------------------------------------------------------
 
+LAKEBASE_STARTUP_URL=""
+
 if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
   echo "[startup] Auto-provisioning Lakebase Autoscale..."
 
-  DB_URL=$(node scripts/provision-lakebase.mjs)
+  LAKEBASE_STARTUP_URL=$(node scripts/provision-lakebase.mjs)
 
-  if [ -n "$DB_URL" ]; then
-    export DATABASE_URL="$DB_URL"
+  if [ -n "$LAKEBASE_STARTUP_URL" ]; then
     echo "[startup] Lakebase connection established."
   else
     echo "[startup] ERROR: Lakebase provisioning returned empty URL."
@@ -38,19 +39,24 @@ fi
 # Schema sync (best-effort)
 # npx is not available in the Databricks Apps runtime, so invoke the
 # prisma CLI directly from node_modules.
+#
+# DATABASE_URL is passed inline so it is only visible to the prisma process.
+# The Next.js server must NOT inherit it -- otherwise the runtime falls into
+# "static URL" mode and credential rotation is disabled.
 # ---------------------------------------------------------------------------
 
 PRISMA_BIN="./node_modules/.bin/prisma"
+SCHEMA_URL="${DATABASE_URL:-$LAKEBASE_STARTUP_URL}"
 
-if [ -x "$PRISMA_BIN" ]; then
+if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   echo "[startup] Syncing database schema..."
-  if "$PRISMA_BIN" db push 2>&1; then
+  if DATABASE_URL="$SCHEMA_URL" "$PRISMA_BIN" db push 2>&1; then
     echo "[startup] Schema sync complete."
   else
     echo "[startup] WARNING: Schema sync failed — tables may already be up to date."
   fi
 else
-  echo "[startup] Prisma CLI not found, skipping schema sync."
+  echo "[startup] Prisma CLI not found or no DB URL, skipping schema sync."
 fi
 
 # ---------------------------------------------------------------------------

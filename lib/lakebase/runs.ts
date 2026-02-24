@@ -13,7 +13,6 @@ import type {
   BusinessPriority,
   GenerationOption,
   StepLogEntry,
-  SupportedLanguage,
 } from "@/lib/domain/types";
 import { PROMPT_VERSIONS } from "@/lib/ai/templates";
 import { archiveCurrentPromptTemplates } from "@/lib/lakebase/prompt-templates";
@@ -69,7 +68,7 @@ function dbRowToRun(row: {
       discoveryDepth: (genOpts.discoveryDepth ?? "balanced") as PipelineRunConfig["discoveryDepth"],
       depthConfig: genOpts.depthConfig,
       generationPath: row.generationPath ?? "./forge_gen/",
-      languages: parseJSON<SupportedLanguage[]>(row.languages, ["English"]),
+      languages: parseJSON<string[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
       estateScanEnabled: genOpts.estateScanEnabled,
     },

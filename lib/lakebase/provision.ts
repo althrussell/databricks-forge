@@ -359,6 +359,21 @@ export function isAutoProvisionEnabled(): boolean {
 }
 
 /**
+ * True when Databricks App SP credentials are available, regardless of
+ * whether DATABASE_URL is set. Used by withPrisma to decide whether
+ * auth-error retry can fall back to auto-provisioned credentials even
+ * when a static URL was initially configured (e.g. platform resource
+ * binding or leaked startup env).
+ */
+export function canAutoProvision(): boolean {
+  return !!(
+    process.env.DATABRICKS_CLIENT_ID &&
+    process.env.DATABRICKS_CLIENT_SECRET &&
+    process.env.DATABRICKS_HOST
+  );
+}
+
+/**
  * Ensure the Lakebase Autoscale project exists, creating it on first boot.
  * Idempotent -- subsequent calls are near-instant.
  */
