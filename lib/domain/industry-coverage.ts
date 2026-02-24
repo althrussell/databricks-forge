@@ -24,14 +24,27 @@ export interface PriorityCoverage {
   coverageRatio: number;
 }
 
+export interface GapRefUseCase {
+  name: string;
+  businessValue?: string;
+}
+
 export interface CoverageResult {
   priorities: PriorityCoverage[];
   overallCoverage: number;
   totalRefUseCases: number;
   coveredRefUseCases: number;
   gapCount: number;
-  missingDataEntities: Array<{ entity: string; useCaseCount: number }>;
-  missingSourceSystems: Array<{ system: string; useCaseCount: number }>;
+  missingDataEntities: Array<{
+    entity: string;
+    useCaseCount: number;
+    refUseCases: GapRefUseCase[];
+  }>;
+  missingSourceSystems: Array<{
+    system: string;
+    useCaseCount: number;
+    refUseCases: GapRefUseCase[];
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,8 +70,8 @@ export function computeIndustryCoverage(
     ),
   }));
 
-  const entityCounts = new Map<string, number>();
-  const systemCounts = new Map<string, number>();
+  const entityRefs = new Map<string, GapRefUseCase[]>();
+  const systemRefs = new Map<string, GapRefUseCase[]>();
 
   for (const objective of industry.objectives) {
     for (const priority of objective.priorities) {
@@ -90,11 +103,23 @@ export function computeIndustryCoverage(
           coveredRef++;
         } else if (!bestMatch) {
           unmatched.push(refUc);
+          const ref: GapRefUseCase = {
+            name: refUc.name,
+            ...(refUc.businessValue ? { businessValue: refUc.businessValue } : {}),
+          };
           for (const entity of refUc.typicalDataEntities ?? []) {
-            entityCounts.set(entity, (entityCounts.get(entity) ?? 0) + 1);
+            const existing = entityRefs.get(entity) ?? [];
+            if (!existing.some((r) => r.name === ref.name)) {
+              existing.push(ref);
+            }
+            entityRefs.set(entity, existing);
           }
           for (const system of refUc.typicalSourceSystems ?? []) {
-            systemCounts.set(system, (systemCounts.get(system) ?? 0) + 1);
+            const existing = systemRefs.get(system) ?? [];
+            if (!existing.some((r) => r.name === ref.name)) {
+              existing.push(ref);
+            }
+            systemRefs.set(system, existing);
           }
         }
       }
@@ -112,12 +137,20 @@ export function computeIndustryCoverage(
     }
   }
 
-  const missingDataEntities = [...entityCounts.entries()]
-    .map(([entity, useCaseCount]) => ({ entity, useCaseCount }))
+  const missingDataEntities = [...entityRefs.entries()]
+    .map(([entity, refs]) => ({
+      entity,
+      useCaseCount: refs.length,
+      refUseCases: refs,
+    }))
     .sort((a, b) => b.useCaseCount - a.useCaseCount);
 
-  const missingSourceSystems = [...systemCounts.entries()]
-    .map(([system, useCaseCount]) => ({ system, useCaseCount }))
+  const missingSourceSystems = [...systemRefs.entries()]
+    .map(([system, refs]) => ({
+      system,
+      useCaseCount: refs.length,
+      refUseCases: refs,
+    }))
     .sort((a, b) => b.useCaseCount - a.useCaseCount);
 
   return {
