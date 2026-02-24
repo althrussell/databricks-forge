@@ -83,8 +83,8 @@ const DEFAULT_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
  * Returns the Model Serving endpoint name.
  *
  * Resolution order:
- *   1. `DATABRICKS_SERVING_ENDPOINT` env var (set via databricks.yml resource
- *      binding when deployed, or .env.local for local dev).
+ *   1. `DATABRICKS_SERVING_ENDPOINT` env var (set via deploy.sh or app.yaml
+ *      resource binding when deployed, or .env.local for local dev).
  *   2. Falls back to `DEFAULT_SERVING_ENDPOINT` so the app works out of the
  *      box without requiring the env var. Pipeline runs store the model name
  *      per-run in the `aiModel` config field.

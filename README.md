@@ -50,7 +50,7 @@ Databricks Forge AI is a web application deployed as a [Databricks App](https://
 databricks-forge/
   AGENTS.md                     # AI agent guidance
   app.yaml                      # Databricks App runtime config
-  databricks.yml                # Databricks App manifest (bundles)
+  deploy.sh                     # One-command deployment script
   prisma/
     schema.prisma               # Prisma schema (Lakebase tables)
   app/                          # Next.js routes + UI
@@ -235,9 +235,8 @@ Before you start, ensure you have:
 
 - [ ] **A Databricks workspace** with Unity Catalog enabled
 - [ ] **A SQL Warehouse** (Serverless or Pro) running in that workspace
-- [ ] **A Model Serving endpoint** for premium tasks (e.g. `databricks-claude-sonnet-4-5`) with pay-per-token enabled
-- [ ] **A Model Serving endpoint** for fast tasks (e.g. `databricks-claude-haiku-3-5`) -- optional but recommended for cost savings
-- [ ] **Workspace previews enabled**: Both **Databricks Apps - On-Behalf-Of User Authorization** and **Databricks Apps - Install Apps from Git** must be turned on in your workspace Admin Settings under Previews
+- [ ] **[Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html)** installed and authenticated
+- [ ] **Workspace previews enabled**: **Databricks Apps - On-Behalf-Of User Authorization** must be turned on in your workspace Admin Settings under Previews (optional but recommended)
 
 > **Lakebase is auto-provisioned.** The app creates its own Lakebase Autoscale project on first boot -- no manual database setup, no secret scopes, no resource bindings for the database.
 
@@ -247,79 +246,26 @@ Before you start, ensure you have:
 
 ---
 
-### Step 1: Create the app from Git
-
-1. In your Databricks workspace, navigate to **Compute > Apps**
-2. Click **Create app** and choose **Create a custom app from scratch**
-3. In step 2 of the wizard, select **From Git repository**
-4. Enter the Git URL for this repository and select the branch (e.g. `main`)
-5. Click **Create**
-
-<p align="center">
-  <img src="docs/images/create-app.png" alt="Create new app — Databricks UI" width="700" />
-</p>
-
-The platform clones the repo, detects `app.yaml` and `databricks.yml`, and sets up the app automatically.
-
-<details>
-<summary>Alternative: Create via Databricks CLI</summary>
-
-If you prefer the CLI:
+### Step 1: Deploy
 
 ```bash
-databricks apps create databricks-forge \
-  --description "Discover AI-powered use cases from Unity Catalog metadata"
+git clone <repo-url> databricks-forge
+cd databricks-forge
+./deploy.sh
 ```
 
-Then deploy from Git:
+The deploy script discovers your SQL Warehouses, lets you pick one, creates
+the app, uploads the code, and deploys. Models default to
+`databricks-claude-sonnet-4-6`. The whole process takes 3-5 minutes.
 
-```bash
-databricks apps deploy databricks-forge --source-code-path . --branch main
-```
+### Step 2: Deploy completes
 
-</details>
+The script configures everything automatically -- resource bindings (SQL
+warehouse, serving endpoints) and user authorization scopes (`sql`,
+`catalog.tables:read`, `catalog.schemas:read`, `catalog.catalogs:read`,
+`files.files`). No manual UI steps needed.
 
----
-
-### Step 2: Configure app resources
-
-The app requires three Databricks resource bindings (two required, one recommended). Configure them in the app's **Configure** page:
-
-| # | Resource type | Resource key | Configuration |
-| --- | --- | --- | --- |
-| 1 | **SQL Warehouse** | `sql-warehouse` | Select your warehouse. Permission: **Can use** |
-| 2 | **Serving Endpoint** | `serving-endpoint` | Premium model for generation/scoring (e.g. `databricks-claude-sonnet-4-5`). Permission: **Can query** |
-| 3 | **Serving Endpoint** | `serving-endpoint-fast` | Fast model for classification/enrichment (e.g. `databricks-claude-haiku-3-5`). Permission: **Can query**. Optional -- falls back to premium if not set |
-
-<p align="center">
-  <img src="docs/images/app-resources.png" alt="App resources — configured SQL Warehouse and Serving Endpoint" width="700" />
-</p>
-
-The database (Lakebase) is auto-provisioned at startup -- no binding needed.
-
----
-
-### Step 3: Configure User Authorization scopes
-
-In the app's **Configure** page, under **User authorization**, add these scopes:
-
-| Scope | Description |
-| --- | --- |
-| `sql` | Execute SQL and manage SQL resources |
-| `files.files` | Manage files and directories |
-| `catalog.tables:read` | Read tables in Unity Catalog |
-| `catalog.schemas:read` | Read schemas in Unity Catalog |
-| `catalog.catalogs:read` | Read catalogs in Unity Catalog |
-
-<p align="center">
-  <img src="docs/images/user-auth.png" alt="User authorization — API scopes configuration" width="700" />
-</p>
-
----
-
-### Step 4: Deploy
-
-Click **Deploy** from the app details page. The platform will:
+The platform will:
 
 1. **Install dependencies** -- runs `npm install`
 2. **Build** -- runs `npm run build` (generates Prisma client, builds the Next.js standalone server, copies static assets)
@@ -333,7 +279,7 @@ Click **Deploy** from the app details page. The platform will:
 
 ---
 
-### Step 5: Grant UC permissions to the service principal
+### Step 4: Grant UC permissions to the service principal
 
 The app's service principal needs access to the catalogs you want to discover:
 
@@ -354,7 +300,7 @@ GRANT SELECT ON TABLE system.access.table_lineage TO `<service_principal_name>`;
 
 ---
 
-### Step 6: Verify
+### Step 5: Verify
 
 Open the app URL in your browser. You should see the Forge AI dashboard.
 
@@ -379,43 +325,15 @@ A healthy response:
 
 ### Updating the app
 
-Push changes to your Git repository, then click **Deploy** from the app details page and select your branch. Schema changes in `prisma/schema.prisma` are applied automatically on the next startup.
+Pull the latest changes and re-run `./deploy.sh`. The script detects the existing app and updates it. Schema changes in `prisma/schema.prisma` are applied automatically on the next startup.
 
 ---
 
 ### How it all fits together
 
-The app uses two config files that map resources to environment variables:
-
-**`databricks.yml`** (bundle manifest):
-
-```yaml
-apps:
-  databricks-forge:
-    resources:
-      - name: sql-warehouse           # → DATABRICKS_WAREHOUSE_ID
-        type: sql_warehouse
-      - name: serving-endpoint        # → DATABRICKS_SERVING_ENDPOINT
-        type: serving_endpoint
-      - name: serving-endpoint-fast   # → DATABRICKS_SERVING_ENDPOINT_FAST
-        type: serving_endpoint
-```
-
-**`app.yaml`** (runtime config):
-
-```yaml
-command:
-  - "sh"
-  - "scripts/start.sh"
-
-env:
-  - name: DATABRICKS_WAREHOUSE_ID
-    valueFrom: sql-warehouse
-  - name: DATABRICKS_SERVING_ENDPOINT
-    valueFrom: serving-endpoint
-  - name: DATABRICKS_SERVING_ENDPOINT_FAST
-    valueFrom: serving-endpoint-fast
-```
+The `deploy.sh` script generates an `app.yaml` with your selected resources
+as direct environment variable values, then syncs and deploys. The platform
+reads `app.yaml` at startup to inject the env vars.
 
 ### Environment variables at runtime
 
@@ -424,9 +342,9 @@ env:
 | `DATABRICKS_HOST` | Workspace URL | Auto-injected by platform |
 | `DATABRICKS_CLIENT_ID` | Service principal OAuth client ID | Auto-injected by platform |
 | `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret | Auto-injected by platform |
-| `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | From `sql-warehouse` resource binding |
-| `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | From `serving-endpoint` resource binding |
-| `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast Model Serving endpoint name | From `serving-endpoint-fast` resource binding (optional) |
+| `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | Set by `deploy.sh` in `app.yaml` |
+| `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
+| `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
 | `DATABASE_URL` | Lakebase connection string | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 
 > `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically. `DATABASE_URL` is generated dynamically. You never set these manually.
@@ -483,19 +401,14 @@ databricks apps logs databricks-forge --follow
 ### Deployment checklist
 
 ```
-[ ] 1. Workspace previews enabled (Apps OBO User Auth + Apps Install from Git)
-[ ] 2. App created from Git (Compute > Apps > Create app > From Git)
-[ ] 3. SQL Warehouse resource bound (key: sql-warehouse, permission: Can use)
-[ ] 4. Serving Endpoint resource bound (key: serving-endpoint, permission: Can query)
-[ ] 5. Fast Serving Endpoint resource bound (key: serving-endpoint-fast, permission: Can query)
-       — optional but recommended for cost savings
-[ ] 6. User authorization scopes: sql, files.files, catalog.catalogs:read,
-       catalog.schemas:read, catalog.tables:read
-[ ] 7. UC grants applied to the app's service principal
-[ ] 8. Deployed and health check passes: <app-url>/api/health
+[ ] 1. Databricks CLI installed and authenticated
+[ ] 2. ./deploy.sh completed (creates app, binds resources, sets scopes, deploys)
+[ ] 3. UC grants applied to the app's service principal
+[ ] 4. Health check passes: <app-url>/api/health
 ```
 
 > Lakebase is auto-provisioned on first deploy -- no manual database setup needed.
+> Resources (warehouse, endpoints) and user scopes are configured automatically by deploy.sh.
 
 ---
 

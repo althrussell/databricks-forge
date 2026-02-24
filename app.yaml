@@ -1,14 +1,14 @@
-# Databricks Apps configuration
-# Maps app resources to environment variables consumed by the Next.js backend.
+# Databricks Apps runtime configuration
+# Resources and scopes are bound automatically by deploy.sh.
 #
-# Required app resources (configure in Databricks App UI):
-#   1. SQL Warehouse  — resource key: "sql-warehouse"
-#   2. Serving Endpoint — resource key: "serving-endpoint"
-#   3. Fast Serving Endpoint — resource key: "serving-endpoint-fast"
+# Resource bindings (set by deploy.sh via Apps API):
+#   sql-warehouse        → DATABRICKS_WAREHOUSE_ID
+#   serving-endpoint     → DATABRICKS_SERVING_ENDPOINT
+#   serving-endpoint-fast → DATABRICKS_SERVING_ENDPOINT_FAST
 #
-# Required user authorization scopes (configure in App UI → Configure → Add Scope):
-#   1. sql — SQL Statement Execution API (metadata queries, generated SQL)
-#   (defaults: iam.access-control:read, iam.current-user:read — auto-included)
+# User authorization scopes (set by deploy.sh via Apps API):
+#   sql, catalog.tables:read, catalog.schemas:read,
+#   catalog.catalogs:read, files.files
 #
 # Auth model:
 #   - SQL queries run as the logged-in user (OBO via x-forwarded-access-token)
