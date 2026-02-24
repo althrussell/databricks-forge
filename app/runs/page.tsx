@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { resilientFetch } from "@/lib/resilient-fetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -80,7 +81,7 @@ export default function RunsPage() {
     abortRef.current = controller;
 
     try {
-      const res = await fetch("/api/runs?limit=200", {
+      const res = await resilientFetch("/api/runs?limit=200", {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("Failed to fetch runs");
@@ -89,12 +90,16 @@ export default function RunsPage() {
       setError(null);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Failed to load runs");
+      // Keep stale data visible during transient failures; only show error
+      // if we have no data at all (initial load failed completely).
+      if (runs.length === 0) {
+        setError(err instanceof Error ? err.message : "Failed to load runs");
+      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, []);
+  }, [runs.length]);
 
   useEffect(() => {
     fetchRuns();

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { resilientFetch } from "@/lib/resilient-fetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -219,7 +220,7 @@ export default function RunDetailPage({
     abortRef.current = controller;
 
     try {
-      const res = await fetch(`/api/runs/${runId}`, {
+      const res = await resilientFetch(`/api/runs/${runId}`, {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("Run not found");
@@ -231,12 +232,16 @@ export default function RunDetailPage({
       setError(null);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Failed to load run");
+      // Keep stale data visible during transient failures; only show error
+      // if we have no data at all (initial load failed completely).
+      if (!run) {
+        setError(err instanceof Error ? err.message : "Failed to load run");
+      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [runId]);
+  }, [runId, run]);
 
   const fetchPromptLogs = useCallback(async () => {
     if (logsLoaded || logsLoading) return;

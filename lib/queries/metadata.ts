@@ -76,6 +76,100 @@ export async function ensureWarehouseReady(): Promise<WarehouseStatus> {
 }
 
 // ---------------------------------------------------------------------------
+// Permission probing
+// ---------------------------------------------------------------------------
+
+export interface ScopeProbeResult {
+  catalog: string;
+  schema?: string;
+  label: string;
+  accessible: boolean;
+  error?: string;
+}
+
+/**
+ * Run a cheap probe query to check whether the current user can read
+ * from a catalog's information_schema. Returns quickly on permission
+ * errors without retry -- these are deterministic.
+ */
+export async function probeCatalogAccess(
+  catalog: string,
+  schema?: string
+): Promise<ScopeProbeResult> {
+  const safeCatalog = validateIdentifier(catalog, "catalog");
+  const label = schema ? `${catalog}.${schema}` : catalog;
+  try {
+    if (schema) {
+      const safeSchema = validateIdentifier(schema, "schema");
+      await executeSQL(
+        `SELECT 1 FROM \`${safeCatalog}\`.information_schema.tables WHERE table_schema = '${safeSchema}' LIMIT 1`,
+        undefined,
+        undefined,
+        { submitTimeoutMs: 10_000 }
+      );
+    } else {
+      await executeSQL(
+        `SELECT 1 FROM \`${safeCatalog}\`.information_schema.schemata LIMIT 1`,
+        undefined,
+        undefined,
+        { submitTimeoutMs: 10_000 }
+      );
+    }
+    return { catalog, schema, label, accessible: true };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.info("[metadata] Scope inaccessible, will skip", { scope: label, error: msg });
+    return { catalog, schema, label, accessible: false, error: msg };
+  }
+}
+
+/**
+ * Probe all scopes in parallel and partition into accessible vs skipped.
+ * Uses `Promise.allSettled` so one failing probe cannot break the batch.
+ */
+export async function filterAccessibleScopes(
+  scopes: Array<{ catalog: string; schema?: string }>
+): Promise<{ accessible: typeof scopes; skipped: ScopeProbeResult[] }> {
+  const results = await Promise.allSettled(
+    scopes.map((s) => probeCatalogAccess(s.catalog, s.schema))
+  );
+
+  const accessible: typeof scopes = [];
+  const skipped: ScopeProbeResult[] = [];
+
+  for (let i = 0; i < scopes.length; i++) {
+    const result = results[i];
+    if (result.status === "fulfilled" && result.value.accessible) {
+      accessible.push(scopes[i]);
+    } else {
+      const probe =
+        result.status === "fulfilled"
+          ? result.value
+          : {
+              catalog: scopes[i].catalog,
+              schema: scopes[i].schema,
+              label: scopes[i].schema
+                ? `${scopes[i].catalog}.${scopes[i].schema}`
+                : scopes[i].catalog,
+              accessible: false as const,
+              error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            };
+      skipped.push(probe);
+    }
+  }
+
+  if (skipped.length > 0) {
+    logger.info("[metadata] Permission pre-check complete", {
+      accessible: accessible.length,
+      skipped: skipped.length,
+      skippedScopes: skipped.map((s) => s.label),
+    });
+  }
+
+  return { accessible, skipped };
+}
+
+// ---------------------------------------------------------------------------
 // Row Mappers
 // ---------------------------------------------------------------------------
 

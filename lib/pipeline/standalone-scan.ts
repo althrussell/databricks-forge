@@ -14,6 +14,7 @@ import {
   fetchTableTypes,
   mergeTableTypes,
   fetchColumnsBatch,
+  filterAccessibleScopes,
 } from "@/lib/queries/metadata";
 import {
   enrichTablesInBatches,
@@ -66,17 +67,42 @@ export async function runStandaloneEnrichment(
   initScanProgress(scanId);
   logger.info("[standalone-scan] Starting", { scanId, ucMetadata, scopes: scopes.length });
 
-  // Phase 1: Basic metadata
+  // Phase 0: Permission pre-check -- filter out inaccessible scopes in parallel
   updateScanProgress(scanId, {
     phase: "listing-tables",
-    message: `Scanning ${scopes.length} scope${scopes.length !== 1 ? "s" : ""} for tables and columns...`,
+    message: `Probing ${scopes.length} scope${scopes.length !== 1 ? "s" : ""} for access permissions...`,
+  });
+
+  const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
+
+  if (skipped.length > 0) {
+    logger.info("[standalone-scan] Filtered inaccessible scopes", {
+      skipped: skipped.map((s) => s.label),
+    });
+    updateScanProgress(scanId, {
+      message: `Filtered ${skipped.length} inaccessible scope(s). Scanning ${accessibleScopes.length} accessible scope(s)...`,
+    });
+  }
+
+  if (accessibleScopes.length === 0) {
+    logger.error("[standalone-scan] No accessible scopes", { scanId, ucMetadata });
+    updateScanProgress(scanId, {
+      phase: "failed",
+      message: "No accessible scopes found. Check permissions for the configured catalogs/schemas.",
+    });
+    return;
+  }
+
+  // Phase 1: Basic metadata
+  updateScanProgress(scanId, {
+    message: `Scanning ${accessibleScopes.length} scope${accessibleScopes.length !== 1 ? "s" : ""} for tables and columns...`,
   });
 
   const allTables = [];
   const allColumns = [];
   const allFKs = [];
 
-  for (const scope of scopes) {
+  for (const scope of accessibleScopes) {
     const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
     try {
       updateScanProgress(scanId, {
@@ -195,7 +221,7 @@ export async function runStandaloneEnrichment(
   });
   const allTableTags = [];
   const allColumnTags = [];
-  for (const scope of scopes) {
+  for (const scope of accessibleScopes) {
     allTableTags.push(...await getTableTags(scope.catalog, scope.schema));
     allColumnTags.push(...await getColumnTags(scope.catalog, scope.schema));
   }

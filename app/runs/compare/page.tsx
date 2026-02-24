@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { resilientFetch } from "@/lib/resilient-fetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -62,7 +63,7 @@ function ComparePageInner() {
   const [runsLoading, setRunsLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/runs?limit=100")
+    resilientFetch("/api/runs?limit=100")
       .then((r) => r.json())
       .then((data) => {
         const completedRuns = (data.runs as PipelineRun[]).filter(
@@ -78,7 +79,7 @@ function ComparePageInner() {
     if (!runA || !runB || runA === runB) return;
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await resilientFetch(
         `/api/runs/compare?runA=${runA}&runB=${runB}`
       );
       if (res.ok) {

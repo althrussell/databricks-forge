@@ -26,6 +26,7 @@ import {
   fetchTableInfoBatch,
   fetchColumnsBatch,
   fetchForeignKeysBatch,
+  filterAccessibleScopes,
 } from "@/lib/queries/metadata";
 import {
   enrichTablesInBatches,
@@ -98,13 +99,30 @@ export async function runMetadataExtraction(
   const allFKs: ForeignKey[] = [];
   const allMetricViews: MetricViewInfo[] = [];
 
+  // --- Phase 0: Permission pre-check -- filter inaccessible scopes in parallel ---
+
+  if (runId) await updateRunMessage(runId, `Probing ${scopes.length} scope(s) for access permissions...`);
+  const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
+
+  if (skipped.length > 0) {
+    logger.info("[metadata-extraction] Filtered inaccessible scopes", {
+      skipped: skipped.map((s) => s.label),
+    });
+    if (runId) {
+      await updateRunMessage(
+        runId,
+        `Filtered ${skipped.length} inaccessible scope(s): ${skipped.map((s) => s.label).join(", ")}. Scanning ${accessibleScopes.length} accessible scope(s)...`
+      );
+    }
+  }
+
   // --- Phase 1: Basic metadata extraction (existing logic) ---
 
-  for (let si = 0; si < scopes.length; si++) {
-    const scope = scopes[si];
+  for (let si = 0; si < accessibleScopes.length; si++) {
+    const scope = accessibleScopes[si];
     const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
     try {
-      if (runId) await updateRunMessage(runId, `Scanning catalog ${scopeLabel}... (${si + 1}/${scopes.length})`);
+      if (runId) await updateRunMessage(runId, `Scanning catalog ${scopeLabel}... (${si + 1}/${accessibleScopes.length})`);
       const tables = await listTables(scope.catalog, scope.schema);
       allTables.push(...tables);
 
@@ -133,7 +151,7 @@ export async function runMetadataExtraction(
   }
 
   if (runId && allTables.length > 0) {
-    await updateRunMessage(runId, `Found ${allTables.length} tables across ${scopes.length} scope(s), ${allColumns.length} columns`);
+    await updateRunMessage(runId, `Found ${allTables.length} tables across ${accessibleScopes.length} scope(s), ${allColumns.length} columns`);
   }
 
   if (allTables.length === 0) {
@@ -174,7 +192,7 @@ export async function runMetadataExtraction(
         allTables,
         allColumns,
         allFKs,
-        scopes,
+        accessibleScopes,
         dc,
         runId
       );
