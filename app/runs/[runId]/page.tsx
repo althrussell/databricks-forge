@@ -52,7 +52,10 @@ import {
     Settings2,
     Eye,
     RotateCcw,
+    ArrowLeft,
+    GitCompareArrows,
   } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import type {
   PipelineRun,
   UseCase,
@@ -382,6 +385,7 @@ export default function RunDetailPage({
                 onGenieClick={() => setActiveTab("genie")}
                 scanId={scanId}
               />
+              <Separator orientation="vertical" className="mx-1 h-6" />
               <Button
                 variant="outline"
                 size="sm"
@@ -393,16 +397,22 @@ export default function RunDetailPage({
                   router.push("/configure");
                 }}
               >
-                <Copy className="mr-1 h-3.5 w-3.5" />
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
                 Duplicate
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/runs/compare?run=${runId}`}>Compare</Link>
+                <Link href={`/runs/compare?run=${runId}`}>
+                  <GitCompareArrows className="mr-1.5 h-3.5 w-3.5" />
+                  Compare
+                </Link>
               </Button>
             </>
           )}
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/runs">Back to Runs</Link>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/runs">
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+              Runs
+            </Link>
           </Button>
         </div>
       </div>

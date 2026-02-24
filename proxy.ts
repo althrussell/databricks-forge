@@ -38,7 +38,7 @@ function getClientIp(request: NextRequest): string {
   );
 }
 
-export function middleware(request: NextRequest): NextResponse | undefined {
+export function proxy(request: NextRequest): NextResponse | undefined {
   if (!request.nextUrl.pathname.startsWith("/api/")) {
     return undefined;
   }

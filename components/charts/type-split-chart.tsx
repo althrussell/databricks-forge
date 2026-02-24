@@ -41,8 +41,8 @@ export function TypeSplitChart({
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={200}>
+      <CardContent className="overflow-visible">
+        <ResponsiveContainer width="100%" height={200} style={{ overflow: "visible" }}>
           <PieChart>
             <Pie
               data={data}
@@ -50,12 +50,12 @@ export function TypeSplitChart({
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius={45}
-              outerRadius={75}
+              innerRadius={38}
+              outerRadius={65}
               paddingAngle={4}
               label={({ name, value }) => `${name} (${value})`}
               labelLine={false}
-              fontSize={12}
+              fontSize={11}
             >
               {data.map((entry) => (
                 <Cell
