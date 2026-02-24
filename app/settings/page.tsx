@@ -37,7 +37,9 @@ import {
   AlertTriangle,
   Loader2,
   ScanLine,
+  Info,
 } from "lucide-react";
+import packageJson from "@/package.json";
 import {
   DEFAULT_DEPTH_CONFIGS,
   type DiscoveryDepth,
@@ -697,6 +699,41 @@ export default function SettingsPage() {
                   placeholder="./forge_gen/"
                 />
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* About */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5" />
+            About
+          </CardTitle>
+          <CardDescription>
+            Application version and build information
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Version</Label>
+              <p className="mt-0.5 text-sm font-medium font-mono">
+                v{packageJson.version}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Application</Label>
+              <p className="mt-0.5 text-sm font-medium">
+                Databricks Forge AI
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Runtime</Label>
+              <p className="mt-0.5 text-sm font-medium font-mono">
+                Next.js {profile ? "/ Databricks Apps" : "/ Local Dev"}
+              </p>
             </div>
           </div>
         </CardContent>

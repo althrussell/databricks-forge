@@ -1,6 +1,6 @@
 {
   "name": "databricks-forge",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "version:patch": "bash scripts/bump-version.sh patch",
+    "version:minor": "bash scripts/bump-version.sh minor",
+    "version:major": "bash scripts/bump-version.sh major"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

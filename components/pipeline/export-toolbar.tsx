@@ -30,7 +30,6 @@ import {
   Braces,
   Briefcase,
   Loader2,
-  Sparkles,
   ExternalLink,
   RotateCcw,
   Rocket,
@@ -39,7 +38,6 @@ import {
 interface ExportToolbarProps {
   runId: string;
   businessName: string;
-  onGenieClick?: () => void;
   scanId?: string | null;
 }
 
@@ -51,7 +49,7 @@ const EXPORT_FORMATS = [
   { key: "json", label: "JSON", icon: Braces },
 ] as const;
 
-export function ExportToolbar({ runId, businessName, onGenieClick, scanId }: ExportToolbarProps) {
+export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProps) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [notebookUrl, setNotebookUrl] = useState<string | null>(null);
   const [hasDeployed, setHasDeployed] = useState(false);
@@ -181,17 +179,6 @@ export function ExportToolbar({ runId, businessName, onGenieClick, scanId }: Exp
       </DropdownMenu>
 
       {/* Deploy actions */}
-      {onGenieClick && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!!exporting}
-          onClick={onGenieClick}
-        >
-          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-          Deploy Genie
-        </Button>
-      )}
       {hasDeployed ? (
         <>
           <Button

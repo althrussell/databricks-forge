@@ -382,7 +382,6 @@ export default function RunDetailPage({
               <ExportToolbar
                 runId={run.runId}
                 businessName={run.config.businessName}
-                onGenieClick={() => setActiveTab("genie")}
                 scanId={scanId}
               />
               <Separator orientation="vertical" className="mx-1 h-6" />
