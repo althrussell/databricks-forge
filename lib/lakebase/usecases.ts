@@ -43,6 +43,8 @@ function dbRowToUseCase(row: {
   userOverallScore: number | null;
   sqlCode: string | null;
   sqlStatus: string | null;
+  feedback: string | null;
+  feedbackAt: Date | null;
 }): UseCase {
   return {
     id: row.id,
@@ -69,6 +71,8 @@ function dbRowToUseCase(row: {
     userOverallScore: row.userOverallScore ?? null,
     sqlCode: row.sqlCode ?? null,
     sqlStatus: row.sqlStatus ?? null,
+    feedback: (row.feedback as UseCase["feedback"]) ?? null,
+    feedbackAt: row.feedbackAt?.toISOString() ?? null,
   };
 }
 
@@ -161,5 +165,26 @@ export async function getDomainsForRun(runId: string): Promise<string[]> {
 export async function deleteUseCasesForRun(runId: string): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeUseCase.deleteMany({ where: { runId } });
+  });
+}
+
+/**
+ * Retrieve accepted use cases from previous runs targeting the same UC scope.
+ * Used as few-shot examples in the use case generation prompt.
+ */
+export async function getFeedbackExamples(
+  ucMetadata: string,
+  limit = 10
+): Promise<UseCase[]> {
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeUseCase.findMany({
+      where: {
+        feedback: "accepted",
+        run: { ucMetadata },
+      },
+      orderBy: { overallScore: "desc" },
+      take: limit,
+    });
+    return rows.map(dbRowToUseCase);
   });
 }

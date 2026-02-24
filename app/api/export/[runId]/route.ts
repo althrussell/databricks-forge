@@ -15,6 +15,9 @@ import { generateExcel } from "@/lib/export/excel";
 import { generatePptx } from "@/lib/export/pptx";
 import { generatePdf } from "@/lib/export/pdf";
 import { generateNotebooks } from "@/lib/export/notebooks";
+import { generateCsv } from "@/lib/export/csv";
+import { generateJson } from "@/lib/export/json";
+import { generateExportSummaries } from "@/lib/export/summaries";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { getConfig, getCurrentUserEmail } from "@/lib/dbx/client";
@@ -32,14 +35,14 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") as ExportFormat | null;
 
-    if (!format || !["excel", "pdf", "pptx", "notebooks"].includes(format)) {
+    if (!format || !["excel", "pdf", "pptx", "notebooks", "csv", "json"].includes(format)) {
       logger.warn("[api/export/runId] Invalid or missing format", {
         runId,
         format: format ?? "missing",
-        reason: "format query param required: excel, pdf, pptx, or notebooks",
+        reason: "format query param required: excel, pdf, pptx, notebooks, csv, or json",
       });
       return NextResponse.json(
-        { error: "format query param required: excel, pdf, pptx, or notebooks" },
+        { error: "format query param required: excel, pdf, pptx, notebooks, csv, or json" },
         { status: 400 }
       );
     }
@@ -75,6 +78,12 @@ export async function GET(
 
     const userEmail = await getCurrentUserEmail();
 
+    // Generate LLM summaries for PDF/PPTX (non-blocking, with fallback)
+    let summaries: Awaited<ReturnType<typeof generateExportSummaries>> = null;
+    if (format === "pdf" || format === "pptx") {
+      summaries = await generateExportSummaries(run, useCases);
+    }
+
     switch (format) {
       case "excel": {
         const buffer = await generateExcel(run, useCases, lineageDiscoveredFqns);
@@ -90,7 +99,7 @@ export async function GET(
         });
       }
       case "pptx": {
-        const buffer = await generatePptx(run, useCases, lineageDiscoveredFqns);
+        const buffer = await generatePptx(run, useCases, lineageDiscoveredFqns, summaries);
         insertExportRecord(runId, "pptx");
         logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pptx", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(buffer), {
@@ -103,7 +112,7 @@ export async function GET(
         });
       }
       case "pdf": {
-        const pdfBuffer = await generatePdf(run, useCases, lineageDiscoveredFqns);
+        const pdfBuffer = await generatePdf(run, useCases, lineageDiscoveredFqns, summaries);
         insertExportRecord(runId, "pdf");
         logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pdf", businessName: run.config.businessName } });
         return new NextResponse(new Uint8Array(pdfBuffer), {
@@ -111,6 +120,30 @@ export async function GET(
           headers: {
             "Content-Type": "application/pdf",
             "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.pdf"`,
+          },
+        });
+      }
+      case "csv": {
+        const csvBuffer = generateCsv(run, useCases);
+        insertExportRecord(runId, "csv");
+        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "csv", businessName: run.config.businessName } });
+        return new NextResponse(new Uint8Array(csvBuffer), {
+          status: 200,
+          headers: {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.csv"`,
+          },
+        });
+      }
+      case "json": {
+        const jsonBuffer = generateJson(run, useCases);
+        insertExportRecord(runId, "json");
+        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "json", businessName: run.config.businessName } });
+        return new NextResponse(new Uint8Array(jsonBuffer), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.json"`,
           },
         });
       }

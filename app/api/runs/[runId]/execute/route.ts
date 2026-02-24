@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { getRunById } from "@/lib/lakebase/runs";
-import { startPipeline } from "@/lib/pipeline/engine";
+import { startPipeline, resumePipeline } from "@/lib/pipeline/engine";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
 
@@ -37,6 +37,17 @@ export async function POST(
         { error: "Pipeline is already running" },
         { status: 409 }
       );
+    }
+
+    const { searchParams } = new URL(_request.url);
+    const isResume = searchParams.get("resume") === "true";
+
+    if (isResume && run.status === "failed") {
+      resumePipeline(runId).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error("[execute] Resume pipeline crashed", { runId, error: msg });
+      });
+      return NextResponse.json({ status: "running", runId, resumed: true });
     }
 
     // Start pipeline asynchronously -- do not await

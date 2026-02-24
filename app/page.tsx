@@ -14,10 +14,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScoreDistributionChart } from "@/components/charts/score-distribution-chart";
 import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
 import { TypeSplitChart } from "@/components/charts/type-split-chart";
-import { ActivityFeed } from "@/components/pipeline/activity-feed";
+import { ActivityFeedInline } from "@/components/pipeline/activity-feed";
 import {
   BarChart3,
   BrainCircuit,
@@ -84,7 +85,7 @@ export default function DashboardPage() {
   }, [fetchStats]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -197,89 +198,81 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Recent Runs */}
+          {/* Recent Runs & Activity */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Recent Runs</CardTitle>
-                <CardDescription>
-                  Latest discovery pipeline executions
-                </CardDescription>
-              </div>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/runs">
-                  View All
-                  <ArrowRight className="ml-1 h-3 w-3" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {stats.recentRuns.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No runs yet. Start a new discovery to see results here.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {stats.recentRuns.map((run) => (
-                    <Link
-                      key={run.runId}
-                      href={`/runs/${run.runId}`}
-                      className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <p className="font-medium">{run.businessName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(run.createdAt).toLocaleDateString(
-                              undefined,
-                              {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {run.status === "completed" && run.useCaseCount > 0 && (
-                          <span className="text-sm text-muted-foreground">
-                            {run.useCaseCount} use cases
-                          </span>
-                        )}
-                        <Badge
-                          variant="secondary"
-                          className={STATUS_STYLES[run.status] ?? ""}
-                        >
-                          {run.status}
-                        </Badge>
-                      </div>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <Tabs defaultValue="runs" className="w-full">
+                <div className="flex items-center justify-between">
+                  <TabsList>
+                    <TabsTrigger value="runs">Recent Runs</TabsTrigger>
+                    <TabsTrigger value="activity">Activity</TabsTrigger>
+                  </TabsList>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/runs">
+                      View All
+                      <ArrowRight className="ml-1 h-3 w-3" />
                     </Link>
-                  ))}
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Activity Feed */}
-          <ActivityFeed limit={10} />
-
-          {/* Privacy Notice */}
-          <Card className="border-dashed">
-            <CardHeader>
-              <CardTitle className="text-sm">
-                Privacy &amp; Data Access
-              </CardTitle>
+                <TabsContent value="runs" className="mt-4">
+                  {stats.recentRuns.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No runs yet. Start a new discovery to see results here.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {stats.recentRuns.map((run) => (
+                        <Link
+                          key={run.runId}
+                          href={`/runs/${run.runId}`}
+                          className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <p className="font-medium">{run.businessName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(run.createdAt).toLocaleDateString(
+                                  undefined,
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {run.status === "completed" && run.useCaseCount > 0 && (
+                              <span className="text-sm text-muted-foreground">
+                                {run.useCaseCount} use cases
+                              </span>
+                            )}
+                            <Badge
+                              variant="secondary"
+                              className={STATUS_STYLES[run.status] ?? ""}
+                            >
+                              {run.status}
+                            </Badge>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="activity" className="mt-4">
+                  <ActivityFeedInline limit={10} />
+                </TabsContent>
+              </Tabs>
             </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                Forge reads <strong>metadata only</strong> -- schema names,
-                table names, and column names. No row-level data is accessed
-                unless data sampling is explicitly enabled.
-              </p>
-            </CardContent>
           </Card>
+
+          <p className="text-xs text-muted-foreground">
+            Forge reads <strong>metadata only</strong> -- schema names,
+            table names, and column names. No row-level data is accessed
+            unless data sampling is explicitly enabled.
+          </p>
         </>
       ) : null}
     </div>

@@ -216,7 +216,8 @@ function annotateTableFqn(fqn: string, lineageFqns: Set<string>): string {
 export async function generatePptx(
   run: PipelineRun,
   useCases: UseCase[],
-  lineageDiscoveredFqns: string[] = []
+  lineageDiscoveredFqns: string[] = [],
+  summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const pptx = new PptxGenJS();
@@ -297,9 +298,21 @@ export async function generatePptx(
   // 2. EXECUTIVE SUMMARY (paginated across multiple slides when long)
   // =====================================================================
 
-  // Collect all summary bullets
+  // LLM-generated narrative summary (prepended when available)
   const bc = run.businessContext;
   const summaryBullets: Array<{ text: string; options: PptxGenJS.TextPropsOptions }> = [];
+
+  if (summaries?.executiveSummary) {
+    summaryBullets.push({
+      text: summaries.executiveSummary,
+      options: {
+        fontSize: 13,
+        color: TEXT_COLOR,
+        breakLine: true,
+        paraSpaceAfter: 10,
+      },
+    });
+  }
 
   const bulletOpts: PptxGenJS.TextPropsOptions = {
     fontSize: 14,
@@ -508,16 +521,21 @@ export async function generatePptx(
     });
     addRedSeparator(sumSlide, CONTENT_MARGIN, 1.05, 4);
 
+    const llmDomainSummary = summaries?.domainSummaries?.[domain];
+    const bulletTexts: Array<{ text: string; options: PptxGenJS.TextPropsOptions }> = [];
+    if (llmDomainSummary) {
+      bulletTexts.push({
+        text: llmDomainSummary,
+        options: { fontSize: 14, color: TEXT_COLOR, breakLine: true, paraSpaceAfter: 8 },
+      });
+    }
     const bullets = buildDomainSummary(domain, cases);
-    const bulletTexts = bullets.map((b) => ({
-      text: b,
-      options: {
-        fontSize: 18,
-        color: TEXT_COLOR,
-        bullet: true,
-        breakLine: true,
-      } as PptxGenJS.TextPropsOptions,
-    }));
+    for (const b of bullets) {
+      bulletTexts.push({
+        text: b,
+        options: { fontSize: 18, color: TEXT_COLOR, bullet: true, breakLine: true },
+      });
+    }
 
     sumSlide.addText(bulletTexts, {
       x: CONTENT_MARGIN + 0.3,

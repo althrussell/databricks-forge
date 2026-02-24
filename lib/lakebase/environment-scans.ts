@@ -253,6 +253,35 @@ export async function getEnvironmentScanByRunId(runId: string) {
 }
 
 /**
+ * Find the best available scan for a run: first by run linkage, then by matching ucPath.
+ * Returns just the scanId or null.
+ */
+export async function getLatestScanIdForRun(
+  runId: string,
+  ucPath?: string
+): Promise<string | null> {
+  return withPrisma(async (prisma) => {
+    const linked = await prisma.forgeEnvironmentScan.findFirst({
+      where: { runId },
+      select: { scanId: true },
+      orderBy: { createdAt: "desc" },
+    });
+    if (linked) return linked.scanId;
+
+    if (ucPath) {
+      const byPath = await prisma.forgeEnvironmentScan.findFirst({
+        where: { ucPath },
+        select: { scanId: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (byPath) return byPath.scanId;
+    }
+
+    return null;
+  });
+}
+
+/**
  * List recent environment scans (summary only, no related data).
  */
 export async function listEnvironmentScans(limit = 20, offset = 0) {

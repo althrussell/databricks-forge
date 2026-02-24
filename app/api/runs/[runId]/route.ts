@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRunById, deleteRun } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
+import { getLatestScanIdForRun } from "@/lib/lakebase/environment-scans";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
@@ -38,6 +39,7 @@ export async function GET(
     // Only fetch use cases if the run is completed
     let useCases = undefined;
     let lineageDiscoveredFqns: string[] = [];
+    let scanId: string | null = null;
     if (run.status === "completed") {
       useCases = await getUseCasesByRunId(runId);
       try {
@@ -46,9 +48,14 @@ export async function GET(
       } catch {
         // Non-critical -- continue without lineage data
       }
+      try {
+        scanId = await getLatestScanIdForRun(runId, run.config.ucMetadata);
+      } catch {
+        // Non-critical
+      }
     }
 
-    return NextResponse.json({ run, useCases, lineageDiscoveredFqns });
+    return NextResponse.json({ run, useCases, lineageDiscoveredFqns, scanId });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { runId: "unknown", error: msg });

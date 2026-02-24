@@ -42,22 +42,24 @@ import {
   type PromptLogEntry,
   type PromptLogStats,
 } from "@/components/pipeline/run-detail/ai-observability-tab";
-import {
-  Target,
-  Database,
-  Copy,
-  ChevronDown,
-  ChevronUp,
-  BarChart3,
-  Settings2,
-  Eye,
-} from "lucide-react";
+  import {
+    Target,
+    Database,
+    Copy,
+    ChevronDown,
+    ChevronUp,
+    BarChart3,
+    Settings2,
+    Eye,
+    RotateCcw,
+  } from "lucide-react";
 import type {
   PipelineRun,
   UseCase,
   PipelineStep,
 } from "@/lib/domain/types";
 import { computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
+import { toast } from "sonner";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
 
 export default function RunDetailPage({
@@ -73,6 +75,7 @@ export default function RunDetailPage({
   const [lineageDiscoveredFqns, setLineageDiscoveredFqns] = useState<
     string[]
   >([]);
+  const [scanId, setScanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -229,6 +232,7 @@ export default function RunDetailPage({
       if (data.useCases) setUseCases(data.useCases);
       if (data.lineageDiscoveredFqns)
         setLineageDiscoveredFqns(data.lineageDiscoveredFqns);
+      if (data.scanId) setScanId(data.scanId);
       setError(null);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -376,6 +380,7 @@ export default function RunDetailPage({
                 runId={run.runId}
                 businessName={run.config.businessName}
                 onGenieClick={() => setActiveTab("genie")}
+                scanId={scanId}
               />
               <Button
                 variant="outline"
@@ -485,9 +490,26 @@ export default function RunDetailPage({
       {run.status === "failed" && run.errorMessage && (
         <Card className="border-destructive/50">
           <CardHeader>
-            <CardTitle className="text-lg text-destructive">
-              Pipeline Failed
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg text-destructive">
+                Pipeline Failed
+              </CardTitle>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/${runId}/execute?resume=true`, { method: "POST" });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Resume failed"); }
+                    toast.success("Pipeline resuming from last successful step");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Resume failed");
+                  }
+                }}
+              >
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Resume Pipeline
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm">{run.errorMessage}</p>

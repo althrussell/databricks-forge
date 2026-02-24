@@ -23,7 +23,12 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine, ChevronDown } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
@@ -423,15 +428,22 @@ export function ConfigForm() {
       </Card>
 
       {/* Optional Fields */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Advanced Configuration</CardTitle>
-          <CardDescription>
-            Optional settings -- defaults are auto-detected by the AI. Only
-            override these if you want to constrain the analysis to specific
-            business domains or use a particular AI model.
-          </CardDescription>
-        </CardHeader>
+      <Collapsible defaultOpen={false}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer select-none">
+              <div className="flex items-center justify-between">
+                <CardTitle>Advanced Configuration</CardTitle>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+              </div>
+              <CardDescription>
+                Optional settings -- defaults are auto-detected by the AI. Only
+                override these if you want to constrain the analysis to specific
+                business domains or use a particular AI model.
+              </CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
         <CardContent className="space-y-4">
           <div className="space-y-3">
             <Label>Business Domains (optional)</Label>
@@ -575,7 +587,9 @@ export function ConfigForm() {
             </button>
           </div>
         </CardContent>
-      </Card>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Submit */}
       <div className="flex justify-end">

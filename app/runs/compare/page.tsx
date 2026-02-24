@@ -108,12 +108,39 @@ function ComparePageInner() {
             Side-by-side comparison of two discovery runs including prompt version diffs
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/runs">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Back to Runs
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {compareData && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/runs/compare/export?runA=${runA}&runB=${runB}`);
+                  if (!res.ok) throw new Error("Export failed");
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `forge_comparison_${runA.substring(0, 8)}_vs_${runB.substring(0, 8)}.xlsx`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch {
+                  // Silent fail — toast not available here
+                }
+              }}
+            >
+              Export Comparison
+            </Button>
+          )}
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/runs">
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back to Runs
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Run Selectors */}

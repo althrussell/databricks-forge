@@ -246,7 +246,7 @@ function IndustryCard({
 
   return (
     <Card
-      className={`group cursor-pointer border bg-gradient-to-br transition-all hover:shadow-md ${gradientClass}`}
+      className={`group flex cursor-pointer flex-col border bg-gradient-to-br transition-all hover:shadow-md ${gradientClass}`}
       onClick={onClick}
     >
       <CardHeader className="pb-3">
@@ -263,7 +263,7 @@ function IndustryCard({
           </CardDescription>
         )}
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-1 flex-col justify-between space-y-3">
         {/* Objective pills */}
         <div className="flex flex-wrap gap-1">
           {industry.objectives.map((obj) => (
@@ -273,17 +273,18 @@ function IndustryCard({
           ))}
         </div>
 
-        <Separator />
-
-        {/* Stats row */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Target className="h-3.5 w-3.5" />
-            <span>{priCount} priorities</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Lightbulb className="h-3.5 w-3.5" />
-            <span>{ucCount} use cases</span>
+        <div>
+          <Separator />
+          {/* Stats row */}
+          <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Target className="h-3.5 w-3.5" />
+              <span>{priCount} priorities</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Lightbulb className="h-3.5 w-3.5" />
+              <span>{ucCount} use cases</span>
+            </div>
           </div>
         </div>
       </CardContent>

@@ -83,6 +83,8 @@ model ForgeUseCase {
   userOverallScore       Float?  @map("user_overall_score")
   sqlCode                String? @map("sql_code")
   sqlStatus              String? @map("sql_status")
+  feedback               String?                              // "accepted" | "rejected" | "dismissed"
+  feedbackAt             DateTime? @map("feedback_at")
 
   run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 

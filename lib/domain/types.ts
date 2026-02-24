@@ -165,7 +165,11 @@ export interface UseCase {
   userOverallScore: number | null;
   sqlCode: string | null;
   sqlStatus: string | null;
+  feedback: "accepted" | "rejected" | "dismissed" | null;
+  feedbackAt: string | null;
 }
+
+export type UseCaseFeedback = "accepted" | "rejected" | "dismissed";
 
 // ---------------------------------------------------------------------------
 // Metadata
@@ -225,7 +229,7 @@ export interface MetadataSnapshot {
 // Export
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = "excel" | "pdf" | "pptx" | "notebooks";
+export type ExportFormat = "excel" | "pdf" | "pptx" | "notebooks" | "csv" | "json";
 
 export interface ExportRecord {
   exportId: string;

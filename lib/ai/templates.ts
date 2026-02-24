@@ -1130,6 +1130,35 @@ Return a single valid JSON object matching this TypeScript interface:
 {"id": string, "name": string, "subVerticals": string[], "suggestedDomains": string[], "suggestedPriorities": string[], "objectives": [{"name": string, "whyChange": string, "priorities": [{"name": string, "useCases": [{"name": string, "description": string, "businessValue": string | undefined, "typicalDataEntities": string[], "typicalSourceSystems": string[]}], "kpis": string[], "personas": string[]}]}]}
 
 Return ONLY the JSON object. No markdown fences, no preamble, no explanation.`,
+
+  // -------------------------------------------------------------------------
+  // Export: LLM-Generated Summaries (for PDF/PPTX)
+  // -------------------------------------------------------------------------
+
+  SUMMARY_GEN_PROMPT: `You are a senior management consultant writing an executive briefing on data-driven opportunities for **{business_name}**.
+
+## CONTEXT
+
+A discovery pipeline has generated **{total_cases}** use cases across these domains:
+{domain_list}
+
+## TASK
+
+Produce a JSON object with two keys:
+
+1. **"executiveSummary"** — a 3–5 sentence executive summary highlighting the most impactful opportunities, the breadth of the data estate, and recommended next steps.
+
+2. **"domainSummaries"** — an object keyed by domain name, where each value is a 2–3 sentence narrative summary of the opportunities in that domain, the key tables involved, and the expected business impact.
+
+Write in {output_language}. Be specific and reference actual domain names and use case themes. Avoid generic statements.
+
+## OUTPUT FORMAT
+
+Return ONLY a valid JSON object:
+
+{"executiveSummary": "...", "domainSummaries": {"Domain A": "...", "Domain B": "..."}}
+
+No markdown fences, no preamble.`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1171,6 +1200,8 @@ export const PROMPT_SYSTEM_MESSAGES: Partial<Record<PromptKey, string>> = {
     "You are a Principal Databricks SQL Engineer with 15+ years of experience writing production-grade analytics queries. You produce raw SQL only -- no markdown fences, no explanations.",
   USE_CASE_SQL_FIX_PROMPT:
     "You are a Senior Databricks SQL Engineer specializing in debugging SQL queries. Fix only the reported error, preserve all business logic. You produce raw SQL only.",
+  SUMMARY_GEN_PROMPT:
+    "You are a senior management consultant writing executive briefings. You produce structured JSON output only. Be concise, specific, and action-oriented.",
 };
 
 /**

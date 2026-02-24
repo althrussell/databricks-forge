@@ -266,7 +266,8 @@ function annotateTableFqn(fqn: string, lineageFqns: Set<string>): string {
 export async function generatePdf(
   run: PipelineRun,
   useCases: UseCase[],
-  lineageDiscoveredFqns: string[] = []
+  lineageDiscoveredFqns: string[] = [],
+  summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   return new Promise<Buffer>((resolve, reject) => {
@@ -378,6 +379,21 @@ export async function generatePdf(
     addRedSeparator(doc, MARGIN, MARGIN + 42, 50);
 
     let yPos = MARGIN + 50;
+
+    // LLM-generated narrative summary (when available)
+    if (summaries?.executiveSummary) {
+      doc
+        .fontSize(12)
+        .fillColor(TEXT_COLOR)
+        .font("Helvetica")
+        .text(summaries.executiveSummary, MARGIN + 10, yPos, {
+          width: CONTENT_W - 20,
+          lineGap: 5,
+        });
+      yPos = doc.y + 18;
+      addRedSeparator(doc, MARGIN, yPos, 30);
+      yPos += 12;
+    }
 
     // Business context bullets
     const bc = run.businessContext;
@@ -531,19 +547,33 @@ export async function generatePdf(
 
       addRedSeparator(doc, MARGIN, MARGIN + 58, 40);
 
-      const bullets = buildDomainSummary(domain, cases);
       yPos = MARGIN + 70;
 
-      for (const bullet of bullets) {
+      // Use LLM domain summary if available; otherwise fall back to static bullets
+      const llmDomainSummary = summaries?.domainSummaries?.[domain];
+      if (llmDomainSummary) {
         doc
-          .fontSize(13)
+          .fontSize(12)
           .fillColor(TEXT_COLOR)
           .font("Helvetica")
-          .text(`•  ${bullet}`, MARGIN + 20, yPos, {
-            width: CONTENT_W - 40,
-            lineGap: 4,
+          .text(llmDomainSummary, MARGIN + 10, yPos, {
+            width: CONTENT_W - 20,
+            lineGap: 5,
           });
         yPos = doc.y + 10;
+      } else {
+        const bullets = buildDomainSummary(domain, cases);
+        for (const bullet of bullets) {
+          doc
+            .fontSize(13)
+            .fillColor(TEXT_COLOR)
+            .font("Helvetica")
+            .text(`•  ${bullet}`, MARGIN + 20, yPos, {
+              width: CONTENT_W - 40,
+              lineGap: 4,
+            });
+          yPos = doc.y + 10;
+        }
       }
 
       // Quick stats grid
@@ -615,6 +645,10 @@ export async function generatePdf(
             width: CONTENT_W,
           });
 
+        // Red separator between title and subtitle
+        const sepY = doc.y + 6;
+        addRedSeparator(doc, MARGIN, sepY, 50);
+
         // Subtitle: Subdomain | Type | Technique
         const subtitleParts = [
           uc.subdomain,
@@ -625,7 +659,7 @@ export async function generatePdf(
           .fontSize(12)
           .fillColor(DB_RED)
           .font("Helvetica-Bold")
-          .text(subtitleParts.join("  |  "), MARGIN, doc.y + 6, {
+          .text(subtitleParts.join("  |  "), MARGIN, sepY + 8, {
             width: CONTENT_W,
           });
 

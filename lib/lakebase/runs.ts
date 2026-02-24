@@ -340,6 +340,33 @@ export async function updateRunIndustry(
 }
 
 /**
+ * Read the raw filteredTablesJson from a run row.
+ * Returns the array of FQNs classified as "business", or null if not yet set.
+ */
+export async function getRunFilteredTables(
+  runId: string
+): Promise<string[] | null> {
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeRun.findUnique({
+      where: { runId },
+      select: { filteredTablesJson: true },
+    });
+    if (!row?.filteredTablesJson) return null;
+    try {
+      const classifications = JSON.parse(row.filteredTablesJson) as Array<{
+        fqn: string;
+        classification: string;
+      }>;
+      return classifications
+        .filter((c) => c.classification === "business")
+        .map((c) => c.fqn);
+    } catch {
+      return null;
+    }
+  });
+}
+
+/**
  * Append or update a step log entry in the generationOptions JSON.
  * Reads the current value, merges the entry, and writes back atomically.
  */

@@ -19,9 +19,10 @@ interface ExportToolbarProps {
   runId: string;
   businessName: string;
   onGenieClick?: () => void;
+  scanId?: string | null;
 }
 
-export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolbarProps) {
+export function ExportToolbar({ runId, businessName, onGenieClick, scanId }: ExportToolbarProps) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [notebookUrl, setNotebookUrl] = useState<string | null>(null);
   const [hasDeployed, setHasDeployed] = useState(false);
@@ -68,7 +69,8 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
       const a = document.createElement("a");
       a.href = url;
 
-      const ext = format === "excel" ? "xlsx" : format;
+      const extMap: Record<string, string> = { excel: "xlsx", pptx: "pptx", pdf: "pdf", csv: "csv", json: "json" };
+      const ext = extMap[format] ?? format;
       a.download = `forge_${businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.${ext}`;
       document.body.appendChild(a);
       a.click();
@@ -110,6 +112,53 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
         onClick={() => handleExport("pdf")}
       >
         {exporting === "pdf" ? "Exporting..." : "PDF"}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!!exporting}
+        onClick={() => handleExport("csv")}
+      >
+        {exporting === "csv" ? "Exporting..." : "CSV"}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!!exporting}
+        onClick={() => handleExport("json")}
+      >
+        {exporting === "json" ? "Exporting..." : "JSON"}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!!exporting || !scanId}
+        title={scanId ? "Export combined estate & discovery briefing" : "Requires an estate scan"}
+        onClick={async () => {
+          if (!scanId) return;
+          setExporting("briefing");
+          try {
+            const url = `/api/export/executive-briefing?scanId=${scanId}&runId=${runId}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = `forge_executive_briefing_${businessName.replace(/\s+/g, "_")}.pptx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            toast.success("Executive Briefing exported successfully");
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Executive Briefing export failed");
+          } finally {
+            setExporting(null);
+          }
+        }}
+      >
+        {exporting === "briefing" ? "Exporting..." : "Executive Briefing"}
       </Button>
       {onGenieClick && (
         <Button

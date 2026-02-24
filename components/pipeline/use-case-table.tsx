@@ -53,6 +53,8 @@ import {
   X,
   SlidersHorizontal,
   RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
@@ -621,6 +623,36 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                         )}
                       </div>
                     )}
+                  </>
+                )}
+
+                {/* Feedback Buttons */}
+                {onUpdate && (
+                  <>
+                    <Separator />
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-muted-foreground mr-1">Feedback:</span>
+                      {(["accepted", "rejected", "dismissed"] as const).map((fb) => (
+                        <Button
+                          key={fb}
+                          variant={selectedUseCase.feedback === fb ? "default" : "outline"}
+                          size="sm"
+                          onClick={async () => {
+                            const newFb = selectedUseCase.feedback === fb ? null : fb;
+                            const updated = { ...selectedUseCase, feedback: newFb, feedbackAt: newFb ? new Date().toISOString() : null };
+                            const result = await onUpdate(updated);
+                            if (result && "ok" in result && result.ok) {
+                              setSelectedUseCase(updated);
+                            }
+                          }}
+                        >
+                          {fb === "accepted" && <ThumbsUp className="mr-1 h-3.5 w-3.5" />}
+                          {fb === "rejected" && <ThumbsDown className="mr-1 h-3.5 w-3.5" />}
+                          {fb === "dismissed" && <X className="mr-1 h-3.5 w-3.5" />}
+                          {fb.charAt(0).toUpperCase() + fb.slice(1)}
+                        </Button>
+                      ))}
+                    </div>
                   </>
                 )}
 
