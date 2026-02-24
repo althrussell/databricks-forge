@@ -1,52 +1,99 @@
 # Deployment Guide
 
-## Databricks App Deployment
+## Quick Deploy (Recommended)
 
-This application is deployed as a **Databricks App**. Databricks Apps are
-containerised web applications that run inside a Databricks workspace with
-automatic authentication and resource bindings.
+The easiest way to deploy is the interactive deploy script. It discovers
+your resources, creates the app, uploads code, and deploys -- all in one
+command with a single prompt (which SQL Warehouse to use).
 
-### App Manifest (`databricks.yml`)
+```bash
+./deploy.sh
+```
 
-The app manifest declares:
+Models default to `databricks-claude-sonnet-4-6` for both premium and fast
+endpoints. Override with flags if needed:
 
-- **App name and description**
-- **Resource bindings** -- SQL Warehouse for query execution
-- **Environment variables** -- injected automatically by the platform
-- **Port** -- `DATABRICKS_APP_PORT` (default 3000)
+```bash
+./deploy.sh --warehouse "My Warehouse" --endpoint "my-model" --fast-endpoint "my-fast-model"
+```
 
-### Resource Bindings
+To remove the app:
 
-| Resource | Resource Key | Type | Purpose |
-|----------|-------------|------|---------|
-| SQL Warehouse | `sql-warehouse` | `sql_warehouse` | Execute metadata queries and generated SQL |
-| Serving Endpoint | `serving-endpoint` | `serving_endpoint` | Premium LLM (Claude Opus) for SQL-critical passes |
-| Fast Serving Endpoint | `serving-endpoint-fast` | `serving_endpoint` | Fast LLM (Claude Sonnet) for metadata/classification passes |
+```bash
+./deploy.sh --destroy
+```
 
-Resource IDs are injected via environment variables. Never hardcode them.
+See [QUICKSTART.md](../QUICKSTART.md) for the full three-step setup.
 
-### Environment Variables (Auto-injected)
+---
+
+## How It Works
+
+Databricks Forge AI is deployed as a **Databricks App** -- a containerised web
+application that runs inside a Databricks workspace with automatic
+authentication.
+
+### What `deploy.sh` does
+
+1. Validates the Databricks CLI is installed and authenticated
+2. Lists SQL Warehouses and lets you pick one
+3. Creates the app (or detects an existing one)
+4. Binds resources (SQL warehouse, serving endpoints) and sets user
+   authorization scopes via the Apps API `create-update` endpoint
+5. Syncs the project source code to a workspace folder
+6. Deploys the app from that workspace folder
+
+No manual UI configuration is needed. The script handles everything.
+
+### Resource bindings
+
+The script binds three resources to the app via the API. The `app.yaml`
+references these using `valueFrom:` keys, which the platform resolves to
+environment variables at runtime.
+
+| Resource key | Type | Default | Permission |
+|---|---|---|---|
+| `sql-warehouse` | SQL Warehouse | Customer-selected | CAN_USE |
+| `serving-endpoint` | Serving Endpoint | `databricks-claude-sonnet-4-6` | CAN_QUERY |
+| `serving-endpoint-fast` | Serving Endpoint | `databricks-claude-sonnet-4-6` | CAN_QUERY |
+
+### User authorization scopes
+
+The script configures these OAuth scopes so the app can act on behalf of the
+logged-in user, enforcing their Unity Catalog permissions:
+
+| Scope | Purpose |
+|---|---|
+| `sql` | Execute SQL via warehouse |
+| `catalog.tables:read` | Read tables in Unity Catalog |
+| `catalog.schemas:read` | Read schemas in Unity Catalog |
+| `catalog.catalogs:read` | Read catalogs in Unity Catalog |
+| `files.files` | Manage files and directories |
+
+### Platform-injected variables
+
+These are set automatically by the Databricks Apps platform at runtime:
 
 | Variable | Description |
-|----------|-------------|
-| `DATABRICKS_HOST` | Workspace URL (e.g. `https://xxx.cloud.databricks.com`) |
-| `DATABRICKS_CLIENT_ID` | OAuth client ID (app identity) |
+|---|---|
+| `DATABRICKS_HOST` | Workspace URL |
+| `DATABRICKS_CLIENT_ID` | OAuth client ID (app service principal) |
 | `DATABRICKS_CLIENT_SECRET` | OAuth client secret |
 | `DATABRICKS_APP_PORT` | Port the app must listen on |
-| `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID (from `sql-warehouse` resource) |
-| `DATABRICKS_SERVING_ENDPOINT` | Premium model endpoint (from `serving-endpoint` resource) |
-| `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast model endpoint (from `serving-endpoint-fast` resource) |
 
-### Deployment Steps
+---
 
-1. Ensure `databricks.yml` is in the project root
-2. Build the Next.js app: `npm run build`
-3. Deploy via Databricks CLI:
-   ```bash
-   databricks apps deploy --app-name databricks-forge
-   ```
-4. The platform builds the container and starts the app
-5. Access via the workspace Apps page or the app URL
+## Build and Start Sequence
+
+Databricks Apps builds the application from `package.json`. No Dockerfile is
+needed -- the platform handles containerisation.
+
+1. `npm install` (runs `postinstall` which triggers `prisma generate`)
+2. `npm run build` (runs `prisma generate && next build && sh scripts/postbuild.sh`)
+3. `scripts/start.sh`:
+   - Auto-provisions Lakebase Autoscale (if `DATABRICKS_CLIENT_ID` is set)
+   - Syncs the Prisma schema to Lakebase
+   - Starts the Next.js standalone server on `DATABRICKS_APP_PORT`
 
 ---
 
@@ -54,7 +101,7 @@ Resource IDs are injected via environment variables. Never hardcode them.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - A Databricks workspace with a SQL Warehouse
 - A Databricks Personal Access Token (PAT)
 
@@ -71,9 +118,6 @@ Resource IDs are injected via environment variables. Never hardcode them.
    DATABRICKS_TOKEN=dapi_xxxxxxxxxxxxx
    DATABRICKS_WAREHOUSE_ID=your_warehouse_id
    DATABRICKS_APP_PORT=3000
-
-   # Optional: fast model for Genie Engine (defaults to databricks-claude-sonnet-4-6)
-   # DATABRICKS_SERVING_ENDPOINT_FAST=databricks-claude-sonnet-4-6
    ```
 4. Start the dev server:
    ```bash
@@ -83,25 +127,8 @@ Resource IDs are injected via environment variables. Never hardcode them.
 
 ### Lakebase Setup
 
-On first run, the app needs to create its Lakebase tables. Either:
-
-- Visit `/api/migrate` to run the migration endpoint, or
-- Run the DDL statements from `lib/lakebase/schema.ts` manually in a SQL editor
-
----
-
-## Build and Start (Databricks Apps)
-
-Databricks Apps builds the application using the project's `package.json`
-scripts. No Dockerfile is needed -- the platform handles containerisation.
-
-The build and start sequence is:
-
-1. `npm install` (runs `postinstall` which triggers `prisma generate`)
-2. `npm run build` (runs `prisma generate && next build && sh scripts/postbuild.sh`)
-3. `scripts/start.sh` (pushes the Prisma schema and starts the standalone Next.js server)
-
-The app reads `DATABRICKS_APP_PORT` at runtime and falls back to port 3000.
+On first run, the app creates its Lakebase tables automatically. If that
+fails, visit `/api/migrate` to run the migration endpoint.
 
 ---
 
@@ -113,4 +140,4 @@ Recommended pipeline:
 2. **Type check** -- `npm run typecheck`
 3. **Test** -- `npm test`
 4. **Build** -- `npm run build`
-5. **Deploy** -- `databricks apps deploy`
+5. **Deploy** -- `./deploy.sh --warehouse "Production Warehouse"`
