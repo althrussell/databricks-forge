@@ -20,8 +20,7 @@ import type { UseCase } from "./types";
  */
 export function computeOverallScore(
   priorityScore: number,
-  feasibilityScore: number,
-  _impactScore?: number
+  feasibilityScore: number
 ): number {
   return Number(
     (priorityScore * 0.75 + feasibilityScore * 0.25).toFixed(3)

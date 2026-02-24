@@ -145,8 +145,8 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
 
   // Computed user overall from sliders
   const adjOverall = useMemo(
-    () => computeOverallScore(adjPriority / 100, adjFeasibility / 100, adjImpact / 100),
-    [adjPriority, adjFeasibility, adjImpact]
+    () => computeOverallScore(adjPriority / 100, adjFeasibility / 100),
+    [adjPriority, adjFeasibility]
   );
 
   const hasUserScoreChanges = useCallback(

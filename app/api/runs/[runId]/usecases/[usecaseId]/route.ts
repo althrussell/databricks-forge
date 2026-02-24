@@ -122,12 +122,7 @@ export async function PATCH(
             existing.userFeasibilityScore ??
             existing.feasibilityScore ??
             0;
-          const i =
-            updateData.userImpactScore ??
-            existing.userImpactScore ??
-            existing.impactScore ??
-            0;
-          updateData.userOverallScore = computeOverallScore(p, f, i);
+          updateData.userOverallScore = computeOverallScore(p, f);
         }
       }
 

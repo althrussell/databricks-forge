@@ -55,7 +55,7 @@ describe("computeOverallScore", () => {
   });
 
   it("ignores impact score (it is embedded in priority)", () => {
-    expect(computeOverallScore(0.8, 0.6)).toBe(computeOverallScore(0.8, 0.6, 0.9));
+    expect(computeOverallScore(0.8, 0.6)).toBe(0.75);
   });
 });
 
