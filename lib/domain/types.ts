@@ -68,31 +68,6 @@ export const DEFAULT_DEPTH_CONFIGS: Record<DiscoveryDepth, DiscoveryDepthConfig>
   comprehensive: { batchTargetMin: 15, batchTargetMax: 22, qualityFloor: 0.2, adaptiveCap: 250, lineageDepth: 10 },
 };
 
-export const SUPPORTED_LANGUAGES = [
-  "English",
-  "Arabic",
-  "Chinese",
-  "French",
-  "German",
-  "Hindi",
-  "Italian",
-  "Japanese",
-  "Korean",
-  "Portuguese",
-  "Russian",
-  "Spanish",
-  "Turkish",
-  "Dutch",
-  "Polish",
-  "Swedish",
-  "Thai",
-  "Vietnamese",
-  "Indonesian",
-  "Malay",
-] as const;
-
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-
 // ---------------------------------------------------------------------------
 // Pipeline Run
 // ---------------------------------------------------------------------------
@@ -106,7 +81,7 @@ export interface PipelineRunConfig {
   strategicGoals: string;
   generationOptions: GenerationOption[];
   generationPath: string;
-  languages: SupportedLanguage[];
+  languages: string[];
   aiModel: string;
   sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for discovery & SQL gen
   industry: string; // industry outcome map id, empty = not selected

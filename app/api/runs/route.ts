@@ -18,7 +18,6 @@ import type {
   Operation,
   BusinessPriority,
   GenerationOption,
-  SupportedLanguage,
   DiscoveryDepth,
 } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
       strategicGoals: body.strategicGoals ?? "",
       generationOptions: (body.generationOptions ?? ["SQL Code"]) as GenerationOption[],
       generationPath: body.generationPath ?? "./forge_gen/",
-      languages: (body.languages ?? ["English"]) as SupportedLanguage[],
+      languages: ["English"],
       aiModel: body.aiModel,
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,
       industry: body.industry ?? "",

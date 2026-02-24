@@ -27,10 +27,8 @@ import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine } from "l
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
-  SUPPORTED_LANGUAGES,
   DISCOVERY_DEPTHS,
   type BusinessPriority,
-  type SupportedLanguage,
   type DiscoveryDepth,
 } from "@/lib/domain/types";
 
@@ -139,9 +137,6 @@ export function ConfigForm() {
     BusinessPriority[]
   >(["Increase Revenue"]);
   const [strategicGoals, setStrategicGoals] = useState("");
-  const [selectedLanguages, setSelectedLanguages] = useState<
-    SupportedLanguage[]
-  >(["English"]);
 
   // Hydrate from sessionStorage (for "Duplicate Config" flow)
   useEffect(() => {
@@ -165,7 +160,6 @@ export function ConfigForm() {
       }
       if (cfg.businessPriorities?.length) setSelectedPriorities(cfg.businessPriorities);
       if (cfg.strategicGoals) setStrategicGoals(cfg.strategicGoals);
-      if (cfg.languages?.length) setSelectedLanguages(cfg.languages);
     } catch {
       // Ignore malformed data
     }
@@ -179,13 +173,6 @@ export function ConfigForm() {
     );
   };
 
-  const toggleLanguage = (lang: SupportedLanguage) => {
-    setSelectedLanguages((prev) =>
-      prev.includes(lang)
-        ? prev.filter((l) => l !== lang)
-        : [...prev, lang]
-    );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,7 +203,7 @@ export function ConfigForm() {
           businessDomains: businessDomains.join(", "),
           businessPriorities: selectedPriorities,
           strategicGoals: strategicGoals.trim(),
-          languages: selectedLanguages,
+          languages: ["English"],
           sampleRowsPerTable: appSettings.sampleRowsPerTable,
           discoveryDepth,
           depthConfig: appSettings.discoveryDepthConfigs[discoveryDepth],
@@ -554,24 +541,6 @@ export function ConfigForm() {
             <p className="text-xs text-muted-foreground">
               Leave blank for AI-generated goals
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Document Languages</Label>
-            <div className="flex flex-wrap gap-2">
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <label
-                  key={lang}
-                  className="flex items-center gap-1.5 text-sm"
-                >
-                  <Checkbox
-                    checked={selectedLanguages.includes(lang)}
-                    onCheckedChange={() => toggleLanguage(lang)}
-                  />
-                  {lang}
-                </label>
-              ))}
-            </div>
           </div>
 
           <div

@@ -358,11 +358,6 @@ function ComparePageInner() {
                   a={compareData.runA.run.config.businessPriorities.join(", ")}
                   b={compareData.runB.run.config.businessPriorities.join(", ")}
                 />
-                <ConfigDiffRow
-                  label="Languages"
-                  a={compareData.runA.run.config.languages.join(", ")}
-                  b={compareData.runB.run.config.languages.join(", ")}
-                />
               </div>
             </CardContent>
           </Card>
