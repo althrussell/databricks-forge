@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { resilientFetch } from "@/lib/resilient-fetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -66,7 +67,7 @@ export default function DashboardPage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/stats");
+      const res = await resilientFetch("/api/stats");
       if (!res.ok) throw new Error("Failed to fetch stats");
       const data = await res.json();
       setStats(data);

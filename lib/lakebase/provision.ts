@@ -429,3 +429,12 @@ export function invalidateDbCredential(): void {
 export function getCredentialGeneration(): number {
   return _credentialGeneration;
 }
+
+/**
+ * Returns the epoch-ms expiry time of the current DB credential,
+ * or null if no credential has been minted yet. Used by lib/prisma.ts
+ * to schedule proactive pool rotation before the credential expires.
+ */
+export function getCredentialExpiresAt(): number | null {
+  return _dbCredential?.expiresAt ?? null;
+}
