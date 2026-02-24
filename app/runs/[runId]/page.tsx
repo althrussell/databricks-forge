@@ -217,6 +217,9 @@ export default function RunDetailPage({
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsLoaded, setLogsLoaded] = useState(false);
 
+  // Rerun state
+  const [isRerunning, setIsRerunning] = useState(false);
+
   const fetchRun = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -267,6 +270,53 @@ export default function RunDetailPage({
       setLogsLoaded(true);
     }
   }, [runId, logsLoaded, logsLoading]);
+
+  const handleRerun = useCallback(async () => {
+    if (!run) return;
+    setIsRerunning(true);
+    try {
+      const cfg = run.config;
+      const createRes = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: cfg.businessName,
+          ucMetadata: cfg.ucMetadata,
+          industry: cfg.industry,
+          businessDomains: cfg.businessDomains,
+          businessPriorities: cfg.businessPriorities,
+          strategicGoals: cfg.strategicGoals,
+          languages: cfg.languages,
+          sampleRowsPerTable: cfg.sampleRowsPerTable,
+          discoveryDepth: cfg.discoveryDepth,
+          depthConfig: cfg.depthConfig,
+          estateScanEnabled: cfg.estateScanEnabled,
+        }),
+      });
+      if (!createRes.ok) {
+        const err = await createRes.json();
+        throw new Error(err.error ?? "Failed to create run");
+      }
+      const { runId: newRunId } = await createRes.json();
+
+      const execRes = await fetch(`/api/runs/${newRunId}/execute`, {
+        method: "POST",
+      });
+      if (!execRes.ok) {
+        const err = await execRes.json();
+        throw new Error(err.error ?? "Failed to start pipeline");
+      }
+
+      toast.success("Pipeline restarted! Redirecting to new run...");
+      router.push(`/runs/${newRunId}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to rerun pipeline"
+      );
+    } finally {
+      setIsRerunning(false);
+    }
+  }, [run, router]);
 
   useEffect(() => {
     fetchRun();
@@ -935,6 +985,8 @@ export default function RunDetailPage({
                     />
                   ) : undefined
                 }
+                onRerun={handleRerun}
+                isRerunning={isRerunning}
               />
             </TabsContent>
           </Tabs>
