@@ -59,6 +59,8 @@ export async function PATCH(
         userFeasibilityScore?: number | null;
         userImpactScore?: number | null;
         userOverallScore?: number | null;
+        feedback?: string | null;
+        feedbackAt?: Date | null;
       } = {};
 
       if (typeof body.name === "string" && body.name.trim()) {
@@ -69,6 +71,15 @@ export async function PATCH(
       }
       if (Array.isArray(body.tablesInvolved)) {
         updateData.tablesInvolved = JSON.stringify(body.tablesInvolved);
+      }
+
+      const validFeedback = ["accepted", "rejected", "dismissed"];
+      if (typeof body.feedback === "string" && validFeedback.includes(body.feedback)) {
+        updateData.feedback = body.feedback;
+        updateData.feedbackAt = new Date();
+      } else if (body.feedback === null) {
+        updateData.feedback = null;
+        updateData.feedbackAt = null;
       }
 
       if (body.resetScores === true) {

@@ -78,51 +78,68 @@ export async function generateGapReportExcel(
   const summary = wb.addWorksheet("Gap Summary");
   summary.columns = [
     { header: "Metric", key: "metric", width: 35 },
-    { header: "Value", key: "value", width: 50 },
+    { header: "Value", key: "value", width: 18 },
+    { header: "Linked Use Cases", key: "linked", width: 65 },
   ];
   styleHeaderRow(summary);
 
-  const rows = [
-    { metric: "Business", value: businessName },
-    { metric: "Industry Outcome Map", value: industryName },
+  type SummaryRow = { metric: string; value: string; linked: string };
+  const rows: SummaryRow[] = [
+    { metric: "Business", value: businessName, linked: "" },
+    { metric: "Industry Outcome Map", value: industryName, linked: "" },
     {
       metric: "Overall Coverage",
       value: `${Math.round(coverage.overallCoverage * 100)}%`,
+      linked: "",
     },
     {
       metric: "Reference Use Cases (Total)",
       value: String(coverage.totalRefUseCases),
+      linked: "",
     },
     {
       metric: "Matched Use Cases",
       value: String(coverage.coveredRefUseCases),
+      linked: "",
     },
-    { metric: "Gaps Identified", value: String(coverage.gapCount) },
-    { metric: "", value: "" },
+    { metric: "Gaps Identified", value: String(coverage.gapCount), linked: "" },
+    { metric: "", value: "", linked: "" },
     {
       metric: "TOP DATA ENTITIES TO ONBOARD",
-      value: "Use Cases Unlocked",
+      value: "Count",
+      linked: "Use Cases Unlocked",
     },
   ];
 
-  for (const { entity, useCaseCount } of coverage.missingDataEntities.slice(
-    0,
-    15
-  )) {
-    rows.push({ metric: entity, value: String(useCaseCount) });
+  for (const {
+    entity,
+    useCaseCount,
+    refUseCases,
+  } of coverage.missingDataEntities.slice(0, 15)) {
+    rows.push({
+      metric: entity,
+      value: String(useCaseCount),
+      linked: refUseCases.map((r) => r.name).join("; "),
+    });
   }
 
-  rows.push({ metric: "", value: "" });
+  rows.push({ metric: "", value: "", linked: "" });
   rows.push({
     metric: "COMMON SOURCE SYSTEMS",
-    value: "Use Cases Linked",
+    value: "Count",
+    linked: "Use Cases Linked",
   });
 
-  for (const { system, useCaseCount } of coverage.missingSourceSystems.slice(
-    0,
-    10
-  )) {
-    rows.push({ metric: system, value: String(useCaseCount) });
+  for (const {
+    system,
+    useCaseCount,
+    refUseCases,
+  } of coverage.missingSourceSystems.slice(0, 10)) {
+    rows.push({
+      metric: system,
+      value: String(useCaseCount),
+      linked: refUseCases.map((r) => r.name).join("; "),
+    });
   }
 
   for (const row of rows) {

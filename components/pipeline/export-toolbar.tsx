@@ -3,6 +3,13 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -14,14 +21,35 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import {
+  Download,
+  FileSpreadsheet,
+  Presentation,
+  FileText,
+  FileCode,
+  Braces,
+  Briefcase,
+  Loader2,
+  ExternalLink,
+  RotateCcw,
+  Rocket,
+} from "lucide-react";
 
 interface ExportToolbarProps {
   runId: string;
   businessName: string;
-  onGenieClick?: () => void;
+  scanId?: string | null;
 }
 
-export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolbarProps) {
+const EXPORT_FORMATS = [
+  { key: "excel", label: "Excel (.xlsx)", icon: FileSpreadsheet },
+  { key: "pptx", label: "PowerPoint (.pptx)", icon: Presentation },
+  { key: "pdf", label: "PDF", icon: FileText },
+  { key: "csv", label: "CSV", icon: FileCode },
+  { key: "json", label: "JSON", icon: Braces },
+] as const;
+
+export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProps) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [notebookUrl, setNotebookUrl] = useState<string | null>(null);
   const [hasDeployed, setHasDeployed] = useState(false);
@@ -68,7 +96,8 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
       const a = document.createElement("a");
       a.href = url;
 
-      const ext = format === "excel" ? "xlsx" : format;
+      const extMap: Record<string, string> = { excel: "xlsx", pptx: "pptx", pdf: "pdf", csv: "csv", json: "json" };
+      const ext = extMap[format] ?? format;
       a.download = `forge_${businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.${ext}`;
       document.body.appendChild(a);
       a.click();
@@ -85,48 +114,78 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
     }
   };
 
+  const handleBriefingExport = async () => {
+    if (!scanId) return;
+    setExporting("briefing");
+    try {
+      const url = `/api/export/executive-briefing?scanId=${scanId}&runId=${runId}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `forge_executive_briefing_${businessName.replace(/\s+/g, "_")}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      toast.success("Executive Briefing exported successfully");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Executive Briefing export failed");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!!exporting}
-        onClick={() => handleExport("excel")}
-      >
-        {exporting === "excel" ? "Exporting..." : "Excel"}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!!exporting}
-        onClick={() => handleExport("pptx")}
-      >
-        {exporting === "pptx" ? "Exporting..." : "PowerPoint"}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!!exporting}
-        onClick={() => handleExport("pdf")}
-      >
-        {exporting === "pdf" ? "Exporting..." : "PDF"}
-      </Button>
-      {onGenieClick && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!!exporting}
-          onClick={onGenieClick}
-        >
-          Deploy Genie
-        </Button>
-      )}
+    <div className="flex items-center gap-2">
+      {/* Export dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" disabled={!!exporting}>
+            {exporting && exporting !== "notebooks" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Export
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {EXPORT_FORMATS.map(({ key, label, icon: Icon }) => (
+            <DropdownMenuItem
+              key={key}
+              disabled={!!exporting}
+              onClick={() => handleExport(key)}
+            >
+              <Icon className="mr-2 h-4 w-4" />
+              {exporting === key ? "Exporting..." : label}
+            </DropdownMenuItem>
+          ))}
+          {scanId && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={!!exporting}
+                onClick={handleBriefingExport}
+              >
+                <Briefcase className="mr-2 h-4 w-4" />
+                {exporting === "briefing" ? "Exporting..." : "Executive Briefing"}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Deploy actions */}
       {hasDeployed ? (
         <>
           <Button
             size="sm"
             onClick={() => window.open(notebookUrl!, "_blank")}
           >
+            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
             Open Notebooks
           </Button>
           <AlertDialog>
@@ -136,6 +195,7 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
                 size="sm"
                 disabled={!!exporting}
               >
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                 {exporting === "notebooks" ? "Deploying..." : "Redeploy"}
               </Button>
             </AlertDialogTrigger>
@@ -163,6 +223,7 @@ export function ExportToolbar({ runId, businessName, onGenieClick }: ExportToolb
           disabled={!!exporting}
           onClick={() => handleExport("notebooks")}
         >
+          <Rocket className="mr-1.5 h-3.5 w-3.5" />
           {exporting === "notebooks" ? "Deploying..." : "Deploy Notebooks"}
         </Button>
       )}

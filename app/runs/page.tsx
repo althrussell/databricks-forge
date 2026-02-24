@@ -304,6 +304,15 @@ export default function RunsPage() {
                         <Progress
                           value={run.progressPct}
                           className="h-2 flex-1"
+                          indicatorClassName={
+                            run.status === "completed"
+                              ? "bg-green-500"
+                              : run.status === "failed"
+                                ? "bg-red-500"
+                                : run.status === "running"
+                                  ? "bg-blue-500"
+                                  : undefined
+                          }
                         />
                         <span className="text-xs text-muted-foreground">
                           {run.progressPct}%

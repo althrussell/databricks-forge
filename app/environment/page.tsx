@@ -50,6 +50,8 @@ import {
   BarChart3,
   Globe,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ArrowLeft,
   Plus,
@@ -890,6 +892,8 @@ interface CoverageTableRow {
   }>;
 }
 
+const COVERAGE_PAGE_SIZE = 25;
+
 function TableCoverageView() {
   const [data, setData] = useState<{
     tables: CoverageTableRow[];
@@ -898,6 +902,7 @@ function TableCoverageView() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "covered" | "uncovered">("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -934,6 +939,10 @@ function TableCoverageView() {
     if (search && !t.tableFqn.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const totalPages = Math.ceil(filtered.length / COVERAGE_PAGE_SIZE);
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const paged = filtered.slice(safePage * COVERAGE_PAGE_SIZE, (safePage + 1) * COVERAGE_PAGE_SIZE);
 
   return (
     <div className="space-y-4">
@@ -974,28 +983,28 @@ function TableCoverageView() {
           <Input
             placeholder="Search tables..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             className="pl-8"
           />
         </div>
         <Button
           variant={filter === "all" ? "default" : "outline"}
           size="sm"
-          onClick={() => setFilter("all")}
+          onClick={() => { setFilter("all"); setPage(0); }}
         >
           All
         </Button>
         <Button
           variant={filter === "covered" ? "default" : "outline"}
           size="sm"
-          onClick={() => setFilter("covered")}
+          onClick={() => { setFilter("covered"); setPage(0); }}
         >
           With Use Cases
         </Button>
         <Button
           variant={filter === "uncovered" ? "default" : "outline"}
           size="sm"
-          onClick={() => setFilter("uncovered")}
+          onClick={() => { setFilter("uncovered"); setPage(0); }}
         >
           Untapped
         </Button>
@@ -1013,7 +1022,7 @@ function TableCoverageView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.slice(0, 100).map((t) => (
+            {paged.map((t) => (
               <TableRow key={t.tableFqn}>
                 <TableCell className="font-mono text-xs">
                   {t.tableFqn}
@@ -1050,8 +1059,8 @@ function TableCoverageView() {
                       )}
                     </div>
                   ) : (
-                    <span className="text-xs text-orange-600 font-medium">
-                      No use cases — expansion signal
+                    <span className="text-xs text-muted-foreground">
+                      No use cases
                     </span>
                   )}
                 </TableCell>
@@ -1059,9 +1068,22 @@ function TableCoverageView() {
             ))}
           </TableBody>
         </Table>
-        {filtered.length > 100 && (
-          <div className="p-2 text-center text-sm text-muted-foreground">
-            Showing 100 of {filtered.length} tables
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t px-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Showing {safePage * COVERAGE_PAGE_SIZE + 1}–{Math.min((safePage + 1) * COVERAGE_PAGE_SIZE, filtered.length)} of {filtered.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 text-sm text-muted-foreground">
+                {safePage + 1} / {totalPages}
+              </span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -1121,14 +1143,6 @@ function AggregateSummary({
       {/* Data Maturity Score */}
       <DataMaturityCard maturity={maturity} />
 
-      {/* Executive Summary */}
-      <ExecutiveSummary
-        stats={stats}
-        details={details}
-        insights={insights}
-        humanSize={humanSize}
-      />
-
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           title="Tables"
@@ -1168,6 +1182,14 @@ function AggregateSummary({
           tooltip="Tables containing personally identifiable information (names, emails, phone numbers, etc.) that may require compliance with regulations like GDPR, CCPA, or HIPAA."
         />
       </div>
+
+      {/* Executive Summary */}
+      <ExecutiveSummary
+        stats={stats}
+        details={details}
+        insights={insights}
+        humanSize={humanSize}
+      />
 
       {stats.newestScanAt && (
         <p className="text-sm text-muted-foreground">
@@ -2013,51 +2035,48 @@ function ExecutiveSummary({
             : "Your data estate is in good shape. No critical findings."}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Business perspective */}
-        {businessFindings.length > 0 && (
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Business Perspective
-            </h4>
-            <div className="space-y-4">
-              {businessFindings.map((f, idx) => (
-                <div key={`biz-${idx}`} className="flex gap-3">
-                  {severityIcon(f.severity)}
-                  <div>
-                    <p className="text-sm font-semibold">{f.label}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+      <CardContent>
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Business perspective */}
+          {businessFindings.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Business Perspective
+              </h4>
+              <div className="space-y-4">
+                {businessFindings.map((f, idx) => (
+                  <div key={`biz-${idx}`} className="flex gap-3">
+                    {severityIcon(f.severity)}
+                    <div>
+                      <p className="text-sm font-semibold">{f.label}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Divider */}
-        {businessFindings.length > 0 && technicalFindings.length > 0 && (
-          <div className="border-t" />
-        )}
-
-        {/* Technical findings */}
-        {technicalFindings.length > 0 && (
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Technical Detail
-            </h4>
-            <div className="space-y-3">
-              {technicalFindings.map((f, idx) => (
-                <div key={`tech-${idx}`} className="flex gap-3">
-                  {severityIcon(f.severity)}
-                  <div>
-                    <p className="text-sm font-semibold">{f.label}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+          {/* Technical findings */}
+          {technicalFindings.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Technical Detail
+              </h4>
+              <div className="space-y-3">
+                {technicalFindings.map((f, idx) => (
+                  <div key={`tech-${idx}`} className="flex gap-3">
+                    {severityIcon(f.severity)}
+                    <div>
+                      <p className="text-sm font-semibold">{f.label}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{f.body}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   );

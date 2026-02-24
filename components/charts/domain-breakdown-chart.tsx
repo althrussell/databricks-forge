@@ -37,8 +37,8 @@ export function DomainBreakdownChart({
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={240}>
+      <CardContent className="overflow-visible">
+        <ResponsiveContainer width="100%" height={240} style={{ overflow: "visible" }}>
           <PieChart>
             <Pie
               data={data}
@@ -46,14 +46,14 @@ export function DomainBreakdownChart({
               nameKey="domain"
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={85}
+              innerRadius={40}
+              outerRadius={70}
               paddingAngle={2}
               label={({ name, value }) =>
                 data.length <= 6 ? `${name} (${value})` : `${value}`
               }
               labelLine={false}
-              fontSize={11}
+              fontSize={10}
             >
               {data.map((_, index) => (
                 <Cell

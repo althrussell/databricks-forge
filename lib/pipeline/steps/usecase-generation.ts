@@ -74,6 +74,19 @@ export async function runUsecaseGeneration(
     ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
     : "";
 
+  // Load accepted use cases from prior runs as few-shot examples
+  let feedbackExamplesSection = "";
+  try {
+    const { getFeedbackExamples } = await import("@/lib/lakebase/usecases");
+    const examples = await getFeedbackExamples(run.config.ucMetadata, 8);
+    if (examples.length > 0) {
+      feedbackExamplesSection = "\n\n**USER-APPROVED USE CASES FROM PRIOR RUNS** (generate similar quality and style):\n" +
+        examples.map((ex, i) => `${i + 1}. "${ex.name}" (${ex.type}) — ${ex.statement}`).join("\n");
+    }
+  } catch {
+    // Non-critical: proceed without feedback examples
+  }
+
   // Estimate base token cost (everything except schema_markdown which varies per batch)
   const sharedContextTokens = estimateTokens(
     JSON.stringify(bc) +
@@ -168,7 +181,7 @@ export async function runUsecaseGeneration(
         schema_markdown: schemaMarkdown,
         foreign_key_relationships: fkMarkdown,
         sample_data_section: sampleDataSection,
-        previous_use_cases_feedback: previousFeedback,
+        previous_use_cases_feedback: previousFeedback + feedbackExamplesSection,
         target_use_case_count: String(targetCount),
         lineage_context: lineageContext,
       };
@@ -311,6 +324,8 @@ async function generateBatch(
         userOverallScore: null,
         sqlCode: null,
         sqlStatus: null,
+        feedback: null,
+        feedbackAt: null,
       };
     });
 }

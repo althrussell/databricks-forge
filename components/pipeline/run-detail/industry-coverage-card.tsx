@@ -18,6 +18,11 @@ import {
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
   Eye,
   ChevronDown,
   ChevronUp,
@@ -25,12 +30,14 @@ import {
   Server,
   AlertTriangle,
   Download,
+  Info,
 } from "lucide-react";
 import type { UseCase } from "@/lib/domain/types";
 import {
   computeIndustryCoverage,
   type PriorityCoverage,
   type CoverageResult,
+  type GapRefUseCase,
 } from "@/lib/domain/industry-coverage";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
 
@@ -259,6 +266,52 @@ function PriorityRow({ pc }: { pc: PriorityCoverage }) {
 // Aggregate Data Gap Summary
 // ---------------------------------------------------------------------------
 
+function GapRefPopover({
+  label,
+  refUseCases,
+  badge,
+}: {
+  label: string;
+  refUseCases: GapRefUseCase[];
+  badge: React.ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between rounded-md border bg-background/60 px-2.5 py-1 text-left transition-colors hover:bg-muted/40"
+        >
+          <span className="flex items-center gap-1.5 truncate text-xs">
+            {label}
+            <Info className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+          </span>
+          {badge}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-0">
+        <div className="border-b px-3 py-2">
+          <p className="text-xs font-semibold">
+            Use cases unlocked by &ldquo;{label}&rdquo;
+          </p>
+        </div>
+        <ul className="max-h-60 overflow-y-auto px-3 py-2 space-y-1.5">
+          {refUseCases.map((ref) => (
+            <li key={ref.name} className="text-xs">
+              <span className="font-medium">{ref.name}</span>
+              {ref.businessValue && (
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground italic">
+                  {ref.businessValue}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function DataGapSummary({
   coverage,
   runId,
@@ -303,20 +356,21 @@ function DataGapSummary({
               </p>
             </div>
             <div className="space-y-1">
-              {topEntities.map(({ entity, useCaseCount }) => (
-                <div
+              {topEntities.map(({ entity, useCaseCount, refUseCases }) => (
+                <GapRefPopover
                   key={entity}
-                  className="flex items-center justify-between rounded-md border bg-background/60 px-2.5 py-1"
-                >
-                  <span className="truncate text-xs">{entity}</span>
-                  <Badge
-                    variant="secondary"
-                    className="ml-2 shrink-0 text-[10px]"
-                  >
-                    unlocks {useCaseCount} UC
-                    {useCaseCount !== 1 ? "s" : ""}
-                  </Badge>
-                </div>
+                  label={entity}
+                  refUseCases={refUseCases}
+                  badge={
+                    <Badge
+                      variant="secondary"
+                      className="ml-2 shrink-0 text-[10px]"
+                    >
+                      unlocks {useCaseCount} UC
+                      {useCaseCount !== 1 ? "s" : ""}
+                    </Badge>
+                  }
+                />
               ))}
             </div>
           </div>
@@ -332,19 +386,20 @@ function DataGapSummary({
               </p>
             </div>
             <div className="space-y-1">
-              {topSystems.map(({ system, useCaseCount }) => (
-                <div
+              {topSystems.map(({ system, useCaseCount, refUseCases }) => (
+                <GapRefPopover
                   key={system}
-                  className="flex items-center justify-between rounded-md border bg-background/60 px-2.5 py-1"
-                >
-                  <span className="truncate text-xs">{system}</span>
-                  <Badge
-                    variant="secondary"
-                    className="ml-2 shrink-0 text-[10px]"
-                  >
-                    {useCaseCount} UC{useCaseCount !== 1 ? "s" : ""}
-                  </Badge>
-                </div>
+                  label={system}
+                  refUseCases={refUseCases}
+                  badge={
+                    <Badge
+                      variant="secondary"
+                      className="ml-2 shrink-0 text-[10px]"
+                    >
+                      {useCaseCount} UC{useCaseCount !== 1 ? "s" : ""}
+                    </Badge>
+                  }
+                />
               ))}
             </div>
           </div>

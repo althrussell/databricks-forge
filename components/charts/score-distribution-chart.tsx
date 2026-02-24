@@ -8,8 +8,17 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const BUCKET_COLORS = [
+  "#ef4444", // 0-20%  red
+  "#f97316", // 20-40% orange
+  "#eab308", // 40-60% yellow
+  "#22c55e", // 60-80% green
+  "#16a34a", // 80-100% dark green
+];
 
 interface ScoreDistributionChartProps {
   scores: number[];
@@ -55,7 +64,11 @@ export function ScoreDistributionChart({
                 fontSize: 12,
               }}
             />
-            <Bar dataKey="count" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              {data.map((_, idx) => (
+                <Cell key={idx} fill={BUCKET_COLORS[idx]} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

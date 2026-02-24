@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,6 +10,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StepDurationChart } from "@/components/charts/step-duration-chart";
@@ -19,6 +31,8 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import type { StepLogEntry } from "@/lib/domain/types";
 
@@ -52,12 +66,16 @@ export function AIObservabilityTab({
   loading,
   stepLog,
   promptVersionsNode,
+  onRerun,
+  isRerunning,
 }: {
   logs: PromptLogEntry[];
   stats: PromptLogStats | null;
   loading: boolean;
   stepLog: StepLogEntry[];
   promptVersionsNode?: React.ReactNode;
+  onRerun?: () => void;
+  isRerunning?: boolean;
 }) {
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
@@ -275,6 +293,47 @@ export function AIObservabilityTab({
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {onRerun && (
+        <Card>
+          <CardContent className="flex items-center justify-between pt-6">
+            <div>
+              <p className="text-sm font-medium">Rerun Pipeline</p>
+              <p className="text-xs text-muted-foreground">
+                Create a new run with the exact same configuration and start it immediately
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isRerunning}>
+                  {isRerunning ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {isRerunning ? "Starting..." : "Rerun Pipeline"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Rerun this pipeline?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will create a new pipeline run using the same
+                    configuration and start it immediately. The run will consume
+                    LLM and SQL Warehouse resources.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onRerun}>
+                    Rerun
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       )}

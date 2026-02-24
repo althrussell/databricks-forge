@@ -42,22 +42,27 @@ import {
   type PromptLogEntry,
   type PromptLogStats,
 } from "@/components/pipeline/run-detail/ai-observability-tab";
-import {
-  Target,
-  Database,
-  Copy,
-  ChevronDown,
-  ChevronUp,
-  BarChart3,
-  Settings2,
-  Eye,
-} from "lucide-react";
+  import {
+    Target,
+    Database,
+    Copy,
+    ChevronDown,
+    ChevronUp,
+    BarChart3,
+    Settings2,
+    Eye,
+    RotateCcw,
+    ArrowLeft,
+    GitCompareArrows,
+  } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import type {
   PipelineRun,
   UseCase,
   PipelineStep,
 } from "@/lib/domain/types";
 import { computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
+import { toast } from "sonner";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
 
 export default function RunDetailPage({
@@ -73,6 +78,7 @@ export default function RunDetailPage({
   const [lineageDiscoveredFqns, setLineageDiscoveredFqns] = useState<
     string[]
   >([]);
+  const [scanId, setScanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -211,6 +217,9 @@ export default function RunDetailPage({
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsLoaded, setLogsLoaded] = useState(false);
 
+  // Rerun state
+  const [isRerunning, setIsRerunning] = useState(false);
+
   const fetchRun = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -229,6 +238,7 @@ export default function RunDetailPage({
       if (data.useCases) setUseCases(data.useCases);
       if (data.lineageDiscoveredFqns)
         setLineageDiscoveredFqns(data.lineageDiscoveredFqns);
+      if (data.scanId) setScanId(data.scanId);
       setError(null);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -260,6 +270,53 @@ export default function RunDetailPage({
       setLogsLoaded(true);
     }
   }, [runId, logsLoaded, logsLoading]);
+
+  const handleRerun = useCallback(async () => {
+    if (!run) return;
+    setIsRerunning(true);
+    try {
+      const cfg = run.config;
+      const createRes = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: cfg.businessName,
+          ucMetadata: cfg.ucMetadata,
+          industry: cfg.industry,
+          businessDomains: cfg.businessDomains,
+          businessPriorities: cfg.businessPriorities,
+          strategicGoals: cfg.strategicGoals,
+          languages: cfg.languages,
+          sampleRowsPerTable: cfg.sampleRowsPerTable,
+          discoveryDepth: cfg.discoveryDepth,
+          depthConfig: cfg.depthConfig,
+          estateScanEnabled: cfg.estateScanEnabled,
+        }),
+      });
+      if (!createRes.ok) {
+        const err = await createRes.json();
+        throw new Error(err.error ?? "Failed to create run");
+      }
+      const { runId: newRunId } = await createRes.json();
+
+      const execRes = await fetch(`/api/runs/${newRunId}/execute`, {
+        method: "POST",
+      });
+      if (!execRes.ok) {
+        const err = await execRes.json();
+        throw new Error(err.error ?? "Failed to start pipeline");
+      }
+
+      toast.success("Pipeline restarted! Redirecting to new run...");
+      router.push(`/runs/${newRunId}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to rerun pipeline"
+      );
+    } finally {
+      setIsRerunning(false);
+    }
+  }, [run, router]);
 
   useEffect(() => {
     fetchRun();
@@ -375,8 +432,9 @@ export default function RunDetailPage({
               <ExportToolbar
                 runId={run.runId}
                 businessName={run.config.businessName}
-                onGenieClick={() => setActiveTab("genie")}
+                scanId={scanId}
               />
+              <Separator orientation="vertical" className="mx-1 h-6" />
               <Button
                 variant="outline"
                 size="sm"
@@ -388,16 +446,22 @@ export default function RunDetailPage({
                   router.push("/configure");
                 }}
               >
-                <Copy className="mr-1 h-3.5 w-3.5" />
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
                 Duplicate
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/runs/compare?run=${runId}`}>Compare</Link>
+                <Link href={`/runs/compare?run=${runId}`}>
+                  <GitCompareArrows className="mr-1.5 h-3.5 w-3.5" />
+                  Compare
+                </Link>
               </Button>
             </>
           )}
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/runs">Back to Runs</Link>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/runs">
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+              Runs
+            </Link>
           </Button>
         </div>
       </div>
@@ -485,9 +549,26 @@ export default function RunDetailPage({
       {run.status === "failed" && run.errorMessage && (
         <Card className="border-destructive/50">
           <CardHeader>
-            <CardTitle className="text-lg text-destructive">
-              Pipeline Failed
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg text-destructive">
+                Pipeline Failed
+              </CardTitle>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/${runId}/execute?resume=true`, { method: "POST" });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Resume failed"); }
+                    toast.success("Pipeline resuming from last successful step");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Resume failed");
+                  }
+                }}
+              >
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Resume Pipeline
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm">{run.errorMessage}</p>
@@ -904,6 +985,8 @@ export default function RunDetailPage({
                     />
                   ) : undefined
                 }
+                onRerun={handleRerun}
+                isRerunning={isRerunning}
               />
             </TabsContent>
           </Tabs>
