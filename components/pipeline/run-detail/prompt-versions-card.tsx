@@ -63,9 +63,17 @@ export function PromptVersionsCard({
                 : null,
             },
           }));
+        } else {
+          setTemplateCache((prev) => ({
+            ...prev,
+            [promptKey]: { run: null, current: null },
+          }));
         }
       } catch {
-        // Non-critical
+        setTemplateCache((prev) => ({
+          ...prev,
+          [promptKey]: { run: null, current: null },
+        }));
       } finally {
         setLoadingKey(null);
       }
@@ -211,7 +219,7 @@ export function PromptVersionsCard({
                     ) : (
                       !loadingKey && (
                         <p className="text-xs italic text-muted-foreground">
-                          No template data available
+                          Loading template data&hellip;
                         </p>
                       )
                     )}
