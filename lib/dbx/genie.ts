@@ -203,9 +203,7 @@ export function sanitizeSerializedSpace(raw: string): string {
       error: err instanceof Error ? err.message : String(err),
       rawLength: raw.length,
     });
-    throw new Error(
-      `Serialized space JSON is malformed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    return raw;
   }
 }
 
