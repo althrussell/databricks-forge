@@ -257,7 +257,7 @@ async function main() {
 
   const url =
     `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(dbToken)}` +
-    `@${epHost}/${DATABASE_NAME}?sslmode=require`;
+    `@${epHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
 
   // Print ONLY the URL to stdout (start.sh captures this)
   process.stdout.write(url);
