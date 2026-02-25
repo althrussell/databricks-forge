@@ -23,6 +23,8 @@ import {
   Layers,
   Rocket,
   AlertTriangle,
+  RefreshCw,
+  Info,
 } from "lucide-react";
 import type {
   GenieEngineRecommendation,
@@ -52,6 +54,14 @@ interface AssetResult {
   success: boolean;
   error?: string;
   fqn?: string;
+  autoFixed?: boolean;
+  errorCategory?: string;
+}
+
+interface StrippedRef {
+  type: "metric_view" | "function";
+  identifier: string;
+  reason: string;
 }
 
 interface DomainResult {
@@ -59,6 +69,8 @@ interface DomainResult {
   assets: AssetResult[];
   spaceId?: string;
   spaceError?: string;
+  patchedSpace?: string;
+  strippedRefs?: StrippedRef[];
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +130,7 @@ export function GenieDeployModal({
   const [targetSchema, setTargetSchema] = useState<string[]>([]);
   const [results, setResults] = useState<DomainResult[]>([]);
   const [deployLog, setDeployLog] = useState<string[]>([]);
+  const [isRetry, setIsRetry] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Build all deployable assets from the selected domains
@@ -164,6 +177,7 @@ export function GenieDeployModal({
     setStep("select");
     setResults([]);
     setDeployLog([]);
+    setIsRetry(false);
     const initial = new Set(
       allAssets.filter((a) => !a.hasError).map((a) => a.id)
     );
@@ -229,10 +243,70 @@ export function GenieDeployModal({
   // Deploy execution
   // -------------------------------------------------------------------------
 
+  async function callDeployApi(
+    domainPayloads: Array<{
+      domain: string;
+      title: string;
+      description: string;
+      serializedSpace: string;
+      metricViews: Array<{ name: string; ddl: string; description?: string }>;
+      functions: Array<{ name: string; ddl: string }>;
+      existingSpaceId?: string;
+    }>,
+    schema: string,
+    log: (msg: string) => void,
+  ): Promise<DomainResult[] | null> {
+    try {
+      const res = await fetch(`/api/runs/${runId}/genie-deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domains: domainPayloads,
+          targetSchema: schema,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        log(`ERROR: ${data.error ?? "Deploy request failed"}`);
+        return null;
+      }
+
+      const data = (await res.json()) as { results: DomainResult[] };
+      return data.results;
+    } catch (err) {
+      log(`ERROR: ${err instanceof Error ? err.message : "Unknown error"}`);
+      return null;
+    }
+  }
+
+  function logResults(domainResults: DomainResult[], log: (msg: string) => void) {
+    for (const dr of domainResults) {
+      for (const ar of dr.assets) {
+        if (ar.success && ar.autoFixed) {
+          log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" auto-fixed and created at ${ar.fqn}`);
+        } else if (ar.success) {
+          log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" created at ${ar.fqn}`);
+        } else {
+          log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" FAILED: ${ar.error}`);
+        }
+      }
+      if (dr.strippedRefs && dr.strippedRefs.length > 0) {
+        log(`  Stripped ${dr.strippedRefs.length} invalid reference(s) from space payload`);
+      }
+      if (dr.spaceId) {
+        log(`Genie space "${dr.domain}" deployed (${dr.spaceId})`);
+      } else if (dr.spaceError) {
+        log(`Genie space "${dr.domain}" FAILED: ${dr.spaceError}`);
+      }
+    }
+  }
+
   async function executeDeploy() {
     setStep("deploying");
     setDeployLog([]);
     setResults([]);
+    setIsRetry(false);
 
     const schema = targetSchema[0] ?? defaultSchema;
     const log = (msg: string) =>
@@ -241,7 +315,6 @@ export function GenieDeployModal({
     log(`Target schema: ${schema}`);
     log(`Deploying ${domains.length} domain(s)...`);
 
-    // Build request payload
     const domainPayloads = domains.map((rec) => {
       const selectedMvs = parseMvProposals(rec).filter((mv) =>
         selectedAssets.has(`mv:${rec.domain}:${mv.name}`)
@@ -267,55 +340,112 @@ export function GenieDeployModal({
       };
     });
 
-    if (domainPayloads.some((d) => d.metricViews.length > 0)) {
-      log(
-        `Creating ${domainPayloads.reduce((s, d) => s + d.metricViews.length, 0)} metric view(s)...`
-      );
-    }
-    if (domainPayloads.some((d) => d.functions.length > 0)) {
-      log(
-        `Creating ${domainPayloads.reduce((s, d) => s + d.functions.length, 0)} function(s)...`
-      );
+    const totalMvs = domainPayloads.reduce((s, d) => s + d.metricViews.length, 0);
+    const totalFns = domainPayloads.reduce((s, d) => s + d.functions.length, 0);
+    if (totalMvs > 0) log(`Creating ${totalMvs} metric view(s)...`);
+    if (totalFns > 0) log(`Creating ${totalFns} function(s)...`);
+    if (totalMvs === 0 && totalFns === 0) log("No assets selected -- deploying spaces only");
+
+    const domainResults = await callDeployApi(domainPayloads, schema, log);
+    if (domainResults) {
+      setResults(domainResults);
+      logResults(domainResults, log);
+      log("Done.");
     }
 
-    try {
-      const res = await fetch(`/api/runs/${runId}/genie-deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domains: domainPayloads,
-          targetSchema: schema,
-        }),
+    setStep("done");
+  }
+
+  async function retryFailed() {
+    setStep("deploying");
+    setIsRetry(true);
+    const prevLog = deployLog;
+    const log = (msg: string) =>
+      setDeployLog((prev) => [...prev, msg]);
+
+    setDeployLog([...prevLog, "", "--- Retrying failed assets ---"]);
+
+    const schema = targetSchema[0] ?? defaultSchema;
+
+    const retryPayloads = results
+      .filter((dr) => {
+        const hasFailedAssets = dr.assets.some((a) => !a.success);
+        const hasFailedSpace = !!dr.spaceError;
+        return hasFailedAssets || hasFailedSpace;
+      })
+      .map((dr) => {
+        const failedMvNames = new Set(
+          dr.assets.filter((a) => !a.success && a.type === "metric_view").map((a) => a.name)
+        );
+        const failedFnNames = new Set(
+          dr.assets.filter((a) => !a.success && a.type === "function").map((a) => a.name)
+        );
+
+        const rec = domains.find((d) => d.domain === dr.domain);
+        if (!rec) return null;
+
+        const retryMvs = parseMvProposals(rec).filter((mv) => failedMvNames.has(mv.name));
+        const retryFns = parseTrustedFunctions(rec).filter(
+          (fn) => fn.ddl && failedFnNames.has(fn.name)
+        );
+
+        return {
+          domain: rec.domain,
+          title: rec.title,
+          description: rec.description,
+          serializedSpace: dr.patchedSpace ?? rec.serializedSpace,
+          metricViews: retryMvs.map((mv) => ({
+            name: mv.name,
+            ddl: mv.ddl,
+            description: mv.description,
+          })),
+          functions: retryFns.map((fn) => ({
+            name: fn.name,
+            ddl: fn.ddl,
+          })),
+          existingSpaceId: dr.spaceId,
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+
+    if (retryPayloads.length === 0) {
+      log("No failed assets to retry.");
+      setStep("done");
+      return;
+    }
+
+    const totalRetryAssets = retryPayloads.reduce(
+      (s, d) => s + d.metricViews.length + d.functions.length, 0
+    );
+    log(`Retrying ${totalRetryAssets} failed asset(s) across ${retryPayloads.length} domain(s)...`);
+
+    const retryResults = await callDeployApi(retryPayloads, schema, log);
+    if (retryResults) {
+      // Merge retry results into existing results
+      const merged = results.map((prev) => {
+        const retried = retryResults.find((r) => r.domain === prev.domain);
+        if (!retried) return prev;
+
+        // Merge assets: replace failed ones with retry results, keep successes
+        const retriedNames = new Set(retried.assets.map((a) => `${a.type}:${a.name}`));
+        const keptAssets = prev.assets.filter(
+          (a) => !retriedNames.has(`${a.type}:${a.name}`)
+        );
+        const mergedAssets = [...keptAssets, ...retried.assets];
+
+        return {
+          domain: prev.domain,
+          assets: mergedAssets,
+          spaceId: retried.spaceId ?? prev.spaceId,
+          spaceError: retried.spaceError,
+          patchedSpace: retried.patchedSpace ?? prev.patchedSpace,
+          strippedRefs: retried.strippedRefs ?? prev.strippedRefs,
+        };
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        log(`ERROR: ${data.error ?? "Deploy request failed"}`);
-        setStep("done");
-        return;
-      }
-
-      const data = (await res.json()) as { results: DomainResult[] };
-      setResults(data.results);
-
-      for (const dr of data.results) {
-        for (const ar of dr.assets) {
-          if (ar.success) {
-            log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" created at ${ar.fqn}`);
-          } else {
-            log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" FAILED: ${ar.error}`);
-          }
-        }
-        if (dr.spaceId) {
-          log(`Genie space "${dr.domain}" deployed (${dr.spaceId})`);
-        } else if (dr.spaceError) {
-          log(`Genie space "${dr.domain}" FAILED: ${dr.spaceError}`);
-        }
-      }
-
-      log("Done.");
-    } catch (err) {
-      log(`ERROR: ${err instanceof Error ? err.message : "Unknown error"}`);
+      setResults(merged);
+      logResults(retryResults, log);
+      log("Retry complete.");
     }
 
     setStep("done");
@@ -405,8 +535,8 @@ export function GenieDeployModal({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              {hasAssets ? (
-                <Button onClick={() => setStep("schema")} disabled={selectedCount === 0 && hasAssets}>
+              {selectedCount > 0 ? (
+                <Button onClick={() => setStep("schema")}>
                   Next: Choose Schema
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
@@ -415,7 +545,7 @@ export function GenieDeployModal({
                   setTargetSchema([defaultSchema]);
                   executeDeploy();
                 }}>
-                  Deploy Spaces (No Assets)
+                  Deploy Spaces Only
                   <Rocket className="ml-1 h-4 w-4" />
                 </Button>
               )}
@@ -450,7 +580,7 @@ export function GenieDeployModal({
           {step === "deploying" && (
             <Button disabled>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Deploying...
+              {isRetry ? "Retrying..." : "Deploying..."}
             </Button>
           )}
 
@@ -478,6 +608,12 @@ export function GenieDeployModal({
                   </span>
                 )}
               </div>
+              {(failedAssets > 0 || failedSpaces > 0) && (
+                <Button variant="outline" onClick={retryFailed}>
+                  <RefreshCw className="mr-1 h-4 w-4" />
+                  Retry Failed
+                </Button>
+              )}
               <Button onClick={() => { onComplete(); onOpenChange(false); }}>
                 Close
               </Button>
@@ -686,9 +822,11 @@ function DeployStep({
             className={
               line.includes("ERROR") || line.includes("FAILED")
                 ? "text-destructive"
-                : line.includes("deployed") || line.includes("created")
+                : line.includes("deployed") || line.includes("created") || line.includes("auto-fixed")
                   ? "text-green-600"
-                  : "text-muted-foreground"
+                  : line.includes("Stripped") || line.includes("Retry")
+                    ? "text-amber-600"
+                    : "text-muted-foreground"
             }
           >
             {line}
@@ -706,64 +844,97 @@ function DeployStep({
       {/* Results summary */}
       {step === "done" && results.length > 0 && (
         <div className="space-y-2">
-          {results.map((dr) => (
-            <div key={dr.domain} className="rounded-md border p-3">
-              <div className="flex items-center gap-2 mb-2">
-                {dr.spaceId ? (
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-destructive" />
+          {results.map((dr) => {
+            const hasFailedAssets = dr.assets.some((a) => !a.success);
+            const hasStripped = dr.strippedRefs && dr.strippedRefs.length > 0;
+            const isDegraded = hasFailedAssets || hasStripped;
+
+            return (
+              <div key={dr.domain} className="rounded-md border p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  {dr.spaceId && !isDegraded ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : dr.spaceId && isDegraded ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-destructive" />
+                  )}
+                  <span className="text-sm font-medium">{dr.domain}</span>
+                  {dr.spaceId && !isDegraded && (
+                    <Badge className="bg-green-500/10 text-green-600 text-[9px]">
+                      Deployed
+                    </Badge>
+                  )}
+                  {dr.spaceId && isDegraded && (
+                    <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">
+                      Deployed (partial)
+                    </Badge>
+                  )}
+                  {dr.spaceError && (
+                    <Badge variant="destructive" className="text-[9px]">
+                      Failed
+                    </Badge>
+                  )}
+                </div>
+
+                {dr.assets.length > 0 && (
+                  <div className="space-y-1 ml-6">
+                    {dr.assets.map((ar, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        {ar.success ? (
+                          <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
+                        ) : (
+                          <XCircle className="h-3 w-3 text-destructive shrink-0" />
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={`text-[8px] shrink-0 ${
+                            ar.type === "metric_view"
+                              ? "border-violet-500/50 text-violet-600"
+                              : "border-blue-500/50 text-blue-600"
+                          }`}
+                        >
+                          {ar.type === "metric_view" ? "MV" : "Fn"}
+                        </Badge>
+                        <span className="font-mono truncate">{ar.name}</span>
+                        {ar.autoFixed && (
+                          <Badge variant="outline" className="text-[8px] shrink-0 border-amber-500/50 text-amber-600">
+                            auto-fixed
+                          </Badge>
+                        )}
+                        {ar.error && (
+                          <span className="text-[10px] text-destructive truncate">
+                            {ar.error}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
-                <span className="text-sm font-medium">{dr.domain}</span>
-                {dr.spaceId && (
-                  <Badge className="bg-green-500/10 text-green-600 text-[9px]">
-                    Deployed
-                  </Badge>
+
+                {hasStripped && (
+                  <div className="mt-2 ml-6 space-y-1">
+                    {dr.strippedRefs!.map((sr, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-amber-600">
+                        <Info className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          Removed {sr.type === "metric_view" ? "metric view" : "function"}{" "}
+                          <code className="font-mono text-[10px]">{sr.identifier}</code>
+                          {" "}&mdash; {sr.reason}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
+
                 {dr.spaceError && (
-                  <Badge variant="destructive" className="text-[9px]">
-                    Failed
-                  </Badge>
+                  <p className="text-[10px] text-destructive mt-1 ml-6">
+                    {dr.spaceError}
+                  </p>
                 )}
               </div>
-
-              {dr.assets.length > 0 && (
-                <div className="space-y-1 ml-6">
-                  {dr.assets.map((ar, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      {ar.success ? (
-                        <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
-                      ) : (
-                        <XCircle className="h-3 w-3 text-destructive shrink-0" />
-                      )}
-                      <Badge
-                        variant="outline"
-                        className={`text-[8px] shrink-0 ${
-                          ar.type === "metric_view"
-                            ? "border-violet-500/50 text-violet-600"
-                            : "border-blue-500/50 text-blue-600"
-                        }`}
-                      >
-                        {ar.type === "metric_view" ? "MV" : "Fn"}
-                      </Badge>
-                      <span className="font-mono truncate">{ar.name}</span>
-                      {ar.error && (
-                        <span className="text-[10px] text-destructive truncate">
-                          {ar.error}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {dr.spaceError && (
-                <p className="text-[10px] text-destructive mt-1 ml-6">
-                  {dr.spaceError}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
