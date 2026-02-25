@@ -161,6 +161,13 @@ export function GenieDeployModal({
     setTargetSchema(defaultSchema ? [defaultSchema] : []);
   }, [allAssets, defaultSchema]);
 
+  // Reset all state when the modal opens (prop-driven, not onOpenChange)
+  useEffect(() => {
+    if (open) {
+      initializeModal();
+    }
+  }, [open, initializeModal]);
+
   // Auto-scroll deploy log
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -420,7 +427,6 @@ export function GenieDeployModal({
   return (
     <Dialog open={open} onOpenChange={(o) => {
       if (step === "deploying") return;
-      if (o) initializeModal();
       if (!o && step === "done") onComplete();
       onOpenChange(o);
     }}>
