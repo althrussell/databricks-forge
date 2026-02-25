@@ -247,7 +247,7 @@ function classifyDeployError(error: string): { category: string; treatAsSuccess:
  * Try to auto-fix common DDL issues that cause deployment failures.
  * Returns the fixed DDL string, or null if no fix is applicable.
  */
-function attemptDdlAutoFix(ddl: string, error: string, assetType: "metric_view"): string | null {
+function attemptDdlAutoFix(ddl: string, error: string, _assetType: "metric_view"): string | null {
   const msg = error.toUpperCase();
 
   if (msg.includes("PARSE") || msg.includes("SYNTAX")) {

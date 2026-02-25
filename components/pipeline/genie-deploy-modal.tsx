@@ -149,17 +149,21 @@ export function GenieDeployModal({
     [domains]
   );
 
-  const initializeModal = useCallback(() => {
+  // Reset state on open transition (render-time adjustment avoids useEffect setState lint)
+  const [prevOpen, setPrevOpen] = useState(false);
+  if (open && !prevOpen) {
+    setPrevOpen(true);
     setStep("select");
     setResults([]);
     setDeployLog([]);
     setIsRetry(false);
-    const initial = new Set(
-      allAssets.filter((a) => !a.hasError).map((a) => a.id)
+    setSelectedAssets(
+      new Set(allAssets.filter((a) => !a.hasError).map((a) => a.id))
     );
-    setSelectedAssets(initial);
     setTargetSchema(defaultSchema ? [defaultSchema] : []);
-  }, [allAssets, defaultSchema]);
+  } else if (!open && prevOpen) {
+    setPrevOpen(false);
+  }
 
   // Auto-scroll deploy log
   useEffect(() => {
@@ -420,7 +424,6 @@ export function GenieDeployModal({
   return (
     <Dialog open={open} onOpenChange={(o) => {
       if (step === "deploying") return;
-      if (o) initializeModal();
       if (!o && step === "done") onComplete();
       onOpenChange(o);
     }}>
