@@ -98,7 +98,7 @@ Identify additional table join relationships from column naming patterns.`;
     .filter((j) => {
       if (!j.leftTable || !j.rightTable || !j.sql) return false;
       if (!isValidTable(allowlist, j.leftTable) || !isValidTable(allowlist, j.rightTable)) return false;
-      if (!validateSqlExpression(allowlist, j.sql, `join:${j.leftTable}->${j.rightTable}`)) return false;
+      if (!validateSqlExpression(allowlist, j.sql, `join:${j.leftTable}->${j.rightTable}`, true)) return false;
 
       const pairKey = `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`;
       const reverseKey = `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`;

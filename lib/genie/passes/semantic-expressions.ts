@@ -75,13 +75,13 @@ export async function runSemanticExpressions(
       );
       llmMeasures = llmResult.measures
         .filter((m) => !isSnippetTooComplex(m.sql, m.name))
-        .filter((m) => validateSqlExpression(allowlist, m.sql, `measure:${m.name}`));
+        .filter((m) => validateSqlExpression(allowlist, m.sql, `measure:${m.name}`, true));
       llmFilters = llmResult.filters
         .filter((f) => !isSnippetTooComplex(f.sql, f.name))
-        .filter((f) => validateSqlExpression(allowlist, f.sql, `filter:${f.name}`));
+        .filter((f) => validateSqlExpression(allowlist, f.sql, `filter:${f.name}`, true));
       llmDimensions = llmResult.dimensions
         .filter((d) => !isSnippetTooComplex(d.sql, d.name))
-        .filter((d) => validateSqlExpression(allowlist, d.sql, `dimension:${d.name}`));
+        .filter((d) => validateSqlExpression(allowlist, d.sql, `dimension:${d.name}`, true));
     } catch (err) {
       logger.warn("LLM expression generation failed, using time periods only", {
         error: err instanceof Error ? err.message : String(err),

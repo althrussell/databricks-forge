@@ -168,7 +168,7 @@ async function processDomain(
   const dashAllowlist = buildSchemaAllowlist(metadata);
   const originalCount = parsed.datasets.length;
   parsed.datasets = parsed.datasets.filter((ds) =>
-    validateSqlExpression(dashAllowlist, ds.sql, `dashboard:${ds.name}`)
+    validateSqlExpression(dashAllowlist, ds.sql, `dashboard:${ds.name}`, true)
   );
   if (parsed.datasets.length < originalCount) {
     logger.warn("Dashboard Engine: dropped datasets with invalid SQL references", {

@@ -30,6 +30,7 @@ import type {
   ForeignKey,
   TableInfo,
 } from "@/lib/domain/types";
+import { SQL_KEYWORDS } from "@/lib/genie/schema-allowlist";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -490,32 +491,6 @@ function validateSqlOutput(
       aliasSet.add(aliasMatch[1].toLowerCase());
     }
 
-    const sqlKeywords = new Set([
-      "select", "from", "where", "and", "or", "not", "in", "is", "null",
-      "as", "on", "join", "left", "right", "inner", "outer", "full", "cross",
-      "group", "by", "order", "having", "limit", "offset", "union", "all",
-      "with", "case", "when", "then", "else", "end", "between", "like",
-      "exists", "distinct", "count", "sum", "avg", "min", "max", "over",
-      "partition", "row_number", "rank", "dense_rank", "ntile", "lead", "lag",
-      "first_value", "last_value", "coalesce", "cast", "concat", "substring",
-      "trim", "upper", "lower", "date", "timestamp", "int", "string", "float",
-      "double", "boolean", "decimal", "bigint", "array", "map", "struct",
-      "true", "false", "asc", "desc", "insert", "into", "values", "update",
-      "set", "delete", "create", "table", "view", "temp", "temporary",
-      "if", "replace", "drop", "alter", "add", "column", "named_struct",
-      "ai_query", "ai_gen", "ai_classify", "ai_forecast", "ai_summarize",
-      "ai_analyze_sentiment", "ai_extract", "ai_similarity", "ai_mask",
-      "ai_fix_grammar", "ai_translate", "ai_parse_document",
-      "temperature", "max_tokens", "modelparameters", "responseformat",
-      "failonerror", "response", "result", "qualify",
-      "h3_longlatash3", "h3_polyfillash3", "h3_toparent", "h3_kring",
-      "h3_distance", "h3_ischildof", "st_point", "st_distance",
-      "st_contains", "st_intersects", "st_within", "st_dwithin",
-      "st_buffer", "st_area", "st_length", "st_union", "st_makeline",
-      "http_request", "remote_query", "read_files", "vector_search",
-      "recursive", "depth",
-    ]);
-
     // Extract identifiers after dots (likely column references): table.column
     const dotColPattern = /\.([a-z_][a-z0-9_]*)/gi;
     let match;
@@ -524,15 +499,14 @@ function validateSqlOutput(
       const colName = match[1].toLowerCase();
       if (
         !knownColumns.has(colName) &&
-        !sqlKeywords.has(colName) &&
+        !SQL_KEYWORDS.has(colName) &&
         !fqnParts.has(colName) &&
         !aliasSet.has(colName)
       ) {
         unknownCols.push(match[1]);
       }
     }
-    // Only warn if there are multiple unknown columns (single mismatches may be aliases)
-    if (unknownCols.length > 3) {
+    if (unknownCols.length > 1) {
       warnings.push(
         `SQL may reference unknown columns: ${[...new Set(unknownCols)].slice(0, 5).join(", ")}`
       );

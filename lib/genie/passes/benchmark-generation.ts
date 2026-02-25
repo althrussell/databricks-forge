@@ -210,7 +210,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
       }
       return true;
     })
-    .filter((b) => validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`));
+    .filter((b) => validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`, true));
 }
 
 function dedup(items: BenchmarkInput[], keyFn: (item: BenchmarkInput) => string): BenchmarkInput[] {
