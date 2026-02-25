@@ -1,7 +1,9 @@
 /**
  * Prisma client singleton for Lakebase.
  *
- * Uses @prisma/adapter-pg with node-postgres (pg) Pool.
+ * Uses @prisma/adapter-neon with @neondatabase/serverless Pool.
+ * Lakebase Autoscale IS Neon, so the native driver handles authentication
+ * (SCRAM-SHA-256 + channel binding) correctly over WebSocket transport.
  *
  * Two modes (chosen automatically):
  *   1. **Static URL** (startup credential or local dev) -- DATABASE_URL is
@@ -17,8 +19,12 @@
  * HMR reloads in development.
  */
 
-import pg from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { neonConfig } from "@neondatabase/serverless";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import ws from "ws";
+
+neonConfig.webSocketConstructor = ws;
+
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
   isAutoProvisionEnabled,
@@ -33,36 +39,17 @@ import { isAuthError } from "@/lib/lakebase/auth-errors";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
-// Pool construction helper
-//
-// Passes the FULL connection string to pg so all parameters (including
-// sslmode=require and uselibpqcompat=true) are preserved. Explicitly
-// overrides `ssl` to match sslmode=require semantics: encrypt the
-// connection but do NOT verify the server certificate. This prevents
-// SCRAM channel-binding mismatches with the Lakebase (Neon-based) proxy.
+// Connection string logging helper
 // ---------------------------------------------------------------------------
 
-function createPool(
-  connectionString: string,
-  opts?: { idleTimeoutMillis?: number; max?: number }
-): pg.Pool {
+function logConnectionInfo(connectionString: string): void {
   const parsed = new URL(connectionString);
-
-  logger.info("[prisma] Pool connecting", {
+  logger.info("[prisma] Connecting", {
     host: parsed.hostname,
     database: parsed.pathname.slice(1),
     user: decodeURIComponent(parsed.username),
     passwordLength: decodeURIComponent(parsed.password).length,
   });
-
-  const pool = new pg.Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-    idleTimeoutMillis: opts?.idleTimeoutMillis,
-    max: opts?.max,
-  });
-
-  return pool;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,30 +148,30 @@ async function buildAutoProvisionedPool(
   }
 
   const connectionString = await getLakebaseConnectionUrl();
-  const pool = createPool(connectionString, {
-    idleTimeoutMillis: 30_000,
-    max: 10,
-  });
+  logConnectionInfo(connectionString);
 
-  const adapter = new PrismaPg(pool);
+  const capturedTokenId = tokenId;
+  const adapter = new PrismaNeon(
+    { connectionString, idleTimeoutMillis: 30_000, max: 10 },
+    {
+      onPoolError: (err) => {
+        if (globalForPrisma.__prismaTokenId !== capturedTokenId) return;
+        logger.warn("[prisma] Pool background error — will recreate on next request", {
+          error: err.message,
+        });
+        globalForPrisma.__prisma = undefined;
+        globalForPrisma.__prismaTokenId = undefined;
+        invalidateDbCredential();
+      },
+    }
+  );
   const prisma = new PrismaClient({ adapter });
-
-  const thisClient = prisma;
-  pool.on("error", (err) => {
-    if (globalForPrisma.__prisma !== thisClient) return;
-    logger.warn("[prisma] Pool background error — will recreate on next request", {
-      error: err.message,
-    });
-    globalForPrisma.__prisma = undefined;
-    globalForPrisma.__prismaTokenId = undefined;
-    invalidateDbCredential();
-  });
 
   globalForPrisma.__prisma = prisma;
   globalForPrisma.__prismaTokenId = tokenId;
   _dbReady = true;
 
-  logger.info("[prisma] Pool created (auto-provision mode)", {
+  logger.info("[prisma] Client created (auto-provision mode)", {
     generation,
     tokenId,
   });
@@ -258,26 +245,28 @@ async function getStaticPrisma(): Promise<PrismaClient> {
     await globalForPrisma.__prisma.$disconnect();
   }
 
-  const pool = createPool(url);
+  logConnectionInfo(url);
 
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaNeon(
+    { connectionString: url },
+    {
+      onPoolError: (err) => {
+        if (globalForPrisma.__prismaTokenId !== "__static__") return;
+        logger.warn("[prisma] Pool background error (static) — will recreate on next request", {
+          error: err.message,
+        });
+        globalForPrisma.__prisma = undefined;
+        globalForPrisma.__prismaTokenId = undefined;
+      },
+    }
+  );
   const prisma = new PrismaClient({ adapter });
-
-  const thisClient = prisma;
-  pool.on("error", (err) => {
-    if (globalForPrisma.__prisma !== thisClient) return;
-    logger.warn("[prisma] Pool background error (static) — will recreate on next request", {
-      error: err.message,
-    });
-    globalForPrisma.__prisma = undefined;
-    globalForPrisma.__prismaTokenId = undefined;
-  });
 
   globalForPrisma.__prisma = prisma;
   globalForPrisma.__prismaTokenId = "__static__";
   _dbReady = true;
 
-  logger.info("[prisma] Pool created (static mode)");
+  logger.info("[prisma] Client created (static mode)");
 
   return prisma;
 }
