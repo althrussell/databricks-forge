@@ -242,6 +242,30 @@ print(json.dumps({
   fi
 }
 
+wait_for_stable_state() {
+  local state
+  state=$(databricks apps get "$APP_NAME" --output json 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+
+  if [ "$state" = "ACTIVE" ] || [ "$state" = "STOPPED" ]; then
+    return
+  fi
+
+  info "Waiting for compute to stabilise..."
+  local attempts=0
+  while [ $attempts -lt 30 ]; do
+    sleep 10
+    state=$(databricks apps get "$APP_NAME" --output json 2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+    if [ "$state" = "ACTIVE" ] || [ "$state" = "STOPPED" ]; then
+      ok "$state"
+      return
+    fi
+    attempts=$((attempts + 1))
+  done
+  ok "proceeding ($state)"
+}
+
 configure_app() {
   info "Configuring resources and scopes..."
 
@@ -277,7 +301,7 @@ print(json.dumps({
 ")
 
   local update_err
-  if ! update_err=$(databricks apps create-update "$APP_NAME" "resources,user_api_scopes" \
+  if ! update_err=$(databricks apps update "$APP_NAME" \
        --json "$update_json" 2>&1); then
     printf "FAILED\n"
     die "Failed to configure app resources and scopes.\n  $update_err"
@@ -299,16 +323,55 @@ upload_code() {
 }
 
 # -------------------------------------------------------------------------
-# Step 6: Deploy
+# Step 6: Start compute (must be active before deploying)
+# -------------------------------------------------------------------------
+start_compute() {
+  info "App compute..."
+
+  local state
+  state=$(databricks apps get "$APP_NAME" --output json 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+
+  if [ "$state" = "ACTIVE" ]; then
+    ok "already running"
+    return
+  fi
+
+  databricks apps start "$APP_NAME" --no-wait &>/dev/null || true
+  printf "starting"
+
+  local attempts=0
+  while [ $attempts -lt 30 ]; do
+    sleep 10
+    state=$(databricks apps get "$APP_NAME" --output json 2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+    if [ "$state" = "ACTIVE" ]; then
+      printf "\r  %-48s" "App compute..."
+      ok "running"
+      return
+    fi
+    printf "."
+    attempts=$((attempts + 1))
+  done
+
+  printf "\r  %-48s" "App compute..."
+  printf "TIMEOUT\n"
+  die "Compute did not start within 5 minutes.\n  Check the Databricks Apps UI for details."
+}
+
+# -------------------------------------------------------------------------
+# Step 7: Deploy
 # -------------------------------------------------------------------------
 deploy_app() {
-  info "Deploying (takes 3-5 minutes)..."
+  info "Deploying..."
 
-  if ! databricks apps deploy "$APP_NAME" \
-       --source-code-path "$WORKSPACE_PATH" --mode SNAPSHOT 2>/dev/null; then
-    die "Deployment failed.\n  Check logs: databricks apps logs $APP_NAME"
+  local deploy_err
+  if ! deploy_err=$(databricks apps deploy "$APP_NAME" \
+       --source-code-path "$WORKSPACE_PATH" --mode SNAPSHOT --no-wait 2>&1); then
+    printf "FAILED\n"
+    die "Deployment failed.\n  $deploy_err"
   fi
-  ok
+  ok "deployment started"
 }
 
 # -------------------------------------------------------------------------
@@ -373,8 +436,10 @@ main() {
 
   select_warehouse
   create_app
+  wait_for_stable_state
   configure_app
   upload_code
+  start_compute
   deploy_app
   print_success
 }
