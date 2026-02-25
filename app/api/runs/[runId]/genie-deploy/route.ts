@@ -581,6 +581,37 @@ function prepareSerializedSpace(
 // Asset deployment helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Wait for a newly-created function or view to become visible in UC.
+ * The Statement Execution API can report DDL success before the metastore
+ * has propagated the object, causing immediate DESCRIBE/GRANT to fail.
+ */
+async function waitForAssetVisibility(
+  fqn: string,
+  objectSqlType: "TABLE" | "FUNCTION",
+  maxRetries = 5,
+  delayMs = 2000,
+): Promise<boolean> {
+  const describeCmd = objectSqlType === "FUNCTION"
+    ? `DESCRIBE FUNCTION ${fqn}`
+    : `DESCRIBE TABLE ${fqn}`;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await executeSQL(describeCmd);
+      return true;
+    } catch {
+      if (attempt < maxRetries - 1) {
+        logger.debug("Asset not yet visible, waiting for propagation", {
+          fqn, attempt: attempt + 1, maxRetries, delayMs,
+        });
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  return false;
+}
+
 async function grantAccess(
   fqn: string,
   objectType: "TABLE" | "FUNCTION",
@@ -624,6 +655,17 @@ async function deployAsset(
   // First attempt
   try {
     await executeSQL(rewritten);
+
+    // Verify the asset actually exists (DDL can report success before metastore propagation)
+    const visible = await waitForAssetVisibility(fqn, objectSqlType);
+    if (!visible) {
+      logger.error("Asset DDL succeeded but asset not visible after retries", { fqn, type: assetType });
+      return {
+        name: asset.name, type: assetType, success: false, fqn, deployed: false,
+        error: `DDL executed but ${assetType} not found in Unity Catalog after waiting. The SQL warehouse may need more time to propagate.`,
+      };
+    }
+
     await grantAccess(fqn, objectSqlType);
     return { name: asset.name, type: assetType, success: true, fqn, deployed: true };
   } catch (err) {
@@ -636,7 +678,7 @@ async function deployAsset(
       await grantAccess(fqn, objectSqlType);
       return {
         name: asset.name, type: assetType, success: true, fqn,
-        deployed: true, autoFixed: true, errorCategory: classification.category,
+        deployed: true, errorCategory: classification.category,
       };
     }
 
@@ -645,6 +687,17 @@ async function deployAsset(
     if (fixedDdl) {
       try {
         await executeSQL(fixedDdl);
+
+        const visible = await waitForAssetVisibility(fqn, objectSqlType);
+        if (!visible) {
+          logger.error("Auto-fixed DDL succeeded but asset not visible", { fqn, type: assetType });
+          return {
+            name: asset.name, type: assetType, success: false, fqn, deployed: false,
+            error: `Auto-fixed DDL executed but ${assetType} not found in Unity Catalog after waiting.`,
+            errorCategory: classification.category,
+          };
+        }
+
         await grantAccess(fqn, objectSqlType);
         logger.info("Asset deployed after auto-fix", { fqn, type: assetType });
         return {
