@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     const { runId } = await params;
-    const job = getDashboardJobStatus(runId);
+    const job = await getDashboardJobStatus(runId);
 
     if (!job) {
       return NextResponse.json({

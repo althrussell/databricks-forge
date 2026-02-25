@@ -49,6 +49,7 @@ model ForgeRun {
   genieEngineConfigs       ForgeGenieEngineConfig[]
   dashboardRecommendations ForgeDashboardRecommendation[]
   dashboards               ForgeDashboard[]
+  backgroundJobs           ForgeBackgroundJob[]
   environmentScans         ForgeEnvironmentScan[]
 
   @@map("forge_runs")
@@ -316,6 +317,29 @@ model ForgeDashboard {
 }
 
 // ---------------------------------------------------------------------------
+// Background Jobs (engine status persistence)
+// ---------------------------------------------------------------------------
+
+model ForgeBackgroundJob {
+  id          String    @id @map("job_id")
+  runId       String    @map("run_id")
+  engine      String    // "genie" | "dashboard" | "scan"
+  status      String    @default("generating")
+  message     String    @default("")
+  percent     Int       @default(0)
+  startedAt   DateTime  @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  error       String?
+  domainCount Int       @default(0) @map("domain_count")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, engine])
+  @@index([runId])
+  @@map("forge_background_jobs")
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -396,6 +420,9 @@ model ForgeTableDetail {
   autoOptimize          Boolean  @default(false) @map("auto_optimize")
   tableCreatedAt        String?  @map("table_created_at")
   lastModified          String?  @map("last_modified")
+  createdBy             String?  @map("created_by")
+  lastAccess            String?  @map("last_access")
+  isManagedLocation     Boolean? @map("is_managed_location")
   columnsJson           String?  @map("columns_json")
   propertiesJson        String?  @map("properties_json")
   tagsJson              String?  @map("tags_json")

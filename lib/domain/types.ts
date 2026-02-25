@@ -270,19 +270,24 @@ export interface TableDetail {
   /** DESCRIBE DETAIL fields + statistics */
   sizeInBytes: number | null;
   numFiles: number | null;
-  numRows: number | null; // from spark.sql.statistics.numRows (ANALYZE TABLE) or operationMetrics
+  numRows: number | null; // from DESCRIBE TABLE EXTENDED Statistics, or spark.sql.statistics.numRows fallback
   format: string | null; // delta, parquet, csv, etc.
   partitionColumns: string[];
   clusteringColumns: string[];
   location: string | null;
   owner: string | null;
   provider: string | null;
-  isManaged: boolean;
+  isManaged: boolean; // heuristic from DESCRIBE DETAIL; overridden by isManagedLocation when available
   deltaMinReaderVersion: number | null;
   deltaMinWriterVersion: number | null;
   createdAt: string | null; // ISO timestamp
   lastModified: string | null; // ISO timestamp
   tableProperties: Record<string, string>;
+
+  /** DESCRIBE TABLE EXTENDED fields */
+  createdBy: string | null;
+  lastAccess: string | null; // raw value from UC, may be "UNKNOWN"
+  isManagedLocation: boolean | null; // ground truth from UC (replaces isManaged heuristic)
 
   /** How this table was found */
   discoveredVia: "selected" | "lineage";

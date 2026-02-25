@@ -44,7 +44,7 @@ export default function RootLayout({
                 <ThemeToggle />
               </header>
               <main className="flex-1">
-                <div className="mx-auto w-full max-w-screen-xl px-6 py-6">{children}</div>
+                <div className="w-full px-6 py-6">{children}</div>
               </main>
             </div>
           </div>

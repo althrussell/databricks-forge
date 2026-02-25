@@ -1,12 +1,15 @@
 /**
- * In-memory status tracker for async Genie Engine generation jobs.
+ * In-memory status tracker for async Genie Engine generation jobs,
+ * with write-through persistence to Lakebase.
  *
- * Used by the generate route to track progress and by the status
- * route to report it to the client. Also stores an AbortController
- * per job to support user-initiated cancellation.
+ * The in-memory Map is the primary store for fast polling. State
+ * transitions (start/complete/fail/cancel) are written through to
+ * Lakebase so status survives server restarts. On read, if the
+ * in-memory Map has no entry, we fall back to Lakebase.
  */
 
 import { isAuthErrorMessage } from "@/lib/lakebase/auth-errors";
+import { upsertJobStatus, getPersistedJobStatus } from "@/lib/lakebase/background-jobs";
 
 export type EngineErrorType = "auth" | "general" | null;
 
@@ -47,12 +50,13 @@ export function startJob(runId: string): void {
   const controller = new AbortController();
   controllers.set(runId, controller);
 
+  const now = Date.now();
   jobs.set(runId, {
     runId,
     status: "generating",
     message: "Starting Genie Engine...",
     percent: 0,
-    startedAt: Date.now(),
+    startedAt: now,
     completedAt: null,
     error: null,
     errorType: null,
@@ -60,6 +64,10 @@ export function startJob(runId: string): void {
     completedDomains: 0,
     totalDomains: 0,
     completedDomainNames: [],
+  });
+
+  void upsertJobStatus(runId, "genie", "generating", "Starting Genie Engine...", 0, {
+    startedAt: new Date(now),
   });
 }
 
@@ -80,6 +88,11 @@ export function cancelJob(runId: string): boolean {
   job.status = "cancelled";
   job.message = "Generation cancelled by user";
   job.completedAt = Date.now();
+
+  void upsertJobStatus(runId, "genie", "cancelled", job.message, job.percent, {
+    completedAt: new Date(job.completedAt),
+  });
+
   return true;
 }
 
@@ -118,6 +131,11 @@ export function completeJob(runId: string, domainCount: number): void {
     job.percent = 100;
     job.completedAt = Date.now();
     job.domainCount = domainCount;
+
+    void upsertJobStatus(runId, "genie", "completed", job.message, 100, {
+      completedAt: new Date(job.completedAt),
+      domainCount,
+    });
   }
   controllers.delete(runId);
 }
@@ -130,11 +148,41 @@ export function failJob(runId: string, error: string): void {
     job.completedAt = Date.now();
     job.error = error;
     job.errorType = isAuthErrorMessage(error) ? "auth" : "general";
+
+    void upsertJobStatus(runId, "genie", "failed", job.message, job.percent, {
+      completedAt: new Date(job.completedAt),
+      error,
+    });
   }
   controllers.delete(runId);
 }
 
-export function getJobStatus(runId: string): EngineJobStatus | null {
+/**
+ * Get job status: in-memory first, then Lakebase fallback.
+ * The DB fallback covers the case where the server restarted
+ * after a job completed (in-memory Map was lost).
+ */
+export async function getJobStatus(runId: string): Promise<EngineJobStatus | null> {
   evictStaleJobs();
-  return jobs.get(runId) ?? null;
+
+  const memJob = jobs.get(runId);
+  if (memJob) return memJob;
+
+  const persisted = await getPersistedJobStatus(runId, "genie");
+  if (!persisted) return null;
+
+  return {
+    runId: persisted.runId,
+    status: persisted.status as EngineJobStatus["status"],
+    message: persisted.message,
+    percent: persisted.percent,
+    startedAt: persisted.startedAt.getTime(),
+    completedAt: persisted.completedAt?.getTime() ?? null,
+    error: persisted.error,
+    errorType: persisted.error ? (isAuthErrorMessage(persisted.error) ? "auth" : "general") : null,
+    domainCount: persisted.domainCount,
+    completedDomains: 0,
+    totalDomains: 0,
+    completedDomainNames: [],
+  };
 }

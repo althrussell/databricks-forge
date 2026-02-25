@@ -1,9 +1,14 @@
 /**
- * In-memory status tracker for async Dashboard Engine generation jobs.
+ * In-memory status tracker for async Dashboard Engine generation jobs,
+ * with write-through persistence to Lakebase.
  *
- * Used by the generate route to track progress and by the status
- * route to report it to the client. Mirrors lib/genie/engine-status.ts.
+ * The in-memory Map is the primary store for fast polling. State
+ * transitions (start/complete/fail) are written through to Lakebase
+ * so status survives server restarts. On read, if the in-memory Map
+ * has no entry, we fall back to Lakebase.
  */
+
+import { upsertJobStatus, getPersistedJobStatus } from "@/lib/lakebase/background-jobs";
 
 export interface DashboardJobStatus {
   runId: string;
@@ -17,17 +22,34 @@ export interface DashboardJobStatus {
 }
 
 const jobs = new Map<string, DashboardJobStatus>();
+const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function evictStaleJobs(): void {
+  const now = Date.now();
+  for (const [runId, job] of jobs) {
+    if (job.completedAt && now - job.completedAt > JOB_TTL_MS) {
+      jobs.delete(runId);
+    } else if (!job.completedAt && now - job.startedAt > JOB_TTL_MS * 2) {
+      jobs.delete(runId);
+    }
+  }
+}
 
 export function startDashboardJob(runId: string): void {
+  const now = Date.now();
   jobs.set(runId, {
     runId,
     status: "generating",
     message: "Starting Dashboard Engine...",
     percent: 0,
-    startedAt: Date.now(),
+    startedAt: now,
     completedAt: null,
     error: null,
     domainCount: 0,
+  });
+
+  void upsertJobStatus(runId, "dashboard", "generating", "Starting Dashboard Engine...", 0, {
+    startedAt: new Date(now),
   });
 }
 
@@ -47,6 +69,11 @@ export function completeDashboardJob(runId: string, domainCount: number): void {
     job.percent = 100;
     job.completedAt = Date.now();
     job.domainCount = domainCount;
+
+    void upsertJobStatus(runId, "dashboard", "completed", job.message, 100, {
+      completedAt: new Date(job.completedAt),
+      domainCount,
+    });
   }
 }
 
@@ -57,9 +84,36 @@ export function failDashboardJob(runId: string, error: string): void {
     job.message = "Dashboard generation failed";
     job.completedAt = Date.now();
     job.error = error;
+
+    void upsertJobStatus(runId, "dashboard", "failed", job.message, job.percent, {
+      completedAt: new Date(job.completedAt),
+      error,
+    });
   }
 }
 
-export function getDashboardJobStatus(runId: string): DashboardJobStatus | null {
-  return jobs.get(runId) ?? null;
+/**
+ * Get job status: in-memory first, then Lakebase fallback.
+ * The DB fallback covers the case where the server restarted
+ * after a job completed (in-memory Map was lost).
+ */
+export async function getDashboardJobStatus(runId: string): Promise<DashboardJobStatus | null> {
+  evictStaleJobs();
+
+  const memJob = jobs.get(runId);
+  if (memJob) return memJob;
+
+  const persisted = await getPersistedJobStatus(runId, "dashboard");
+  if (!persisted) return null;
+
+  return {
+    runId: persisted.runId,
+    status: persisted.status as DashboardJobStatus["status"],
+    message: persisted.message,
+    percent: persisted.percent,
+    startedAt: persisted.startedAt.getTime(),
+    completedAt: persisted.completedAt?.getTime() ?? null,
+    error: persisted.error,
+    domainCount: persisted.domainCount,
+  };
 }

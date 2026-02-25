@@ -59,7 +59,7 @@ export async function describeDetail(
       comment: null, // filled later from information_schema
       sizeInBytes: parseIntSafe(col("sizeInBytes") ?? col("size_in_bytes")),
       numFiles: parseIntSafe(col("numFiles") ?? col("num_files")),
-      numRows: null, // populated later from TBLPROPERTIES (spark.sql.statistics.numRows)
+      numRows: null, // populated later from DESCRIBE TABLE EXTENDED Statistics
       format: col("format"),
       partitionColumns: parseStringArray(partitionCols),
       clusteringColumns: parseStringArray(clusteringCols),
@@ -72,6 +72,9 @@ export async function describeDetail(
       createdAt: col("createdAt") ?? col("created_at"),
       lastModified: col("lastModified") ?? col("last_modified"),
       tableProperties: {},
+      createdBy: null,
+      lastAccess: null,
+      isManagedLocation: null,
       discoveredVia,
       dataDomain: null,
       dataSubdomain: null,
@@ -127,6 +130,9 @@ export function createFallbackDetail(
     createdAt: null,
     lastModified: null,
     tableProperties: {},
+    createdBy: null,
+    lastAccess: null,
+    isManagedLocation: null,
     discoveredVia,
     dataDomain: null,
     dataSubdomain: null,
@@ -303,6 +309,162 @@ export async function getTableProperties(
 }
 
 // ---------------------------------------------------------------------------
+// DESCRIBE TABLE EXTENDED
+// ---------------------------------------------------------------------------
+
+export interface ExtendedTableInfo {
+  properties: Record<string, string>;
+  numRows: number | null;
+  sizeInBytes: number | null;
+  comment: string | null;
+  owner: string | null;
+  tableType: string | null;
+  createdTime: string | null;
+  createdBy: string | null;
+  lastAccess: string | null;
+  isManagedLocation: boolean | null;
+  provider: string | null;
+  location: string | null;
+}
+
+const EMPTY_EXTENDED: ExtendedTableInfo = {
+  properties: {},
+  numRows: null,
+  sizeInBytes: null,
+  comment: null,
+  owner: null,
+  tableType: null,
+  createdTime: null,
+  createdBy: null,
+  lastAccess: null,
+  isManagedLocation: null,
+  provider: null,
+  location: null,
+};
+
+/**
+ * Run DESCRIBE TABLE EXTENDED and parse the key-value metadata section.
+ *
+ * The result set has 3 columns (col_name, data_type, comment). The first
+ * rows are column definitions; after a blank separator row and a
+ * "# Detailed Table Information" marker, the remaining rows are key-value
+ * metadata with the key in col_name and the value in data_type.
+ *
+ * Returns a structured `ExtendedTableInfo` with properties, statistics,
+ * and additional metadata fields not available from DESCRIBE DETAIL.
+ */
+export async function describeTableExtended(
+  tableFqn: string
+): Promise<ExtendedTableInfo> {
+  const [catalog, schema, table] = splitFqn(tableFqn);
+  const safeCat = validateIdentifier(catalog, "catalog");
+  const safeSch = validateIdentifier(schema, "schema");
+  const safeTbl = validateIdentifier(table, "table");
+  const sql = `DESCRIBE TABLE EXTENDED \`${safeCat}\`.\`${safeSch}\`.\`${safeTbl}\``;
+
+  try {
+    const result = await executeSQL(sql);
+    if (result.rows.length === 0) return { ...EMPTY_EXTENDED };
+
+    const colIdx = (name: string) =>
+      result.columns.findIndex(
+        (c) => c.name.toLowerCase() === name.toLowerCase()
+      );
+    const nameIdx = colIdx("col_name");
+    const valueIdx = colIdx("data_type");
+
+    if (nameIdx < 0 || valueIdx < 0) return { ...EMPTY_EXTENDED };
+
+    // Scan for the metadata section marker
+    let metaStart = -1;
+    for (let i = 0; i < result.rows.length; i++) {
+      const key = result.rows[i][nameIdx]?.trim() ?? "";
+      if (key.startsWith("# Detailed Table Information")) {
+        metaStart = i + 1;
+        break;
+      }
+    }
+
+    if (metaStart < 0) return { ...EMPTY_EXTENDED };
+
+    // Build key-value map from the metadata section
+    const meta = new Map<string, string>();
+    for (let i = metaStart; i < result.rows.length; i++) {
+      const key = result.rows[i][nameIdx]?.trim() ?? "";
+      const value = result.rows[i][valueIdx]?.trim() ?? "";
+      if (key) meta.set(key, value);
+    }
+
+    // Parse Statistics: "26524 bytes, 204 rows" or "26524 bytes"
+    let numRows: number | null = null;
+    let sizeInBytes: number | null = null;
+    const statsRaw = meta.get("Statistics") ?? "";
+    const statsMatch = statsRaw.match(/(\d[\d,]*)\s+bytes(?:,\s*(\d[\d,]*)\s+rows)?/);
+    if (statsMatch) {
+      sizeInBytes = parseIntSafe(statsMatch[1].replace(/,/g, ""));
+      if (statsMatch[2]) {
+        numRows = parseIntSafe(statsMatch[2].replace(/,/g, ""));
+      }
+    }
+
+    // Parse Table Properties: "[key1=val1,key2=val2,...]"
+    const properties = parseTablePropertiesString(meta.get("Table Properties") ?? "");
+
+    // Parse Is_managed_location
+    let isManagedLocation: boolean | null = null;
+    const managedRaw = meta.get("Is_managed_location") ?? "";
+    if (managedRaw.toLowerCase() === "true") isManagedLocation = true;
+    else if (managedRaw.toLowerCase() === "false") isManagedLocation = false;
+
+    return {
+      properties,
+      numRows,
+      sizeInBytes,
+      comment: meta.get("Comment") || null,
+      owner: meta.get("Owner") || null,
+      tableType: meta.get("Type") || null,
+      createdTime: meta.get("Created Time") || null,
+      createdBy: meta.get("Created By") || null,
+      lastAccess: meta.get("Last Access") || null,
+      isManagedLocation,
+      provider: meta.get("Provider") || null,
+      location: meta.get("Location") || null,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("does not exist") || msg.includes("(403)") || msg.includes("(404)")) {
+      logger.warn("[metadata-detail] Permission denied for DESCRIBE TABLE EXTENDED", { tableFqn });
+    } else {
+      logger.error("[metadata-detail] DESCRIBE TABLE EXTENDED failed", { tableFqn, error: msg });
+    }
+    return { ...EMPTY_EXTENDED };
+  }
+}
+
+/**
+ * Parse the Table Properties string from DESCRIBE TABLE EXTENDED.
+ * Format: "[key1=val1,key2=val2,...]"
+ * Values may contain spaces and special characters but keys do not contain commas.
+ */
+function parseTablePropertiesString(raw: string): Record<string, string> {
+  const props: Record<string, string> = {};
+  const trimmed = raw.replace(/^\[/, "").replace(/]$/, "").trim();
+  if (!trimmed) return props;
+
+  // Split on comma followed by a key=value pattern to avoid splitting values that contain commas
+  const entries = trimmed.split(/,(?=[\w.]+\s*=)/);
+  for (const entry of entries) {
+    const eqIdx = entry.indexOf("=");
+    if (eqIdx > 0) {
+      const key = entry.slice(0, eqIdx).trim();
+      const value = entry.slice(eqIdx + 1).trim();
+      if (key) props[key] = value;
+    }
+  }
+  return props;
+}
+
+// ---------------------------------------------------------------------------
 // Tags
 // ---------------------------------------------------------------------------
 
@@ -382,8 +544,13 @@ export interface EnrichmentResult {
 }
 
 /**
- * Enrich tables in parallel batches. Runs DESCRIBE DETAIL, DESCRIBE HISTORY
- * (Delta tables only), and SHOW TBLPROPERTIES for each table.
+ * Enrich tables in parallel batches. Runs DESCRIBE DETAIL, DESCRIBE TABLE
+ * EXTENDED, and DESCRIBE HISTORY (Delta tables only) for each table.
+ *
+ * DESCRIBE DETAIL provides numFiles, partitionColumns, clusteringColumns,
+ * and lastModified. DESCRIBE TABLE EXTENDED replaces SHOW TBLPROPERTIES
+ * and adds numRows (from Statistics), createdBy, lastAccess, and
+ * isManagedLocation.
  *
  * When DESCRIBE DETAIL returns null (views, permission denied), a fallback
  * TableDetail is created so the table still appears in the estate.
@@ -413,10 +580,11 @@ export async function enrichTablesInBatches(
         const knownFormat = t.dataSourceFormat?.toUpperCase() ?? null;
         const skipHistoryUpfront = knownFormat !== null && knownFormat !== "DELTA";
 
-        const [detail, properties] = await Promise.all([
+        const [detail, extended] = await Promise.all([
           describeDetail(t.fqn, t.discoveredVia),
-          getTableProperties(t.fqn),
+          describeTableExtended(t.fqn),
         ]);
+        const properties = extended.properties;
 
         // Determine whether to run DESCRIBE HISTORY based on known format or DESCRIBE DETAIL result
         const detailFormat = detail?.format?.toUpperCase() ?? null;
@@ -442,13 +610,34 @@ export async function enrichTablesInBatches(
           t.tableType ?? "VIEW"
         );
 
-        // Merge properties into detail
+        // Merge EXTENDED metadata into detail
         if (properties && Object.keys(properties).length > 0) {
           effectiveDetail.tableProperties = properties;
+        }
+
+        // numRows: prefer Statistics from EXTENDED, fall back to spark.sql.statistics.numRows
+        if (extended.numRows != null) {
+          effectiveDetail.numRows = extended.numRows;
+        } else if (effectiveDetail.numRows == null) {
           const statsNumRows = properties["spark.sql.statistics.numRows"];
-          if (statsNumRows && effectiveDetail.numRows == null) {
+          if (statsNumRows) {
             effectiveDetail.numRows = parseIntSafe(statsNumRows);
           }
+        }
+
+        // New EXTENDED-only fields
+        effectiveDetail.createdBy = extended.createdBy;
+        effectiveDetail.lastAccess = extended.lastAccess;
+        effectiveDetail.isManagedLocation = extended.isManagedLocation;
+
+        // Override isManaged heuristic with ground truth when available
+        if (extended.isManagedLocation != null) {
+          effectiveDetail.isManaged = extended.isManagedLocation;
+        }
+
+        // Backfill comment from EXTENDED if not already set
+        if (!effectiveDetail.comment && extended.comment) {
+          effectiveDetail.comment = extended.comment;
         }
 
         return { fqn: t.fqn, detail: effectiveDetail, history, properties };
