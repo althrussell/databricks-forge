@@ -837,12 +837,12 @@ function MetricViewProposalCard({
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{mv.description}</p>
       {mv.validationIssues.length > 0 && (
-        <div className="mt-1.5 rounded bg-amber-50 p-1.5 dark:bg-amber-950/20">
-          <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
-            Validation issues:
+        <div className={`mt-1.5 rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}>
+          <p className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+            {mv.validationStatus === "error" ? "Validation errors (deploy blocked):" : "Validation issues:"}
           </p>
           {mv.validationIssues.map((issue, idx) => (
-            <p key={idx} className="text-[10px] text-amber-600 dark:text-amber-500">
+            <p key={idx} className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}>
               - {issue}
             </p>
           ))}

@@ -1,14 +1,18 @@
 /**
- * Next.js middleware -- rate limiting for API routes.
+ * Next.js proxy -- rate limiting for API routes.
  *
  * Uses an in-memory sliding window counter per IP.
  * Sufficient for single-instance Databricks Apps deployment.
+ *
+ * Lightweight status-polling endpoints are exempt because they only
+ * read in-memory state and the UI polls them every 2-3 seconds during
+ * engine generation runs.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 100;
+const MAX_REQUESTS = 300;
 
 interface WindowEntry {
   count: number;
@@ -17,7 +21,6 @@ interface WindowEntry {
 
 const windows = new Map<string, WindowEntry>();
 
-// Periodic cleanup to prevent memory leaks
 let lastCleanup = Date.now();
 const CLEANUP_INTERVAL = 5 * 60_000;
 
@@ -38,13 +41,21 @@ function getClientIp(request: NextRequest): string {
   );
 }
 
+const EXEMPT_SUFFIXES = [
+  "/status",
+  "/health",
+];
+
+function isExempt(pathname: string): boolean {
+  return EXEMPT_SUFFIXES.some((s) => pathname.endsWith(s));
+}
+
 export function proxy(request: NextRequest): NextResponse | undefined {
   if (!request.nextUrl.pathname.startsWith("/api/")) {
     return undefined;
   }
 
-  // Skip rate limiting for health checks
-  if (request.nextUrl.pathname === "/api/health") {
+  if (isExempt(request.nextUrl.pathname)) {
     return undefined;
   }
 

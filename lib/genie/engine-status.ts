@@ -22,6 +22,7 @@ export interface EngineJobStatus {
   domainCount: number;
   completedDomains: number;
   totalDomains: number;
+  completedDomainNames: string[];
 }
 
 const jobs = new Map<string, EngineJobStatus>();
@@ -45,6 +46,7 @@ export function startJob(runId: string): void {
     domainCount: 0,
     completedDomains: 0,
     totalDomains: 0,
+    completedDomainNames: [],
   });
 }
 
@@ -85,6 +87,13 @@ export function updateJobDomainProgress(
   if (job && job.status === "generating") {
     job.completedDomains = completedDomains;
     job.totalDomains = totalDomains;
+  }
+}
+
+export function addCompletedDomainName(runId: string, domainName: string): void {
+  const job = jobs.get(runId);
+  if (job && job.status === "generating" && !job.completedDomainNames.includes(domainName)) {
+    job.completedDomainNames.push(domainName);
   }
 }
 

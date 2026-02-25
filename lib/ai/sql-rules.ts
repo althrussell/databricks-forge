@@ -16,6 +16,7 @@ Syntax and type safety:
 - NEVER nest a window function (OVER) inside an aggregate function (SUM, AVG, COUNT, MIN, MAX). Compute window values in a CTE first, then aggregate.
 - Use DECIMAL(18,2) instead of FLOAT/DOUBLE for financial and monetary calculations.
 - All string literals must use single quotes. COALESCE text defaults must be quoted: COALESCE(col, 'Unknown') not COALESCE(col, Unknown).
+- NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query) in metric view definitions. They are non-deterministic and prohibitively expensive. Use only deterministic expressions over materialized columns.
 
 Query structure:
 - For top-N queries, ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() for top-N because ties can return more than N rows.
@@ -41,4 +42,5 @@ DATABRICKS SQL RULES:
 - Use PERCENTILE_APPROX for percentile calculations.
 - Filter early, aggregate late.
 - Prefer native SQL functions over UDFs.
+- NEVER use AI functions (ai_analyze_sentiment, ai_classify, etc.) in metric views.
 `.trim();

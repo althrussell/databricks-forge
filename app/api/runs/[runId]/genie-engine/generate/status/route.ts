@@ -32,6 +32,7 @@ export async function GET(
       domainCount: job.domainCount,
       completedDomains: job.completedDomains,
       totalDomains: job.totalDomains,
+      completedDomainNames: job.completedDomainNames,
       error: job.error,
       errorType: job.errorType,
       elapsedMs: job.completedAt

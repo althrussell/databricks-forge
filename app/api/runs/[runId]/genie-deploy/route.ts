@@ -152,12 +152,15 @@ function stripWindowBlocks(ddl: string): string {
   return result.join("\n");
 }
 
+const AI_FUNCTION_PATTERN = /\b(?:ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
+
 /**
  * Sanitize a metric view DDL before execution:
  * 1. Strip FQN column prefixes from expr: and on: lines
  * 2. Remove `comment:` lines (unsupported by Databricks YAML parser)
  * 3. Qualify ambiguous join criteria with `source.` prefix
  * 4. Strip window: blocks (experimental, frequently malformed)
+ * 5. Strip dimension/measure entries that use AI functions (non-deterministic, expensive)
  */
 function sanitizeMetricViewDdl(ddl: string): string {
   let result = ddl
@@ -178,7 +181,30 @@ function sanitizeMetricViewDdl(ddl: string): string {
   // Remove window blocks that the YAML parser rejects
   result = stripWindowBlocks(result);
 
+  // Strip dimension/measure entries containing AI functions
+  result = stripAiFunctionEntries(result);
+
   return result;
+}
+
+/**
+ * Remove YAML dimension/measure entries whose expr: contains an AI function.
+ * Matches a `- name: ...` line followed by an `expr: ...` line that includes
+ * a prohibited AI function call, and removes both lines.
+ */
+function stripAiFunctionEntries(ddl: string): string {
+  return ddl.replace(
+    /^(\s*- name:\s*.+\n)(\s*expr:\s*.+)$/gm,
+    (_match, nameLine: string, exprLine: string) => {
+      if (AI_FUNCTION_PATTERN.test(exprLine)) {
+        logger.warn("Stripping metric view entry with AI function", {
+          entry: exprLine.trim(),
+        });
+        return "";
+      }
+      return nameLine + exprLine;
+    }
+  );
 }
 
 /**
@@ -211,6 +237,9 @@ function classifyDeployError(error: string): { category: string; treatAsSuccess:
   if (msg.includes("PARSE_SYNTAX_ERROR") || msg.includes("PARSE ERROR") || msg.includes("PARSING ERROR")) {
     return { category: "syntax", treatAsSuccess: false };
   }
+  if (msg.includes("INVALID_AGGREGATE_FILTER") || msg.includes("NON_DETERMINISTIC")) {
+    return { category: "non_deterministic", treatAsSuccess: false };
+  }
   return { category: "unknown", treatAsSuccess: false };
 }
 
@@ -238,6 +267,12 @@ function attemptDdlAutoFix(ddl: string, error: string, assetType: "metric_view" 
     // Strip label: lines (unsupported in some DBR versions)
     fixed = fixed.replace(/^\s*label:\s*[^\n]+$/gm, "");
 
+    if (fixed !== ddl) return fixed;
+  }
+
+  // Non-deterministic AI functions in metric view expressions
+  if (assetType === "metric_view" && (msg.includes("NON_DETERMINISTIC") || msg.includes("INVALID_AGGREGATE_FILTER"))) {
+    const fixed = stripAiFunctionEntries(ddl);
     if (fixed !== ddl) return fixed;
   }
 

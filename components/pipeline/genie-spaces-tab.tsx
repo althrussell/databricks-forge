@@ -38,6 +38,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { BrainCircuit } from "lucide-react";
 import { toast } from "sonner";
 import type {
   GenieEngineRecommendation,
@@ -54,13 +55,24 @@ import { GenieDeployModal } from "./genie-deploy-modal";
 
 interface GenieSpacesTabProps {
   runId: string;
+  /** Whether the Genie Engine is currently generating. */
+  generating?: boolean;
+  /** Domain names that the engine has finished processing so far. */
+  completedDomainNames?: string[];
+  /** Incremented when the engine completes; triggers a data refetch. */
+  refreshKey?: number;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
+export function GenieSpacesTab({
+  runId,
+  generating: engineGenerating = false,
+  completedDomainNames = [],
+  refreshKey = 0,
+}: GenieSpacesTabProps) {
   const [recommendations, setRecommendations] = useState<
     GenieEngineRecommendation[]
   >([]);
@@ -127,6 +139,13 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
   useEffect(() => {
     fetchRecommendations();
   }, [fetchRecommendations]);
+
+  // Re-fetch when the engine completes (refreshKey increments from parent)
+  useEffect(() => {
+    if (refreshKey > 0) {
+      fetchRecommendations();
+    }
+  }, [refreshKey, fetchRecommendations]);
 
   useEffect(() => {
     if (!detailDomain) {
@@ -469,7 +488,29 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                           aria-label={`Select ${rec.domain}`}
                         />
                       </td>
-                      <td className="px-3 py-2.5 font-medium">{rec.domain}</td>
+                      <td className="px-3 py-2.5 font-medium">
+                        <span className="flex items-center gap-1.5">
+                          {rec.domain}
+                          {engineGenerating && completedDomainNames.includes(rec.domain) && (
+                            <BrainCircuit
+                              className="h-3.5 w-3.5 text-violet-500"
+                              aria-label="AI analysis complete"
+                            />
+                          )}
+                          {engineGenerating && !completedDomainNames.includes(rec.domain) && (
+                            <BrainCircuit
+                              className="h-3.5 w-3.5 animate-pulse text-violet-400/50"
+                              aria-label="AI analysis in progress"
+                            />
+                          )}
+                          {!engineGenerating && completedDomainNames.includes(rec.domain) && (
+                            <BrainCircuit
+                              className="h-3.5 w-3.5 text-violet-500"
+                              aria-label="AI enriched"
+                            />
+                          )}
+                        </span>
+                      </td>
                       <td className="max-w-[200px] px-3 py-2.5">
                         <div className="flex flex-wrap gap-1">
                           {rec.subdomains.slice(0, 3).map((sd) => (
@@ -622,6 +663,9 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                 <SheetTitle className="flex items-center gap-2">
                   <GenieIcon className="h-5 w-5 text-violet-500" />
                   {detailRec.domain}
+                  {completedDomainNames.includes(detailRec.domain) && (
+                    <BrainCircuit className="h-4 w-4 text-violet-500" aria-label="AI enriched" />
+                  )}
                 </SheetTitle>
                 <SheetDescription>{detailRec.description}</SheetDescription>
                 {detailTracking && (

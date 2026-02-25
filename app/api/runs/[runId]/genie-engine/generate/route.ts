@@ -13,7 +13,7 @@ import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { invalidatePrismaClient } from "@/lib/prisma";
 import { runGenieEngine, EngineCancelledError } from "@/lib/genie/engine";
-import { startJob, getJobController, updateJob, updateJobDomainProgress, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
+import { startJob, getJobController, updateJob, updateJobDomainProgress, addCompletedDomainName, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -69,9 +69,12 @@ export async function POST(
       sampleData: null,
       domainFilter: domains,
       signal: controller?.signal,
-      onProgress: (message, percent, completedDomains, totalDomains) => {
+      onProgress: (message, percent, completedDomains, totalDomains, completedDomainName) => {
         updateJob(runId, message, percent);
         updateJobDomainProgress(runId, completedDomains, totalDomains);
+        if (completedDomainName) {
+          addCompletedDomainName(runId, completedDomainName);
+        }
       },
     })
       .then(async (result) => {

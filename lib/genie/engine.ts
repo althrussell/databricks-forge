@@ -55,7 +55,7 @@ export interface GenieEngineInput {
   domainFilter?: string[];
   /** Abort signal for user-initiated cancellation. */
   signal?: AbortSignal;
-  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number) => void;
+  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number, completedDomainName?: string) => void;
 }
 
 export interface GenieEngineResult {
@@ -172,7 +172,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         rec.useCaseCount = group.useCases.length;
 
         completedDomainCount++;
-        onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount);
+        onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount, group.domain);
 
         logger.info("Domain processed", {
           domain: group.domain,
