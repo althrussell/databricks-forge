@@ -771,6 +771,18 @@ export function GenieSpacesTab({
                                   {mv.hasWindowMeasures && <Badge className="bg-purple-500/10 text-purple-600 text-[9px]">window</Badge>}
                                   {mv.hasMaterialization && <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px]">materialized</Badge>}
                                 </div>
+                                {mv.validationIssues && mv.validationIssues.length > 0 && (
+                                  <div className={`rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}>
+                                    <p className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+                                      {mv.validationStatus === "error" ? "Validation errors:" : "Validation issues:"}
+                                    </p>
+                                    {mv.validationIssues.map((issue: string, idx: number) => (
+                                      <p key={idx} className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}>
+                                        - {issue}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
                                 {mv.ddl && (
                                   <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
                                     {mv.ddl}
