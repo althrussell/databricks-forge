@@ -242,11 +242,14 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 // Resilient wrapper with auth-error retry
 // ---------------------------------------------------------------------------
 
+const MAX_AUTH_RETRIES = 4;
+const AUTH_RETRY_BASE_MS = 2_000;
+
 /**
  * Execute a callback with a PrismaClient. If the call fails with a
- * database authentication error (stale credential), the client and
- * credential are invalidated and the call is retried exactly once with
- * a freshly-provisioned connection.
+ * database authentication error (stale credential or Lakebase Autoscale
+ * cold start), the client and credential are invalidated and the call
+ * is retried with exponential backoff (2s, 4s, 8s, 16s).
  *
  * The retry fires whenever Databricks App SP credentials are available
  * (canAutoProvision), even if the initial connection used a static
@@ -259,19 +262,31 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 export async function withPrisma<T>(
   fn: (prisma: PrismaClient) => Promise<T>
 ): Promise<T> {
-  const prisma = await getPrisma();
-  try {
-    return await fn(prisma);
-  } catch (err) {
-    if (isAuthError(err) && canAutoProvision()) {
-      logger.warn("Database auth error, rotating credentials and retrying", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      const freshPrisma = await rotatePrismaClient();
-      return fn(freshPrisma);
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt <= MAX_AUTH_RETRIES; attempt++) {
+    const prisma = await getPrisma();
+    try {
+      return await fn(prisma);
+    } catch (err) {
+      lastErr = err;
+      if (!isAuthError(err) || !canAutoProvision()) throw err;
+
+      if (attempt < MAX_AUTH_RETRIES) {
+        const delayMs = AUTH_RETRY_BASE_MS * Math.pow(2, attempt);
+        logger.warn("Database auth error, rotating credentials and retrying", {
+          attempt: attempt + 1,
+          maxRetries: MAX_AUTH_RETRIES,
+          nextRetryMs: delayMs,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await rotatePrismaClient();
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
     }
-    throw err;
   }
+
+  throw lastErr;
 }
 
 // ---------------------------------------------------------------------------
