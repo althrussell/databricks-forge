@@ -73,15 +73,15 @@ export async function runSemanticExpressions(
       const llmResult = await generateLLMExpressions(
         tableFqns, metadata, useCases, businessContext, config.glossary, endpoint, signal
       );
-      llmMeasures = llmResult.measures.filter((m) =>
-        validateSqlExpression(allowlist, m.sql, `measure:${m.name}`)
-      );
-      llmFilters = llmResult.filters.filter((f) =>
-        validateSqlExpression(allowlist, f.sql, `filter:${f.name}`)
-      );
-      llmDimensions = llmResult.dimensions.filter((d) =>
-        validateSqlExpression(allowlist, d.sql, `dimension:${d.name}`)
-      );
+      llmMeasures = llmResult.measures
+        .filter((m) => !isSnippetTooComplex(m.sql, m.name))
+        .filter((m) => validateSqlExpression(allowlist, m.sql, `measure:${m.name}`));
+      llmFilters = llmResult.filters
+        .filter((f) => !isSnippetTooComplex(f.sql, f.name))
+        .filter((f) => validateSqlExpression(allowlist, f.sql, `filter:${f.name}`));
+      llmDimensions = llmResult.dimensions
+        .filter((d) => !isSnippetTooComplex(d.sql, d.name))
+        .filter((d) => validateSqlExpression(allowlist, d.sql, `dimension:${d.name}`));
     } catch (err) {
       logger.warn("LLM expression generation failed, using time periods only", {
         error: err instanceof Error ? err.message : String(err),
@@ -148,16 +148,27 @@ async function generateLLMExpressions(
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
 Generate SQL expressions in three categories:
-1. **Measures**: Aggregate KPIs (SUM, COUNT, AVG, etc.) with business-friendly names
+1. **Measures**: Simple aggregate KPIs (SUM, COUNT, AVG, MIN, MAX) with business-friendly names
 2. **Filters**: Common WHERE conditions with business-friendly names
-3. **Dimensions**: GROUP BY expressions with business-friendly names
+3. **Dimensions**: Simple GROUP BY expressions with business-friendly names
 
-Include complex analytical patterns where the use case SQL demonstrates them:
-- Composite scoring measures (weighted multi-factor scores bounded by LEAST/GREATEST)
-- Segmentation dimensions (CASE WHEN chains that classify entities into named tiers or risk segments)
-- Percentile-based baselines (PERCENTILE_APPROX for P20, P50 thresholds)
-- Trend statistics (REGR_SLOPE, REGR_R2 for time-series trend detection)
-- Revenue share expressions (value / SUM(value) OVER ())
+IMPORTANT — Genie SQL snippets must be SHORT, reusable expressions (single aggregates or simple CASE WHEN). They are building blocks Genie composes into queries. Complex multi-step analytics belong in SQL examples, NOT in snippets.
+
+GOOD snippet examples:
+- Measure: SUM(CAST(amount AS DECIMAL(18,2)))
+- Measure: COUNT(DISTINCT customer_id)
+- Filter: status = 'active'
+- Dimension: DATE_TRUNC('month', order_date)
+- Dimension: CASE WHEN amount > 1000 THEN 'High' WHEN amount > 100 THEN 'Medium' ELSE 'Low' END
+
+BAD snippet examples (too complex for Genie snippets):
+- Anything with window functions (OVER(...))
+- Statistical functions (REGR_SLOPE, CORR, STDDEV, SKEWNESS)
+- PERCENTILE_APPROX in a measure
+- Nested subqueries
+- Multiple function calls chained together
+
+Each expression's SQL should be a SINGLE expression, ideally under 200 characters.
 
 For each expression provide:
 - name: Business-friendly display name
@@ -236,6 +247,30 @@ function parseLLMExpressions(content: string): {
 function parseArray(val: unknown): Record<string, unknown>[] {
   if (!Array.isArray(val)) return [];
   return val.filter((v): v is Record<string, unknown> => typeof v === "object" && v !== null);
+}
+
+/**
+ * Reject SQL snippets that are too complex for Genie knowledge store expressions.
+ * Snippets should be simple, composable building blocks (single aggregates, CASE WHEN).
+ */
+function isSnippetTooComplex(sql: string, name: string): boolean {
+  if (sql.length > 500) {
+    logger.info("Rejecting oversized snippet", { name, length: sql.length });
+    return true;
+  }
+  if (/\bOVER\s*\(/i.test(sql)) {
+    logger.info("Rejecting snippet with window function", { name });
+    return true;
+  }
+  if (/\b(REGR_SLOPE|REGR_R2|REGR_INTERCEPT|CORR|STDDEV_POP|STDDEV_SAMP|SKEWNESS|KURTOSIS|CUME_DIST)\b/i.test(sql)) {
+    logger.info("Rejecting snippet with statistical function", { name });
+    return true;
+  }
+  if (/\bSELECT\b/i.test(sql)) {
+    logger.info("Rejecting snippet with subquery", { name });
+    return true;
+  }
+  return false;
 }
 
 function dedup<T>(items: T[], keyFn: (item: T) => string): T[] {

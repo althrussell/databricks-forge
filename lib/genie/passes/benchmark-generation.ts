@@ -136,28 +136,25 @@ async function processBenchmarkBatch(
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
-Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL answers. Include:
-1. Direct questions from the use cases
-2. Alternate phrasings of the same questions (2-4 phrasings per concept)
-3. Time-period variants: "last month", "this quarter", "YTD"
-4. Entity-matching tests: use conversational language that requires mapping to coded values
+Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL answers. These benchmarks teach Genie what correct answers look like, so accuracy and simplicity are critical.
+
+IMPORTANT — Benchmark SQL must be SIMPLE and VERIFIABLE:
+- Use straightforward SELECT ... FROM ... WHERE ... GROUP BY ... ORDER BY patterns
+- Max 1 CTE. No deeply nested CTEs or multi-stage analytical pipelines.
+- Max 1 window function per query (e.g. a single RANK() or ROW_NUMBER() for top-N is OK)
+- Do NOT include statistical functions (REGR_SLOPE, CORR, STDDEV, SKEWNESS, etc.)
+- Do NOT include complex scoring formulas or composite indices
+- Benchmarks with wrong SQL are WORSE than no benchmarks — keep them simple enough to be correct
 
 For each benchmark:
-- question: The natural language question
-- expectedSql: Valid SQL that correctly answers the question
-- alternatePhrasings: 2-4 different ways to ask the same question
+- question: Natural language question a user would actually ask
+- expectedSql: Simple, correct SQL that answers it
+- alternatePhrasings: 2-3 different ways to ask the same question
 
-SQL rules for expectedSql:
-- For top-N queries (e.g. "top 10 customers"), ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() because ties can return more than N rows.
-- Always include human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT alongside IDs and metrics when the query is entity-level.
-
-SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
-- The expectedSql MUST faithfully reproduce the full analytical complexity of the source use case SQL. Do NOT simplify CTEs, remove scoring logic, drop statistical functions, or reduce the number of output columns.
-- PRESERVE exact thresholds (LIMIT values, WHERE filter conditions, minimum row counts). The ground truth SQL specifies these for a reason.
-- PRESERVE all window function ORDER BY directions exactly (ASC vs DESC). NTILE(5) OVER (ORDER BY x ASC) assigns quintile 5 to the highest values. NTILE(5) OVER (ORDER BY x DESC) assigns quintile 1 to the highest values. Reversing the direction reverses tier/segment assignments.
-- PRESERVE all advanced analytics: CORR, REGR_SLOPE, REGR_INTERCEPT, PERCENTILE_APPROX, SKEWNESS, KURTOSIS, CUME_DIST, cross-join correlation CTEs, revenue share calculations.
-- Do NOT add columns not present in the source SQL (e.g., do not add "country" if the source SQL does not include it).
-- Do NOT remove columns present in the source SQL (e.g., do not drop email_address, scoring columns, or percentile baselines).
+SQL rules:
+- For top-N queries, use ORDER BY ... LIMIT N (not RANK/DENSE_RANK)
+- Include human-readable columns (names, emails) alongside IDs
+- Use proper JOIN conditions from the table relationships provided
 
 ${DATABRICKS_SQL_RULES_COMPACT}
 
@@ -192,6 +189,8 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     ? parsed.benchmarks
     : Array.isArray(parsed) ? parsed : [];
 
+  const MAX_BENCHMARK_SQL_CHARS = 3000;
+
   return items
     .map((b) => ({
       question: String(b.question ?? ""),
@@ -201,6 +200,16 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
         : [],
     }))
     .filter((b) => b.question.length > 0 && b.expectedSql.length > 0)
+    .filter((b) => {
+      if (b.expectedSql.length > MAX_BENCHMARK_SQL_CHARS) {
+        logger.info("Dropping benchmark with oversized SQL", {
+          question: b.question,
+          sqlLength: b.expectedSql.length,
+        });
+        return false;
+      }
+      return true;
+    })
     .filter((b) => validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`));
 }
 

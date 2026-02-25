@@ -147,21 +147,29 @@ You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do
 
 From the provided SQL examples, create:
 
-1. **Parameterized queries**: Convert WHERE clause values into named parameters using :param_name syntax.
+1. **Parameterized queries** (primary output): Convert WHERE clause values into named parameters using :param_name syntax.
    - Type each parameter (String, Date, Numeric) based on the column's data type
    - For entity-matching columns, include sample values in the parameter comment
    - Include DEFAULT NULL for optional parameters
    - PRESERVE all human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT output -- do not strip them during parameterization
    - For top-N queries, use ORDER BY ... LIMIT N, NOT RANK()/DENSE_RANK() (ties can return more than N rows)
+   - Parameterized queries are the RIGHT place for complex analytics: multi-CTE queries, window functions, statistical functions, correlation analysis, anomaly detection, benchmarking, etc. Genie learns from these patterns.
 
-2. **SQL functions (UDFs)**: For the most common question patterns, create a CREATE FUNCTION statement.
+2. **SQL functions (UDFs)** (sparingly -- only when genuinely useful): Simple, focused utility functions.
+   Functions in Genie are "certified answers" -- Genie calls them directly and shows the result. It CANNOT compose on top of them (no extra WHERE, no GROUP BY changes). Therefore:
+   - ONLY create a function when the pattern is a simple parameterized lookup, entity summary, or reusable calculation
+   - Functions MUST be short: max 1 CTE, max ~30 lines of SQL in the body
+   - Good function examples: get_customer_summary(name), find_top_products(city), lookup_order_by_id(id)
+   - BAD function examples: anomaly detection, multi-CTE benchmarks, statistical reports, correlation analyses -- these MUST be parameterized queries instead
+   - Do NOT wrap complex analytical SQL in a function. If a use case has CTEs with window functions, statistical aggregates, or multi-step analytical logic, it belongs as a parameterized query, NOT a function.
    - Use table-valued functions (RETURNS TABLE)
    - Include descriptive COMMENT on the function and parameters
    - Handle NULL parameters with ISNULL() checks
    - Include identifying columns (name, email, etc.) in the RETURNS TABLE definition
    - LIMIT values MUST be integer literals (e.g. LIMIT 10), NOT parameters -- Databricks requires LIMIT to be a constant
+   - PARAMETER TYPE RESTRICTION: Genie certified answer functions only support STRING, INT, LONG, DOUBLE, DECIMAL, and BOOLEAN parameter types. Do NOT use DATE or TIMESTAMP as parameter types. For date parameters, use STRING and CAST inside the function body.
 
-SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
+SQL PRESERVATION RULES (apply to parameterized queries):
 - PRESERVE the full CTE structure and all business logic from the source SQL. Do NOT simplify, remove CTEs, drop analytical columns, or reduce query complexity.
 - PRESERVE all columns in the SELECT list exactly as they appear in the source SQL. Do NOT add columns not present in the source or remove columns that are present.
 - PRESERVE exact threshold values (LIMIT N, WHERE conditions, >= comparisons). Do NOT change numeric thresholds, filter conditions, or row limits.
@@ -170,7 +178,7 @@ SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
 
 QUANTITY RULES:
 - Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
-- Produce at least 1 SQL function (UDF) per batch. Prioritize the most reusable analytical pattern as a table-valued function.
+- Produce 0 or 1 functions per batch. Only create a function if there is a genuinely simple, reusable lookup pattern. It is perfectly fine to produce 0 functions.
 
 ${DATABRICKS_SQL_RULES_COMPACT}
 
@@ -227,9 +235,45 @@ Create parameterized queries and UDF functions from these examples.`;
       description: String(f.description ?? ""),
     }))
     .filter((f) => f.ddl.length > 0 && f.name.length > 0)
-    .filter((f) => validateSqlExpression(allowlist, f.ddl, `trusted_fn:${f.name}`));
+    .filter((f) => validateSqlExpression(allowlist, f.ddl, `trusted_fn:${f.name}`))
+    .filter((f) => {
+      if (isFunctionTooComplex(f.ddl)) {
+        logger.info("Rejecting overly complex function — should be a SQL example", {
+          name: f.name,
+          cteCount: (f.ddl.match(/\bAS\s*\(/gi) ?? []).length,
+          lineCount: f.ddl.split("\n").length,
+        });
+        return false;
+      }
+      return true;
+    });
 
   return { queries, functions };
+}
+
+/**
+ * Reject functions that are too complex for Genie certified answers.
+ * Complex analytics belong as parameterized queries (SQL examples),
+ * not as functions that Genie calls opaquely.
+ */
+function isFunctionTooComplex(ddl: string): boolean {
+  const bodyMatch = ddl.match(/\bRETURN\b([\s\S]*)/i);
+  if (!bodyMatch) return false;
+  const body = bodyMatch[1];
+
+  const cteCount = (body.match(/\bAS\s*\(/gi) ?? []).length;
+  if (cteCount > 2) return true;
+
+  const lineCount = body.split("\n").filter((l) => l.trim().length > 0).length;
+  if (lineCount > 50) return true;
+
+  const windowFnCount = (body.match(/\bOVER\s*\(/gi) ?? []).length;
+  if (windowFnCount > 1) return true;
+
+  const statFns = /\b(STDDEV_POP|STDDEV_SAMP|SKEWNESS|KURTOSIS|REGR_SLOPE|REGR_R2|REGR_INTERCEPT|CUME_DIST|CORR)\b/gi;
+  if (statFns.test(body)) return true;
+
+  return false;
 }
 
 function parseArray(val: unknown): Record<string, unknown>[] {

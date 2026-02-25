@@ -202,8 +202,14 @@ export function sanitizeSerializedSpace(raw: string): string {
     }
 
     return JSON.stringify(parsed);
-  } catch {
-    return raw;
+  } catch (err) {
+    logger.error("sanitizeSerializedSpace: failed to parse JSON, returning raw", {
+      error: err instanceof Error ? err.message : String(err),
+      rawLength: raw.length,
+    });
+    throw new Error(
+      `Serialized space JSON is malformed: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 

@@ -211,6 +211,68 @@ function stripAiFunctionEntries(ddl: string): string {
 }
 
 /**
+ * Parameter types that the Genie Spaces certified answer API does not
+ * support.  These must be rewritten to STRING; the function body should
+ * CAST from STRING internally.
+ */
+const UNSUPPORTED_PARAM_TYPES = /\b(DATE|TIMESTAMP|TIMESTAMP_NTZ|TIMESTAMP_LTZ|INTERVAL|BINARY|ARRAY|MAP|STRUCT)\b/gi;
+
+/**
+ * Sanitize a function DDL before execution:
+ * 1. Fix doubled single quotes that the LLM generates as if the body
+ *    were inside a SQL string literal (''month'' -> 'month').
+ * 2. Rewrite unsupported parameter types (DATE, TIMESTAMP, etc.) to STRING
+ *    so Genie can introspect the function without rejecting it.
+ * 3. Add OR REPLACE if missing (idempotent creation).
+ */
+function sanitizeFunctionDdl(ddl: string): string {
+  let result = ddl;
+
+  // LLMs frequently double-escape single quotes throughout the function body.
+  const bodyMatch = result.match(/\bRETURN\b([\s\S]*)/i);
+  if (bodyMatch) {
+    const bodyStart = result.indexOf(bodyMatch[0]);
+    const prefix = result.slice(0, bodyStart);
+    const body = result.slice(bodyStart);
+    const collapsed = body.replace(/''/g, "'");
+    if (collapsed !== body) {
+      result = prefix + collapsed;
+      logger.info("Collapsed doubled single quotes in function DDL");
+    }
+  }
+
+  // Rewrite unsupported parameter types in the function signature.
+  // The signature sits between the opening `(` after the function name
+  // and the closing `)` before RETURNS TABLE.
+  const sigMatch = result.match(
+    /(CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+[^\(]+\()([^)]*\))\s*(RETURNS\s+TABLE)/i
+  );
+  if (sigMatch) {
+    const before = result.slice(0, result.indexOf(sigMatch[0]));
+    const sigPrefix = sigMatch[1]; // "CREATE ... FUNCTION name("
+    let params = sigMatch[2];      // "p_date DATE DEFAULT NULL, ...)"
+    const after = sigMatch[3];     // "RETURNS TABLE"
+    const rest = result.slice(
+      result.indexOf(sigMatch[0]) + sigMatch[0].length
+    );
+
+    const original = params;
+    params = params.replace(UNSUPPORTED_PARAM_TYPES, "STRING");
+    if (params !== original) {
+      logger.info("Rewrote unsupported parameter types to STRING in function DDL");
+      result = before + sigPrefix + params + " " + after + rest;
+    }
+  }
+
+  // Ensure OR REPLACE is present
+  if (/^CREATE\s+FUNCTION\s+/i.test(result) && !/OR\s+REPLACE/i.test(result)) {
+    result = result.replace(/^CREATE\s+FUNCTION/i, "CREATE OR REPLACE FUNCTION");
+  }
+
+  return result;
+}
+
+/**
  * Extract the object name from a CREATE DDL (last segment of the FQN).
  */
 function extractObjectName(ddl: string): string | null {
@@ -280,13 +342,9 @@ function attemptDdlAutoFix(ddl: string, error: string, assetType: "metric_view" 
   }
 
   if (assetType === "function" && (msg.includes("PARSE") || msg.includes("SYNTAX"))) {
-    let fixed = ddl;
-
-    // Add missing OR REPLACE if not present (idempotent retry)
-    if (/^CREATE\s+FUNCTION\s+/i.test(fixed) && !/OR\s+REPLACE/i.test(fixed)) {
-      fixed = fixed.replace(/^CREATE\s+FUNCTION/i, "CREATE OR REPLACE FUNCTION");
-    }
-
+    // Re-run the full sanitizer — it may catch issues the first pass missed
+    // if the DDL was modified between sanitization and this retry.
+    const fixed = sanitizeFunctionDdl(ddl);
     if (fixed !== ddl) return fixed;
   }
 
@@ -532,7 +590,7 @@ async function deployAsset(
 ): Promise<AssetResult & { deployed: boolean; fqn: string }> {
   const rewritten = assetType === "metric_view"
     ? sanitizeMetricViewDdl(rewriteDdlTarget(asset.ddl, targetSchema))
-    : rewriteDdlTarget(asset.ddl, targetSchema);
+    : sanitizeFunctionDdl(rewriteDdlTarget(asset.ddl, targetSchema));
   const objectName = extractObjectName(rewritten) ?? asset.name;
   const fqn = `${targetSchema}.${objectName}`;
   const objectSqlType = assetType === "metric_view" ? "TABLE" as const : "FUNCTION" as const;
