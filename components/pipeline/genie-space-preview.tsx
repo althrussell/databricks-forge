@@ -29,7 +29,6 @@ import type {
   ColumnEnrichment,
   MetricViewProposal,
   BenchmarkInput,
-  TrustedAssetFunction,
 } from "@/lib/genie/types";
 
 interface GenieSpacePreviewProps {
@@ -40,7 +39,6 @@ interface ExtendedRecommendation extends GenieSpaceRecommendation {
   benchmarks?: string | null;
   columnEnrichments?: string | null;
   metricViewProposals?: string | null;
-  trustedFunctions?: string | null;
 }
 
 export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
@@ -132,9 +130,6 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
     ? (() => { try { return JSON.parse(rec.benchmarks!) as BenchmarkInput[]; } catch { return []; } })()
     : [];
 
-  const trustedFns: TrustedAssetFunction[] = rec?.trustedFunctions
-    ? (() => { try { return JSON.parse(rec.trustedFunctions!) as TrustedAssetFunction[]; } catch { return []; } })()
-    : [];
 
   return (
     <div className="space-y-4">
@@ -170,11 +165,10 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             <StatCard label="Dimensions" value={rec.dimensionCount} />
             <StatCard label="Joins" value={rec.joinCount} />
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <StatCard label="Benchmarks" value={benchmarks.length} />
             <StatCard label="Instructions" value={rec.instructionCount} />
             <StatCard label="Questions" value={rec.sampleQuestionCount} />
-            <StatCard label="Functions" value={rec.sqlFunctionCount} />
           </div>
 
           <Accordion type="multiple" defaultValue={["tables", "measures"]} className="w-full">
@@ -392,39 +386,6 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                             <Badge variant="outline" className="shrink-0 text-[9px]">{rt}</Badge>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            )}
-
-            {/* SQL Functions (Trusted Asset UDFs) */}
-            {(parsed.instructions?.sql_functions?.length ?? 0) > 0 && (
-              <AccordionItem value="functions">
-                <AccordionTrigger className="text-xs font-medium">
-                  SQL Functions ({parsed.instructions?.sql_functions?.length ?? 0})
-                  {trustedFns.length > 0 && (
-                    <Badge variant="outline" className="ml-2 text-[9px]">
-                      {trustedFns.length} deployable
-                    </Badge>
-                  )}
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-2 text-xs">
-                    {(parsed.instructions?.sql_functions ?? []).map((fn) => {
-                      const tfn = trustedFns.find(
-                        (t) => t.name.toLowerCase() === fn.identifier.toLowerCase()
-                      );
-                      return (
-                        <TrustedFunctionCard
-                          key={fn.id}
-                          identifier={fn.identifier}
-                          ddl={tfn?.ddl ?? null}
-                          description={tfn?.description ?? null}
-                          runId={runId}
-                          domain={selectedDomain!}
-                        />
                       );
                     })}
                   </div>
@@ -673,82 +634,6 @@ function EditableTextRow({
           remove
         </button>
       </span>
-    </div>
-  );
-}
-
-function TrustedFunctionCard({
-  identifier,
-  ddl,
-  description,
-  runId,
-  domain,
-}: {
-  identifier: string;
-  ddl: string | null;
-  description: string | null;
-  runId: string;
-  domain: string;
-}) {
-  const [deploying, setDeploying] = useState(false);
-  const [deployed, setDeployed] = useState(false);
-
-  const handleDeploy = async () => {
-    if (!ddl) return;
-    setDeploying(true);
-    try {
-      const res = await fetch(
-        `/api/runs/${runId}/genie-engine/${encodeURIComponent(domain)}/functions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ddl, name: identifier }),
-        }
-      );
-      if (res.ok) {
-        toast.success(`Function "${identifier}" created`);
-        setDeployed(true);
-      } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to create function");
-      }
-    } catch {
-      toast.error("Failed to create function");
-    } finally {
-      setDeploying(false);
-    }
-  };
-
-  return (
-    <div className="rounded border p-2">
-      <div className="flex items-center justify-between gap-2">
-        <code className="rounded bg-muted px-1 font-mono text-[10px] font-semibold">
-          {identifier}
-        </code>
-        {ddl ? (
-          <Button
-            size="sm"
-            variant={deployed ? "outline" : "default"}
-            onClick={handleDeploy}
-            disabled={deploying || deployed}
-            className="h-5 px-2 text-[9px]"
-          >
-            {deployed ? "Deployed" : deploying ? "Creating..." : "Deploy"}
-          </Button>
-        ) : (
-          <Badge variant="outline" className="text-[9px] text-muted-foreground">
-            no DDL
-          </Badge>
-        )}
-      </div>
-      {description && (
-        <p className="mt-0.5 text-[10px] text-muted-foreground">{description}</p>
-      )}
-      {ddl && (
-        <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-1.5 text-[10px] font-mono leading-relaxed">
-          {ddl}
-        </pre>
-      )}
     </div>
   );
 }

@@ -437,7 +437,7 @@ async function processDomain(
     filters: exprResult.filters,
     dimensions: exprResult.dimensions,
     trustedQueries: trustedResult.queries,
-    trustedFunctions: trustedResult.functions,
+    trustedFunctions: [],
     textInstructions: instructionResult.instructions,
     sampleQuestions,
     benchmarkQuestions: benchmarkResult.benchmarks,

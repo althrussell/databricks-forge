@@ -29,7 +29,6 @@ import {
 import type {
   GenieEngineRecommendation,
   MetricViewProposal,
-  TrustedAssetFunction,
 } from "@/lib/genie/types";
 
 // ---------------------------------------------------------------------------
@@ -42,7 +41,7 @@ interface DeployableAsset {
   id: string;
   domain: string;
   name: string;
-  type: "metric_view" | "function";
+  type: "metric_view";
   ddl: string;
   description?: string;
   hasError: boolean;
@@ -50,7 +49,7 @@ interface DeployableAsset {
 
 interface AssetResult {
   name: string;
-  type: "metric_view" | "function";
+  type: "metric_view";
   success: boolean;
   error?: string;
   fqn?: string;
@@ -59,7 +58,7 @@ interface AssetResult {
 }
 
 interface StrippedRef {
-  type: "metric_view" | "function";
+  type: "metric_view";
   identifier: string;
   reason: string;
 }
@@ -93,15 +92,6 @@ function parseMvProposals(rec: GenieEngineRecommendation): MetricViewProposal[] 
   if (!rec.metricViewProposals) return [];
   try {
     return JSON.parse(rec.metricViewProposals) as MetricViewProposal[];
-  } catch {
-    return [];
-  }
-}
-
-function parseTrustedFunctions(rec: GenieEngineRecommendation): TrustedAssetFunction[] {
-  if (!rec.trustedFunctions) return [];
-  try {
-    return JSON.parse(rec.trustedFunctions) as TrustedAssetFunction[];
   } catch {
     return [];
   }
@@ -148,20 +138,6 @@ export function GenieDeployModal({
           description: mv.description,
           hasError: mv.validationStatus === "error",
         });
-      }
-      const fns = parseTrustedFunctions(rec);
-      for (const fn of fns) {
-        if (fn.ddl) {
-          assets.push({
-            id: `fn:${rec.domain}:${fn.name}`,
-            domain: rec.domain,
-            name: fn.name,
-            type: "function",
-            ddl: fn.ddl,
-            description: fn.description,
-            hasError: false,
-          });
-        }
       }
     }
     return assets;
@@ -235,9 +211,6 @@ export function GenieDeployModal({
   const mvCount = allAssets.filter(
     (a) => a.type === "metric_view" && selectedAssets.has(a.id)
   ).length;
-  const fnCount = allAssets.filter(
-    (a) => a.type === "function" && selectedAssets.has(a.id)
-  ).length;
 
   // -------------------------------------------------------------------------
   // Deploy execution
@@ -250,7 +223,6 @@ export function GenieDeployModal({
       description: string;
       serializedSpace: string;
       metricViews: Array<{ name: string; ddl: string; description?: string }>;
-      functions: Array<{ name: string; ddl: string }>;
       existingSpaceId?: string;
     }>,
     schema: string,
@@ -284,11 +256,11 @@ export function GenieDeployModal({
     for (const dr of domainResults) {
       for (const ar of dr.assets) {
         if (ar.success && ar.autoFixed) {
-          log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" auto-fixed and created at ${ar.fqn}`);
+          log(`  Metric view "${ar.name}" auto-fixed and created at ${ar.fqn}`);
         } else if (ar.success) {
-          log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" created at ${ar.fqn}`);
+          log(`  Metric view "${ar.name}" created at ${ar.fqn}`);
         } else {
-          log(`  ${ar.type === "metric_view" ? "Metric view" : "Function"} "${ar.name}" FAILED: ${ar.error}`);
+          log(`  Metric view "${ar.name}" FAILED: ${ar.error}`);
         }
       }
       if (dr.strippedRefs && dr.strippedRefs.length > 0) {
@@ -319,9 +291,6 @@ export function GenieDeployModal({
       const selectedMvs = parseMvProposals(rec).filter((mv) =>
         selectedAssets.has(`mv:${rec.domain}:${mv.name}`)
       );
-      const selectedFns = parseTrustedFunctions(rec).filter(
-        (fn) => fn.ddl && selectedAssets.has(`fn:${rec.domain}:${fn.name}`)
-      );
 
       return {
         domain: rec.domain,
@@ -333,18 +302,12 @@ export function GenieDeployModal({
           ddl: mv.ddl,
           description: mv.description,
         })),
-        functions: selectedFns.map((fn) => ({
-          name: fn.name,
-          ddl: fn.ddl,
-        })),
       };
     });
 
     const totalMvs = domainPayloads.reduce((s, d) => s + d.metricViews.length, 0);
-    const totalFns = domainPayloads.reduce((s, d) => s + d.functions.length, 0);
     if (totalMvs > 0) log(`Creating ${totalMvs} metric view(s)...`);
-    if (totalFns > 0) log(`Creating ${totalFns} function(s)...`);
-    if (totalMvs === 0 && totalFns === 0) log("No assets selected -- deploying spaces only");
+    else log("No metric views selected -- deploying spaces only");
 
     const domainResults = await callDeployApi(domainPayloads, schema, log);
     if (domainResults) {
@@ -377,17 +340,11 @@ export function GenieDeployModal({
         const failedMvNames = new Set(
           dr.assets.filter((a) => !a.success && a.type === "metric_view").map((a) => a.name)
         );
-        const failedFnNames = new Set(
-          dr.assets.filter((a) => !a.success && a.type === "function").map((a) => a.name)
-        );
 
         const rec = domains.find((d) => d.domain === dr.domain);
         if (!rec) return null;
 
         const retryMvs = parseMvProposals(rec).filter((mv) => failedMvNames.has(mv.name));
-        const retryFns = parseTrustedFunctions(rec).filter(
-          (fn) => fn.ddl && failedFnNames.has(fn.name)
-        );
 
         return {
           domain: rec.domain,
@@ -398,10 +355,6 @@ export function GenieDeployModal({
             name: mv.name,
             ddl: mv.ddl,
             description: mv.description,
-          })),
-          functions: retryFns.map((fn) => ({
-            name: fn.name,
-            ddl: fn.ddl,
           })),
           existingSpaceId: dr.spaceId,
         };
@@ -415,7 +368,7 @@ export function GenieDeployModal({
     }
 
     const totalRetryAssets = retryPayloads.reduce(
-      (s, d) => s + d.metricViews.length + d.functions.length, 0
+      (s, d) => s + d.metricViews.length, 0
     );
     log(`Retrying ${totalRetryAssets} failed asset(s) across ${retryPayloads.length} domain(s)...`);
 
@@ -478,8 +431,8 @@ export function GenieDeployModal({
             Deploy Genie Spaces
           </DialogTitle>
           <DialogDescription>
-            {step === "select" && "Select metric views and functions to deploy alongside your Genie spaces."}
-            {step === "schema" && "Choose the target schema where metric views and functions will be created."}
+            {step === "select" && "Select metric views to deploy alongside your Genie spaces."}
+            {step === "schema" && "Choose the target schema where metric views will be created."}
             {step === "deploying" && "Deploying assets and creating Genie spaces..."}
             {step === "done" && "Deployment complete."}
           </DialogDescription>
@@ -565,9 +518,7 @@ export function GenieDeployModal({
               <div className="flex-1" />
               <div className="text-xs text-muted-foreground mr-2 self-center">
                 {mvCount > 0 && `${mvCount} metric view${mvCount !== 1 ? "s" : ""}`}
-                {mvCount > 0 && fnCount > 0 && ", "}
-                {fnCount > 0 && `${fnCount} function${fnCount !== 1 ? "s" : ""}`}
-                {" + "}
+                {mvCount > 0 && " + "}
                 {domains.length} space{domains.length !== 1 ? "s" : ""}
               </div>
               <Button
@@ -681,7 +632,7 @@ function SelectAssetsStep({
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Layers className="h-8 w-8 text-muted-foreground mb-3" />
         <p className="text-sm text-muted-foreground">
-          No metric views or functions available to deploy.
+          No metric views available to deploy.
         </p>
         <p className="text-xs text-muted-foreground mt-1">
           The Genie spaces will be created without additional assets.
@@ -778,7 +729,7 @@ function SchemaStep({
     <div className="space-y-3 py-2">
       <div className="px-1">
         <p className="text-xs text-muted-foreground">
-          Choose the target schema where metric views and functions will be created.
+          Choose the target schema where metric views will be created.
           The Genie space will reference these assets from this schema.
         </p>
         {targetSchema.length > 0 && (
@@ -922,7 +873,7 @@ function DeployStep({
                       <div key={i} className="flex items-center gap-2 text-xs text-amber-600">
                         <Info className="h-3 w-3 shrink-0" />
                         <span className="truncate">
-                          Removed {sr.type === "metric_view" ? "metric view" : "function"}{" "}
+                          Removed metric view{" "}
                           <code className="font-mono text-[10px]">{sr.identifier}</code>
                           {" "}&mdash; {sr.reason}
                         </span>

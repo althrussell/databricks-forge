@@ -68,7 +68,7 @@ export function getColumnType(allowlist: SchemaAllowlist, tableFqn: string, colu
  * - 3-part FQNs (`catalog.schema.table`) for invalid table references
  * - 4-part FQNs (`catalog.schema.table.column`) for invalid column references
  *
- * Excludes FQNs that are the target of CREATE statements (FUNCTION, VIEW, TABLE)
+ * Excludes FQNs that are the target of CREATE statements (VIEW, TABLE)
  * since those are being defined, not referenced.
  */
 export function findInvalidIdentifiers(allowlist: SchemaAllowlist, sql: string): string[] {
@@ -76,7 +76,7 @@ export function findInvalidIdentifiers(allowlist: SchemaAllowlist, sql: string):
 
   // Collect FQNs that are targets of CREATE statements (these are being defined, not referenced)
   const createTargets = new Set<string>();
-  const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
+  const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
   let createMatch: RegExpExecArray | null;
   while ((createMatch = createRegex.exec(sql)) !== null) {
     const fqnMatch = createMatch[0].match(/(?:`([^`]+)`|([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*))$/);

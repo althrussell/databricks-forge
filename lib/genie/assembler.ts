@@ -10,7 +10,6 @@ import type {
   DataSourceTable,
   DataSourceMetricView,
   ExampleQuestionSql,
-  SqlFunction,
   JoinSpec,
   SqlSnippetMeasure,
   SqlSnippetFilter,
@@ -314,14 +313,7 @@ export function assembleSerializedSpace(
       ...(d.synonyms.length > 0 ? { synonyms: d.synonyms } : {}),
     }));
 
-  // 7. SQL functions (trusted assets)
-  const sqlFunctions: SqlFunction[] = outputs.trustedFunctions
-    .map((fn, i) => ({
-      id: makeId(seed, "fn", i),
-      identifier: fn.name,
-    }));
-
-  // 8. Text instructions -- API allows at most one TextInstruction entry;
+  // 7. Text instructions -- API allows at most one TextInstruction entry;
   //    all instruction strings go into its content[] array.
   const instrContent = outputs.textInstructions.filter(
     (t) => t.trim().length > 0
@@ -359,7 +351,7 @@ export function assembleSerializedSpace(
   }
   logger.info("Genie instruction size", { domain, totalChars: instrTotalChars, blocks: instrContent.length });
 
-  // 9. Benchmarks -- each phrasing gets its own entry sharing the same answer
+  // 8. Benchmarks -- each phrasing gets its own entry sharing the same answer
   const benchmarks: BenchmarkQuestion[] = [];
   let benchIdx = 0;
   for (const b of outputs.benchmarkQuestions) {
@@ -387,7 +379,6 @@ export function assembleSerializedSpace(
     instructions: {
       text_instructions: [...textInstructions].sort(byId),
       example_question_sqls: [...exampleSqls].sort(byId),
-      ...(sqlFunctions.length > 0 ? { sql_functions: [...sqlFunctions].sort(byId) } : {}),
       join_specs: [...joinSpecs].sort(byId),
       sql_snippets: {
         measures: [...measures].sort(byId),
@@ -442,7 +433,7 @@ export function buildRecommendation(
     benchmarkCount: space.benchmarks?.questions.length ?? 0,
     instructionCount: space.instructions.text_instructions.flatMap((t) => t.content).length,
     sampleQuestionCount: space.config.sample_questions.length,
-    sqlFunctionCount: space.instructions.sql_functions?.length ?? 0,
+    sqlFunctionCount: 0,
     tables: spaceTables,
     metricViews: spaceMvs,
     serializedSpace: JSON.stringify(space),

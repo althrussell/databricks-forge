@@ -192,13 +192,9 @@ export function sanitizeSerializedSpace(raw: string): string {
       }
     }
 
-    // Sort sql_functions by (id, identifier) -- Genie API requirement
-    const sqlFunctions = parsed?.instructions?.sql_functions;
-    if (Array.isArray(sqlFunctions)) {
-      sqlFunctions.sort(
-        (a: { id?: string; identifier?: string }, b: { id?: string; identifier?: string }) =>
-          (a.id ?? "").localeCompare(b.id ?? "") || (a.identifier ?? "").localeCompare(b.identifier ?? "")
-      );
+    // Strip any leftover sql_functions (no longer supported)
+    if (parsed?.instructions?.sql_functions) {
+      delete parsed.instructions.sql_functions;
     }
 
     return JSON.stringify(parsed);

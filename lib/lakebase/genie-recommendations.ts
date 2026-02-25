@@ -41,13 +41,11 @@ function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
   let benchmarkCount = 0;
   let instructionCount = 0;
   let sampleQuestionCount = 0;
-  let sqlFunctionCount = 0;
   try {
     const space = JSON.parse(row.serializedSpace);
     benchmarkCount = space?.benchmarks?.questions?.length ?? 0;
     instructionCount = space?.instructions?.text_instructions?.length ?? 0;
     sampleQuestionCount = space?.config?.sample_questions?.length ?? 0;
-    sqlFunctionCount = space?.instructions?.sql_functions?.length ?? 0;
   } catch {
     // serializedSpace is malformed -- counts stay at 0
   }
@@ -78,7 +76,7 @@ function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
     benchmarkCount,
     instructionCount,
     sampleQuestionCount,
-    sqlFunctionCount,
+    sqlFunctionCount: 0,
     tables: row.tables ? JSON.parse(row.tables) : [],
     metricViews: metricViewsArr,
     serializedSpace: row.serializedSpace,
@@ -170,7 +168,7 @@ export async function saveGenieRecommendations(
             benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
             columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
             metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
-            trustedFunctions: po ? JSON.stringify(po.trustedFunctions) : null,
+            trustedFunctions: null,
             engineConfigVersion: engineConfigVersion ?? 0,
           };
         }),

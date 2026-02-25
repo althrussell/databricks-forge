@@ -613,7 +613,6 @@ export function GenieSpacesTab({
                             <KSChip label="Benchmarks" value={rec.benchmarkCount} accent="violet" />
                             <KSChip label="Instructions" value={rec.instructionCount} />
                             <KSChip label="Questions" value={rec.sampleQuestionCount} />
-                            <KSChip label="Functions" value={rec.sqlFunctionCount} accent="blue" />
                           </div>
                         )}
                       </td>
@@ -743,11 +742,10 @@ export function GenieSpacesTab({
                     value={detailRec.dimensionCount}
                   />
                 </div>
-                <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+                <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                   <StatBadge label="Benchmarks" value={detailRec.benchmarkCount} />
                   <StatBadge label="Instructions" value={detailRec.instructionCount} />
                   <StatBadge label="Questions" value={detailRec.sampleQuestionCount} />
-                  <StatBadge label="Functions" value={detailRec.sqlFunctionCount} />
                 </div>
 
                 <Separator />
@@ -1052,22 +1050,6 @@ export function GenieSpacesTab({
                               </div>
                             );
                           })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* SQL Functions (Trusted Asset UDFs) */}
-                  {detailParsed.instructions.sql_functions && detailParsed.instructions.sql_functions.length > 0 && (
-                    <AccordionItem value="functions">
-                      <AccordionTrigger className="text-xs font-medium">
-                        SQL Functions ({detailParsed.instructions.sql_functions.length})
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-0.5 text-xs font-mono text-muted-foreground">
-                          {detailParsed.instructions.sql_functions.map((fn) => (
-                            <div key={fn.id} className="truncate">{fn.identifier}</div>
-                          ))}
                         </div>
                       </AccordionContent>
                     </AccordionItem>

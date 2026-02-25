@@ -75,18 +75,6 @@ export async function DELETE(
     // Drop assets from Unity Catalog before trashing the space
     const dropResults: { fqn: string; type: string; success: boolean; error?: string }[] = [];
     if (dropAssets && assetsToDelete) {
-      for (const fqn of assetsToDelete.functions) {
-        try {
-          validateFqn(fqn, "function to drop");
-          await executeSQL(`DROP FUNCTION IF EXISTS ${fqn}`);
-          dropResults.push({ fqn, type: "function", success: true });
-          logger.info("Dropped function during space cleanup", { spaceId, fqn });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          dropResults.push({ fqn, type: "function", success: false, error: msg });
-          logger.warn("Failed to drop function during space cleanup", { spaceId, fqn, error: msg });
-        }
-      }
       for (const fqn of assetsToDelete.metricViews) {
         try {
           validateFqn(fqn, "metric view to drop");
