@@ -383,7 +383,6 @@ export default function EstatePage() {
         const active = scans[0];
         setScanning(true);
         setScanProgress(active);
-        setViewMode("new-scan");
         pollForScan(active.scanId);
       } catch {
         // Non-fatal -- just means no active scan to resume
@@ -570,8 +569,8 @@ export default function EstatePage() {
         </div>
       </div>
 
-      {/* New Scan Form with Catalog Browser */}
-      {viewMode === "new-scan" && (
+      {/* New Scan Form with Catalog Browser (hidden while a scan is running) */}
+      {viewMode === "new-scan" && !scanning && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
