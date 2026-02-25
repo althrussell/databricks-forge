@@ -230,13 +230,16 @@ const UNSUPPORTED_PARAM_TYPES = /\b(DATE|TIMESTAMP|TIMESTAMP_NTZ|TIMESTAMP_LTZ|I
 function sanitizeFunctionDdl(ddl: string): string {
   let result = ddl;
 
-  // LLMs frequently double-escape single quotes throughout the function body.
+  // LLMs frequently double-escape single quotes around string literals in
+  // function bodies, e.g. ''month'' instead of 'month'. We collapse these
+  // paired doubled quotes but preserve standalone '' (empty string literals).
   const bodyMatch = result.match(/\bRETURN\b([\s\S]*)/i);
   if (bodyMatch) {
     const bodyStart = result.indexOf(bodyMatch[0]);
     const prefix = result.slice(0, bodyStart);
     const body = result.slice(bodyStart);
-    const collapsed = body.replace(/''/g, "'");
+    // Match ''...'' (doubled quotes wrapping content) and collapse to '...'
+    const collapsed = body.replace(/''([^']+)''/g, "'$1'");
     if (collapsed !== body) {
       result = prefix + collapsed;
       logger.info("Collapsed doubled single quotes in function DDL");
