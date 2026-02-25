@@ -134,6 +134,10 @@ async function buildAutoProvisionedPool(
     connectionString,
     idleTimeoutMillis: 30_000,
     max: 10,
+    // Lakebase endpoints use valid public certs, but pg v8.18+ treats
+    // sslmode=require as verify-full which can fail on intermediate cert
+    // chains. Use standard libpq semantics: encrypt without host verification.
+    ssl: { rejectUnauthorized: false },
   });
 
   const adapter = new PrismaPg(pool);
@@ -230,7 +234,11 @@ async function getStaticPrisma(): Promise<PrismaClient> {
     await globalForPrisma.__prisma.$disconnect();
   }
 
-  const pool = new pg.Pool({ connectionString: url });
+  const needsSsl = url.includes("sslmode=");
+  const pool = new pg.Pool({
+    connectionString: url,
+    ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
 
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
