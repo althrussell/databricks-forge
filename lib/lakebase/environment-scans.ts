@@ -222,6 +222,23 @@ export async function saveEnvironmentScan(
 }
 
 // ---------------------------------------------------------------------------
+// Delete
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete a single environment scan and all related data.
+ * Prisma cascade deletes handle child tables (details, histories, lineage, insights).
+ */
+export async function deleteEnvironmentScan(scanId: string): Promise<void> {
+  await withPrisma(async (prisma) => {
+    await prisma.forgeEnvironmentScan.delete({
+      where: { scanId },
+    });
+  });
+  logger.info("[environment-scans] Deleted scan", { scanId });
+}
+
+// ---------------------------------------------------------------------------
 // Read
 // ---------------------------------------------------------------------------
 

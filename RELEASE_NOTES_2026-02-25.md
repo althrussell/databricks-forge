@@ -1,4 +1,4 @@
-# Release Notes -- Databricks Forge AI v0.4.0
+# Release Notes -- Databricks Forge AI v0.5.0
 
 **Date:** 25 February 2026
 
@@ -295,3 +295,55 @@ infrastructure in `lib/dbx/`.
 The `GenieDeployModal` now resets its internal state each time it is opened,
 preventing stale deployment results or error messages from a previous session
 from appearing.
+
+### Contextual Help System
+
+A new `InfoTip` / `LabelWithTip` component pair (`components/ui/info-tip.tsx`)
+provides hover-tooltip explanations for KPIs, table headers, form fields, and
+config options. All tooltip copy is centralised in `lib/help-text.ts` for
+consistent wording and future localisation. `TooltipProvider` is now in the
+root layout so tooltips work on every page without per-page wrappers.
+
+### Help Page
+
+New `/help` route with a quick-start guide (4 steps) and a collapsible FAQ
+covering common questions about pipeline behaviour, data access, exports,
+Genie Spaces, and estate scans.
+
+### Header & Navigation Polish
+
+- Desktop header now displays the current page title for wayfinding.
+- Mobile header shows "Forge AI" branding between the hamburger and theme
+  toggle.
+- Global error page (`app/global-error.tsx`) respects `prefers-color-scheme`
+  for dark mode and includes a "Go to Dashboard" link alongside "Try Again".
+
+### Config Form Inline Validation
+
+The discovery config form now shows inline field errors (red border + helper
+text) for Business Name and UC Metadata when validation fails on submit.
+Errors clear as the user types or selects sources. Toast notification is
+retained as a secondary signal.
+
+### Compare Page Empty State
+
+When no completed runs exist, the Compare page now shows a dedicated empty
+state with guidance and a CTA to start a new discovery, instead of empty
+dropdowns.
+
+### Loading Skeleton Alignment
+
+- Run detail skeleton updated to 5 summary cards (`md:grid-cols-5`) matching
+  the actual page layout.
+- Configure skeleton now includes a placeholder for the Tips card.
+- New `app/outcomes/ingest/loading.tsx` for the outcome map ingest wizard.
+- New `app/help/loading.tsx` for the help page.
+
+### Accessibility Improvements
+
+- `aria-live="polite"` added to pipeline step progress, estate scan progress,
+  Genie engine generation status, and dashboard engine generation status so
+  screen readers announce dynamic updates.
+- `aria-label` added to all icon-only buttons (estate back, Genie error
+  dismiss, domain badge removal, Genie cancel generation).
+- Config form fields set `aria-invalid` when validation errors are present.

@@ -352,7 +352,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
         )}
 
         {generating && (
-          <div className="space-y-1">
+          <div className="space-y-1" aria-live="polite">
             <div className="flex items-center gap-2">
               <Progress value={genProgress} className="h-2 flex-1" />
               <Button
@@ -360,7 +360,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
                 size="sm"
                 onClick={handleCancel}
                 className="h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-                title="Cancel generation"
+                aria-label="Cancel generation"
               >
                 <Square className="h-3 w-3" />
               </Button>
@@ -403,6 +403,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
               <button
                 onClick={() => { setLastError(null); setLastErrorType(null); }}
                 className="text-muted-foreground hover:text-foreground"
+                aria-label="Dismiss error"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

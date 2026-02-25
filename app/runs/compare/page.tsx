@@ -41,6 +41,8 @@ import {
 } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
 import type { RunComparisonResult, PromptDiff, RunMetrics, UseCaseAlignmentEntry, StepMetrics } from "@/lib/lakebase/run-comparison";
+import { InfoTip } from "@/components/ui/info-tip";
+import { COMPARE } from "@/lib/help-text";
 
 export default function ComparePage() {
   return (
@@ -144,6 +146,20 @@ function ComparePageInner() {
       </div>
 
       {/* Run Selectors */}
+      {!runsLoading && runs.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <ArrowLeftRight className="mb-3 h-8 w-8 text-muted-foreground/50" />
+            <p className="font-medium">No completed runs to compare</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              You need at least two completed discovery runs to use the comparison tool.
+            </p>
+            <Button className="mt-4" asChild>
+              <Link href="/configure">Start a New Discovery</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center gap-4">
@@ -195,6 +211,7 @@ function ComparePageInner() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {loading && (
         <div className="space-y-4">
@@ -232,8 +249,9 @@ function ComparePageInner() {
           {/* Metric Comparison */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 Metric Comparison
+                <InfoTip tip={COMPARE.metricComparison} />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -298,8 +316,9 @@ function ComparePageInner() {
           {/* Use Case Overlap */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 Use Case Overlap
+                <InfoTip tip={COMPARE.useCaseOverlap} />
               </CardTitle>
               <CardDescription>
                 Matched by exact name comparison
@@ -355,8 +374,9 @@ function ComparePageInner() {
           {/* Config Diff */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 Configuration Differences
+                <InfoTip tip={COMPARE.configDiff} />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -515,6 +535,7 @@ function StepMetricsCard({ steps }: { steps: StepMetrics[] }) {
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <Clock className="h-4 w-4 text-blue-500" />
           Step-Level Comparison
+          <InfoTip tip={COMPARE.stepComparison} />
         </CardTitle>
         <CardDescription>
           Per-pipeline-step duration, token usage, and success rate

@@ -34,6 +34,7 @@ import {
   RotateCcw,
   Rocket,
 } from "lucide-react";
+import { EXPORT } from "@/lib/help-text";
 
 interface ExportToolbarProps {
   runId: string;
@@ -42,11 +43,11 @@ interface ExportToolbarProps {
 }
 
 const EXPORT_FORMATS = [
-  { key: "excel", label: "Excel (.xlsx)", icon: FileSpreadsheet },
-  { key: "pptx", label: "PowerPoint (.pptx)", icon: Presentation },
-  { key: "pdf", label: "PDF", icon: FileText },
-  { key: "csv", label: "CSV", icon: FileCode },
-  { key: "json", label: "JSON", icon: Braces },
+  { key: "excel", label: "Excel (.xlsx)", icon: FileSpreadsheet, description: EXPORT.excel },
+  { key: "pptx", label: "PowerPoint (.pptx)", icon: Presentation, description: EXPORT.pptx },
+  { key: "pdf", label: "PDF", icon: FileText, description: EXPORT.pdf },
+  { key: "csv", label: "CSV", icon: FileCode, description: EXPORT.csv },
+  { key: "json", label: "JSON", icon: Braces, description: EXPORT.json },
 ] as const;
 
 export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProps) {
@@ -153,14 +154,19 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          {EXPORT_FORMATS.map(({ key, label, icon: Icon }) => (
+          {EXPORT_FORMATS.map(({ key, label, icon: Icon, description }) => (
             <DropdownMenuItem
               key={key}
               disabled={!!exporting}
               onClick={() => handleExport(key)}
             >
-              <Icon className="mr-2 h-4 w-4" />
-              {exporting === key ? "Exporting..." : label}
+              <div className="flex items-start gap-2">
+                <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <div>{exporting === key ? "Exporting..." : label}</div>
+                  <div className="text-[10px] text-muted-foreground font-normal">{description}</div>
+                </div>
+              </div>
             </DropdownMenuItem>
           ))}
           {scanId && (

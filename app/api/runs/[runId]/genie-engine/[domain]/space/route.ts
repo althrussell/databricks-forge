@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
+import { isValidUUID } from "@/lib/validation";
 
 export async function PATCH(
   request: NextRequest,
@@ -17,6 +18,9 @@ export async function PATCH(
 ) {
   try {
     const { runId, domain } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
     const decodedDomain = decodeURIComponent(domain);
 
     const run = await getRunById(runId);

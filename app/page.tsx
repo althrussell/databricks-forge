@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { resilientFetch } from "@/lib/resilient-fetch";
+import { InfoTip } from "@/components/ui/info-tip";
+import { DASHBOARD } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -143,6 +145,7 @@ export default function DashboardPage() {
             <KPICard
               icon={<Activity className="h-4 w-4 text-blue-500" />}
               label="Total Runs"
+              tip={DASHBOARD.totalRuns}
               value={stats.totalRuns}
               detail={
                 stats.runningRuns > 0
@@ -153,24 +156,28 @@ export default function DashboardPage() {
             <KPICard
               icon={<BrainCircuit className="h-4 w-4 text-violet-500" />}
               label="Use Cases"
+              tip={DASHBOARD.useCases}
               value={stats.totalUseCases}
               detail={`${stats.aiCount} AI, ${stats.statisticalCount} Stat${stats.geospatialCount ? `, ${stats.geospatialCount} Geo` : ""}`}
             />
             <KPICard
               icon={<Trophy className="h-4 w-4 text-amber-500" />}
               label="Avg Score"
+              tip={DASHBOARD.avgScore}
               value={`${stats.avgScore}%`}
               detail="Across all use cases"
             />
             <KPICard
               icon={<Layers className="h-4 w-4 text-teal-500" />}
               label="Domains"
+              tip={DASHBOARD.domains}
               value={stats.totalDomains}
               detail="Unique business domains"
             />
             <KPICard
               icon={<TrendingUp className="h-4 w-4 text-green-500" />}
               label="Success Rate"
+              tip={DASHBOARD.successRate}
               value={
                 stats.totalRuns > 0
                   ? `${Math.round((stats.completedRuns / stats.totalRuns) * 100)}%`
@@ -281,11 +288,13 @@ export default function DashboardPage() {
 function KPICard({
   icon,
   label,
+  tip,
   value,
   detail,
 }: {
   icon: React.ReactNode;
   label: string;
+  tip?: string;
   value: string | number;
   detail?: string;
 }) {
@@ -294,7 +303,10 @@ function KPICard({
       <CardContent className="pt-6">
         <div className="flex items-center gap-2">
           {icon}
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            {tip && <InfoTip tip={tip} />}
+          </div>
         </div>
         <p className="mt-2 text-2xl font-bold">{value}</p>
         {detail && (

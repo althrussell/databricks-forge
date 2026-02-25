@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { InfoTip, LabelWithTip } from "@/components/ui/info-tip";
+import { CONFIG } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,6 +88,7 @@ const SUGGESTED_DOMAINS = [
 export function ConfigForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [discoveryDepth, setDiscoveryDepth] = useState<DiscoveryDepth>(() => {
     if (typeof window === "undefined") return "balanced";
@@ -182,14 +185,20 @@ export function ConfigForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const errors: Record<string, string> = {};
     if (!businessName.trim()) {
-      toast.error("Business Name is required");
-      return;
+      errors.businessName = "Business Name is required";
     }
     if (!ucMetadata) {
-      toast.error("Select at least one catalog or schema from Unity Catalog");
+      errors.ucMetadata =
+        "Select at least one catalog or schema from Unity Catalog";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error(Object.values(errors)[0]);
       return;
     }
+    setFieldErrors({});
 
     setIsSubmitting(true);
 
@@ -249,7 +258,10 @@ export function ConfigForm() {
       {/* Discovery Depth */}
       <Card>
         <CardHeader>
-          <CardTitle>Discovery Depth</CardTitle>
+          <CardTitle className="flex items-center gap-1">
+            Discovery Depth
+            <InfoTip tip={CONFIG.discoveryDepth} />
+          </CardTitle>
           <CardDescription>
             Choose how broadly to search for use cases. This affects how many
             use cases are generated and the quality threshold applied.
@@ -304,22 +316,35 @@ export function ConfigForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="businessName">Business Name</Label>
+            <Label htmlFor="businessName">
+              <LabelWithTip label="Business Name" tip={CONFIG.businessName} />
+            </Label>
             <Input
               id="businessName"
               placeholder="e.g. Acme Financial Services"
               value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
+              onChange={(e) => {
+                setBusinessName(e.target.value);
+                if (fieldErrors.businessName) setFieldErrors((prev) => { const { businessName: _, ...rest } = prev; return rest; });
+              }}
+              aria-invalid={!!fieldErrors.businessName}
+              className={fieldErrors.businessName ? "border-destructive focus-visible:ring-destructive" : ""}
               required
             />
-            <p className="text-xs text-muted-foreground">
-              Your organisation or project name -- the AI derives industry
-              context, value chain, and revenue model from this.
-            </p>
+            {fieldErrors.businessName ? (
+              <p className="text-xs text-destructive">{fieldErrors.businessName}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Your organisation or project name -- the AI derives industry
+                context, value chain, and revenue model from this.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="industry">Industry (optional)</Label>
+            <Label htmlFor="industry">
+              <LabelWithTip label="Industry (optional)" tip={CONFIG.industry} />
+            </Label>
             <Select
               value={industry || "__none__"}
               onValueChange={handleIndustryChange}
@@ -355,14 +380,22 @@ export function ConfigForm() {
           </div>
 
           <div className="space-y-2">
-            <Label>UC Metadata Sources</Label>
+            <LabelWithTip label="UC Metadata Sources" tip={CONFIG.ucMetadata} />
+            {fieldErrors.ucMetadata && (
+              <p className="text-xs text-destructive">{fieldErrors.ucMetadata}</p>
+            )}
             {manualMode ? (
               <>
                 <Input
                   id="ucMetadata"
                   placeholder="e.g. main.finance or catalog1, catalog2"
                   value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
+                  onChange={(e) => {
+                    setManualInput(e.target.value);
+                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const { ucMetadata: _, ...rest } = prev; return rest; });
+                  }}
+                  aria-invalid={!!fieldErrors.ucMetadata}
+                  className={fieldErrors.ucMetadata ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
                 <p className="text-xs text-muted-foreground">
                   Comma-separated list: catalog, catalog.schema, or mix
@@ -380,7 +413,10 @@ export function ConfigForm() {
               <>
                 <CatalogBrowser
                   selectedSources={selectedSources}
-                  onSelectionChange={setSelectedSources}
+                  onSelectionChange={(sources) => {
+                    setSelectedSources(sources);
+                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const { ucMetadata: _, ...rest } = prev; return rest; });
+                  }}
                 />
                 <button
                   type="button"
@@ -402,7 +438,10 @@ export function ConfigForm() {
       {/* Business Priorities */}
       <Card>
         <CardHeader>
-          <CardTitle>Business Priorities</CardTitle>
+          <CardTitle className="flex items-center gap-1">
+            Business Priorities
+            <InfoTip tip={CONFIG.priorities} />
+          </CardTitle>
           <CardDescription>
             Select the priorities that matter most to your organisation. These
             directly influence how use cases are scored -- higher weight is given
@@ -446,7 +485,7 @@ export function ConfigForm() {
           <CollapsibleContent>
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <Label>Business Domains (optional)</Label>
+            <LabelWithTip label="Business Domains (optional)" tip={CONFIG.domains} />
 
             {/* Selected domains */}
             {businessDomains.length > 0 && (
@@ -466,6 +505,7 @@ export function ConfigForm() {
                         )
                       }
                       className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                      aria-label={`Remove ${domain}`}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -541,7 +581,7 @@ export function ConfigForm() {
 
           <div className="space-y-2">
             <Label htmlFor="strategicGoals">
-              Strategic Goals (optional)
+              <LabelWithTip label="Strategic Goals (optional)" tip={CONFIG.strategicGoals} />
             </Label>
             <Textarea
               id="strategicGoals"
@@ -565,7 +605,10 @@ export function ConfigForm() {
             <div className="flex items-start gap-3">
               <ScanLine className={`mt-0.5 h-4 w-4 shrink-0 ${estateScanEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
               <div>
-                <p className="text-sm font-medium">Estate Scan</p>
+                <p className="text-sm font-medium flex items-center gap-1">
+                  Estate Scan
+                  <InfoTip tip={CONFIG.estateScan} />
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Run environment intelligence (domain classification, PII
                   detection, health scoring, lineage) during this run

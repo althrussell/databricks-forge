@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isValidUUID } from "@/lib/validation";
 import { cancelJob } from "@/lib/genie/engine-status";
 import { logger } from "@/lib/logger";
 
@@ -14,6 +15,9 @@ export async function POST(
 ) {
   try {
     const { runId } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
     const cancelled = cancelJob(runId);
 
     if (!cancelled) {

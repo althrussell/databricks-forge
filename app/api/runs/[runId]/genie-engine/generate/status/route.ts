@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getJobStatus } from "@/lib/genie/engine-status";
+import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
@@ -13,6 +14,9 @@ export async function GET(
 ) {
   try {
     const { runId } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
     const job = await getJobStatus(runId);
 
     if (!job) {

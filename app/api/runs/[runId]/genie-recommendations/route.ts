@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isValidUUID } from "@/lib/validation";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
@@ -23,6 +24,9 @@ export async function GET(
 ) {
   try {
     const { runId } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
 
     // Load the run
     const run = await getRunById(runId);

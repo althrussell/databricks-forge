@@ -43,6 +43,8 @@ import {
   ChevronRight,
   ArrowUpDown,
 } from "lucide-react";
+import { LabelWithTip } from "@/components/ui/info-tip";
+import { RUNS_LIST } from "@/lib/help-text";
 import type { PipelineRun } from "@/lib/domain/types";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -158,7 +160,7 @@ export default function RunsPage() {
   );
 
   return (
-    <div className="space-y-6">
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pipeline Runs</h1>
@@ -269,12 +271,12 @@ export default function RunsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Business Name</TableHead>
-                  <TableHead>UC Metadata</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Progress</TableHead>
+                  <TableHead><LabelWithTip label="Business Name" tip={RUNS_LIST.businessName} /></TableHead>
+                  <TableHead><LabelWithTip label="UC Metadata" tip={RUNS_LIST.ucMetadata} /></TableHead>
+                  <TableHead><LabelWithTip label="Status" tip={RUNS_LIST.status} /></TableHead>
+                  <TableHead><LabelWithTip label="Progress" tip={RUNS_LIST.progress} /></TableHead>
                   <TableHead>Activity</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead><LabelWithTip label="Created" tip={RUNS_LIST.created} /></TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -411,6 +413,6 @@ export default function RunsPage() {
           )}
         </>
       )}
-    </div>
+      </div>
   );
 }

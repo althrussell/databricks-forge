@@ -14,23 +14,32 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ scanId: string }> }
 ) {
-  const { scanId } = await params;
+  try {
+    const { scanId } = await params;
 
-  if (!isValidUUID(scanId)) {
-    logger.warn("[api/environment-scan/progress] Invalid scan ID", { scanId });
-    return NextResponse.json({ error: "Invalid scan ID" }, { status: 400 });
-  }
+    if (!isValidUUID(scanId)) {
+      logger.warn("[api/environment-scan/progress] Invalid scan ID", { scanId });
+      return NextResponse.json({ error: "Invalid scan ID" }, { status: 400 });
+    }
 
-  const progress = getScanProgress(scanId);
-  if (!progress) {
-    logger.warn("[api/environment-scan/progress] No progress data found for this scan", {
-      scanId,
-    });
+    const progress = getScanProgress(scanId);
+    if (!progress) {
+      logger.warn("[api/environment-scan/progress] No progress data found for this scan", {
+        scanId,
+      });
+      return NextResponse.json(
+        { error: "No progress data found for this scan" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(progress);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/environment-scan/progress] GET failed", { error: msg });
     return NextResponse.json(
-      { error: "No progress data found for this scan" },
-      { status: 404 }
+      { error: "Failed to retrieve scan progress" },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json(progress);
 }

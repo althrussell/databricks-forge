@@ -289,7 +289,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
         </CardHeader>
         <CardContent>
           {generating ? (
-            <div className="space-y-1">
+            <div className="space-y-1" aria-live="polite">
               <Progress value={genProgress} className="h-2" />
               <p className="text-[10px] text-muted-foreground">{genMessage}</p>
             </div>
@@ -355,7 +355,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
         </CardHeader>
 
         {generating && (
-          <div className="space-y-1 px-6 pb-4">
+          <div className="space-y-1 px-6 pb-4" aria-live="polite">
             <Progress value={genProgress} className="h-2" />
             <p className="text-[10px] text-muted-foreground">{genMessage}</p>
           </div>
