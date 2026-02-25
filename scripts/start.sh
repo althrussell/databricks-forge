@@ -58,7 +58,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   while [ "$ATTEMPT" -lt "$MAX_DB_RETRIES" ]; do
     ATTEMPT=$((ATTEMPT + 1))
 
-    if DATABASE_URL="$SCHEMA_URL" "$PRISMA_BIN" db push --skip-generate 2>&1; then
+    if DATABASE_URL="$SCHEMA_URL" "$PRISMA_BIN" db push 2>&1; then
       echo "[startup] Database ready — schema sync complete (attempt $ATTEMPT)."
       DB_READY=true
       break
