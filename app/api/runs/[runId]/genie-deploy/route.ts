@@ -237,6 +237,9 @@ function classifyDeployError(error: string): { category: string; treatAsSuccess:
   if (msg.includes("PARSE_SYNTAX_ERROR") || msg.includes("PARSE ERROR") || msg.includes("PARSING ERROR")) {
     return { category: "syntax", treatAsSuccess: false };
   }
+  if (msg.includes("UNRESOLVED_COLUMN") || msg.includes("UNRESOLVED_ROUTINE")) {
+    return { category: "unresolved_reference", treatAsSuccess: false };
+  }
   if (msg.includes("INVALID_AGGREGATE_FILTER") || msg.includes("NON_DETERMINISTIC")) {
     return { category: "non_deterministic", treatAsSuccess: false };
   }

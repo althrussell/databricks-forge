@@ -204,7 +204,7 @@ Create parameterized queries from these examples.`;
         defaultValue: p.defaultValue ? String(p.defaultValue) : null,
       })),
     }))
-    .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_query:${q.question}`));
+    .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_query:${q.question}`, true));
 
   return { queries };
 }

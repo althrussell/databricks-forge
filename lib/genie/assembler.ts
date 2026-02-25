@@ -253,7 +253,7 @@ export function assembleSerializedSpace(
   //    - sql uses backtick-quoted alias.column references
   //    - relationship_type is encoded as a SQL comment: --rt=FROM_RELATIONSHIP_TYPE_...--
   const joinSpecs: JoinSpec[] = outputs.joinSpecs
-    .filter((j) => validateSqlExpression(allowlist, j.sql, `asm_join:${j.leftTable}->${j.rightTable}`))
+    .filter((j) => validateSqlExpression(allowlist, j.sql, `asm_join:${j.leftTable}->${j.rightTable}`, true))
     .map((j, i) => {
       const leftAlias = fqnToAlias(j.leftTable);
       let rightAlias = fqnToAlias(j.rightTable);
@@ -281,7 +281,7 @@ export function assembleSerializedSpace(
   const MAX_SNIPPET_SQL_CHARS = 500;
 
   const measures: SqlSnippetMeasure[] = outputs.measures
-    .filter((m) => validateSqlExpression(allowlist, m.sql, `asm_measure:${m.name}`))
+    .filter((m) => validateSqlExpression(allowlist, m.sql, `asm_measure:${m.name}`, true))
     .filter((m) => m.sql.length <= MAX_SNIPPET_SQL_CHARS)
     .slice(0, MAX_SNIPPETS)
     .map((m, i) => ({
@@ -292,7 +292,7 @@ export function assembleSerializedSpace(
     }));
 
   const filters: SqlSnippetFilter[] = outputs.filters
-    .filter((f) => validateSqlExpression(allowlist, f.sql, `asm_filter:${f.name}`))
+    .filter((f) => validateSqlExpression(allowlist, f.sql, `asm_filter:${f.name}`, true))
     .filter((f) => f.sql.length <= MAX_SNIPPET_SQL_CHARS)
     .slice(0, MAX_SNIPPETS)
     .map((f, i) => ({
@@ -303,7 +303,7 @@ export function assembleSerializedSpace(
     }));
 
   const expressions: SqlSnippetExpression[] = outputs.dimensions
-    .filter((d) => validateSqlExpression(allowlist, d.sql, `asm_dim:${d.name}`))
+    .filter((d) => validateSqlExpression(allowlist, d.sql, `asm_dim:${d.name}`, true))
     .filter((d) => d.sql.length <= MAX_SNIPPET_SQL_CHARS)
     .slice(0, MAX_SNIPPETS)
     .map((d, i) => ({

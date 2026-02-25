@@ -31,6 +31,7 @@ import type {
 } from "../types";
 import {
   buildSchemaContextBlock,
+  buildCompactColumnsBlock,
   isValidTable,
   isValidColumn,
   type SchemaAllowlist,
@@ -243,13 +244,30 @@ function validateColumnReferences(
   const colRefPattern = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
   const reported = new Set<string>();
 
+  // SQL keywords and YAML fields that look like alias.column but aren't
+  const SKIP_ALIASES = new Set([
+    "version", "catalog", "schema", "language", "yaml",
+  ]);
+
   for (const expr of expressions) {
     let cm: RegExpExecArray | null;
     while ((cm = colRefPattern.exec(expr)) !== null) {
       const alias = cm[1].toLowerCase();
       const column = cm[2].toLowerCase();
+
+      if (SKIP_ALIASES.has(alias)) continue;
+
       const tableFqn = aliasToTable.get(alias);
-      if (!tableFqn) continue;
+      if (!tableFqn) {
+        const key = `${alias}.${column}`;
+        if (!reported.has(key)) {
+          reported.add(key);
+          issues.push(
+            `Unknown alias \`${cm[1]}\` in \`${cm[1]}.${cm[2]}\` — only \`source\` and declared join names are valid`,
+          );
+        }
+        continue;
+      }
 
       if (!isValidColumn(allowlist, tableFqn, column)) {
         const key = `${alias}.${column}`;
@@ -350,6 +368,7 @@ function validateMetricViewYaml(
     i.startsWith("Missing required") ||
     i.includes("not found in schema") ||
     i.includes("not found in table") ||
+    i.includes("Unknown alias") ||
     i.includes("Window function") ||
     i.includes("AI function")
   );
@@ -379,6 +398,94 @@ function detectFeatures(yaml: string): {
 }
 
 // ---------------------------------------------------------------------------
+// LLM repair: re-prompt once with validation errors + correct schema
+// ---------------------------------------------------------------------------
+
+const COLUMN_ERROR_PATTERNS = [
+  "not found in table",
+  "Unknown alias",
+  "UNRESOLVED_COLUMN",
+];
+
+function hasColumnErrors(issues: string[]): boolean {
+  return issues.some((i) =>
+    COLUMN_ERROR_PATTERNS.some((p) => i.includes(p))
+  );
+}
+
+async function repairProposal(
+  proposal: MetricViewProposal,
+  schemaBlock: string,
+  columnsBlock: string,
+  endpoint: string,
+  signal?: AbortSignal,
+): Promise<MetricViewProposal | null> {
+  const repairMessages: ChatMessage[] = [
+    {
+      role: "system",
+      content: `You are a Databricks SQL expert. A metric view YAML definition failed validation because it references columns or table aliases that do not exist. Fix the YAML so it ONLY uses columns from the SCHEMA CONTEXT below.
+
+Rules:
+- The primary fact table has the implicit alias \`source\`. Use \`source.columnName\` or bare \`columnName\` for its columns.
+- Join aliases must match a \`name:\` declared in the \`joins:\` block. Do NOT invent aliases.
+- If a join references a table not listed in the SCHEMA CONTEXT, REMOVE the entire join and all references to it.
+- Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
+
+${schemaBlock}
+
+${columnsBlock}`,
+    },
+    {
+      role: "user",
+      content: `The following metric view YAML failed validation:
+
+### VALIDATION ERRORS
+${proposal.validationIssues.map((i) => `- ${i}`).join("\n")}
+
+### ORIGINAL YAML
+\`\`\`yaml
+${proposal.yaml}
+\`\`\`
+
+### ORIGINAL DDL
+\`\`\`sql
+${proposal.ddl}
+\`\`\`
+
+Fix the YAML and DDL to only reference tables and columns from the SCHEMA CONTEXT. Return JSON: { "yaml": "...", "ddl": "..." }`,
+    },
+  ];
+
+  try {
+    const result = await cachedChatCompletion({
+      endpoint,
+      messages: repairMessages,
+      temperature: 0.1,
+      responseFormat: "json_object",
+      signal,
+    });
+
+    const parsed = parseLLMJson(result.content ?? "") as Record<string, unknown>;
+    const repairedYaml = String(parsed.yaml ?? "");
+    const repairedDdl = String(parsed.ddl ?? "");
+
+    if (!repairedYaml || !repairedDdl) return null;
+
+    return {
+      ...proposal,
+      yaml: repairedYaml,
+      ddl: repairedDdl,
+    };
+  } catch (err) {
+    logger.warn("Metric view repair LLM call failed", {
+      name: proposal.name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main pass
 // ---------------------------------------------------------------------------
 
@@ -395,6 +502,7 @@ export async function runMetricViewProposals(
   }
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
+  const columnsBlock = buildCompactColumnsBlock(metadata, tableFqns);
 
   // Build enrichment lookup: column name -> description
   const enrichmentMap = new Map<string, string>();
@@ -447,6 +555,8 @@ export async function runMetricViewProposals(
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
+${columnsBlock}
+
 ${YAML_SPEC_REFERENCE}
 
 ---
@@ -457,7 +567,7 @@ Create 1-3 metric view proposals for the "${domain}" domain. Each proposal MUST:
 
 1. Follow the YAML v1.1 spec exactly (version, source, dimensions, measures)
 2. Use a central fact table as the source
-${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric views using the joins: block to pull dimensions from dimension tables" : "3. Define meaningful dimensions from the source table columns"}
+${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric views using the joins: block to pull dimensions from dimension tables" : "3. Define meaningful dimensions from the source table columns. Do NOT create a joins: block — no join relationships are available."}
 4. Include time-based dimensions using DATE_TRUNC for any date/timestamp columns
 5. Include a mix of measure types:
    - Basic aggregates (SUM, COUNT, AVG)
@@ -466,6 +576,13 @@ ${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric
    - COUNT DISTINCT measures for cardinality metrics
 6. Use descriptive dimension/measure \`name\` values informed by the column descriptions provided
 ${suggestMaterialization ? `7. For the most complex proposal, include a materialization: block (schedule: every 6 hours, mode: relaxed) with at least one aggregated materialized view` : ""}
+
+## STRICT COLUMN GROUNDING RULES
+- Every column name in \`expr:\`, \`on:\`, and \`filter:\` MUST exist in the AVAILABLE COLUMNS list above.
+- The source table uses the implicit alias \`source\`. Use \`source.column\` or bare \`column\` for its columns.
+- NEVER reference a table alias you did not define in a \`joins:\` block.
+- NEVER invent column names like "ingredient", "supplier_name", etc. that are not in the AVAILABLE COLUMNS list.
+${joinSpecs.length === 0 ? "- There are NO join relationships — do NOT create a joins: block or reference any aliases other than \`source\`." : "- Join aliases must match an alias from the JOIN RELATIONSHIPS section. Do not invent join aliases."}
 
 ## Output format (JSON):
 {
@@ -553,6 +670,58 @@ Create metric view proposals for this domain.`;
         };
       })
       .filter((p) => p.name.length > 0 && p.ddl.length > 0);
+
+    // Repair loop: re-prompt the LLM once for proposals with column/alias errors
+    for (let i = 0; i < proposals.length; i++) {
+      const proposal = proposals[i];
+      if (proposal.validationStatus !== "error" || !hasColumnErrors(proposal.validationIssues)) {
+        continue;
+      }
+
+      logger.info("Attempting LLM repair for metric view with column errors", {
+        domain,
+        name: proposal.name,
+        issues: proposal.validationIssues,
+      });
+
+      const repaired = await repairProposal(
+        proposal, schemaBlock, columnsBlock, endpoint, signal,
+      );
+
+      if (!repaired) continue;
+
+      // Strip FQN prefixes from repaired DDL expr/on lines
+      repaired.ddl = repaired.ddl.replace(
+        /^(\s*(?:expr|on):\s*)(.+)$/gm,
+        (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
+      );
+
+      const revalidation = validateMetricViewYaml(repaired.yaml, repaired.ddl, allowlist);
+      const reFeatures = detectFeatures(repaired.yaml);
+
+      proposals[i] = {
+        ...repaired,
+        hasJoins: reFeatures.hasJoins,
+        hasFilteredMeasures: reFeatures.hasFilteredMeasures,
+        hasWindowMeasures: reFeatures.hasWindowMeasures,
+        hasMaterialization: reFeatures.hasMaterialization,
+        validationStatus: revalidation.status,
+        validationIssues: revalidation.issues,
+      };
+
+      if (revalidation.status !== "error") {
+        logger.info("LLM repair succeeded for metric view", {
+          domain,
+          name: proposal.name,
+        });
+      } else {
+        logger.warn("LLM repair did not resolve column errors", {
+          domain,
+          name: proposal.name,
+          issues: revalidation.issues,
+        });
+      }
+    }
 
     // Dry-run: execute DDL for proposals that passed static validation to
     // catch SQL-level errors before the user ever sees the proposal.
