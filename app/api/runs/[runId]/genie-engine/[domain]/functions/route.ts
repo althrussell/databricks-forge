@@ -11,6 +11,7 @@ import { executeSQL } from "@/lib/dbx/sql";
 import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
+import { isSafeId, validateDdl } from "@/lib/validation";
 
 export async function POST(
   request: NextRequest,
@@ -18,6 +19,9 @@ export async function POST(
 ) {
   try {
     const { runId, domain } = await params;
+    if (!isSafeId(runId)) {
+      return NextResponse.json({ error: "Invalid runId" }, { status: 400 });
+    }
     const decodedDomain = decodeURIComponent(domain);
 
     const run = await getRunById(runId);
@@ -37,12 +41,11 @@ export async function POST(
       );
     }
 
-    if (
-      !body.ddl.toUpperCase().includes("CREATE") ||
-      !body.ddl.toUpperCase().includes("FUNCTION")
-    ) {
+    try {
+      validateDdl(body.ddl, /^\s*CREATE\s+/i, "Function DDL");
+    } catch {
       return NextResponse.json(
-        { error: "DDL does not appear to be a valid function statement" },
+        { error: "DDL does not appear to be a valid CREATE FUNCTION statement" },
         { status: 400 }
       );
     }

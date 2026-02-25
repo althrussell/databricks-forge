@@ -61,6 +61,7 @@ export interface GenieEngineInput {
 export interface GenieEngineResult {
   recommendations: GenieSpaceRecommendation[];
   passOutputs: GenieEnginePassOutputs[];
+  failedDomains: Array<{ domain: string; error: string }>;
 }
 
 /**
@@ -115,7 +116,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
   if (domainGroups.length === 0) {
     logger.warn("No domain groups produced", { runId: run.runId, domainFilter });
-    return { recommendations: [], passOutputs: [] };
+    return { recommendations: [], passOutputs: [], failedDomains: [] };
   }
 
   if (domainGroups.length < filteredGroups.length) {
@@ -188,11 +189,12 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       } catch (err) {
         if (err instanceof EngineCancelledError) throw err;
         completedDomainCount++;
+        const errorMsg = err instanceof Error ? err.message : String(err);
         logger.error("Failed to process domain", {
           domain: group.domain,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMsg,
         });
-        return null;
+        return { failed: true as const, domain: group.domain, error: errorMsg };
       }
     }),
     DOMAIN_CONCURRENCY,
@@ -200,8 +202,12 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
   const recommendations: GenieSpaceRecommendation[] = [];
   const allPassOutputs: GenieEnginePassOutputs[] = [];
+  const failedDomains: Array<{ domain: string; error: string }> = [];
   for (const result of domainResults) {
-    if (result) {
+    if (!result) continue;
+    if ("failed" in result && result.failed) {
+      failedDomains.push({ domain: result.domain as string, error: result.error as string });
+    } else if ("rec" in result) {
       recommendations.push(result.rec);
       allPassOutputs.push(result.outputs);
     }
@@ -211,12 +217,20 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
   recommendations.sort((a, b) => b.useCaseCount - a.useCaseCount);
 
+  if (failedDomains.length > 0) {
+    logger.warn("Some domains failed during Genie Engine run", {
+      runId: run.runId,
+      failedDomains,
+    });
+  }
+
   logger.info("Genie Engine complete", {
     runId: run.runId,
     recommendationCount: recommendations.length,
+    failedDomainCount: failedDomains.length,
   });
 
-  return { recommendations, passOutputs: allPassOutputs };
+  return { recommendations, passOutputs: allPassOutputs, failedDomains };
 }
 
 async function processDomain(
@@ -488,9 +502,24 @@ function inferJoinsFromUseCaseSql(
       if (existingJoinKeys.has(pairKey) || existingJoinKeys.has(reversePairKey)) continue;
       if (discovered.has(pairKey) || discovered.has(reversePairKey)) continue;
 
-      // Normalize the ON condition to use FQNs where possible
-      const joinSql = `${leftTable}.${onCondition.split("=")[0].trim().split(".").pop()} = ${rightTable}.${onCondition.split("=")[1]?.trim().split(".").pop() ?? ""}`.trim();
+      // Skip complex ON clauses (AND/OR) -- we can only reliably parse simple equi-joins
+      if (/\b(AND|OR)\b/i.test(onCondition)) {
+        logger.debug("Skipping complex ON clause in join inference", {
+          leftTable,
+          rightTable,
+          onCondition: onCondition.substring(0, 100),
+        });
+        continue;
+      }
 
+      const eqParts = onCondition.split("=");
+      if (eqParts.length !== 2 || !eqParts[0].trim() || !eqParts[1].trim()) continue;
+
+      const leftCol = eqParts[0].trim().split(".").pop();
+      const rightCol = eqParts[1].trim().split(".").pop();
+      if (!leftCol || !rightCol) continue;
+
+      const joinSql = `${leftTable}.${leftCol} = ${rightTable}.${rightCol}`;
       discovered.set(pairKey, { leftTable, rightTable, sql: joinSql });
     }
     joinRegex.lastIndex = 0;

@@ -246,14 +246,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Measures */}
-            {parsed.instructions.sql_snippets.measures.length > 0 && (
+            {(parsed.instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
               <AccordionItem value="measures">
                 <AccordionTrigger className="text-xs font-medium">
-                  Measures ({parsed.instructions.sql_snippets.measures.length})
+                  Measures ({parsed.instructions?.sql_snippets?.measures?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.instructions.sql_snippets.measures.map((m) => (
+                    {(parsed.instructions?.sql_snippets?.measures ?? []).map((m) => (
                       <EditableSnippetRow
                         key={m.id}
                         id={m.id}
@@ -273,14 +273,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Filters */}
-            {parsed.instructions.sql_snippets.filters.length > 0 && (
+            {(parsed.instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
               <AccordionItem value="filters">
                 <AccordionTrigger className="text-xs font-medium">
-                  Filters ({parsed.instructions.sql_snippets.filters.length})
+                  Filters ({parsed.instructions?.sql_snippets?.filters?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.instructions.sql_snippets.filters.map((f) => (
+                    {(parsed.instructions?.sql_snippets?.filters ?? []).map((f) => (
                       <EditableSnippetRow
                         key={f.id}
                         id={f.id}
@@ -300,14 +300,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Dimensions */}
-            {parsed.instructions.sql_snippets.expressions.length > 0 && (
+            {(parsed.instructions?.sql_snippets?.expressions?.length ?? 0) > 0 && (
               <AccordionItem value="dimensions">
                 <AccordionTrigger className="text-xs font-medium">
-                  Dimensions ({parsed.instructions.sql_snippets.expressions.length})
+                  Dimensions ({parsed.instructions?.sql_snippets?.expressions?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.instructions.sql_snippets.expressions.map((e) => (
+                    {(parsed.instructions?.sql_snippets?.expressions ?? []).map((e) => (
                       <EditableSnippetRow
                         key={e.id}
                         id={e.id}
@@ -327,14 +327,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Sample Questions */}
-            {parsed.config.sample_questions.length > 0 && (
+            {(parsed.config?.sample_questions?.length ?? 0) > 0 && (
               <AccordionItem value="questions">
                 <AccordionTrigger className="text-xs font-medium">
-                  Sample Questions ({parsed.config.sample_questions.length})
+                  Sample Questions ({parsed.config?.sample_questions?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.config.sample_questions.map((q) => (
+                    {(parsed.config?.sample_questions ?? []).map((q) => (
                       <EditableTextRow
                         key={q.id}
                         id={q.id}
@@ -353,14 +353,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* SQL Examples */}
-            {parsed.instructions.example_question_sqls.length > 0 && (
+            {(parsed.instructions?.example_question_sqls?.length ?? 0) > 0 && (
               <AccordionItem value="sql">
                 <AccordionTrigger className="text-xs font-medium">
-                  SQL Examples ({parsed.instructions.example_question_sqls.length})
+                  SQL Examples ({parsed.instructions?.example_question_sqls?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="max-h-64 space-y-3 overflow-auto">
-                    {parsed.instructions.example_question_sqls.map((ex) => (
+                    {(parsed.instructions?.example_question_sqls ?? []).map((ex) => (
                       <div key={ex.id}>
                         <p className="text-xs font-medium">{ex.question.join(" ")}</p>
                         <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
@@ -374,14 +374,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Joins */}
-            {parsed.instructions.join_specs.length > 0 && (
+            {(parsed.instructions?.join_specs?.length ?? 0) > 0 && (
               <AccordionItem value="joins">
                 <AccordionTrigger className="text-xs font-medium">
-                  Join Relationships ({parsed.instructions.join_specs.length})
+                  Join Relationships ({parsed.instructions?.join_specs?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1 text-xs">
-                    {parsed.instructions.join_specs.map((j) => {
+                    {(parsed.instructions?.join_specs ?? []).map((j) => {
                       const rtMatch = j.sql.find((s: string) => s.startsWith("--rt="))?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
                       const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
                       const sqlDisplay = j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ");
@@ -400,10 +400,10 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* SQL Functions (Trusted Asset UDFs) */}
-            {parsed.instructions.sql_functions && parsed.instructions.sql_functions.length > 0 && (
+            {(parsed.instructions?.sql_functions?.length ?? 0) > 0 && (
               <AccordionItem value="functions">
                 <AccordionTrigger className="text-xs font-medium">
-                  SQL Functions ({parsed.instructions.sql_functions.length})
+                  SQL Functions ({parsed.instructions?.sql_functions?.length ?? 0})
                   {trustedFns.length > 0 && (
                     <Badge variant="outline" className="ml-2 text-[9px]">
                       {trustedFns.length} deployable
@@ -412,7 +412,7 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-2 text-xs">
-                    {parsed.instructions.sql_functions.map((fn) => {
+                    {(parsed.instructions?.sql_functions ?? []).map((fn) => {
                       const tfn = trustedFns.find(
                         (t) => t.name.toLowerCase() === fn.identifier.toLowerCase()
                       );
@@ -433,14 +433,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Instructions */}
-            {parsed.instructions.text_instructions.length > 0 && (
+            {(parsed.instructions?.text_instructions?.length ?? 0) > 0 && (
               <AccordionItem value="instructions">
                 <AccordionTrigger className="text-xs font-medium">
-                  Text Instructions ({parsed.instructions.text_instructions.length})
+                  Text Instructions ({parsed.instructions?.text_instructions?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-2">
-                    {parsed.instructions.text_instructions.map((ti) => (
+                    {(parsed.instructions?.text_instructions ?? []).map((ti) => (
                       <EditableTextRow
                         key={ti.id}
                         id={ti.id}

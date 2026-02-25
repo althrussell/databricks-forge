@@ -14,6 +14,9 @@ type AsyncFn<T> = () => Promise<T>;
  * tasks complete.
  */
 export function createConcurrencyLimiter(concurrency: number) {
+  if (concurrency < 1) {
+    throw new Error(`concurrency must be >= 1, got ${concurrency}`);
+  }
   let active = 0;
   const queue: Array<() => void> = [];
 

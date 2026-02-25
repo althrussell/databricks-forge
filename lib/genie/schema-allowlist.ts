@@ -149,17 +149,18 @@ export function buildSchemaContextBlock(
 
   const columnsByTable = new Map<string, ColumnInfo[]>();
   for (const c of metadata.columns) {
-    const fqn = c.tableFqn.toLowerCase();
-    if (targetTables && !targetTables.has(fqn)) continue;
-    if (!columnsByTable.has(c.tableFqn)) columnsByTable.set(c.tableFqn, []);
-    columnsByTable.get(c.tableFqn)!.push(c);
+    const key = c.tableFqn.toLowerCase();
+    if (targetTables && !targetTables.has(key)) continue;
+    if (!columnsByTable.has(key)) columnsByTable.set(key, []);
+    columnsByTable.get(key)!.push(c);
   }
 
   const lines: string[] = ["### SCHEMA CONTEXT (you MUST only reference these tables and columns)\n"];
 
   for (const t of metadata.tables) {
-    if (targetTables && !targetTables.has(t.fqn.toLowerCase())) continue;
-    const cols = columnsByTable.get(t.fqn) ?? [];
+    const key = t.fqn.toLowerCase();
+    if (targetTables && !targetTables.has(key)) continue;
+    const cols = columnsByTable.get(key) ?? [];
     cols.sort((a, b) => a.ordinalPosition - b.ordinalPosition);
 
     lines.push(`**${t.fqn}**${t.comment ? ` — ${t.comment}` : ""}`);

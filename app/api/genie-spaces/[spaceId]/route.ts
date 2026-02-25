@@ -13,6 +13,7 @@ import {
   trackGenieSpaceTrashed,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import { isSafeId, validateFqn } from "@/lib/validation";
 
 export async function PATCH(
   request: NextRequest,
@@ -20,6 +21,9 @@ export async function PATCH(
 ) {
   try {
     const { spaceId } = await params;
+    if (!isSafeId(spaceId)) {
+      return NextResponse.json({ error: "Invalid spaceId" }, { status: 400 });
+    }
     const body = await request.json();
     const { title, description, serializedSpace } = body as {
       title?: string;
@@ -51,6 +55,9 @@ export async function DELETE(
 ) {
   try {
     const { spaceId } = await params;
+    if (!isSafeId(spaceId)) {
+      return NextResponse.json({ error: "Invalid spaceId" }, { status: 400 });
+    }
 
     // Parse optional body for asset cleanup
     let dropAssets = false;
@@ -70,6 +77,7 @@ export async function DELETE(
     if (dropAssets && assetsToDelete) {
       for (const fqn of assetsToDelete.functions) {
         try {
+          validateFqn(fqn, "function to drop");
           await executeSQL(`DROP FUNCTION IF EXISTS ${fqn}`);
           dropResults.push({ fqn, type: "function", success: true });
           logger.info("Dropped function during space cleanup", { spaceId, fqn });
@@ -81,6 +89,7 @@ export async function DELETE(
       }
       for (const fqn of assetsToDelete.metricViews) {
         try {
+          validateFqn(fqn, "metric view to drop");
           await executeSQL(`DROP VIEW IF EXISTS ${fqn}`);
           dropResults.push({ fqn, type: "metric_view", success: true });
           logger.info("Dropped metric view during space cleanup", { spaceId, fqn });

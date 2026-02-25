@@ -11,6 +11,7 @@ import {
   getDeployedAssets,
   findSpacesReferencingAssets,
 } from "@/lib/lakebase/genie-spaces";
+import { isSafeId } from "@/lib/validation";
 
 interface SharedAsset {
   fqn: string;
@@ -29,6 +30,9 @@ export async function GET(
 ) {
   try {
     const { spaceId } = await params;
+    if (!isSafeId(spaceId)) {
+      return NextResponse.json({ error: "Invalid spaceId" }, { status: 400 });
+    }
 
     const assets = await getDeployedAssets(spaceId);
     if (!assets) {

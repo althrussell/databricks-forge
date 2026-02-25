@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -126,6 +126,7 @@ export function GenieSpacesTab({
 
   // Per-domain regeneration state
   const [regeneratingDomain, setRegeneratingDomain] = useState<string | null>(null);
+  const regenPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Use cases for detail sheet (lazy-loaded per domain, cached)
   const [detailUseCases, setDetailUseCases] = useState<UseCase[]>([]);
@@ -157,6 +158,12 @@ export function GenieSpacesTab({
 
   useEffect(() => {
     fetchRecommendations();
+    return () => {
+      if (regenPollRef.current) {
+        clearInterval(regenPollRef.current);
+        regenPollRef.current = null;
+      }
+    };
   }, [fetchRecommendations]);
 
   // Re-fetch when the engine completes (refreshKey increments from parent)
@@ -167,6 +174,7 @@ export function GenieSpacesTab({
   }, [refreshKey, fetchRecommendations]);
 
   useEffect(() => {
+    setTestResults(null);
     if (!detailDomain) {
       setDetailUseCases([]);
       return;
@@ -189,7 +197,7 @@ export function GenieSpacesTab({
         setUseCaseCache((prev) => new Map(prev).set(detailDomain, filtered));
         setDetailUseCases(filtered);
       } catch {
-        /* non-critical */
+        toast.error("Failed to load use cases for this domain");
       } finally {
         if (!cancelled) setLoadingUseCases(false);
       }
@@ -277,7 +285,7 @@ export function GenieSpacesTab({
         setTrashPreview(data);
       }
     } catch {
-      // Non-fatal — user can still trash without asset cleanup
+      toast.error("Failed to load asset preview — you can still trash the space");
     } finally {
       setTrashPreviewLoading(false);
     }
@@ -386,18 +394,21 @@ export function GenieSpacesTab({
 
       toast.info(`Regenerating "${domain}"...`);
 
-      const poll = setInterval(async () => {
+      if (regenPollRef.current) clearInterval(regenPollRef.current);
+      regenPollRef.current = setInterval(async () => {
         try {
           const sr = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
           if (!sr.ok) return;
           const sd = await sr.json();
           if (sd.status === "completed") {
-            clearInterval(poll);
+            if (regenPollRef.current) clearInterval(regenPollRef.current);
+            regenPollRef.current = null;
             setRegeneratingDomain(null);
             toast.success(`"${domain}" regenerated`);
             await fetchRecommendations();
           } else if (sd.status === "failed") {
-            clearInterval(poll);
+            if (regenPollRef.current) clearInterval(regenPollRef.current);
+            regenPollRef.current = null;
             setRegeneratingDomain(null);
             toast.error(sd.error || `"${domain}" regeneration failed`);
           }
@@ -901,14 +912,14 @@ export function GenieSpacesTab({
                   {/* Column enrichment info is now folded into table descriptions */}
 
                   {/* Sample Questions */}
-                  {detailParsed.config.sample_questions.length > 0 && (
+                  {(detailParsed.config?.sample_questions?.length ?? 0) > 0 && (
                     <AccordionItem value="questions">
                       <AccordionTrigger className="text-xs font-medium">
-                        Sample Questions ({detailParsed.config.sample_questions.length})
+                        Sample Questions ({detailParsed.config?.sample_questions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <ul className="space-y-1 text-xs text-muted-foreground">
-                          {detailParsed.config.sample_questions.map((q) => (
+                          {(detailParsed.config?.sample_questions ?? []).map((q) => (
                             <li key={q.id}>{q.question.join(" ")}</li>
                           ))}
                         </ul>
@@ -917,14 +928,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* SQL Examples */}
-                  {detailParsed.instructions.example_question_sqls.length > 0 && (
+                  {(detailParsed.instructions?.example_question_sqls?.length ?? 0) > 0 && (
                     <AccordionItem value="sql">
                       <AccordionTrigger className="text-xs font-medium">
-                        SQL Examples ({detailParsed.instructions.example_question_sqls.length})
+                        SQL Examples ({detailParsed.instructions?.example_question_sqls?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="max-h-64 space-y-3 overflow-auto">
-                          {detailParsed.instructions.example_question_sqls.map((ex) => (
+                          {(detailParsed.instructions?.example_question_sqls ?? []).map((ex) => (
                             <div key={ex.id}>
                               <p className="text-xs font-medium">{ex.question.join(" ")}</p>
                               <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
@@ -943,14 +954,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* Measures */}
-                  {detailParsed.instructions.sql_snippets.measures.length > 0 && (
+                  {(detailParsed.instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
                     <AccordionItem value="measures">
                       <AccordionTrigger className="text-xs font-medium">
-                        Measures ({detailParsed.instructions.sql_snippets.measures.length})
+                        Measures ({detailParsed.instructions?.sql_snippets?.measures?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-0.5 text-xs">
-                          {detailParsed.instructions.sql_snippets.measures.map((m) => (
+                          {(detailParsed.instructions?.sql_snippets?.measures ?? []).map((m) => (
                             <div key={m.id} className="flex items-baseline gap-2 py-0.5">
                               <code className="rounded bg-muted px-1 font-mono text-[10px]">{m.alias}</code>
                               <span className="text-muted-foreground">{m.sql.join(" ")}</span>
@@ -969,14 +980,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* Filters */}
-                  {detailParsed.instructions.sql_snippets.filters.length > 0 && (
+                  {(detailParsed.instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
                     <AccordionItem value="filters">
                       <AccordionTrigger className="text-xs font-medium">
-                        Filters ({detailParsed.instructions.sql_snippets.filters.length})
+                        Filters ({detailParsed.instructions?.sql_snippets?.filters?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-0.5 text-xs">
-                          {detailParsed.instructions.sql_snippets.filters.map((f) => (
+                          {(detailParsed.instructions?.sql_snippets?.filters ?? []).map((f) => (
                             <div key={f.id} className="flex items-baseline gap-2 py-0.5">
                               <code className="rounded bg-muted px-1 font-mono text-[10px]">{f.display_name}</code>
                               <span className="text-muted-foreground">{f.sql.join(" ")}</span>
@@ -995,14 +1006,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* Dimensions */}
-                  {detailParsed.instructions.sql_snippets.expressions.length > 0 && (
+                  {(detailParsed.instructions?.sql_snippets?.expressions?.length ?? 0) > 0 && (
                     <AccordionItem value="dimensions">
                       <AccordionTrigger className="text-xs font-medium">
-                        Dimensions ({detailParsed.instructions.sql_snippets.expressions.length})
+                        Dimensions ({detailParsed.instructions?.sql_snippets?.expressions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-0.5 text-xs">
-                          {detailParsed.instructions.sql_snippets.expressions.map((e) => (
+                          {(detailParsed.instructions?.sql_snippets?.expressions ?? []).map((e) => (
                             <div key={e.id} className="flex items-baseline gap-2 py-0.5">
                               <code className="rounded bg-muted px-1 font-mono text-[10px]">{e.alias}</code>
                               <span className="text-muted-foreground">{e.sql.join(" ")}</span>
@@ -1021,14 +1032,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* Join Relationships */}
-                  {detailParsed.instructions.join_specs.length > 0 && (
+                  {(detailParsed.instructions?.join_specs?.length ?? 0) > 0 && (
                     <AccordionItem value="joins">
                       <AccordionTrigger className="text-xs font-medium">
-                        Join Relationships ({detailParsed.instructions.join_specs.length})
+                        Join Relationships ({detailParsed.instructions?.join_specs?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-1 text-xs">
-                          {detailParsed.instructions.join_specs.map((j) => {
+                          {(detailParsed.instructions?.join_specs ?? []).map((j) => {
                             const rtMatch = j.sql.find((s: string) => s.startsWith("--rt="))?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
                             const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
                             const sqlDisplay = j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ");
@@ -1063,14 +1074,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* Text Instructions */}
-                  {detailParsed.instructions.text_instructions.length > 0 && (
+                  {(detailParsed.instructions?.text_instructions?.length ?? 0) > 0 && (
                     <AccordionItem value="instructions">
                       <AccordionTrigger className="text-xs font-medium">
-                        Text Instructions ({detailParsed.instructions.text_instructions.length})
+                        Text Instructions ({detailParsed.instructions?.text_instructions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-2 text-xs text-muted-foreground">
-                          {detailParsed.instructions.text_instructions.map((ti) => (
+                          {(detailParsed.instructions?.text_instructions ?? []).map((ti) => (
                             <p key={ti.id} className="whitespace-pre-line">{ti.content.join("\n")}</p>
                           ))}
                         </div>
@@ -1079,14 +1090,14 @@ export function GenieSpacesTab({
                   )}
 
                   {/* Benchmarks */}
-                  {detailParsed.benchmarks && detailParsed.benchmarks.questions.length > 0 && (
+                  {(detailParsed.benchmarks?.questions?.length ?? 0) > 0 && (
                     <AccordionItem value="benchmarks">
                       <AccordionTrigger className="text-xs font-medium">
-                        Benchmarks ({detailParsed.benchmarks.questions.length})
+                        Benchmarks ({detailParsed.benchmarks?.questions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="max-h-64 space-y-2 overflow-auto">
-                          {detailParsed.benchmarks.questions.map((b) => (
+                          {(detailParsed.benchmarks?.questions ?? []).map((b) => (
                             <div key={b.id} className="rounded border p-2">
                               <p className="text-xs font-medium">{b.question.join(" ")}</p>
                               {b.answer && b.answer.length > 0 && (

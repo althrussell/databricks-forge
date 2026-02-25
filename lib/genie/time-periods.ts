@@ -37,7 +37,8 @@ export function generateTimePeriods(
   tableFqns: string[],
   options: TimePeriodOptions
 ): TimePeriodResult {
-  const { fiscalYearStartMonth, targetDateColumns } = options;
+  const fiscalYearStartMonth = Math.max(1, Math.min(12, options.fiscalYearStartMonth));
+  const { targetDateColumns } = options;
   const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
   const filters: EnrichedSqlSnippetFilter[] = [];
   const dimensions: EnrichedSqlSnippetDimension[] = [];

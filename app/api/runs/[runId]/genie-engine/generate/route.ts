@@ -92,9 +92,16 @@ export async function POST(
           domains,
         );
         completeJob(runId, result.recommendations.length);
+        if (result.failedDomains.length > 0) {
+          logger.warn("Genie Engine completed with domain failures", {
+            runId,
+            failedDomains: result.failedDomains,
+          });
+        }
         logger.info("Genie Engine generation complete (async)", {
           runId,
           recommendationCount: result.recommendations.length,
+          failedDomainCount: result.failedDomains.length,
           configVersion: version,
           domainFilter: domains ?? "all",
         });

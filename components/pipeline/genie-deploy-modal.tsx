@@ -541,10 +541,14 @@ export function GenieDeployModal({
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               ) : (
-                <Button onClick={() => {
-                  setTargetSchema([defaultSchema]);
-                  executeDeploy();
-                }}>
+                <Button
+                  disabled={!defaultSchema}
+                  title={!defaultSchema ? "No target schema could be inferred — select assets first" : undefined}
+                  onClick={() => {
+                    setTargetSchema([defaultSchema]);
+                    executeDeploy();
+                  }}
+                >
                   Deploy Spaces Only
                   <Rocket className="ml-1 h-4 w-4" />
                 </Button>

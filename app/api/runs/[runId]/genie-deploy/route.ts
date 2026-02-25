@@ -20,6 +20,7 @@ import {
   trackGenieSpaceUpdated as trackSpaceUpdated,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import { isSafeId, validateFqn } from "@/lib/validation";
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -67,6 +68,7 @@ interface DomainResult {
   assets: AssetResult[];
   spaceId?: string;
   spaceError?: string;
+  orphanedAssets?: { functions: string[]; metricViews: string[] };
   patchedSpace?: string;
   strippedRefs?: StrippedRef[];
 }
@@ -373,6 +375,7 @@ async function validatePreExistingMetricViews(mvFqns: string[]): Promise<{
 
   const results = await Promise.allSettled(
     mvFqns.map(async (fqn) => {
+      validateFqn(fqn, "metric view");
       await executeSQL(`DESCRIBE TABLE ${fqn}`);
       return fqn;
     })
@@ -419,6 +422,7 @@ async function validatePreExistingFunctions(fnIdentifiers: string[]): Promise<{
 
   const results = await Promise.allSettled(
     fnIdentifiers.map(async (fqn) => {
+      validateFqn(fqn, "function");
       await executeSQL(`DESCRIBE FUNCTION ${fqn}`);
       return fqn;
     })
@@ -581,6 +585,7 @@ async function grantAccess(
   fqn: string,
   objectType: "TABLE" | "FUNCTION",
 ): Promise<void> {
+  validateFqn(fqn, "grantAccess target");
   const privilege = objectType === "TABLE" ? "SELECT" : "EXECUTE";
   for (const grant of [
     `GRANT ALL PRIVILEGES ON ${objectType} ${fqn} TO \`account users\``,
@@ -670,6 +675,10 @@ export async function POST(
 ) {
   const { runId } = await params;
 
+  if (!isSafeId(runId)) {
+    return NextResponse.json({ error: "Invalid runId" }, { status: 400 });
+  }
+
   try {
     const body = (await request.json()) as RequestBody;
 
@@ -683,6 +692,15 @@ export async function POST(
     if (!body.targetSchema || body.targetSchema.split(".").length !== 2) {
       return NextResponse.json(
         { error: "targetSchema must be in catalog.schema format" },
+        { status: 400 }
+      );
+    }
+
+    try {
+      validateFqn(body.targetSchema, "targetSchema");
+    } catch {
+      return NextResponse.json(
+        { error: "targetSchema contains invalid characters" },
         { status: 400 }
       );
     }
@@ -777,8 +795,19 @@ export async function POST(
             serializedSpace: finalSpace,
           });
           spaceId = result.space_id;
-          await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
-          logger.info("Genie space updated after retry", {
+          try {
+            await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
+          } catch (trackErr) {
+            logger.error("Lakebase tracking failed after space update (space exists in Genie)", {
+              spaceId,
+              domain: domainReq.domain,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            });
+            try {
+              await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
+            } catch { /* exhausted retry */ }
+          }
+          logger.info("Genie space updated", {
             runId, domain: domainReq.domain, spaceId,
           });
         } else {
@@ -791,14 +820,27 @@ export async function POST(
           spaceId = result.space_id;
 
           const trackingId = uuidv4();
-          await trackGenieSpaceCreated(
-            trackingId,
-            spaceId,
-            runId,
-            domainReq.domain,
-            domainReq.title,
-            deployedAssetsPayload,
-          );
+          try {
+            await trackGenieSpaceCreated(
+              trackingId,
+              spaceId,
+              runId,
+              domainReq.domain,
+              domainReq.title,
+              deployedAssetsPayload,
+            );
+          } catch (trackErr) {
+            logger.error("Lakebase tracking failed after space creation (space exists in Genie)", {
+              spaceId,
+              domain: domainReq.domain,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            });
+            try {
+              await trackGenieSpaceCreated(
+                trackingId, spaceId, runId, domainReq.domain, domainReq.title, deployedAssetsPayload,
+              );
+            } catch { /* exhausted retry */ }
+          }
         }
 
         results.push({
@@ -819,10 +861,22 @@ export async function POST(
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const orphanedAssets = {
+          functions: deployedFns.map((f) => f.fqn),
+          metricViews: deployedMvs.map((m) => m.fqn),
+        };
+        if (orphanedAssets.functions.length > 0 || orphanedAssets.metricViews.length > 0) {
+          logger.warn("Genie space creation failed -- UC assets deployed but not attached to any space", {
+            domain: domainReq.domain,
+            orphanedAssets,
+          });
+        }
         results.push({
           domain: domainReq.domain,
           assets,
           spaceError: msg,
+          orphanedAssets: (orphanedAssets.functions.length > 0 || orphanedAssets.metricViews.length > 0)
+            ? orphanedAssets : undefined,
           patchedSpace: finalSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
@@ -930,6 +984,7 @@ async function validateFinalSpace(
   if (fns.length > 0) {
     const results = await Promise.allSettled(
       fns.map(async (fn) => {
+        validateFqn(fn.identifier, "sql_function");
         await executeSQL(`DESCRIBE FUNCTION ${fn.identifier}`);
         return fn.identifier;
       })
@@ -967,6 +1022,7 @@ async function validateFinalSpace(
   if (mvs.length > 0) {
     const results = await Promise.allSettled(
       mvs.map(async (mv) => {
+        validateFqn(mv.identifier, "metric_view");
         await executeSQL(`DESCRIBE TABLE ${mv.identifier}`);
         return mv.identifier;
       })

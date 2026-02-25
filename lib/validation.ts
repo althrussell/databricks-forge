@@ -44,6 +44,51 @@ export class IdentifierValidationError extends Error {
   }
 }
 
+/**
+ * Validate a fully-qualified name (catalog.schema.object) for safe SQL interpolation.
+ * Each dot-separated segment must pass SAFE_IDENTIFIER_RE.
+ */
+export function validateFqn(fqn: string, label = "FQN"): string {
+  const trimmed = fqn.replace(/`/g, "").trim();
+  if (!trimmed) {
+    throw new IdentifierValidationError(`${label} cannot be empty`);
+  }
+  const parts = trimmed.split(".");
+  if (parts.length < 1 || parts.length > 4) {
+    throw new IdentifierValidationError(
+      `${label} must have 1-4 dot-separated parts, got ${parts.length}`
+    );
+  }
+  for (const part of parts) {
+    validateIdentifier(part, `${label} segment`);
+  }
+  return trimmed;
+}
+
+/**
+ * Validate a DDL string only contains an expected CREATE statement.
+ * Rejects DDL that contains dangerous standalone statements.
+ */
+const DDL_DANGEROUS_PATTERN =
+  /\b(DROP\s+(?!FUNCTION\s+IF\s+EXISTS|VIEW\s+IF\s+EXISTS)|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|TRUNCATE|ALTER\s+TABLE|GRANT\s+|REVOKE\s+)/i;
+
+export function validateDdl(
+  ddl: string,
+  expectedPrefix: RegExp,
+  label = "DDL"
+): void {
+  if (!expectedPrefix.test(ddl)) {
+    throw new IdentifierValidationError(
+      `${label} must start with expected CREATE statement`
+    );
+  }
+  if (DDL_DANGEROUS_PATTERN.test(ddl)) {
+    throw new IdentifierValidationError(
+      `${label} contains disallowed SQL statement`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // UUID validation
 // ---------------------------------------------------------------------------
