@@ -33,6 +33,36 @@ import { isAuthError } from "@/lib/lakebase/auth-errors";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
+// Pool construction helper — bypasses pg-connection-string URL parsing
+// ---------------------------------------------------------------------------
+
+function createPool(
+  connectionString: string,
+  opts?: { idleTimeoutMillis?: number; max?: number }
+): pg.Pool {
+  const parsed = new URL(connectionString);
+  const pool = new pg.Pool({
+    host: parsed.hostname,
+    port: parseInt(parsed.port || "5432", 10),
+    database: parsed.pathname.slice(1),
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    ssl: true,
+    idleTimeoutMillis: opts?.idleTimeoutMillis,
+    max: opts?.max,
+  });
+
+  logger.info("[prisma] Pool connecting", {
+    host: parsed.hostname,
+    database: parsed.pathname.slice(1),
+    user: decodeURIComponent(parsed.username),
+    passwordLength: decodeURIComponent(parsed.password).length,
+  });
+
+  return pool;
+}
+
+// ---------------------------------------------------------------------------
 // Singleton cache
 // ---------------------------------------------------------------------------
 
@@ -130,8 +160,7 @@ async function buildAutoProvisionedPool(
   }
 
   const connectionString = await getLakebaseConnectionUrl();
-  const pool = new pg.Pool({
-    connectionString,
+  const pool = createPool(connectionString, {
     idleTimeoutMillis: 30_000,
     max: 10,
   });
@@ -230,14 +259,7 @@ async function getStaticPrisma(): Promise<PrismaClient> {
     await globalForPrisma.__prisma.$disconnect();
   }
 
-  // Ensure libpq-compatible SSL (encrypt without cert verification) for
-  // Lakebase URLs that use sslmode=require, so pg doesn't upgrade to verify-full.
-  let connUrl = url;
-  if (connUrl.includes("sslmode=") && !connUrl.includes("uselibpqcompat=")) {
-    const sep = connUrl.includes("?") ? "&" : "?";
-    connUrl += `${sep}uselibpqcompat=true`;
-  }
-  const pool = new pg.Pool({ connectionString: connUrl });
+  const pool = createPool(url);
 
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
