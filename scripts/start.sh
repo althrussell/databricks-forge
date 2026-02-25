@@ -39,10 +39,6 @@ fi
 # Schema sync (best-effort)
 # npx is not available in the Databricks Apps runtime, so invoke the
 # prisma CLI directly from node_modules.
-#
-# DATABASE_URL is passed inline so it is only visible to the prisma process.
-# The Next.js server must NOT inherit it -- otherwise the runtime falls into
-# "static URL" mode and credential rotation is disabled.
 # ---------------------------------------------------------------------------
 
 PRISMA_BIN="./node_modules/.bin/prisma"
@@ -61,10 +57,21 @@ fi
 
 # ---------------------------------------------------------------------------
 # Start the standalone Next.js server
+#
+# Pass the startup credential as DATABASE_URL so the server has an
+# immediately working connection. When the credential expires (~1h),
+# withPrisma catches the auth error, deletes DATABASE_URL, and switches
+# to auto-provision mode with proactive refresh permanently.
 # ---------------------------------------------------------------------------
 
 export PORT="${DATABRICKS_APP_PORT:-8000}"
 echo "[startup] Starting server on port $PORT..."
 
 cd .next/standalone
-exec node server.js
+
+if [ -n "$LAKEBASE_STARTUP_URL" ]; then
+  echo "[startup] Passing startup credential to server."
+  DATABASE_URL="$LAKEBASE_STARTUP_URL" exec node server.js
+else
+  exec node server.js
+fi

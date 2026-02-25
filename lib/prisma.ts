@@ -4,12 +4,14 @@
  * Uses @prisma/adapter-pg with node-postgres (pg) Pool.
  *
  * Two modes (chosen automatically):
- *   1. **Auto-provisioned** (Databricks Apps) -- DATABRICKS_CLIENT_ID is
- *      present and DATABASE_URL is absent. The provision module creates the
- *      Lakebase Autoscale project on first boot, then generates short-lived
- *      OAuth DB credentials with automatic rotation. No secrets needed.
- *   2. **Static URL** (local dev) -- DATABASE_URL is set in .env.
- *      Used directly with no token rotation.
+ *   1. **Static URL** (startup credential or local dev) -- DATABASE_URL is
+ *      set. Used directly. In Databricks Apps the startup script passes the
+ *      provisioned credential as DATABASE_URL; when it expires (~1h),
+ *      withPrisma catches the auth error, deletes DATABASE_URL, and switches
+ *      to auto-provision mode permanently.
+ *   2. **Auto-provisioned** (Databricks Apps) -- DATABRICKS_CLIENT_ID is
+ *      present and DATABASE_URL is absent. The provision module generates
+ *      short-lived OAuth DB credentials with automatic rotation.
  *
  * The standard Next.js pattern caches the client on `globalThis` to survive
  * HMR reloads in development.
@@ -40,10 +42,9 @@ const globalForPrisma = globalThis as unknown as {
   __refreshTimer: ReturnType<typeof setTimeout> | undefined;
 };
 
-// In-flight rotation promise. When multiple concurrent requests all hit an
-// auth error at the same time, only the first one triggers the actual
-// invalidate-and-rebuild cycle. The rest await the same promise.
 let _rotationInFlight: Promise<PrismaClient> | null = null;
+let _initInFlight: Promise<PrismaClient> | null = null;
+let _dbReady = false;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -54,14 +55,22 @@ let _rotationInFlight: Promise<PrismaClient> | null = null;
  *
  * In Databricks Apps the connection URL (including the OAuth token) is built
  * dynamically by the provision module. The pool + client are recreated when
- * the credential rotates (~every 50 min). In local dev the static
- * DATABASE_URL is used and the client persists across HMR.
+ * the credential rotates (~every 50 min). In local dev or when a startup
+ * credential is passed, the static DATABASE_URL is used directly.
  */
 export async function getPrisma(): Promise<PrismaClient> {
   if (isAutoProvisionEnabled()) {
     return getAutoProvisionedPrisma();
   }
   return getStaticPrisma();
+}
+
+/**
+ * True once a Prisma client has been successfully created.
+ * API routes can use this to return 503 instead of blocking on init.
+ */
+export function isDatabaseReady(): boolean {
+  return _dbReady;
 }
 
 /**
@@ -87,11 +96,8 @@ export async function invalidatePrismaClient(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
-  // Proactively refresh the credential if it has expired or is about to.
-  // This bumps the generation counter when a new credential is minted,
-  // which triggers pool recreation below.
+  // Fast path: pool exists and credential is current
   await refreshDbCredential();
-
   const generation = getCredentialGeneration();
   const tokenId = `autoscale_${generation}`;
 
@@ -99,12 +105,25 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
     return globalForPrisma.__prisma;
   }
 
-  // Credential has rotated (or first call) -- rebuild the pool
+  // Slow path: need to build a new pool. Gate so only one caller does it.
+  if (_initInFlight) return _initInFlight;
+
+  _initInFlight = buildAutoProvisionedPool(tokenId, generation).finally(() => {
+    _initInFlight = null;
+  });
+
+  return _initInFlight;
+}
+
+async function buildAutoProvisionedPool(
+  tokenId: string,
+  generation: number
+): Promise<PrismaClient> {
   if (globalForPrisma.__prisma) {
     try {
       await globalForPrisma.__prisma.$disconnect();
     } catch (err) {
-      logger.warn("Failed to disconnect old Prisma client during rotation", {
+      logger.warn("[prisma] Failed to disconnect old client during rotation", {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -113,15 +132,19 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
   const connectionString = await getLakebaseConnectionUrl();
   const pool = new pg.Pool({
     connectionString,
-    // Keep idle connection lifetime well below the credential TTL (~1h)
-    // so stale connections are reaped before the token they authed with
-    // could be revoked server-side.
     idleTimeoutMillis: 30_000,
     max: 10,
   });
 
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
+
+  // Capture this client reference so the error handler only invalidates
+  // its own pool, not a newer one created by a subsequent rotation.
+  const thisClient = prisma;
   pool.on("error", (err) => {
-    logger.warn("pg Pool background error — will recreate on next request", {
+    if (globalForPrisma.__prisma !== thisClient) return;
+    logger.warn("[prisma] Pool background error — will recreate on next request", {
       error: err.message,
     });
     globalForPrisma.__prisma = undefined;
@@ -129,19 +152,16 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
     invalidateDbCredential();
   });
 
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
-
   globalForPrisma.__prisma = prisma;
   globalForPrisma.__prismaTokenId = tokenId;
+  _dbReady = true;
 
-  logger.debug("Prisma client created with fresh credentials", {
+  logger.info("[prisma] Pool created (auto-provision mode)", {
     generation,
     tokenId,
   });
 
   scheduleProactiveRefresh();
-
   return prisma;
 }
 
@@ -149,15 +169,8 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
 // Proactive background credential refresh
 // ---------------------------------------------------------------------------
 
-const PROACTIVE_REFRESH_LEAD_MS = 5 * 60_000; // 5 minutes before expiry
+const PROACTIVE_REFRESH_LEAD_MS = 5 * 60_000;
 
-/**
- * Schedule a background timer that rotates the pool BEFORE the credential
- * expires, so no request ever hits a stale credential. Called automatically
- * after each pool creation. The timer is self-healing: if it fires and
- * the credential is already fresh (e.g. a request-driven rotation beat it),
- * it simply reschedules.
- */
 function scheduleProactiveRefresh(): void {
   if (globalForPrisma.__refreshTimer) {
     clearTimeout(globalForPrisma.__refreshTimer);
@@ -172,31 +185,29 @@ function scheduleProactiveRefresh(): void {
   globalForPrisma.__refreshTimer = setTimeout(async () => {
     globalForPrisma.__refreshTimer = undefined;
     try {
-      logger.info("Proactive credential rotation starting", {
+      logger.info("[prisma] Proactive credential rotation starting", {
         msBeforeExpiry: expiresAt - Date.now(),
       });
       invalidateDbCredential();
-      // Trigger pool rebuild — getAutoProvisionedPrisma will mint a new
-      // credential and scheduleProactiveRefresh for the next cycle.
       globalForPrisma.__prisma = undefined;
       globalForPrisma.__prismaTokenId = undefined;
       await getPrisma();
-      logger.info("Proactive credential rotation complete");
+      logger.info("[prisma] Proactive credential rotation complete");
     } catch (err) {
-      logger.warn("Proactive credential rotation failed — will retry on next request", {
+      logger.warn("[prisma] Proactive credential rotation failed — will retry on next request", {
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }, delay);
 
-  logger.debug("Proactive refresh scheduled", {
+  logger.info("[prisma] Proactive refresh scheduled", {
     delaySec: Math.round(delay / 1_000),
     expiresAt: new Date(expiresAt).toISOString(),
   });
 }
 
 // ---------------------------------------------------------------------------
-// Static URL mode (local dev)
+// Static URL mode (local dev or startup credential from start.sh)
 // ---------------------------------------------------------------------------
 
 async function getStaticPrisma(): Promise<PrismaClient> {
@@ -221,19 +232,25 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 
   const pool = new pg.Pool({ connectionString: url });
 
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
+
+  // Scoped error handler — only invalidates its own pool
+  const thisClient = prisma;
   pool.on("error", (err) => {
-    logger.warn("pg Pool background error (static) — will recreate on next request", {
+    if (globalForPrisma.__prisma !== thisClient) return;
+    logger.warn("[prisma] Pool background error (static) — will recreate on next request", {
       error: err.message,
     });
     globalForPrisma.__prisma = undefined;
     globalForPrisma.__prismaTokenId = undefined;
   });
 
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
-
   globalForPrisma.__prisma = prisma;
   globalForPrisma.__prismaTokenId = "__static__";
+  _dbReady = true;
+
+  logger.info("[prisma] Pool created (static mode)");
 
   return prisma;
 }
@@ -242,14 +259,13 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 // Resilient wrapper with auth-error retry
 // ---------------------------------------------------------------------------
 
-const MAX_AUTH_RETRIES = 4;
-const AUTH_RETRY_BASE_MS = 2_000;
+const MAX_AUTH_RETRIES = 2;
+const AUTH_RETRY_BASE_MS = 1_000;
 
 /**
  * Execute a callback with a PrismaClient. If the call fails with a
- * database authentication error (stale credential or Lakebase Autoscale
- * cold start), the client and credential are invalidated and the call
- * is retried with exponential backoff (2s, 4s, 8s, 16s).
+ * database authentication error (stale credential), the client and
+ * credential are invalidated and the call is retried with short backoff.
  *
  * The retry fires whenever Databricks App SP credentials are available
  * (canAutoProvision), even if the initial connection used a static
@@ -274,7 +290,7 @@ export async function withPrisma<T>(
 
       if (attempt < MAX_AUTH_RETRIES) {
         const delayMs = AUTH_RETRY_BASE_MS * Math.pow(2, attempt);
-        logger.warn("Database auth error, rotating credentials and retrying", {
+        logger.warn("[prisma] Auth error, rotating credentials", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
           nextRetryMs: delayMs,
@@ -293,19 +309,14 @@ export async function withPrisma<T>(
 // Race-safe credential rotation
 // ---------------------------------------------------------------------------
 
-/**
- * Invalidate the current client, generate fresh credentials, and return a
- * new PrismaClient. If another caller already started a rotation, return
- * the same in-flight promise so only one rotation happens at a time.
- */
 async function rotatePrismaClient(): Promise<PrismaClient> {
   if (_rotationInFlight) return _rotationInFlight;
 
   _rotationInFlight = (async () => {
     try {
-      // Clear stale static URL so getPrisma() enters auto-provision mode
       delete process.env.DATABASE_URL;
       await invalidatePrismaClient();
+      logger.info("[prisma] Credential rotation — switching to auto-provision mode");
       return getPrisma();
     } finally {
       _rotationInFlight = null;
