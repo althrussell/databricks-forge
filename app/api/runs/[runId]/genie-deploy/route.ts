@@ -272,6 +272,12 @@ function sanitizeFunctionDdl(ddl: string): string {
   return result;
 }
 
+/** Extract the bare object name (last dot-segment) from an identifier or FQN. */
+function bareName(identifier: string): string {
+  const parts = identifier.replace(/`/g, "").split(".");
+  return parts[parts.length - 1].toLowerCase();
+}
+
 /**
  * Extract the object name from a CREATE DDL (last segment of the FQN).
  */
@@ -469,30 +475,45 @@ function prepareSerializedSpace(
   const strippedRefs: StrippedRef[] = [];
 
   // --- sql_functions: retain validated pre-existing + add newly deployed ---
+  // The assembler stores bare names (e.g. "get_franchise_summary") while the
+  // deploy step records full FQNs (e.g. "forge_test.forge.get_franchise_summary").
+  // Normalise both sides to bare names for matching, then upgrade retained
+  // entries to FQN format.
   const oldFns = (instructions.sql_functions ?? []) as Array<{ id: string; identifier: string }>;
-  const deployedFnFqns = new Set(deployedFunctions.map((f) => f.fqn.toLowerCase()));
 
-  const retainedFns = oldFns.filter((fn) => {
-    const isDeployed = deployedFnFqns.has(fn.identifier.toLowerCase());
-    const isValidPreExisting = validPreExistingFnFqns.has(fn.identifier.toLowerCase());
-    if (!isDeployed && !isValidPreExisting) {
+  const deployedFnByName = new Map(
+    deployedFunctions.map((f) => [bareName(f.fqn), f.fqn])
+  );
+  const validPreExistingFnNames = new Set(
+    [...validPreExistingFnFqns].map(bareName)
+  );
+
+  const retainedFns: Array<{ id: string; identifier: string }> = [];
+  for (const fn of oldFns) {
+    const name = bareName(fn.identifier);
+    const deployedFqn = deployedFnByName.get(name);
+    const isValidPreExisting = validPreExistingFnFqns.has(fn.identifier.toLowerCase())
+      || validPreExistingFnNames.has(name);
+
+    if (deployedFqn) {
+      retainedFns.push({ id: fn.id, identifier: deployedFqn });
+      deployedFnByName.delete(name);
+    } else if (isValidPreExisting) {
+      retainedFns.push(fn);
+    } else {
       strippedRefs.push({
         type: "function",
         identifier: fn.identifier,
         reason: "Not deployed to Unity Catalog",
       });
-      return false;
     }
-    return true;
-  });
+  }
 
-  const retainedFnFqns = new Set(retainedFns.map((f) => f.identifier.toLowerCase()));
-  const newFnEntries = deployedFunctions
-    .filter((fn) => !retainedFnFqns.has(fn.fqn.toLowerCase()))
-    .map((fn) => ({
-      id: uuidv4().replace(/-/g, ""),
-      identifier: fn.fqn,
-    }));
+  // Add any deployed functions that didn't match an existing entry
+  const newFnEntries = [...deployedFnByName.values()].map((fqn) => ({
+    id: uuidv4().replace(/-/g, ""),
+    identifier: fqn,
+  }));
 
   const allFns = [...retainedFns, ...newFnEntries].sort((a, b) =>
     a.identifier.localeCompare(b.identifier)
@@ -694,9 +715,14 @@ export async function POST(
         }
       }
 
-      // 3. Validate pre-existing metric views and functions from the serialized space
-      const preExistingMvFqns = extractPreExistingMvFqns(domainReq.serializedSpace);
-      const preExistingFnFqns = extractPreExistingFnIdentifiers(domainReq.serializedSpace);
+      // 3. Validate pre-existing metric views and functions from the serialized space.
+      //    Only validate identifiers that are already FQNs (3-part names). Bare names
+      //    come from the assembler (first deploy) and haven't been created yet —
+      //    validating them produces spurious failures.
+      const isFqn = (id: string) => id.replace(/`/g, "").split(".").length >= 3;
+
+      const preExistingMvFqns = extractPreExistingMvFqns(domainReq.serializedSpace).filter(isFqn);
+      const preExistingFnFqns = extractPreExistingFnIdentifiers(domainReq.serializedSpace).filter(isFqn);
 
       const [
         { valid: validPreExistingMvs, stripped: mvValidationStripped },
@@ -718,6 +744,10 @@ export async function POST(
       // 5. Final existence check — verify every reference in the space is real
       const { json: validatedSpace, stripped: finalStripped } =
         await validateFinalSpace(preparedSpace);
+
+      // 5b. Normalize all identifiers to 3-part FQNs — Genie API requires
+      // fully-qualified catalog.schema.object names for functions and metric views.
+      const finalSpace = normalizeIdentifiersToFqn(validatedSpace, body.targetSchema);
 
       const allStripped = [
         ...mvValidationStripped,
@@ -744,7 +774,7 @@ export async function POST(
 
         if (domainReq.existingSpaceId) {
           const result = await updateGenieSpace(domainReq.existingSpaceId, {
-            serializedSpace: validatedSpace,
+            serializedSpace: finalSpace,
           });
           spaceId = result.space_id;
           await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
@@ -755,7 +785,7 @@ export async function POST(
           const result = await createGenieSpace({
             title: domainReq.title,
             description: domainReq.description || "",
-            serializedSpace: validatedSpace,
+            serializedSpace: finalSpace,
             warehouseId: config.warehouseId,
           });
           spaceId = result.space_id;
@@ -775,7 +805,7 @@ export async function POST(
           domain: domainReq.domain,
           assets,
           spaceId,
-          patchedSpace: validatedSpace,
+          patchedSpace: finalSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
 
@@ -793,7 +823,7 @@ export async function POST(
           domain: domainReq.domain,
           assets,
           spaceError: msg,
-          patchedSpace: validatedSpace,
+          patchedSpace: finalSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
         logger.error("Genie space creation failed during deploy", {
@@ -809,6 +839,72 @@ export async function POST(
     logger.error("Genie deploy failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// FQN normalisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Ensure every sql_function and metric_view identifier is a 3-part FQN
+ * (catalog.schema.object). Genie cannot resolve bare names or 2-part names.
+ * Any identifier that is not already 3-part gets prefixed with targetSchema.
+ */
+function normalizeIdentifiersToFqn(spaceJson: string, targetSchema: string): string {
+  const space = JSON.parse(spaceJson) as Record<string, unknown>;
+  const instructions = (space.instructions ?? {}) as Record<string, unknown>;
+  const dataSources = (space.data_sources ?? {}) as Record<string, unknown>;
+
+  const fns = (instructions.sql_functions ?? []) as Array<{ id: string; identifier: string }>;
+  if (fns.length > 0) {
+    for (const fn of fns) {
+      const parts = fn.identifier.replace(/`/g, "").split(".");
+      if (parts.length < 3) {
+        const objectName = parts[parts.length - 1];
+        const fqn = `${targetSchema}.${objectName}`;
+        logger.info("Normalized function identifier to FQN", {
+          from: fn.identifier,
+          to: fqn,
+        });
+        fn.identifier = fqn;
+      }
+    }
+    // Deduplicate by FQN (bare name + deployed FQN may both be present)
+    const seenFns = new Set<string>();
+    instructions.sql_functions = fns.filter((fn) => {
+      const key = fn.identifier.toLowerCase();
+      if (seenFns.has(key)) return false;
+      seenFns.add(key);
+      return true;
+    });
+  }
+
+  const mvs = (dataSources.metric_views ?? []) as Array<{ identifier: string }>;
+  if (mvs.length > 0) {
+    for (const mv of mvs) {
+      const parts = mv.identifier.replace(/`/g, "").split(".");
+      if (parts.length < 3) {
+        const objectName = parts[parts.length - 1];
+        const fqn = `${targetSchema}.${objectName}`;
+        logger.info("Normalized metric view identifier to FQN", {
+          from: mv.identifier,
+          to: fqn,
+        });
+        mv.identifier = fqn;
+      }
+    }
+    const seenMvs = new Set<string>();
+    dataSources.metric_views = mvs.filter((mv) => {
+      const key = mv.identifier.toLowerCase();
+      if (seenMvs.has(key)) return false;
+      seenMvs.add(key);
+      return true;
+    });
+  }
+
+  space.instructions = instructions;
+  space.data_sources = dataSources;
+  return JSON.stringify(space);
 }
 
 // ---------------------------------------------------------------------------
