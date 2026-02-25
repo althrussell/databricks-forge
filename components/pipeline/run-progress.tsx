@@ -33,7 +33,7 @@ export function RunProgress({
     : -1;
 
   return (
-    <div className="space-y-3" role="list" aria-label="Pipeline steps">
+    <div className="space-y-3" role="list" aria-label="Pipeline steps" aria-live="polite">
       {STEPS.map((step, idx) => {
         const isCompleted =
           status === "completed" ||

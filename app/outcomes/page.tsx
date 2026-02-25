@@ -40,7 +40,6 @@ import {
   type ReferenceUseCase,
 } from "@/lib/domain/industry-outcomes";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { InfoTip } from "@/components/ui/info-tip";
 import { OUTCOMES } from "@/lib/help-text";
 
@@ -136,7 +135,6 @@ export default function OutcomesPage() {
   );
 
   return (
-    <TooltipProvider>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -230,7 +228,6 @@ export default function OutcomesPage() {
         </>
       )}
       </div>
-    </TooltipProvider>
   );
 }
 

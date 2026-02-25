@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { InfoTip, LabelWithTip } from "@/components/ui/info-tip";
 import { CONFIG } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
@@ -89,6 +88,7 @@ const SUGGESTED_DOMAINS = [
 export function ConfigForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [discoveryDepth, setDiscoveryDepth] = useState<DiscoveryDepth>(() => {
     if (typeof window === "undefined") return "balanced";
@@ -185,14 +185,20 @@ export function ConfigForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const errors: Record<string, string> = {};
     if (!businessName.trim()) {
-      toast.error("Business Name is required");
-      return;
+      errors.businessName = "Business Name is required";
     }
     if (!ucMetadata) {
-      toast.error("Select at least one catalog or schema from Unity Catalog");
+      errors.ucMetadata =
+        "Select at least one catalog or schema from Unity Catalog";
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error(Object.values(errors)[0]);
       return;
     }
+    setFieldErrors({});
 
     setIsSubmitting(true);
 
@@ -248,7 +254,6 @@ export function ConfigForm() {
   };
 
   return (
-    <TooltipProvider>
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Discovery Depth */}
       <Card>
@@ -318,13 +323,22 @@ export function ConfigForm() {
               id="businessName"
               placeholder="e.g. Acme Financial Services"
               value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
+              onChange={(e) => {
+                setBusinessName(e.target.value);
+                if (fieldErrors.businessName) setFieldErrors((prev) => { const { businessName: _, ...rest } = prev; return rest; });
+              }}
+              aria-invalid={!!fieldErrors.businessName}
+              className={fieldErrors.businessName ? "border-destructive focus-visible:ring-destructive" : ""}
               required
             />
-            <p className="text-xs text-muted-foreground">
-              Your organisation or project name -- the AI derives industry
-              context, value chain, and revenue model from this.
-            </p>
+            {fieldErrors.businessName ? (
+              <p className="text-xs text-destructive">{fieldErrors.businessName}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Your organisation or project name -- the AI derives industry
+                context, value chain, and revenue model from this.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -367,13 +381,21 @@ export function ConfigForm() {
 
           <div className="space-y-2">
             <LabelWithTip label="UC Metadata Sources" tip={CONFIG.ucMetadata} />
+            {fieldErrors.ucMetadata && (
+              <p className="text-xs text-destructive">{fieldErrors.ucMetadata}</p>
+            )}
             {manualMode ? (
               <>
                 <Input
                   id="ucMetadata"
                   placeholder="e.g. main.finance or catalog1, catalog2"
                   value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
+                  onChange={(e) => {
+                    setManualInput(e.target.value);
+                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const { ucMetadata: _, ...rest } = prev; return rest; });
+                  }}
+                  aria-invalid={!!fieldErrors.ucMetadata}
+                  className={fieldErrors.ucMetadata ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
                 <p className="text-xs text-muted-foreground">
                   Comma-separated list: catalog, catalog.schema, or mix
@@ -391,7 +413,10 @@ export function ConfigForm() {
               <>
                 <CatalogBrowser
                   selectedSources={selectedSources}
-                  onSelectionChange={setSelectedSources}
+                  onSelectionChange={(sources) => {
+                    setSelectedSources(sources);
+                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const { ucMetadata: _, ...rest } = prev; return rest; });
+                  }}
                 />
                 <button
                   type="button"
@@ -480,6 +505,7 @@ export function ConfigForm() {
                         )
                       }
                       className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                      aria-label={`Remove ${domain}`}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -615,6 +641,5 @@ export function ConfigForm() {
         </Button>
       </div>
     </form>
-    </TooltipProvider>
   );
 }

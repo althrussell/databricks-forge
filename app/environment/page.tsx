@@ -33,7 +33,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { LabelWithTip, InfoTip } from "@/components/ui/info-tip";
@@ -514,7 +513,6 @@ export default function EstatePage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -525,6 +523,7 @@ export default function EstatePage() {
               size="icon"
               onClick={backToAggregate}
               className="shrink-0"
+              aria-label="Back to estate overview"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -939,7 +938,6 @@ export default function EstatePage() {
         </Tabs>
       )}
     </div>
-    </TooltipProvider>
   );
 }
 
@@ -1566,7 +1564,7 @@ function ScanProgressCard({ progress }: { progress: ScanProgressData }) {
   const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
   return (
-    <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10">
+    <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10" aria-live="polite">
       <CardContent className="pt-5 pb-4 space-y-4">
         {/* Phase + elapsed */}
         <div className="flex items-center justify-between">

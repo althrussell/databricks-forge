@@ -56,7 +56,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { InfoTip } from "@/components/ui/info-tip";
 import { SETTINGS } from "@/lib/help-text";
 
@@ -178,7 +177,6 @@ export default function SettingsPage() {
   }
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
@@ -881,7 +879,6 @@ export default function SettingsPage() {
         </Button>
       </div>
     </div>
-    </TooltipProvider>
   );
 }
 

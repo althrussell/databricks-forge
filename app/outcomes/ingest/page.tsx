@@ -41,7 +41,6 @@ import {
   Pencil,
 } from "lucide-react";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { InfoTip } from "@/components/ui/info-tip";
 import { OUTCOMES } from "@/lib/help-text";
 
@@ -279,7 +278,6 @@ export default function IngestOutcomeMapPage() {
   // -------------------------------------------------------------------------
 
   return (
-    <TooltipProvider>
       <div className="flex flex-col gap-6 p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -914,7 +912,6 @@ export default function IngestOutcomeMapPage() {
         </Card>
       )}
       </div>
-    </TooltipProvider>
   );
 }
 

@@ -43,7 +43,6 @@ import {
   ChevronRight,
   ArrowUpDown,
 } from "lucide-react";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { LabelWithTip } from "@/components/ui/info-tip";
 import { RUNS_LIST } from "@/lib/help-text";
 import type { PipelineRun } from "@/lib/domain/types";
@@ -161,7 +160,6 @@ export default function RunsPage() {
   );
 
   return (
-    <TooltipProvider>
       <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -416,6 +414,5 @@ export default function RunsPage() {
         </>
       )}
       </div>
-    </TooltipProvider>
   );
 }

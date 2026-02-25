@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { resilientFetch } from "@/lib/resilient-fetch";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { InfoTip } from "@/components/ui/info-tip";
 import { DASHBOARD } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
@@ -87,7 +86,6 @@ export default function DashboardPage() {
   }, [fetchStats]);
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -284,7 +282,6 @@ export default function DashboardPage() {
         </>
       ) : null}
     </div>
-    </TooltipProvider>
   );
 }
 

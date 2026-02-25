@@ -56,7 +56,6 @@ import {
   GitCompareArrows,
 } from "lucide-react";
 import {
-  TooltipProvider,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -396,7 +395,6 @@ export default function RunDetailPage({
   };
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -1041,7 +1039,6 @@ export default function RunDetailPage({
         </Card>
       )}
     </div>
-    </TooltipProvider>
   );
 }
 

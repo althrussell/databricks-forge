@@ -41,7 +41,6 @@ import {
 } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
 import type { RunComparisonResult, PromptDiff, RunMetrics, UseCaseAlignmentEntry, StepMetrics } from "@/lib/lakebase/run-comparison";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { InfoTip } from "@/components/ui/info-tip";
 import { COMPARE } from "@/lib/help-text";
 
@@ -102,7 +101,6 @@ function ComparePageInner() {
   }, [runA, runB, fetchComparison]);
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -148,6 +146,20 @@ function ComparePageInner() {
       </div>
 
       {/* Run Selectors */}
+      {!runsLoading && runs.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <ArrowLeftRight className="mb-3 h-8 w-8 text-muted-foreground/50" />
+            <p className="font-medium">No completed runs to compare</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              You need at least two completed discovery runs to use the comparison tool.
+            </p>
+            <Button className="mt-4" asChild>
+              <Link href="/configure">Start a New Discovery</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center gap-4">
@@ -199,6 +211,7 @@ function ComparePageInner() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {loading && (
         <div className="space-y-4">
@@ -399,7 +412,6 @@ function ComparePageInner() {
         </>
       )}
     </div>
-    </TooltipProvider>
   );
 }
 
