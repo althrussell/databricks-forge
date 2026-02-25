@@ -18,12 +18,6 @@ import { logger } from "@/lib/logger";
  */
 export const MAX_PROMPT_TOKENS = 180_000;
 
-/**
- * Absolute minimum batch size. Even if a single item is enormous we still
- * try with at least one item per batch.
- */
-const MIN_BATCH_SIZE = 1;
-
 // ---------------------------------------------------------------------------
 // Token Estimation
 // ---------------------------------------------------------------------------

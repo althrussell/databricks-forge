@@ -55,7 +55,6 @@ export function DashboardDeployModal({
   onOpenChange,
   runId,
   recommendations,
-  databricksHost,
   onDeployComplete,
 }: DashboardDeployModalProps) {
   const [step, setStep] = useState<Step>("configure");

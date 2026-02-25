@@ -11,7 +11,7 @@
  * All diagnostic output goes to stderr so stdout contains only the URL.
  */
 
-const PROJECT_ID = "databricks-forge";
+const PROJECT_ID_BASE = "databricks-forge";
 const BRANCH_ID = "production";
 const DATABASE_NAME = "databricks_postgres";
 const PG_VERSION = "17";
@@ -19,6 +19,13 @@ const DISPLAY_NAME = "Databricks Forge AI";
 const API_TIMEOUT = 30_000;
 const LRO_TIMEOUT = 120_000;
 const LRO_POLL = 5_000;
+
+function getProjectId() {
+  if (process.env.LAKEBASE_PROJECT_ID) return process.env.LAKEBASE_PROJECT_ID;
+  const clientId = process.env.DATABRICKS_CLIENT_ID || "";
+  if (clientId) return `${PROJECT_ID_BASE}-${clientId.slice(0, 8)}`;
+  return PROJECT_ID_BASE;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,9 +106,10 @@ async function api(method, path, body) {
 // ---------------------------------------------------------------------------
 
 async function ensureProject() {
-  const getResp = await api("GET", `projects/${PROJECT_ID}`);
+  const projectId = getProjectId();
+  const getResp = await api("GET", `projects/${projectId}`);
   if (getResp.ok) {
-    log(`Project '${PROJECT_ID}' exists.`);
+    log(`Project '${projectId}' exists.`);
     return;
   }
   if (getResp.status !== 404) {
@@ -109,10 +117,10 @@ async function ensureProject() {
     throw new Error(`Check project failed (${getResp.status}): ${text}`);
   }
 
-  log(`Creating Lakebase project '${PROJECT_ID}'...`);
+  log(`Creating Lakebase project '${projectId}'...`);
   const createResp = await api(
     "POST",
-    `projects?project_id=${encodeURIComponent(PROJECT_ID)}`,
+    `projects?project_id=${encodeURIComponent(projectId)}`,
     { spec: { display_name: DISPLAY_NAME, pg_version: PG_VERSION } }
   );
 
@@ -156,9 +164,10 @@ async function pollOp(name) {
 // ---------------------------------------------------------------------------
 
 async function getEndpointHost() {
+  const projectId = getProjectId();
   const listResp = await api(
     "GET",
-    `projects/${PROJECT_ID}/branches/${BRANCH_ID}/endpoints`
+    `projects/${projectId}/branches/${BRANCH_ID}/endpoints`
   );
   if (!listResp.ok) {
     const text = await listResp.text();

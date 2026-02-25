@@ -31,15 +31,6 @@ const WIDGET_VERSIONS: Record<string, number> = {
   pie: 3,
 };
 
-// Default dimensions per widget type
-const WIDGET_SIZES: Record<string, { width: number; height: number }> = {
-  counter: { width: 2, height: 3 },
-  bar: { width: 3, height: 5 },
-  line: { width: 3, height: 5 },
-  pie: { width: 3, height: 5 },
-  table: { width: 6, height: 6 },
-};
-
 function sanitiseWidgetName(name: string): string {
   return name
     .toLowerCase()

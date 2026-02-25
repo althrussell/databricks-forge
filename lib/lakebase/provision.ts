@@ -20,11 +20,18 @@ import { fetchWithTimeout, TIMEOUTS } from "@/lib/dbx/fetch-with-timeout";
 // Constants
 // ---------------------------------------------------------------------------
 
-const PROJECT_ID = "databricks-forge";
+const PROJECT_ID_BASE = "databricks-forge";
 const BRANCH_ID = "production";
 const DATABASE_NAME = "databricks_postgres";
 const PG_VERSION = "17";
 const DISPLAY_NAME = "Databricks Forge AI";
+
+function getProjectId(): string {
+  if (process.env.LAKEBASE_PROJECT_ID) return process.env.LAKEBASE_PROJECT_ID;
+  const clientId = process.env.DATABRICKS_CLIENT_ID || "";
+  if (clientId) return `${PROJECT_ID_BASE}-${clientId.slice(0, 8)}`;
+  return PROJECT_ID_BASE;
+}
 
 const LAKEBASE_API_TIMEOUT = 30_000;
 const PROJECT_CREATION_TIMEOUT = 120_000;
@@ -138,7 +145,8 @@ async function lakebaseApi(
 // ---------------------------------------------------------------------------
 
 async function projectExists(): Promise<boolean> {
-  const resp = await lakebaseApi("GET", `projects/${PROJECT_ID}`);
+  const projectId = getProjectId();
+  const resp = await lakebaseApi("GET", `projects/${projectId}`);
   if (resp.status === 404) return false;
   if (resp.ok) return true;
   const text = await resp.text();
@@ -146,13 +154,12 @@ async function projectExists(): Promise<boolean> {
 }
 
 async function createProject(): Promise<void> {
-  logger.info("Creating Lakebase Autoscale project...", {
-    projectId: PROJECT_ID,
-  });
+  const projectId = getProjectId();
+  logger.info("Creating Lakebase Autoscale project...", { projectId });
 
   const resp = await lakebaseApi(
     "POST",
-    `projects?project_id=${encodeURIComponent(PROJECT_ID)}`,
+    `projects?project_id=${encodeURIComponent(projectId)}`,
     {
       spec: {
         display_name: DISPLAY_NAME,
@@ -176,8 +183,7 @@ async function createProject(): Promise<void> {
     await pollOperation(operation.name);
   }
 
-  logger.info("Lakebase Autoscale project created", {
-    projectId: PROJECT_ID,
+  logger.info("Lakebase Autoscale project created", { projectId,
   });
 }
 
@@ -224,7 +230,7 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
 
   const listResp = await lakebaseApi(
     "GET",
-    `projects/${PROJECT_ID}/branches/${BRANCH_ID}/endpoints`
+    `projects/${getProjectId()}/branches/${BRANCH_ID}/endpoints`
   );
   if (!listResp.ok) {
     const text = await listResp.text();
@@ -237,7 +243,7 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
 
   if (endpoints.length === 0) {
     throw new Error(
-      `No endpoints found on projects/${PROJECT_ID}/branches/${BRANCH_ID}`
+      `No endpoints found on projects/${getProjectId()}/branches/${BRANCH_ID}`
     );
   }
 
@@ -379,7 +385,7 @@ export function canAutoProvision(): boolean {
  */
 export async function ensureLakebaseProject(): Promise<void> {
   if (await projectExists()) {
-    logger.info("Lakebase project exists", { projectId: PROJECT_ID });
+    logger.info("Lakebase project exists", { projectId: getProjectId() });
     return;
   }
   await createProject();
