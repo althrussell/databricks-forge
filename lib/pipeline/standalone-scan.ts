@@ -67,6 +67,7 @@ export async function runStandaloneEnrichment(
   initScanProgress(scanId);
   logger.info("[standalone-scan] Starting", { scanId, ucMetadata, scopes: scopes.length });
 
+  try {
   // Phase 0: Permission pre-check -- filter out inaccessible scopes in parallel
   updateScanProgress(scanId, {
     phase: "listing-tables",
@@ -378,4 +379,12 @@ export async function runStandaloneEnrichment(
     message: `Scan complete — ${details.length} tables, ${lineageGraph.edges.length} lineage edges, ${intelligenceResult?.domains.length ?? 0} domains.`,
   });
   logger.info("[standalone-scan] Complete", { scanId, tables: details.length, durationMs: Date.now() - startTime });
+
+  } catch (error) {
+    updateScanProgress(scanId, {
+      phase: "failed",
+      message: error instanceof Error ? error.message : "Scan failed unexpectedly.",
+    });
+    throw error;
+  }
 }

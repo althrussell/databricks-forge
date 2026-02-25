@@ -216,11 +216,6 @@ export default function EstatePage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAggregate();
-    fetchAggregateErd();
-  }, [fetchAggregate, fetchAggregateErd]);
-
   // Load a single scan's detail
   const loadSingleScan = useCallback(async (scanId: string) => {
     try {
@@ -353,6 +348,34 @@ export default function EstatePage() {
     },
     [fetchAggregate, fetchAggregateErd, loadSingleScan]
   );
+
+  // On mount: load aggregate data and resume any in-progress scan
+  useEffect(() => {
+    fetchAggregate();
+    fetchAggregateErd();
+
+    // Check for scans that are still running server-side (e.g. user
+    // navigated away mid-scan and came back).
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch("/api/environment-scan/active");
+        if (!resp.ok || cancelled) return;
+        const { scans } = await resp.json();
+        if (cancelled || !scans?.length) return;
+
+        const active = scans[0];
+        setScanning(true);
+        setScanProgress(active);
+        setViewMode("new-scan");
+        pollForScan(active.scanId);
+      } catch {
+        // Non-fatal -- just means no active scan to resume
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fetchAggregate, fetchAggregateErd, pollForScan]);
 
   const [exporting, setExporting] = useState(false);
 

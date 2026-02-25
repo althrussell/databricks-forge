@@ -55,145 +55,150 @@ export async function saveEnvironmentScan(
     });
   }
 
+  const BATCH_SIZE = 500;
+
   try {
     await withPrisma(async (prisma) => {
       await prisma.$transaction(async (tx) => {
-      // 1. Upsert the scan record
-      await tx.forgeEnvironmentScan.upsert({
-        where: { scanId: scan.scanId },
-        create: {
-          scanId: scan.scanId,
-          runId: scan.runId,
-          ucPath: scan.ucPath,
-          tableCount: scan.tableCount,
-          totalSizeBytes: BigInt(scan.totalSizeBytes),
-          totalFiles: scan.totalFiles,
-          totalRows: BigInt(scan.totalRows),
-          tablesWithStreaming: scan.tablesWithStreaming,
-          tablesWithCDF: scan.tablesWithCDF,
-          tablesNeedingOptimize: scan.tablesNeedingOptimize,
-          tablesNeedingVacuum: scan.tablesNeedingVacuum,
-          lineageDiscoveredCount: scan.lineageDiscoveredCount,
-          domainCount: scan.domainCount,
-          piiTablesCount: scan.piiTablesCount,
-          redundancyPairsCount: scan.redundancyPairsCount,
-          dataProductCount: scan.dataProductCount,
-          avgGovernanceScore: scan.avgGovernanceScore,
-          scanDurationMs: scan.scanDurationMs,
-          scanSummaryJson: null,
-          passResultsJson: JSON.stringify(scan.passResults),
-        },
-        update: {},
-      });
-
-      // Build a lookup for health scores from histories
-      const healthScoreMap = new Map<string, number>();
-      for (const h of histories) {
-        healthScoreMap.set(h.tableFqn, h.healthScore);
-      }
-
-      // 2. Insert table details
-      if (details.length > 0) {
-        await tx.forgeTableDetail.createMany({
-          data: details.map((d) => ({
+        // 1. Upsert the scan record
+        await tx.forgeEnvironmentScan.upsert({
+          where: { scanId: scan.scanId },
+          create: {
             scanId: scan.scanId,
-            tableFqn: d.fqn,
-            catalog: d.catalog,
-            schema: d.schema,
-            tableName: d.tableName,
-            tableType: d.tableType,
-            comment: d.comment,
-            generatedDescription: d.generatedDescription,
-            format: d.format,
-            provider: d.provider,
-            location: d.location,
-            isManaged: d.isManaged,
-            owner: d.owner,
-            sizeInBytes: d.sizeInBytes != null ? BigInt(d.sizeInBytes) : null,
-            numFiles: d.numFiles,
-            numRows: d.numRows != null ? BigInt(d.numRows) : null,
-            partitionColumns: JSON.stringify(d.partitionColumns),
-            clusteringColumns: JSON.stringify(d.clusteringColumns),
-            deltaMinReaderVersion: d.deltaMinReaderVersion,
-            deltaMinWriterVersion: d.deltaMinWriterVersion,
-            cdfEnabled: d.tableProperties["delta.enableChangeDataFeed"] === "true",
-            autoOptimize: d.tableProperties["delta.autoOptimize.optimizeWrite"] === "true",
-            tableCreatedAt: d.createdAt,
-            lastModified: d.lastModified,
-            columnsJson: JSON.stringify(columnsByTable.get(d.fqn.toLowerCase()) ?? []),
-            propertiesJson: JSON.stringify(d.tableProperties),
-            tagsJson: null,
-            columnTagsJson: null,
-            dataDomain: d.dataDomain,
-            dataSubdomain: d.dataSubdomain,
-            dataTier: d.dataTier,
-            sensitivityLevel: d.sensitivityLevel,
-            governancePriority: d.governancePriority,
-            governanceScore: healthScoreMap.get(d.fqn) ?? null,
-            discoveredVia: d.discoveredVia,
-          })),
-          skipDuplicates: true,
+            runId: scan.runId,
+            ucPath: scan.ucPath,
+            tableCount: scan.tableCount,
+            totalSizeBytes: BigInt(scan.totalSizeBytes),
+            totalFiles: scan.totalFiles,
+            totalRows: BigInt(scan.totalRows),
+            tablesWithStreaming: scan.tablesWithStreaming,
+            tablesWithCDF: scan.tablesWithCDF,
+            tablesNeedingOptimize: scan.tablesNeedingOptimize,
+            tablesNeedingVacuum: scan.tablesNeedingVacuum,
+            lineageDiscoveredCount: scan.lineageDiscoveredCount,
+            domainCount: scan.domainCount,
+            piiTablesCount: scan.piiTablesCount,
+            redundancyPairsCount: scan.redundancyPairsCount,
+            dataProductCount: scan.dataProductCount,
+            avgGovernanceScore: scan.avgGovernanceScore,
+            scanDurationMs: scan.scanDurationMs,
+            scanSummaryJson: null,
+            passResultsJson: JSON.stringify(scan.passResults),
+          },
+          update: {},
         });
-      }
 
-      // 3. Insert history summaries
-      if (histories.length > 0) {
-        await tx.forgeTableHistorySummary.createMany({
-          data: histories.map((h) => ({
-            scanId: scan.scanId,
-            tableFqn: h.tableFqn,
-            lastWriteTimestamp: h.lastWriteTimestamp,
-            lastWriteOperation: h.lastWriteOperation,
-            lastWriteRows: h.lastWriteRows != null ? BigInt(h.lastWriteRows) : null,
-            lastWriteBytes: h.lastWriteBytes != null ? BigInt(h.lastWriteBytes) : null,
-            totalWriteOps: h.totalWriteOps,
-            totalStreamingOps: h.totalStreamingOps,
-            totalOptimizeOps: h.totalOptimizeOps,
-            totalVacuumOps: h.totalVacuumOps,
-            totalMergeOps: h.totalMergeOps,
-            lastOptimizeTimestamp: h.lastOptimizeTimestamp,
-            lastVacuumTimestamp: h.lastVacuumTimestamp,
-            hasStreamingWrites: h.hasStreamingWrites,
-            historyDays: h.historyDays,
-            topOperationsJson: JSON.stringify(h.topOperations),
-            healthScore: h.healthScore,
-            issuesJson: JSON.stringify(h.issues),
-            recommendationsJson: JSON.stringify(h.recommendations),
-          })),
-          skipDuplicates: true,
-        });
-      }
+        // Build a lookup for health scores from histories
+        const healthScoreMap = new Map<string, number>();
+        for (const h of histories) {
+          healthScoreMap.set(h.tableFqn, h.healthScore);
+        }
 
-      // 4. Insert lineage edges
-      if (lineageEdges.length > 0) {
-        await tx.forgeTableLineage.createMany({
-          data: lineageEdges.map((e) => ({
-            scanId: scan.scanId,
-            sourceTableFqn: e.sourceTableFqn,
-            targetTableFqn: e.targetTableFqn,
-            sourceType: e.sourceType,
-            targetType: e.targetType,
-            entityType: e.entityType,
-            lastEventTime: e.lastEventTime,
-            eventCount: e.eventCount,
-          })),
-          skipDuplicates: true,
-        });
-      }
+        // 2. Insert table details (batched)
+        for (let i = 0; i < details.length; i += BATCH_SIZE) {
+          await tx.forgeTableDetail.createMany({
+            data: details.slice(i, i + BATCH_SIZE).map((d) => ({
+              scanId: scan.scanId,
+              tableFqn: d.fqn,
+              catalog: d.catalog,
+              schema: d.schema,
+              tableName: d.tableName,
+              tableType: d.tableType,
+              comment: d.comment,
+              generatedDescription: d.generatedDescription,
+              format: d.format,
+              provider: d.provider,
+              location: d.location,
+              isManaged: d.isManaged,
+              owner: d.owner,
+              sizeInBytes: d.sizeInBytes != null ? BigInt(d.sizeInBytes) : null,
+              numFiles: d.numFiles,
+              numRows: d.numRows != null ? BigInt(d.numRows) : null,
+              partitionColumns: JSON.stringify(d.partitionColumns),
+              clusteringColumns: JSON.stringify(d.clusteringColumns),
+              deltaMinReaderVersion: d.deltaMinReaderVersion,
+              deltaMinWriterVersion: d.deltaMinWriterVersion,
+              cdfEnabled: d.tableProperties["delta.enableChangeDataFeed"] === "true",
+              autoOptimize: d.tableProperties["delta.autoOptimize.optimizeWrite"] === "true",
+              tableCreatedAt: d.createdAt,
+              lastModified: d.lastModified,
+              columnsJson: JSON.stringify(columnsByTable.get(d.fqn.toLowerCase()) ?? []),
+              propertiesJson: JSON.stringify(d.tableProperties),
+              tagsJson: null,
+              columnTagsJson: null,
+              dataDomain: d.dataDomain,
+              dataSubdomain: d.dataSubdomain,
+              dataTier: d.dataTier,
+              sensitivityLevel: d.sensitivityLevel,
+              governancePriority: d.governancePriority,
+              governanceScore: healthScoreMap.get(d.fqn) ?? null,
+              discoveredVia: d.discoveredVia,
+            })),
+            skipDuplicates: true,
+          });
+        }
 
-      // 5. Insert insights
-      if (insights.length > 0) {
-        await tx.forgeTableInsight.createMany({
-          data: insights.map((i) => ({
-            scanId: scan.scanId,
-            insightType: i.insightType,
-            tableFqn: i.tableFqn,
-            payloadJson: i.payloadJson,
-            severity: i.severity,
-          })),
-          skipDuplicates: true,
-        });
-      }
+        // 3. Insert history summaries (batched)
+        for (let i = 0; i < histories.length; i += BATCH_SIZE) {
+          await tx.forgeTableHistorySummary.createMany({
+            data: histories.slice(i, i + BATCH_SIZE).map((h) => ({
+              scanId: scan.scanId,
+              tableFqn: h.tableFqn,
+              lastWriteTimestamp: h.lastWriteTimestamp,
+              lastWriteOperation: h.lastWriteOperation,
+              lastWriteRows: h.lastWriteRows != null ? BigInt(h.lastWriteRows) : null,
+              lastWriteBytes: h.lastWriteBytes != null ? BigInt(h.lastWriteBytes) : null,
+              totalWriteOps: h.totalWriteOps,
+              totalStreamingOps: h.totalStreamingOps,
+              totalOptimizeOps: h.totalOptimizeOps,
+              totalVacuumOps: h.totalVacuumOps,
+              totalMergeOps: h.totalMergeOps,
+              lastOptimizeTimestamp: h.lastOptimizeTimestamp,
+              lastVacuumTimestamp: h.lastVacuumTimestamp,
+              hasStreamingWrites: h.hasStreamingWrites,
+              historyDays: h.historyDays,
+              topOperationsJson: JSON.stringify(h.topOperations),
+              healthScore: h.healthScore,
+              issuesJson: JSON.stringify(h.issues),
+              recommendationsJson: JSON.stringify(h.recommendations),
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        // 4. Insert lineage edges (batched)
+        for (let i = 0; i < lineageEdges.length; i += BATCH_SIZE) {
+          await tx.forgeTableLineage.createMany({
+            data: lineageEdges.slice(i, i + BATCH_SIZE).map((e) => ({
+              scanId: scan.scanId,
+              sourceTableFqn: e.sourceTableFqn,
+              targetTableFqn: e.targetTableFqn,
+              sourceType: e.sourceType,
+              targetType: e.targetType,
+              entityType: e.entityType,
+              lastEventTime: e.lastEventTime,
+              eventCount: e.eventCount,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        // 5. Insert insights (batched)
+        for (let i = 0; i < insights.length; i += BATCH_SIZE) {
+          await tx.forgeTableInsight.createMany({
+            data: insights.slice(i, i + BATCH_SIZE).map((ins) => ({
+              scanId: scan.scanId,
+              insightType: ins.insightType,
+              tableFqn: ins.tableFqn,
+              payloadJson: ins.payloadJson,
+              severity: ins.severity,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }, {
+        maxWait: 10_000,
+        timeout: 120_000,
       });
     });
 
