@@ -33,7 +33,13 @@ import { isAuthError } from "@/lib/lakebase/auth-errors";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
-// Pool construction helper — bypasses pg-connection-string URL parsing
+// Pool construction helper
+//
+// Passes the FULL connection string to pg so all parameters (including
+// sslmode=require and uselibpqcompat=true) are preserved. Explicitly
+// overrides `ssl` to match sslmode=require semantics: encrypt the
+// connection but do NOT verify the server certificate. This prevents
+// SCRAM channel-binding mismatches with the Lakebase (Neon-based) proxy.
 // ---------------------------------------------------------------------------
 
 function createPool(
@@ -41,22 +47,19 @@ function createPool(
   opts?: { idleTimeoutMillis?: number; max?: number }
 ): pg.Pool {
   const parsed = new URL(connectionString);
-  const pool = new pg.Pool({
-    host: parsed.hostname,
-    port: parseInt(parsed.port || "5432", 10),
-    database: parsed.pathname.slice(1),
-    user: decodeURIComponent(parsed.username),
-    password: decodeURIComponent(parsed.password),
-    ssl: true,
-    idleTimeoutMillis: opts?.idleTimeoutMillis,
-    max: opts?.max,
-  });
 
   logger.info("[prisma] Pool connecting", {
     host: parsed.hostname,
     database: parsed.pathname.slice(1),
     user: decodeURIComponent(parsed.username),
     passwordLength: decodeURIComponent(parsed.password).length,
+  });
+
+  const pool = new pg.Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    idleTimeoutMillis: opts?.idleTimeoutMillis,
+    max: opts?.max,
   });
 
   return pool;
@@ -126,7 +129,6 @@ export async function invalidatePrismaClient(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
-  // Fast path: pool exists and credential is current
   await refreshDbCredential();
   const generation = getCredentialGeneration();
   const tokenId = `autoscale_${generation}`;
@@ -135,7 +137,6 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
     return globalForPrisma.__prisma;
   }
 
-  // Slow path: need to build a new pool. Gate so only one caller does it.
   if (_initInFlight) return _initInFlight;
 
   _initInFlight = buildAutoProvisionedPool(tokenId, generation).finally(() => {
@@ -168,8 +169,6 @@ async function buildAutoProvisionedPool(
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
-  // Capture this client reference so the error handler only invalidates
-  // its own pool, not a newer one created by a subsequent rotation.
   const thisClient = prisma;
   pool.on("error", (err) => {
     if (globalForPrisma.__prisma !== thisClient) return;
@@ -264,7 +263,6 @@ async function getStaticPrisma(): Promise<PrismaClient> {
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
-  // Scoped error handler — only invalidates its own pool
   const thisClient = prisma;
   pool.on("error", (err) => {
     if (globalForPrisma.__prisma !== thisClient) return;
