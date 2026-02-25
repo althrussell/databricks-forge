@@ -14,21 +14,20 @@ export async function onRequestError() {
 
 export function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const required: [string, string][] = [
-      ["DATABASE_URL", "Lakebase connection string"],
+    const expected: [string, string][] = [
       ["DATABRICKS_HOST", "Databricks workspace URL"],
       ["DATABRICKS_WAREHOUSE_ID", "SQL Warehouse resource binding"],
     ];
-    const missing = required.filter(([key]) => !process.env[key]);
+    const missing = expected.filter(([key]) => !process.env[key]);
     if (missing.length > 0) {
       const list = missing.map(([k, desc]) => `  - ${k} (${desc})`).join("\n");
-      console.error(
-        `[startup] Missing required environment variables:\n${list}\n` +
-          "The app cannot start without these. Check your app.yaml resource bindings and .env.local for local dev."
+      console.warn(
+        `[startup] Expected environment variables not yet available:\n${list}\n` +
+          "These are normally injected by the Databricks Apps platform or set in .env.local for local dev."
       );
-      process.exit(1);
+    } else {
+      console.log("[instrumentation] Environment variables validated.");
     }
-    console.log("[instrumentation] Environment variables validated.");
 
     process.on("SIGTERM", async () => {
       console.log("[shutdown] SIGTERM received, closing connections...");

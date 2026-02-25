@@ -250,6 +250,7 @@ function classifyDeployError(error: string): { category: string; treatAsSuccess:
  * Try to auto-fix common DDL issues that cause deployment failures.
  * Returns the fixed DDL string, or null if no fix is applicable.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function attemptDdlAutoFix(ddl: string, error: string, _assetType: "metric_view"): string | null {
   const msg = error.toUpperCase();
 

@@ -325,7 +325,7 @@ export function ConfigForm() {
               value={businessName}
               onChange={(e) => {
                 setBusinessName(e.target.value);
-                if (fieldErrors.businessName) setFieldErrors((prev) => { const { businessName: _, ...rest } = prev; return rest; });
+                if (fieldErrors.businessName) setFieldErrors((prev) => { const next = { ...prev }; delete next.businessName; return next; });
               }}
               aria-invalid={!!fieldErrors.businessName}
               className={fieldErrors.businessName ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -392,7 +392,7 @@ export function ConfigForm() {
                   value={manualInput}
                   onChange={(e) => {
                     setManualInput(e.target.value);
-                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const { ucMetadata: _, ...rest } = prev; return rest; });
+                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const next = { ...prev }; delete next.ucMetadata; return next; });
                   }}
                   aria-invalid={!!fieldErrors.ucMetadata}
                   className={fieldErrors.ucMetadata ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -415,7 +415,7 @@ export function ConfigForm() {
                   selectedSources={selectedSources}
                   onSelectionChange={(sources) => {
                     setSelectedSources(sources);
-                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const { ucMetadata: _, ...rest } = prev; return rest; });
+                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const next = { ...prev }; delete next.ucMetadata; return next; });
                   }}
                 />
                 <button

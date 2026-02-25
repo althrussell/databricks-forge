@@ -100,6 +100,7 @@ export default function GlobalError({
                 justifyContent: "center",
               }}
             >
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- global-error replaces the root layout so next/link router context is unavailable */}
               <a
                 href="/"
                 className="ge-btn-secondary"
