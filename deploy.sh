@@ -228,12 +228,15 @@ create_app() {
     create_json=$(python3 -c "
 import json
 print(json.dumps({
+    'name': '''$APP_NAME''',
     'description': '''$APP_DESC''',
     'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files']
 }))
 ")
-    if ! databricks apps create "$APP_NAME" --json "$create_json" --no-compute 2>/dev/null; then
-      die "Failed to create app. You may need CAN_MANAGE permissions."
+    local create_err
+    if ! create_err=$(databricks apps create --json "$create_json" --no-compute 2>&1); then
+      printf "FAILED\n"
+      die "Failed to create app.\n  $create_err"
     fi
     ok "created with scopes"
   fi
@@ -273,9 +276,11 @@ print(json.dumps({
 }))
 ")
 
-  if ! databricks apps create-update "$APP_NAME" "resources,user_api_scopes" \
-       --json "$update_json" 2>/dev/null; then
-    die "Failed to configure app resources and scopes.\n  You may need CAN_MANAGE permissions on the app, warehouse, and endpoints."
+  local update_err
+  if ! update_err=$(databricks apps create-update "$APP_NAME" "resources,user_api_scopes" \
+       --json "$update_json" 2>&1); then
+    printf "FAILED\n"
+    die "Failed to configure app resources and scopes.\n  $update_err"
   fi
   ok
 }
