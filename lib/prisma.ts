@@ -24,6 +24,7 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
+neonConfig.pipelineConnect = false;
 
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
