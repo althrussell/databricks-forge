@@ -68,7 +68,7 @@ export function getColumnType(allowlist: SchemaAllowlist, tableFqn: string, colu
  * - 3-part FQNs (`catalog.schema.table`) for invalid table references
  * - 4-part FQNs (`catalog.schema.table.column`) for invalid column references
  *
- * Excludes FQNs that are the target of CREATE statements (FUNCTION, VIEW, TABLE)
+ * Excludes FQNs that are the target of CREATE statements (VIEW, TABLE)
  * since those are being defined, not referenced.
  */
 export function findInvalidIdentifiers(allowlist: SchemaAllowlist, sql: string): string[] {
@@ -76,7 +76,7 @@ export function findInvalidIdentifiers(allowlist: SchemaAllowlist, sql: string):
 
   // Collect FQNs that are targets of CREATE statements (these are being defined, not referenced)
   const createTargets = new Set<string>();
-  const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
+  const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
   let createMatch: RegExpExecArray | null;
   while ((createMatch = createRegex.exec(sql)) !== null) {
     const fqnMatch = createMatch[0].match(/(?:`([^`]+)`|([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*))$/);
@@ -149,17 +149,18 @@ export function buildSchemaContextBlock(
 
   const columnsByTable = new Map<string, ColumnInfo[]>();
   for (const c of metadata.columns) {
-    const fqn = c.tableFqn.toLowerCase();
-    if (targetTables && !targetTables.has(fqn)) continue;
-    if (!columnsByTable.has(c.tableFqn)) columnsByTable.set(c.tableFqn, []);
-    columnsByTable.get(c.tableFqn)!.push(c);
+    const key = c.tableFqn.toLowerCase();
+    if (targetTables && !targetTables.has(key)) continue;
+    if (!columnsByTable.has(key)) columnsByTable.set(key, []);
+    columnsByTable.get(key)!.push(c);
   }
 
   const lines: string[] = ["### SCHEMA CONTEXT (you MUST only reference these tables and columns)\n"];
 
   for (const t of metadata.tables) {
-    if (targetTables && !targetTables.has(t.fqn.toLowerCase())) continue;
-    const cols = columnsByTable.get(t.fqn) ?? [];
+    const key = t.fqn.toLowerCase();
+    if (targetTables && !targetTables.has(key)) continue;
+    const cols = columnsByTable.get(key) ?? [];
     cols.sort((a, b) => a.ordinalPosition - b.ordinalPosition);
 
     lines.push(`**${t.fqn}**${t.comment ? ` — ${t.comment}` : ""}`);

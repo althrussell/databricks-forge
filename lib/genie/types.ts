@@ -180,6 +180,7 @@ export interface TrustedAssetParameter {
   defaultValue: string | null;
 }
 
+/** @deprecated SQL functions are no longer generated for Genie spaces. Retained for backward-compatible deserialization of persisted data. */
 export interface TrustedAssetFunction {
   name: string;
   ddl: string;
@@ -299,6 +300,7 @@ export interface ExampleQuestionSql {
   usage_guidance?: string[];
 }
 
+/** @deprecated SQL functions are no longer deployed to Genie spaces. Retained for backward-compatible deserialization. */
 export interface SqlFunction {
   id: string;
   identifier: string;
@@ -387,6 +389,8 @@ export interface TrackedGenieSpace {
   domain: string;
   title: string;
   status: GenieSpaceStatus;
+  /** @deprecated `functions` is always empty — function deployment has been removed. */
+  deployedAssets?: { functions: string[]; metricViews: string[] } | null;
   createdAt: string;
   updatedAt: string;
 }

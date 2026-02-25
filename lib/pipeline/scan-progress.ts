@@ -129,6 +129,22 @@ export function getScanProgress(scanId: string): ScanProgress | null {
 }
 
 /**
+ * Return progress for all scans that are still running (not complete/failed).
+ */
+export function getActiveScans(): ScanProgress[] {
+  cleanup();
+  const now = Date.now();
+  const active: ScanProgress[] = [];
+  for (const entry of store.values()) {
+    if (entry.progress.phase !== "complete" && entry.progress.phase !== "failed") {
+      entry.progress.elapsedMs = now - entry.startTime;
+      active.push({ ...entry.progress });
+    }
+  }
+  return active;
+}
+
+/**
  * Remove expired entries.
  */
 function cleanup(): void {

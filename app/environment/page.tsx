@@ -216,11 +216,6 @@ export default function EstatePage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAggregate();
-    fetchAggregateErd();
-  }, [fetchAggregate, fetchAggregateErd]);
-
   // Load a single scan's detail
   const loadSingleScan = useCallback(async (scanId: string) => {
     try {
@@ -288,6 +283,8 @@ export default function EstatePage() {
       let attempts = 0;
       const maxAttempts = 300; // 10 minutes at 2s intervals
       const interval = 2_000;
+      let consecutiveMisses = 0;
+      const maxConsecutiveMisses = 5;
 
       const poll = async () => {
         attempts++;
@@ -297,6 +294,7 @@ export default function EstatePage() {
             `/api/environment-scan/${scanId}/progress`
           );
           if (progResp.ok) {
+            consecutiveMisses = 0;
             const prog: ScanProgressData = await progResp.json();
             setScanProgress(prog);
 
@@ -314,12 +312,14 @@ export default function EstatePage() {
 
             if (prog.phase === "failed") {
               setScanning(false);
+              setScanProgress(null);
               toast.error(prog.message || "Scan failed.");
               return;
             }
           } else {
-            // Progress endpoint 404 = scan may have completed before tracking started
-            // Fall back to checking the scan result directly
+            // Progress endpoint 404 = scan may have completed, or failed
+            // and the in-memory entry expired. Fall back to the persisted
+            // scan record to check for results.
             const scanResp = await fetch(`/api/environment-scan/${scanId}`);
             if (scanResp.ok) {
               const scan = await scanResp.json();
@@ -334,9 +334,20 @@ export default function EstatePage() {
                 return;
               }
             }
+
+            // Neither endpoint knows about this scan -- it likely failed
+            // without saving. Stop after a few consecutive misses to avoid
+            // filling logs with 404s for 10 minutes.
+            consecutiveMisses++;
+            if (consecutiveMisses >= maxConsecutiveMisses) {
+              setScanning(false);
+              setScanProgress(null);
+              toast.error("Scan failed — no progress or results found. Check the logs.");
+              return;
+            }
           }
         } catch {
-          // Continue polling on error
+          // Continue polling on transient network errors
         }
 
         if (attempts < maxAttempts) {
@@ -353,6 +364,33 @@ export default function EstatePage() {
     },
     [fetchAggregate, fetchAggregateErd, loadSingleScan]
   );
+
+  // On mount: load aggregate data and resume any in-progress scan
+  useEffect(() => {
+    fetchAggregate();
+    fetchAggregateErd();
+
+    // Check for scans that are still running server-side (e.g. user
+    // navigated away mid-scan and came back).
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch("/api/environment-scan/active");
+        if (!resp.ok || cancelled) return;
+        const { scans } = await resp.json();
+        if (cancelled || !scans?.length) return;
+
+        const active = scans[0];
+        setScanning(true);
+        setScanProgress(active);
+        pollForScan(active.scanId);
+      } catch {
+        // Non-fatal -- just means no active scan to resume
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fetchAggregate, fetchAggregateErd, pollForScan]);
 
   const [exporting, setExporting] = useState(false);
 
@@ -531,8 +569,8 @@ export default function EstatePage() {
         </div>
       </div>
 
-      {/* New Scan Form with Catalog Browser */}
-      {viewMode === "new-scan" && (
+      {/* New Scan Form with Catalog Browser (hidden while a scan is running) */}
+      {viewMode === "new-scan" && !scanning && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

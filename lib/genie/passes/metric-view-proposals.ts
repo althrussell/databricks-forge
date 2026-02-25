@@ -19,6 +19,7 @@
 
 import { type ChatMessage } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "../llm-cache";
+import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot, UseCase } from "@/lib/domain/types";
@@ -125,6 +126,7 @@ IMPORTANT: Dimension and measure entries only support "name" and "expr". Do NOT 
 Do NOT use window: blocks on measures -- this feature is experimental and not supported in production.
 Do NOT use window functions (OVER clause) in measure expressions -- metric views do not support OVER().
 NEVER use MEDIAN() -- use PERCENTILE_APPROX(col, 0.5) instead.
+NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query, ai_similarity, ai_forecast, ai_summarize) anywhere in metric view definitions -- not in dimensions, measures, filters, or join conditions. They are non-deterministic and prohibitively expensive per-row. Metric views must use only deterministic SQL expressions over materialized columns.
 
 ### Materialization (experimental):
 \`\`\`yaml
@@ -311,6 +313,17 @@ function validateMetricViewYaml(
     }
   }
 
+  // Detect AI functions anywhere in metric view expressions -- they are
+  // non-deterministic and prohibitively expensive per-row.
+  const AI_FN_PATTERN = /\b(ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
+  const allExprLines = yaml.match(/(?:expr|filter|on):\s*.+/g) ?? [];
+  for (const line of allExprLines) {
+    const aiMatch = line.match(AI_FN_PATTERN);
+    if (aiMatch) {
+      issues.push(`AI function "${aiMatch[1]}" in metric view expression is not allowed (non-deterministic and expensive): ${line.trim()}`);
+    }
+  }
+
   const joinSourceMatches = yaml.matchAll(/joins:[\s\S]*?source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/g);
   for (const m of joinSourceMatches) {
     const joinFqn = m[1];
@@ -337,7 +350,8 @@ function validateMetricViewYaml(
     i.startsWith("Missing required") ||
     i.includes("not found in schema") ||
     i.includes("not found in table") ||
-    i.includes("Window function")
+    i.includes("Window function") ||
+    i.includes("AI function")
   );
 
   return {
@@ -447,7 +461,7 @@ ${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric
 4. Include time-based dimensions using DATE_TRUNC for any date/timestamp columns
 5. Include a mix of measure types:
    - Basic aggregates (SUM, COUNT, AVG)
-   - FILTER clause measures for status/category breakdowns, e.g. \`SUM(amount) FILTER (WHERE status = 'OPEN')\`
+   - FILTER clause measures for status/category breakdowns using DETERMINISTIC column values only, e.g. \`SUM(amount) FILTER (WHERE status = 'OPEN')\`. NEVER use AI functions in ANY metric view expression -- they are non-deterministic and expensive.
    - Ratio measures that safely re-aggregate, e.g. \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
    - COUNT DISTINCT measures for cardinality metrics
 6. Use descriptive dimension/measure \`name\` values informed by the column descriptions provided
@@ -539,6 +553,48 @@ Create metric view proposals for this domain.`;
         };
       })
       .filter((p) => p.name.length > 0 && p.ddl.length > 0);
+
+    // Dry-run: execute DDL for proposals that passed static validation to
+    // catch SQL-level errors before the user ever sees the proposal.
+    // Permission errors are treated as warnings (user can deploy to a
+    // different schema), not hard failures.
+    const PERMISSION_PATTERNS = [
+      "PERMISSION_DENIED",
+      "does not have CREATE",
+      "Access denied",
+      "INSUFFICIENT_PRIVILEGES",
+    ];
+
+    for (const proposal of proposals) {
+      if (proposal.validationStatus === "error") continue;
+      try {
+        await executeSQL(proposal.ddl);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isPermissionError = PERMISSION_PATTERNS.some((p) => msg.includes(p));
+
+        if (isPermissionError) {
+          if (proposal.validationStatus !== "warning") {
+            proposal.validationStatus = "warning";
+          }
+          proposal.validationIssues.push(
+            `Could not pre-validate — no CREATE permission on source schema. Deploy to a schema you own.`
+          );
+          logger.info("Metric view dry-run skipped (permission)", {
+            domain,
+            name: proposal.name,
+          });
+        } else {
+          proposal.validationStatus = "error";
+          proposal.validationIssues.push(`SQL validation failed: ${msg}`);
+          logger.warn("Metric view dry-run failed", {
+            domain,
+            name: proposal.name,
+            error: msg,
+          });
+        }
+      }
+    }
 
     logger.info("Metric view proposals generated", {
       domain,

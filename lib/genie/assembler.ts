@@ -10,7 +10,6 @@ import type {
   DataSourceTable,
   DataSourceMetricView,
   ExampleQuestionSql,
-  SqlFunction,
   JoinSpec,
   SqlSnippetMeasure,
   SqlSnippetFilter,
@@ -185,14 +184,37 @@ export function assembleSerializedSpace(
       return comment ? { identifier: fqn, description: [comment] } : { identifier: fqn };
     });
 
-  // Table limit guard (Genie spaces support up to 30 tables/views)
+  // Hard cap: Genie spaces support at most 30 tables + views combined.
+  // Prioritise tables that participate in joins (higher connectivity = higher value).
+  const MAX_DATA_OBJECTS = 30;
+  let cappedTables = dataTables;
+  let cappedMetricViews = dataMetricViews;
   const totalDataObjects = dataTables.length + dataMetricViews.length;
-  if (totalDataObjects > 30) {
-    logger.warn("Genie space exceeds 30 table/view limit", {
+
+  if (totalDataObjects > MAX_DATA_OBJECTS) {
+    const joinedTableIds = new Set(
+      outputs.joinSpecs.flatMap((j) => [j.leftTable.toLowerCase(), j.rightTable.toLowerCase()])
+    );
+
+    cappedTables = [...dataTables].sort((a, b) => {
+      const aJoined = joinedTableIds.has(a.identifier.toLowerCase()) ? 1 : 0;
+      const bJoined = joinedTableIds.has(b.identifier.toLowerCase()) ? 1 : 0;
+      return bJoined - aJoined;
+    });
+
+    // Metric views always count; cap tables to fill remaining budget
+    const mvBudget = Math.min(cappedMetricViews.length, Math.floor(MAX_DATA_OBJECTS * 0.3));
+    cappedMetricViews = cappedMetricViews.slice(0, mvBudget);
+    cappedTables = cappedTables.slice(0, MAX_DATA_OBJECTS - cappedMetricViews.length);
+
+    logger.warn("Genie space capped to 30 data objects", {
       domain,
-      tables: dataTables.length,
-      metricViews: dataMetricViews.length,
-      total: totalDataObjects,
+      originalTables: dataTables.length,
+      originalMetricViews: dataMetricViews.length,
+      keptTables: cappedTables.length,
+      keptMetricViews: cappedMetricViews.length,
+      droppedTables: dataTables.length - cappedTables.length,
+      droppedMetricViews: dataMetricViews.length - cappedMetricViews.length,
     });
   }
 
@@ -205,8 +227,12 @@ export function assembleSerializedSpace(
     }));
 
   // 4. SQL examples (from trusted queries + use case SQL)
+  // Cap at 8 examples; drop any with SQL longer than 4000 chars (Genie comprehension degrades)
+  const MAX_EXAMPLE_SQL_CHARS = 4000;
+  const MAX_SQL_EXAMPLES = 8;
   const exampleSqls: ExampleQuestionSql[] = outputs.trustedQueries
-    .slice(0, 10)
+    .filter((tq) => tq.sql.length <= MAX_EXAMPLE_SQL_CHARS)
+    .slice(0, MAX_SQL_EXAMPLES)
     .map((tq, i) => {
       const entry: ExampleQuestionSql = {
         id: makeId(seed, "sql", i),
@@ -250,9 +276,14 @@ export function assembleSerializedSpace(
     });
 
   // 6. SQL snippets (measures, filters, dimensions)
+  // Focused spaces perform better — cap at 12 each (Genie best practice)
+  const MAX_SNIPPETS = 12;
+  const MAX_SNIPPET_SQL_CHARS = 500;
+
   const measures: SqlSnippetMeasure[] = outputs.measures
     .filter((m) => validateSqlExpression(allowlist, m.sql, `asm_measure:${m.name}`))
-    .slice(0, 20)
+    .filter((m) => m.sql.length <= MAX_SNIPPET_SQL_CHARS)
+    .slice(0, MAX_SNIPPETS)
     .map((m, i) => ({
       id: makeId(seed, "measure", i),
       alias: m.instructions ? `${m.name} -- ${m.instructions}` : m.name,
@@ -262,7 +293,8 @@ export function assembleSerializedSpace(
 
   const filters: SqlSnippetFilter[] = outputs.filters
     .filter((f) => validateSqlExpression(allowlist, f.sql, `asm_filter:${f.name}`))
-    .slice(0, 20)
+    .filter((f) => f.sql.length <= MAX_SNIPPET_SQL_CHARS)
+    .slice(0, MAX_SNIPPETS)
     .map((f, i) => ({
       id: makeId(seed, "filter", i),
       sql: [f.sql],
@@ -272,7 +304,8 @@ export function assembleSerializedSpace(
 
   const expressions: SqlSnippetExpression[] = outputs.dimensions
     .filter((d) => validateSqlExpression(allowlist, d.sql, `asm_dim:${d.name}`))
-    .slice(0, 20)
+    .filter((d) => d.sql.length <= MAX_SNIPPET_SQL_CHARS)
+    .slice(0, MAX_SNIPPETS)
     .map((d, i) => ({
       id: makeId(seed, "expr", i),
       alias: d.instructions ? `${d.name} -- ${d.instructions}` : d.name,
@@ -280,14 +313,7 @@ export function assembleSerializedSpace(
       ...(d.synonyms.length > 0 ? { synonyms: d.synonyms } : {}),
     }));
 
-  // 7. SQL functions (trusted assets)
-  const sqlFunctions: SqlFunction[] = outputs.trustedFunctions
-    .map((fn, i) => ({
-      id: makeId(seed, "fn", i),
-      identifier: fn.name,
-    }));
-
-  // 8. Text instructions -- API allows at most one TextInstruction entry;
+  // 7. Text instructions -- API allows at most one TextInstruction entry;
   //    all instruction strings go into its content[] array.
   const instrContent = outputs.textInstructions.filter(
     (t) => t.trim().length > 0
@@ -297,13 +323,35 @@ export function assembleSerializedSpace(
       ? [{ id: makeId(seed, "instr", 0), content: instrContent }]
       : [];
 
-  const instrTotalChars = instrContent.reduce((sum, s) => sum + s.length, 0);
-  logger.info("Genie instruction size", { domain, totalChars: instrTotalChars, blocks: instrContent.length });
-  if (instrTotalChars > 3000) {
-    logger.warn("Genie instructions exceed recommended limit", { domain, totalChars: instrTotalChars });
+  // Hard-truncate instructions to 3000 chars (Genie API recommended limit).
+  // The instruction-generation pass already budgets, but this is a safety net.
+  const MAX_INSTR_CHARS = 3000;
+  let instrTotalChars = instrContent.reduce((sum, s) => sum + s.length, 0);
+  if (instrTotalChars > MAX_INSTR_CHARS) {
+    let charBudget = MAX_INSTR_CHARS;
+    const trimmed: string[] = [];
+    for (const block of instrContent) {
+      if (charBudget <= 0) break;
+      if (block.length <= charBudget) {
+        trimmed.push(block);
+        charBudget -= block.length;
+      } else {
+        trimmed.push(block.slice(0, charBudget));
+        charBudget = 0;
+      }
+    }
+    instrContent.length = 0;
+    instrContent.push(...trimmed);
+    logger.warn("Genie instructions truncated to fit 3000-char limit", {
+      domain,
+      originalChars: instrTotalChars,
+      truncatedChars: trimmed.reduce((s, t) => s + t.length, 0),
+    });
+    instrTotalChars = trimmed.reduce((s, t) => s + t.length, 0);
   }
+  logger.info("Genie instruction size", { domain, totalChars: instrTotalChars, blocks: instrContent.length });
 
-  // 9. Benchmarks -- each phrasing gets its own entry sharing the same answer
+  // 8. Benchmarks -- each phrasing gets its own entry sharing the same answer
   const benchmarks: BenchmarkQuestion[] = [];
   let benchIdx = 0;
   for (const b of outputs.benchmarkQuestions) {
@@ -325,13 +373,12 @@ export function assembleSerializedSpace(
     version: 2,
     config: { sample_questions: [...sampleQuestions].sort(byId) },
     data_sources: {
-      tables: dataTables,
-      ...(dataMetricViews.length > 0 ? { metric_views: dataMetricViews } : {}),
+      tables: cappedTables,
+      ...(cappedMetricViews.length > 0 ? { metric_views: cappedMetricViews } : {}),
     },
     instructions: {
       text_instructions: [...textInstructions].sort(byId),
       example_question_sqls: [...exampleSqls].sort(byId),
-      ...(sqlFunctions.length > 0 ? { sql_functions: [...sqlFunctions].sort(byId) } : {}),
       join_specs: [...joinSpecs].sort(byId),
       sql_snippets: {
         measures: [...measures].sort(byId),
@@ -362,16 +409,21 @@ export function buildRecommendation(
     descParts.push(`Covers: ${outputs.subdomains.join(", ")}.`);
   }
   descParts.push(
-    `${outputs.measures.length} measures, ${outputs.filters.length} filters, ${outputs.dimensions.length} dimensions.`
+    `${space.instructions.sql_snippets.measures.length} measures, ` +
+    `${space.instructions.sql_snippets.filters.length} filters, ` +
+    `${space.instructions.sql_snippets.expressions.length} dimensions.`
   );
+
+  const spaceTables = space.data_sources.tables.map((t) => t.identifier);
+  const spaceMvs = space.data_sources.metric_views?.map((mv) => mv.identifier) ?? [];
 
   return {
     domain: outputs.domain,
     subdomains: outputs.subdomains,
     title,
     description: descParts.join(" "),
-    tableCount: outputs.tables.length,
-    metricViewCount: outputs.metricViews.length,
+    tableCount: spaceTables.length,
+    metricViewCount: spaceMvs.length,
     useCaseCount: 0, // Will be set by the engine
     sqlExampleCount: space.instructions.example_question_sqls.length,
     joinCount: space.instructions.join_specs.length,
@@ -381,9 +433,9 @@ export function buildRecommendation(
     benchmarkCount: space.benchmarks?.questions.length ?? 0,
     instructionCount: space.instructions.text_instructions.flatMap((t) => t.content).length,
     sampleQuestionCount: space.config.sample_questions.length,
-    sqlFunctionCount: space.instructions.sql_functions?.length ?? 0,
-    tables: outputs.tables,
-    metricViews: outputs.metricViews,
+    sqlFunctionCount: 0,
+    tables: spaceTables,
+    metricViews: spaceMvs,
     serializedSpace: JSON.stringify(space),
   };
 }

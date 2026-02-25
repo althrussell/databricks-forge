@@ -29,7 +29,6 @@ import type {
   ColumnEnrichment,
   MetricViewProposal,
   BenchmarkInput,
-  TrustedAssetFunction,
 } from "@/lib/genie/types";
 
 interface GenieSpacePreviewProps {
@@ -40,7 +39,6 @@ interface ExtendedRecommendation extends GenieSpaceRecommendation {
   benchmarks?: string | null;
   columnEnrichments?: string | null;
   metricViewProposals?: string | null;
-  trustedFunctions?: string | null;
 }
 
 export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
@@ -132,9 +130,6 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
     ? (() => { try { return JSON.parse(rec.benchmarks!) as BenchmarkInput[]; } catch { return []; } })()
     : [];
 
-  const trustedFns: TrustedAssetFunction[] = rec?.trustedFunctions
-    ? (() => { try { return JSON.parse(rec.trustedFunctions!) as TrustedAssetFunction[]; } catch { return []; } })()
-    : [];
 
   return (
     <div className="space-y-4">
@@ -170,11 +165,10 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             <StatCard label="Dimensions" value={rec.dimensionCount} />
             <StatCard label="Joins" value={rec.joinCount} />
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <StatCard label="Benchmarks" value={benchmarks.length} />
             <StatCard label="Instructions" value={rec.instructionCount} />
             <StatCard label="Questions" value={rec.sampleQuestionCount} />
-            <StatCard label="Functions" value={rec.sqlFunctionCount} />
           </div>
 
           <Accordion type="multiple" defaultValue={["tables", "measures"]} className="w-full">
@@ -246,14 +240,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Measures */}
-            {parsed.instructions.sql_snippets.measures.length > 0 && (
+            {(parsed.instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
               <AccordionItem value="measures">
                 <AccordionTrigger className="text-xs font-medium">
-                  Measures ({parsed.instructions.sql_snippets.measures.length})
+                  Measures ({parsed.instructions?.sql_snippets?.measures?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.instructions.sql_snippets.measures.map((m) => (
+                    {(parsed.instructions?.sql_snippets?.measures ?? []).map((m) => (
                       <EditableSnippetRow
                         key={m.id}
                         id={m.id}
@@ -273,14 +267,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Filters */}
-            {parsed.instructions.sql_snippets.filters.length > 0 && (
+            {(parsed.instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
               <AccordionItem value="filters">
                 <AccordionTrigger className="text-xs font-medium">
-                  Filters ({parsed.instructions.sql_snippets.filters.length})
+                  Filters ({parsed.instructions?.sql_snippets?.filters?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.instructions.sql_snippets.filters.map((f) => (
+                    {(parsed.instructions?.sql_snippets?.filters ?? []).map((f) => (
                       <EditableSnippetRow
                         key={f.id}
                         id={f.id}
@@ -300,14 +294,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Dimensions */}
-            {parsed.instructions.sql_snippets.expressions.length > 0 && (
+            {(parsed.instructions?.sql_snippets?.expressions?.length ?? 0) > 0 && (
               <AccordionItem value="dimensions">
                 <AccordionTrigger className="text-xs font-medium">
-                  Dimensions ({parsed.instructions.sql_snippets.expressions.length})
+                  Dimensions ({parsed.instructions?.sql_snippets?.expressions?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.instructions.sql_snippets.expressions.map((e) => (
+                    {(parsed.instructions?.sql_snippets?.expressions ?? []).map((e) => (
                       <EditableSnippetRow
                         key={e.id}
                         id={e.id}
@@ -327,14 +321,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Sample Questions */}
-            {parsed.config.sample_questions.length > 0 && (
+            {(parsed.config?.sample_questions?.length ?? 0) > 0 && (
               <AccordionItem value="questions">
                 <AccordionTrigger className="text-xs font-medium">
-                  Sample Questions ({parsed.config.sample_questions.length})
+                  Sample Questions ({parsed.config?.sample_questions?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1">
-                    {parsed.config.sample_questions.map((q) => (
+                    {(parsed.config?.sample_questions ?? []).map((q) => (
                       <EditableTextRow
                         key={q.id}
                         id={q.id}
@@ -353,14 +347,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* SQL Examples */}
-            {parsed.instructions.example_question_sqls.length > 0 && (
+            {(parsed.instructions?.example_question_sqls?.length ?? 0) > 0 && (
               <AccordionItem value="sql">
                 <AccordionTrigger className="text-xs font-medium">
-                  SQL Examples ({parsed.instructions.example_question_sqls.length})
+                  SQL Examples ({parsed.instructions?.example_question_sqls?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="max-h-64 space-y-3 overflow-auto">
-                    {parsed.instructions.example_question_sqls.map((ex) => (
+                    {(parsed.instructions?.example_question_sqls ?? []).map((ex) => (
                       <div key={ex.id}>
                         <p className="text-xs font-medium">{ex.question.join(" ")}</p>
                         <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
@@ -374,14 +368,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             )}
 
             {/* Joins */}
-            {parsed.instructions.join_specs.length > 0 && (
+            {(parsed.instructions?.join_specs?.length ?? 0) > 0 && (
               <AccordionItem value="joins">
                 <AccordionTrigger className="text-xs font-medium">
-                  Join Relationships ({parsed.instructions.join_specs.length})
+                  Join Relationships ({parsed.instructions?.join_specs?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-1 text-xs">
-                    {parsed.instructions.join_specs.map((j) => {
+                    {(parsed.instructions?.join_specs ?? []).map((j) => {
                       const rtMatch = j.sql.find((s: string) => s.startsWith("--rt="))?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
                       const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
                       const sqlDisplay = j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ");
@@ -399,48 +393,15 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
               </AccordionItem>
             )}
 
-            {/* SQL Functions (Trusted Asset UDFs) */}
-            {parsed.instructions.sql_functions && parsed.instructions.sql_functions.length > 0 && (
-              <AccordionItem value="functions">
-                <AccordionTrigger className="text-xs font-medium">
-                  SQL Functions ({parsed.instructions.sql_functions.length})
-                  {trustedFns.length > 0 && (
-                    <Badge variant="outline" className="ml-2 text-[9px]">
-                      {trustedFns.length} deployable
-                    </Badge>
-                  )}
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-2 text-xs">
-                    {parsed.instructions.sql_functions.map((fn) => {
-                      const tfn = trustedFns.find(
-                        (t) => t.name.toLowerCase() === fn.identifier.toLowerCase()
-                      );
-                      return (
-                        <TrustedFunctionCard
-                          key={fn.id}
-                          identifier={fn.identifier}
-                          ddl={tfn?.ddl ?? null}
-                          description={tfn?.description ?? null}
-                          runId={runId}
-                          domain={selectedDomain!}
-                        />
-                      );
-                    })}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            )}
-
             {/* Instructions */}
-            {parsed.instructions.text_instructions.length > 0 && (
+            {(parsed.instructions?.text_instructions?.length ?? 0) > 0 && (
               <AccordionItem value="instructions">
                 <AccordionTrigger className="text-xs font-medium">
-                  Text Instructions ({parsed.instructions.text_instructions.length})
+                  Text Instructions ({parsed.instructions?.text_instructions?.length ?? 0})
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-2">
-                    {parsed.instructions.text_instructions.map((ti) => (
+                    {(parsed.instructions?.text_instructions ?? []).map((ti) => (
                       <EditableTextRow
                         key={ti.id}
                         id={ti.id}
@@ -677,82 +638,6 @@ function EditableTextRow({
   );
 }
 
-function TrustedFunctionCard({
-  identifier,
-  ddl,
-  description,
-  runId,
-  domain,
-}: {
-  identifier: string;
-  ddl: string | null;
-  description: string | null;
-  runId: string;
-  domain: string;
-}) {
-  const [deploying, setDeploying] = useState(false);
-  const [deployed, setDeployed] = useState(false);
-
-  const handleDeploy = async () => {
-    if (!ddl) return;
-    setDeploying(true);
-    try {
-      const res = await fetch(
-        `/api/runs/${runId}/genie-engine/${encodeURIComponent(domain)}/functions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ddl, name: identifier }),
-        }
-      );
-      if (res.ok) {
-        toast.success(`Function "${identifier}" created`);
-        setDeployed(true);
-      } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to create function");
-      }
-    } catch {
-      toast.error("Failed to create function");
-    } finally {
-      setDeploying(false);
-    }
-  };
-
-  return (
-    <div className="rounded border p-2">
-      <div className="flex items-center justify-between gap-2">
-        <code className="rounded bg-muted px-1 font-mono text-[10px] font-semibold">
-          {identifier}
-        </code>
-        {ddl ? (
-          <Button
-            size="sm"
-            variant={deployed ? "outline" : "default"}
-            onClick={handleDeploy}
-            disabled={deploying || deployed}
-            className="h-5 px-2 text-[9px]"
-          >
-            {deployed ? "Deployed" : deploying ? "Creating..." : "Deploy"}
-          </Button>
-        ) : (
-          <Badge variant="outline" className="text-[9px] text-muted-foreground">
-            no DDL
-          </Badge>
-        )}
-      </div>
-      {description && (
-        <p className="mt-0.5 text-[10px] text-muted-foreground">{description}</p>
-      )}
-      {ddl && (
-        <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-1.5 text-[10px] font-mono leading-relaxed">
-          {ddl}
-        </pre>
-      )}
-    </div>
-  );
-}
-
 function MetricViewProposalCard({
   proposal,
   runId,
@@ -837,12 +722,12 @@ function MetricViewProposalCard({
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{mv.description}</p>
       {mv.validationIssues.length > 0 && (
-        <div className="mt-1.5 rounded bg-amber-50 p-1.5 dark:bg-amber-950/20">
-          <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
-            Validation issues:
+        <div className={`mt-1.5 rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}>
+          <p className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+            {mv.validationStatus === "error" ? "Validation errors (deploy blocked):" : "Validation issues:"}
           </p>
           {mv.validationIssues.map((issue, idx) => (
-            <p key={idx} className="text-[10px] text-amber-600 dark:text-amber-500">
+            <p key={idx} className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}>
               - {issue}
             </p>
           ))}

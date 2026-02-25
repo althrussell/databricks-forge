@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -30,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Accordion,
@@ -38,6 +37,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { BrainCircuit, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type {
   GenieEngineRecommendation,
@@ -49,18 +49,44 @@ import type { UseCase } from "@/lib/domain/types";
 import { GenieDeployModal } from "./genie-deploy-modal";
 
 // ---------------------------------------------------------------------------
+// Trash preview types
+// ---------------------------------------------------------------------------
+
+interface SharedAsset {
+  fqn: string;
+  usedBy: string[];
+}
+
+interface TrashPreview {
+  assets: { functions: string[]; metricViews: string[] };
+  shared: { functions: SharedAsset[]; metricViews: SharedAsset[] };
+  safeToDelete: { functions: string[]; metricViews: string[] };
+}
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 interface GenieSpacesTabProps {
   runId: string;
+  /** Whether the Genie Engine is currently generating. */
+  generating?: boolean;
+  /** Domain names that the engine has finished processing so far. */
+  completedDomainNames?: string[];
+  /** Incremented when the engine completes; triggers a data refetch. */
+  refreshKey?: number;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
+export function GenieSpacesTab({
+  runId,
+  generating: engineGenerating = false,
+  completedDomainNames = [],
+  refreshKey = 0,
+}: GenieSpacesTabProps) {
   const [recommendations, setRecommendations] = useState<
     GenieEngineRecommendation[]
   >([]);
@@ -77,8 +103,13 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
 
   // Deploy state
 
-  // Trash loading
+  // Trash flow state
   const [trashingDomain, setTrashingDomain] = useState<string | null>(null);
+  const [trashDialogOpen, setTrashDialogOpen] = useState(false);
+  const [trashDialogDomain, setTrashDialogDomain] = useState<string | null>(null);
+  const [trashPreview, setTrashPreview] = useState<TrashPreview | null>(null);
+  const [trashPreviewLoading, setTrashPreviewLoading] = useState(false);
+  const [dropAssetsChecked, setDropAssetsChecked] = useState(true);
 
   // Test Space state
   const [testingDomain, setTestingDomain] = useState<string | null>(null);
@@ -95,6 +126,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
 
   // Per-domain regeneration state
   const [regeneratingDomain, setRegeneratingDomain] = useState<string | null>(null);
+  const regenPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Use cases for detail sheet (lazy-loaded per domain, cached)
   const [detailUseCases, setDetailUseCases] = useState<UseCase[]>([]);
@@ -126,9 +158,23 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
 
   useEffect(() => {
     fetchRecommendations();
+    return () => {
+      if (regenPollRef.current) {
+        clearInterval(regenPollRef.current);
+        regenPollRef.current = null;
+      }
+    };
   }, [fetchRecommendations]);
 
+  // Re-fetch when the engine completes (refreshKey increments from parent)
   useEffect(() => {
+    if (refreshKey > 0) {
+      fetchRecommendations();
+    }
+  }, [refreshKey, fetchRecommendations]);
+
+  useEffect(() => {
+    setTestResults(null);
     if (!detailDomain) {
       setDetailUseCases([]);
       return;
@@ -151,7 +197,7 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
         setUseCaseCache((prev) => new Map(prev).set(detailDomain, filtered));
         setDetailUseCases(filtered);
       } catch {
-        /* non-critical */
+        toast.error("Failed to load use cases for this domain");
       } finally {
         if (!cancelled) setLoadingUseCases(false);
       }
@@ -222,14 +268,48 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
     fetchRecommendations();
   }
 
-  async function handleTrash(domain: string) {
+  async function openTrashDialog(domain: string) {
     const tracking = getTracking(domain);
     if (!tracking) return;
 
-    setTrashingDomain(domain);
+    setTrashDialogDomain(domain);
+    setTrashPreview(null);
+    setDropAssetsChecked(true);
+    setTrashDialogOpen(true);
+    setTrashPreviewLoading(true);
+
     try {
+      const res = await fetch(`/api/genie-spaces/${tracking.spaceId}/trash-preview`);
+      if (res.ok) {
+        const data = (await res.json()) as TrashPreview;
+        setTrashPreview(data);
+      }
+    } catch {
+      toast.error("Failed to load asset preview — you can still trash the space");
+    } finally {
+      setTrashPreviewLoading(false);
+    }
+  }
+
+  async function executeTrash() {
+    if (!trashDialogDomain) return;
+    const tracking = getTracking(trashDialogDomain);
+    if (!tracking) return;
+
+    setTrashingDomain(trashDialogDomain);
+    setTrashDialogOpen(false);
+
+    try {
+      const body: Record<string, unknown> = {};
+      if (dropAssetsChecked && trashPreview) {
+        body.dropAssets = true;
+        body.assetsToDelete = trashPreview.safeToDelete;
+      }
+
       const res = await fetch(`/api/genie-spaces/${tracking.spaceId}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -241,6 +321,8 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
       toast.error(err instanceof Error ? err.message : "Trash failed");
     } finally {
       setTrashingDomain(null);
+      setTrashDialogDomain(null);
+      setTrashPreview(null);
     }
   }
 
@@ -312,18 +394,21 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
 
       toast.info(`Regenerating "${domain}"...`);
 
-      const poll = setInterval(async () => {
+      if (regenPollRef.current) clearInterval(regenPollRef.current);
+      regenPollRef.current = setInterval(async () => {
         try {
           const sr = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
           if (!sr.ok) return;
           const sd = await sr.json();
           if (sd.status === "completed") {
-            clearInterval(poll);
+            if (regenPollRef.current) clearInterval(regenPollRef.current);
+            regenPollRef.current = null;
             setRegeneratingDomain(null);
             toast.success(`"${domain}" regenerated`);
             await fetchRecommendations();
           } else if (sd.status === "failed") {
-            clearInterval(poll);
+            if (regenPollRef.current) clearInterval(regenPollRef.current);
+            regenPollRef.current = null;
             setRegeneratingDomain(null);
             toast.error(sd.error || `"${domain}" regeneration failed`);
           }
@@ -469,7 +554,29 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                           aria-label={`Select ${rec.domain}`}
                         />
                       </td>
-                      <td className="px-3 py-2.5 font-medium">{rec.domain}</td>
+                      <td className="px-3 py-2.5 font-medium">
+                        <span className="flex items-center gap-1.5">
+                          {rec.domain}
+                          {engineGenerating && completedDomainNames.includes(rec.domain) && (
+                            <BrainCircuit
+                              className="h-3.5 w-3.5 text-violet-500"
+                              aria-label="AI analysis complete"
+                            />
+                          )}
+                          {engineGenerating && !completedDomainNames.includes(rec.domain) && (
+                            <BrainCircuit
+                              className="h-3.5 w-3.5 animate-pulse text-violet-400/50"
+                              aria-label="AI analysis in progress"
+                            />
+                          )}
+                          {!engineGenerating && completedDomainNames.includes(rec.domain) && (
+                            <BrainCircuit
+                              className="h-3.5 w-3.5 text-violet-500"
+                              aria-label="AI enriched"
+                            />
+                          )}
+                        </span>
+                      </td>
                       <td className="max-w-[200px] px-3 py-2.5">
                         <div className="flex flex-wrap gap-1">
                           {rec.subdomains.slice(0, 3).map((sd) => (
@@ -506,7 +613,6 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                             <KSChip label="Benchmarks" value={rec.benchmarkCount} accent="violet" />
                             <KSChip label="Instructions" value={rec.instructionCount} />
                             <KSChip label="Questions" value={rec.sampleQuestionCount} />
-                            <KSChip label="Functions" value={rec.sqlFunctionCount} accent="blue" />
                           </div>
                         )}
                       </td>
@@ -541,37 +647,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                         onClick={(e) => e.stopPropagation()}
                       >
                         {deployed && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <button
-                                className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                                disabled={trashingDomain === rec.domain}
-                                aria-label={`Trash ${rec.domain} space`}
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Trash Genie Space?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will move the &quot;{rec.title}&quot;
-                                  Genie space to trash. This can be undone from
-                                  the Databricks workspace.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleTrash(rec.domain)}
-                                >
-                                  Trash
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <button
+                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            disabled={trashingDomain === rec.domain}
+                            aria-label={`Trash ${rec.domain} space`}
+                            onClick={() => openTrashDialog(rec.domain)}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -622,6 +705,9 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                 <SheetTitle className="flex items-center gap-2">
                   <GenieIcon className="h-5 w-5 text-violet-500" />
                   {detailRec.domain}
+                  {completedDomainNames.includes(detailRec.domain) && (
+                    <BrainCircuit className="h-4 w-4 text-violet-500" aria-label="AI enriched" />
+                  )}
                 </SheetTitle>
                 <SheetDescription>{detailRec.description}</SheetDescription>
                 {detailTracking && (
@@ -656,11 +742,10 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                     value={detailRec.dimensionCount}
                   />
                 </div>
-                <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+                <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                   <StatBadge label="Benchmarks" value={detailRec.benchmarkCount} />
                   <StatBadge label="Instructions" value={detailRec.instructionCount} />
                   <StatBadge label="Questions" value={detailRec.sampleQuestionCount} />
-                  <StatBadge label="Functions" value={detailRec.sqlFunctionCount} />
                 </div>
 
                 <Separator />
@@ -727,6 +812,18 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                                   {mv.hasWindowMeasures && <Badge className="bg-purple-500/10 text-purple-600 text-[9px]">window</Badge>}
                                   {mv.hasMaterialization && <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px]">materialized</Badge>}
                                 </div>
+                                {mv.validationIssues && mv.validationIssues.length > 0 && (
+                                  <div className={`rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}>
+                                    <p className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+                                      {mv.validationStatus === "error" ? "Validation errors:" : "Validation issues:"}
+                                    </p>
+                                    {mv.validationIssues.map((issue: string, idx: number) => (
+                                      <p key={idx} className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}>
+                                        - {issue}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
                                 {mv.ddl && (
                                   <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
                                     {mv.ddl}
@@ -813,14 +910,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   {/* Column enrichment info is now folded into table descriptions */}
 
                   {/* Sample Questions */}
-                  {detailParsed.config.sample_questions.length > 0 && (
+                  {(detailParsed.config?.sample_questions?.length ?? 0) > 0 && (
                     <AccordionItem value="questions">
                       <AccordionTrigger className="text-xs font-medium">
-                        Sample Questions ({detailParsed.config.sample_questions.length})
+                        Sample Questions ({detailParsed.config?.sample_questions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <ul className="space-y-1 text-xs text-muted-foreground">
-                          {detailParsed.config.sample_questions.map((q) => (
+                          {(detailParsed.config?.sample_questions ?? []).map((q) => (
                             <li key={q.id}>{q.question.join(" ")}</li>
                           ))}
                         </ul>
@@ -829,14 +926,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   )}
 
                   {/* SQL Examples */}
-                  {detailParsed.instructions.example_question_sqls.length > 0 && (
+                  {(detailParsed.instructions?.example_question_sqls?.length ?? 0) > 0 && (
                     <AccordionItem value="sql">
                       <AccordionTrigger className="text-xs font-medium">
-                        SQL Examples ({detailParsed.instructions.example_question_sqls.length})
+                        SQL Examples ({detailParsed.instructions?.example_question_sqls?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="max-h-64 space-y-3 overflow-auto">
-                          {detailParsed.instructions.example_question_sqls.map((ex) => (
+                          {(detailParsed.instructions?.example_question_sqls ?? []).map((ex) => (
                             <div key={ex.id}>
                               <p className="text-xs font-medium">{ex.question.join(" ")}</p>
                               <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
@@ -855,14 +952,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   )}
 
                   {/* Measures */}
-                  {detailParsed.instructions.sql_snippets.measures.length > 0 && (
+                  {(detailParsed.instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
                     <AccordionItem value="measures">
                       <AccordionTrigger className="text-xs font-medium">
-                        Measures ({detailParsed.instructions.sql_snippets.measures.length})
+                        Measures ({detailParsed.instructions?.sql_snippets?.measures?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-0.5 text-xs">
-                          {detailParsed.instructions.sql_snippets.measures.map((m) => (
+                          {(detailParsed.instructions?.sql_snippets?.measures ?? []).map((m) => (
                             <div key={m.id} className="flex items-baseline gap-2 py-0.5">
                               <code className="rounded bg-muted px-1 font-mono text-[10px]">{m.alias}</code>
                               <span className="text-muted-foreground">{m.sql.join(" ")}</span>
@@ -881,14 +978,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   )}
 
                   {/* Filters */}
-                  {detailParsed.instructions.sql_snippets.filters.length > 0 && (
+                  {(detailParsed.instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
                     <AccordionItem value="filters">
                       <AccordionTrigger className="text-xs font-medium">
-                        Filters ({detailParsed.instructions.sql_snippets.filters.length})
+                        Filters ({detailParsed.instructions?.sql_snippets?.filters?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-0.5 text-xs">
-                          {detailParsed.instructions.sql_snippets.filters.map((f) => (
+                          {(detailParsed.instructions?.sql_snippets?.filters ?? []).map((f) => (
                             <div key={f.id} className="flex items-baseline gap-2 py-0.5">
                               <code className="rounded bg-muted px-1 font-mono text-[10px]">{f.display_name}</code>
                               <span className="text-muted-foreground">{f.sql.join(" ")}</span>
@@ -907,14 +1004,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   )}
 
                   {/* Dimensions */}
-                  {detailParsed.instructions.sql_snippets.expressions.length > 0 && (
+                  {(detailParsed.instructions?.sql_snippets?.expressions?.length ?? 0) > 0 && (
                     <AccordionItem value="dimensions">
                       <AccordionTrigger className="text-xs font-medium">
-                        Dimensions ({detailParsed.instructions.sql_snippets.expressions.length})
+                        Dimensions ({detailParsed.instructions?.sql_snippets?.expressions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-0.5 text-xs">
-                          {detailParsed.instructions.sql_snippets.expressions.map((e) => (
+                          {(detailParsed.instructions?.sql_snippets?.expressions ?? []).map((e) => (
                             <div key={e.id} className="flex items-baseline gap-2 py-0.5">
                               <code className="rounded bg-muted px-1 font-mono text-[10px]">{e.alias}</code>
                               <span className="text-muted-foreground">{e.sql.join(" ")}</span>
@@ -933,14 +1030,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   )}
 
                   {/* Join Relationships */}
-                  {detailParsed.instructions.join_specs.length > 0 && (
+                  {(detailParsed.instructions?.join_specs?.length ?? 0) > 0 && (
                     <AccordionItem value="joins">
                       <AccordionTrigger className="text-xs font-medium">
-                        Join Relationships ({detailParsed.instructions.join_specs.length})
+                        Join Relationships ({detailParsed.instructions?.join_specs?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-1 text-xs">
-                          {detailParsed.instructions.join_specs.map((j) => {
+                          {(detailParsed.instructions?.join_specs ?? []).map((j) => {
                             const rtMatch = j.sql.find((s: string) => s.startsWith("--rt="))?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
                             const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
                             const sqlDisplay = j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ");
@@ -958,31 +1055,15 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                     </AccordionItem>
                   )}
 
-                  {/* SQL Functions (Trusted Asset UDFs) */}
-                  {detailParsed.instructions.sql_functions && detailParsed.instructions.sql_functions.length > 0 && (
-                    <AccordionItem value="functions">
-                      <AccordionTrigger className="text-xs font-medium">
-                        SQL Functions ({detailParsed.instructions.sql_functions.length})
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-0.5 text-xs font-mono text-muted-foreground">
-                          {detailParsed.instructions.sql_functions.map((fn) => (
-                            <div key={fn.id} className="truncate">{fn.identifier}</div>
-                          ))}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
                   {/* Text Instructions */}
-                  {detailParsed.instructions.text_instructions.length > 0 && (
+                  {(detailParsed.instructions?.text_instructions?.length ?? 0) > 0 && (
                     <AccordionItem value="instructions">
                       <AccordionTrigger className="text-xs font-medium">
-                        Text Instructions ({detailParsed.instructions.text_instructions.length})
+                        Text Instructions ({detailParsed.instructions?.text_instructions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-2 text-xs text-muted-foreground">
-                          {detailParsed.instructions.text_instructions.map((ti) => (
+                          {(detailParsed.instructions?.text_instructions ?? []).map((ti) => (
                             <p key={ti.id} className="whitespace-pre-line">{ti.content.join("\n")}</p>
                           ))}
                         </div>
@@ -991,14 +1072,14 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   )}
 
                   {/* Benchmarks */}
-                  {detailParsed.benchmarks && detailParsed.benchmarks.questions.length > 0 && (
+                  {(detailParsed.benchmarks?.questions?.length ?? 0) > 0 && (
                     <AccordionItem value="benchmarks">
                       <AccordionTrigger className="text-xs font-medium">
-                        Benchmarks ({detailParsed.benchmarks.questions.length})
+                        Benchmarks ({detailParsed.benchmarks?.questions?.length ?? 0})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="max-h-64 space-y-2 overflow-auto">
-                          {detailParsed.benchmarks.questions.map((b) => (
+                          {(detailParsed.benchmarks?.questions ?? []).map((b) => (
                             <div key={b.id} className="rounded border p-2">
                               <p className="text-xs font-medium">{b.question.join(" ")}</p>
                               {b.answer && b.answer.length > 0 && (
@@ -1089,36 +1170,17 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
                   </div>
                 )}
                 {detailTracking ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" className="w-full">
-                        Delete Space
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Trash Genie Space?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will move the &quot;{detailRec.title}&quot; Genie
-                          space to trash. This can be undone from the Databricks
-                          workspace.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => {
-                            handleTrash(detailRec.domain);
-                            setDetailDomain(null);
-                          }}
-                        >
-                          Trash
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled={trashingDomain === detailRec.domain}
+                    onClick={() => {
+                      setDetailDomain(null);
+                      openTrashDialog(detailRec.domain);
+                    }}
+                  >
+                    Delete Space
+                  </Button>
                 ) : detailRec.tableCount === 0 ? (
                   <Button className="w-full" variant="secondary" disabled>
                     Cannot Deploy — No Tables
@@ -1140,6 +1202,49 @@ export function GenieSpacesTab({ runId }: GenieSpacesTabProps) {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Trash Confirmation Dialog */}
+      <AlertDialog open={trashDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setTrashDialogOpen(false);
+          setTrashDialogDomain(null);
+          setTrashPreview(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Trash Genie Space?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move the space to trash in Databricks.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {trashPreviewLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking deployed resources...
+            </div>
+          )}
+
+          {!trashPreviewLoading && trashPreview && (
+            <TrashPreviewSection
+              preview={trashPreview}
+              dropChecked={dropAssetsChecked}
+              onDropCheckedChange={setDropAssetsChecked}
+            />
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeTrash}
+              disabled={trashPreviewLoading}
+            >
+              Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Deploy Modal */}
       <GenieDeployModal
@@ -1189,6 +1294,80 @@ function KSChip({
       <span className={`font-semibold ${valueColor}`}>{value}</span>
       <span className="text-muted-foreground">{label}</span>
     </span>
+  );
+}
+
+function TrashPreviewSection({
+  preview,
+  dropChecked,
+  onDropCheckedChange,
+}: {
+  preview: TrashPreview;
+  dropChecked: boolean;
+  onDropCheckedChange: (v: boolean) => void;
+}) {
+  const hasSafe =
+    preview.safeToDelete.functions.length > 0 ||
+    preview.safeToDelete.metricViews.length > 0;
+  const hasShared =
+    preview.shared.functions.length > 0 ||
+    preview.shared.metricViews.length > 0;
+  const hasAny = hasSafe || hasShared;
+
+  if (!hasAny) return null;
+
+  return (
+    <div className="space-y-3 text-sm">
+      {hasSafe && (
+        <div className="flex items-start gap-2">
+          <Checkbox
+            checked={dropChecked}
+            onCheckedChange={(v) => onDropCheckedChange(v === true)}
+            id="drop-assets"
+            className="mt-0.5"
+          />
+          <label htmlFor="drop-assets" className="cursor-pointer leading-tight">
+            Also delete deployed functions and metric views
+          </label>
+        </div>
+      )}
+
+      {hasSafe && dropChecked && (
+        <div className="rounded border bg-destructive/5 p-2.5 space-y-1">
+          <p className="text-xs font-medium text-destructive">
+            Will be removed from Unity Catalog:
+          </p>
+          {preview.safeToDelete.functions.map((fqn) => (
+            <p key={fqn} className="text-xs font-mono text-destructive/80 truncate">
+              fn: {fqn}
+            </p>
+          ))}
+          {preview.safeToDelete.metricViews.map((fqn) => (
+            <p key={fqn} className="text-xs font-mono text-destructive/80 truncate">
+              mv: {fqn}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {hasShared && (
+        <div className="rounded border bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-1">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Shared with other spaces (will be kept):
+          </p>
+          {preview.shared.functions.map((s) => (
+            <p key={s.fqn} className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate">
+              fn: {s.fqn} — used by {s.usedBy.join(", ")}
+            </p>
+          ))}
+          {preview.shared.metricViews.map((s) => (
+            <p key={s.fqn} className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate">
+              mv: {s.fqn} — used by {s.usedBy.join(", ")}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

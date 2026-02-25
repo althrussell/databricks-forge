@@ -11,6 +11,7 @@ import { executeSQL } from "@/lib/dbx/sql";
 import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
+import { isSafeId, validateDdl } from "@/lib/validation";
 
 export async function POST(
   request: NextRequest,
@@ -18,6 +19,9 @@ export async function POST(
 ) {
   try {
     const { runId, domain } = await params;
+    if (!isSafeId(runId)) {
+      return NextResponse.json({ error: "Invalid runId" }, { status: 400 });
+    }
     const decodedDomain = decodeURIComponent(domain);
 
     const run = await getRunById(runId);
@@ -38,14 +42,15 @@ export async function POST(
       );
     }
 
-    if (!body.ddl.includes("WITH METRICS") || !body.ddl.includes("LANGUAGE YAML")) {
+    try {
+      validateDdl(body.ddl, /^\s*CREATE\s+/i, "Metric view DDL");
+    } catch {
       return NextResponse.json(
-        { error: "DDL does not appear to be a valid metric view statement" },
+        { error: "DDL does not appear to be a valid CREATE VIEW statement" },
         { status: 400 }
       );
     }
 
-    // Execute the DDL to create the metric view in Databricks
     await executeSQL(body.ddl);
 
     logger.info("Metric view created via DDL", {

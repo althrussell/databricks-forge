@@ -26,6 +26,7 @@ import {
 import { logger } from "@/lib/logger";
 
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CACHE_ENTRIES = 200;
 const MAX_RETRIES = 3;
 const MAX_429_RETRIES = 4;
 const INITIAL_BACKOFF_MS = 1_000;
@@ -96,6 +97,19 @@ function evictExpired(): void {
       cache.delete(key);
     }
   }
+}
+
+function evictLru(): void {
+  if (cache.size <= MAX_CACHE_ENTRIES) return;
+  let oldestKey: string | null = null;
+  let oldestExpiry = Infinity;
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt < oldestExpiry) {
+      oldestExpiry = entry.expiresAt;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey) cache.delete(oldestKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +230,7 @@ export async function cachedChatCompletion(
     response,
     expiresAt: Date.now() + CACHE_TTL_MS,
   });
+  evictLru();
 
   return response;
 }

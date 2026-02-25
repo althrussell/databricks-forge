@@ -1,8 +1,7 @@
 /**
  * Pass 3: Trusted Asset Authoring (LLM, grounded)
  *
- * Converts top SQL examples into parameterized queries (trusted assets)
- * and generates UDF SQL definitions for frequently-asked question patterns.
+ * Converts top SQL examples into parameterized queries (trusted assets).
  * All SQL is validated against the schema allowlist.
  */
 
@@ -13,7 +12,6 @@ import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type {
   TrustedAssetQuery,
-  TrustedAssetFunction,
   EntityMatchingCandidate,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
@@ -44,7 +42,6 @@ export interface TrustedAssetsInput {
 
 export interface TrustedAssetsOutput {
   queries: TrustedAssetQuery[];
-  functions: TrustedAssetFunction[];
 }
 
 export async function runTrustedAssetAuthoring(
@@ -57,7 +54,7 @@ export async function runTrustedAssetAuthoring(
     .slice(0, 12);
 
   if (topUseCases.length === 0) {
-    return { queries: [], functions: [] };
+    return { queries: [] };
   }
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
@@ -87,20 +84,18 @@ export async function runTrustedAssetAuthoring(
           batchUseCases: batch.map((uc) => uc.name),
           error: err instanceof Error ? err.message : String(err),
         });
-        return { queries: [] as TrustedAssetQuery[], functions: [] as TrustedAssetFunction[] };
+        return { queries: [] as TrustedAssetQuery[] };
       }
     }),
     BATCH_CONCURRENCY,
   );
 
   const allQueries: TrustedAssetQuery[] = [];
-  const allFunctions: TrustedAssetFunction[] = [];
   for (const result of batchResults) {
     allQueries.push(...result.queries);
-    allFunctions.push(...result.functions);
   }
 
-  return { queries: allQueries, functions: allFunctions };
+  return { queries: allQueries };
 }
 
 function buildEntityBlock(entityCandidates: EntityMatchingCandidate[]): string {
@@ -145,23 +140,15 @@ async function processTrustedAssetBatch(
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
-From the provided SQL examples, create:
-
-1. **Parameterized queries**: Convert WHERE clause values into named parameters using :param_name syntax.
+From the provided SQL examples, create **parameterized queries**: Convert WHERE clause values into named parameters using :param_name syntax.
    - Type each parameter (String, Date, Numeric) based on the column's data type
    - For entity-matching columns, include sample values in the parameter comment
    - Include DEFAULT NULL for optional parameters
    - PRESERVE all human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT output -- do not strip them during parameterization
    - For top-N queries, use ORDER BY ... LIMIT N, NOT RANK()/DENSE_RANK() (ties can return more than N rows)
+   - Parameterized queries are the RIGHT place for complex analytics: multi-CTE queries, window functions, statistical functions, correlation analysis, anomaly detection, benchmarking, etc. Genie learns from these patterns.
 
-2. **SQL functions (UDFs)**: For the most common question patterns, create a CREATE FUNCTION statement.
-   - Use table-valued functions (RETURNS TABLE)
-   - Include descriptive COMMENT on the function and parameters
-   - Handle NULL parameters with ISNULL() checks
-   - Include identifying columns (name, email, etc.) in the RETURNS TABLE definition
-   - LIMIT values MUST be integer literals (e.g. LIMIT 10), NOT parameters -- Databricks requires LIMIT to be a constant
-
-SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
+SQL PRESERVATION RULES:
 - PRESERVE the full CTE structure and all business logic from the source SQL. Do NOT simplify, remove CTEs, drop analytical columns, or reduce query complexity.
 - PRESERVE all columns in the SELECT list exactly as they appear in the source SQL. Do NOT add columns not present in the source or remove columns that are present.
 - PRESERVE exact threshold values (LIMIT N, WHERE conditions, >= comparisons). Do NOT change numeric thresholds, filter conditions, or row limits.
@@ -170,13 +157,12 @@ SQL PRESERVATION RULES (critical -- violations cause benchmark failures):
 
 QUANTITY RULES:
 - Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
-- Produce at least 1 SQL function (UDF) per batch. Prioritize the most reusable analytical pattern as a table-valued function.
+- Do NOT create any SQL functions (UDFs). Only produce parameterized queries.
 
 ${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: {
-  "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }],
-  "functions": [{ "name": "...", "ddl": "CREATE OR REPLACE FUNCTION...", "description": "..." }]
+  "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
 }`;
 
   const userMessage = `${schemaBlock}
@@ -188,7 +174,7 @@ ${joinBlock}
 ### SQL EXAMPLES TO PARAMETERIZE
 ${sqlExamples}
 
-Create parameterized queries and UDF functions from these examples.`;
+Create parameterized queries from these examples.`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemMessage },
@@ -220,16 +206,7 @@ Create parameterized queries and UDF functions from these examples.`;
     }))
     .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_query:${q.question}`));
 
-  const functions: TrustedAssetFunction[] = parseArray(parsed.functions)
-    .map((f) => ({
-      name: String(f.name ?? ""),
-      ddl: String(f.ddl ?? ""),
-      description: String(f.description ?? ""),
-    }))
-    .filter((f) => f.ddl.length > 0 && f.name.length > 0)
-    .filter((f) => validateSqlExpression(allowlist, f.ddl, `trusted_fn:${f.name}`));
-
-  return { queries, functions };
+  return { queries };
 }
 
 function parseArray(val: unknown): Record<string, unknown>[] {

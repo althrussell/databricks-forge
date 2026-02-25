@@ -58,6 +58,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
   const [configDirty, setConfigDirty] = useState(false);
   const [domains, setDomains] = useState<string[]>([]);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
+  const [completedDomainNames, setCompletedDomainNames] = useState<string[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastErrorType, setLastErrorType] = useState<"auth" | "general" | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -93,6 +95,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
           setGenMessage(data.message ?? "");
           setCompletedDomains(data.completedDomains ?? 0);
           setTotalDomains(data.totalDomains ?? 0);
+          if (Array.isArray(data.completedDomainNames)) {
+            setCompletedDomainNames(data.completedDomainNames);
+          }
           if (data.status === "completed") {
             stopPolling();
             setGenerating(false);
@@ -100,6 +105,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             setSelectedDomains(new Set());
             setLastError(null);
             setLastErrorType(null);
+            setRefreshKey((k) => k + 1);
             fetchDomains();
             toast.success(`Genie Engine complete: ${data.domainCount} domain${data.domainCount !== 1 ? "s" : ""} generated`);
           } else if (data.status === "cancelled") {
@@ -139,6 +145,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             setGenMessage(data.message ?? "");
             setCompletedDomains(data.completedDomains ?? 0);
             setTotalDomains(data.totalDomains ?? 0);
+            if (Array.isArray(data.completedDomainNames)) {
+              setCompletedDomainNames(data.completedDomainNames);
+            }
             startPolling();
           }
         }
@@ -204,6 +213,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
     setGenProgress(0);
     setCompletedDomains(0);
     setTotalDomains(0);
+    setCompletedDomainNames([]);
     setLastError(null);
     setLastErrorType(null);
     setGenMessage(filterDomains?.length ? `Regenerating ${filterDomains.length} domain${filterDomains.length !== 1 ? "s" : ""}...` : "Starting...");
@@ -409,7 +419,12 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          <GenieSpacesTab runId={runId} />
+          <GenieSpacesTab
+            runId={runId}
+            generating={generating}
+            completedDomainNames={completedDomainNames}
+            refreshKey={refreshKey}
+          />
         </TabsContent>
 
         <TabsContent value="config" className="mt-4">

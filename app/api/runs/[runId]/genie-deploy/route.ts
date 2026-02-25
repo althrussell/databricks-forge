@@ -15,8 +15,12 @@ import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
 import { executeSQL } from "@/lib/dbx/sql";
 import { createGenieSpace, updateGenieSpace } from "@/lib/dbx/genie";
-import { trackGenieSpaceCreated } from "@/lib/lakebase/genie-spaces";
+import {
+  trackGenieSpaceCreated,
+  trackGenieSpaceUpdated as trackSpaceUpdated,
+} from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import { isSafeId, validateFqn } from "@/lib/validation";
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -34,7 +38,6 @@ interface DomainDeployRequest {
   description: string;
   serializedSpace: string;
   metricViews: DeployAsset[];
-  functions: DeployAsset[];
   existingSpaceId?: string;
 }
 
@@ -45,7 +48,7 @@ interface RequestBody {
 
 interface AssetResult {
   name: string;
-  type: "metric_view" | "function";
+  type: "metric_view";
   success: boolean;
   error?: string;
   fqn?: string;
@@ -54,7 +57,7 @@ interface AssetResult {
 }
 
 interface StrippedRef {
-  type: "metric_view" | "function";
+  type: "metric_view";
   identifier: string;
   reason: string;
 }
@@ -64,6 +67,7 @@ interface DomainResult {
   assets: AssetResult[];
   spaceId?: string;
   spaceError?: string;
+  orphanedAssets?: { metricViews: string[] };
   patchedSpace?: string;
   strippedRefs?: StrippedRef[];
 }
@@ -84,16 +88,12 @@ function stripFqnPrefixes(sql: string): string {
 }
 
 /**
- * Rewrite the target FQN in a CREATE statement to use a different
+ * Rewrite the target FQN in a CREATE VIEW statement to use a different
  * catalog.schema while preserving the object name.
- *
- * Handles:
- *   CREATE [OR REPLACE] VIEW catalog.schema.name ...
- *   CREATE [OR REPLACE] FUNCTION catalog.schema.name ...
  */
 function rewriteDdlTarget(ddl: string, targetSchema: string): string {
   return ddl.replace(
-    /(CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|FUNCTION)\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
+    /(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
     (_match, prefix: string, fqn: string) => {
       const parts = fqn.replace(/`/g, "").split(".");
       const objectName = parts[parts.length - 1];
@@ -152,12 +152,15 @@ function stripWindowBlocks(ddl: string): string {
   return result.join("\n");
 }
 
+const AI_FUNCTION_PATTERN = /\b(?:ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
+
 /**
  * Sanitize a metric view DDL before execution:
  * 1. Strip FQN column prefixes from expr: and on: lines
  * 2. Remove `comment:` lines (unsupported by Databricks YAML parser)
  * 3. Qualify ambiguous join criteria with `source.` prefix
  * 4. Strip window: blocks (experimental, frequently malformed)
+ * 5. Strip dimension/measure entries that use AI functions (non-deterministic, expensive)
  */
 function sanitizeMetricViewDdl(ddl: string): string {
   let result = ddl
@@ -178,15 +181,38 @@ function sanitizeMetricViewDdl(ddl: string): string {
   // Remove window blocks that the YAML parser rejects
   result = stripWindowBlocks(result);
 
+  // Strip dimension/measure entries containing AI functions
+  result = stripAiFunctionEntries(result);
+
   return result;
 }
 
 /**
- * Extract the object name from a CREATE DDL (last segment of the FQN).
+ * Remove YAML dimension/measure entries whose expr: contains an AI function.
+ * Matches a `- name: ...` line followed by an `expr: ...` line that includes
+ * a prohibited AI function call, and removes both lines.
+ */
+function stripAiFunctionEntries(ddl: string): string {
+  return ddl.replace(
+    /^(\s*- name:\s*.+\n)(\s*expr:\s*.+)$/gm,
+    (_match, nameLine: string, exprLine: string) => {
+      if (AI_FUNCTION_PATTERN.test(exprLine)) {
+        logger.warn("Stripping metric view entry with AI function", {
+          entry: exprLine.trim(),
+        });
+        return "";
+      }
+      return nameLine + exprLine;
+    }
+  );
+}
+
+/**
+ * Extract the object name from a CREATE VIEW DDL (last segment of the FQN).
  */
 function extractObjectName(ddl: string): string | null {
   const match = ddl.match(
-    /(?:CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|FUNCTION)\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i
+    /(?:CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i
   );
   if (!match) return null;
   const parts = match[1].replace(/`/g, "").split(".");
@@ -211,6 +237,9 @@ function classifyDeployError(error: string): { category: string; treatAsSuccess:
   if (msg.includes("PARSE_SYNTAX_ERROR") || msg.includes("PARSE ERROR") || msg.includes("PARSING ERROR")) {
     return { category: "syntax", treatAsSuccess: false };
   }
+  if (msg.includes("INVALID_AGGREGATE_FILTER") || msg.includes("NON_DETERMINISTIC")) {
+    return { category: "non_deterministic", treatAsSuccess: false };
+  }
   return { category: "unknown", treatAsSuccess: false };
 }
 
@@ -218,10 +247,10 @@ function classifyDeployError(error: string): { category: string; treatAsSuccess:
  * Try to auto-fix common DDL issues that cause deployment failures.
  * Returns the fixed DDL string, or null if no fix is applicable.
  */
-function attemptDdlAutoFix(ddl: string, error: string, assetType: "metric_view" | "function"): string | null {
+function attemptDdlAutoFix(ddl: string, error: string, assetType: "metric_view"): string | null {
   const msg = error.toUpperCase();
 
-  if (assetType === "metric_view" && (msg.includes("PARSE") || msg.includes("SYNTAX"))) {
+  if (msg.includes("PARSE") || msg.includes("SYNTAX")) {
     let fixed = ddl;
 
     // Strip unsupported description: lines in YAML
@@ -241,14 +270,9 @@ function attemptDdlAutoFix(ddl: string, error: string, assetType: "metric_view" 
     if (fixed !== ddl) return fixed;
   }
 
-  if (assetType === "function" && (msg.includes("PARSE") || msg.includes("SYNTAX"))) {
-    let fixed = ddl;
-
-    // Add missing OR REPLACE if not present (idempotent retry)
-    if (/^CREATE\s+FUNCTION\s+/i.test(fixed) && !/OR\s+REPLACE/i.test(fixed)) {
-      fixed = fixed.replace(/^CREATE\s+FUNCTION/i, "CREATE OR REPLACE FUNCTION");
-    }
-
+  // Non-deterministic AI functions in metric view expressions
+  if (msg.includes("NON_DETERMINISTIC") || msg.includes("INVALID_AGGREGATE_FILTER")) {
+    const fixed = stripAiFunctionEntries(ddl);
     if (fixed !== ddl) return fixed;
   }
 
@@ -271,6 +295,7 @@ async function validatePreExistingMetricViews(mvFqns: string[]): Promise<{
 
   const results = await Promise.allSettled(
     mvFqns.map(async (fqn) => {
+      validateFqn(fqn, "metric view");
       await executeSQL(`DESCRIBE TABLE ${fqn}`);
       return fqn;
     })
@@ -301,52 +326,6 @@ async function validatePreExistingMetricViews(mvFqns: string[]): Promise<{
 }
 
 // ---------------------------------------------------------------------------
-// Pre-existing function validation
-// ---------------------------------------------------------------------------
-
-/**
- * Validate that function identifiers already in the serialized space actually
- * exist in Unity Catalog. Used on retry so that previously-deployed functions
- * are retained rather than wiped.
- */
-async function validatePreExistingFunctions(fnIdentifiers: string[]): Promise<{
-  valid: Set<string>;
-  stripped: StrippedRef[];
-}> {
-  if (fnIdentifiers.length === 0) return { valid: new Set(), stripped: [] };
-
-  const results = await Promise.allSettled(
-    fnIdentifiers.map(async (fqn) => {
-      await executeSQL(`DESCRIBE FUNCTION ${fqn}`);
-      return fqn;
-    })
-  );
-
-  const valid = new Set<string>();
-  const stripped: StrippedRef[] = [];
-
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    if (r.status === "fulfilled") {
-      valid.add(r.value.toLowerCase());
-    } else {
-      const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
-      stripped.push({
-        type: "function",
-        identifier: fnIdentifiers[i],
-        reason: `Function not accessible: ${reason}`,
-      });
-      logger.warn("Function in serialized space inaccessible, stripping", {
-        fqn: fnIdentifiers[i],
-        error: reason,
-      });
-    }
-  }
-
-  return { valid, stripped };
-}
-
-// ---------------------------------------------------------------------------
 // Space preparation (replaces the old add-only patchSerializedSpace)
 // ---------------------------------------------------------------------------
 
@@ -354,8 +333,6 @@ async function validatePreExistingFunctions(fnIdentifiers: string[]): Promise<{
  * Build a clean serialized space that only references objects confirmed to
  * exist in Unity Catalog:
  *
- *   sql_functions  -- retain validated pre-existing FQNs (from a prior deploy)
- *                     + add newly-deployed FQNs; strip everything else.
  *   metric_views   -- keep validated pre-existing entries + deployed proposals.
  *
  * Also tracks which references were stripped so the UI can show warnings.
@@ -363,50 +340,15 @@ async function validatePreExistingFunctions(fnIdentifiers: string[]): Promise<{
 function prepareSerializedSpace(
   spaceJson: string,
   deployedMetricViews: { fqn: string; description?: string }[],
-  deployedFunctions: { fqn: string }[],
   validPreExistingMvFqns: Set<string>,
-  validPreExistingFnFqns: Set<string>,
 ): { json: string; strippedRefs: StrippedRef[] } {
   const space = JSON.parse(spaceJson) as Record<string, unknown>;
   const dataSources = (space.data_sources ?? {}) as Record<string, unknown>;
   const instructions = (space.instructions ?? {}) as Record<string, unknown>;
   const strippedRefs: StrippedRef[] = [];
 
-  // --- sql_functions: retain validated pre-existing + add newly deployed ---
-  const oldFns = (instructions.sql_functions ?? []) as Array<{ id: string; identifier: string }>;
-  const deployedFnFqns = new Set(deployedFunctions.map((f) => f.fqn.toLowerCase()));
-
-  const retainedFns = oldFns.filter((fn) => {
-    const isDeployed = deployedFnFqns.has(fn.identifier.toLowerCase());
-    const isValidPreExisting = validPreExistingFnFqns.has(fn.identifier.toLowerCase());
-    if (!isDeployed && !isValidPreExisting) {
-      strippedRefs.push({
-        type: "function",
-        identifier: fn.identifier,
-        reason: "Not deployed to Unity Catalog",
-      });
-      return false;
-    }
-    return true;
-  });
-
-  const retainedFnFqns = new Set(retainedFns.map((f) => f.identifier.toLowerCase()));
-  const newFnEntries = deployedFunctions
-    .filter((fn) => !retainedFnFqns.has(fn.fqn.toLowerCase()))
-    .map((fn) => ({
-      id: uuidv4().replace(/-/g, ""),
-      identifier: fn.fqn,
-    }));
-
-  const allFns = [...retainedFns, ...newFnEntries].sort((a, b) =>
-    a.identifier.localeCompare(b.identifier)
-  );
-
-  if (allFns.length > 0) {
-    instructions.sql_functions = allFns;
-  } else {
-    delete instructions.sql_functions;
-  }
+  // Strip any leftover sql_functions from previously-generated spaces
+  delete instructions.sql_functions;
 
   // --- metric_views: keep validated pre-existing + add deployed proposals ---
   const existingMvs = (dataSources.metric_views ?? []) as Array<{
@@ -460,21 +402,46 @@ function prepareSerializedSpace(
 // Asset deployment helpers
 // ---------------------------------------------------------------------------
 
-async function grantAccess(
+/**
+ * Wait for a newly-created view to become visible in UC.
+ * The Statement Execution API can report DDL success before the metastore
+ * has propagated the object, causing immediate DESCRIBE/GRANT to fail.
+ */
+async function waitForAssetVisibility(
   fqn: string,
-  objectType: "TABLE" | "FUNCTION",
-): Promise<void> {
-  const privilege = objectType === "TABLE" ? "SELECT" : "EXECUTE";
+  maxRetries = 5,
+  delayMs = 2000,
+): Promise<boolean> {
+  const describeCmd = `DESCRIBE TABLE ${fqn}`;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await executeSQL(describeCmd);
+      return true;
+    } catch {
+      if (attempt < maxRetries - 1) {
+        logger.debug("Asset not yet visible, waiting for propagation", {
+          fqn, attempt: attempt + 1, maxRetries, delayMs,
+        });
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  return false;
+}
+
+async function grantAccess(fqn: string): Promise<void> {
+  validateFqn(fqn, "grantAccess target");
   for (const grant of [
-    `GRANT ALL PRIVILEGES ON ${objectType} ${fqn} TO \`account users\``,
-    `GRANT ${privilege} ON ${objectType} ${fqn} TO \`account users\``,
+    `GRANT ALL PRIVILEGES ON TABLE ${fqn} TO \`account users\``,
+    `GRANT SELECT ON TABLE ${fqn} TO \`account users\``,
   ]) {
     try {
       await executeSQL(grant);
-      logger.info(`GRANT succeeded on ${objectType.toLowerCase()}`, { fqn, grant });
+      logger.info("GRANT succeeded on table", { fqn, grant });
       return;
     } catch (grantErr) {
-      logger.warn(`GRANT attempt on ${objectType.toLowerCase()} failed`, {
+      logger.warn("GRANT attempt on table failed", {
         fqn,
         grant,
         error: grantErr instanceof Error ? grantErr.message : String(grantErr),
@@ -484,60 +451,75 @@ async function grantAccess(
 }
 
 /**
- * Deploy a single DDL asset with auto-fix: execute DDL, classify errors,
+ * Deploy a single metric view DDL with auto-fix: execute DDL, classify errors,
  * attempt auto-fix on failure, and treat ALREADY_EXISTS as success.
  */
 async function deployAsset(
   asset: DeployAsset,
-  assetType: "metric_view" | "function",
   targetSchema: string,
 ): Promise<AssetResult & { deployed: boolean; fqn: string }> {
-  const rewritten = assetType === "metric_view"
-    ? sanitizeMetricViewDdl(rewriteDdlTarget(asset.ddl, targetSchema))
-    : rewriteDdlTarget(asset.ddl, targetSchema);
+  const rewritten = sanitizeMetricViewDdl(rewriteDdlTarget(asset.ddl, targetSchema));
   const objectName = extractObjectName(rewritten) ?? asset.name;
   const fqn = `${targetSchema}.${objectName}`;
-  const objectSqlType = assetType === "metric_view" ? "TABLE" as const : "FUNCTION" as const;
 
   // First attempt
   try {
     await executeSQL(rewritten);
-    await grantAccess(fqn, objectSqlType);
-    return { name: asset.name, type: assetType, success: true, fqn, deployed: true };
+
+    const visible = await waitForAssetVisibility(fqn);
+    if (!visible) {
+      logger.error("Asset DDL succeeded but asset not visible after retries", { fqn, type: "metric_view" });
+      return {
+        name: asset.name, type: "metric_view", success: false, fqn, deployed: false,
+        error: "DDL executed but metric view not found in Unity Catalog after waiting. The SQL warehouse may need more time to propagate.",
+      };
+    }
+
+    await grantAccess(fqn);
+    return { name: asset.name, type: "metric_view", success: true, fqn, deployed: true };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     const classification = classifyDeployError(errorMsg);
 
-    // ALREADY_EXISTS → treat as success (idempotent)
     if (classification.treatAsSuccess) {
-      logger.info("Asset already exists, treating as success", { fqn, type: assetType });
-      await grantAccess(fqn, objectSqlType);
+      logger.info("Asset already exists, treating as success", { fqn, type: "metric_view" });
+      await grantAccess(fqn);
       return {
-        name: asset.name, type: assetType, success: true, fqn,
-        deployed: true, autoFixed: true, errorCategory: classification.category,
+        name: asset.name, type: "metric_view", success: true, fqn,
+        deployed: true, errorCategory: classification.category,
       };
     }
 
-    // Try auto-fix
-    const fixedDdl = attemptDdlAutoFix(rewritten, errorMsg, assetType);
+    const fixedDdl = attemptDdlAutoFix(rewritten, errorMsg, "metric_view");
     if (fixedDdl) {
       try {
         await executeSQL(fixedDdl);
-        await grantAccess(fqn, objectSqlType);
-        logger.info("Asset deployed after auto-fix", { fqn, type: assetType });
+
+        const visible = await waitForAssetVisibility(fqn);
+        if (!visible) {
+          logger.error("Auto-fixed DDL succeeded but asset not visible", { fqn, type: "metric_view" });
+          return {
+            name: asset.name, type: "metric_view", success: false, fqn, deployed: false,
+            error: "Auto-fixed DDL executed but metric view not found in Unity Catalog after waiting.",
+            errorCategory: classification.category,
+          };
+        }
+
+        await grantAccess(fqn);
+        logger.info("Asset deployed after auto-fix", { fqn, type: "metric_view" });
         return {
-          name: asset.name, type: assetType, success: true, fqn,
+          name: asset.name, type: "metric_view", success: true, fqn,
           deployed: true, autoFixed: true, errorCategory: classification.category,
         };
       } catch (retryErr) {
         const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        logger.warn("Auto-fix attempt also failed", { fqn, type: assetType, error: retryMsg });
+        logger.warn("Auto-fix attempt also failed", { fqn, type: "metric_view", error: retryMsg });
       }
     }
 
-    logger.warn(`${assetType} deployment failed`, { name: asset.name, error: errorMsg });
+    logger.warn("Metric view deployment failed", { name: asset.name, error: errorMsg });
     return {
-      name: asset.name, type: assetType, success: false,
+      name: asset.name, type: "metric_view", success: false,
       error: errorMsg, fqn, deployed: false, errorCategory: classification.category,
     };
   }
@@ -552,6 +534,10 @@ export async function POST(
   { params }: { params: Promise<{ runId: string }> }
 ) {
   const { runId } = await params;
+
+  if (!isSafeId(runId)) {
+    return NextResponse.json({ error: "Invalid runId" }, { status: 400 });
+  }
 
   try {
     const body = (await request.json()) as RequestBody;
@@ -570,17 +556,25 @@ export async function POST(
       );
     }
 
+    try {
+      validateFqn(body.targetSchema, "targetSchema");
+    } catch {
+      return NextResponse.json(
+        { error: "targetSchema contains invalid characters" },
+        { status: 400 }
+      );
+    }
+
     const config = getConfig();
     const results: DomainResult[] = [];
 
     for (const domainReq of body.domains) {
       const assets: AssetResult[] = [];
       const deployedMvs: { fqn: string; description?: string }[] = [];
-      const deployedFns: { fqn: string }[] = [];
 
       // 1. Deploy metric views (with auto-fix)
       for (const mv of domainReq.metricViews) {
-        const result = await deployAsset(mv, "metric_view", body.targetSchema);
+        const result = await deployAsset(mv, body.targetSchema);
         assets.push(result);
         if (result.deployed) {
           deployedMvs.push({ fqn: result.fqn, description: mv.description });
@@ -588,37 +582,37 @@ export async function POST(
         }
       }
 
-      // 2. Deploy functions (with auto-fix)
-      for (const fn of domainReq.functions) {
-        const result = await deployAsset(fn, "function", body.targetSchema);
-        assets.push(result);
-        if (result.deployed) {
-          deployedFns.push({ fqn: result.fqn });
-          logger.info("Function deployed", { runId, domain: domainReq.domain, fqn: result.fqn });
-        }
-      }
+      // 2. Validate pre-existing metric views from the serialized space.
+      //    Only validate identifiers that are already FQNs (3-part names). Bare names
+      //    come from the assembler (first deploy) and haven't been created yet —
+      //    validating them produces spurious failures.
+      const isFqn = (id: string) => id.replace(/`/g, "").split(".").length >= 3;
 
-      // 3. Validate pre-existing metric views and functions from the serialized space
-      const preExistingMvFqns = extractPreExistingMvFqns(domainReq.serializedSpace);
-      const preExistingFnFqns = extractPreExistingFnIdentifiers(domainReq.serializedSpace);
+      const preExistingMvFqns = extractPreExistingMvFqns(domainReq.serializedSpace).filter(isFqn);
 
-      const [
-        { valid: validPreExistingMvs, stripped: mvValidationStripped },
-        { valid: validPreExistingFns, stripped: fnValidationStripped },
-      ] = await Promise.all([
-        validatePreExistingMetricViews(preExistingMvFqns),
-        validatePreExistingFunctions(preExistingFnFqns),
-      ]);
+      const { valid: validPreExistingMvs, stripped: mvValidationStripped } =
+        await validatePreExistingMetricViews(preExistingMvFqns);
 
-      // 4. Prepare a clean serialized space (strip undeployed, add deployed FQNs)
+      // 3. Prepare a clean serialized space (strip undeployed, add deployed FQNs)
       const { json: preparedSpace, strippedRefs } = prepareSerializedSpace(
         domainReq.serializedSpace,
         deployedMvs,
-        deployedFns,
         validPreExistingMvs,
-        validPreExistingFns,
       );
-      const allStripped = [...mvValidationStripped, ...fnValidationStripped, ...strippedRefs];
+
+      // 4. Final existence check — verify every reference in the space is real
+      const { json: validatedSpace, stripped: finalStripped } =
+        await validateFinalSpace(preparedSpace);
+
+      // 4b. Normalize all identifiers to 3-part FQNs — Genie API requires
+      // fully-qualified catalog.schema.object names for functions and metric views.
+      const finalSpace = normalizeIdentifiersToFqn(validatedSpace, body.targetSchema);
+
+      const allStripped = [
+        ...mvValidationStripped,
+        ...strippedRefs,
+        ...finalStripped,
+      ];
 
       if (allStripped.length > 0) {
         logger.info("Stripped references from serialized space", {
@@ -628,41 +622,72 @@ export async function POST(
       }
 
       // 5. Create or update Genie space
+      const deployedAssetsPayload = {
+        functions: [] as string[],
+        metricViews: deployedMvs.map((m) => m.fqn),
+      };
+
       try {
         let spaceId: string;
 
         if (domainReq.existingSpaceId) {
           const result = await updateGenieSpace(domainReq.existingSpaceId, {
-            serializedSpace: preparedSpace,
+            serializedSpace: finalSpace,
           });
           spaceId = result.space_id;
-          logger.info("Genie space updated after retry", {
+          try {
+            await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
+          } catch (trackErr) {
+            logger.error("Lakebase tracking failed after space update (space exists in Genie)", {
+              spaceId,
+              domain: domainReq.domain,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            });
+            try {
+              await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
+            } catch { /* exhausted retry */ }
+          }
+          logger.info("Genie space updated", {
             runId, domain: domainReq.domain, spaceId,
           });
         } else {
           const result = await createGenieSpace({
             title: domainReq.title,
             description: domainReq.description || "",
-            serializedSpace: preparedSpace,
+            serializedSpace: finalSpace,
             warehouseId: config.warehouseId,
           });
           spaceId = result.space_id;
 
           const trackingId = uuidv4();
-          await trackGenieSpaceCreated(
-            trackingId,
-            spaceId,
-            runId,
-            domainReq.domain,
-            domainReq.title,
-          );
+          try {
+            await trackGenieSpaceCreated(
+              trackingId,
+              spaceId,
+              runId,
+              domainReq.domain,
+              domainReq.title,
+              deployedAssetsPayload,
+            );
+          } catch (trackErr) {
+            logger.error("Lakebase tracking failed after space creation (space exists in Genie)", {
+              spaceId,
+              domain: domainReq.domain,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            });
+            try {
+              await trackGenieSpaceCreated(
+                trackingId, spaceId, runId, domainReq.domain, domainReq.title, deployedAssetsPayload,
+              );
+            } catch { /* exhausted retry */ }
+          }
         }
 
         results.push({
           domain: domainReq.domain,
           assets,
           spaceId,
-          patchedSpace: preparedSpace,
+          patchedSpace: finalSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
 
@@ -671,16 +696,26 @@ export async function POST(
           domain: domainReq.domain,
           spaceId,
           metricViews: deployedMvs.length,
-          functions: deployedFns.length,
           strippedRefs: allStripped.length,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const orphanedAssets = {
+          metricViews: deployedMvs.map((m) => m.fqn),
+        };
+        if (orphanedAssets.metricViews.length > 0) {
+          logger.warn("Genie space creation failed -- UC assets deployed but not attached to any space", {
+            domain: domainReq.domain,
+            orphanedAssets,
+          });
+        }
         results.push({
           domain: domainReq.domain,
           assets,
           spaceError: msg,
-          patchedSpace: preparedSpace,
+          orphanedAssets: orphanedAssets.metricViews.length > 0
+            ? orphanedAssets : undefined,
+          patchedSpace: finalSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
         logger.error("Genie space creation failed during deploy", {
@@ -696,6 +731,110 @@ export async function POST(
     logger.error("Genie deploy failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// FQN normalisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Ensure every metric_view identifier is a 3-part FQN
+ * (catalog.schema.object). Genie cannot resolve bare names or 2-part names.
+ * Any identifier that is not already 3-part gets prefixed with targetSchema.
+ */
+function normalizeIdentifiersToFqn(spaceJson: string, targetSchema: string): string {
+  const space = JSON.parse(spaceJson) as Record<string, unknown>;
+  const dataSources = (space.data_sources ?? {}) as Record<string, unknown>;
+
+  const mvs = (dataSources.metric_views ?? []) as Array<{ identifier: string }>;
+  if (mvs.length > 0) {
+    for (const mv of mvs) {
+      const parts = mv.identifier.replace(/`/g, "").split(".");
+      if (parts.length < 3) {
+        const objectName = parts[parts.length - 1];
+        const fqn = `${targetSchema}.${objectName}`;
+        logger.info("Normalized metric view identifier to FQN", {
+          from: mv.identifier,
+          to: fqn,
+        });
+        mv.identifier = fqn;
+      }
+    }
+    const seenMvs = new Set<string>();
+    dataSources.metric_views = mvs.filter((mv) => {
+      const key = mv.identifier.toLowerCase();
+      if (seenMvs.has(key)) return false;
+      seenMvs.add(key);
+      return true;
+    });
+  }
+
+  space.data_sources = dataSources;
+  return JSON.stringify(space);
+}
+
+// ---------------------------------------------------------------------------
+// Final existence validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Final belt-and-suspenders check: parse the prepared serialised space and
+ * verify that every metric_view identifier actually exists in Unity Catalog
+ * right now. Strip any that don't so the Genie space never references a
+ * phantom object.
+ */
+async function validateFinalSpace(
+  spaceJson: string,
+): Promise<{ json: string; stripped: StrippedRef[] }> {
+  const space = JSON.parse(spaceJson) as Record<string, unknown>;
+  const dataSources = (space.data_sources ?? {}) as Record<string, unknown>;
+  const instructions = (space.instructions ?? {}) as Record<string, unknown>;
+  const stripped: StrippedRef[] = [];
+
+  // Strip any leftover sql_functions
+  delete instructions.sql_functions;
+
+  // --- validate metric_views ---
+  const mvs = (dataSources.metric_views ?? []) as Array<{
+    identifier: string;
+    description?: string[];
+  }>;
+  if (mvs.length > 0) {
+    const results = await Promise.allSettled(
+      mvs.map(async (mv) => {
+        validateFqn(mv.identifier, "metric_view");
+        await executeSQL(`DESCRIBE TABLE ${mv.identifier}`);
+        return mv.identifier;
+      })
+    );
+    const validMvs: typeof mvs = [];
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === "fulfilled") {
+        validMvs.push(mvs[i]);
+      } else {
+        const reason = (results[i] as PromiseRejectedResult).reason;
+        const msg = reason instanceof Error ? reason.message : String(reason);
+        stripped.push({
+          type: "metric_view",
+          identifier: mvs[i].identifier,
+          reason: `Does not exist in Unity Catalog: ${msg}`,
+        });
+        logger.warn("Final validation: metric view missing from UC, stripping", {
+          identifier: mvs[i].identifier,
+          error: msg,
+        });
+      }
+    }
+    if (validMvs.length > 0) {
+      dataSources.metric_views = validMvs;
+    } else {
+      delete dataSources.metric_views;
+    }
+  }
+
+  space.data_sources = dataSources;
+  space.instructions = instructions;
+  return { json: JSON.stringify(space), stripped };
 }
 
 // ---------------------------------------------------------------------------
@@ -719,20 +858,3 @@ function extractPreExistingMvFqns(spaceJson: string): string[] {
   }
 }
 
-/**
- * Extract function identifiers from the serialized space payload.
- * On retry, these may include FQNs from previously-deployed functions
- * that need to be validated rather than wiped.
- */
-function extractPreExistingFnIdentifiers(spaceJson: string): string[] {
-  try {
-    const space = JSON.parse(spaceJson);
-    const fns = space?.instructions?.sql_functions;
-    if (!Array.isArray(fns)) return [];
-    return fns
-      .map((fn: { identifier?: string }) => fn.identifier)
-      .filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
-  } catch {
-    return [];
-  }
-}

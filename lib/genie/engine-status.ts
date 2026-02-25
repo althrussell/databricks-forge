@@ -22,10 +22,24 @@ export interface EngineJobStatus {
   domainCount: number;
   completedDomains: number;
   totalDomains: number;
+  completedDomainNames: string[];
 }
 
 const jobs = new Map<string, EngineJobStatus>();
 const controllers = new Map<string, AbortController>();
+const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function evictStaleJobs(): void {
+  const now = Date.now();
+  for (const [runId, job] of jobs) {
+    if (job.completedAt && now - job.completedAt > JOB_TTL_MS) {
+      jobs.delete(runId);
+    } else if (!job.completedAt && now - job.startedAt > JOB_TTL_MS * 2) {
+      jobs.delete(runId);
+      controllers.delete(runId);
+    }
+  }
+}
 
 export function startJob(runId: string): void {
   controllers.get(runId)?.abort();
@@ -45,6 +59,7 @@ export function startJob(runId: string): void {
     domainCount: 0,
     completedDomains: 0,
     totalDomains: 0,
+    completedDomainNames: [],
   });
 }
 
@@ -88,6 +103,13 @@ export function updateJobDomainProgress(
   }
 }
 
+export function addCompletedDomainName(runId: string, domainName: string): void {
+  const job = jobs.get(runId);
+  if (job && job.status === "generating" && !job.completedDomainNames.includes(domainName)) {
+    job.completedDomainNames.push(domainName);
+  }
+}
+
 export function completeJob(runId: string, domainCount: number): void {
   const job = jobs.get(runId);
   if (job && job.status === "generating") {
@@ -113,5 +135,6 @@ export function failJob(runId: string, error: string): void {
 }
 
 export function getJobStatus(runId: string): EngineJobStatus | null {
+  evictStaleJobs();
   return jobs.get(runId) ?? null;
 }
