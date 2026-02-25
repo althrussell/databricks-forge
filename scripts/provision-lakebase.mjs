@@ -191,18 +191,35 @@ async function getEndpointHost() {
 
 async function getUsername() {
   const host = getHost();
-  const resp = await timedFetch(`${host}/api/2.0/preview/scim/v2/Me`, {
-    headers: {
-      Authorization: `Bearer ${_token}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!resp.ok) {
+  const maxRetries = 5;
+  let lastErr;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const resp = await timedFetch(`${host}/api/2.0/preview/scim/v2/Me`, {
+      headers: {
+        Authorization: `Bearer ${_token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.userName || data.displayName;
+    }
+
     const text = await resp.text();
-    throw new Error(`SCIM /Me failed (${resp.status}): ${text}`);
+
+    if (resp.status === 429 && attempt < maxRetries - 1) {
+      const delaySec = Math.pow(2, attempt + 1);
+      log(`SCIM /Me rate-limited (429), retrying in ${delaySec}s... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise((r) => setTimeout(r, delaySec * 1000));
+      continue;
+    }
+
+    lastErr = new Error(`SCIM /Me failed (${resp.status}): ${text}`);
   }
-  const data = await resp.json();
-  return data.userName || data.displayName;
+
+  throw lastErr;
 }
 
 async function generateCredential(epName) {
