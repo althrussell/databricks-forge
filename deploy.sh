@@ -234,7 +234,7 @@ print(json.dumps({
 }))
 ")
     local create_err
-    if ! create_err=$(databricks apps create --json "$create_json" --no-compute 2>&1); then
+    if ! create_err=$(databricks apps create --json "$create_json" --no-compute --no-wait 2>&1); then
       printf "FAILED\n"
       die "Failed to create app.\n  $create_err"
     fi
