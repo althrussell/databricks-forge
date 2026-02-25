@@ -11,7 +11,6 @@ import { runDashboardEngine } from "@/lib/dashboard/engine";
 import { saveDashboardRecommendations } from "@/lib/lakebase/dashboard-recommendations";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
-import { invalidatePrismaClient } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 export async function runDashboardRecommendations(
@@ -47,7 +46,6 @@ export async function runDashboardRecommendations(
       onProgress,
     });
 
-    await invalidatePrismaClient();
     await saveDashboardRecommendations(runId, result.recommendations);
 
     logger.info("Dashboard recommendations generated and persisted", {
@@ -62,6 +60,6 @@ export async function runDashboardRecommendations(
       runId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return 0;
+    throw err;
   }
 }

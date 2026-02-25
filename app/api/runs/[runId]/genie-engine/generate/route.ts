@@ -11,7 +11,6 @@ import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
-import { invalidatePrismaClient } from "@/lib/prisma";
 import { runGenieEngine, EngineCancelledError } from "@/lib/genie/engine";
 import { startJob, getJobController, updateJob, updateJobDomainProgress, addCompletedDomainName, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
 import { logger } from "@/lib/logger";
@@ -56,6 +55,14 @@ export async function POST(
       return NextResponse.json({ error: "Metadata snapshot not found" }, { status: 404 });
     }
 
+    const existingJob = await getJobStatus(runId);
+    if (existingJob?.status === "generating") {
+      return NextResponse.json(
+        { error: "Genie generation already in progress", status: "generating" },
+        { status: 409 }
+      );
+    }
+
     const { config, version } = await getGenieEngineConfig(runId);
 
     startJob(runId);
@@ -78,12 +85,11 @@ export async function POST(
       },
     })
       .then(async (result) => {
-        const job = getJobStatus(runId);
+        const job = await getJobStatus(runId);
         if (job?.status === "cancelled") {
           logger.info("Genie Engine generation cancelled, skipping save", { runId });
           return;
         }
-        await invalidatePrismaClient();
         await saveGenieRecommendations(
           runId,
           result.recommendations,

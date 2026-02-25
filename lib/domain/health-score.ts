@@ -81,6 +81,16 @@ const HEALTH_RULES: HealthRule[] = [
     recommendation: "Verify if this table is still actively used. Consider archiving or dropping if abandoned.",
   },
   {
+    id: "not_accessed_90d",
+    deduction: 10,
+    check: (d) => {
+      if (!d.lastAccess || d.lastAccess === "UNKNOWN") return false;
+      return daysSince(d.lastAccess) > 90;
+    },
+    issue: "Table not accessed in the last 90 days",
+    recommendation: "This table has not been read or queried recently. Verify it is still needed or consider archiving.",
+  },
+  {
     id: "no_cdf_with_streaming",
     deduction: 10,
     check: (d, h) => {

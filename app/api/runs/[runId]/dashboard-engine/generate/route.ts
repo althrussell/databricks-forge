@@ -11,13 +11,13 @@ import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { saveDashboardRecommendations } from "@/lib/lakebase/dashboard-recommendations";
-import { invalidatePrismaClient } from "@/lib/prisma";
 import { runDashboardEngine } from "@/lib/dashboard/engine";
 import {
   startDashboardJob,
   updateDashboardJob,
   completeDashboardJob,
   failDashboardJob,
+  getDashboardJobStatus,
 } from "@/lib/dashboard/engine-status";
 import { logger } from "@/lib/logger";
 
@@ -60,6 +60,14 @@ export async function POST(
       return NextResponse.json({ error: "Metadata snapshot not found" }, { status: 404 });
     }
 
+    const existingJob = await getDashboardJobStatus(runId);
+    if (existingJob?.status === "generating") {
+      return NextResponse.json(
+        { error: "Dashboard generation already in progress", status: "generating" },
+        { status: 409 }
+      );
+    }
+
     let genieRecommendations;
     try {
       genieRecommendations = await getGenieRecommendationsByRunId(runId);
@@ -78,7 +86,6 @@ export async function POST(
       onProgress: (message, percent) => updateDashboardJob(runId, message, percent),
     })
       .then(async (result) => {
-        await invalidatePrismaClient();
         await saveDashboardRecommendations(runId, result.recommendations, domains);
         completeDashboardJob(runId, result.recommendations.length);
         logger.info("Dashboard Engine generation complete (async)", {

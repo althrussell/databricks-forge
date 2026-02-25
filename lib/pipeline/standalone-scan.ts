@@ -25,7 +25,6 @@ import { walkLineage } from "@/lib/queries/lineage";
 import { runIntelligenceLayer, buildTableInputs } from "@/lib/ai/environment-intelligence";
 import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
-import { invalidatePrismaClient } from "@/lib/prisma";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { initScanProgress, updateScanProgress } from "@/lib/pipeline/scan-progress";
 import { logger } from "@/lib/logger";
@@ -371,7 +370,6 @@ export async function runStandaloneEnrichment(
     }
   }
 
-  await invalidatePrismaClient();
   await saveEnvironmentScan(scan, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
 
   updateScanProgress(scanId, {
