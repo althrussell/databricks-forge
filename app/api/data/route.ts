@@ -2,15 +2,28 @@
  * API: /api/data
  *
  * DELETE -- wipe all application data (factory reset)
+ *
+ * Requires the `x-confirm-delete` header set to "delete-all-data" to
+ * prevent accidental invocation.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { deleteAllData } from "@/lib/lakebase/reset";
 
-export async function DELETE() {
+const CONFIRMATION_VALUE = "delete-all-data";
+
+export async function DELETE(request: NextRequest) {
   try {
+    const confirm = request.headers.get("x-confirm-delete");
+    if (confirm !== CONFIRMATION_VALUE) {
+      return NextResponse.json(
+        { error: "Missing or invalid confirmation header. Set x-confirm-delete: delete-all-data to proceed." },
+        { status: 400 },
+      );
+    }
+
     await ensureMigrated();
     await deleteAllData();
 

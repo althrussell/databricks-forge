@@ -1,4 +1,4 @@
-# Release Notes -- Databricks Forge AI v0.4.0
+# Release Notes -- Databricks Forge AI v0.5.0
 
 **Date:** 25 February 2026
 

@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { InfoTip, LabelWithTip } from "@/components/ui/info-tip";
+import { CONFIG } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -245,11 +248,15 @@ export function ConfigForm() {
   };
 
   return (
+    <TooltipProvider>
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Discovery Depth */}
       <Card>
         <CardHeader>
-          <CardTitle>Discovery Depth</CardTitle>
+          <CardTitle className="flex items-center gap-1">
+            Discovery Depth
+            <InfoTip tip={CONFIG.discoveryDepth} />
+          </CardTitle>
           <CardDescription>
             Choose how broadly to search for use cases. This affects how many
             use cases are generated and the quality threshold applied.
@@ -304,7 +311,9 @@ export function ConfigForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="businessName">Business Name</Label>
+            <Label htmlFor="businessName">
+              <LabelWithTip label="Business Name" tip={CONFIG.businessName} />
+            </Label>
             <Input
               id="businessName"
               placeholder="e.g. Acme Financial Services"
@@ -319,7 +328,9 @@ export function ConfigForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="industry">Industry (optional)</Label>
+            <Label htmlFor="industry">
+              <LabelWithTip label="Industry (optional)" tip={CONFIG.industry} />
+            </Label>
             <Select
               value={industry || "__none__"}
               onValueChange={handleIndustryChange}
@@ -355,7 +366,7 @@ export function ConfigForm() {
           </div>
 
           <div className="space-y-2">
-            <Label>UC Metadata Sources</Label>
+            <LabelWithTip label="UC Metadata Sources" tip={CONFIG.ucMetadata} />
             {manualMode ? (
               <>
                 <Input
@@ -402,7 +413,10 @@ export function ConfigForm() {
       {/* Business Priorities */}
       <Card>
         <CardHeader>
-          <CardTitle>Business Priorities</CardTitle>
+          <CardTitle className="flex items-center gap-1">
+            Business Priorities
+            <InfoTip tip={CONFIG.priorities} />
+          </CardTitle>
           <CardDescription>
             Select the priorities that matter most to your organisation. These
             directly influence how use cases are scored -- higher weight is given
@@ -446,7 +460,7 @@ export function ConfigForm() {
           <CollapsibleContent>
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <Label>Business Domains (optional)</Label>
+            <LabelWithTip label="Business Domains (optional)" tip={CONFIG.domains} />
 
             {/* Selected domains */}
             {businessDomains.length > 0 && (
@@ -541,7 +555,7 @@ export function ConfigForm() {
 
           <div className="space-y-2">
             <Label htmlFor="strategicGoals">
-              Strategic Goals (optional)
+              <LabelWithTip label="Strategic Goals (optional)" tip={CONFIG.strategicGoals} />
             </Label>
             <Textarea
               id="strategicGoals"
@@ -565,7 +579,10 @@ export function ConfigForm() {
             <div className="flex items-start gap-3">
               <ScanLine className={`mt-0.5 h-4 w-4 shrink-0 ${estateScanEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
               <div>
-                <p className="text-sm font-medium">Estate Scan</p>
+                <p className="text-sm font-medium flex items-center gap-1">
+                  Estate Scan
+                  <InfoTip tip={CONFIG.estateScan} />
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Run environment intelligence (domain classification, PII
                   detection, health scoring, lineage) during this run
@@ -598,5 +615,6 @@ export function ConfigForm() {
         </Button>
       </div>
     </form>
+    </TooltipProvider>
   );
 }

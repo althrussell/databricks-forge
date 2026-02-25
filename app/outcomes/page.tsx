@@ -40,6 +40,9 @@ import {
   type ReferenceUseCase,
 } from "@/lib/domain/industry-outcomes";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { InfoTip } from "@/components/ui/info-tip";
+import { OUTCOMES } from "@/lib/help-text";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -133,18 +136,22 @@ export default function OutcomesPage() {
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
-              <Layers className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                Industry Outcome Maps
-              </h1>
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
+                <Layers className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight">
+                    Industry Outcome Maps
+                  </h1>
+                  <InfoTip tip={OUTCOMES.pageDescription} />
+                </div>
               <p className="text-sm text-muted-foreground">
                 {loading ? "Loading..." : (
                   <>{outcomes.length} industries &middot;{" "}
@@ -222,7 +229,8 @@ export default function OutcomesPage() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 

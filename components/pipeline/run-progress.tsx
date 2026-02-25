@@ -2,15 +2,17 @@
 
 import { cn } from "@/lib/utils";
 import { PipelineStep, type RunStatus } from "@/lib/domain/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PIPELINE_STEPS } from "@/lib/help-text";
 
 const STEPS = [
-  { key: PipelineStep.BusinessContext, label: "Business Context", pct: 10 },
-  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 20 },
-  { key: PipelineStep.TableFiltering, label: "Table Filtering", pct: 30 },
-  { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 45 },
-  { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 55 },
-  { key: PipelineStep.Scoring, label: "Scoring & Dedup", pct: 65 },
-  { key: PipelineStep.SqlGeneration, label: "SQL Generation", pct: 100 },
+  { key: PipelineStep.BusinessContext, label: "Business Context", pct: 10, tip: PIPELINE_STEPS["business-context"] },
+  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 20, tip: PIPELINE_STEPS["metadata-extraction"] },
+  { key: PipelineStep.TableFiltering, label: "Table Filtering", pct: 30, tip: PIPELINE_STEPS["table-filtering"] },
+  { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 45, tip: PIPELINE_STEPS["usecase-generation"] },
+  { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 55, tip: PIPELINE_STEPS["domain-clustering"] },
+  { key: PipelineStep.Scoring, label: "Scoring & Dedup", pct: 65, tip: PIPELINE_STEPS["scoring"] },
+  { key: PipelineStep.SqlGeneration, label: "SQL Generation", pct: 100, tip: PIPELINE_STEPS["sql-generation"] },
 ];
 
 interface RunProgressProps {
@@ -31,7 +33,7 @@ export function RunProgress({
     : -1;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" role="list" aria-label="Pipeline steps">
       {STEPS.map((step, idx) => {
         const isCompleted =
           status === "completed" ||
@@ -42,7 +44,7 @@ export function RunProgress({
         const isPending = !isCompleted && !isActive && !isFailed;
 
         return (
-          <div key={step.key} className="flex items-center gap-3">
+          <div key={step.key} role="listitem" aria-current={isActive ? "step" : undefined} className="flex items-center gap-3">
             <div
               className={cn(
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors",
@@ -65,16 +67,23 @@ export function RunProgress({
               )}
             </div>
             <div className="flex-1">
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  isPending && "text-muted-foreground/50",
-                  isActive && "text-blue-600",
-                  isFailed && "text-red-600"
-                )}
-              >
-                {step.label}
-              </p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p
+                    className={cn(
+                      "text-sm font-medium cursor-help",
+                      isPending && "text-muted-foreground/50",
+                      isActive && "text-blue-600",
+                      isFailed && "text-red-600"
+                    )}
+                  >
+                    {step.label}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[280px]">
+                  {step.tip}
+                </TooltipContent>
+              </Tooltip>
               {isActive && statusMessage && (
                 <p className="mt-0.5 text-xs text-muted-foreground animate-pulse">
                   {statusMessage}

@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isValidUUID } from "@/lib/validation";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getDashboardRecommendationsByRunId } from "@/lib/lakebase/dashboard-recommendations";
 import { listTrackedDashboards } from "@/lib/lakebase/dashboards";
@@ -17,6 +18,9 @@ export async function GET(
 ) {
   try {
     const { runId } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
 
     const run = await getRunById(runId);
     if (!run) {

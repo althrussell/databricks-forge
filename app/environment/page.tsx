@@ -36,6 +36,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { LabelWithTip, InfoTip } from "@/components/ui/info-tip";
+import { ENVIRONMENT } from "@/lib/help-text";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Database,
@@ -55,6 +67,7 @@ import {
   Clock,
   ArrowLeft,
   Plus,
+  Trash2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
@@ -243,6 +256,27 @@ export default function EstatePage() {
     setSelectedErdGraph(null);
     setSearchFilter("");
   }, []);
+
+  // Delete a scan
+  const deleteScan = useCallback(async (scanId: string) => {
+    try {
+      const resp = await fetch(`/api/environment-scan/${scanId}`, { method: "DELETE" });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error ?? "Delete failed");
+      }
+      toast.success("Scan deleted");
+      if (selectedScan?.scanId === scanId) {
+        setViewMode("aggregate");
+        setSelectedScan(null);
+        setSelectedErdGraph(null);
+      }
+      fetchAggregate();
+      fetchAggregateErd();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete scan");
+    }
+  }, [selectedScan, fetchAggregate, fetchAggregateErd]);
 
   // Derive the UC scope string from selected catalog browser sources
   const ucScope = selectedSources.join(", ");
@@ -657,7 +691,10 @@ export default function EstatePage() {
             <TabsTrigger value="tables">
               Tables ({activeDetails.length})
             </TabsTrigger>
-            <TabsTrigger value="erd">ERD</TabsTrigger>
+            <TabsTrigger value="erd" className="gap-1">
+              ERD
+              <InfoTip tip={ENVIRONMENT.erdView} />
+            </TabsTrigger>
             {viewMode === "aggregate" && (
               <TabsTrigger value="coverage">Table Coverage</TabsTrigger>
             )}
@@ -677,6 +714,7 @@ export default function EstatePage() {
                 humanNumber={humanNumber}
                 timeAgo={timeAgo}
                 onViewScan={loadSingleScan}
+                onDeleteScan={deleteScan}
               />
             ) : viewMode === "single-scan" && selectedScan ? (
               <SingleScanSummary
@@ -703,34 +741,34 @@ export default function EstatePage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>
-                      <HeaderWithTip label="Table" tip="Fully qualified table name (catalog.schema.table) with its description if one exists — either human-authored or AI-generated." />
+                      <LabelWithTip label="Table" tip="Fully qualified table name (catalog.schema.table) with its description if one exists — either human-authored or AI-generated." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Domain" tip="Business domain assigned by AI analysis. Groups tables by the business function they serve (e.g. Finance, Customer, Operations)." />
+                      <LabelWithTip label="Domain" tip="Business domain assigned by AI analysis. Groups tables by the business function they serve (e.g. Finance, Customer, Operations)." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Tier" tip="Medallion architecture tier: bronze = raw ingested data, silver = cleansed and conformed, gold = analytics-ready for business users, system = internal/technical." />
+                      <LabelWithTip label="Tier" tip="Medallion architecture tier: bronze = raw ingested data, silver = cleansed and conformed, gold = analytics-ready for business users, system = internal/technical." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Size" tip="Physical storage size of the table on disk. Views and inaccessible tables may show as '—'." />
+                      <LabelWithTip label="Size" tip="Physical storage size of the table on disk. Views and inaccessible tables may show as '—'." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Rows" tip="Total row count from Delta table statistics. Available when ANALYZE TABLE has been run, or estimated from the latest write operation metrics. '—' means stats are not yet computed." />
+                      <LabelWithTip label="Rows" tip="Total row count from Delta table statistics. Available when ANALYZE TABLE has been run, or estimated from the latest write operation metrics. '—' means stats are not yet computed." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Owner" tip="The Unity Catalog owner of this table. Tables without owners lack clear accountability when issues arise." />
+                      <LabelWithTip label="Owner" tip="The Unity Catalog owner of this table. Tables without owners lack clear accountability when issues arise." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Gov." tip="Governance score (0-100) based on documentation, ownership, tagging, sensitivity labelling, and maintenance status. Higher is better." />
+                      <LabelWithTip label="Gov." tip="Governance score (0-100) based on documentation, ownership, tagging, sensitivity labelling, and maintenance status. Higher is better." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Sensitivity" tip="Data sensitivity classification determined by AI. 'Confidential' or 'restricted' indicates PII or regulated data requiring compliance controls." />
+                      <LabelWithTip label="Sensitivity" tip="Data sensitivity classification determined by AI. 'Confidential' or 'restricted' indicates PII or regulated data requiring compliance controls." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Modified" tip="When this table was last modified. Helps identify stale or abandoned datasets." />
+                      <LabelWithTip label="Modified" tip="When this table was last modified. Helps identify stale or abandoned datasets." />
                     </TableHead>
                     <TableHead>
-                      <HeaderWithTip label="Via" tip="How this table was discovered. 'Selected' means it was within your chosen scan scope. 'Lineage' means it was found by following data dependencies from other tables." />
+                      <LabelWithTip label="Via" tip="How this table was discovered. 'Selected' means it was within your chosen scan scope. 'Lineage' means it was found by following data dependencies from other tables." />
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1112,13 +1150,13 @@ function TableCoverageView() {
               Showing {safePage * COVERAGE_PAGE_SIZE + 1}–{Math.min((safePage + 1) * COVERAGE_PAGE_SIZE, filtered.length)} of {filtered.length}
             </p>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} aria-label="Previous page">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="px-2 text-sm text-muted-foreground">
                 {safePage + 1} / {totalPages}
               </span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)} aria-label="Next page">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -1141,6 +1179,7 @@ function AggregateSummary({
   humanNumber,
   timeAgo,
   onViewScan,
+  onDeleteScan,
 }: {
   stats: AggregateStats;
   details: TableDetailRow[];
@@ -1149,8 +1188,10 @@ function AggregateSummary({
   humanNumber: (value: string | number | null) => string;
   timeAgo: (iso: string) => string;
   onViewScan: (scanId: string) => void;
+  onDeleteScan: (scanId: string) => void;
 }) {
   const [coverageOpen, setCoverageOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CoverageEntry | null>(null);
 
   // Compute Data Maturity Score
   const maturity = computeDataMaturity({
@@ -1287,13 +1328,24 @@ function AggregateSummary({
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onViewScan(c.scanId)}
-                          >
-                            View
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onViewScan(c.scanId)}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleteTarget(c)}
+                              aria-label="Delete scan"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1304,6 +1356,30 @@ function AggregateSummary({
           </Card>
         </CollapsibleContent>
       </Collapsible>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete scan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete the scan for <span className="font-mono font-medium">{deleteTarget?.ucPath}</span>?
+              This permanently removes all table details, history, lineage, and insights for this scan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) onDeleteScan(deleteTarget.scanId);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1633,30 +1709,6 @@ function MiniCounter({
 }
 
 // ---------------------------------------------------------------------------
-// Header with tooltip (for table column headers)
-// ---------------------------------------------------------------------------
-
-function HeaderWithTip({ label, tip }: { label: string; tip: string }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex items-center gap-1 cursor-help">
-          {label}
-          <Info className="h-3 w-3 text-muted-foreground/50" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[280px]">
-        {tip}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Executive Summary
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Scan Trends Panel
 // ---------------------------------------------------------------------------
 
@@ -1827,6 +1879,7 @@ function DataMaturityCard({ maturity }: { maturity: DataMaturityScore }) {
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <BarChart3 className="h-4 w-4 text-primary" />
           Data Maturity Score
+          <InfoTip tip={ENVIRONMENT.dataMaturity} />
         </CardTitle>
         <CardDescription>
           Composite score across governance, architecture, operations, and analytics readiness
@@ -2066,6 +2119,7 @@ function ExecutiveSummary({
         <CardTitle className="flex items-center gap-2 text-lg">
           <FileSpreadsheet className="h-5 w-5 text-primary" />
           Executive Summary
+          <InfoTip tip={ENVIRONMENT.executiveSummary} />
         </CardTitle>
         <CardDescription>
           {actionCount > 0

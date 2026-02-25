@@ -41,6 +41,9 @@ import {
 } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
 import type { RunComparisonResult, PromptDiff, RunMetrics, UseCaseAlignmentEntry, StepMetrics } from "@/lib/lakebase/run-comparison";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { InfoTip } from "@/components/ui/info-tip";
+import { COMPARE } from "@/lib/help-text";
 
 export default function ComparePage() {
   return (
@@ -99,6 +102,7 @@ function ComparePageInner() {
   }, [runA, runB, fetchComparison]);
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -232,8 +236,9 @@ function ComparePageInner() {
           {/* Metric Comparison */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 Metric Comparison
+                <InfoTip tip={COMPARE.metricComparison} />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -298,8 +303,9 @@ function ComparePageInner() {
           {/* Use Case Overlap */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 Use Case Overlap
+                <InfoTip tip={COMPARE.useCaseOverlap} />
               </CardTitle>
               <CardDescription>
                 Matched by exact name comparison
@@ -355,8 +361,9 @@ function ComparePageInner() {
           {/* Config Diff */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 Configuration Differences
+                <InfoTip tip={COMPARE.configDiff} />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -392,6 +399,7 @@ function ComparePageInner() {
         </>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -515,6 +523,7 @@ function StepMetricsCard({ steps }: { steps: StepMetrics[] }) {
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <Clock className="h-4 w-4 text-blue-500" />
           Step-Level Comparison
+          <InfoTip tip={COMPARE.stepComparison} />
         </CardTitle>
         <CardDescription>
           Per-pipeline-step duration, token usage, and success rate

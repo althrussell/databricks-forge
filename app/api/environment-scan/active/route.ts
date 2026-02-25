@@ -8,8 +8,18 @@
 
 import { NextResponse } from "next/server";
 import { getActiveScans } from "@/lib/pipeline/scan-progress";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
-  const scans = getActiveScans();
-  return NextResponse.json({ scans });
+  try {
+    const scans = getActiveScans();
+    return NextResponse.json({ scans });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("[api/environment-scan/active] GET failed", { error: msg });
+    return NextResponse.json(
+      { error: "Failed to retrieve active scans" },
+      { status: 500 },
+    );
+  }
 }

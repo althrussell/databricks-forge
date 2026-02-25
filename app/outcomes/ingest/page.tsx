@@ -41,6 +41,9 @@ import {
   Pencil,
 } from "lucide-react";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { InfoTip } from "@/components/ui/info-tip";
+import { OUTCOMES } from "@/lib/help-text";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -276,24 +279,28 @@ export default function IngestOutcomeMapPage() {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/outcomes">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Ingest Outcome Map
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Upload a markdown outcome map and let AI extract structured data
-            </p>
+    <TooltipProvider>
+      <div className="flex flex-col gap-6 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/outcomes">
+              <Button variant="ghost" size="icon" aria-label="Back to outcome maps">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">
+                  Ingest Outcome Map
+                </h1>
+                <InfoTip tip={OUTCOMES.ingestDescription} />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Upload a markdown outcome map and let AI extract structured data
+              </p>
+            </div>
           </div>
-        </div>
 
         {/* Step indicator */}
         <div className="hidden md:flex items-center gap-2">
@@ -755,6 +762,7 @@ export default function IngestOutcomeMapPage() {
                                   onClick={() =>
                                     removeUseCase(objIdx, priIdx, ucIdx)
                                   }
+                                  aria-label="Remove use case"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -905,7 +913,8 @@ export default function IngestOutcomeMapPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 

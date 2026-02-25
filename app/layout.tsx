@@ -36,6 +36,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
+          >
+            Skip to main content
+          </a>
           <div className="flex min-h-screen">
             <SidebarNav />
             <div className="flex flex-1 flex-col overflow-auto">
@@ -43,7 +49,7 @@ export default function RootLayout({
                 <MobileNav />
                 <ThemeToggle />
               </header>
-              <main className="flex-1">
+              <main id="main-content" className="flex-1">
                 <div className="w-full px-6 py-6">{children}</div>
               </main>
             </div>

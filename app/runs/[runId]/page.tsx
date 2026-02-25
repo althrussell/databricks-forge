@@ -42,19 +42,27 @@ import {
   type PromptLogEntry,
   type PromptLogStats,
 } from "@/components/pipeline/run-detail/ai-observability-tab";
-  import {
-    Target,
-    Database,
-    Copy,
-    ChevronDown,
-    ChevronUp,
-    BarChart3,
-    Settings2,
-    Eye,
-    RotateCcw,
-    ArrowLeft,
-    GitCompareArrows,
-  } from "lucide-react";
+import {
+  Target,
+  Database,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  Settings2,
+  Eye,
+  RotateCcw,
+  ArrowLeft,
+  GitCompareArrows,
+} from "lucide-react";
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { InfoTip } from "@/components/ui/info-tip";
+import { RUN_DETAIL } from "@/lib/help-text";
 import { Separator } from "@/components/ui/separator";
 import type {
   PipelineRun,
@@ -388,6 +396,7 @@ export default function RunDetailPage({
   };
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -589,6 +598,7 @@ export default function RunDetailPage({
             <SummaryCard
               title="Total Use Cases"
               value={String(useCases.length)}
+              tip={RUN_DETAIL.totalUseCases}
               onClick={() => setActiveTab("usecases")}
             />
             <SummaryCard
@@ -596,6 +606,7 @@ export default function RunDetailPage({
               value={String(
                 new Set(useCases.map((uc) => uc.domain)).size
               )}
+              tip={RUN_DETAIL.domainCount}
               onClick={() => {
                 setActiveTab("overview");
                 setInsightsOpen(true);
@@ -607,6 +618,7 @@ export default function RunDetailPage({
               value={String(
                 useCases.filter((uc) => uc.type === "AI").length
               )}
+              tip={RUN_DETAIL.aiUseCases}
               onClick={() => setActiveTab("usecases")}
             />
             <SummaryCard
@@ -623,6 +635,7 @@ export default function RunDetailPage({
                     )}%`
                   : "N/A"
               }
+              tip={RUN_DETAIL.avgScore}
               onClick={() => scrollTo(radarRef)}
             />
             <CoverageGapCard
@@ -644,36 +657,61 @@ export default function RunDetailPage({
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="usecases">
-                Use Cases ({useCases.length})
-              </TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{RUN_DETAIL.tabOverview}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="usecases">
+                    Use Cases ({useCases.length})
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{RUN_DETAIL.tabUseCases}</TooltipContent>
+              </Tooltip>
               {useCases.length > 0 && (
-                <TabsTrigger value="genie">
-                  Genie Spaces{" "}
-                  {genieGenerating && (
-                    <span className="ml-1 animate-pulse text-violet-500">
-                      ●
-                    </span>
-                  )}
-                </TabsTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="genie">
+                      Genie Spaces{" "}
+                      {genieGenerating && (
+                        <span className="ml-1 animate-pulse text-violet-500">
+                          ●
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{RUN_DETAIL.tabGenie}</TooltipContent>
+                </Tooltip>
               )}
               {useCases.length > 0 && (
-                <TabsTrigger value="dashboards">
-                  Dashboards{" "}
-                  {dashboardGenerating && (
-                    <span className="ml-1 animate-pulse text-blue-500">
-                      ●
-                    </span>
-                  )}
-                </TabsTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="dashboards">
+                      Dashboards{" "}
+                      {dashboardGenerating && (
+                        <span className="ml-1 animate-pulse text-blue-500">
+                          ●
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{RUN_DETAIL.tabDashboards}</TooltipContent>
+                </Tooltip>
               )}
-              <TabsTrigger
-                value="observability"
-                onClick={() => fetchPromptLogs()}
-              >
-                AI Observability
-              </TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger
+                    value="observability"
+                    onClick={() => fetchPromptLogs()}
+                  >
+                    AI Observability
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{RUN_DETAIL.tabObservability}</TooltipContent>
+              </Tooltip>
             </TabsList>
 
             {/* Overview Tab */}
@@ -1003,6 +1041,7 @@ export default function RunDetailPage({
         </Card>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -1013,10 +1052,12 @@ export default function RunDetailPage({
 function SummaryCard({
   title,
   value,
+  tip,
   onClick,
 }: {
   title: string;
   value: string;
+  tip?: string;
   onClick?: () => void;
 }) {
   return (
@@ -1029,7 +1070,10 @@ function SummaryCard({
       onClick={onClick}
     >
       <CardContent className="pt-6">
-        <p className="text-sm text-muted-foreground">{title}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          {tip && <InfoTip tip={tip} />}
+        </div>
         <p className="text-2xl font-bold">{value}</p>
       </CardContent>
     </Card>

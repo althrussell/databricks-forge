@@ -56,6 +56,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { InfoTip } from "@/components/ui/info-tip";
+import { SETTINGS } from "@/lib/help-text";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -145,7 +148,10 @@ export default function SettingsPage() {
   const handleDeleteAllData = async () => {
     setDeleting(true);
     try {
-      const res = await fetch("/api/data", { method: "DELETE" });
+      const res = await fetch("/api/data", {
+        method: "DELETE",
+        headers: { "x-confirm-delete": "delete-all-data" },
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Request failed (${res.status})`);
@@ -172,6 +178,7 @@ export default function SettingsPage() {
   }
 
   return (
+    <TooltipProvider>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
@@ -228,7 +235,10 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="sampleRows">Rows per table</Label>
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="sampleRows">Rows per table</Label>
+              <InfoTip tip={SETTINGS.sampleRows} />
+            </div>
             <Select
               value={String(sampleRowsPerTable)}
               onValueChange={(v) => setSampleRowsPerTable(parseInt(v, 10))}
@@ -383,7 +393,10 @@ export default function SettingsPage() {
 
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">Batch target (min-max use cases per batch)</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs">Batch target (min-max use cases per batch)</Label>
+                        <InfoTip tip={SETTINGS.batchTarget} />
+                      </div>
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
@@ -406,7 +419,10 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-xs">Quality floor (0-1, minimum overall score)</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs">Quality floor (0-1, minimum overall score)</Label>
+                        <InfoTip tip={SETTINGS.qualityFloor} />
+                      </div>
                       <Input
                         type="number"
                         min={0}
@@ -419,7 +435,10 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-xs">Adaptive cap (max use cases in output)</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs">Adaptive cap (max use cases in output)</Label>
+                        <InfoTip tip={SETTINGS.adaptiveCap} />
+                      </div>
                       <Input
                         type="number"
                         min={10}
@@ -432,7 +451,10 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-xs">Lineage depth (max hops to walk)</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs">Lineage depth (max hops to walk)</Label>
+                        <InfoTip tip={SETTINGS.lineageDepth} />
+                      </div>
                       <Input
                         type="number"
                         min={1}
@@ -464,6 +486,7 @@ export default function SettingsPage() {
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
             Genie Engine
+            <InfoTip tip={SETTINGS.genieEngine} />
           </CardTitle>
           <CardDescription>
             Global defaults for Genie Space generation. These apply to all new
@@ -512,7 +535,10 @@ export default function SettingsPage() {
             {/* Max tables + Fiscal year */}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="maxTables">Max tables per space</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="maxTables">Max tables per space</Label>
+                  <InfoTip tip={SETTINGS.maxTables} />
+                </div>
                 <div className="flex items-center gap-3">
                   <Input
                     id="maxTables"
@@ -534,7 +560,10 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="fiscalMonth">Fiscal year start month</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="fiscalMonth">Fiscal year start month</Label>
+                  <InfoTip tip={SETTINGS.fiscalYear} />
+                </div>
                 <Select
                   value={String(genieDefaults.fiscalYearStartMonth)}
                   onValueChange={(v) =>
@@ -584,7 +613,10 @@ export default function SettingsPage() {
 
             {/* Entity matching */}
             <div className="mt-4 space-y-2">
-              <Label>Entity Matching</Label>
+              <div className="flex items-center gap-1.5">
+                <Label>Entity Matching</Label>
+                <InfoTip tip={SETTINGS.entityMatching} />
+              </div>
               <div className="flex gap-2">
                 {([
                   { value: "auto" as const, label: "Auto (from sample data)" },
@@ -668,7 +700,10 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="defaultExport">Default export format</Label>
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="defaultExport">Default export format</Label>
+                <InfoTip tip={SETTINGS.exportFormat} />
+              </div>
               <Select
                 value={defaultExportFormat}
                 onValueChange={setDefaultExportFormat}
@@ -687,9 +722,12 @@ export default function SettingsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notebookPath">
-                Notebook deployment path
-              </Label>
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="notebookPath">
+                  Notebook deployment path
+                </Label>
+                <InfoTip tip={SETTINGS.notebookPath} />
+              </div>
               <div className="flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -843,6 +881,7 @@ export default function SettingsPage() {
         </Button>
       </div>
     </div>
+    </TooltipProvider>
   );
 }
 

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDashboardRecommendationsByRunId } from "@/lib/lakebase/dashboard-recommendations";
+import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
@@ -13,6 +14,9 @@ export async function GET(
 ) {
   try {
     const { runId, domain } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
     const decodedDomain = decodeURIComponent(domain);
 
     const recs = await getDashboardRecommendationsByRunId(runId);

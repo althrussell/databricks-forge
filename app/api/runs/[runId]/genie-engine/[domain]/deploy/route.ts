@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isValidUUID } from "@/lib/validation";
 import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
 import { createGenieSpace, updateGenieSpace, DEFAULT_GENIE_PARENT_PATH } from "@/lib/dbx/genie";
@@ -25,6 +26,9 @@ export async function POST(
 ) {
   try {
     const { runId, domain } = await params;
+    if (!isValidUUID(runId)) {
+      return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
+    }
     const decodedDomain = decodeURIComponent(domain);
 
     const run = await getRunById(runId);
