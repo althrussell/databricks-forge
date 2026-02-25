@@ -8,8 +8,8 @@ export default function RunDetailLoading() {
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-6 w-24" />
       </div>
-      <div className="grid gap-4 md:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid gap-4 md:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-24" />
         ))}
       </div>
