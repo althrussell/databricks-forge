@@ -15,7 +15,10 @@ import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
 import { executeSQL } from "@/lib/dbx/sql";
 import { createGenieSpace, updateGenieSpace } from "@/lib/dbx/genie";
-import { trackGenieSpaceCreated } from "@/lib/lakebase/genie-spaces";
+import {
+  trackGenieSpaceCreated,
+  trackGenieSpaceUpdated as trackSpaceUpdated,
+} from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -653,7 +656,17 @@ export async function POST(
         validPreExistingMvs,
         validPreExistingFns,
       );
-      const allStripped = [...mvValidationStripped, ...fnValidationStripped, ...strippedRefs];
+
+      // 5. Final existence check — verify every reference in the space is real
+      const { json: validatedSpace, stripped: finalStripped } =
+        await validateFinalSpace(preparedSpace);
+
+      const allStripped = [
+        ...mvValidationStripped,
+        ...fnValidationStripped,
+        ...strippedRefs,
+        ...finalStripped,
+      ];
 
       if (allStripped.length > 0) {
         logger.info("Stripped references from serialized space", {
@@ -662,15 +675,21 @@ export async function POST(
         });
       }
 
-      // 5. Create or update Genie space
+      // 6. Create or update Genie space
+      const deployedAssetsPayload = {
+        functions: deployedFns.map((f) => f.fqn),
+        metricViews: deployedMvs.map((m) => m.fqn),
+      };
+
       try {
         let spaceId: string;
 
         if (domainReq.existingSpaceId) {
           const result = await updateGenieSpace(domainReq.existingSpaceId, {
-            serializedSpace: preparedSpace,
+            serializedSpace: validatedSpace,
           });
           spaceId = result.space_id;
+          await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
           logger.info("Genie space updated after retry", {
             runId, domain: domainReq.domain, spaceId,
           });
@@ -678,7 +697,7 @@ export async function POST(
           const result = await createGenieSpace({
             title: domainReq.title,
             description: domainReq.description || "",
-            serializedSpace: preparedSpace,
+            serializedSpace: validatedSpace,
             warehouseId: config.warehouseId,
           });
           spaceId = result.space_id;
@@ -690,6 +709,7 @@ export async function POST(
             runId,
             domainReq.domain,
             domainReq.title,
+            deployedAssetsPayload,
           );
         }
 
@@ -697,7 +717,7 @@ export async function POST(
           domain: domainReq.domain,
           assets,
           spaceId,
-          patchedSpace: preparedSpace,
+          patchedSpace: validatedSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
 
@@ -715,7 +735,7 @@ export async function POST(
           domain: domainReq.domain,
           assets,
           spaceError: msg,
-          patchedSpace: preparedSpace,
+          patchedSpace: validatedSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
         logger.error("Genie space creation failed during deploy", {
@@ -731,6 +751,100 @@ export async function POST(
     logger.error("Genie deploy failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Final existence validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Final belt-and-suspenders check: parse the prepared serialised space and
+ * verify that every sql_function and metric_view identifier actually exists
+ * in Unity Catalog right now.  Strip any that don't so the Genie space never
+ * references a phantom object.
+ */
+async function validateFinalSpace(
+  spaceJson: string,
+): Promise<{ json: string; stripped: StrippedRef[] }> {
+  const space = JSON.parse(spaceJson) as Record<string, unknown>;
+  const dataSources = (space.data_sources ?? {}) as Record<string, unknown>;
+  const instructions = (space.instructions ?? {}) as Record<string, unknown>;
+  const stripped: StrippedRef[] = [];
+
+  // --- validate sql_functions ---
+  const fns = (instructions.sql_functions ?? []) as Array<{ id: string; identifier: string }>;
+  if (fns.length > 0) {
+    const results = await Promise.allSettled(
+      fns.map(async (fn) => {
+        await executeSQL(`DESCRIBE FUNCTION ${fn.identifier}`);
+        return fn.identifier;
+      })
+    );
+    const validFns: typeof fns = [];
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === "fulfilled") {
+        validFns.push(fns[i]);
+      } else {
+        const reason = (results[i] as PromiseRejectedResult).reason;
+        const msg = reason instanceof Error ? reason.message : String(reason);
+        stripped.push({
+          type: "function",
+          identifier: fns[i].identifier,
+          reason: `Does not exist in Unity Catalog: ${msg}`,
+        });
+        logger.warn("Final validation: function missing from UC, stripping", {
+          identifier: fns[i].identifier,
+          error: msg,
+        });
+      }
+    }
+    if (validFns.length > 0) {
+      instructions.sql_functions = validFns;
+    } else {
+      delete instructions.sql_functions;
+    }
+  }
+
+  // --- validate metric_views ---
+  const mvs = (dataSources.metric_views ?? []) as Array<{
+    identifier: string;
+    description?: string[];
+  }>;
+  if (mvs.length > 0) {
+    const results = await Promise.allSettled(
+      mvs.map(async (mv) => {
+        await executeSQL(`DESCRIBE TABLE ${mv.identifier}`);
+        return mv.identifier;
+      })
+    );
+    const validMvs: typeof mvs = [];
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === "fulfilled") {
+        validMvs.push(mvs[i]);
+      } else {
+        const reason = (results[i] as PromiseRejectedResult).reason;
+        const msg = reason instanceof Error ? reason.message : String(reason);
+        stripped.push({
+          type: "metric_view",
+          identifier: mvs[i].identifier,
+          reason: `Does not exist in Unity Catalog: ${msg}`,
+        });
+        logger.warn("Final validation: metric view missing from UC, stripping", {
+          identifier: mvs[i].identifier,
+          error: msg,
+        });
+      }
+    }
+    if (validMvs.length > 0) {
+      dataSources.metric_views = validMvs;
+    } else {
+      delete dataSources.metric_views;
+    }
+  }
+
+  space.data_sources = dataSources;
+  space.instructions = instructions;
+  return { json: JSON.stringify(space), stripped };
 }
 
 // ---------------------------------------------------------------------------

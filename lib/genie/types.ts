@@ -387,6 +387,7 @@ export interface TrackedGenieSpace {
   domain: string;
   title: string;
   status: GenieSpaceStatus;
+  deployedAssets?: { functions: string[]; metricViews: string[] } | null;
   createdAt: string;
   updatedAt: string;
 }

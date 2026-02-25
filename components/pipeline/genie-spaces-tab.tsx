@@ -30,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Accordion,
@@ -38,7 +37,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { BrainCircuit } from "lucide-react";
+import { BrainCircuit, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type {
   GenieEngineRecommendation,
@@ -48,6 +47,21 @@ import type {
 } from "@/lib/genie/types";
 import type { UseCase } from "@/lib/domain/types";
 import { GenieDeployModal } from "./genie-deploy-modal";
+
+// ---------------------------------------------------------------------------
+// Trash preview types
+// ---------------------------------------------------------------------------
+
+interface SharedAsset {
+  fqn: string;
+  usedBy: string[];
+}
+
+interface TrashPreview {
+  assets: { functions: string[]; metricViews: string[] };
+  shared: { functions: SharedAsset[]; metricViews: SharedAsset[] };
+  safeToDelete: { functions: string[]; metricViews: string[] };
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -89,8 +103,13 @@ export function GenieSpacesTab({
 
   // Deploy state
 
-  // Trash loading
+  // Trash flow state
   const [trashingDomain, setTrashingDomain] = useState<string | null>(null);
+  const [trashDialogOpen, setTrashDialogOpen] = useState(false);
+  const [trashDialogDomain, setTrashDialogDomain] = useState<string | null>(null);
+  const [trashPreview, setTrashPreview] = useState<TrashPreview | null>(null);
+  const [trashPreviewLoading, setTrashPreviewLoading] = useState(false);
+  const [dropAssetsChecked, setDropAssetsChecked] = useState(true);
 
   // Test Space state
   const [testingDomain, setTestingDomain] = useState<string | null>(null);
@@ -241,14 +260,48 @@ export function GenieSpacesTab({
     fetchRecommendations();
   }
 
-  async function handleTrash(domain: string) {
+  async function openTrashDialog(domain: string) {
     const tracking = getTracking(domain);
     if (!tracking) return;
 
-    setTrashingDomain(domain);
+    setTrashDialogDomain(domain);
+    setTrashPreview(null);
+    setDropAssetsChecked(true);
+    setTrashDialogOpen(true);
+    setTrashPreviewLoading(true);
+
     try {
+      const res = await fetch(`/api/genie-spaces/${tracking.spaceId}/trash-preview`);
+      if (res.ok) {
+        const data = (await res.json()) as TrashPreview;
+        setTrashPreview(data);
+      }
+    } catch {
+      // Non-fatal — user can still trash without asset cleanup
+    } finally {
+      setTrashPreviewLoading(false);
+    }
+  }
+
+  async function executeTrash() {
+    if (!trashDialogDomain) return;
+    const tracking = getTracking(trashDialogDomain);
+    if (!tracking) return;
+
+    setTrashingDomain(trashDialogDomain);
+    setTrashDialogOpen(false);
+
+    try {
+      const body: Record<string, unknown> = {};
+      if (dropAssetsChecked && trashPreview) {
+        body.dropAssets = true;
+        body.assetsToDelete = trashPreview.safeToDelete;
+      }
+
       const res = await fetch(`/api/genie-spaces/${tracking.spaceId}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -260,6 +313,8 @@ export function GenieSpacesTab({
       toast.error(err instanceof Error ? err.message : "Trash failed");
     } finally {
       setTrashingDomain(null);
+      setTrashDialogDomain(null);
+      setTrashPreview(null);
     }
   }
 
@@ -582,37 +637,14 @@ export function GenieSpacesTab({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {deployed && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <button
-                                className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                                disabled={trashingDomain === rec.domain}
-                                aria-label={`Trash ${rec.domain} space`}
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Trash Genie Space?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will move the &quot;{rec.title}&quot;
-                                  Genie space to trash. This can be undone from
-                                  the Databricks workspace.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleTrash(rec.domain)}
-                                >
-                                  Trash
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <button
+                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            disabled={trashingDomain === rec.domain}
+                            aria-label={`Trash ${rec.domain} space`}
+                            onClick={() => openTrashDialog(rec.domain)}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -1145,36 +1177,17 @@ export function GenieSpacesTab({
                   </div>
                 )}
                 {detailTracking ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" className="w-full">
-                        Delete Space
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Trash Genie Space?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will move the &quot;{detailRec.title}&quot; Genie
-                          space to trash. This can be undone from the Databricks
-                          workspace.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => {
-                            handleTrash(detailRec.domain);
-                            setDetailDomain(null);
-                          }}
-                        >
-                          Trash
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled={trashingDomain === detailRec.domain}
+                    onClick={() => {
+                      setDetailDomain(null);
+                      openTrashDialog(detailRec.domain);
+                    }}
+                  >
+                    Delete Space
+                  </Button>
                 ) : detailRec.tableCount === 0 ? (
                   <Button className="w-full" variant="secondary" disabled>
                     Cannot Deploy — No Tables
@@ -1196,6 +1209,49 @@ export function GenieSpacesTab({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Trash Confirmation Dialog */}
+      <AlertDialog open={trashDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setTrashDialogOpen(false);
+          setTrashDialogDomain(null);
+          setTrashPreview(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Trash Genie Space?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move the space to trash in Databricks.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {trashPreviewLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking deployed resources...
+            </div>
+          )}
+
+          {!trashPreviewLoading && trashPreview && (
+            <TrashPreviewSection
+              preview={trashPreview}
+              dropChecked={dropAssetsChecked}
+              onDropCheckedChange={setDropAssetsChecked}
+            />
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeTrash}
+              disabled={trashPreviewLoading}
+            >
+              Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Deploy Modal */}
       <GenieDeployModal
@@ -1245,6 +1301,80 @@ function KSChip({
       <span className={`font-semibold ${valueColor}`}>{value}</span>
       <span className="text-muted-foreground">{label}</span>
     </span>
+  );
+}
+
+function TrashPreviewSection({
+  preview,
+  dropChecked,
+  onDropCheckedChange,
+}: {
+  preview: TrashPreview;
+  dropChecked: boolean;
+  onDropCheckedChange: (v: boolean) => void;
+}) {
+  const hasSafe =
+    preview.safeToDelete.functions.length > 0 ||
+    preview.safeToDelete.metricViews.length > 0;
+  const hasShared =
+    preview.shared.functions.length > 0 ||
+    preview.shared.metricViews.length > 0;
+  const hasAny = hasSafe || hasShared;
+
+  if (!hasAny) return null;
+
+  return (
+    <div className="space-y-3 text-sm">
+      {hasSafe && (
+        <div className="flex items-start gap-2">
+          <Checkbox
+            checked={dropChecked}
+            onCheckedChange={(v) => onDropCheckedChange(v === true)}
+            id="drop-assets"
+            className="mt-0.5"
+          />
+          <label htmlFor="drop-assets" className="cursor-pointer leading-tight">
+            Also delete deployed functions and metric views
+          </label>
+        </div>
+      )}
+
+      {hasSafe && dropChecked && (
+        <div className="rounded border bg-destructive/5 p-2.5 space-y-1">
+          <p className="text-xs font-medium text-destructive">
+            Will be removed from Unity Catalog:
+          </p>
+          {preview.safeToDelete.functions.map((fqn) => (
+            <p key={fqn} className="text-xs font-mono text-destructive/80 truncate">
+              fn: {fqn}
+            </p>
+          ))}
+          {preview.safeToDelete.metricViews.map((fqn) => (
+            <p key={fqn} className="text-xs font-mono text-destructive/80 truncate">
+              mv: {fqn}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {hasShared && (
+        <div className="rounded border bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-1">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Shared with other spaces (will be kept):
+          </p>
+          {preview.shared.functions.map((s) => (
+            <p key={s.fqn} className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate">
+              fn: {s.fqn} — used by {s.usedBy.join(", ")}
+            </p>
+          ))}
+          {preview.shared.metricViews.map((s) => (
+            <p key={s.fqn} className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate">
+              mv: {s.fqn} — used by {s.usedBy.join(", ")}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
