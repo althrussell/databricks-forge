@@ -556,19 +556,43 @@ Create metric view proposals for this domain.`;
 
     // Dry-run: execute DDL for proposals that passed static validation to
     // catch SQL-level errors before the user ever sees the proposal.
+    // Permission errors are treated as warnings (user can deploy to a
+    // different schema), not hard failures.
+    const PERMISSION_PATTERNS = [
+      "PERMISSION_DENIED",
+      "does not have CREATE",
+      "Access denied",
+      "INSUFFICIENT_PRIVILEGES",
+    ];
+
     for (const proposal of proposals) {
       if (proposal.validationStatus === "error") continue;
       try {
         await executeSQL(proposal.ddl);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        proposal.validationStatus = "error";
-        proposal.validationIssues.push(`SQL validation failed: ${msg}`);
-        logger.warn("Metric view dry-run failed", {
-          domain,
-          name: proposal.name,
-          error: msg,
-        });
+        const isPermissionError = PERMISSION_PATTERNS.some((p) => msg.includes(p));
+
+        if (isPermissionError) {
+          if (proposal.validationStatus !== "warning") {
+            proposal.validationStatus = "warning";
+          }
+          proposal.validationIssues.push(
+            `Could not pre-validate — no CREATE permission on source schema. Deploy to a schema you own.`
+          );
+          logger.info("Metric view dry-run skipped (permission)", {
+            domain,
+            name: proposal.name,
+          });
+        } else {
+          proposal.validationStatus = "error";
+          proposal.validationIssues.push(`SQL validation failed: ${msg}`);
+          logger.warn("Metric view dry-run failed", {
+            domain,
+            name: proposal.name,
+            error: msg,
+          });
+        }
       }
     }
 
