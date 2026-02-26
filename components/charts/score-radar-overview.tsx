@@ -316,12 +316,13 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "var(--color-card)",
-                    color: "var(--color-card-foreground)",
                     borderColor: "var(--color-border)",
                     borderRadius: "var(--radius)",
                     fontSize: 12,
                     maxWidth: 260,
                   }}
+                  itemStyle={{ color: "var(--color-card-foreground)" }}
+                  labelStyle={{ color: "var(--color-card-foreground)" }}
                   formatter={(value) => [`${value ?? 0}%`, undefined]}
                 />
               </RadarChart>

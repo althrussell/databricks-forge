@@ -35,7 +35,7 @@ function evictStaleJobs(): void {
   }
 }
 
-export function startDashboardJob(runId: string): void {
+export async function startDashboardJob(runId: string): Promise<void> {
   const now = Date.now();
   jobs.set(runId, {
     runId,
@@ -48,7 +48,7 @@ export function startDashboardJob(runId: string): void {
     domainCount: 0,
   });
 
-  void upsertJobStatus(runId, "dashboard", "generating", "Starting Dashboard Engine...", 0, {
+  await upsertJobStatus(runId, "dashboard", "generating", "Starting Dashboard Engine...", 0, {
     startedAt: new Date(now),
   });
 }
@@ -61,7 +61,7 @@ export function updateDashboardJob(runId: string, message: string, percent: numb
   }
 }
 
-export function completeDashboardJob(runId: string, domainCount: number): void {
+export async function completeDashboardJob(runId: string, domainCount: number): Promise<void> {
   const job = jobs.get(runId);
   if (job) {
     job.status = "completed";
@@ -70,14 +70,14 @@ export function completeDashboardJob(runId: string, domainCount: number): void {
     job.completedAt = Date.now();
     job.domainCount = domainCount;
 
-    void upsertJobStatus(runId, "dashboard", "completed", job.message, 100, {
+    await upsertJobStatus(runId, "dashboard", "completed", job.message, 100, {
       completedAt: new Date(job.completedAt),
       domainCount,
     });
   }
 }
 
-export function failDashboardJob(runId: string, error: string): void {
+export async function failDashboardJob(runId: string, error: string): Promise<void> {
   const job = jobs.get(runId);
   if (job) {
     job.status = "failed";
@@ -85,7 +85,7 @@ export function failDashboardJob(runId: string, error: string): void {
     job.completedAt = Date.now();
     job.error = error;
 
-    void upsertJobStatus(runId, "dashboard", "failed", job.message, job.percent, {
+    await upsertJobStatus(runId, "dashboard", "failed", job.message, job.percent, {
       completedAt: new Date(job.completedAt),
       error,
     });

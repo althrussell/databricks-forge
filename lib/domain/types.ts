@@ -12,6 +12,7 @@
 export enum PipelineStep {
   BusinessContext = "business-context",
   MetadataExtraction = "metadata-extraction",
+  AssetDiscovery = "asset-discovery",
   TableFiltering = "table-filtering",
   UsecaseGeneration = "usecase-generation",
   DomainClustering = "domain-clustering",
@@ -88,6 +89,7 @@ export interface PipelineRunConfig {
   discoveryDepth: DiscoveryDepth; // controls generation volume, quality floor, and adaptive cap
   depthConfig?: DiscoveryDepthConfig; // resolved parameters for the selected depth (from settings or defaults)
   estateScanEnabled: boolean; // run estate scan (environment intelligence enrichment) during metadata extraction
+  assetDiscoveryEnabled: boolean; // discover existing analytics assets (Genie spaces, dashboards, metric views)
 }
 
 /** Per-step timing and metadata logged during pipeline execution. */
@@ -251,6 +253,8 @@ export interface PipelineContext {
   lineageGraph: LineageGraph | null;
   /** Cached sample rows from data sampling, keyed by table FQN. Used by Genie Engine for entity extraction. */
   sampleData: import("@/lib/genie/types").SampleDataCache | null;
+  /** Existing analytics assets discovered in the workspace (null when asset discovery is disabled). */
+  discoveryResult: import("@/lib/discovery/types").DiscoveryResult | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +427,25 @@ export interface GovernanceGap {
   }>;
 }
 
+/** Analytics maturity assessment from LLM pass 9. */
+export interface AnalyticsMaturityAssessment {
+  overallScore: number;
+  level: "nascent" | "developing" | "established" | "advanced";
+  dimensions: {
+    coverage: { score: number; summary: string };
+    depth: { score: number; summary: string };
+    freshness: { score: number; summary: string };
+    completeness: { score: number; summary: string };
+  };
+  uncoveredDomains: string[];
+  topRecommendations: Array<{
+    priority: number;
+    action: string;
+    impact: "high" | "medium" | "low";
+    effort: "high" | "medium" | "low";
+  }>;
+}
+
 /** Per-table health insight (rule-based, not LLM). */
 export interface TableHealthInsight {
   tableFqn: string;
@@ -469,6 +492,7 @@ export interface IntelligenceResult {
   tierAssignments: Map<string, { tier: DataTier; reasoning: string }>;
   dataProducts: DataProduct[];
   governanceGaps: GovernanceGap[];
+  analyticsMaturity: AnalyticsMaturityAssessment | null;
   passResults: Record<string, "success" | "failed" | "skipped">;
 }
 

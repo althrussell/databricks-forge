@@ -5,9 +5,9 @@
 # After build, .next/standalone/ contains the self-contained server.
 #
 # 1. Auto-provisions Lakebase Autoscale (if running as a Databricks App).
-# 2. Verifies database connectivity (retries for cold-start wake-up).
-# 3. Pushes the Prisma schema to Lakebase.
-# 4. Starts the Next.js standalone server with a verified credential.
+# 2. Syncs the Prisma schema to Lakebase (retries for cold-start wake-up).
+#    Exits with error if sync fails — the app cannot run with a stale schema.
+# 3. Starts the Next.js standalone server with a verified credential.
 
 set -e
 
@@ -37,12 +37,12 @@ if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Database connectivity verification
+# Database schema sync (mandatory)
 #
 # Lakebase Autoscale endpoints may need a few seconds after provisioning
 # before they accept authenticated connections. Retry schema sync with
-# backoff to absorb this cold-start delay. The server must NOT start
-# until the DB is confirmed reachable.
+# backoff to absorb this cold-start delay. The server MUST NOT start
+# until the schema is confirmed in sync.
 # ---------------------------------------------------------------------------
 
 PRISMA_BIN="./node_modules/.bin/prisma"
@@ -71,10 +71,12 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   done
 
   if [ "$DB_READY" = false ]; then
-    echo "[startup] WARNING: Database not reachable after $MAX_DB_RETRIES attempts. Starting server anyway."
+    echo "[startup] FATAL: Database schema sync failed after $MAX_DB_RETRIES attempts."
+    exit 1
   fi
 else
-  echo "[startup] Prisma CLI not found or no DB URL, skipping connectivity check."
+  echo "[startup] FATAL: Prisma CLI not found or no DB URL — cannot sync schema."
+  exit 1
 fi
 
 # ---------------------------------------------------------------------------

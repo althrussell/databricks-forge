@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { loadSettings, saveSettings, type GenieEngineDefaults } from "@/lib/settings";
+import { loadSettings, saveSettings, type GenieEngineDefaults, type GenieAuthMode } from "@/lib/settings";
 import {
   Shield,
   Database,
@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   Loader2,
   ScanLine,
+  Search,
   Info,
 } from "lucide-react";
 import packageJson from "@/package.json";
@@ -96,6 +97,16 @@ export default function SettingsPage() {
     return loadSettings().estateScanEnabled;
   });
 
+  const [assetDiscoveryEnabled, setAssetDiscoveryEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return loadSettings().assetDiscoveryEnabled;
+  });
+
+  const [genieDeployAuthMode, setGenieDeployAuthMode] = useState<GenieAuthMode>(() => {
+    if (typeof window === "undefined") return "obo";
+    return loadSettings().genieDeployAuthMode;
+  });
+
   const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
     setDepthConfigs((prev) => ({
       ...prev,
@@ -124,7 +135,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode });
     toast.success("Settings saved");
   };
 
@@ -138,6 +149,8 @@ export default function SettingsPage() {
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
       setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       setEstateScanEnabled(false);
+      setAssetDiscoveryEnabled(false);
+      setGenieDeployAuthMode("obo");
       toast.success("Local settings cleared");
     }
   };
@@ -157,6 +170,7 @@ export default function SettingsPage() {
       }
       handleClearLocalData();
       toast.success("All data deleted — app has been reset");
+      window.location.href = "/";
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete data");
     } finally {
@@ -315,6 +329,39 @@ export default function SettingsPage() {
               <span
                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
                   estateScanEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              assetDiscoveryEnabled
+                ? "border-sky-500/50 bg-sky-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <Search className={`mt-0.5 h-4 w-4 shrink-0 ${assetDiscoveryEnabled ? "text-sky-500" : "text-muted-foreground"}`} />
+              <div>
+                <p className="text-sm font-medium">Asset Discovery during pipeline runs</p>
+                <p className="text-xs text-muted-foreground">
+                  {assetDiscoveryEnabled
+                    ? "Enabled — existing Genie spaces, dashboards, and metric views will be discovered and used to improve recommendations"
+                    : "Disabled — recommendations are generated without awareness of existing analytics assets (faster runs)"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAssetDiscoveryEnabled((prev) => !prev)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                assetDiscoveryEnabled ? "bg-sky-500" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  assetDiscoveryEnabled ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>
@@ -679,6 +726,40 @@ export default function SettingsPage() {
                 checked={genieDefaults.autoTimePeriods}
                 onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, autoTimePeriods: v }))}
               />
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* Deploy auth mode */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Label>Deploy Authentication</Label>
+                <InfoTip tip="Controls which identity is used when creating, updating, or deleting Genie Spaces in Databricks. User (OBO) uses the logged-in user's credentials; Service Principal uses the app's service principal." />
+              </div>
+              <div className="flex gap-2">
+                {([
+                  { value: "obo" as const, label: "User (recommended)" },
+                  { value: "sp" as const, label: "Service Principal" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setGenieDeployAuthMode(opt.value)}
+                    className={`rounded-md border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                      genieDeployAuthMode === opt.value
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-muted text-muted-foreground hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                {genieDeployAuthMode === "obo"
+                  ? "Spaces are created under your identity. You must have access to the referenced tables."
+                  : "Spaces are created under the app\u2019s service principal. The SP must have SELECT access to the referenced tables."}
+              </p>
             </div>
           </div>
         </CardContent>

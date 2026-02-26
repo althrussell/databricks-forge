@@ -76,15 +76,28 @@ export async function upsertJobStatus(
 }
 
 // ---------------------------------------------------------------------------
-// Startup orphan recovery (runs once on first DB read)
+// Startup orphan recovery
+//
+// Only marks jobs as orphaned if they started BEFORE the current process.
+// This prevents the sweep from killing jobs started in the current process.
 // ---------------------------------------------------------------------------
 
+const PROCESS_START = new Date();
 let _orphanCheckDone = false;
 
 async function ensureOrphanCheck(): Promise<void> {
   if (_orphanCheckDone) return;
   _orphanCheckDone = true;
   await markOrphanedJobsFailed();
+}
+
+/**
+ * Mark the orphan check as complete. Call this from instrumentation.ts
+ * after the eager check so the lazy check in getPersistedJobStatus
+ * does not run a second time.
+ */
+export function markOrphanCheckComplete(): void {
+  _orphanCheckDone = true;
 }
 
 /**
@@ -125,14 +138,18 @@ export async function getPersistedJobStatus(
 }
 
 /**
- * Mark all jobs stuck in "generating" as "failed". Call once on
- * server startup to recover from unclean shutdowns.
+ * Mark jobs stuck in "generating" as "failed", but only if they
+ * started before the current server process. This prevents sweeping
+ * jobs that were legitimately started in this process.
  */
 export async function markOrphanedJobsFailed(): Promise<number> {
   try {
     return await withPrisma(async (prisma) => {
       const result = await prisma.forgeBackgroundJob.updateMany({
-        where: { status: "generating" },
+        where: {
+          status: "generating",
+          startedAt: { lt: PROCESS_START },
+        },
         data: {
           status: "failed",
           error: "Server restarted during generation",

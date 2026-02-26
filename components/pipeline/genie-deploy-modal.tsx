@@ -30,6 +30,7 @@ import type {
   GenieEngineRecommendation,
   MetricViewProposal,
 } from "@/lib/genie/types";
+import { loadSettings } from "@/lib/settings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -239,6 +240,7 @@ export function GenieDeployModal({
         body: JSON.stringify({
           domains: domainPayloads,
           targetSchema: schema,
+          authMode: loadSettings().genieDeployAuthMode,
         }),
       });
 

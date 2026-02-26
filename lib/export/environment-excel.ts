@@ -115,6 +115,10 @@ export interface ScanWithRelations {
   redundancyPairsCount: number;
   dataProductCount: number;
   avgGovernanceScore: number;
+  genieSpaceCount?: number;
+  dashboardCount?: number;
+  metricViewCount?: number;
+  analyticsCoveragePercent?: number;
   scanDurationMs: number | null;
   passResultsJson: string | null;
   createdAt: Date;
@@ -212,6 +216,7 @@ export async function generateEnvironmentExcel(
   addHistoryInsights(wb, scan);
   addTagsProperties(wb, scan);
   addFeatureAdoption(wb, scan);
+  addAnalyticsCoverage(wb, scan);
 
   const arrayBuffer = await wb.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);
@@ -282,6 +287,14 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     { metric: "Redundancy Pairs", value: scan.redundancyPairsCount },
     { metric: "Data Products", value: scan.dataProductCount },
     { metric: "Avg Governance Score", value: scan.avgGovernanceScore.toFixed(1) },
+    ...(((scan.genieSpaceCount ?? 0) + (scan.dashboardCount ?? 0) + (scan.metricViewCount ?? 0) > 0) ? [
+      { metric: "", value: "" as string | number },
+      { metric: "ANALYTICS COVERAGE", value: "" as string | number },
+      { metric: "Existing Genie Spaces", value: scan.genieSpaceCount ?? 0 },
+      { metric: "Existing Dashboards", value: scan.dashboardCount ?? 0 },
+      { metric: "Existing Metric Views", value: scan.metricViewCount ?? 0 },
+      { metric: "Table Coverage", value: `${(scan.analyticsCoveragePercent ?? 0).toFixed(0)}%` },
+    ] : []),
   ];
 
   for (const r of rows) {
@@ -804,4 +817,74 @@ function addFeatureAdoption(wb: ExcelJS.Workbook, scan: ScanWithRelations): void
   styleHeaderRow(sheet);
   const lastRow = adoption.findings.length + stats.length + 4;
   styleDataRows(sheet, 2, lastRow);
+}
+
+// ---------------------------------------------------------------------------
+// Sheet 14: Analytics Coverage
+// ---------------------------------------------------------------------------
+
+function addAnalyticsCoverage(wb: ExcelJS.Workbook, scan: ScanWithRelations): void {
+  const maturityInsight = scan.insights.find((i) => i.insightType === "analytics_maturity");
+  type MaturityData = {
+    overallScore: number;
+    level: string;
+    dimensions: Record<string, { score: number; summary: string }>;
+    uncoveredDomains: string[];
+    topRecommendations: Array<{ priority: number; action: string; impact: string; effort: string }>;
+  };
+  const maturity: MaturityData | null = maturityInsight
+    ? safeJSON<MaturityData | null>(maturityInsight.payloadJson, null)
+    : null;
+
+  const genieSpaces = scan.insights.filter((i) => i.insightType === "discovered_genie_space");
+  const dashboards = scan.insights.filter((i) => i.insightType === "discovered_dashboard");
+
+  if (!maturity && genieSpaces.length === 0 && dashboards.length === 0) return;
+
+  const sheet = wb.addWorksheet("Analytics Coverage");
+
+  if (maturity) {
+    sheet.columns = [
+      { header: "Metric", key: "metric", width: 35 },
+      { header: "Value", key: "value", width: 55 },
+    ];
+
+    sheet.addRow({ metric: "ANALYTICS MATURITY SCORE", value: `${maturity.overallScore}/100 — ${maturity.level}` });
+    const scoreRow = sheet.getRow(sheet.rowCount);
+    scoreRow.eachCell((cell) => { cell.font = { bold: true, size: 12 }; });
+    applyScoreCell(scoreRow.getCell("value"), maturity.overallScore);
+
+    for (const [dim, data] of Object.entries(maturity.dimensions)) {
+      sheet.addRow({ metric: `  ${dim.charAt(0).toUpperCase() + dim.slice(1)}`, value: `${data.score}/100 — ${data.summary}` });
+    }
+
+    sheet.addRow({ metric: "", value: "" });
+
+    if (maturity.uncoveredDomains.length > 0) {
+      sheet.addRow({ metric: "UNCOVERED DOMAINS", value: maturity.uncoveredDomains.join(", ") });
+      const ucRow = sheet.getRow(sheet.rowCount);
+      ucRow.eachCell((cell) => { cell.font = { bold: true }; });
+    }
+
+    sheet.addRow({ metric: "", value: "" });
+
+    if (maturity.topRecommendations.length > 0) {
+      sheet.addRow({ metric: "TOP RECOMMENDATIONS", value: "" });
+      const recHeader = sheet.getRow(sheet.rowCount);
+      recHeader.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: WHITE } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DATABRICKS_BLUE } };
+      });
+
+      for (const rec of maturity.topRecommendations) {
+        sheet.addRow({
+          metric: `#${rec.priority} [Impact: ${rec.impact}, Effort: ${rec.effort}]`,
+          value: rec.action,
+        });
+      }
+    }
+
+    styleHeaderRow(sheet);
+    styleDataRows(sheet, 2, sheet.rowCount);
+  }
 }

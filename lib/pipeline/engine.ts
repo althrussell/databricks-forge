@@ -27,6 +27,7 @@ import { runUsecaseGeneration } from "./steps/usecase-generation";
 import { runDomainClustering } from "./steps/domain-clustering";
 import { runScoring } from "./steps/scoring";
 import { runSqlGeneration } from "./steps/sql-generation";
+import { runAssetDiscovery } from "./steps/asset-discovery";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
 import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
 import {
@@ -55,7 +56,8 @@ interface StepDef {
 
 const STEPS: StepDef[] = [
   { step: PipelineStep.BusinessContext, progressPct: 10, label: "Generating business context" },
-  { step: PipelineStep.MetadataExtraction, progressPct: 20, label: "Extracting metadata" },
+  { step: PipelineStep.MetadataExtraction, progressPct: 18, label: "Extracting metadata" },
+  { step: PipelineStep.AssetDiscovery, progressPct: 22, label: "Discovering existing assets" },
   { step: PipelineStep.TableFiltering, progressPct: 30, label: "Filtering tables" },
   { step: PipelineStep.UsecaseGeneration, progressPct: 45, label: "Generating use cases" },
   { step: PipelineStep.DomainClustering, progressPct: 55, label: "Clustering domains" },
@@ -85,6 +87,7 @@ export async function startPipeline(runId: string): Promise<void> {
     useCases: [],
     lineageGraph: null,
     sampleData: null,
+    discoveryResult: null,
   };
 
   /** Helper: record step start/end timing in the run's stepLog. */
@@ -151,20 +154,31 @@ export async function startPipeline(runId: string): Promise<void> {
       const extractionResult = await runMetadataExtraction(ctx, runId);
       ctx.metadata = extractionResult.snapshot;
       ctx.lineageGraph = extractionResult.lineageGraph;
-      // Link the metadata snapshot to this run for auditing
       if (ctx.metadata.cacheKey) {
         await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
-        // Persist the full snapshot for later use (e.g. Genie recommendations)
         const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
         await saveMetadataSnapshot(ctx.metadata);
       }
-      await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 20, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
+      await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 18, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
     });
+
+    // Step 2b: Asset Discovery (conditional -- skipped when assetDiscoveryEnabled is false)
+    if (ctx.run.config.assetDiscoveryEnabled) {
+      await logStep(PipelineStep.AssetDiscovery, async () => {
+        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 19, undefined, "Discovering existing Genie spaces, dashboards, and metric views...");
+        logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
+        ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
+        const summary = ctx.discoveryResult
+          ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
+          : "Discovery skipped";
+        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 22, undefined, summary);
+      });
+    }
 
     // Step 3: Table Filtering
     await logStep(PipelineStep.TableFiltering, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 22, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
-      logger.info(`Step 3: ${STEPS[2].label}`, { runId, step: "table-filtering" });
+      await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 24, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
+      logger.info(`Step 3: Table Filtering`, { runId, step: "table-filtering" });
       ctx.filteredTables = await runTableFiltering(ctx, runId);
       await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 30, undefined, `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`);
     });
@@ -331,6 +345,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     useCases: [],
     lineageGraph: null,
     sampleData: null,
+    discoveryResult: null,
   };
 
   // Restore business context (persisted after step 1)
@@ -343,6 +358,29 @@ export async function resumePipeline(runId: string): Promise<void> {
     const { loadMetadataForRun } = await import("@/lib/lakebase/metadata-cache");
     const snapshot = await loadMetadataForRun(runId);
     if (snapshot) ctx.metadata = snapshot;
+  }
+
+  // Restore discovery result (persisted after step 2b)
+  if (completedSteps.has(PipelineStep.AssetDiscovery)) {
+    const { getDiscoveryResultsByRunId } = await import("@/lib/lakebase/discovered-assets");
+    const discoveryData = await getDiscoveryResultsByRunId(runId);
+    if (discoveryData) {
+      ctx.discoveryResult = {
+        genieSpaces: discoveryData.genieSpaces.map((s) => ({
+          ...s,
+          description: null,
+          instructionLength: 0,
+        })),
+        dashboards: discoveryData.dashboards.map((d) => ({
+          ...d,
+          creatorEmail: undefined,
+          updatedAt: undefined,
+          parentPath: undefined,
+        })),
+        metricViews: [],
+        discoveredAt: new Date().toISOString(),
+      };
+    }
   }
 
   // Restore filtered tables (persisted after step 3)
@@ -416,14 +454,27 @@ export async function resumePipeline(runId: string): Promise<void> {
           const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
           await saveMetadataSnapshot(ctx.metadata);
         }
-        await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 20, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
+        await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 18, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
+      });
+    }
+
+    // Step 2b: Asset Discovery (conditional)
+    if (resumeIndex <= 2 && ctx.run.config.assetDiscoveryEnabled) {
+      await logStep(PipelineStep.AssetDiscovery, async () => {
+        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 19, undefined, "Discovering existing Genie spaces, dashboards, and metric views...");
+        logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
+        ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
+        const summary = ctx.discoveryResult
+          ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
+          : "Discovery skipped";
+        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 22, undefined, summary);
       });
     }
 
     // Step 3: Table Filtering
-    if (resumeIndex <= 2) {
+    if (resumeIndex <= 3) {
       await logStep(PipelineStep.TableFiltering, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 22, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
+        await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 24, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
         logger.info("Step 3: Filtering tables", { runId, step: "table-filtering" });
         ctx.filteredTables = await runTableFiltering(ctx, runId);
         await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 30, undefined, `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`);
@@ -431,7 +482,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     }
 
     // Step 4: Use Case Generation
-    if (resumeIndex <= 3) {
+    if (resumeIndex <= 4) {
       await logStep(PipelineStep.UsecaseGeneration, async () => {
         await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
         logger.info("Step 4: Generating use cases", { runId, step: "usecase-generation" });
@@ -458,7 +509,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     }
 
     // Step 5: Domain Clustering
-    if (resumeIndex <= 4) {
+    if (resumeIndex <= 5) {
       await logStep(PipelineStep.DomainClustering, async () => {
         await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
         logger.info("Step 5: Clustering domains", { runId, step: "domain-clustering" });
@@ -469,7 +520,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     }
 
     // Step 6: Scoring
-    if (resumeIndex <= 5) {
+    if (resumeIndex <= 6) {
       await logStep(PipelineStep.Scoring, async () => {
         await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${ctx.useCases.length} use cases...`);
         logger.info("Step 6: Scoring", { runId, step: "scoring" });
@@ -480,7 +531,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 7: SQL Generation
     let sqlOk = 0;
-    if (resumeIndex <= 6) {
+    if (resumeIndex <= 7) {
       await logStep(PipelineStep.SqlGeneration, async () => {
         await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
         logger.info("Step 7: Generating SQL", { runId, step: "sql-generation" });
@@ -514,7 +565,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     });
 
     // Step 8: Genie Recommendations
-    if (resumeIndex <= 7) {
+    if (resumeIndex <= 8) {
       // Genie recommendations are handled by the background engine below
     }
 
@@ -554,7 +605,7 @@ function startBackgroundEngines(
 ): void {
   (async () => {
     // --- Genie Engine ---
-    startJob(runId);
+    await startJob(runId);
     try {
       const genieCount = await runGenieRecommendations(
         ctx,
@@ -564,27 +615,27 @@ function startBackgroundEngines(
           updateJobDomainProgress(runId, completedDomains, totalDomains);
         },
       );
-      completeJob(runId, genieCount);
+      await completeJob(runId, genieCount);
       logger.info("Background Genie Engine completed", { runId, genieCount });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      failJob(runId, msg);
+      await failJob(runId, msg);
       logger.error("Background Genie Engine failed", { runId, error: msg });
     }
 
     // --- Dashboard Engine (always runs, even if Genie failed) ---
-    startDashboardJob(runId);
+    await startDashboardJob(runId);
     try {
       const dashCount = await runDashboardRecommendations(
         ctx,
         runId,
         (message, percent) => updateDashboardJob(runId, message, percent),
       );
-      completeDashboardJob(runId, dashCount);
+      await completeDashboardJob(runId, dashCount);
       logger.info("Background Dashboard Engine completed", { runId, dashboardCount: dashCount });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      failDashboardJob(runId, msg);
+      await failDashboardJob(runId, msg);
       logger.error("Background Dashboard Engine failed", { runId, error: msg });
     }
   })();

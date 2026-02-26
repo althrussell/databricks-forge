@@ -167,6 +167,12 @@ export interface DashboardRecommendation {
   useCaseIds: string[];
   serializedDashboard: string;
   dashboardDesign: DashboardDesign;
+  /** "new" (default), "enhancement" (existing dashboard found), or "replacement" */
+  recommendationType?: "new" | "enhancement" | "replacement";
+  /** Dashboard ID of the existing asset when recommendationType is "enhancement" */
+  existingAssetId?: string;
+  /** Human-readable summary of what changed vs the existing dashboard */
+  changeSummary?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +202,8 @@ export interface DashboardEngineInput {
   useCases: import("@/lib/domain/types").UseCase[];
   metadata: import("@/lib/domain/types").MetadataSnapshot;
   genieRecommendations?: import("@/lib/genie/types").GenieEngineRecommendation[];
+  /** Existing dashboards discovered via asset discovery (for dedup and enhancement). */
+  existingDashboards?: import("@/lib/discovery/types").DiscoveredDashboard[];
   domainFilter?: string[];
   onProgress?: (message: string, percent: number) => void;
 }

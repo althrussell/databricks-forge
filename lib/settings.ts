@@ -8,6 +8,9 @@
 import type { DiscoveryDepth, DiscoveryDepthConfig } from "@/lib/domain/types";
 import { DISCOVERY_DEPTHS, DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 
+export type GenieAuthMode = "obo" | "sp";
+const VALID_AUTH_MODES = new Set<GenieAuthMode>(["obo", "sp"]);
+
 export interface GenieEngineDefaults {
   engineEnabled: boolean;
   maxTablesPerSpace: number;
@@ -37,6 +40,10 @@ export interface AppSettings {
   genieEngineDefaults: GenieEngineDefaults;
   /** Whether to run estate scan (environment intelligence) during pipeline runs (default: false) */
   estateScanEnabled: boolean;
+  /** Whether to discover existing analytics assets (Genie spaces, dashboards, metric views) during runs (default: false) */
+  assetDiscoveryEnabled: boolean;
+  /** Auth mode for Genie Space deployments: "obo" (user token) or "sp" (service principal) */
+  genieDeployAuthMode: GenieAuthMode;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -62,6 +69,8 @@ const DEFAULTS: AppSettings = {
   discoveryDepthConfigs: { ...DEFAULT_DEPTH_CONFIGS },
   genieEngineDefaults: { ...DEFAULT_GENIE_ENGINE },
   estateScanEnabled: false,
+  assetDiscoveryEnabled: false,
+  genieDeployAuthMode: "obo",
 };
 
 export function loadSettings(): AppSettings {
@@ -94,6 +103,15 @@ export function loadSettings(): AppSettings {
         typeof parsed.estateScanEnabled === "boolean"
           ? parsed.estateScanEnabled
           : DEFAULTS.estateScanEnabled,
+      assetDiscoveryEnabled:
+        typeof parsed.assetDiscoveryEnabled === "boolean"
+          ? parsed.assetDiscoveryEnabled
+          : DEFAULTS.assetDiscoveryEnabled,
+      genieDeployAuthMode:
+        typeof parsed.genieDeployAuthMode === "string" &&
+        VALID_AUTH_MODES.has(parsed.genieDeployAuthMode as GenieAuthMode)
+          ? (parsed.genieDeployAuthMode as GenieAuthMode)
+          : DEFAULTS.genieDeployAuthMode,
     };
   } catch {
     return { ...DEFAULTS };

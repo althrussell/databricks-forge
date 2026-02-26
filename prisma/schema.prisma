@@ -51,6 +51,9 @@ model ForgeRun {
   dashboards               ForgeDashboard[]
   backgroundJobs           ForgeBackgroundJob[]
   environmentScans         ForgeEnvironmentScan[]
+  discoveredGenieSpaces    ForgeDiscoveredGenieSpace[]
+  discoveredDashboards     ForgeDiscoveredDashboard[]
+  assetCoverages           ForgeAssetCoverage[]
 
   @@map("forge_runs")
 }
@@ -217,6 +220,9 @@ model ForgeGenieRecommendation {
   metricViewProposals String?  @map("metric_view_proposals") // JSON: MetricViewProposal[]
   trustedFunctions    String?  @map("trusted_functions")     // JSON: TrustedAssetFunction[]
   engineConfigVersion Int      @default(0) @map("engine_config_version")
+  recommendationType  String   @default("new") @map("recommendation_type") // new | enhancement | replacement
+  existingAssetId     String?  @map("existing_asset_id")
+  changeSummary       String?  @map("change_summary")
   createdAt           DateTime @default(now()) @map("created_at")
 
   run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
@@ -257,6 +263,7 @@ model ForgeGenieSpace {
   title              String
   status             String   @default("created") // created | updated | trashed
   deployedAssetsJson String?  @map("deployed_assets_json")
+  authMode           String?  @map("auth_mode") // "obo" | "sp" — null for legacy rows (treated as "sp")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -284,6 +291,9 @@ model ForgeDashboardRecommendation {
   useCaseIds          String?  @map("use_case_ids")        // JSON array
   serializedDashboard String   @map("serialized_dashboard") // Lakeview JSON
   dashboardDesign     String?  @map("dashboard_design")     // JSON: DashboardDesign
+  recommendationType  String   @default("new") @map("recommendation_type") // new | enhancement | replacement
+  existingAssetId     String?  @map("existing_asset_id")
+  changeSummary       String?  @map("change_summary")
   createdAt           DateTime @default(now()) @map("created_at")
 
   run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
@@ -381,6 +391,10 @@ model ForgeEnvironmentScan {
   scanDurationMs        Int?     @map("scan_duration_ms")
   scanSummaryJson       String?  @map("scan_summary_json")
   passResultsJson       String?  @map("pass_results_json")
+  genieSpaceCount       Int      @default(0) @map("genie_space_count")
+  dashboardCount        Int      @default(0) @map("dashboard_count")
+  metricViewCount       Int      @default(0) @map("metric_view_count")
+  analyticsCoveragePercent Float @default(0) @map("analytics_coverage_percent")
   createdAt             DateTime @default(now()) @map("created_at")
 
   run        ForgeRun? @relation(fields: [runId], references: [runId], onDelete: Cascade)
@@ -507,4 +521,69 @@ model ForgeTableInsight {
   @@index([insightType])
   @@index([tableFqn])
   @@map("forge_table_insights")
+}
+
+// ---------------------------------------------------------------------------
+// Discovered Analytics Assets (read-only snapshots from workspace)
+// ---------------------------------------------------------------------------
+
+model ForgeDiscoveredGenieSpace {
+  id                 String   @id @default(uuid())
+  runId              String   @map("run_id")
+  spaceId            String   @map("space_id")
+  title              String
+  description        String?
+  tablesJson         String?  @map("tables_json")          // JSON array of FQNs
+  metricViewsJson    String?  @map("metric_views_json")    // JSON array of FQNs
+  sampleQuestionCount Int     @default(0) @map("sample_question_count")
+  measureCount       Int      @default(0) @map("measure_count")
+  filterCount        Int      @default(0) @map("filter_count")
+  instructionLength  Int      @default(0) @map("instruction_length")
+  discoveredAt       DateTime @default(now()) @map("discovered_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([spaceId])
+  @@map("forge_discovered_genie_spaces")
+}
+
+model ForgeDiscoveredDashboard {
+  id                 String   @id @default(uuid())
+  runId              String   @map("run_id")
+  dashboardId        String   @map("dashboard_id")
+  displayName        String   @map("display_name")
+  tablesJson         String?  @map("tables_json")          // JSON array of FQNs
+  isPublished        Boolean  @default(false) @map("is_published")
+  datasetCount       Int      @default(0) @map("dataset_count")
+  widgetCount        Int      @default(0) @map("widget_count")
+  creatorEmail       String?  @map("creator_email")
+  parentPath         String?  @map("parent_path")
+  discoveredAt       DateTime @default(now()) @map("discovered_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([dashboardId])
+  @@map("forge_discovered_dashboards")
+}
+
+model ForgeAssetCoverage {
+  id                 String   @id @default(uuid())
+  runId              String   @map("run_id")
+  totalTables        Int      @default(0) @map("total_tables")
+  coveredTables      Int      @default(0) @map("covered_tables")
+  uncoveredTables    Int      @default(0) @map("uncovered_tables")
+  coveragePercent    Float    @default(0) @map("coverage_percent")
+  genieSpaceCount    Int      @default(0) @map("genie_space_count")
+  dashboardCount     Int      @default(0) @map("dashboard_count")
+  metricViewCount    Int      @default(0) @map("metric_view_count")
+  coverageDetailJson String?  @map("coverage_detail_json")  // JSON: full AssetCoverage
+  discoveredAt       DateTime @default(now()) @map("discovered_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId])
+  @@index([runId])
+  @@map("forge_asset_coverages")
 }

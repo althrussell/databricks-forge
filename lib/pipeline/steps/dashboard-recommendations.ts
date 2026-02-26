@@ -43,6 +43,7 @@ export async function runDashboardRecommendations(
       useCases: ctx.useCases,
       metadata,
       genieRecommendations,
+      existingDashboards: ctx.discoveryResult?.dashboards,
       onProgress,
     });
 

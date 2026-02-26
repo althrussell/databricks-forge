@@ -150,6 +150,7 @@ export const CreateRunSchema = z.object({
     lineageDepth: z.number().int().min(1).max(10),
   }).optional(),
   estateScanEnabled: z.boolean().optional().default(false),
+  assetDiscoveryEnabled: z.boolean().optional().default(false),
 });
 
 export type CreateRunInput = z.infer<typeof CreateRunSchema>;

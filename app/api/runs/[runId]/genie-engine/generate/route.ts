@@ -14,6 +14,7 @@ import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { runGenieEngine, EngineCancelledError } from "@/lib/genie/engine";
 import { startJob, getJobController, updateJob, updateJobDomainProgress, addCompletedDomainName, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
+import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -69,7 +70,26 @@ export async function POST(
 
     const { config, version } = await getGenieEngineConfig(runId);
 
-    startJob(runId);
+    // Load existing spaces from asset discovery (if available) for enhancement detection
+    let existingSpaces: import("@/lib/discovery/types").DiscoveredGenieSpace[] | undefined;
+    try {
+      const discoveryData = await getDiscoveryResultsByRunId(runId);
+      if (discoveryData?.genieSpaces?.length) {
+        existingSpaces = discoveryData.genieSpaces.map((s) => ({
+          spaceId: s.spaceId,
+          title: s.title,
+          description: null,
+          tables: s.tables,
+          metricViews: s.metricViews,
+          sampleQuestionCount: s.sampleQuestionCount,
+          measureCount: s.measureCount,
+          filterCount: s.filterCount,
+          instructionLength: 0,
+        }));
+      }
+    } catch { /* non-critical */ }
+
+    await startJob(runId);
     const controller = getJobController(runId);
 
     runGenieEngine({
@@ -78,6 +98,7 @@ export async function POST(
       metadata,
       config,
       sampleData: null,
+      existingSpaces,
       domainFilter: domains,
       signal: controller?.signal,
       onProgress: (message, percent, completedDomains, totalDomains, completedDomainName) => {
@@ -101,7 +122,7 @@ export async function POST(
           version,
           domains,
         );
-        completeJob(runId, result.recommendations.length);
+        await completeJob(runId, result.recommendations.length);
         if (result.failedDomains.length > 0) {
           logger.warn("Genie Engine completed with domain failures", {
             runId,
@@ -116,13 +137,13 @@ export async function POST(
           domainFilter: domains ?? "all",
         });
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (err instanceof EngineCancelledError) {
           logger.info("Genie Engine generation cancelled (async)", { runId });
           return;
         }
         const errMsg = err instanceof Error ? err.message : String(err);
-        failJob(runId, errMsg);
+        await failJob(runId, errMsg);
         logger.error("Genie Engine generation failed (async)", {
           runId,
           error: errMsg,

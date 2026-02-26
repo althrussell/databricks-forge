@@ -27,6 +27,9 @@ import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { initScanProgress, updateScanProgress } from "@/lib/pipeline/scan-progress";
+import { discoverExistingAssets } from "@/lib/discovery/asset-scanner";
+import { computeCoverage } from "@/lib/discovery/coverage";
+import { saveDiscoveryResults } from "@/lib/lakebase/discovered-assets";
 import { logger } from "@/lib/logger";
 import type {
   EnvironmentScan,
@@ -34,6 +37,7 @@ import type {
   TableHistorySummary,
   TableHealthInsight,
 } from "@/lib/domain/types";
+import type { DiscoveryResult } from "@/lib/discovery/types";
 
 /**
  * Parse the uc_metadata scope string.
@@ -58,7 +62,8 @@ function parseUCMetadata(
 export async function runStandaloneEnrichment(
   scanId: string,
   ucMetadata: string,
-  lineageDepth = 5
+  lineageDepth = 5,
+  assetDiscoveryEnabled = false
 ): Promise<void> {
   const startTime = Date.now();
   const scopes = parseUCMetadata(ucMetadata);
@@ -239,7 +244,52 @@ export async function runStandaloneEnrichment(
   }
   const healthScores = computeAllTableHealth(details, histories);
 
-  // Phase 6: LLM intelligence
+  // Phase 6a: Asset discovery (if enabled -- runs before LLM intelligence so results feed into analytics maturity pass)
+  let assetCoveragePercent = 0;
+  let genieSpaceCount = 0;
+  let dashboardCount = 0;
+  let metricViewCount = 0;
+  let discoveryResult: DiscoveryResult | null = null;
+
+  if (assetDiscoveryEnabled) {
+    updateScanProgress(scanId, {
+      phase: "asset-discovery",
+      message: "Discovering existing analytics assets (Genie spaces, dashboards, metric views)...",
+    });
+
+    try {
+      const scopeStrings = accessibleScopes.map(
+        (s) => s.schema ? `${s.catalog}.${s.schema}` : s.catalog
+      );
+
+      discoveryResult = await discoverExistingAssets({
+        scopeTables: allTables.map((t) => t.fqn),
+        metricViewScope: scopeStrings,
+      });
+
+      const coverage = computeCoverage(
+        allTables.map((t) => t.fqn),
+        discoveryResult
+      );
+
+      genieSpaceCount = discoveryResult.genieSpaces.length;
+      dashboardCount = discoveryResult.dashboards.length;
+      metricViewCount = discoveryResult.metricViews.length;
+      assetCoveragePercent = coverage.coveragePercent;
+
+      await saveDiscoveryResults(scanId, discoveryResult, coverage);
+
+      updateScanProgress(scanId, {
+        message: `Asset discovery: ${genieSpaceCount} Genie spaces, ${dashboardCount} dashboards, ${metricViewCount} metric views (${assetCoveragePercent}% coverage)`,
+      });
+    } catch (error) {
+      logger.warn("[standalone-scan] Asset discovery failed (non-fatal)", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Phase 6b: LLM intelligence (passes 1-8 + optional pass 9 analytics maturity when discovery data is available)
   updateScanProgress(scanId, {
     phase: "llm-intelligence",
     message: "Running LLM intelligence analysis (domains, PII, governance)...",
@@ -250,6 +300,7 @@ export async function runStandaloneEnrichment(
     const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
     intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
       endpoint,
+      discoveryResult,
       onProgress: (pass) => {
         updateScanProgress(scanId, {
           llmPass: pass,
@@ -367,6 +418,14 @@ export async function runStandaloneEnrichment(
     }
     for (const gap of intelligenceResult.governanceGaps) {
       insightRecords.push({ insightType: "governance_gap", tableFqn: gap.tableFqn, payloadJson: JSON.stringify(gap), severity: gap.overallScore < 30 ? "critical" : gap.overallScore < 50 ? "high" : "medium" });
+    }
+    if (intelligenceResult.analyticsMaturity) {
+      insightRecords.push({
+        insightType: "analytics_maturity",
+        tableFqn: null,
+        payloadJson: JSON.stringify(intelligenceResult.analyticsMaturity),
+        severity: intelligenceResult.analyticsMaturity.overallScore < 25 ? "critical" : intelligenceResult.analyticsMaturity.overallScore < 50 ? "high" : "info",
+      });
     }
   }
 

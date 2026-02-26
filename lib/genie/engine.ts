@@ -34,6 +34,7 @@ import { isValidTable } from "./schema-allowlist";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "./concurrency";
 import { logger } from "@/lib/logger";
+import type { DiscoveredGenieSpace } from "@/lib/discovery/types";
 
 const DOMAIN_CONCURRENCY = 3;
 
@@ -51,6 +52,8 @@ export interface GenieEngineInput {
   config?: GenieEngineConfig;
   sampleData?: SampleDataCache | null;
   piiClassifications?: SensitivityClassification[];
+  /** Existing Genie spaces discovered via asset discovery (for dedup and enhancement). */
+  existingSpaces?: DiscoveredGenieSpace[];
   /** When set, only regenerate the listed domains (partial run). */
   domainFilter?: string[];
   /** Abort signal for user-initiated cancellation. */
@@ -81,6 +84,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     config = defaultGenieEngineConfig(),
     sampleData = null,
     piiClassifications,
+    existingSpaces = [],
     domainFilter,
     signal,
     onProgress,
@@ -124,6 +128,31 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       maxAutoSpaces: config.maxAutoSpaces,
       totalAvailable: filteredGroups.length,
       processing: domainGroups.length,
+    });
+  }
+
+  // Build existing-space-to-domain mapping for enhancement detection
+  const existingSpaceByDomain = new Map<string, DiscoveredGenieSpace>();
+  if (existingSpaces.length > 0) {
+    for (const group of domainGroups) {
+      const domainTableSet = new Set(group.tables.map((t) => t.toLowerCase()));
+      let bestMatch: { space: DiscoveredGenieSpace; overlap: number } | null = null;
+      for (const space of existingSpaces) {
+        const overlap = space.tables.filter((t) => domainTableSet.has(t.toLowerCase())).length;
+        if (overlap > 0 && (!bestMatch || overlap > bestMatch.overlap)) {
+          bestMatch = { space, overlap };
+        }
+      }
+      if (bestMatch && bestMatch.overlap >= 2) {
+        existingSpaceByDomain.set(group.domain, bestMatch.space);
+      }
+    }
+    logger.info("Existing space mapping", {
+      totalExisting: existingSpaces.length,
+      domainsWithExisting: existingSpaceByDomain.size,
+      mapped: Array.from(existingSpaceByDomain.entries()).map(
+        ([d, s]) => `${d} -> ${s.title} (${s.spaceId})`
+      ),
     });
   }
 
@@ -171,6 +200,14 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
         const rec = buildRecommendation(outputs, space, run.config.businessName);
         rec.useCaseCount = group.useCases.length;
+
+        // Tag with recommendation type based on existing space mapping
+        const existingSpace = existingSpaceByDomain.get(group.domain);
+        if (existingSpace) {
+          rec.recommendationType = "enhancement";
+          rec.existingAssetId = existingSpace.spaceId;
+          rec.changeSummary = buildChangeSummary(existingSpace, rec);
+        }
 
         completedDomainCount++;
         onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount, group.domain);
@@ -550,4 +587,44 @@ function statementToQuestion(statement: string): string {
     return `${s}?`;
   }
   return `What insights can we gain from: ${s}?`;
+}
+
+/**
+ * Build a human-readable change summary comparing an existing space with a new recommendation.
+ */
+function buildChangeSummary(
+  existing: DiscoveredGenieSpace,
+  rec: GenieSpaceRecommendation
+): string {
+  const changes: string[] = [];
+
+  const existingTableSet = new Set(existing.tables.map((t) => t.toLowerCase()));
+  const newTables = rec.tables.filter((t) => !existingTableSet.has(t.toLowerCase()));
+  if (newTables.length > 0) {
+    changes.push(`+${newTables.length} new tables: ${newTables.slice(0, 5).join(", ")}${newTables.length > 5 ? "..." : ""}`);
+  }
+
+  const recTableSet = new Set(rec.tables.map((t) => t.toLowerCase()));
+  const removedTables = existing.tables.filter((t) => !recTableSet.has(t.toLowerCase()));
+  if (removedTables.length > 0) {
+    changes.push(`-${removedTables.length} tables no longer included`);
+  }
+
+  if (rec.measureCount > existing.measureCount) {
+    changes.push(`+${rec.measureCount - existing.measureCount} new measures`);
+  }
+
+  if (rec.sampleQuestionCount > existing.sampleQuestionCount) {
+    changes.push(`+${rec.sampleQuestionCount - existing.sampleQuestionCount} new sample questions`);
+  }
+
+  const existingMvSet = new Set(existing.metricViews.map((m) => m.toLowerCase()));
+  const newMvs = rec.metricViews.filter((m) => !existingMvSet.has(m.toLowerCase()));
+  if (newMvs.length > 0) {
+    changes.push(`+${newMvs.length} new metric views`);
+  }
+
+  return changes.length > 0
+    ? `Enhancement of "${existing.title}": ${changes.join("; ")}`
+    : `Replacement of "${existing.title}" with updated configuration`;
 }

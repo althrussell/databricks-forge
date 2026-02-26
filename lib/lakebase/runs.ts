@@ -71,6 +71,7 @@ function dbRowToRun(row: {
       languages: parseJSON<string[]>(row.languages, ["English"]),
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
       estateScanEnabled: genOpts.estateScanEnabled,
+      assetDiscoveryEnabled: genOpts.assetDiscoveryEnabled,
     },
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
@@ -103,12 +104,13 @@ function parseGenerationOptions(raw: string | null): {
   discoveryDepth: string;
   depthConfig: PipelineRunConfig["depthConfig"];
   estateScanEnabled: boolean;
+  assetDiscoveryEnabled: boolean;
   industryAutoDetected: boolean;
   appVersion: string | null;
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", depthConfig: undefined as PipelineRunConfig["depthConfig"], estateScanEnabled: false, industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", depthConfig: undefined as PipelineRunConfig["depthConfig"], estateScanEnabled: false, assetDiscoveryEnabled: false, industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
@@ -123,6 +125,7 @@ function parseGenerationOptions(raw: string | null): {
         discoveryDepth: parsed.discoveryDepth ?? "balanced",
         depthConfig: parsed.depthConfig ?? undefined,
         estateScanEnabled: parsed.estateScanEnabled === true,
+        assetDiscoveryEnabled: parsed.assetDiscoveryEnabled === true,
         industryAutoDetected: parsed.industryAutoDetected === true,
         appVersion: parsed.appVersion ?? null,
         promptVersions: parsed.promptVersions ?? null,
@@ -141,6 +144,7 @@ function serializeGenerationOptions(config: PipelineRunConfig): string {
     discoveryDepth: config.discoveryDepth,
     depthConfig: config.depthConfig ?? null,
     estateScanEnabled: config.estateScanEnabled,
+    assetDiscoveryEnabled: config.assetDiscoveryEnabled,
     appVersion: packageJson.version,
     promptVersions: PROMPT_VERSIONS,
     stepLog: [],

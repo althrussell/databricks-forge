@@ -17,6 +17,70 @@ export const DEFAULT_DASHBOARD_PARENT_PATH = "/Shared/Forge Dashboards/";
 const FALLBACK_DASHBOARD_PARENT_PATH = "/Shared/";
 
 // ---------------------------------------------------------------------------
+// List
+// ---------------------------------------------------------------------------
+
+export interface DashboardListItem {
+  dashboard_id: string;
+  display_name: string;
+  path?: string;
+  parent_path?: string;
+  lifecycle_state?: string;
+  create_time?: string;
+  update_time?: string;
+  warehouse_id?: string;
+  creator_user_name?: string;
+  serialized_dashboard?: string;
+}
+
+interface DashboardListResponse {
+  dashboards?: DashboardListItem[];
+  next_page_token?: string;
+}
+
+/**
+ * List all Lakeview (AI/BI) dashboards in the workspace.
+ * Paginates automatically, returning all non-trashed dashboards.
+ */
+export async function listDashboards(
+  pageSize = 100
+): Promise<DashboardListItem[]> {
+  const config = getConfig();
+  const headers = await getAppHeaders();
+  const all: DashboardListItem[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({ page_size: String(pageSize) });
+    if (pageToken) params.set("page_token", pageToken);
+
+    const url = `${config.host}/api/2.0/lakeview/dashboards?${params}`;
+    const response = await fetchWithTimeout(
+      url,
+      { method: "GET", headers },
+      TIMEOUTS.WORKSPACE
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Lakeview list dashboards failed (${response.status}): ${text}`);
+    }
+
+    const data = (await response.json()) as DashboardListResponse;
+    if (data.dashboards) {
+      for (const d of data.dashboards) {
+        if (d.lifecycle_state !== "TRASHED") {
+          all.push(d);
+        }
+      }
+    }
+    pageToken = data.next_page_token;
+  } while (pageToken);
+
+  return all;
+}
+
+// ---------------------------------------------------------------------------
 // Get
 // ---------------------------------------------------------------------------
 

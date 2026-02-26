@@ -19,6 +19,7 @@ import {
   trackGenieSpaceUpdated,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import type { GenieAuthMode } from "@/lib/settings";
 
 export async function POST(
   request: NextRequest,
@@ -49,6 +50,8 @@ export async function POST(
     }
 
     const config = getConfig();
+    const body = await request.json().catch(() => ({})) as Record<string, string>;
+    const authMode = (body.authMode as GenieAuthMode) || undefined;
 
     // Check if there's already a tracked space for this run+domain
     const tracked = await listTrackedGenieSpaces(runId);
@@ -65,6 +68,7 @@ export async function POST(
         title: rec.title,
         description: rec.description,
         serializedSpace: rec.serializedSpace,
+        authMode,
       });
       spaceId = result.space_id;
       action = "updated";
@@ -72,7 +76,6 @@ export async function POST(
       await trackGenieSpaceUpdated(existing.spaceId, rec.title);
     } else {
       // Create new space
-      const body = await request.json().catch(() => ({})) as Record<string, string>;
       const parentPath = body.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
 
       const result = await createGenieSpace({
@@ -81,6 +84,7 @@ export async function POST(
         serializedSpace: rec.serializedSpace,
         warehouseId: config.warehouseId,
         parentPath,
+        authMode,
       });
       spaceId = result.space_id;
       action = "created";
@@ -90,7 +94,9 @@ export async function POST(
         spaceId,
         runId,
         rec.domain,
-        rec.title
+        rec.title,
+        undefined,
+        authMode,
       );
     }
 

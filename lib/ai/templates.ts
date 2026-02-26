@@ -256,6 +256,8 @@ Generate **{target_use_case_count}** unique, actionable AI-powered business use 
 
 Tables connected via lineage represent actual data pipelines. When multiple tables at different refinement levels (raw -> clean -> aggregated) appear, focus use cases on the highest-quality version unless the lower-level table provides unique columns or granularity not available in the refined version.
 
+{asset_context}
+
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
@@ -623,6 +625,8 @@ For each use case, before assigning scores, briefly think through:
 This internal reasoning produces more accurate, calibrated scores. You do NOT need to output your reasoning -- only the final scores.
 
 {industry_kpis}
+
+{asset_context}
 
 # SCORE EVERY SINGLE USE CASE
 
@@ -1089,6 +1093,46 @@ For each table, produce an overall governance score (0-100, where 100 is perfect
 
 Return JSON array:
 [{"tableFqn": "...", "overallScore": 75, "gaps": [{"category": "...", "severity": "...", "detail": "...", "recommendation": "..."}]}]`,
+
+  ENV_ANALYTICS_MATURITY_PROMPT: `You are an analytics strategy consultant. Assess the analytics maturity of this data estate based on the table inventory and existing analytics assets.
+
+{business_name_line}
+
+## Table Inventory Summary
+- Total tables: {table_count}
+- Business domains: {domain_count}
+- Gold/Silver/Bronze distribution: {tier_distribution}
+
+## Existing Analytics Assets
+{asset_summary}
+
+## Tables
+{table_list}
+
+Evaluate along these dimensions:
+1. **coverage** — What percentage of business-critical tables have analytics built on them? Are there domains with no analytics at all?
+2. **depth** — Do analytics go beyond basic reporting (e.g., metric views, curated Genie spaces with instructions/benchmarks)?
+3. **freshness** — Are analytics built on gold-tier (refined) tables or raw sources?
+4. **completeness** — Are there obvious gaps where high-value tables lack any analytics coverage?
+5. **recommendations** — What are the top 5 actionable steps to improve the analytics layer?
+
+Produce an overall analytics maturity score (0-100) and a maturity level: "nascent" (<25), "developing" (25-49), "established" (50-74), "advanced" (75-100).
+
+Return JSON:
+{
+  "overallScore": 55,
+  "level": "established",
+  "dimensions": {
+    "coverage": { "score": 60, "summary": "..." },
+    "depth": { "score": 45, "summary": "..." },
+    "freshness": { "score": 70, "summary": "..." },
+    "completeness": { "score": 40, "summary": "..." }
+  },
+  "uncoveredDomains": ["domain1", "domain2"],
+  "topRecommendations": [
+    { "priority": 1, "action": "...", "impact": "high", "effort": "medium" }
+  ]
+}`,
 
   // -------------------------------------------------------------------------
   // Outcome Map Parsing

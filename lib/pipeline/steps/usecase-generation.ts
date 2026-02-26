@@ -66,6 +66,13 @@ export async function runUsecaseGeneration(
     ? buildFilteredLineageSummary(ctx.lineageGraph, filteredTables, 30)
     : "";
 
+  // Build existing asset context from discovery results
+  let assetContext = "";
+  if (ctx.discoveryResult) {
+    const { buildAssetContextForGeneration } = await import("@/lib/discovery/prompt-context");
+    assetContext = buildAssetContextForGeneration(ctx.discoveryResult, filteredTables);
+  }
+
   const focusAreasInstruction = run.config.businessDomains
     ? `**FOCUS AREAS**: Focus your use cases on these business areas: ${run.config.businessDomains}. At least 60% of generated use cases should directly address these domains.`
     : "";
@@ -184,6 +191,7 @@ export async function runUsecaseGeneration(
         previous_use_cases_feedback: previousFeedback + feedbackExamplesSection,
         target_use_case_count: String(targetCount),
         lineage_context: lineageContext,
+        asset_context: assetContext,
       };
 
       // Generate both AI and Stats use cases per batch

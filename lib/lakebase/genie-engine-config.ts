@@ -22,7 +22,10 @@ export async function getGenieEngineConfig(runId: string): Promise<StoredConfig>
     });
 
     if (!row) {
-      return { config: defaultGenieEngineConfig(), version: 0 };
+      // Version 1 (not 0) -- the engine runs with default config, which is a
+      // valid config.  version: 0 is reserved for legacy/fallback-generated
+      // recommendations that were never processed by the engine.
+      return { config: defaultGenieEngineConfig(), version: 1 };
     }
 
     try {

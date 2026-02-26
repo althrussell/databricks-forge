@@ -54,6 +54,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
   const [databricksHost, setDatabricksHost] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detailDomain, setDetailDomain] = useState<string | null>(null);
@@ -125,6 +126,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setRegeneratingDomain(null);
           setGenProgress(100);
           setGenMessage("");
+          setEngineError(null);
           toast.success("Dashboard generation complete");
           fetchRecommendations();
         } else if (data.status === "failed") {
@@ -132,6 +134,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setGenerating(false);
           setRegeneratingDomain(null);
           setGenMessage("");
+          setEngineError(data.error ?? "Dashboard generation failed");
           toast.error(`Dashboard generation failed: ${data.error ?? "unknown error"}`);
           fetchRecommendations();
         }
@@ -141,7 +144,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
     }, 2000);
   }, [runId, stopPolling, fetchRecommendations]);
 
-  // Auto-detect in-progress generation on mount
+  // Auto-detect in-progress or failed generation on mount
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -154,6 +157,8 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setGenProgress(data.percent ?? 0);
           setGenMessage(data.message ?? "");
           startPolling();
+        } else if (data.status === "failed") {
+          setEngineError(data.error ?? "Dashboard generation failed. Try regenerating.");
         }
       } catch {
         /* no active job */
@@ -272,6 +277,24 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           <CardTitle>Dashboards</CardTitle>
           <CardDescription className="text-red-500">{error}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setError(null);
+              try {
+                await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
+                toast.success("Dashboard generation started");
+                setGenerating(true);
+                startPolling();
+              } catch {
+                toast.error("Failed to start dashboard generation");
+              }
+            }}
+          >
+            Retry Generation
+          </Button>
+        </CardContent>
       </Card>
     );
   }
@@ -284,7 +307,9 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           <CardDescription>
             {generating
               ? "Generating dashboard recommendations..."
-              : "No dashboard recommendations generated yet. Dashboard recommendations are created automatically when the pipeline completes."}
+              : engineError
+                ? engineError
+                : "No dashboard recommendations generated yet. Dashboard recommendations are created automatically when the pipeline completes."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -297,6 +322,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
             <Button
               variant="outline"
               onClick={async () => {
+                setEngineError(null);
                 try {
                   await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
                   toast.success("Dashboard generation started");
@@ -307,7 +333,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                 }
               }}
             >
-              Generate Dashboards
+              {engineError ? "Retry Generation" : "Generate Dashboards"}
             </Button>
           )}
         </CardContent>
@@ -392,7 +418,14 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                   onClick={(e) => e.stopPropagation()}
                 />
                 <div>
-                  <div className="font-medium text-sm">{rec.title}</div>
+                  <div className="flex items-center gap-1.5 font-medium text-sm">
+                    {rec.title}
+                    {rec.recommendationType === "enhancement" && (
+                      <Badge variant="outline" className="text-[9px] border-sky-400 text-sky-600">
+                        Enhancement
+                      </Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {rec.subdomains.length > 0
                       ? rec.subdomains.join(", ")
@@ -454,9 +487,21 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
               <SheetHeader>
                 <SheetTitle>{detailRec.title}</SheetTitle>
                 <SheetDescription>{detailRec.description}</SheetDescription>
+                {detailRec.recommendationType === "enhancement" && (
+                  <Badge className="mt-1 w-fit bg-sky-500/10 text-sky-600 border-sky-500/30">
+                    Enhancement of existing dashboard
+                  </Badge>
+                )}
               </SheetHeader>
 
               <div className="mt-6 space-y-4">
+                {detailRec.changeSummary && (
+                  <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+                    <p className="text-xs font-medium text-sky-700 dark:text-sky-400">Changes vs Existing</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{detailRec.changeSummary}</p>
+                  </div>
+                )}
+
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 bg-muted rounded-md text-center">

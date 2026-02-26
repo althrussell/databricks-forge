@@ -36,6 +36,8 @@ export const CONFIG = {
     "Free-text goals injected into the business context prompt. Leave empty for AI-generated goals.",
   estateScan:
     "Runs 8 additional LLM intelligence passes: domain classification, PII detection, redundancy, relationships, data tiers, governance, and health scoring.",
+  assetDiscovery:
+    "Discovers existing Genie spaces, AI/BI dashboards, and metric views in the workspace. Results are used to avoid duplicate recommendations, identify coverage gaps, and suggest improvements to existing assets.",
 } as const;
 
 // ── Runs list ───────────────────────────────────────────────────────
@@ -77,6 +79,8 @@ export const PIPELINE_STEPS = {
     "Generates industry context, value chain, and revenue model from your business name using the LLM.",
   "metadata-extraction":
     "Queries information_schema to discover tables, columns, and foreign keys in your selected catalogs.",
+  "asset-discovery":
+    "Discovers existing Genie spaces, AI/BI dashboards, and metric views in the workspace to avoid duplicates and identify gaps.",
   "table-filtering":
     "Classifies each table as business-relevant or technical/system using the LLM.",
   "usecase-generation":

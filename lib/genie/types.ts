@@ -374,6 +374,12 @@ export interface GenieSpaceRecommendation {
   tables: string[];
   metricViews: string[];
   serializedSpace: string; // JSON string ready for the Create API
+  /** "new" (default), "enhancement" (existing space found), or "replacement" */
+  recommendationType?: "new" | "enhancement" | "replacement";
+  /** Space ID of the existing asset when recommendationType is "enhancement" */
+  existingAssetId?: string;
+  /** Human-readable summary of what changed vs the existing space */
+  changeSummary?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +397,8 @@ export interface TrackedGenieSpace {
   status: GenieSpaceStatus;
   /** @deprecated `functions` is always empty — function deployment has been removed. */
   deployedAssets?: { functions: string[]; metricViews: string[] } | null;
+  /** Auth mode used when the space was created ("obo" = user token, "sp" = service principal). Null for legacy rows. */
+  authMode?: "obo" | "sp" | null;
   createdAt: string;
   updatedAt: string;
 }

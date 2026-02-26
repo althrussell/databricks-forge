@@ -24,6 +24,9 @@ interface DbRow {
   useCaseIds: string | null;
   serializedDashboard: string;
   dashboardDesign: string | null;
+  recommendationType: string;
+  existingAssetId: string | null;
+  changeSummary: string | null;
 }
 
 function dbRowToRecommendation(row: DbRow): DashboardRecommendation {
@@ -37,6 +40,9 @@ function dbRowToRecommendation(row: DbRow): DashboardRecommendation {
     useCaseIds: row.useCaseIds ? JSON.parse(row.useCaseIds) : [],
     serializedDashboard: row.serializedDashboard,
     dashboardDesign: row.dashboardDesign ? JSON.parse(row.dashboardDesign) : { title: row.title, description: row.description, datasets: [], widgets: [] },
+    recommendationType: (row.recommendationType as "new" | "enhancement" | "replacement") ?? "new",
+    existingAssetId: row.existingAssetId ?? undefined,
+    changeSummary: row.changeSummary ?? undefined,
   };
 }
 
@@ -92,6 +98,9 @@ export async function saveDashboardRecommendations(
             useCaseIds: JSON.stringify(rec.useCaseIds),
             serializedDashboard: rec.serializedDashboard,
             dashboardDesign: JSON.stringify(rec.dashboardDesign),
+            recommendationType: rec.recommendationType ?? "new",
+            existingAssetId: rec.existingAssetId ?? null,
+            changeSummary: rec.changeSummary ?? null,
           };
         }),
       });

@@ -13,6 +13,7 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { saveDashboardRecommendations } from "@/lib/lakebase/dashboard-recommendations";
 import { runDashboardEngine } from "@/lib/dashboard/engine";
+import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
 import {
   startDashboardJob,
   updateDashboardJob,
@@ -79,28 +80,45 @@ export async function POST(
       // Genie recommendations not available
     }
 
-    startDashboardJob(runId);
+    // Load existing dashboards from asset discovery (if available)
+    let existingDashboards: import("@/lib/discovery/types").DiscoveredDashboard[] | undefined;
+    try {
+      const discoveryData = await getDiscoveryResultsByRunId(runId);
+      if (discoveryData?.dashboards?.length) {
+        existingDashboards = discoveryData.dashboards.map((d) => ({
+          dashboardId: d.dashboardId,
+          displayName: d.displayName,
+          tables: d.tables,
+          isPublished: d.isPublished,
+          datasetCount: d.datasetCount,
+          widgetCount: d.widgetCount,
+        }));
+      }
+    } catch { /* non-critical */ }
+
+    await startDashboardJob(runId);
 
     runDashboardEngine({
       run,
       useCases,
       metadata,
       genieRecommendations,
+      existingDashboards,
       domainFilter: domains,
       onProgress: (message, percent) => updateDashboardJob(runId, message, percent),
     })
       .then(async (result) => {
         await saveDashboardRecommendations(runId, result.recommendations, domains);
-        completeDashboardJob(runId, result.recommendations.length);
+        await completeDashboardJob(runId, result.recommendations.length);
         logger.info("Dashboard Engine generation complete (async)", {
           runId,
           recommendationCount: result.recommendations.length,
           domainFilter: domains ?? "all",
         });
       })
-      .catch((err) => {
+      .catch(async (err) => {
         const errMsg = err instanceof Error ? err.message : String(err);
-        failDashboardJob(runId, errMsg);
+        await failDashboardJob(runId, errMsg);
         logger.error("Dashboard Engine generation failed (async)", {
           runId,
           error: errMsg,

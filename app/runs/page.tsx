@@ -7,6 +7,8 @@ import { listRuns } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { PipelineRun } from "@/lib/domain/types";
 
+export const dynamic = "force-dynamic";
+
 async function fetchInitialRuns(): Promise<{
   runs: PipelineRun[];
   error: string | null;

@@ -4,10 +4,12 @@ import { cn } from "@/lib/utils";
 import { PipelineStep, type RunStatus } from "@/lib/domain/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PIPELINE_STEPS } from "@/lib/help-text";
+import { useMemo } from "react";
 
-const STEPS = [
+const BASE_STEPS = [
   { key: PipelineStep.BusinessContext, label: "Business Context", pct: 10, tip: PIPELINE_STEPS["business-context"] },
-  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 20, tip: PIPELINE_STEPS["metadata-extraction"] },
+  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 18, tip: PIPELINE_STEPS["metadata-extraction"] },
+  { key: PipelineStep.AssetDiscovery, label: "Asset Discovery", pct: 22, tip: PIPELINE_STEPS["asset-discovery"], optional: true },
   { key: PipelineStep.TableFiltering, label: "Table Filtering", pct: 30, tip: PIPELINE_STEPS["table-filtering"] },
   { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 45, tip: PIPELINE_STEPS["usecase-generation"] },
   { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 55, tip: PIPELINE_STEPS["domain-clustering"] },
@@ -20,6 +22,8 @@ interface RunProgressProps {
   progressPct: number;
   status: RunStatus;
   statusMessage?: string;
+  /** When true, shows the Asset Discovery step in the progress list. */
+  assetDiscoveryEnabled?: boolean;
 }
 
 export function RunProgress({
@@ -27,7 +31,13 @@ export function RunProgress({
   progressPct,
   status,
   statusMessage,
+  assetDiscoveryEnabled = false,
 }: RunProgressProps) {
+  const STEPS = useMemo(
+    () => BASE_STEPS.filter((s) => !("optional" in s && s.optional) || assetDiscoveryEnabled),
+    [assetDiscoveryEnabled]
+  );
+
   const currentIdx = currentStep
     ? STEPS.findIndex((s) => s.key === currentStep)
     : -1;
