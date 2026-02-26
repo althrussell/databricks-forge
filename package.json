@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@neondatabase/serverless": "^1.0.2",
-    "@prisma/adapter-neon": "^7.4.1",
+    "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
     "@types/dagre": "^0.7.53",
     "@xyflow/react": "^12.10.1",
@@ -41,7 +40,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "uuid": "^13.0.0",
-    "ws": "^8.19.0",
+    "pg": "^8.18.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -51,7 +50,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
-    "@types/ws": "^8.18.1",
+    "@types/pg": "^8.16.0",
     "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
