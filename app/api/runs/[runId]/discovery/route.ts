@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidUUID } from "@/lib/validation";
 import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
+import { getConfig } from "@/lib/dbx/client";
 
 export async function GET(
   _request: NextRequest,
@@ -19,15 +20,22 @@ export async function GET(
     }
 
     const data = await getDiscoveryResultsByRunId(runId);
+
+    let databricksHost: string | null = null;
+    try {
+      databricksHost = getConfig().host;
+    } catch { /* host unavailable in some dev environments */ }
+
     if (!data) {
       return NextResponse.json({
         genieSpaces: [],
         dashboards: [],
         coverage: null,
+        databricksHost,
       });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({ ...data, databricksHost });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: msg }, { status: 500 });

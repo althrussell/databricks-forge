@@ -53,10 +53,12 @@ export function register() {
 
     // Eagerly mark any background jobs left in "generating" state as failed.
     // These are orphans from a previous process that was killed mid-generation.
+    // Also set the flag so the lazy check in getPersistedJobStatus doesn't re-run.
     setTimeout(async () => {
       try {
-        const { markOrphanedJobsFailed } = await import("@/lib/lakebase/background-jobs");
+        const { markOrphanedJobsFailed, markOrphanCheckComplete } = await import("@/lib/lakebase/background-jobs");
         await markOrphanedJobsFailed();
+        markOrphanCheckComplete();
       } catch {
         // DB may not be ready yet; the lazy check in getPersistedJobStatus
         // will catch any remaining orphans on first poll.

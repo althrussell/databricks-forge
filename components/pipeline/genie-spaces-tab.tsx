@@ -38,6 +38,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { AlertTriangle, BrainCircuit, Loader2 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type {
   GenieEngineRecommendation,
@@ -239,7 +244,7 @@ export function GenieSpacesTab({
   function getDeployStatus(rec: GenieEngineRecommendation): DeployStatus {
     if (!engineEnabled) return { allowed: true, warn: false };
     if (engineGenerating) {
-      if (completedDomainNames.includes(rec.domain)) return { allowed: true, warn: false };
+      if (completedDomainNames.includes(rec.domain) || !isV1Domain(rec)) return { allowed: true, warn: false };
       return { allowed: false, warn: false, reason: "Waiting for AI Engine to process this domain\u2026" };
     }
     if (isV1Domain(rec)) {
@@ -250,6 +255,8 @@ export function GenieSpacesTab({
 
   const hasV1Domains = engineEnabled && !engineGenerating &&
     recommendations.some((r) => isV1Domain(r) && !isDeployed(r.domain) && r.tableCount > 0);
+
+  const enhancementCount = recommendations.filter((r) => r.recommendationType === "enhancement").length;
 
   // Selectable = not already deployed AND has at least one table AND deploy allowed
   const selectableDomains = recommendations
@@ -538,6 +545,11 @@ export function GenieSpacesTab({
             <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
               Run analysis for enriched spaces with benchmarks, metric views, and improved instructions.
             </p>
+            {enhancementCount > 0 && (
+              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/80">
+                {enhancementCount} {enhancementCount === 1 ? "space improves" : "spaces improve"} existing resources. Deploying creates new spaces alongside your originals.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -614,27 +626,34 @@ export function GenieSpacesTab({
                               aria-label="AI analysis complete"
                             />
                           )}
-                          {engineGenerating && !completedDomainNames.includes(rec.domain) && (
+                          {engineGenerating && !completedDomainNames.includes(rec.domain) && isV1Domain(rec) && (
                             <BrainCircuit
                               className="h-3.5 w-3.5 animate-pulse text-violet-400/50"
                               aria-label="AI analysis in progress"
                             />
                           )}
-                          {!engineGenerating && completedDomainNames.includes(rec.domain) && (
+                          {!engineGenerating && !isV1Domain(rec) && (
                             <BrainCircuit
                               className="h-3.5 w-3.5 text-violet-500"
                               aria-label="AI enriched"
                             />
                           )}
-                          {!engineGenerating && engineEnabled && isV1Domain(rec) && !completedDomainNames.includes(rec.domain) && (
+                          {!engineGenerating && engineEnabled && isV1Domain(rec) && (
                             <Badge variant="outline" className="text-[9px] border-amber-400 text-amber-600">
                               Basic
                             </Badge>
                           )}
                           {rec.recommendationType === "enhancement" && (
-                            <Badge variant="outline" className="text-[9px] border-sky-400 text-sky-600">
-                              Enhancement
-                            </Badge>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="text-[9px] border-sky-400 text-sky-600 cursor-help">
+                                  Improves existing
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[220px]">
+                                Enriches an existing Genie space. Deploying creates a new space &mdash; your original is untouched.
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </span>
                       </td>
@@ -766,7 +785,7 @@ export function GenieSpacesTab({
                 <SheetTitle className="flex items-center gap-2">
                   <GenieIcon className="h-5 w-5 text-violet-500" />
                   {detailRec.domain}
-                  {completedDomainNames.includes(detailRec.domain) && (
+                  {!isV1Domain(detailRec) && (
                     <BrainCircuit className="h-4 w-4 text-violet-500" aria-label="AI enriched" />
                   )}
                 </SheetTitle>
@@ -781,14 +800,36 @@ export function GenieSpacesTab({
                   )}
                   {detailRec.recommendationType === "enhancement" && (
                     <Badge className="w-fit bg-sky-500/10 text-sky-600 border-sky-500/30">
-                      Enhancement of existing space
+                      Improves existing space
                     </Badge>
                   )}
                 </div>
               </SheetHeader>
 
               <div className="mt-6 space-y-5 px-4">
-                {detailRec.changeSummary && (
+                {detailRec.recommendationType === "enhancement" && (
+                  <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-2">
+                    <p className="text-xs font-medium text-sky-700 dark:text-sky-400">Improves an existing Genie space</p>
+                    {detailRec.changeSummary && (
+                      <p className="text-xs text-muted-foreground">{detailRec.changeSummary}</p>
+                    )}
+                    <p className="text-[11px] text-sky-700/80 dark:text-sky-400/80">
+                      Deploying creates a <span className="font-medium">new</span> Genie space. The original space will not be modified.
+                    </p>
+                    {detailRec.existingAssetId && genieSpaceUrl(detailRec.existingAssetId) && (
+                      <a
+                        href={genieSpaceUrl(detailRec.existingAssetId)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 hover:text-sky-700 transition-colors"
+                      >
+                        Open original space
+                        <ExternalLinkIcon className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                )}
+                {detailRec.recommendationType !== "enhancement" && detailRec.changeSummary && (
                   <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
                     <p className="text-xs font-medium text-sky-700 dark:text-sky-400">Changes vs Existing</p>
                     <p className="mt-1 text-xs text-muted-foreground">{detailRec.changeSummary}</p>
