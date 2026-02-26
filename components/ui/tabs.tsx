@@ -77,12 +77,23 @@ function TabsTrigger({
 
 function TabsContent({
   className,
+  onFocusCapture,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+  const handleFocusCapture = React.useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      e.stopPropagation()
+      ;(e.target as HTMLElement).focus({ preventScroll: true })
+      onFocusCapture?.(e)
+    },
+    [onFocusCapture]
+  )
+
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
       className={cn("flex-1 outline-none", className)}
+      onFocusCapture={handleFocusCapture}
       {...props}
     />
   )
