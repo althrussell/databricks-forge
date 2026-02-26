@@ -118,14 +118,17 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
       id: randomUUID(),
       left: { identifier: fqn("mdg_catalogs"), alias: "mdg_catalogs" },
       right: { identifier: fqn("mdg_schemas"), alias: "mdg_schemas" },
-      sql: ["`mdg_catalogs`.`catalog_name` = `mdg_schemas`.`catalog_name`"],
+      sql: [
+        "`mdg_catalogs`.`catalog_name` = `mdg_schemas`.`catalog_name`",
+      ],
     },
     {
       id: randomUUID(),
       left: { identifier: fqn("mdg_schemas"), alias: "mdg_schemas" },
       right: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
       sql: [
-        "`mdg_schemas`.`catalog_name` = `mdg_tables`.`table_catalog` AND `mdg_schemas`.`schema_name` = `mdg_tables`.`table_schema`",
+        "`mdg_schemas`.`catalog_name` = `mdg_tables`.`table_catalog`",
+        "`mdg_schemas`.`schema_name` = `mdg_tables`.`table_schema`",
       ],
     },
     {
@@ -133,7 +136,9 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
       left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
       right: { identifier: fqn("mdg_columns"), alias: "mdg_columns" },
       sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_columns`.`table_catalog` AND `mdg_tables`.`table_schema` = `mdg_columns`.`table_schema` AND `mdg_tables`.`table_name` = `mdg_columns`.`table_name`",
+        "`mdg_tables`.`table_catalog` = `mdg_columns`.`table_catalog`",
+        "`mdg_tables`.`table_schema` = `mdg_columns`.`table_schema`",
+        "`mdg_tables`.`table_name` = `mdg_columns`.`table_name`",
       ],
     },
     {
@@ -141,7 +146,9 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
       left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
       right: { identifier: fqn("mdg_table_tags"), alias: "mdg_table_tags" },
       sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_table_tags`.`catalog_name` AND `mdg_tables`.`table_schema` = `mdg_table_tags`.`schema_name` AND `mdg_tables`.`table_name` = `mdg_table_tags`.`table_name`",
+        "`mdg_tables`.`table_catalog` = `mdg_table_tags`.`catalog_name`",
+        "`mdg_tables`.`table_schema` = `mdg_table_tags`.`schema_name`",
+        "`mdg_tables`.`table_name` = `mdg_table_tags`.`table_name`",
       ],
     },
     {
@@ -152,7 +159,10 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
         alias: "mdg_column_tags",
       },
       sql: [
-        "`mdg_columns`.`table_catalog` = `mdg_column_tags`.`catalog_name` AND `mdg_columns`.`table_schema` = `mdg_column_tags`.`schema_name` AND `mdg_columns`.`table_name` = `mdg_column_tags`.`table_name` AND `mdg_columns`.`column_name` = `mdg_column_tags`.`column_name`",
+        "`mdg_columns`.`table_catalog` = `mdg_column_tags`.`catalog_name`",
+        "`mdg_columns`.`table_schema` = `mdg_column_tags`.`schema_name`",
+        "`mdg_columns`.`table_name` = `mdg_column_tags`.`table_name`",
+        "`mdg_columns`.`column_name` = `mdg_column_tags`.`column_name`",
       ],
     },
     {
@@ -163,7 +173,9 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
         alias: "mdg_table_constraints",
       },
       sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_table_constraints`.`table_catalog` AND `mdg_tables`.`table_schema` = `mdg_table_constraints`.`table_schema` AND `mdg_tables`.`table_name` = `mdg_table_constraints`.`table_name`",
+        "`mdg_tables`.`table_catalog` = `mdg_table_constraints`.`table_catalog`",
+        "`mdg_tables`.`table_schema` = `mdg_table_constraints`.`table_schema`",
+        "`mdg_tables`.`table_name` = `mdg_table_constraints`.`table_name`",
       ],
     },
     {
@@ -174,7 +186,9 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
         alias: "mdg_table_privileges",
       },
       sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_table_privileges`.`table_catalog` AND `mdg_tables`.`table_schema` = `mdg_table_privileges`.`table_schema` AND `mdg_tables`.`table_name` = `mdg_table_privileges`.`table_name`",
+        "`mdg_tables`.`table_catalog` = `mdg_table_privileges`.`table_catalog`",
+        "`mdg_tables`.`table_schema` = `mdg_table_privileges`.`table_schema`",
+        "`mdg_tables`.`table_name` = `mdg_table_privileges`.`table_name`",
       ],
     },
     {
@@ -182,7 +196,9 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
       left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
       right: { identifier: fqn("mdg_views"), alias: "mdg_views" },
       sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_views`.`table_catalog` AND `mdg_tables`.`table_schema` = `mdg_views`.`table_schema` AND `mdg_tables`.`table_name` = `mdg_views`.`table_name`",
+        "`mdg_tables`.`table_catalog` = `mdg_views`.`table_catalog`",
+        "`mdg_tables`.`table_schema` = `mdg_views`.`table_schema`",
+        "`mdg_tables`.`table_name` = `mdg_views`.`table_name`",
       ],
     },
     {
@@ -190,7 +206,8 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
       left: { identifier: fqn("mdg_schemas"), alias: "mdg_schemas" },
       right: { identifier: fqn("mdg_volumes"), alias: "mdg_volumes" },
       sql: [
-        "`mdg_schemas`.`catalog_name` = `mdg_volumes`.`volume_catalog` AND `mdg_schemas`.`schema_name` = `mdg_volumes`.`volume_schema`",
+        "`mdg_schemas`.`catalog_name` = `mdg_volumes`.`volume_catalog`",
+        "`mdg_schemas`.`schema_name` = `mdg_volumes`.`volume_schema`",
       ],
     },
   ];

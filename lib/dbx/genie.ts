@@ -198,6 +198,19 @@ export function sanitizeSerializedSpace(raw: string): string {
       }
     }
 
+    // Split any AND-joined join_spec sql entries into separate array elements
+    if (Array.isArray(parsed?.instructions?.join_specs)) {
+      for (const js of parsed.instructions.join_specs) {
+        if (Array.isArray(js.sql)) {
+          js.sql = js.sql.flatMap((s: string) =>
+            s.includes(" AND ") && !s.startsWith("--")
+              ? s.split(/\s+AND\s+/)
+              : [s]
+          );
+        }
+      }
+    }
+
     // Strip any leftover sql_functions (no longer supported)
     if (parsed?.instructions?.sql_functions) {
       delete parsed.instructions.sql_functions;
