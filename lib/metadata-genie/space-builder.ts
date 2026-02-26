@@ -10,7 +10,6 @@ import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 import type {
   SerializedSpace,
   DataSourceTable,
-  JoinSpec,
   TextInstruction,
   ExampleQuestionSql,
   SampleQuestion,
@@ -67,7 +66,6 @@ export function buildMetadataGenieSpace(
   const prefix = `${viewTarget.catalog}.${viewTarget.schema}`;
 
   const tables = buildDataSourceTables(prefix);
-  const joinSpecs = buildJoinSpecs(prefix);
   const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection);
   const textInstructions = buildTextInstructions(
     outcomeMap,
@@ -88,7 +86,7 @@ export function buildMetadataGenieSpace(
     instructions: {
       text_instructions: textInstructions,
       example_question_sqls: exampleSqls,
-      join_specs: joinSpecs,
+      join_specs: [],
       sql_snippets: sqlSnippets,
     },
   };
@@ -107,43 +105,25 @@ function buildDataSourceTables(prefix: string): DataSourceTable[] {
 }
 
 // ---------------------------------------------------------------------------
-// Join Specs
+// Join Relationship Descriptions (expressed via text instructions)
 // ---------------------------------------------------------------------------
+// The Genie API protobuf parser does not support composite (AND-joined) join
+// conditions in join_specs.sql.  Since all MDG view joins are composite-key
+// (catalog + schema + table_name), we express them as natural-language text
+// instructions instead.  This is the Databricks-recommended approach for
+// complex joins and works reliably with the Genie AI engine.
 
-function buildJoinSpecs(prefix: string): JoinSpec[] {
-  const fqn = (name: string) => `${prefix}.${name}`;
-
-  // Each join spec gets ONE sql entry with all conditions AND-joined.
-  // Uses FQN.column format so sanitizeSerializedSpace rewrites to `alias`.`column`.
-  // This matches how the Genie Engine assembler produces join specs.
-  const specs: [string, string, string][] = [
-    ["mdg_catalogs", "mdg_schemas",
-      `${fqn("mdg_catalogs")}.catalog_name = ${fqn("mdg_schemas")}.catalog_name`],
-    ["mdg_schemas", "mdg_tables",
-      `${fqn("mdg_schemas")}.catalog_name = ${fqn("mdg_tables")}.table_catalog AND ${fqn("mdg_schemas")}.schema_name = ${fqn("mdg_tables")}.table_schema`],
-    ["mdg_tables", "mdg_columns",
-      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_columns")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_columns")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_columns")}.table_name`],
-    ["mdg_tables", "mdg_table_tags",
-      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_table_tags")}.catalog_name AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_table_tags")}.schema_name AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_table_tags")}.table_name`],
-    ["mdg_columns", "mdg_column_tags",
-      `${fqn("mdg_columns")}.table_catalog = ${fqn("mdg_column_tags")}.catalog_name AND ${fqn("mdg_columns")}.table_schema = ${fqn("mdg_column_tags")}.schema_name AND ${fqn("mdg_columns")}.table_name = ${fqn("mdg_column_tags")}.table_name AND ${fqn("mdg_columns")}.column_name = ${fqn("mdg_column_tags")}.column_name`],
-    ["mdg_tables", "mdg_table_constraints",
-      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_table_constraints")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_table_constraints")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_table_constraints")}.table_name`],
-    ["mdg_tables", "mdg_table_privileges",
-      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_table_privileges")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_table_privileges")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_table_privileges")}.table_name`],
-    ["mdg_tables", "mdg_views",
-      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_views")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_views")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_views")}.table_name`],
-    ["mdg_schemas", "mdg_volumes",
-      `${fqn("mdg_schemas")}.catalog_name = ${fqn("mdg_volumes")}.volume_catalog AND ${fqn("mdg_schemas")}.schema_name = ${fqn("mdg_volumes")}.volume_schema`],
-  ];
-
-  return specs.map(([left, right, sql]) => ({
-    id: randomUUID(),
-    left: { identifier: fqn(left), alias: left },
-    right: { identifier: fqn(right), alias: right },
-    sql: [sql],
-  }));
-}
+const JOIN_DESCRIPTIONS: string[] = [
+  "mdg_catalogs → mdg_schemas: JOIN ON catalog_name = catalog_name",
+  "mdg_schemas → mdg_tables: JOIN ON catalog_name = table_catalog AND schema_name = table_schema",
+  "mdg_tables → mdg_columns: JOIN ON table_catalog, table_schema, table_name",
+  "mdg_tables → mdg_table_tags: JOIN ON table_catalog = catalog_name, table_schema = schema_name, table_name",
+  "mdg_columns → mdg_column_tags: JOIN ON table_catalog = catalog_name, table_schema = schema_name, table_name, column_name",
+  "mdg_tables → mdg_table_constraints: JOIN ON table_catalog, table_schema, table_name",
+  "mdg_tables → mdg_table_privileges: JOIN ON table_catalog, table_schema, table_name",
+  "mdg_tables → mdg_views: JOIN ON table_catalog, table_schema, table_name",
+  "mdg_schemas → mdg_volumes: JOIN ON catalog_name = volume_catalog, schema_name = volume_schema",
+];
 
 // ---------------------------------------------------------------------------
 // Sample Questions (BA-focused, derived from outcome map)
@@ -272,6 +252,11 @@ function buildTextInstructions(
   parts.push(
     "When searching for business-relevant tables, look at both table names and their comments/descriptions. " +
       "Tables without comments may still contain important data — infer purpose from naming conventions."
+  );
+
+  parts.push(
+    "TABLE RELATIONSHIPS — use these joins when combining data across views:\n" +
+      JOIN_DESCRIPTIONS.join("\n")
   );
 
   return [

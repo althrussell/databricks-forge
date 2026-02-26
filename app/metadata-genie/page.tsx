@@ -594,8 +594,12 @@ function SpaceContentPreview({
       <div className="grid grid-cols-4 gap-2">
         <StatCard label="Tables" value={tables.length} />
         <StatCard label="SQL Examples" value={sqls.length} />
-        <StatCard label="Joins" value={joins.length} />
         <StatCard label="Questions" value={questions.length} />
+        {joins.length > 0 ? (
+          <StatCard label="Joins" value={joins.length} />
+        ) : (
+          <StatCard label="Instructions" value={instructions.flatMap((i) => i.content ?? []).length} />
+        )}
       </div>
       <div className="grid grid-cols-3 gap-2">
         <StatCard label="Measures" value={measures.length} />
