@@ -94,17 +94,10 @@ export default function RunDetailPage({
   const fetchingRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState("overview");
-  const tabsRef = useRef<HTMLDivElement>(null);
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
-    tabsRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
   }, []);
-
-  // Section refs for clickable summary card navigation
-  const radarRef = useRef<HTMLDivElement>(null);
-  const chartsRef = useRef<HTMLDivElement>(null);
-  const coverageRef = useRef<HTMLDivElement>(null);
 
   // Collapsible section state
   const [insightsOpen, setInsightsOpen] = useState(true);
@@ -401,9 +394,6 @@ export default function RunDetailPage({
       ? computeIndustryCoverage(industryOutcome, useCases)
       : null;
 
-  const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <div className="space-y-6">
@@ -619,7 +609,6 @@ export default function RunDetailPage({
               onClick={() => {
                 setActiveTab("overview");
                 setInsightsOpen(true);
-                setTimeout(() => scrollTo(chartsRef), 100);
               }}
             />
             <SummaryCard
@@ -645,26 +634,25 @@ export default function RunDetailPage({
                   : "N/A"
               }
               tip={RUN_DETAIL.avgScore}
-              onClick={() => scrollTo(radarRef)}
+              onClick={() => setActiveTab("overview")}
             />
             <CoverageGapCard
               coverageData={coverageData}
               onClick={() => {
                 setActiveTab("overview");
                 setInsightsOpen(true);
-                setTimeout(() => scrollTo(coverageRef), 100);
               }}
             />
           </div>
 
           {/* Score Landscape Radar */}
           {useCases.length > 1 && (
-            <div ref={radarRef}>
+            <div>
               <ScoreRadarOverview useCases={useCases} />
             </div>
           )}
 
-          <Tabs ref={tabsRef} value={activeTab} onValueChange={handleTabChange} className="scroll-mt-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -741,7 +729,7 @@ export default function RunDetailPage({
                 <CollapsibleContent className="space-y-6 pt-4">
                   {/* Charts */}
                   {useCases.length > 0 && (
-                    <div ref={chartsRef} className="grid gap-6 md:grid-cols-3">
+                    <div className="grid gap-6 md:grid-cols-3">
                       <ScoreDistributionChart
                         scores={useCases.map(
                           (uc) => effectiveScores(uc).overall
@@ -782,7 +770,7 @@ export default function RunDetailPage({
 
                   {/* Industry Coverage + Gap Analysis */}
                   {run.config.industry && useCases.length > 0 && (
-                    <div ref={coverageRef}>
+                    <div>
                       <IndustryCoverageCard
                         industryId={run.config.industry}
                         useCases={useCases}
