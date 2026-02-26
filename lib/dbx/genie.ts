@@ -203,7 +203,7 @@ export function sanitizeSerializedSpace(raw: string): string {
       delete parsed.instructions.sql_functions;
     }
 
-    // Sort all id-keyed arrays (Genie API requirement)
+    // Normalize + sort all id-keyed arrays (Genie API requires lowercase 32-hex UUIDs without hyphens, sorted)
     for (const arr of [
       parsed?.config?.sample_questions,
       parsed?.instructions?.join_specs,
@@ -215,6 +215,11 @@ export function sanitizeSerializedSpace(raw: string): string {
       parsed?.benchmarks?.questions,
     ]) {
       if (Array.isArray(arr)) {
+        for (const item of arr) {
+          if (typeof item?.id === "string") {
+            item.id = item.id.replace(/-/g, "").toLowerCase();
+          }
+        }
         arr.sort((a: { id?: string }, b: { id?: string }) =>
           (a.id ?? "").localeCompare(b.id ?? "")
         );

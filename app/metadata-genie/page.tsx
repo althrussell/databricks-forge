@@ -258,24 +258,54 @@ export default function MetadataGeniePage() {
         <div className="space-y-4">
           {/* Industry + domain header */}
           <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 pb-5">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-blue-600" />
                   <h2 className="text-lg font-semibold">{draft.title}</h2>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {draft.industryName
-                      ? `${draft.industryName} industry detected`
-                      : "Industry not detected"}{" "}
-                    &middot; {draft.tableCount.toLocaleString()} tables scanned
-                    {draft.domains?.length
-                      ? ` · Domains: ${draft.domains.join(", ")}`
-                      : ""}
-                  </p>
                 </div>
                 <Badge variant="outline" className="shrink-0">
                   Draft
                 </Badge>
               </div>
+
+              <div className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Industry
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium">
+                    {draft.industryName ?? "Not detected"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Tables Scanned
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium">
+                    {draft.tableCount.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {draft.domains && draft.domains.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Domains
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {draft.domains.map((d) => (
+                      <Badge
+                        key={d}
+                        variant="secondary"
+                        className="text-[10px] font-normal"
+                      >
+                        {d}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -283,22 +313,31 @@ export default function MetadataGeniePage() {
           {draft.detection?.duplication_notes &&
             draft.detection.duplication_notes.length > 0 && (
               <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
-                <CardContent className="flex items-start gap-3 pt-4">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
-                  <div>
-                    <p className="text-sm font-medium">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
                       Potential duplication detected
                     </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {draft.detection.duplication_notes.map((note, i) => (
-                        <li
-                          key={i}
-                          className="text-xs text-muted-foreground"
-                        >
+                    <Badge
+                      variant="outline"
+                      className="ml-auto border-amber-300 text-[10px] text-amber-700 dark:border-amber-700 dark:text-amber-400"
+                    >
+                      {draft.detection.duplication_notes.length} finding
+                      {draft.detection.duplication_notes.length !== 1 && "s"}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {draft.detection.duplication_notes.map((note, i) => (
+                      <div
+                        key={i}
+                        className="rounded-md border border-amber-200/60 bg-white/60 px-3 py-2 dark:border-amber-800/40 dark:bg-amber-950/30"
+                      >
+                        <p className="text-xs leading-relaxed text-muted-foreground">
                           {note}
-                        </li>
-                      ))}
-                    </ul>
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
