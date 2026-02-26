@@ -304,12 +304,15 @@ export function generateViewDDL(opts: {
       conditions.push(`${def.tableNameColumn} NOT LIKE '!_%' ESCAPE '!'`);
     }
 
-    // Lineage: filter by FQN prefix when catalog scope is set
-    if (def.name === "mdg_lineage" && catalogScope && catalogScope.length > 0) {
-      const orConditions = catalogScope
-        .map((c) => `source_table_full_name LIKE '${c}.%' OR target_table_full_name LIKE '${c}.%'`)
-        .join(" OR ");
-      conditions.push(`(${orConditions})`);
+    if (def.name === "mdg_lineage") {
+      conditions.push("source_table_full_name IS NOT NULL");
+      conditions.push("target_table_full_name IS NOT NULL");
+      if (catalogScope && catalogScope.length > 0) {
+        const orConditions = catalogScope
+          .map((c) => `source_table_full_name LIKE '${c}.%' OR target_table_full_name LIKE '${c}.%'`)
+          .join(" OR ");
+        conditions.push(`(${orConditions})`);
+      }
     }
 
     const whereClause =
