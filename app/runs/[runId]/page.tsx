@@ -94,6 +94,12 @@ export default function RunDetailPage({
   const fetchingRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState("overview");
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+    tabsRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+  }, []);
 
   // Section refs for clickable summary card navigation
   const radarRef = useRef<HTMLDivElement>(null);
@@ -658,7 +664,7 @@ export default function RunDetailPage({
             </div>
           )}
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs ref={tabsRef} value={activeTab} onValueChange={handleTabChange} className="scroll-mt-4">
             <TabsList>
               <Tooltip>
                 <TooltipTrigger asChild>

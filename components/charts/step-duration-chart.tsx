@@ -83,6 +83,7 @@ export function StepDurationChart({
               dataKey="seconds"
               fill="var(--color-chart-2)"
               radius={[0, 4, 4, 0]}
+              isAnimationActive={false}
             />
           </BarChart>
         </ResponsiveContainer>

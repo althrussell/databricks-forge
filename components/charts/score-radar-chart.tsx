@@ -91,8 +91,8 @@ export function ScoreRadarChart({
           strokeWidth={hasUserScores ? 1.5 : 2.5}
           strokeDasharray={hasUserScores ? "4 3" : undefined}
           dot={!hasUserScores}
+          isAnimationActive={false}
         />
-        {/* User-adjusted scores layer */}
         {hasUserScores && (
           <Radar
             name="Adjusted"
@@ -102,6 +102,7 @@ export function ScoreRadarChart({
             fillOpacity={0.2}
             strokeWidth={2.5}
             dot
+            isAnimationActive={false}
           />
         )}
         <Tooltip
