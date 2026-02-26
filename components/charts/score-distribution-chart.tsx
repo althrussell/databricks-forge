@@ -58,11 +58,12 @@ export function ScoreDistributionChart({
             <Tooltip
               contentStyle={{
                 backgroundColor: "var(--color-card)",
-                color: "var(--color-card-foreground)",
                 borderColor: "var(--color-border)",
                 borderRadius: "var(--radius)",
                 fontSize: 12,
               }}
+              itemStyle={{ color: "var(--color-card-foreground)" }}
+              labelStyle={{ color: "var(--color-card-foreground)" }}
             />
             <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               {data.map((_, idx) => (

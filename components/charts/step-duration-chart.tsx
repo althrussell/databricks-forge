@@ -73,11 +73,12 @@ export function StepDurationChart({
               formatter={(value) => [`${value}s`, "Duration"]}
               contentStyle={{
                 backgroundColor: "var(--color-card)",
-                color: "var(--color-card-foreground)",
                 borderColor: "var(--color-border)",
                 borderRadius: "var(--radius)",
                 fontSize: 12,
               }}
+              itemStyle={{ color: "var(--color-card-foreground)" }}
+              labelStyle={{ color: "var(--color-card-foreground)" }}
             />
             <Bar
               dataKey="seconds"
