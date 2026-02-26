@@ -13,6 +13,7 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { saveDashboardRecommendations } from "@/lib/lakebase/dashboard-recommendations";
 import { runDashboardEngine } from "@/lib/dashboard/engine";
+import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
 import {
   startDashboardJob,
   updateDashboardJob,
@@ -79,6 +80,22 @@ export async function POST(
       // Genie recommendations not available
     }
 
+    // Load existing dashboards from asset discovery (if available)
+    let existingDashboards: import("@/lib/discovery/types").DiscoveredDashboard[] | undefined;
+    try {
+      const discoveryData = await getDiscoveryResultsByRunId(runId);
+      if (discoveryData?.dashboards?.length) {
+        existingDashboards = discoveryData.dashboards.map((d) => ({
+          dashboardId: d.dashboardId,
+          displayName: d.displayName,
+          tables: d.tables,
+          isPublished: d.isPublished,
+          datasetCount: d.datasetCount,
+          widgetCount: d.widgetCount,
+        }));
+      }
+    } catch { /* non-critical */ }
+
     startDashboardJob(runId);
 
     runDashboardEngine({
@@ -86,6 +103,7 @@ export async function POST(
       useCases,
       metadata,
       genieRecommendations,
+      existingDashboards,
       domainFilter: domains,
       onProgress: (message, percent) => updateDashboardJob(runId, message, percent),
     })

@@ -392,7 +392,14 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                   onClick={(e) => e.stopPropagation()}
                 />
                 <div>
-                  <div className="font-medium text-sm">{rec.title}</div>
+                  <div className="flex items-center gap-1.5 font-medium text-sm">
+                    {rec.title}
+                    {rec.recommendationType === "enhancement" && (
+                      <Badge variant="outline" className="text-[9px] border-sky-400 text-sky-600">
+                        Enhancement
+                      </Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {rec.subdomains.length > 0
                       ? rec.subdomains.join(", ")
@@ -454,9 +461,21 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
               <SheetHeader>
                 <SheetTitle>{detailRec.title}</SheetTitle>
                 <SheetDescription>{detailRec.description}</SheetDescription>
+                {detailRec.recommendationType === "enhancement" && (
+                  <Badge className="mt-1 w-fit bg-sky-500/10 text-sky-600 border-sky-500/30">
+                    Enhancement of existing dashboard
+                  </Badge>
+                )}
               </SheetHeader>
 
               <div className="mt-6 space-y-4">
+                {detailRec.changeSummary && (
+                  <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+                    <p className="text-xs font-medium text-sky-700 dark:text-sky-400">Changes vs Existing</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{detailRec.changeSummary}</p>
+                  </div>
+                )}
+
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 bg-muted rounded-md text-center">

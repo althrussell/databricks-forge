@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Network } from "lucide-react";
+import { Network, Search } from "lucide-react";
 
 export function EnvironmentScanCard({ runId }: { runId: string }) {
   const [scan, setScan] = useState<{
@@ -18,6 +18,10 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
     avgGovernanceScore: number;
     lineageDiscoveredCount: number;
     scanDurationMs: number | null;
+    genieSpaceCount?: number;
+    dashboardCount?: number;
+    metricViewCount?: number;
+    analyticsCoveragePercent?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -76,6 +80,32 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
             </p>
           </div>
         </div>
+        {(scan.genieSpaceCount ?? 0) + (scan.dashboardCount ?? 0) + (scan.metricViewCount ?? 0) > 0 && (
+          <>
+            <div className="mt-4 mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Search className="h-3.5 w-3.5" />
+              Asset Discovery
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Genie Spaces</p>
+                <p className="text-lg font-bold">{scan.genieSpaceCount ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Dashboards</p>
+                <p className="text-lg font-bold">{scan.dashboardCount ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Metric Views</p>
+                <p className="text-lg font-bold">{scan.metricViewCount ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Table Coverage</p>
+                <p className="text-lg font-bold">{scan.analyticsCoveragePercent?.toFixed(0) ?? 0}%</p>
+              </div>
+            </div>
+          </>
+        )}
         {scan.scanDurationMs && (
           <p className="mt-2 text-xs text-muted-foreground">
             Scan completed in {(scan.scanDurationMs / 1000).toFixed(1)}s

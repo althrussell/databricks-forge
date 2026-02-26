@@ -40,6 +40,7 @@ export async function runGenieRecommendations(
       metadata,
       config,
       sampleData: ctx.sampleData,
+      existingSpaces: ctx.discoveryResult?.genieSpaces,
       onProgress,
     });
 

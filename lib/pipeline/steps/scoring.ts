@@ -34,6 +34,13 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     ? await buildIndustryKPIsPrompt(run.config.industry)
     : "";
 
+  // Build existing asset context for scoring (higher scores for gap-filling use cases)
+  let assetContext = "";
+  if (ctx.discoveryResult) {
+    const { buildAssetContextForScoring } = await import("@/lib/discovery/prompt-context");
+    assetContext = buildAssetContextForScoring(ctx.discoveryResult);
+  }
+
   // Step 6a: Score per domain
   const domains = [...new Set(scored.map((uc) => uc.domain))];
   const bcRecord = bc as unknown as Record<string, string>;
@@ -42,7 +49,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     const domainCases = scored.filter((uc) => uc.domain === domain);
     if (runId) await updateRunMessage(runId, `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`);
     try {
-      await scoreDomain(domainCases, bcRecord, run.config.aiModel, industryKpis, runId);
+      await scoreDomain(domainCases, bcRecord, run.config.aiModel, industryKpis, runId, assetContext);
     } catch (error) {
       logger.warn("Scoring failed for domain", { domain, error: error instanceof Error ? error.message : String(error) });
       // Assign default scores
@@ -146,7 +153,8 @@ async function scoreDomain(
   businessContext: Record<string, string>,
   aiModel: string,
   industryKpis: string = "",
-  runId?: string
+  runId?: string,
+  assetContext: string = ""
 ): Promise<void> {
   const renderScoreRow = (uc: UseCase) =>
     `| ${uc.useCaseNo} | ${uc.name} | ${uc.type} | ${uc.analyticsTechnique} | ${uc.statement} |`;
@@ -172,6 +180,7 @@ async function scoreDomain(
         value_chain: businessContext.valueChain ?? "",
         revenue_model: businessContext.revenueModel ?? "",
         industry_kpis: industryKpis,
+        asset_context: assetContext,
         use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
       },
       modelEndpoint: aiModel,

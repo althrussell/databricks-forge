@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     const lineageDepth = typeof body.lineageDepth === "number"
       ? Math.min(Math.max(Math.round(body.lineageDepth), 1), 10)
       : undefined;
+    const assetDiscoveryEnabled = body.assetDiscoveryEnabled === true;
 
     if (!ucMetadata || typeof ucMetadata !== "string") {
       logger.warn("[api/environment-scan] ucMetadata is required", {
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Fire and forget -- the scan runs asynchronously
-    runStandaloneEnrichment(scanId, ucMetadata, lineageDepth).catch((error) => {
+    runStandaloneEnrichment(scanId, ucMetadata, lineageDepth, assetDiscoveryEnabled).catch((error) => {
       logger.error("[api/environment-scan] Standalone scan failed", {
         scanId,
         error: error instanceof Error ? error.message : String(error),

@@ -59,6 +59,10 @@ import type {
   DiscoveryDepthConfig,
 } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
+import { discoverExistingAssets } from "@/lib/discovery/asset-scanner";
+import { computeCoverage } from "@/lib/discovery/coverage";
+import { saveDiscoveryResults } from "@/lib/lakebase/discovered-assets";
+import type { DiscoveryResult } from "@/lib/discovery/types";
 
 /**
  * Parse the uc_metadata input string into catalog/schema pairs.
@@ -84,6 +88,7 @@ function parseUCMetadata(
 export interface MetadataExtractionResult {
   snapshot: MetadataSnapshot;
   lineageGraph: LineageGraph | null;
+  discoveryResult: DiscoveryResult | null;
 }
 
 export async function runMetadataExtraction(
@@ -208,7 +213,51 @@ export async function runMetadataExtraction(
     logger.info("[metadata-extraction] Estate scan disabled -- skipping enrichment pass");
   }
 
-  return { snapshot, lineageGraph };
+  // --- Phase 3: Asset discovery (discover existing Genie spaces, dashboards, metric views) ---
+
+  let discoveryResult: DiscoveryResult | null = null;
+  if (config.assetDiscoveryEnabled) {
+    try {
+      if (runId) await updateRunMessage(runId, "Discovering existing analytics assets (Genie spaces, dashboards, metric views)...");
+
+      const scopeStrings = accessibleScopes.map(
+        (s) => s.schema ? `${s.catalog}.${s.schema}` : s.catalog
+      );
+
+      discoveryResult = await discoverExistingAssets({
+        scopeTables: allTables.map((t) => t.fqn),
+        metricViewScope: scopeStrings,
+      });
+
+      const coverage = computeCoverage(
+        allTables.map((t) => t.fqn),
+        discoveryResult
+      );
+
+      if (runId) {
+        await saveDiscoveryResults(runId, discoveryResult, coverage);
+        await updateRunMessage(
+          runId,
+          `Asset discovery complete: ${discoveryResult.genieSpaces.length} Genie spaces, ${discoveryResult.dashboards.length} dashboards, ${discoveryResult.metricViews.length} metric views (${coverage.coveragePercent}% table coverage)`
+        );
+      }
+
+      logger.info("[metadata-extraction] Asset discovery complete", {
+        genieSpaces: discoveryResult.genieSpaces.length,
+        dashboards: discoveryResult.dashboards.length,
+        metricViews: discoveryResult.metricViews.length,
+        coveragePercent: coverage.coveragePercent,
+      });
+    } catch (error) {
+      logger.warn("[metadata-extraction] Asset discovery failed (non-fatal)", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  } else {
+    logger.info("[metadata-extraction] Asset discovery disabled -- skipping");
+  }
+
+  return { snapshot, lineageGraph, discoveryResult };
 }
 
 // ---------------------------------------------------------------------------

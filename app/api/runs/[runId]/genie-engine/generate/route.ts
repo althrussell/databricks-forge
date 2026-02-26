@@ -14,6 +14,7 @@ import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { runGenieEngine, EngineCancelledError } from "@/lib/genie/engine";
 import { startJob, getJobController, updateJob, updateJobDomainProgress, addCompletedDomainName, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
+import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -69,6 +70,25 @@ export async function POST(
 
     const { config, version } = await getGenieEngineConfig(runId);
 
+    // Load existing spaces from asset discovery (if available) for enhancement detection
+    let existingSpaces: import("@/lib/discovery/types").DiscoveredGenieSpace[] | undefined;
+    try {
+      const discoveryData = await getDiscoveryResultsByRunId(runId);
+      if (discoveryData?.genieSpaces?.length) {
+        existingSpaces = discoveryData.genieSpaces.map((s) => ({
+          spaceId: s.spaceId,
+          title: s.title,
+          description: null,
+          tables: s.tables,
+          metricViews: s.metricViews,
+          sampleQuestionCount: s.sampleQuestionCount,
+          measureCount: s.measureCount,
+          filterCount: s.filterCount,
+          instructionLength: 0,
+        }));
+      }
+    } catch { /* non-critical */ }
+
     startJob(runId);
     const controller = getJobController(runId);
 
@@ -78,6 +98,7 @@ export async function POST(
       metadata,
       config,
       sampleData: null,
+      existingSpaces,
       domainFilter: domains,
       signal: controller?.signal,
       onProgress: (message, percent, completedDomains, totalDomains, completedDomainName) => {

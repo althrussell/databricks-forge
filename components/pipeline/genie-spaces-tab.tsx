@@ -631,6 +631,11 @@ export function GenieSpacesTab({
                               Basic
                             </Badge>
                           )}
+                          {rec.recommendationType === "enhancement" && (
+                            <Badge variant="outline" className="text-[9px] border-sky-400 text-sky-600">
+                              Enhancement
+                            </Badge>
+                          )}
                         </span>
                       </td>
                       <td className="max-w-[200px] px-3 py-2.5">
@@ -766,16 +771,30 @@ export function GenieSpacesTab({
                   )}
                 </SheetTitle>
                 <SheetDescription>{detailRec.description}</SheetDescription>
-                {detailTracking && (
-                  <Badge className="mt-1 w-fit bg-green-500/10 text-green-600">
-                    {detailTracking.status === "updated"
-                      ? "Updated"
-                      : "Deployed"}
-                  </Badge>
-                )}
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {detailTracking && (
+                    <Badge className="w-fit bg-green-500/10 text-green-600">
+                      {detailTracking.status === "updated"
+                        ? "Updated"
+                        : "Deployed"}
+                    </Badge>
+                  )}
+                  {detailRec.recommendationType === "enhancement" && (
+                    <Badge className="w-fit bg-sky-500/10 text-sky-600 border-sky-500/30">
+                      Enhancement of existing space
+                    </Badge>
+                  )}
+                </div>
               </SheetHeader>
 
               <div className="mt-6 space-y-5 px-4">
+                {detailRec.changeSummary && (
+                  <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+                    <p className="text-xs font-medium text-sky-700 dark:text-sky-400">Changes vs Existing</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{detailRec.changeSummary}</p>
+                  </div>
+                )}
+
                 {/* Stats */}
                 <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
                   <StatBadge label="Tables" value={detailRec.tableCount} />

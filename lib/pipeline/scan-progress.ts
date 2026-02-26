@@ -21,6 +21,7 @@ export type ScanPhase =
   | "fetching-tags"
   | "health-scoring"
   | "llm-intelligence"
+  | "asset-discovery"
   | "saving"
   | "complete"
   | "failed";

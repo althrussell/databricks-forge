@@ -29,6 +29,7 @@ import {
 import { logger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
 import type {
+  AnalyticsMaturityAssessment,
   ColumnInfo,
   DataDomain,
   DataProduct,
@@ -42,6 +43,7 @@ import type {
   TableDetail,
   TableHistorySummary,
 } from "@/lib/domain/types";
+import type { DiscoveryResult } from "@/lib/discovery/types";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -54,6 +56,8 @@ export interface IntelligenceOptions {
   businessName?: string;
   /** Progress callback: (passName, percent 0-100). */
   onProgress?: (pass: string, percent: number) => void;
+  /** Discovered analytics assets (Genie spaces, dashboards, metric views) for maturity assessment. */
+  discoveryResult?: DiscoveryResult | null;
 }
 
 /** Input table info for the intelligence layer. */
@@ -190,6 +194,7 @@ export async function runIntelligenceLayer(
     tierAssignments: new Map(),
     dataProducts: [],
     governanceGaps: [],
+    analyticsMaturity: null,
     passResults,
   };
 
@@ -319,6 +324,23 @@ export async function runIntelligenceLayer(
   } catch (error) {
     logger.error("[intelligence] Post-pass (governance) failed", { error: String(error) });
     passResults["governance"] = "failed";
+  }
+
+  // Pass 9: Analytics Maturity (requires discovery data)
+  if (options.discoveryResult) {
+    try {
+      progress("analytics-maturity", 0);
+      result.analyticsMaturity = await passAnalyticsMaturity(
+        tables, result.domains, result.tierAssignments, options.discoveryResult, options
+      );
+      passResults["analytics-maturity"] = "success";
+      progress("analytics-maturity", 100);
+    } catch (error) {
+      logger.error("[intelligence] Pass 9 (analytics maturity) failed", { error: String(error) });
+      passResults["analytics-maturity"] = "failed";
+    }
+  } else {
+    passResults["analytics-maturity"] = "skipped";
   }
 
   result.passResults = passResults;
@@ -672,6 +694,91 @@ function safeParseArray<T>(raw: string): T[] {
     });
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pass 9: Analytics Maturity Assessment
+// ---------------------------------------------------------------------------
+
+async function passAnalyticsMaturity(
+  tables: TableInput[],
+  domains: DataDomain[],
+  tierAssignments: Map<string, { tier: DataTier; reasoning: string }>,
+  discoveryResult: DiscoveryResult,
+  options: IntelligenceOptions
+): Promise<AnalyticsMaturityAssessment> {
+  const tierCounts: Record<string, number> = { bronze: 0, silver: 0, gold: 0, unknown: 0 };
+  for (const [, assignment] of tierAssignments) {
+    const tier = assignment.tier.toLowerCase();
+    if (tier in tierCounts) tierCounts[tier]++;
+    else tierCounts["unknown"]++;
+  }
+  const tierDistribution = `Gold: ${tierCounts["gold"]}, Silver: ${tierCounts["silver"]}, Bronze: ${tierCounts["bronze"]}, Unclassified: ${tierCounts["unknown"]}`;
+
+  const domainSet = new Set(domains.map((d) => d.domain));
+
+  const assetLines: string[] = [];
+  if (discoveryResult.genieSpaces.length > 0) {
+    assetLines.push(`### Genie Spaces (${discoveryResult.genieSpaces.length})`);
+    for (const s of discoveryResult.genieSpaces.slice(0, 20)) {
+      assetLines.push(`- "${s.title}": ${s.tables.length} tables, ${s.sampleQuestionCount} questions, ${s.measureCount} measures`);
+    }
+  }
+  if (discoveryResult.dashboards.length > 0) {
+    assetLines.push(`### Dashboards (${discoveryResult.dashboards.length})`);
+    for (const d of discoveryResult.dashboards.slice(0, 20)) {
+      assetLines.push(`- "${d.displayName}": ${d.tables.length} tables, ${d.datasetCount} datasets, ${d.widgetCount} widgets${d.isPublished ? " (published)" : ""}`);
+    }
+  }
+  if (discoveryResult.metricViews.length > 0) {
+    assetLines.push(`### Metric Views (${discoveryResult.metricViews.length})`);
+    for (const mv of discoveryResult.metricViews.slice(0, 20)) {
+      assetLines.push(`- ${mv.fqn}${mv.comment ? `: ${mv.comment}` : ""}`);
+    }
+  }
+  if (assetLines.length === 0) {
+    assetLines.push("No existing analytics assets were discovered.");
+  }
+
+  const tableListLines = tables.slice(0, 50).map((t) => {
+    const tier = tierAssignments.get(t.fqn)?.tier ?? "unknown";
+    const domain = domains.find((d) => d.tables.includes(t.fqn));
+    return `- ${t.fqn} [tier=${tier}${domain ? `, domain=${domain.domain}` : ""}] (${t.columns.length} cols)`;
+  });
+  if (tables.length > 50) {
+    tableListLines.push(`... and ${tables.length - 50} more tables`);
+  }
+
+  const vars: Record<string, string> = {
+    business_name_line: options.businessName ? `Business: ${options.businessName}` : "",
+    table_count: String(tables.length),
+    domain_count: String(domainSet.size),
+    tier_distribution: tierDistribution,
+    asset_summary: assetLines.join("\n"),
+    table_list: tableListLines.join("\n"),
+  };
+
+  const prompt = formatPrompt("ENV_ANALYTICS_MATURITY_PROMPT" as never, vars);
+  const raw = await callLLM(prompt, options.endpoint);
+
+  const parsed = JSON.parse(cleanJSON(raw));
+  return {
+    overallScore: Math.max(0, Math.min(100, parsed.overallScore ?? 0)),
+    level: parsed.level ?? "nascent",
+    dimensions: {
+      coverage: { score: parsed.dimensions?.coverage?.score ?? 0, summary: parsed.dimensions?.coverage?.summary ?? "" },
+      depth: { score: parsed.dimensions?.depth?.score ?? 0, summary: parsed.dimensions?.depth?.summary ?? "" },
+      freshness: { score: parsed.dimensions?.freshness?.score ?? 0, summary: parsed.dimensions?.freshness?.summary ?? "" },
+      completeness: { score: parsed.dimensions?.completeness?.score ?? 0, summary: parsed.dimensions?.completeness?.summary ?? "" },
+    },
+    uncoveredDomains: Array.isArray(parsed.uncoveredDomains) ? parsed.uncoveredDomains : [],
+    topRecommendations: Array.isArray(parsed.topRecommendations) ? parsed.topRecommendations.map((r: { priority?: number; action?: string; impact?: string; effort?: string }, i: number) => ({
+      priority: r.priority ?? i + 1,
+      action: r.action ?? "",
+      impact: (r.impact ?? "medium") as "high" | "medium" | "low",
+      effort: (r.effort ?? "medium") as "high" | "medium" | "low",
+    })) : [],
+  };
 }
 
 function cleanJSON(response: string): string {

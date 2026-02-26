@@ -17,6 +17,7 @@ import { AlertTriangle, RefreshCw, Square, X } from "lucide-react";
 import { GenieSpacesTab } from "./genie-spaces-tab";
 import { GenieConfigEditor } from "./genie-config-editor";
 import { GenieSpacePreview } from "./genie-space-preview";
+import { ExistingAssetsTab } from "./existing-assets-tab";
 import type { GenieEngineConfig } from "@/lib/genie/types";
 import { defaultGenieEngineConfig } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
@@ -415,6 +416,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="existing">Existing Assets</TabsTrigger>
           <TabsTrigger value="config">Engine Config</TabsTrigger>
           <TabsTrigger value="preview">Space Preview</TabsTrigger>
         </TabsList>
@@ -427,6 +429,10 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             refreshKey={refreshKey}
             engineEnabled={engineEnabled}
           />
+        </TabsContent>
+
+        <TabsContent value="existing" className="mt-4">
+          <ExistingAssetsTab runId={runId} />
         </TabsContent>
 
         <TabsContent value="config" className="mt-4">

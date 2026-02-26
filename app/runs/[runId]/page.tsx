@@ -302,6 +302,7 @@ export default function RunDetailPage({
           discoveryDepth: cfg.discoveryDepth,
           depthConfig: cfg.depthConfig,
           estateScanEnabled: cfg.estateScanEnabled,
+          assetDiscoveryEnabled: cfg.assetDiscoveryEnabled,
         }),
       });
       if (!createRes.ok) {

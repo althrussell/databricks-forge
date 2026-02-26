@@ -36,6 +36,8 @@ export const CONFIG = {
     "Free-text goals injected into the business context prompt. Leave empty for AI-generated goals.",
   estateScan:
     "Runs 8 additional LLM intelligence passes: domain classification, PII detection, redundancy, relationships, data tiers, governance, and health scoring.",
+  assetDiscovery:
+    "Discovers existing Genie spaces, AI/BI dashboards, and metric views in the workspace. Results are used to avoid duplicate recommendations, identify coverage gaps, and suggest improvements to existing assets.",
 } as const;
 
 // ── Runs list ───────────────────────────────────────────────────────

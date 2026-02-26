@@ -35,6 +35,9 @@ interface DbRow {
   metricViewProposals: string | null;
   trustedFunctions: string | null;
   engineConfigVersion: number;
+  recommendationType: string;
+  existingAssetId: string | null;
+  changeSummary: string | null;
 }
 
 function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
@@ -85,6 +88,9 @@ function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
     metricViewProposals: row.metricViewProposals,
     trustedFunctions: row.trustedFunctions,
     engineConfigVersion: row.engineConfigVersion,
+    recommendationType: (row.recommendationType as "new" | "enhancement" | "replacement") ?? "new",
+    existingAssetId: row.existingAssetId ?? undefined,
+    changeSummary: row.changeSummary ?? undefined,
   };
 }
 
@@ -170,6 +176,9 @@ export async function saveGenieRecommendations(
             metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
             trustedFunctions: null,
             engineConfigVersion: engineConfigVersion ?? 0,
+            recommendationType: rec.recommendationType ?? "new",
+            existingAssetId: rec.existingAssetId ?? null,
+            changeSummary: rec.changeSummary ?? null,
           };
         }),
       });

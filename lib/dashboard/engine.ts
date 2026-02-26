@@ -25,6 +25,7 @@ import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts"
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { logger } from "@/lib/logger";
+import type { DiscoveredDashboard } from "@/lib/discovery/types";
 
 const TEMPERATURE = 0.3;
 
@@ -212,6 +213,7 @@ export async function runDashboardEngine(
     useCases,
     metadata,
     genieRecommendations,
+    existingDashboards = [],
     domainFilter,
     onProgress,
   } = input;
@@ -241,6 +243,30 @@ export async function runDashboardEngine(
     return { recommendations: [] };
   }
 
+  // Build existing-dashboard-to-domain mapping for enhancement detection
+  const existingDashboardByDomain = new Map<string, DiscoveredDashboard>();
+  if (existingDashboards.length > 0) {
+    for (const group of domainGroups) {
+      const domainTableSet = new Set(group.tables.map((t) => t.toLowerCase()));
+      let bestMatch: { dashboard: DiscoveredDashboard; overlap: number } | null = null;
+      for (const dash of existingDashboards) {
+        const overlap = dash.tables.filter((t) => domainTableSet.has(t.toLowerCase())).length;
+        if (overlap > 0 && (!bestMatch || overlap > bestMatch.overlap)) {
+          bestMatch = { dashboard: dash, overlap };
+        }
+      }
+      if (bestMatch && bestMatch.overlap >= 1) {
+        existingDashboardByDomain.set(group.domain, bestMatch.dashboard);
+      }
+    }
+    if (existingDashboardByDomain.size > 0) {
+      logger.info("Existing dashboard mapping", {
+        totalExisting: existingDashboards.length,
+        domainsWithExisting: existingDashboardByDomain.size,
+      });
+    }
+  }
+
   logger.info("Dashboard Engine: processing domains", {
     domainCount: domainGroups.length,
     domains: domainGroups.map((g) => g.domain),
@@ -264,6 +290,12 @@ export async function runDashboardEngine(
       );
 
       if (rec) {
+        const existingDash = existingDashboardByDomain.get(group.domain);
+        if (existingDash) {
+          rec.recommendationType = "enhancement";
+          rec.existingAssetId = existingDash.dashboardId;
+          rec.changeSummary = `Enhancement of "${existingDash.displayName}": ${rec.datasetCount} datasets, ${rec.widgetCount} widgets (existing has ${existingDash.datasetCount} datasets, ${existingDash.widgetCount} widgets)`;
+        }
         recommendations.push(rec);
         logger.info("Dashboard Engine: domain complete", {
           domain: group.domain,

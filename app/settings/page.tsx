@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   Loader2,
   ScanLine,
+  Search,
   Info,
 } from "lucide-react";
 import packageJson from "@/package.json";
@@ -96,6 +97,11 @@ export default function SettingsPage() {
     return loadSettings().estateScanEnabled;
   });
 
+  const [assetDiscoveryEnabled, setAssetDiscoveryEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return loadSettings().assetDiscoveryEnabled;
+  });
+
   const [genieDeployAuthMode, setGenieDeployAuthMode] = useState<GenieAuthMode>(() => {
     if (typeof window === "undefined") return "obo";
     return loadSettings().genieDeployAuthMode;
@@ -129,7 +135,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, genieDeployAuthMode });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode });
     toast.success("Settings saved");
   };
 
@@ -143,6 +149,7 @@ export default function SettingsPage() {
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
       setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       setEstateScanEnabled(false);
+      setAssetDiscoveryEnabled(false);
       setGenieDeployAuthMode("obo");
       toast.success("Local settings cleared");
     }
@@ -321,6 +328,39 @@ export default function SettingsPage() {
               <span
                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
                   estateScanEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              assetDiscoveryEnabled
+                ? "border-sky-500/50 bg-sky-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <Search className={`mt-0.5 h-4 w-4 shrink-0 ${assetDiscoveryEnabled ? "text-sky-500" : "text-muted-foreground"}`} />
+              <div>
+                <p className="text-sm font-medium">Asset Discovery during pipeline runs</p>
+                <p className="text-xs text-muted-foreground">
+                  {assetDiscoveryEnabled
+                    ? "Enabled — existing Genie spaces, dashboards, and metric views will be discovered and used to improve recommendations"
+                    : "Disabled — recommendations are generated without awareness of existing analytics assets (faster runs)"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAssetDiscoveryEnabled((prev) => !prev)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                assetDiscoveryEnabled ? "bg-sky-500" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  assetDiscoveryEnabled ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>

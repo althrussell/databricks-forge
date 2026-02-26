@@ -85,6 +85,7 @@ export async function startPipeline(runId: string): Promise<void> {
     useCases: [],
     lineageGraph: null,
     sampleData: null,
+    discoveryResult: null,
   };
 
   /** Helper: record step start/end timing in the run's stepLog. */
@@ -151,6 +152,7 @@ export async function startPipeline(runId: string): Promise<void> {
       const extractionResult = await runMetadataExtraction(ctx, runId);
       ctx.metadata = extractionResult.snapshot;
       ctx.lineageGraph = extractionResult.lineageGraph;
+      ctx.discoveryResult = extractionResult.discoveryResult;
       // Link the metadata snapshot to this run for auditing
       if (ctx.metadata.cacheKey) {
         await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
@@ -331,6 +333,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     useCases: [],
     lineageGraph: null,
     sampleData: null,
+    discoveryResult: null,
   };
 
   // Restore business context (persisted after step 1)
@@ -411,6 +414,7 @@ export async function resumePipeline(runId: string): Promise<void> {
         const extractionResult = await runMetadataExtraction(ctx, runId);
         ctx.metadata = extractionResult.snapshot;
         ctx.lineageGraph = extractionResult.lineageGraph;
+        ctx.discoveryResult = extractionResult.discoveryResult;
         if (ctx.metadata.cacheKey) {
           await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
           const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");

@@ -374,6 +374,12 @@ export interface GenieSpaceRecommendation {
   tables: string[];
   metricViews: string[];
   serializedSpace: string; // JSON string ready for the Create API
+  /** "new" (default), "enhancement" (existing space found), or "replacement" */
+  recommendationType?: "new" | "enhancement" | "replacement";
+  /** Space ID of the existing asset when recommendationType is "enhancement" */
+  existingAssetId?: string;
+  /** Human-readable summary of what changed vs the existing space */
+  changeSummary?: string;
 }
 
 // ---------------------------------------------------------------------------
