@@ -15,9 +15,18 @@ interface ViewDef {
   name: string;
   source: string;
   columns: string[];
+  /** Column used for catalog-level filtering (e.g. table_catalog, catalog_name). */
   filterColumn: string;
+  /** Column used for schema-level filtering, if applicable. */
+  schemaColumn?: string;
   comment: string;
 }
+
+/** Catalogs excluded from all views -- system internals and sample datasets. */
+const EXCLUDED_CATALOGS = ["system", "__databricks_internal", "samples"];
+
+/** Schemas excluded from views that have a schema column. */
+const EXCLUDED_SCHEMAS = ["information_schema"];
 
 const VIEW_DEFS: ViewDef[] = [
   {
@@ -49,6 +58,7 @@ const VIEW_DEFS: ViewDef[] = [
       "last_altered_by",
     ],
     filterColumn: "catalog_name",
+    schemaColumn: "schema_name",
     comment: "Curated metadata view: schemas in the data estate",
   },
   {
@@ -68,6 +78,7 @@ const VIEW_DEFS: ViewDef[] = [
       "last_altered_by",
     ],
     filterColumn: "table_catalog",
+    schemaColumn: "table_schema",
     comment: "Curated metadata view: tables and views in the data estate",
   },
   {
@@ -84,6 +95,7 @@ const VIEW_DEFS: ViewDef[] = [
       "comment",
     ],
     filterColumn: "table_catalog",
+    schemaColumn: "table_schema",
     comment:
       "Curated metadata view: column definitions including types and descriptions",
   },
@@ -97,6 +109,7 @@ const VIEW_DEFS: ViewDef[] = [
       "view_definition",
     ],
     filterColumn: "table_catalog",
+    schemaColumn: "table_schema",
     comment: "Curated metadata view: view definitions and their SQL",
   },
   {
@@ -116,6 +129,7 @@ const VIEW_DEFS: ViewDef[] = [
       "last_altered_by",
     ],
     filterColumn: "volume_catalog",
+    schemaColumn: "volume_schema",
     comment: "Curated metadata view: Unity Catalog volumes",
   },
   {
@@ -129,6 +143,7 @@ const VIEW_DEFS: ViewDef[] = [
       "tag_value",
     ],
     filterColumn: "catalog_name",
+    schemaColumn: "schema_name",
     comment: "Curated metadata view: tags applied to tables",
   },
   {
@@ -143,6 +158,7 @@ const VIEW_DEFS: ViewDef[] = [
       "tag_value",
     ],
     filterColumn: "catalog_name",
+    schemaColumn: "schema_name",
     comment: "Curated metadata view: tags applied to columns",
   },
   {
@@ -159,6 +175,7 @@ const VIEW_DEFS: ViewDef[] = [
       "enforced",
     ],
     filterColumn: "table_catalog",
+    schemaColumn: "table_schema",
     comment:
       "Curated metadata view: primary key and foreign key constraints",
   },
@@ -174,6 +191,7 @@ const VIEW_DEFS: ViewDef[] = [
       "is_grantable",
     ],
     filterColumn: "table_catalog",
+    schemaColumn: "table_schema",
     comment: "Curated metadata view: table access privileges and grants",
   },
 ];
@@ -201,9 +219,25 @@ export function generateViewDDL(opts: {
     sql += `\nCOMMENT '${def.comment}'`;
     sql += `\nAS SELECT ${cols}\nFROM ${def.source}`;
 
+    const conditions: string[] = [];
+
+    // Catalog scope: either user-chosen allowlist or exclusion of system catalogs
     if (catalogScope && catalogScope.length > 0) {
       const inList = catalogScope.map((c) => `'${c}'`).join(", ");
-      sql += `\nWHERE ${def.filterColumn} IN (${inList})`;
+      conditions.push(`${def.filterColumn} IN (${inList})`);
+    } else {
+      const exList = EXCLUDED_CATALOGS.map((c) => `'${c}'`).join(", ");
+      conditions.push(`${def.filterColumn} NOT IN (${exList})`);
+    }
+
+    // Exclude information_schema and other system-generated schemas
+    if (def.schemaColumn) {
+      const exSchemas = EXCLUDED_SCHEMAS.map((s) => `'${s}'`).join(", ");
+      conditions.push(`${def.schemaColumn} NOT IN (${exSchemas})`);
+    }
+
+    if (conditions.length > 0) {
+      sql += `\nWHERE ${conditions.join("\n  AND ")}`;
     }
 
     return sql;

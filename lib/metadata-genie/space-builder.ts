@@ -99,7 +99,7 @@ export function buildMetadataGenieSpace(
 // ---------------------------------------------------------------------------
 
 function buildDataSourceTables(prefix: string): DataSourceTable[] {
-  const viewNames = Object.keys(VIEW_DESCRIPTIONS);
+  const viewNames = Object.keys(VIEW_DESCRIPTIONS).sort();
   return viewNames.map((name) => ({
     identifier: `${prefix}.${name}`,
     description: [VIEW_DESCRIPTIONS[name]],

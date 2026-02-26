@@ -7,6 +7,9 @@ import { executeSQL, executeSQLMapped } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import type { ProbeResult } from "./types";
 
+const EXCLUDED_CATALOGS = ["system", "__databricks_internal", "samples"];
+const EXCLUDED_SCHEMAS = ["information_schema"];
+
 /**
  * Check whether the current principal can query system.information_schema,
  * then fetch the list of catalogs and a sample of table names.
@@ -32,18 +35,23 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
       (row) => row[0]
     );
 
+    const excludedCatSet = new Set(EXCLUDED_CATALOGS);
+    const filteredCatalogs = catalogs.filter((c) => !excludedCatSet.has(c));
+
+    const catExclusion = EXCLUDED_CATALOGS.map((c) => `'${c}'`).join(", ");
+    const schemaExclusion = EXCLUDED_SCHEMAS.map((s) => `'${s}'`).join(", ");
     const tableRows = await executeSQLMapped<string>(
       `SELECT DISTINCT CONCAT(table_catalog, '.', table_schema, '.', table_name)
        FROM system.information_schema.tables
+       WHERE table_catalog NOT IN (${catExclusion})
+         AND table_schema NOT IN (${schemaExclusion})
        LIMIT 2000`,
       (row) => row[0]
     );
 
     return {
       accessible: true,
-      catalogs: catalogs.filter(
-        (c) => c !== "system" && c !== "__databricks_internal"
-      ),
+      catalogs: filteredCatalogs,
       tableNames: tableRows,
     };
   } catch (err) {
