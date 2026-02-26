@@ -18,7 +18,11 @@ export async function GET() {
       completedRuns,
       failedRuns,
       runningRuns,
-      allUseCases,
+      totalUseCases,
+      typeGroups,
+      scoreAgg,
+      domainGroups,
+      scoreHistogramRaw,
       recentRuns,
     ] = await withPrisma((prisma) => Promise.all([
       prisma.forgeRun.count(),
@@ -27,12 +31,22 @@ export async function GET() {
       prisma.forgeRun.count({
         where: { status: { in: ["running", "pending"] } },
       }),
+      prisma.forgeUseCase.count(),
+      prisma.forgeUseCase.groupBy({
+        by: ["type"],
+        _count: { _all: true },
+      }),
+      prisma.forgeUseCase.aggregate({
+        _avg: { overallScore: true },
+      }),
+      prisma.forgeUseCase.groupBy({
+        by: ["domain"],
+        _count: { _all: true },
+        orderBy: { _count: { domain: "desc" } },
+      }),
       prisma.forgeUseCase.findMany({
-        select: {
-          domain: true,
-          type: true,
-          overallScore: true,
-        },
+        select: { overallScore: true },
+        where: { overallScore: { not: null } },
       }),
       prisma.forgeRun.findMany({
         orderBy: { createdAt: "desc" },
@@ -49,32 +63,22 @@ export async function GET() {
       }),
     ]));
 
-    // Compute aggregate stats from use cases
-    const totalUseCases = allUseCases.length;
-    const aiCount = allUseCases.filter((uc) => uc.type === "AI").length;
-    const statisticalCount = allUseCases.filter((uc) => uc.type === "Statistical").length;
-    const geospatialCount = allUseCases.filter((uc) => uc.type === "Geospatial").length;
-    const scores = allUseCases
-      .map((uc) => uc.overallScore)
-      .filter((s): s is number => s != null);
-    const avgScore =
-      scores.length > 0
-        ? Math.round(
-            (scores.reduce((a, b) => a + b, 0) / scores.length) * 100
-          )
-        : 0;
+    const typeLookup = new Map(typeGroups.map((g) => [g.type, g._count._all]));
+    const aiCount = typeLookup.get("AI") ?? 0;
+    const statisticalCount = typeLookup.get("Statistical") ?? 0;
+    const geospatialCount = typeLookup.get("Geospatial") ?? 0;
+    const avgScore = scoreAgg._avg.overallScore != null
+      ? Math.round(scoreAgg._avg.overallScore * 100)
+      : 0;
 
-    // Domain breakdown
-    const domainCounts: Record<string, number> = {};
-    for (const uc of allUseCases) {
-      const d = uc.domain ?? "Unknown";
-      domainCounts[d] = (domainCounts[d] || 0) + 1;
-    }
-    const domainBreakdown = Object.entries(domainCounts)
-      .map(([domain, count]) => ({ domain, count }))
-      .sort((a, b) => b.count - a.count);
+    const domainBreakdown = domainGroups.map((g) => ({
+      domain: g.domain ?? "Unknown",
+      count: g._count._all,
+    }));
 
-    // Format recent runs
+    // Pre-compute histogram buckets instead of sending raw scores
+    const scores = scoreHistogramRaw.map((r) => r.overallScore!);
+
     const recent = recentRuns.map((r) => ({
       runId: r.runId,
       businessName: r.businessName,
@@ -85,21 +89,28 @@ export async function GET() {
       completedAt: r.completedAt?.toISOString() ?? null,
     }));
 
-    return NextResponse.json({
-      totalRuns,
-      completedRuns,
-      failedRuns,
-      runningRuns,
-      totalUseCases,
-      aiCount,
-      statisticalCount,
-      geospatialCount,
-      avgScore,
-      totalDomains: domainBreakdown.length,
-      domainBreakdown,
-      scores,
-      recentRuns: recent,
-    });
+    return NextResponse.json(
+      {
+        totalRuns,
+        completedRuns,
+        failedRuns,
+        runningRuns,
+        totalUseCases,
+        aiCount,
+        statisticalCount,
+        geospatialCount,
+        avgScore,
+        totalDomains: domainBreakdown.length,
+        domainBreakdown,
+        scores,
+        recentRuns: recent,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/stats] GET failed", { error: msg });

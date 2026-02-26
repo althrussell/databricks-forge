@@ -390,61 +390,54 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     };
   }
 
-  // Fetch all details with their scan's createdAt for ordering
-  const allDetails = await prisma.forgeTableDetail.findMany({
-    include: { scan: { select: { createdAt: true } } },
-    orderBy: { scan: { createdAt: "desc" } },
-  });
+  // DB-side dedup: DISTINCT ON picks the latest row per dedup key
+  // (ordered by scan created_at DESC), returning only IDs.
+  // Then Prisma findMany fetches the full typed rows by those IDs.
+  const [detailIds, historyIds, lineageIds, insightIds] = await Promise.all([
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT ON (d.table_fqn) d.id
+      FROM forge_table_details d
+      JOIN forge_environment_scans s ON s.scan_id = d.scan_id
+      ORDER BY d.table_fqn, s.created_at DESC`,
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT ON (h.table_fqn) h.id
+      FROM forge_table_history_summaries h
+      JOIN forge_environment_scans s ON s.scan_id = h.scan_id
+      ORDER BY h.table_fqn, s.created_at DESC`,
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT ON (l.source_table_fqn, l.target_table_fqn) l.id
+      FROM forge_table_lineage l
+      JOIN forge_environment_scans s ON s.scan_id = l.scan_id
+      ORDER BY l.source_table_fqn, l.target_table_fqn, s.created_at DESC`,
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT ON (i.insight_type, COALESCE(i.table_fqn, '')) i.id
+      FROM forge_table_insights i
+      JOIN forge_environment_scans s ON s.scan_id = i.scan_id
+      ORDER BY i.insight_type, COALESCE(i.table_fqn, ''), s.created_at DESC`,
+  ]);
 
-  // Deduplicate: keep latest per tableFqn
-  const detailMap = new Map<string, typeof allDetails[number]>();
-  for (const d of allDetails) {
-    if (!detailMap.has(d.tableFqn)) {
-      detailMap.set(d.tableFqn, d);
-    }
-  }
-  const mergedDetails = Array.from(detailMap.values());
-
-  // Histories: latest per tableFqn
-  const allHistories = await prisma.forgeTableHistorySummary.findMany({
-    include: { scan: { select: { createdAt: true } } },
-    orderBy: { scan: { createdAt: "desc" } },
-  });
-  const historyMap = new Map<string, typeof allHistories[number]>();
-  for (const h of allHistories) {
-    if (!historyMap.has(h.tableFqn)) {
-      historyMap.set(h.tableFqn, h);
-    }
-  }
-  const mergedHistories = Array.from(historyMap.values());
-
-  // Lineage: deduplicate by (source, target), keep latest
-  const allLineage = await prisma.forgeTableLineage.findMany({
-    include: { scan: { select: { createdAt: true } } },
-    orderBy: { scan: { createdAt: "desc" } },
-  });
-  const lineageMap = new Map<string, typeof allLineage[number]>();
-  for (const l of allLineage) {
-    const key = `${l.sourceTableFqn}::${l.targetTableFqn}`;
-    if (!lineageMap.has(key)) {
-      lineageMap.set(key, l);
-    }
-  }
-  const mergedLineage = Array.from(lineageMap.values());
-
-  // Insights: deduplicate by (insightType, tableFqn), keep latest
-  const allInsights = await prisma.forgeTableInsight.findMany({
-    include: { scan: { select: { createdAt: true } } },
-    orderBy: { scan: { createdAt: "desc" } },
-  });
-  const insightMap = new Map<string, typeof allInsights[number]>();
-  for (const i of allInsights) {
-    const key = `${i.insightType}::${i.tableFqn ?? "null"}`;
-    if (!insightMap.has(key)) {
-      insightMap.set(key, i);
-    }
-  }
-  const mergedInsights = Array.from(insightMap.values());
+  const [mergedDetails, mergedHistories, mergedLineage, mergedInsights] = await Promise.all([
+    detailIds.length > 0
+      ? prisma.forgeTableDetail.findMany({
+          where: { id: { in: detailIds.map((r) => r.id) } },
+        })
+      : Promise.resolve([]),
+    historyIds.length > 0
+      ? prisma.forgeTableHistorySummary.findMany({
+          where: { id: { in: historyIds.map((r) => r.id) } },
+        })
+      : Promise.resolve([]),
+    lineageIds.length > 0
+      ? prisma.forgeTableLineage.findMany({
+          where: { id: { in: lineageIds.map((r) => r.id) } },
+        })
+      : Promise.resolve([]),
+    insightIds.length > 0
+      ? prisma.forgeTableInsight.findMany({
+          where: { id: { in: insightIds.map((r) => r.id) } },
+        })
+      : Promise.resolve([]),
+  ]);
 
   // Compute aggregate stats
   const domains = new Set(mergedDetails.map((d) => d.dataDomain).filter(Boolean));
@@ -465,10 +458,9 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     scannedAt: s.createdAt.toISOString(),
   }));
 
-  // Serialize — strip the `scan` relation from each record for JSON
+  // Serialize BigInts for JSON
   const serializeDetail = (d: typeof mergedDetails[number]) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { scan, sizeInBytes, numRows, ...rest } = d;
+    const { sizeInBytes, numRows, ...rest } = d;
     return {
       ...rest,
       sizeInBytes: sizeInBytes?.toString() ?? null,
@@ -476,30 +468,19 @@ export async function getAggregateEstateView(): Promise<AggregateEstateView> {
     };
   };
   const serializeHistory = (h: typeof mergedHistories[number]) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { scan, lastWriteRows, lastWriteBytes, ...rest } = h;
+    const { lastWriteRows, lastWriteBytes, ...rest } = h;
     return {
       ...rest,
       lastWriteRows: lastWriteRows?.toString() ?? null,
       lastWriteBytes: lastWriteBytes?.toString() ?? null,
     };
   };
-  const serializeLineage = (l: typeof mergedLineage[number]) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { scan, ...rest } = l;
-    return rest;
-  };
-  const serializeInsight = (i: typeof mergedInsights[number]) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { scan, ...rest } = i;
-    return rest;
-  };
 
   return {
     details: mergedDetails.map(serializeDetail),
     histories: mergedHistories.map(serializeHistory),
-    lineage: mergedLineage.map(serializeLineage),
-    insights: mergedInsights.map(serializeInsight),
+    lineage: mergedLineage,
+    insights: mergedInsights,
     stats: {
       totalTables: mergedDetails.length,
       totalScans: scans.length,
@@ -555,51 +536,52 @@ export async function getAggregateForExcel(): Promise<ScanWithRelations | null> 
 
     if (scans.length === 0) return null;
 
-    // --- Details: latest per tableFqn ---
-    const allDetails = await prisma.forgeTableDetail.findMany({
-      include: { scan: { select: { createdAt: true } } },
-      orderBy: { scan: { createdAt: "desc" } },
-    });
-    const detailMap = new Map<string, typeof allDetails[number]>();
-    for (const d of allDetails) {
-      if (!detailMap.has(d.tableFqn)) detailMap.set(d.tableFqn, d);
-    }
-    const details = Array.from(detailMap.values());
+    // DB-side dedup via DISTINCT ON, then fetch full rows by ID
+    const [detailIds, historyIds, lineageIds, insightIds] = await Promise.all([
+      prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT DISTINCT ON (d.table_fqn) d.id
+        FROM forge_table_details d
+        JOIN forge_environment_scans s ON s.scan_id = d.scan_id
+        ORDER BY d.table_fqn, s.created_at DESC`,
+      prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT DISTINCT ON (h.table_fqn) h.id
+        FROM forge_table_history_summaries h
+        JOIN forge_environment_scans s ON s.scan_id = h.scan_id
+        ORDER BY h.table_fqn, s.created_at DESC`,
+      prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT DISTINCT ON (l.source_table_fqn, l.target_table_fqn) l.id
+        FROM forge_table_lineage l
+        JOIN forge_environment_scans s ON s.scan_id = l.scan_id
+        ORDER BY l.source_table_fqn, l.target_table_fqn, s.created_at DESC`,
+      prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT DISTINCT ON (i.insight_type, COALESCE(i.table_fqn, '')) i.id
+        FROM forge_table_insights i
+        JOIN forge_environment_scans s ON s.scan_id = i.scan_id
+        ORDER BY i.insight_type, COALESCE(i.table_fqn, ''), s.created_at DESC`,
+    ]);
 
-    // --- Histories: latest per tableFqn ---
-    const allHistories = await prisma.forgeTableHistorySummary.findMany({
-      include: { scan: { select: { createdAt: true } } },
-      orderBy: { scan: { createdAt: "desc" } },
-    });
-    const historyMap = new Map<string, typeof allHistories[number]>();
-    for (const h of allHistories) {
-      if (!historyMap.has(h.tableFqn)) historyMap.set(h.tableFqn, h);
-    }
-    const histories = Array.from(historyMap.values());
-
-    // --- Lineage: latest per (source, target) ---
-    const allLineage = await prisma.forgeTableLineage.findMany({
-      include: { scan: { select: { createdAt: true } } },
-      orderBy: { scan: { createdAt: "desc" } },
-    });
-    const lineageMap = new Map<string, typeof allLineage[number]>();
-    for (const l of allLineage) {
-      const key = `${l.sourceTableFqn}::${l.targetTableFqn}`;
-      if (!lineageMap.has(key)) lineageMap.set(key, l);
-    }
-    const lineage = Array.from(lineageMap.values());
-
-    // --- Insights: latest per (insightType, tableFqn) ---
-    const allInsights = await prisma.forgeTableInsight.findMany({
-      include: { scan: { select: { createdAt: true } } },
-      orderBy: { scan: { createdAt: "desc" } },
-    });
-    const insightMap = new Map<string, typeof allInsights[number]>();
-    for (const i of allInsights) {
-      const key = `${i.insightType}::${i.tableFqn ?? "null"}`;
-      if (!insightMap.has(key)) insightMap.set(key, i);
-    }
-    const insights = Array.from(insightMap.values());
+    const [details, histories, lineage, insights] = await Promise.all([
+      detailIds.length > 0
+        ? prisma.forgeTableDetail.findMany({
+            where: { id: { in: detailIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof prisma.forgeTableDetail.findMany>>),
+      historyIds.length > 0
+        ? prisma.forgeTableHistorySummary.findMany({
+            where: { id: { in: historyIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof prisma.forgeTableHistorySummary.findMany>>),
+      lineageIds.length > 0
+        ? prisma.forgeTableLineage.findMany({
+            where: { id: { in: lineageIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof prisma.forgeTableLineage.findMany>>),
+      insightIds.length > 0
+        ? prisma.forgeTableInsight.findMany({
+            where: { id: { in: insightIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof prisma.forgeTableInsight.findMany>>),
+    ]);
 
     // --- Aggregate scan-level stats ---
     const domains = new Set(details.map((d) => d.dataDomain).filter(Boolean));

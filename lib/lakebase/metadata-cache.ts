@@ -80,3 +80,31 @@ export async function loadMetadataForRun(
   if (!cacheKey) return null;
   return loadMetadataSnapshot(cacheKey);
 }
+
+/**
+ * Load only `lineageDiscoveredFqns` for a run, avoiding the full metadata
+ * snapshot transfer and parse.  Returns [] when no cache entry exists.
+ */
+export async function loadLineageFqnsForRun(
+  runId: string
+): Promise<string[]> {
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.$queryRaw<
+      Array<{ fqns: string | null }>
+    >`SELECT mc."metadataJson"::jsonb -> 'lineageDiscoveredFqns' AS fqns
+      FROM "ForgeRun" r
+      JOIN "ForgeMetadataCache" mc ON mc."cacheKey" = r."metadataCacheKey"
+      WHERE r."runId" = ${runId}
+      LIMIT 1`;
+
+    if (!rows.length || !rows[0].fqns) return [];
+    try {
+      const parsed = typeof rows[0].fqns === "string"
+        ? JSON.parse(rows[0].fqns)
+        : rows[0].fqns;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+}

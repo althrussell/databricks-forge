@@ -79,7 +79,11 @@ export async function GET(request: NextRequest) {
     await ensureMigrated();
     const runs = await listRuns(limit, offset);
 
-    return NextResponse.json({ runs });
+    return NextResponse.json({ runs }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=5, stale-while-revalidate=30",
+      },
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { error: msg });

@@ -74,7 +74,12 @@ export async function GET() {
   };
 
   const httpStatus = overallStatus === "unhealthy" ? 503 : 200;
-  return NextResponse.json(health, { status: httpStatus });
+  return NextResponse.json(health, {
+    status: httpStatus,
+    headers: {
+      "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+    },
+  });
 }
 
 async function checkDatabase(): Promise<CheckResult> {

@@ -26,11 +26,13 @@ import { UseCaseTable } from "@/components/pipeline/use-case-table";
 import { ExportToolbar } from "@/components/pipeline/export-toolbar";
 import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
 import { DashboardsTab } from "@/components/pipeline/dashboards-tab";
-import { ScoreDistributionChart } from "@/components/charts/score-distribution-chart";
-import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
-import { TypeSplitChart } from "@/components/charts/type-split-chart";
-import { StepDurationChart } from "@/components/charts/step-duration-chart";
-import { ScoreRadarOverview } from "@/components/charts/score-radar-overview";
+import {
+  ScoreDistributionChart,
+  DomainBreakdownChart,
+  TypeSplitChart,
+  StepDurationChart,
+  ScoreRadarOverview,
+} from "@/components/charts/lazy";
 import { SchemaCoverageCard } from "@/components/pipeline/run-detail/schema-coverage-card";
 import { IndustryCoverageCard } from "@/components/pipeline/run-detail/industry-coverage-card";
 import { computeIndustryCoverage } from "@/lib/domain/industry-coverage";
@@ -236,7 +238,10 @@ export default function RunDetailPage({
     abortRef.current = controller;
 
     try {
-      const res = await resilientFetch(`/api/runs/${runId}`, {
+      const url = useCases.length === 0
+        ? `/api/runs/${runId}?fields=summary`
+        : `/api/runs/${runId}`;
+      const res = await resilientFetch(url, {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("Run not found");
@@ -258,7 +263,7 @@ export default function RunDetailPage({
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [runId, run]);
+  }, [runId, run, useCases.length]);
 
   const fetchPromptLogs = useCallback(async () => {
     if (logsLoaded || logsLoading) return;

@@ -56,7 +56,7 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from "lucide-react";
-import { ScoreRadarChart } from "@/components/charts/score-radar-chart";
+import { ScoreRadarChart } from "@/components/charts/lazy";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
 import type { UseCase } from "@/lib/domain/types";
 

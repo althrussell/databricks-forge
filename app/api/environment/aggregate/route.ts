@@ -13,7 +13,11 @@ import { toJsonSafe } from "@/lib/json-safe";
 export async function GET() {
   try {
     const estate = await getAggregateEstateView();
-    return NextResponse.json(toJsonSafe(estate));
+    return NextResponse.json(toJsonSafe(estate), {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+      },
+    });
   } catch (error) {
     logger.error("[api/environment/aggregate] GET failed", {
       error: error instanceof Error ? error.message : String(error),

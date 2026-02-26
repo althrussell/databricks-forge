@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StepDurationChart } from "@/components/charts/step-duration-chart";
+import { StepDurationChart } from "@/components/charts/lazy";
 import {
   Activity,
   Clock,
