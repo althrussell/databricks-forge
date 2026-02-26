@@ -26,11 +26,12 @@ function dbRowToSpace(row: any): MetadataGenieSpace {
     industryName: row.industryName,
     domains: parseJsonArray(row.domains),
     detection: parseJson<IndustryDetectionResult>(row.detection),
+    sampleQuestions: parseJsonArray(row.sampleQuestions),
     viewCatalog: row.viewCatalog,
     viewSchema: row.viewSchema,
     viewsDeployed: row.viewsDeployed,
     viewNames: parseJsonArray(row.viewNames),
-    serializedSpace: row.serializedSpace,
+    serializedSpace: row.serializedSpace ?? "",
     spaceId: row.spaceId,
     spaceUrl: row.spaceUrl,
     status: row.status as MetadataGenieStatus,
@@ -85,6 +86,7 @@ export async function getMetadataGenieSpace(
   });
 }
 
+/** Save a draft space (generate step -- no viewTarget or serializedSpace yet). */
 export async function saveMetadataGenieSpace(opts: {
   id: string;
   title: string;
@@ -93,9 +95,7 @@ export async function saveMetadataGenieSpace(opts: {
   industryName?: string | null;
   domains?: string[];
   detection?: IndustryDetectionResult;
-  viewCatalog: string;
-  viewSchema: string;
-  serializedSpace: string;
+  sampleQuestions?: string[];
   tableCount: number;
 }): Promise<MetadataGenieSpace> {
   return withPrisma(async (prisma) => {
@@ -111,9 +111,9 @@ export async function saveMetadataGenieSpace(opts: {
         industryName: opts.industryName ?? null,
         domains: opts.domains ? JSON.stringify(opts.domains) : null,
         detection: opts.detection ? JSON.stringify(opts.detection) : null,
-        viewCatalog: opts.viewCatalog,
-        viewSchema: opts.viewSchema,
-        serializedSpace: opts.serializedSpace,
+        sampleQuestions: opts.sampleQuestions
+          ? JSON.stringify(opts.sampleQuestions)
+          : null,
         tableCount: opts.tableCount,
         status: "draft",
       },
@@ -126,9 +126,9 @@ export async function saveMetadataGenieSpace(opts: {
         industryName: opts.industryName ?? null,
         domains: opts.domains ? JSON.stringify(opts.domains) : null,
         detection: opts.detection ? JSON.stringify(opts.detection) : null,
-        viewCatalog: opts.viewCatalog,
-        viewSchema: opts.viewSchema,
-        serializedSpace: opts.serializedSpace,
+        sampleQuestions: opts.sampleQuestions
+          ? JSON.stringify(opts.sampleQuestions)
+          : null,
         tableCount: opts.tableCount,
         status: "draft",
       },
@@ -137,33 +137,27 @@ export async function saveMetadataGenieSpace(opts: {
   });
 }
 
-export async function updateMetadataGenieViewsDeployed(
-  id: string,
-  viewNames: string[]
-): Promise<void> {
+/** Update a space after deploy (sets viewTarget, serializedSpace, spaceId, etc). */
+export async function updateMetadataGenieOnDeploy(opts: {
+  id: string;
+  viewCatalog: string;
+  viewSchema: string;
+  viewNames: string[];
+  serializedSpace: string;
+  spaceId: string;
+  spaceUrl: string;
+}): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeMetadataGenieSpace.update({
-      where: { id },
+      where: { id: opts.id },
       data: {
+        viewCatalog: opts.viewCatalog,
+        viewSchema: opts.viewSchema,
         viewsDeployed: true,
-        viewNames: JSON.stringify(viewNames),
-        status: "views_deployed",
-      },
-    });
-  });
-}
-
-export async function updateMetadataGenieSpaceDeployed(
-  id: string,
-  spaceId: string,
-  spaceUrl: string
-): Promise<void> {
-  await withPrisma(async (prisma) => {
-    await prisma.forgeMetadataGenieSpace.update({
-      where: { id },
-      data: {
-        spaceId,
-        spaceUrl,
+        viewNames: JSON.stringify(opts.viewNames),
+        serializedSpace: opts.serializedSpace,
+        spaceId: opts.spaceId,
+        spaceUrl: opts.spaceUrl,
         status: "deployed",
       },
     });

@@ -579,12 +579,13 @@ model ForgeMetadataGenieSpace {
   industryId      String?  @map("industry_id")
   industryName    String?  @map("industry_name")
   domains         String?
-  detection       String?
-  viewCatalog     String?  @map("view_catalog")
-  viewSchema      String?  @map("view_schema")
-  viewsDeployed   Boolean  @default(false) @map("views_deployed")
-  viewNames       String?  @map("view_names")
-  serializedSpace String   @map("serialized_space")
+  detection        String?
+  sampleQuestions  String?  @map("sample_questions")
+  viewCatalog      String?  @map("view_catalog")
+  viewSchema       String?  @map("view_schema")
+  viewsDeployed    Boolean  @default(false) @map("views_deployed")
+  viewNames        String?  @map("view_names")
+  serializedSpace  String?  @map("serialized_space")
   spaceId         String?  @map("space_id")
   spaceUrl        String?  @map("space_url")
   status          String   @default("draft")

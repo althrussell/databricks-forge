@@ -200,10 +200,14 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
 // Sample Questions (BA-focused, derived from outcome map)
 // ---------------------------------------------------------------------------
 
-function buildSampleQuestions(
+/**
+ * Build preview question strings (exported for use by the generate API
+ * before a viewTarget is chosen).
+ */
+export function buildPreviewQuestions(
   outcomeMap: IndustryOutcome | null | undefined,
   llmDetection: IndustryDetectionResult
-): SampleQuestion[] {
+): string[] {
   const questions: string[] = [];
 
   if (outcomeMap) {
@@ -245,7 +249,6 @@ function buildSampleQuestions(
     }
   }
 
-  // Universal questions always included
   questions.push(
     "What data do we have?",
     "Do we have any tables without descriptions?",
@@ -254,8 +257,14 @@ function buildSampleQuestions(
     "Which schemas have the most tables?"
   );
 
-  // Deduplicate and cap
-  const unique = [...new Set(questions)].slice(0, 15);
+  return [...new Set(questions)].slice(0, 15);
+}
+
+function buildSampleQuestions(
+  outcomeMap: IndustryOutcome | null | undefined,
+  llmDetection: IndustryDetectionResult
+): SampleQuestion[] {
+  const unique = buildPreviewQuestions(outcomeMap, llmDetection);
   return unique.map((q) => ({
     id: randomUUID(),
     question: [q],

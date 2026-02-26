@@ -45,13 +45,20 @@ export interface ViewTarget {
 }
 
 // ---------------------------------------------------------------------------
-// Generate Config
+// Generate Config (no viewTarget -- that's chosen at deploy time)
 // ---------------------------------------------------------------------------
 
 export interface MetadataGenieGenerateConfig {
-  catalogScope?: string[];
-  viewTarget: ViewTarget;
   title?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Deploy Config (viewTarget chosen in the deploy modal)
+// ---------------------------------------------------------------------------
+
+export interface MetadataGenieDeployConfig {
+  id: string;
+  viewTarget: ViewTarget;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +79,7 @@ export interface MetadataGenieSpace {
   industryName: string | null;
   domains: string[] | null;
   detection: IndustryDetectionResult | null;
+  sampleQuestions: string[] | null;
   viewCatalog: string | null;
   viewSchema: string | null;
   viewsDeployed: boolean;
