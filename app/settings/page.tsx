@@ -170,6 +170,7 @@ export default function SettingsPage() {
       }
       handleClearLocalData();
       toast.success("All data deleted — app has been reset");
+      window.location.href = "/";
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete data");
     } finally {

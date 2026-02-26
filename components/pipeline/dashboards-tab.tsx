@@ -141,7 +141,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
     }, 2000);
   }, [runId, stopPolling, fetchRecommendations]);
 
-  // Auto-detect in-progress generation on mount
+  // Auto-detect in-progress or failed generation on mount
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -154,6 +154,8 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setGenProgress(data.percent ?? 0);
           setGenMessage(data.message ?? "");
           startPolling();
+        } else if (data.status === "failed") {
+          setError(data.error ?? "Dashboard generation failed. Try regenerating.");
         }
       } catch {
         /* no active job */
@@ -272,6 +274,24 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           <CardTitle>Dashboards</CardTitle>
           <CardDescription className="text-red-500">{error}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setError(null);
+              try {
+                await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
+                toast.success("Dashboard generation started");
+                setGenerating(true);
+                startPolling();
+              } catch {
+                toast.error("Failed to start dashboard generation");
+              }
+            }}
+          >
+            Retry Generation
+          </Button>
+        </CardContent>
       </Card>
     );
   }

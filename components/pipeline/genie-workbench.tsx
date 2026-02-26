@@ -132,7 +132,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
     return () => stopPolling();
   }, [stopPolling]);
 
-  // Auto-detect an in-progress Genie job (e.g. fired by the pipeline)
+  // Auto-detect an in-progress or failed Genie job (e.g. fired by the pipeline)
   useEffect(() => {
     let cancelled = false;
     async function checkActiveJob() {
@@ -150,6 +150,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
               setCompletedDomainNames(data.completedDomainNames);
             }
             startPolling();
+          } else if (data.status === "failed") {
+            setLastError(data.error || "Generation failed");
+            setLastErrorType(data.errorType ?? "general");
           }
         }
       } catch {

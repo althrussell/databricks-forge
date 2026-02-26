@@ -8,6 +8,8 @@ import { DashboardContent, type DashboardStats } from "@/components/dashboard/da
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
+export const dynamic = "force-dynamic";
+
 async function fetchDashboardStats(): Promise<{
   stats: DashboardStats | null;
   error: string | null;

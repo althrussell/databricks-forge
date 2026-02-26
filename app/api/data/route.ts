@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { deleteAllData } from "@/lib/lakebase/reset";
@@ -26,6 +27,8 @@ export async function DELETE(request: NextRequest) {
 
     await ensureMigrated();
     await deleteAllData();
+
+    revalidatePath("/", "layout");
 
     logger.info("[api/data] All application data deleted (factory reset)");
     return NextResponse.json({ deleted: true });
