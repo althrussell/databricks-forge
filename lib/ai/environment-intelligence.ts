@@ -26,6 +26,7 @@ import {
   estimateTokens,
   truncateColumns,
 } from "@/lib/ai/token-budget";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { logger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
 import type {
@@ -383,8 +384,8 @@ async function passDomainCategorisation(
       business_name_line: options.businessName ? `Business: ${options.businessName}` : "",
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(content);
     allAssignments.push(...parsed);
   }
 
@@ -436,8 +437,8 @@ async function passPIIDetection(
       table_list: tableList,
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<SensitivityClassification>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<SensitivityClassification>(content);
     for (const p of parsed) {
       const key = `${p.tableFqn}::${p.columnName}`;
       if (!ruleKeys.has(key)) {
@@ -475,8 +476,8 @@ async function passAutoDescriptions(
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; description: string }>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<{ table_fqn: string; description: string }>(content);
     for (const p of parsed) {
       descriptions.set(p.table_fqn, p.description);
     }
@@ -505,8 +506,8 @@ async function passRedundancyDetection(
       table_list: tableList,
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<RedundancyPair>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<RedundancyPair>(content);
     allPairs.push(...parsed);
   }
 
@@ -533,8 +534,8 @@ async function passImplicitRelationships(
       table_list: tableList,
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<ImplicitRelationship>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<ImplicitRelationship>(content);
     allRels.push(...parsed);
   }
 
@@ -566,8 +567,8 @@ async function passMedallionTier(
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(content);
     for (const p of parsed) {
       if (["bronze", "silver", "gold", "system"].includes(p.tier)) {
         assignments.set(p.table_fqn, { tier: p.tier, reasoning: p.reasoning });
@@ -609,8 +610,8 @@ async function passDataProducts(
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    allProducts.push(...safeParseArray<DataProduct>(result));
+    const { content } = await callLLM(prompt, options.endpoint);
+    allProducts.push(...safeParseArray<DataProduct>(content));
   }
 
   return allProducts;
@@ -646,8 +647,8 @@ async function passGovernanceGaps(
       table_list: tableList,
     });
 
-    const result = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<GovernanceGap>(result);
+    const { content } = await callLLM(prompt, options.endpoint);
+    const parsed = safeParseArray<GovernanceGap>(content);
     allGaps.push(...parsed);
   }
 
@@ -658,7 +659,13 @@ async function passGovernanceGaps(
 // LLM call helper
 // ---------------------------------------------------------------------------
 
-async function callLLM(prompt: string, endpoint: string): Promise<string> {
+interface LLMResult { content: string; finishReason: string | null; }
+
+async function callLLM(
+  prompt: string,
+  endpoint: string,
+  maxTokens = 16384,
+): Promise<LLMResult> {
   const messages: ChatMessage[] = [
     { role: "user", content: prompt },
   ];
@@ -667,10 +674,17 @@ async function callLLM(prompt: string, endpoint: string): Promise<string> {
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    responseFormat: "json_object",
+    maxTokens,
   });
 
-  return response.content;
+  if (response.finishReason === "length") {
+    logger.warn("[intelligence] LLM response truncated (finish_reason=length)", {
+      endpoint,
+      contentLength: response.content.length,
+    });
+  }
+
+  return { content: response.content, finishReason: response.finishReason };
 }
 
 // ---------------------------------------------------------------------------
@@ -679,12 +693,13 @@ async function callLLM(prompt: string, endpoint: string): Promise<string> {
 
 function safeParseArray<T>(raw: string): T[] {
   try {
-    const cleaned = cleanJSON(raw);
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseLLMJson(raw);
     if (Array.isArray(parsed)) return parsed as T[];
-    // Some models wrap in an object with a key
-    for (const key of Object.keys(parsed)) {
-      if (Array.isArray(parsed[key])) return parsed[key] as T[];
+    if (parsed && typeof parsed === "object") {
+      for (const key of Object.keys(parsed as Record<string, unknown>)) {
+        const val = (parsed as Record<string, unknown>)[key];
+        if (Array.isArray(val)) return val as T[];
+      }
     }
     return [];
   } catch (error) {
@@ -759,12 +774,23 @@ async function passAnalyticsMaturity(
   };
 
   const prompt = formatPrompt("ENV_ANALYTICS_MATURITY_PROMPT" as never, vars);
-  const raw = await callLLM(prompt, options.endpoint);
+  const { content } = await callLLM(prompt, options.endpoint);
 
-  const parsed = JSON.parse(cleanJSON(raw));
+  type MaturityLevel = "nascent" | "developing" | "established" | "advanced";
+  const VALID_LEVELS = new Set<MaturityLevel>(["nascent", "developing", "established", "advanced"]);
+  const parsed = parseLLMJson(content) as {
+    overallScore?: number;
+    level?: string;
+    dimensions?: Record<string, { score?: number; summary?: string }>;
+    uncoveredDomains?: string[];
+    topRecommendations?: Array<{ priority?: number; action?: string; impact?: string; effort?: string }>;
+  };
+  const level: MaturityLevel = VALID_LEVELS.has(parsed.level as MaturityLevel)
+    ? (parsed.level as MaturityLevel)
+    : "nascent";
   return {
     overallScore: Math.max(0, Math.min(100, parsed.overallScore ?? 0)),
-    level: parsed.level ?? "nascent",
+    level,
     dimensions: {
       coverage: { score: parsed.dimensions?.coverage?.score ?? 0, summary: parsed.dimensions?.coverage?.summary ?? "" },
       depth: { score: parsed.dimensions?.depth?.score ?? 0, summary: parsed.dimensions?.depth?.summary ?? "" },
@@ -772,29 +798,13 @@ async function passAnalyticsMaturity(
       completeness: { score: parsed.dimensions?.completeness?.score ?? 0, summary: parsed.dimensions?.completeness?.summary ?? "" },
     },
     uncoveredDomains: Array.isArray(parsed.uncoveredDomains) ? parsed.uncoveredDomains : [],
-    topRecommendations: Array.isArray(parsed.topRecommendations) ? parsed.topRecommendations.map((r: { priority?: number; action?: string; impact?: string; effort?: string }, i: number) => ({
+    topRecommendations: Array.isArray(parsed.topRecommendations) ? parsed.topRecommendations.map((r, i) => ({
       priority: r.priority ?? i + 1,
       action: r.action ?? "",
       impact: (r.impact ?? "medium") as "high" | "medium" | "low",
       effort: (r.effort ?? "medium") as "high" | "medium" | "low",
     })) : [],
   };
-}
-
-function cleanJSON(response: string): string {
-  let cleaned = response.trim();
-  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "");
-  cleaned = cleaned.replace(/\n?```\s*$/i, "");
-  const jsonStart = Math.min(
-    cleaned.indexOf("{") === -1 ? Infinity : cleaned.indexOf("{"),
-    cleaned.indexOf("[") === -1 ? Infinity : cleaned.indexOf("[")
-  );
-  if (jsonStart !== Infinity) cleaned = cleaned.substring(jsonStart);
-  const lastBrace = cleaned.lastIndexOf("}");
-  const lastBracket = cleaned.lastIndexOf("]");
-  const jsonEnd = Math.max(lastBrace, lastBracket);
-  if (jsonEnd > 0) cleaned = cleaned.substring(0, jsonEnd + 1);
-  return cleaned;
 }
 
 // ---------------------------------------------------------------------------

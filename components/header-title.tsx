@@ -10,6 +10,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/environment": "Estate Overview",
   "/outcomes": "Outcome Maps",
   "/outcomes/ingest": "Ingest Outcome Map",
+  "/metadata-genie": "Meta Data Genie",
   "/settings": "Settings",
   "/help": "Help",
 };

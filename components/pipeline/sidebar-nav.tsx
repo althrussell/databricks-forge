@@ -22,6 +22,7 @@ const navItems = [
   { href: "/runs/compare", label: "Compare", icon: CompareIcon },
   { href: "/environment", label: "Estate", icon: EnvironmentIcon },
   { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
+  { href: "/metadata-genie", label: "Meta Data Genie", icon: MetadataGenieIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/help", label: "Help", icon: HelpIcon },
 ];
@@ -245,6 +246,25 @@ function HelpIcon({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="10" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
       <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function MetadataGenieIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+      <path d="M3 12A9 3 0 0 0 21 12" />
     </svg>
   );
 }
