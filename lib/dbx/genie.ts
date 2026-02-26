@@ -271,6 +271,19 @@ export async function createGenieSpace(opts: {
     // Will be caught by the retry below if the path doesn't exist
   }
 
+  // Debug: log join_specs from the final payload so we can diagnose API rejections
+  try {
+    const debugParsed = JSON.parse(sanitized);
+    const debugJoins = debugParsed?.instructions?.join_specs;
+    if (Array.isArray(debugJoins) && debugJoins.length > 0) {
+      logger.info("createGenieSpace: join_specs sample", {
+        count: debugJoins.length,
+        first: JSON.stringify(debugJoins[0]),
+        last: JSON.stringify(debugJoins[debugJoins.length - 1]),
+      });
+    }
+  } catch { /* non-critical debug log */ }
+
   const body = {
     title: opts.title,
     description: opts.description,

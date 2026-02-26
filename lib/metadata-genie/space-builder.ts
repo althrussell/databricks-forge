@@ -107,57 +107,57 @@ function buildDataSourceTables(prefix: string): DataSourceTable[] {
 }
 
 // ---------------------------------------------------------------------------
-// Join Specs -- one join_spec per column equality (API spec format)
+// Join Specs -- one join_spec per table pair
 // ---------------------------------------------------------------------------
-// The Genie API uses `tablename.column = tablename.column` format (no
-// backticks, no FQN prefix, no AND).  Composite joins are expressed as
-// separate join_spec entries, each with a single column equality.
+// The working Genie Engine produces join_specs with:
+//   - explicit `alias` on left/right
+//   - backtick-quoted `alias`.`column` format in sql
+//   - exactly ONE sql equality per join_spec
+//   - a --rt= relationship type comment
+// We mirror that format exactly.
 
 type JoinDef = [left: string, right: string, leftCol: string, rightCol: string];
 
 const JOIN_DEFS: JoinDef[] = [
-  // mdg_catalogs → mdg_schemas
   ["mdg_catalogs", "mdg_schemas", "catalog_name", "catalog_name"],
-  // mdg_schemas → mdg_tables
   ["mdg_schemas", "mdg_tables", "catalog_name", "table_catalog"],
   ["mdg_schemas", "mdg_tables", "schema_name", "table_schema"],
-  // mdg_tables → mdg_columns
   ["mdg_tables", "mdg_columns", "table_catalog", "table_catalog"],
   ["mdg_tables", "mdg_columns", "table_schema", "table_schema"],
   ["mdg_tables", "mdg_columns", "table_name", "table_name"],
-  // mdg_tables → mdg_table_tags
   ["mdg_tables", "mdg_table_tags", "table_catalog", "catalog_name"],
   ["mdg_tables", "mdg_table_tags", "table_schema", "schema_name"],
   ["mdg_tables", "mdg_table_tags", "table_name", "table_name"],
-  // mdg_columns → mdg_column_tags
   ["mdg_columns", "mdg_column_tags", "table_catalog", "catalog_name"],
   ["mdg_columns", "mdg_column_tags", "table_schema", "schema_name"],
   ["mdg_columns", "mdg_column_tags", "table_name", "table_name"],
   ["mdg_columns", "mdg_column_tags", "column_name", "column_name"],
-  // mdg_tables → mdg_table_constraints
   ["mdg_tables", "mdg_table_constraints", "table_catalog", "table_catalog"],
   ["mdg_tables", "mdg_table_constraints", "table_schema", "table_schema"],
   ["mdg_tables", "mdg_table_constraints", "table_name", "table_name"],
-  // mdg_tables → mdg_table_privileges
   ["mdg_tables", "mdg_table_privileges", "table_catalog", "table_catalog"],
   ["mdg_tables", "mdg_table_privileges", "table_schema", "table_schema"],
   ["mdg_tables", "mdg_table_privileges", "table_name", "table_name"],
-  // mdg_tables → mdg_views
   ["mdg_tables", "mdg_views", "table_catalog", "table_catalog"],
   ["mdg_tables", "mdg_views", "table_schema", "table_schema"],
   ["mdg_tables", "mdg_views", "table_name", "table_name"],
-  // mdg_schemas → mdg_volumes
   ["mdg_schemas", "mdg_volumes", "catalog_name", "volume_catalog"],
   ["mdg_schemas", "mdg_volumes", "schema_name", "volume_schema"],
 ];
 
 function buildJoinSpecs(prefix: string): JoinSpec[] {
-  return JOIN_DEFS.map(([left, right, leftCol, rightCol]) => ({
-    id: randomUUID(),
-    left: { identifier: `${prefix}.${left}` },
-    right: { identifier: `${prefix}.${right}` },
-    sql: [`${left}.${leftCol} = ${right}.${rightCol}`],
-  }));
+  return JOIN_DEFS.map(([left, right, leftCol, rightCol]) => {
+    const rightAlias = right === left ? `${right}_2` : right;
+    return {
+      id: randomUUID(),
+      left: { identifier: `${prefix}.${left}`, alias: left },
+      right: { identifier: `${prefix}.${right}`, alias: rightAlias },
+      sql: [
+        `\`${left}\`.\`${leftCol}\` = \`${rightAlias}\`.\`${rightCol}\``,
+        "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--",
+      ],
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
