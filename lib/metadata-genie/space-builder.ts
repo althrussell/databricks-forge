@@ -113,104 +113,36 @@ function buildDataSourceTables(prefix: string): DataSourceTable[] {
 function buildJoinSpecs(prefix: string): JoinSpec[] {
   const fqn = (name: string) => `${prefix}.${name}`;
 
-  return [
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_catalogs"), alias: "mdg_catalogs" },
-      right: { identifier: fqn("mdg_schemas"), alias: "mdg_schemas" },
-      sql: [
-        "`mdg_catalogs`.`catalog_name` = `mdg_schemas`.`catalog_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_schemas"), alias: "mdg_schemas" },
-      right: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
-      sql: [
-        "`mdg_schemas`.`catalog_name` = `mdg_tables`.`table_catalog`",
-        "`mdg_schemas`.`schema_name` = `mdg_tables`.`table_schema`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
-      right: { identifier: fqn("mdg_columns"), alias: "mdg_columns" },
-      sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_columns`.`table_catalog`",
-        "`mdg_tables`.`table_schema` = `mdg_columns`.`table_schema`",
-        "`mdg_tables`.`table_name` = `mdg_columns`.`table_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
-      right: { identifier: fqn("mdg_table_tags"), alias: "mdg_table_tags" },
-      sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_table_tags`.`catalog_name`",
-        "`mdg_tables`.`table_schema` = `mdg_table_tags`.`schema_name`",
-        "`mdg_tables`.`table_name` = `mdg_table_tags`.`table_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_columns"), alias: "mdg_columns" },
-      right: {
-        identifier: fqn("mdg_column_tags"),
-        alias: "mdg_column_tags",
-      },
-      sql: [
-        "`mdg_columns`.`table_catalog` = `mdg_column_tags`.`catalog_name`",
-        "`mdg_columns`.`table_schema` = `mdg_column_tags`.`schema_name`",
-        "`mdg_columns`.`table_name` = `mdg_column_tags`.`table_name`",
-        "`mdg_columns`.`column_name` = `mdg_column_tags`.`column_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
-      right: {
-        identifier: fqn("mdg_table_constraints"),
-        alias: "mdg_table_constraints",
-      },
-      sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_table_constraints`.`table_catalog`",
-        "`mdg_tables`.`table_schema` = `mdg_table_constraints`.`table_schema`",
-        "`mdg_tables`.`table_name` = `mdg_table_constraints`.`table_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
-      right: {
-        identifier: fqn("mdg_table_privileges"),
-        alias: "mdg_table_privileges",
-      },
-      sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_table_privileges`.`table_catalog`",
-        "`mdg_tables`.`table_schema` = `mdg_table_privileges`.`table_schema`",
-        "`mdg_tables`.`table_name` = `mdg_table_privileges`.`table_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_tables"), alias: "mdg_tables" },
-      right: { identifier: fqn("mdg_views"), alias: "mdg_views" },
-      sql: [
-        "`mdg_tables`.`table_catalog` = `mdg_views`.`table_catalog`",
-        "`mdg_tables`.`table_schema` = `mdg_views`.`table_schema`",
-        "`mdg_tables`.`table_name` = `mdg_views`.`table_name`",
-      ],
-    },
-    {
-      id: randomUUID(),
-      left: { identifier: fqn("mdg_schemas"), alias: "mdg_schemas" },
-      right: { identifier: fqn("mdg_volumes"), alias: "mdg_volumes" },
-      sql: [
-        "`mdg_schemas`.`catalog_name` = `mdg_volumes`.`volume_catalog`",
-        "`mdg_schemas`.`schema_name` = `mdg_volumes`.`volume_schema`",
-      ],
-    },
+  // Each join spec gets ONE sql entry with all conditions AND-joined.
+  // Uses FQN.column format so sanitizeSerializedSpace rewrites to `alias`.`column`.
+  // This matches how the Genie Engine assembler produces join specs.
+  const specs: [string, string, string][] = [
+    ["mdg_catalogs", "mdg_schemas",
+      `${fqn("mdg_catalogs")}.catalog_name = ${fqn("mdg_schemas")}.catalog_name`],
+    ["mdg_schemas", "mdg_tables",
+      `${fqn("mdg_schemas")}.catalog_name = ${fqn("mdg_tables")}.table_catalog AND ${fqn("mdg_schemas")}.schema_name = ${fqn("mdg_tables")}.table_schema`],
+    ["mdg_tables", "mdg_columns",
+      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_columns")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_columns")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_columns")}.table_name`],
+    ["mdg_tables", "mdg_table_tags",
+      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_table_tags")}.catalog_name AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_table_tags")}.schema_name AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_table_tags")}.table_name`],
+    ["mdg_columns", "mdg_column_tags",
+      `${fqn("mdg_columns")}.table_catalog = ${fqn("mdg_column_tags")}.catalog_name AND ${fqn("mdg_columns")}.table_schema = ${fqn("mdg_column_tags")}.schema_name AND ${fqn("mdg_columns")}.table_name = ${fqn("mdg_column_tags")}.table_name AND ${fqn("mdg_columns")}.column_name = ${fqn("mdg_column_tags")}.column_name`],
+    ["mdg_tables", "mdg_table_constraints",
+      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_table_constraints")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_table_constraints")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_table_constraints")}.table_name`],
+    ["mdg_tables", "mdg_table_privileges",
+      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_table_privileges")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_table_privileges")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_table_privileges")}.table_name`],
+    ["mdg_tables", "mdg_views",
+      `${fqn("mdg_tables")}.table_catalog = ${fqn("mdg_views")}.table_catalog AND ${fqn("mdg_tables")}.table_schema = ${fqn("mdg_views")}.table_schema AND ${fqn("mdg_tables")}.table_name = ${fqn("mdg_views")}.table_name`],
+    ["mdg_schemas", "mdg_volumes",
+      `${fqn("mdg_schemas")}.catalog_name = ${fqn("mdg_volumes")}.volume_catalog AND ${fqn("mdg_schemas")}.schema_name = ${fqn("mdg_volumes")}.volume_schema`],
   ];
+
+  return specs.map(([left, right, sql]) => ({
+    id: randomUUID(),
+    left: { identifier: fqn(left), alias: left },
+    right: { identifier: fqn(right), alias: right },
+    sql: [sql],
+  }));
 }
 
 // ---------------------------------------------------------------------------

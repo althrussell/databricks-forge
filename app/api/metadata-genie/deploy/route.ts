@@ -69,19 +69,6 @@ export async function POST(request: NextRequest) {
       title: space.title,
     });
 
-    // Defense: split any AND-joined join conditions into separate array elements
-    if (serializedSpace.instructions?.join_specs) {
-      for (const js of serializedSpace.instructions.join_specs) {
-        if (Array.isArray(js.sql)) {
-          js.sql = js.sql.flatMap((s: string) =>
-            s.includes(" AND ") && !s.startsWith("--")
-              ? s.split(/\s+AND\s+/)
-              : [s]
-          );
-        }
-      }
-    }
-
     const serializedSpaceJson = JSON.stringify(serializedSpace);
 
     // 2. Deploy views

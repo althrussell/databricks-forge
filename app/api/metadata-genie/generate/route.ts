@@ -46,18 +46,6 @@ export async function POST(request: NextRequest) {
       title: title ?? "Meta Data Genie",
     });
 
-    // Ensure join conditions are split (one per array element)
-    if (previewSpace.instructions?.join_specs) {
-      for (const js of previewSpace.instructions.join_specs) {
-        if (Array.isArray(js.sql)) {
-          js.sql = js.sql.flatMap((s: string) =>
-            s.includes(" AND ") && !s.startsWith("--")
-              ? s.split(/\s+AND\s+/)
-              : [s]
-          );
-        }
-      }
-    }
 
     const id = randomUUID();
     const saved = await saveMetadataGenieSpace({
