@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus } from "lucide-react";
 import { DashboardContent, type DashboardStats } from "@/components/dashboard/dashboard-content";
 import { withPrisma } from "@/lib/prisma";
-import { isDatabaseReady } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 async function fetchDashboardStats(): Promise<{
@@ -14,10 +13,6 @@ async function fetchDashboardStats(): Promise<{
   error: string | null;
 }> {
   try {
-    if (!isDatabaseReady()) {
-      return { stats: null, error: "Database is not ready" };
-    }
-
     const [
       totalRuns,
       completedRuns,

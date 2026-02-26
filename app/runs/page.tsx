@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RunsContent } from "@/components/runs/runs-content";
 import { listRuns } from "@/lib/lakebase/runs";
-import { isDatabaseReady } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type { PipelineRun } from "@/lib/domain/types";
 
@@ -13,9 +12,6 @@ async function fetchInitialRuns(): Promise<{
   error: string | null;
 }> {
   try {
-    if (!isDatabaseReady()) {
-      return { runs: [], error: "Database is not ready" };
-    }
     const runs = await listRuns(200, 0);
     return { runs, error: null };
   } catch (err) {
@@ -56,14 +52,9 @@ export default function RunsPage() {
             View and manage your discovery pipeline runs
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/runs/compare">Compare Runs</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/configure">New Discovery</Link>
-          </Button>
-        </div>
+        <Button asChild>
+          <Link href="/configure">New Discovery</Link>
+        </Button>
       </div>
 
       <Suspense fallback={<RunsSkeleton />}>

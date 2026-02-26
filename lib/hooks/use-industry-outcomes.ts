@@ -40,6 +40,13 @@ export function useIndustryOutcomes(): UseIndustryOutcomesReturn {
       setOutcomes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load registry");
+      // Lazy-load built-in outcomes as fallback to avoid a permanently empty dropdown
+      try {
+        const { INDUSTRY_OUTCOMES } = await import("@/lib/domain/industry-outcomes");
+        setOutcomes(INDUSTRY_OUTCOMES);
+      } catch {
+        // Last resort: leave outcomes empty
+      }
     } finally {
       setLoading(false);
     }

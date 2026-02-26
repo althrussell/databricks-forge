@@ -176,8 +176,17 @@ export function RunsContent({
     );
   }
 
+  const hasCompareableRuns = runs.filter((r) => r.status === "completed").length >= 2;
+
   return (
     <>
+      {hasCompareableRuns && (
+        <div className="flex justify-end -mt-4">
+          <Button variant="outline" asChild>
+            <Link href="/runs/compare">Compare Runs</Link>
+          </Button>
+        </div>
+      )}
       {/* Filters Bar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs flex-1">
