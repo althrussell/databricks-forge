@@ -19,7 +19,7 @@ import { generateNotebooks } from "@/lib/export/notebooks";
 import { generateCsv } from "@/lib/export/csv";
 import { generateJson } from "@/lib/export/json";
 import { generateExportSummaries } from "@/lib/export/summaries";
-import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
+import { loadLineageFqnsForRun } from "@/lib/lakebase/metadata-cache";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { getConfig, getCurrentUserEmail } from "@/lib/dbx/client";
 import { insertExportRecord } from "@/lib/lakebase/exports";
@@ -74,8 +74,7 @@ export async function GET(
 
     let lineageDiscoveredFqns: string[] = [];
     try {
-      const snapshot = await loadMetadataForRun(runId);
-      lineageDiscoveredFqns = snapshot?.lineageDiscoveredFqns ?? [];
+      lineageDiscoveredFqns = await loadLineageFqnsForRun(runId);
     } catch {
       // Non-critical
     }

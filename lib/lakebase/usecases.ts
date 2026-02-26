@@ -129,6 +129,23 @@ export async function getUseCasesByRunId(runId: string): Promise<UseCase[]> {
 }
 
 /**
+ * Lightweight variant that omits sqlCode to reduce payload size.
+ * Used for initial page loads where SQL isn't displayed upfront.
+ */
+export async function getUseCaseSummariesByRunId(
+  runId: string
+): Promise<UseCase[]> {
+  return withPrisma(async (prisma) => {
+    const rows = await prisma.forgeUseCase.findMany({
+      where: { runId },
+      orderBy: [{ overallScore: "desc" }, { useCaseNo: "asc" }],
+      omit: { sqlCode: true },
+    });
+    return rows.map((r) => dbRowToUseCase({ ...r, sqlCode: null }));
+  });
+}
+
+/**
  * Get use cases for a run filtered by domain.
  */
 export async function getUseCasesByDomain(

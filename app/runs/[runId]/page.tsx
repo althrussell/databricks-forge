@@ -26,11 +26,13 @@ import { UseCaseTable } from "@/components/pipeline/use-case-table";
 import { ExportToolbar } from "@/components/pipeline/export-toolbar";
 import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
 import { DashboardsTab } from "@/components/pipeline/dashboards-tab";
-import { ScoreDistributionChart } from "@/components/charts/score-distribution-chart";
-import { DomainBreakdownChart } from "@/components/charts/domain-breakdown-chart";
-import { TypeSplitChart } from "@/components/charts/type-split-chart";
-import { StepDurationChart } from "@/components/charts/step-duration-chart";
-import { ScoreRadarOverview } from "@/components/charts/score-radar-overview";
+import {
+  ScoreDistributionChart,
+  DomainBreakdownChart,
+  TypeSplitChart,
+  StepDurationChart,
+  ScoreRadarOverview,
+} from "@/components/charts/lazy";
 import { SchemaCoverageCard } from "@/components/pipeline/run-detail/schema-coverage-card";
 import { IndustryCoverageCard } from "@/components/pipeline/run-detail/industry-coverage-card";
 import { computeIndustryCoverage } from "@/lib/domain/industry-coverage";
@@ -93,10 +95,9 @@ export default function RunDetailPage({
 
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Section refs for clickable summary card navigation
-  const radarRef = useRef<HTMLDivElement>(null);
-  const chartsRef = useRef<HTMLDivElement>(null);
-  const coverageRef = useRef<HTMLDivElement>(null);
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+  }, []);
 
   // Collapsible section state
   const [insightsOpen, setInsightsOpen] = useState(true);
@@ -236,7 +237,10 @@ export default function RunDetailPage({
     abortRef.current = controller;
 
     try {
-      const res = await resilientFetch(`/api/runs/${runId}`, {
+      const url = useCases.length === 0
+        ? `/api/runs/${runId}?fields=summary`
+        : `/api/runs/${runId}`;
+      const res = await resilientFetch(url, {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("Run not found");
@@ -258,7 +262,7 @@ export default function RunDetailPage({
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [runId, run]);
+  }, [runId, run, useCases.length]);
 
   const fetchPromptLogs = useCallback(async () => {
     if (logsLoaded || logsLoading) return;
@@ -390,9 +394,6 @@ export default function RunDetailPage({
       ? computeIndustryCoverage(industryOutcome, useCases)
       : null;
 
-  const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <div className="space-y-6">
@@ -608,7 +609,6 @@ export default function RunDetailPage({
               onClick={() => {
                 setActiveTab("overview");
                 setInsightsOpen(true);
-                setTimeout(() => scrollTo(chartsRef), 100);
               }}
             />
             <SummaryCard
@@ -634,26 +634,25 @@ export default function RunDetailPage({
                   : "N/A"
               }
               tip={RUN_DETAIL.avgScore}
-              onClick={() => scrollTo(radarRef)}
+              onClick={() => setActiveTab("overview")}
             />
             <CoverageGapCard
               coverageData={coverageData}
               onClick={() => {
                 setActiveTab("overview");
                 setInsightsOpen(true);
-                setTimeout(() => scrollTo(coverageRef), 100);
               }}
             />
           </div>
 
           {/* Score Landscape Radar */}
           {useCases.length > 1 && (
-            <div ref={radarRef}>
+            <div>
               <ScoreRadarOverview useCases={useCases} />
             </div>
           )}
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -730,7 +729,7 @@ export default function RunDetailPage({
                 <CollapsibleContent className="space-y-6 pt-4">
                   {/* Charts */}
                   {useCases.length > 0 && (
-                    <div ref={chartsRef} className="grid gap-6 md:grid-cols-3">
+                    <div className="grid gap-6 md:grid-cols-3">
                       <ScoreDistributionChart
                         scores={useCases.map(
                           (uc) => effectiveScores(uc).overall
@@ -771,7 +770,7 @@ export default function RunDetailPage({
 
                   {/* Industry Coverage + Gap Analysis */}
                   {run.config.industry && useCases.length > 0 && (
-                    <div ref={coverageRef}>
+                    <div>
                       <IndustryCoverageCard
                         industryId={run.config.industry}
                         useCases={useCases}

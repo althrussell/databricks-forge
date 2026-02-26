@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   serverExternalPackages: ["exceljs", "pptxgenjs", "pdfkit", "pg"],
+  experimental: {
+    optimizePackageImports: ["recharts", "lucide-react", "@radix-ui/react-icons"],
+  },
 
   async headers() {
     return [

@@ -64,7 +64,7 @@ export function ScoreDistributionChart({
                 fontSize: 12,
               }}
             />
-            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               {data.map((_, idx) => (
                 <Cell key={idx} fill={BUCKET_COLORS[idx]} />
               ))}

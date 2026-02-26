@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getRunById, deleteRun } from "@/lib/lakebase/runs";
-import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
-import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
+import { getUseCasesByRunId, getUseCaseSummariesByRunId } from "@/lib/lakebase/usecases";
+import { loadLineageFqnsForRun } from "@/lib/lakebase/metadata-cache";
 import { getLatestScanIdForRun } from "@/lib/lakebase/environment-scans";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
@@ -17,12 +17,13 @@ import { logActivity } from "@/lib/lakebase/activity-log";
 import { logger } from "@/lib/logger";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ runId: string }> }
 ) {
   try {
     await ensureMigrated();
     const { runId } = await params;
+    const summary = new URL(request.url).searchParams.get("fields") === "summary";
 
     if (!isValidUUID(runId)) {
       logger.warn("[api/runs] GET invalid run ID", { runId });
@@ -41,21 +42,31 @@ export async function GET(
     let lineageDiscoveredFqns: string[] = [];
     let scanId: string | null = null;
     if (run.status === "completed") {
-      useCases = await getUseCasesByRunId(runId);
-      try {
-        const snapshot = await loadMetadataForRun(runId);
-        lineageDiscoveredFqns = snapshot?.lineageDiscoveredFqns ?? [];
-      } catch {
-        // Non-critical -- continue without lineage data
-      }
-      try {
-        scanId = await getLatestScanIdForRun(runId, run.config.ucMetadata);
-      } catch {
-        // Non-critical
-      }
+      const ucFetcher = summary
+        ? getUseCaseSummariesByRunId(runId)
+        : getUseCasesByRunId(runId);
+      const [ucResult, fqnsResult, scanIdResult] = await Promise.allSettled([
+        ucFetcher,
+        loadLineageFqnsForRun(runId),
+        getLatestScanIdForRun(runId, run.config.ucMetadata),
+      ]);
+      useCases = ucResult.status === "fulfilled" ? ucResult.value : undefined;
+      lineageDiscoveredFqns =
+        fqnsResult.status === "fulfilled" ? fqnsResult.value : [];
+      scanId = scanIdResult.status === "fulfilled" ? scanIdResult.value : null;
     }
 
-    return NextResponse.json({ run, useCases, lineageDiscoveredFqns, scanId });
+    const cacheMaxAge = run.status === "completed" ? 300 : 0;
+    return NextResponse.json(
+      { run, useCases, lineageDiscoveredFqns, scanId },
+      {
+        headers: {
+          "Cache-Control": cacheMaxAge > 0
+            ? `public, s-maxage=${cacheMaxAge}, stale-while-revalidate=60`
+            : "no-store",
+        },
+      }
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { runId: "unknown", error: msg });

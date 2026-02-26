@@ -309,6 +309,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                       fillOpacity={0.05}
                       strokeWidth={2}
                       dot={displaySeries.length <= 5}
+                      isAnimationActive={false}
                     />
                   );
                 })}

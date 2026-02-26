@@ -8,10 +8,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  INDUSTRY_OUTCOMES,
-  type IndustryOutcome,
-} from "@/lib/domain/industry-outcomes";
+import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 
 interface UseIndustryOutcomesReturn {
   /** All industry outcomes (built-in + custom). */
@@ -29,8 +26,7 @@ interface UseIndustryOutcomesReturn {
 }
 
 export function useIndustryOutcomes(): UseIndustryOutcomesReturn {
-  const [outcomes, setOutcomes] =
-    useState<IndustryOutcome[]>(INDUSTRY_OUTCOMES);
+  const [outcomes, setOutcomes] = useState<IndustryOutcome[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,8 +40,13 @@ export function useIndustryOutcomes(): UseIndustryOutcomesReturn {
       setOutcomes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load registry");
-      // Keep built-in as fallback
-      setOutcomes(INDUSTRY_OUTCOMES);
+      // Lazy-load built-in outcomes as fallback to avoid a permanently empty dropdown
+      try {
+        const { INDUSTRY_OUTCOMES } = await import("@/lib/domain/industry-outcomes");
+        setOutcomes(INDUSTRY_OUTCOMES);
+      } catch {
+        // Last resort: leave outcomes empty
+      }
     } finally {
       setLoading(false);
     }

@@ -53,6 +53,7 @@ export function TypeSplitChart({
               innerRadius={38}
               outerRadius={65}
               paddingAngle={4}
+              isAnimationActive={false}
               label={({ name, value }) => `${name} (${value})`}
               labelLine={false}
               fontSize={11}

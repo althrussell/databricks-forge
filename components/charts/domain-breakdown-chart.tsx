@@ -49,6 +49,7 @@ export function DomainBreakdownChart({
               innerRadius={40}
               outerRadius={70}
               paddingAngle={2}
+              isAnimationActive={false}
               label={({ name, value }) =>
                 data.length <= 6 ? `${name} (${value})` : `${value}`
               }
