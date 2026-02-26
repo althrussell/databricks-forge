@@ -272,12 +272,11 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 // ---------------------------------------------------------------------------
 
 const MAX_AUTH_RETRIES = 2;
-const AUTH_RETRY_BASE_MS = 1_000;
 
 /**
  * Execute a callback with a PrismaClient. If the call fails with a
  * database authentication error (stale credential), the client and
- * credential are invalidated and the call is retried with short backoff.
+ * credential are invalidated and the call is retried.
  *
  * The retry fires whenever Databricks App SP credentials are available
  * (canAutoProvision), even if the initial connection used a static
@@ -285,7 +284,9 @@ const AUTH_RETRY_BASE_MS = 1_000;
  * enters auto-provision mode with dynamic credential rotation.
  *
  * Concurrent callers that all hit an auth error at the same time share
- * a single rotation promise to avoid stomping on each other's fresh pools.
+ * a single rotation promise — rotatePrismaClient verifies the connection
+ * before returning and enforces a cooldown to prevent callers from
+ * disconnecting each other's working pools.
  */
 export async function withPrisma<T>(
   fn: (prisma: PrismaClient) => Promise<T>
@@ -301,15 +302,12 @@ export async function withPrisma<T>(
       if (!isAuthError(err) || !canAutoProvision()) throw err;
 
       if (attempt < MAX_AUTH_RETRIES) {
-        const delayMs = AUTH_RETRY_BASE_MS * Math.pow(2, attempt);
         logger.warn("[prisma] Auth error, rotating credentials", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
-          nextRetryMs: delayMs,
           error: err instanceof Error ? err.message : String(err),
         });
         await rotatePrismaClient();
-        await new Promise((r) => setTimeout(r, delayMs));
       }
     }
   }
@@ -318,18 +316,59 @@ export async function withPrisma<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Race-safe credential rotation
+// Race-safe credential rotation with verification + cooldown
 // ---------------------------------------------------------------------------
 
+let _rotationResolvedAt = 0;
+const ROTATION_COOLDOWN_MS = 10_000;
+const VERIFY_MAX_ATTEMPTS = 4;
+
 async function rotatePrismaClient(): Promise<PrismaClient> {
+  if (
+    globalForPrisma.__prisma &&
+    Date.now() - _rotationResolvedAt < ROTATION_COOLDOWN_MS
+  ) {
+    return globalForPrisma.__prisma;
+  }
+
   if (_rotationInFlight) return _rotationInFlight;
 
   _rotationInFlight = (async () => {
     try {
       delete process.env.DATABASE_URL;
       await invalidatePrismaClient();
-      logger.info("[prisma] Credential rotation — switching to auto-provision mode");
-      return getPrisma();
+      logger.info(
+        "[prisma] Credential rotation — switching to auto-provision mode"
+      );
+
+      const client = await getPrisma();
+
+      for (let i = 0; i < VERIFY_MAX_ATTEMPTS; i++) {
+        try {
+          await client.$queryRaw`SELECT 1`;
+          _rotationResolvedAt = Date.now();
+          logger.info("[prisma] Credential rotation complete — connection verified");
+          return client;
+        } catch (verifyErr) {
+          if (i < VERIFY_MAX_ATTEMPTS - 1) {
+            const delay = 1_000 * Math.pow(2, i);
+            logger.warn("[prisma] Rotation: connection not ready, waiting", {
+              attempt: i + 1,
+              maxAttempts: VERIFY_MAX_ATTEMPTS,
+              nextDelayMs: delay,
+              error:
+                verifyErr instanceof Error
+                  ? verifyErr.message
+                  : String(verifyErr),
+            });
+            await new Promise((r) => setTimeout(r, delay));
+          } else {
+            throw verifyErr;
+          }
+        }
+      }
+
+      throw new Error("Rotation verification failed after all attempts");
     } finally {
       _rotationInFlight = null;
     }
