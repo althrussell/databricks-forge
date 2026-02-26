@@ -18,6 +18,7 @@ import type {
   SqlSnippetMeasure,
   SqlSnippetFilter,
   SqlSnippetExpression,
+  BenchmarkQuestion,
 } from "@/lib/genie/types";
 import type { IndustryDetectionResult, ViewTarget } from "./types";
 
@@ -57,25 +58,29 @@ export interface BuildMetadataGenieSpaceOpts {
   outcomeMap?: IndustryOutcome | null;
   llmDetection: IndustryDetectionResult;
   catalogScope?: string[];
+  lineageAccessible?: boolean;
   title?: string;
 }
 
 export function buildMetadataGenieSpace(
   opts: BuildMetadataGenieSpaceOpts
 ): SerializedSpace {
-  const { viewTarget, outcomeMap, llmDetection, catalogScope } = opts;
+  const { viewTarget, outcomeMap, llmDetection, catalogScope, lineageAccessible } = opts;
   const prefix = `${viewTarget.catalog}.${viewTarget.schema}`;
+  const hasLineage = lineageAccessible === true;
 
-  const tables = buildDataSourceTables(prefix);
+  const tables = buildDataSourceTables(prefix, hasLineage);
   const joinSpecs = buildJoinSpecs(prefix);
-  const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection);
+  const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection, hasLineage);
   const textInstructions = buildTextInstructions(
     outcomeMap,
     llmDetection,
-    catalogScope
+    catalogScope,
+    hasLineage
   );
-  const exampleSqls = buildExampleSqls(prefix, outcomeMap, llmDetection);
-  const sqlSnippets = buildSqlSnippets(prefix, outcomeMap);
+  const exampleSqls = buildExampleSqls(prefix, outcomeMap, llmDetection, hasLineage);
+  const sqlSnippets = buildSqlSnippets(prefix, outcomeMap, hasLineage);
+  const benchmarks = buildBenchmarks(prefix);
 
   return {
     version: 2,
@@ -91,6 +96,7 @@ export function buildMetadataGenieSpace(
       join_specs: joinSpecs,
       sql_snippets: sqlSnippets,
     },
+    benchmarks: { questions: benchmarks },
   };
 }
 
@@ -98,11 +104,19 @@ export function buildMetadataGenieSpace(
 // Data Sources
 // ---------------------------------------------------------------------------
 
-function buildDataSourceTables(prefix: string): DataSourceTable[] {
-  const viewNames = Object.keys(VIEW_DESCRIPTIONS).sort();
+const LINEAGE_DESCRIPTION =
+  "Data lineage showing upstream sources and downstream consumers for each table. " +
+  "Use to trace data flow and understand dependencies. " +
+  "Key columns: source_table_full_name, target_table_full_name, source_type, target_type, entity_type, event_time.";
+
+function buildDataSourceTables(prefix: string, hasLineage: boolean): DataSourceTable[] {
+  const allDescriptions = hasLineage
+    ? { ...VIEW_DESCRIPTIONS, mdg_lineage: LINEAGE_DESCRIPTION }
+    : VIEW_DESCRIPTIONS;
+  const viewNames = Object.keys(allDescriptions).sort();
   return viewNames.map((name) => ({
     identifier: `${prefix}.${name}`,
-    description: [VIEW_DESCRIPTIONS[name]],
+    description: [allDescriptions[name]],
   }));
 }
 
@@ -170,7 +184,8 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
  */
 export function buildPreviewQuestions(
   outcomeMap: IndustryOutcome | null | undefined,
-  llmDetection: IndustryDetectionResult
+  llmDetection: IndustryDetectionResult,
+  hasLineage?: boolean
 ): string[] {
   const questions: string[] = [];
 
@@ -221,14 +236,22 @@ export function buildPreviewQuestions(
     "Which schemas have the most tables?"
   );
 
+  if (hasLineage) {
+    questions.push(
+      "Where does this table get its data from?",
+      "What downstream tables depend on our data?"
+    );
+  }
+
   return [...new Set(questions)].slice(0, 15);
 }
 
 function buildSampleQuestions(
   outcomeMap: IndustryOutcome | null | undefined,
-  llmDetection: IndustryDetectionResult
+  llmDetection: IndustryDetectionResult,
+  hasLineage: boolean
 ): SampleQuestion[] {
-  const unique = buildPreviewQuestions(outcomeMap, llmDetection);
+  const unique = buildPreviewQuestions(outcomeMap, llmDetection, hasLineage);
   return unique.map((q) => ({
     id: randomUUID(),
     question: [q],
@@ -242,7 +265,8 @@ function buildSampleQuestions(
 function buildTextInstructions(
   outcomeMap: IndustryOutcome | null | undefined,
   llmDetection: IndustryDetectionResult,
-  catalogScope?: string[]
+  catalogScope?: string[],
+  hasLineage?: boolean
 ): TextInstruction[] {
   const parts: string[] = [];
 
@@ -278,16 +302,36 @@ function buildTextInstructions(
     );
   }
 
-  if (llmDetection.duplication_notes.length > 0) {
-    parts.push(
-      `${llmDetection.duplication_notes.length} potential data duplication pattern(s) detected across the estate. Ask about duplicates to learn more.`
-    );
-  }
-
   parts.push(
     "When searching for business-relevant tables, look at both table names and their comments/descriptions. " +
       "Tables without comments may still contain important data — infer purpose from naming conventions."
   );
+
+  parts.push(
+    "The data_source_format column indicates the storage format (DELTA, PARQUET, CSV, JSON, etc.). DELTA is the default managed format in Databricks."
+  );
+
+  parts.push(
+    "table_type can be MANAGED, EXTERNAL, or VIEW. MANAGED tables are fully governed by Unity Catalog. EXTERNAL tables reference data stored outside Unity Catalog."
+  );
+
+  parts.push(
+    "Tags from mdg_table_tags and mdg_column_tags provide classifications like PII sensitivity, data quality tier, or domain labels. " +
+      "Use them to find sensitive or categorised data."
+  );
+
+  parts.push(
+    "When a user asks about a table by business name, search both the table_name and comment columns using LIKE with wildcards. " +
+      "If multiple matches are found, present all of them and ask the user to clarify which one they mean."
+  );
+
+  if (hasLineage) {
+    parts.push(
+      "The mdg_lineage view shows data flow between tables. " +
+        "source_table_full_name and target_table_full_name are fully qualified names (catalog.schema.table). " +
+        "To join with mdg_tables, use CONCAT(table_catalog, '.', table_schema, '.', table_name) = source_table_full_name or target_table_full_name."
+    );
+  }
 
   return [
     {
@@ -304,7 +348,8 @@ function buildTextInstructions(
 function buildExampleSqls(
   prefix: string,
   outcomeMap: IndustryOutcome | null | undefined,
-  llmDetection: IndustryDetectionResult
+  llmDetection: IndustryDetectionResult,
+  hasLineage?: boolean
 ): ExampleQuestionSql[] {
   const examples: ExampleQuestionSql[] = [];
 
@@ -354,6 +399,56 @@ function buildExampleSqls(
     ],
   });
 
+  examples.push({
+    id: randomUUID(),
+    question: ["What tags are applied to our tables?"],
+    sql: [
+      `SELECT tag_name, tag_value, COUNT(*) AS table_count FROM ${prefix}.mdg_table_tags GROUP BY tag_name, tag_value ORDER BY table_count DESC`,
+    ],
+  });
+
+  examples.push({
+    id: randomUUID(),
+    question: ["Who has access to what data?"],
+    sql: [
+      `SELECT grantee, privilege_type, COUNT(*) AS table_count FROM ${prefix}.mdg_table_privileges GROUP BY grantee, privilege_type ORDER BY table_count DESC`,
+    ],
+  });
+
+  examples.push({
+    id: randomUUID(),
+    question: ["What columns have timestamp data types?"],
+    sql: [
+      `SELECT table_catalog, table_schema, table_name, column_name, data_type FROM ${prefix}.mdg_columns WHERE LOWER(data_type) LIKE '%timestamp%' ORDER BY table_catalog, table_schema, table_name`,
+    ],
+  });
+
+  examples.push({
+    id: randomUUID(),
+    question: ["Which tables have primary key or foreign key constraints?"],
+    sql: [
+      `SELECT constraint_type, COUNT(DISTINCT CONCAT(table_catalog, '.', table_schema, '.', table_name)) AS table_count FROM ${prefix}.mdg_table_constraints GROUP BY constraint_type ORDER BY table_count DESC`,
+    ],
+  });
+
+  examples.push({
+    id: randomUUID(),
+    question: ["What data do we have in each catalog?"],
+    sql: [
+      `SELECT c.catalog_name, c.comment, COUNT(DISTINCT CONCAT(s.catalog_name, '.', s.schema_name)) AS schema_count, COUNT(DISTINCT CONCAT(t.table_catalog, '.', t.table_schema, '.', t.table_name)) AS table_count FROM ${prefix}.mdg_catalogs c LEFT JOIN ${prefix}.mdg_schemas s ON c.catalog_name = s.catalog_name LEFT JOIN ${prefix}.mdg_tables t ON s.catalog_name = t.table_catalog AND s.schema_name = t.table_schema GROUP BY c.catalog_name, c.comment ORDER BY table_count DESC`,
+    ],
+  });
+
+  if (hasLineage) {
+    examples.push({
+      id: randomUUID(),
+      question: ["What are the upstream data sources for a table?"],
+      sql: [
+        `SELECT source_table_full_name, source_type, COUNT(*) AS event_count, MAX(event_time) AS last_event FROM ${prefix}.mdg_lineage WHERE target_table_full_name LIKE '%table_name_here%' GROUP BY source_table_full_name, source_type ORDER BY last_event DESC`,
+      ],
+    });
+  }
+
   return examples;
 }
 
@@ -363,7 +458,8 @@ function buildExampleSqls(
 
 function buildSqlSnippets(
   prefix: string,
-  outcomeMap: IndustryOutcome | null | undefined
+  outcomeMap: IndustryOutcome | null | undefined,
+  hasLineage?: boolean
 ): SqlSnippets {
   const measures: SqlSnippetMeasure[] = [
     {
@@ -382,16 +478,88 @@ function buildSqlSnippets(
       ],
       synonyms: ["columns per table", "table width"],
     },
+    {
+      id: randomUUID(),
+      alias: "total_tables",
+      sql: [`COUNT(DISTINCT CONCAT(table_catalog, '.', table_schema, '.', table_name))`],
+      synonyms: ["table count", "number of tables", "how many tables"],
+    },
+    {
+      id: randomUUID(),
+      alias: "total_schemas",
+      sql: [`COUNT(DISTINCT CONCAT(catalog_name, '.', schema_name))`],
+      synonyms: ["schema count", "number of schemas"],
+    },
+    {
+      id: randomUUID(),
+      alias: "total_catalogs",
+      sql: [`COUNT(DISTINCT catalog_name)`],
+      synonyms: ["catalog count", "number of catalogs"],
+    },
+    {
+      id: randomUUID(),
+      alias: "undocumented_table_count",
+      sql: [`SUM(CASE WHEN comment IS NULL OR TRIM(comment) = '' THEN 1 ELSE 0 END)`],
+      synonyms: ["tables without descriptions", "missing descriptions", "undocumented tables"],
+    },
+    {
+      id: randomUUID(),
+      alias: "tagged_table_count",
+      sql: [`COUNT(DISTINCT CONCAT(catalog_name, '.', schema_name, '.', table_name))`],
+      synonyms: ["classified tables", "labelled tables", "tables with tags"],
+    },
+    {
+      id: randomUUID(),
+      alias: "distinct_data_types",
+      sql: [`COUNT(DISTINCT data_type)`],
+      synonyms: ["data type count", "number of data types", "type variety"],
+    },
   ];
 
   const filters: SqlSnippetFilter[] = [
     {
       id: randomUUID(),
-      sql: [
-        `comment IS NULL OR TRIM(comment) = ''`,
-      ],
+      sql: [`comment IS NULL OR TRIM(comment) = ''`],
       display_name: "Tables without descriptions",
       synonyms: ["undocumented tables", "missing descriptions"],
+    },
+    {
+      id: randomUUID(),
+      sql: [`data_source_format = 'DELTA'`],
+      display_name: "Delta tables",
+      synonyms: ["delta format", "managed tables", "delta"],
+    },
+    {
+      id: randomUUID(),
+      sql: [`table_type = 'EXTERNAL'`],
+      display_name: "External tables",
+      synonyms: ["external", "unmanaged", "external tables"],
+    },
+    {
+      id: randomUUID(),
+      sql: [`table_type = 'VIEW'`],
+      display_name: "Views only",
+      synonyms: ["views", "derived tables", "virtual tables"],
+    },
+    {
+      id: randomUUID(),
+      sql: [
+        `CONCAT(table_catalog, '.', table_schema, '.', table_name) IN (SELECT DISTINCT CONCAT(catalog_name, '.', schema_name, '.', table_name) FROM ${prefix}.mdg_table_tags)`,
+      ],
+      display_name: "Tables with tags",
+      synonyms: ["tagged tables", "classified tables", "labelled tables"],
+    },
+    {
+      id: randomUUID(),
+      sql: [`created >= DATE_ADD(CURRENT_DATE(), -30)`],
+      display_name: "Recently created (last 30 days)",
+      synonyms: ["new tables", "last 30 days", "recently added"],
+    },
+    {
+      id: randomUUID(),
+      sql: [`last_altered >= DATE_ADD(CURRENT_DATE(), -30)`],
+      display_name: "Recently modified (last 30 days)",
+      synonyms: ["recently changed", "recently updated", "recently modified"],
     },
   ];
 
@@ -408,6 +576,24 @@ function buildSqlSnippets(
     }
   }
 
+  if (hasLineage) {
+    measures.push({
+      id: randomUUID(),
+      alias: "lineage_edge_count",
+      sql: [`COUNT(DISTINCT CONCAT(source_table_full_name, ' -> ', target_table_full_name))`],
+      synonyms: ["data flows", "connections", "dependencies", "lineage edges"],
+    });
+
+    filters.push({
+      id: randomUUID(),
+      sql: [
+        `CONCAT(table_catalog, '.', table_schema, '.', table_name) NOT IN (SELECT DISTINCT target_table_full_name FROM ${prefix}.mdg_lineage)`,
+      ],
+      display_name: "Tables with no upstream sources",
+      synonyms: ["source tables", "root tables", "ingestion tables", "origin tables"],
+    });
+  }
+
   const expressions: SqlSnippetExpression[] = [
     {
       id: randomUUID(),
@@ -417,7 +603,88 @@ function buildSqlSnippets(
       ],
       synonyms: ["duplicated tables", "table copies", "redundant tables"],
     },
+    {
+      id: randomUUID(),
+      alias: "full_table_name",
+      sql: [`CONCAT(table_catalog, '.', table_schema, '.', table_name)`],
+      synonyms: ["FQN", "qualified name", "full name", "fully qualified"],
+    },
+    {
+      id: randomUUID(),
+      alias: "table_type",
+      sql: [`table_type`],
+      synonyms: ["type", "managed or external", "table kind"],
+    },
+    {
+      id: randomUUID(),
+      alias: "data_format",
+      sql: [`data_source_format`],
+      synonyms: ["format", "storage format", "delta or parquet"],
+    },
+    {
+      id: randomUUID(),
+      alias: "creation_month",
+      sql: [`DATE_TRUNC('MONTH', created)`],
+      synonyms: ["created month", "by month", "monthly"],
+    },
+    {
+      id: randomUUID(),
+      alias: "owner",
+      sql: [`table_owner`],
+      synonyms: ["owned by", "creator", "responsible", "table owner"],
+    },
   ];
 
   return { measures, filters, expressions };
+}
+
+// ---------------------------------------------------------------------------
+// Benchmarks -- gold-standard Q&A for Genie quality
+// ---------------------------------------------------------------------------
+
+function buildBenchmarks(prefix: string): BenchmarkQuestion[] {
+  const bq = (
+    question: string,
+    sql: string,
+    alternates: string[]
+  ): BenchmarkQuestion[] => {
+    return [question, ...alternates].map((q) => ({
+      id: randomUUID(),
+      question: [q],
+      answer: [{ format: "SQL", content: [sql] }],
+    }));
+  };
+
+  return [
+    ...bq(
+      "How many tables do we have?",
+      `SELECT COUNT(*) AS total_tables FROM ${prefix}.mdg_tables`,
+      ["total number of tables", "count all tables"]
+    ),
+    ...bq(
+      "Which schemas have the most tables?",
+      `SELECT table_catalog, table_schema, COUNT(*) AS table_count FROM ${prefix}.mdg_tables GROUP BY table_catalog, table_schema ORDER BY table_count DESC LIMIT 20`,
+      ["largest schemas", "biggest schemas by table count"]
+    ),
+    ...bq(
+      "Show undocumented tables",
+      `SELECT table_catalog, table_schema, table_name, table_type FROM ${prefix}.mdg_tables WHERE comment IS NULL OR TRIM(comment) = '' ORDER BY table_catalog, table_schema, table_name`,
+      ["tables without descriptions", "missing comments", "tables with no description"]
+    ),
+    ...bq(
+      "What data formats are used?",
+      `SELECT data_source_format, COUNT(*) AS table_count FROM ${prefix}.mdg_tables WHERE data_source_format IS NOT NULL GROUP BY data_source_format ORDER BY table_count DESC`,
+      ["delta vs parquet", "storage formats", "table formats"]
+    ),
+    ...bq(
+      "Who owns the most tables?",
+      `SELECT table_owner, COUNT(*) AS table_count FROM ${prefix}.mdg_tables GROUP BY table_owner ORDER BY table_count DESC LIMIT 20`,
+      ["table owners", "top table owners"]
+    ),
+    ...bq(
+      "What catalogs do we have?",
+      `SELECT catalog_name, catalog_owner, comment FROM ${prefix}.mdg_catalogs ORDER BY catalog_name`,
+      ["list catalogs", "show all catalogs", "available catalogs"]
+    ),
+  ];
 }

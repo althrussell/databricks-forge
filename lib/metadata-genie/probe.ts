@@ -25,8 +25,18 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
     logger.warn("system.information_schema access denied", { error: msg });
     return {
       accessible: false,
+      lineageAccessible: false,
       error: `Cannot access system.information_schema. Ensure the service principal has USE CATALOG and SELECT grants on the system catalog. (${msg})`,
     };
+  }
+
+  // Check lineage access (non-blocking -- graceful fallback)
+  let lineageAccessible = false;
+  try {
+    await executeSQL("SELECT 1 FROM system.access.table_lineage LIMIT 1");
+    lineageAccessible = true;
+  } catch {
+    logger.info("system.access.table_lineage not accessible -- lineage will be excluded from MDG");
   }
 
   try {
@@ -52,6 +62,7 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
 
     return {
       accessible: true,
+      lineageAccessible,
       catalogs: filteredCatalogs,
       tableNames: tableRows,
     };
@@ -63,6 +74,7 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
     });
     return {
       accessible: true,
+      lineageAccessible,
       catalogs: [],
       tableNames: [],
       error: `Access confirmed but failed to list catalogs: ${msg}`,

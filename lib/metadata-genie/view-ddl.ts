@@ -206,6 +206,25 @@ const VIEW_DEFS: ViewDef[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Lineage View (conditional -- only when system.access.table_lineage is accessible)
+// ---------------------------------------------------------------------------
+
+const LINEAGE_VIEW_DEF: ViewDef = {
+  name: "mdg_lineage",
+  source: "system.access.table_lineage",
+  columns: [
+    "source_table_full_name",
+    "source_type",
+    "target_table_full_name",
+    "target_type",
+    "entity_type",
+    "event_time",
+  ],
+  filterColumn: "",
+  comment: "Curated metadata view: data lineage showing upstream and downstream dependencies",
+};
+
+// ---------------------------------------------------------------------------
 // DDL Generation
 // ---------------------------------------------------------------------------
 
@@ -254,19 +273,26 @@ export function generateViewDDL(opts: {
   target: ViewTarget;
   catalogScope?: string[];
   aiDescriptions?: Record<string, string>;
+  lineageAccessible?: boolean;
 }): string[] {
-  const { target, catalogScope, aiDescriptions } = opts;
+  const { target, catalogScope, aiDescriptions, lineageAccessible } = opts;
   const fqnPrefix = `\`${target.catalog}\`.\`${target.schema}\``;
 
-  return VIEW_DEFS.map((def) => {
+  const defs = lineageAccessible
+    ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
+    : VIEW_DEFS;
+
+  return defs.map((def) => {
     const conditions: string[] = [];
 
-    if (catalogScope && catalogScope.length > 0) {
-      const inList = catalogScope.map((c) => `'${c}'`).join(", ");
-      conditions.push(`${def.filterColumn} IN (${inList})`);
-    } else {
-      const exList = EXCLUDED_CATALOGS.map((c) => `'${c}'`).join(", ");
-      conditions.push(`${def.filterColumn} NOT IN (${exList})`);
+    if (def.filterColumn) {
+      if (catalogScope && catalogScope.length > 0) {
+        const inList = catalogScope.map((c) => `'${c}'`).join(", ");
+        conditions.push(`${def.filterColumn} IN (${inList})`);
+      } else {
+        const exList = EXCLUDED_CATALOGS.map((c) => `'${c}'`).join(", ");
+        conditions.push(`${def.filterColumn} NOT IN (${exList})`);
+      }
     }
 
     if (def.schemaColumn) {
@@ -276,6 +302,14 @@ export function generateViewDDL(opts: {
 
     if (def.tableNameColumn) {
       conditions.push(`${def.tableNameColumn} NOT LIKE '!_%' ESCAPE '!'`);
+    }
+
+    // Lineage: filter by FQN prefix when catalog scope is set
+    if (def.name === "mdg_lineage" && catalogScope && catalogScope.length > 0) {
+      const orConditions = catalogScope
+        .map((c) => `source_table_full_name LIKE '${c}.%' OR target_table_full_name LIKE '${c}.%'`)
+        .join(" OR ");
+      conditions.push(`(${orConditions})`);
     }
 
     const whereClause =
@@ -324,8 +358,14 @@ export function generateDropViewDDL(viewFqns: string[]): string[] {
 /**
  * Return the list of view FQNs that would be created for a given target.
  */
-export function getViewFqns(target: ViewTarget): string[] {
-  return VIEW_DEFS.map(
+export function getViewFqns(
+  target: ViewTarget,
+  lineageAccessible?: boolean
+): string[] {
+  const defs = lineageAccessible
+    ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
+    : VIEW_DEFS;
+  return defs.map(
     (def) => `\`${target.catalog}\`.\`${target.schema}\`.\`${def.name}\``
   );
 }
@@ -336,6 +376,9 @@ export function getViewDefinitions(): ViewDef[] {
 }
 
 /** Return just the view names (without FQN prefix). */
-export function getViewNames(): string[] {
-  return VIEW_DEFS.map((d) => d.name);
+export function getViewNames(lineageAccessible?: boolean): string[] {
+  const defs = lineageAccessible
+    ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
+    : VIEW_DEFS;
+  return defs.map((d) => d.name);
 }

@@ -48,8 +48,9 @@ import {
   ChevronDown,
   ChevronRight,
   Rocket,
-  AlertTriangle,
   ShieldAlert,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { MetadataGenieDeployModal } from "@/components/metadata-genie/deploy-modal";
 import type { MetadataGenieSpace } from "@/lib/metadata-genie/types";
@@ -66,6 +67,9 @@ export default function MetadataGeniePage() {
   const [loading, setLoading] = useState(true);
   const [trashTargetId, setTrashTargetId] = useState<string | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [availableCatalogs, setAvailableCatalogs] = useState<string[]>([]);
+  const [selectedCatalogs, setSelectedCatalogs] = useState<string[]>([]);
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   const fetchSpaces = useCallback(async () => {
     try {
@@ -89,6 +93,13 @@ export default function MetadataGeniePage() {
 
   useEffect(() => {
     fetchSpaces();
+    // Fetch available catalogs for scope selection
+    fetch("/api/metadata-genie/probe")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.catalogs) setAvailableCatalogs(data.catalogs);
+      })
+      .catch(() => {});
   }, [fetchSpaces]);
 
   // -------------------------------------------------------------------
@@ -102,7 +113,9 @@ export default function MetadataGeniePage() {
       const res = await fetch("/api/metadata-genie/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          catalogScope: selectedCatalogs.length > 0 ? selectedCatalogs : undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -132,7 +145,7 @@ export default function MetadataGeniePage() {
       setState("list");
       toast.error(err instanceof Error ? err.message : "Generation failed");
     }
-  }, []);
+  }, [selectedCatalogs]);
 
   // -------------------------------------------------------------------
   // Deploy complete callback
@@ -230,6 +243,68 @@ export default function MetadataGeniePage() {
         </Card>
       )}
 
+      {/* Catalog scope selection (shown when empty state) */}
+      {state === "list" &&
+        !draft &&
+        deployedSpaces.length === 0 &&
+        availableCatalogs.length > 1 && (
+          <Collapsible open={optionsOpen} onOpenChange={setOptionsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                {optionsOpen ? "Hide options" : "Scope to specific catalogs"}
+                {selectedCatalogs.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-[10px]">
+                    {selectedCatalogs.length} selected
+                  </Badge>
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <Card className="mt-2">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Restrict the Metadata Genie to specific catalogs. Leave
+                    empty to include all catalogs.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableCatalogs.map((cat) => {
+                      const selected = selectedCatalogs.includes(cat);
+                      return (
+                        <Badge
+                          key={cat}
+                          variant={selected ? "default" : "outline"}
+                          className="cursor-pointer select-none text-xs"
+                          onClick={() =>
+                            setSelectedCatalogs((prev) =>
+                              selected
+                                ? prev.filter((c) => c !== cat)
+                                : [...prev, cat]
+                            )
+                          }
+                        >
+                          {cat}
+                          {selected && <X className="ml-1 h-3 w-3" />}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                  {selectedCatalogs.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 text-xs"
+                      onClick={() => setSelectedCatalogs([])}
+                    >
+                      Clear selection
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
       {/* -------------------------------------------------------------- */}
       {/* State: Generating                                               */}
       {/* -------------------------------------------------------------- */}
@@ -306,42 +381,22 @@ export default function MetadataGeniePage() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {draft.catalogScope && draft.catalogScope.length > 0 && (
+                  <Badge variant="outline" className="text-[10px]">
+                    Scoped to {draft.catalogScope.length} catalog{draft.catalogScope.length !== 1 && "s"}
+                  </Badge>
+                )}
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${draft.lineageAccessible ? "border-green-300 text-green-700 dark:border-green-800 dark:text-green-400" : "border-muted text-muted-foreground"}`}
+                >
+                  Lineage: {draft.lineageAccessible ? "Available" : "Not available"}
+                </Badge>
+              </div>
             </CardContent>
           </Card>
-
-          {/* Duplication notes */}
-          {draft.detection?.duplication_notes &&
-            draft.detection.duplication_notes.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
-                <CardContent className="pt-5 pb-4">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
-                      Potential duplication detected
-                    </p>
-                    <Badge
-                      variant="outline"
-                      className="ml-auto border-amber-300 text-[10px] text-amber-700 dark:border-amber-700 dark:text-amber-400"
-                    >
-                      {draft.detection.duplication_notes.length} finding
-                      {draft.detection.duplication_notes.length !== 1 && "s"}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {draft.detection.duplication_notes.map((note, i) => (
-                      <div
-                        key={i}
-                        className="rounded-md border border-amber-200/60 bg-white/60 px-3 py-2 dark:border-amber-800/40 dark:bg-amber-950/30"
-                      >
-                        <p className="text-xs leading-relaxed text-muted-foreground">
-                          {note}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
           {/* Space content preview */}
           {draft.serializedSpace && (
@@ -588,6 +643,7 @@ function SpaceContentPreview({
   const expressions = sp.instructions?.sql_snippets?.expressions ?? [];
   const joins = sp.instructions?.join_specs ?? [];
   const instructions = sp.instructions?.text_instructions ?? [];
+  const benchmarkQs = sp.benchmarks?.questions ?? [];
 
   return (
     <div className="space-y-3">
@@ -597,10 +653,11 @@ function SpaceContentPreview({
         <StatCard label="Joins" value={joins.length} />
         <StatCard label="Questions" value={questions.length} />
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <StatCard label="Measures" value={measures.length} />
         <StatCard label="Filters" value={filters.length} />
         <StatCard label="Dimensions" value={expressions.length} />
+        <StatCard label="Benchmarks" value={benchmarkQs.length} />
       </div>
 
       <Accordion type="multiple" className="w-full">

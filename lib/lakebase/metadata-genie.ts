@@ -28,6 +28,7 @@ function dbRowToSpace(row: any): MetadataGenieSpace {
     detection: parseJson<IndustryDetectionResult>(row.detection),
     sampleQuestions: parseJsonArray(row.sampleQuestions),
     aiDescriptions: parseJson<Record<string, string>>(row.aiDescriptions),
+    lineageAccessible: row.lineageAccessible ?? false,
     viewCatalog: row.viewCatalog,
     viewSchema: row.viewSchema,
     viewsDeployed: row.viewsDeployed,
@@ -98,6 +99,7 @@ export async function saveMetadataGenieSpace(opts: {
   detection?: IndustryDetectionResult;
   sampleQuestions?: string[];
   aiDescriptions?: Record<string, string>;
+  lineageAccessible?: boolean;
   serializedSpace?: string;
   tableCount: number;
 }): Promise<MetadataGenieSpace> {
@@ -117,6 +119,7 @@ export async function saveMetadataGenieSpace(opts: {
       aiDescriptions: opts.aiDescriptions
         ? JSON.stringify(opts.aiDescriptions)
         : null,
+      lineageAccessible: opts.lineageAccessible ?? false,
       serializedSpace: opts.serializedSpace ?? null,
       tableCount: opts.tableCount,
       status: "draft" as const,

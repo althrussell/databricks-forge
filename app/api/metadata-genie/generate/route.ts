@@ -25,7 +25,7 @@ import type { MetadataGenieGenerateConfig } from "@/lib/metadata-genie/types";
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as MetadataGenieGenerateConfig;
-    const { title } = body;
+    const { title, catalogScope } = body;
 
     const probe = await probeSystemInformationSchema();
     if (!probe.accessible) {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     let aiDescriptions: Record<string, string> = {};
     try {
       const undocumented = await fetchUndocumentedTables(
-        probe.catalogs ?? undefined
+        catalogScope ?? probe.catalogs ?? undefined
       );
       if (undocumented.length > 0) {
         const descMap = await generateTableDescriptions(undocumented);
@@ -56,13 +56,16 @@ export async function POST(request: NextRequest) {
 
     const sampleQuestions = buildPreviewQuestions(
       detection.outcomeMap,
-      detection.llmDetection
+      detection.llmDetection,
+      probe.lineageAccessible
     );
 
     const previewSpace = buildMetadataGenieSpace({
       viewTarget: { catalog: "{catalog}", schema: "{schema}" },
       outcomeMap: detection.outcomeMap,
       llmDetection: detection.llmDetection,
+      catalogScope,
+      lineageAccessible: probe.lineageAccessible,
       title: title ?? "Meta Data Genie",
     });
 
@@ -70,6 +73,7 @@ export async function POST(request: NextRequest) {
     const saved = await saveMetadataGenieSpace({
       id,
       title: title ?? "Meta Data Genie",
+      catalogScope,
       industryId: detection.outcomeMapId,
       industryName: detection.outcomeMap?.name ?? null,
       domains: detection.llmDetection.domains,
@@ -77,6 +81,7 @@ export async function POST(request: NextRequest) {
       sampleQuestions,
       aiDescriptions:
         Object.keys(aiDescriptions).length > 0 ? aiDescriptions : undefined,
+      lineageAccessible: probe.lineageAccessible,
       serializedSpace: JSON.stringify(previewSpace),
       tableCount: tableNames.length,
     });
@@ -87,6 +92,8 @@ export async function POST(request: NextRequest) {
       tableCount: tableNames.length,
       questionCount: sampleQuestions.length,
       aiDescriptionCount: Object.keys(aiDescriptions).length,
+      lineageAccessible: probe.lineageAccessible,
+      catalogScope: catalogScope?.join(", ") ?? "all",
     });
 
     return NextResponse.json(saved);

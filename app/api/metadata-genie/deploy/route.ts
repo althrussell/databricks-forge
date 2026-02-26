@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       outcomeMap,
       llmDetection: space.detection,
       catalogScope: space.catalogScope ?? undefined,
+      lineageAccessible: space.lineageAccessible,
       title: space.title,
     });
 
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
       target: viewTarget,
       catalogScope: space.catalogScope ?? undefined,
       aiDescriptions: space.aiDescriptions ?? undefined,
+      lineageAccessible: space.lineageAccessible,
     });
 
     const viewResults: { view: string; success: boolean; error?: string }[] =
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const viewFqns = getViewFqns(viewTarget);
+    const viewFqns = getViewFqns(viewTarget, space.lineageAccessible);
 
     // 3. Deploy Genie Space
     const config = getConfig();

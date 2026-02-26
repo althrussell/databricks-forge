@@ -30,6 +30,7 @@ export interface IndustryDetectionOutput {
 
 export interface ProbeResult {
   accessible: boolean;
+  lineageAccessible: boolean;
   catalogs?: string[];
   tableNames?: string[];
   error?: string;
@@ -50,6 +51,7 @@ export interface ViewTarget {
 
 export interface MetadataGenieGenerateConfig {
   title?: string;
+  catalogScope?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +83,7 @@ export interface MetadataGenieSpace {
   detection: IndustryDetectionResult | null;
   sampleQuestions: string[] | null;
   aiDescriptions: Record<string, string> | null;
+  lineageAccessible: boolean;
   viewCatalog: string | null;
   viewSchema: string | null;
   viewsDeployed: boolean;
