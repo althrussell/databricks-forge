@@ -48,36 +48,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Build SerializedSpace with the real view FQNs
-    const serializedSpace = buildMetadataGenieSpace({
-      viewTarget,
-      outcomeMap: null,
-      llmDetection: space.detection,
-      catalogScope: space.catalogScope ?? undefined,
-      title: space.title,
-    });
-
-    // If we have an industryId, load the outcome map for richer content
+    // 1. Load outcome map (if matched) then build SerializedSpace once
+    let outcomeMap = null;
     if (space.industryId) {
       try {
         const { getIndustryOutcomeAsync } = await import(
           "@/lib/domain/industry-outcomes-server"
         );
-        const outcomeMap = await getIndustryOutcomeAsync(space.industryId);
-        if (outcomeMap) {
-          const richSpace = buildMetadataGenieSpace({
-            viewTarget,
-            outcomeMap,
-            llmDetection: space.detection,
-            catalogScope: space.catalogScope ?? undefined,
-            title: space.title,
-          });
-          Object.assign(serializedSpace, richSpace);
-        }
+        outcomeMap = (await getIndustryOutcomeAsync(space.industryId)) ?? null;
       } catch {
         // Fall through with detection-only space
       }
     }
+
+    const serializedSpace = buildMetadataGenieSpace({
+      viewTarget,
+      outcomeMap,
+      llmDetection: space.detection,
+      catalogScope: space.catalogScope ?? undefined,
+      title: space.title,
+    });
 
     const serializedSpaceJson = JSON.stringify(serializedSpace);
 

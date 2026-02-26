@@ -10,7 +10,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { probeSystemInformationSchema } from "@/lib/metadata-genie/probe";
 import { detectIndustry } from "@/lib/metadata-genie/industry-detect";
-import { buildPreviewQuestions } from "@/lib/metadata-genie/space-builder";
+import {
+  buildPreviewQuestions,
+  buildMetadataGenieSpace,
+} from "@/lib/metadata-genie/space-builder";
 import { saveMetadataGenieSpace } from "@/lib/lakebase/metadata-genie";
 import { logger } from "@/lib/logger";
 import type { MetadataGenieGenerateConfig } from "@/lib/metadata-genie/types";
@@ -36,6 +39,13 @@ export async function POST(request: NextRequest) {
       detection.llmDetection
     );
 
+    const previewSpace = buildMetadataGenieSpace({
+      viewTarget: { catalog: "{catalog}", schema: "{schema}" },
+      outcomeMap: detection.outcomeMap,
+      llmDetection: detection.llmDetection,
+      title: title ?? "Meta Data Genie",
+    });
+
     const id = randomUUID();
     const saved = await saveMetadataGenieSpace({
       id,
@@ -45,6 +55,7 @@ export async function POST(request: NextRequest) {
       domains: detection.llmDetection.domains,
       detection: detection.llmDetection,
       sampleQuestions,
+      serializedSpace: JSON.stringify(previewSpace),
       tableCount: tableNames.length,
     });
 

@@ -9,21 +9,34 @@
  * 3. Summary -- rich preview of what was detected, with Deploy button
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Database,
@@ -36,12 +49,11 @@ import {
   ChevronRight,
   Rocket,
   AlertTriangle,
-  MessageSquare,
-  Layers,
-  BarChart3,
+  ShieldAlert,
 } from "lucide-react";
 import { MetadataGenieDeployModal } from "@/components/metadata-genie/deploy-modal";
 import type { MetadataGenieSpace } from "@/lib/metadata-genie/types";
+import type { SerializedSpace } from "@/lib/genie/types";
 
 type PageState = "list" | "generating" | "summary";
 
@@ -52,6 +64,8 @@ export default function MetadataGeniePage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deployModalOpen, setDeployModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [trashTargetId, setTrashTargetId] = useState<string | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
 
   const fetchSpaces = useCallback(async () => {
     try {
@@ -83,6 +97,7 @@ export default function MetadataGeniePage() {
 
   const handleGenerate = useCallback(async () => {
     setState("generating");
+    setPermissionError(null);
     try {
       const res = await fetch("/api/metadata-genie/generate", {
         method: "POST",
@@ -92,6 +107,16 @@ export default function MetadataGeniePage() {
 
       if (!res.ok) {
         const err = await res.json();
+        if (res.status === 403) {
+          setState("list");
+          setPermissionError(
+            err.error ??
+              "Insufficient permissions to access system.information_schema. " +
+              "Ensure the service principal or user running this app has been granted " +
+              "SELECT on system.information_schema tables."
+          );
+          return;
+        }
         throw new Error(err.error ?? "Generation failed");
       }
 
@@ -113,32 +138,18 @@ export default function MetadataGeniePage() {
   // Deploy complete callback
   // -------------------------------------------------------------------
 
-  const handleDeployComplete = useCallback(
-    (result: { spaceId: string; spaceUrl: string }) => {
-      if (draft) {
-        setSpaces((prev) => [
-          {
-            ...draft,
-            spaceId: result.spaceId,
-            spaceUrl: result.spaceUrl,
-            status: "deployed",
-            viewsDeployed: true,
-          },
-          ...prev,
-        ]);
-      }
-      setDraft(null);
-      setState("list");
-      toast.success("Meta Data Genie deployed!");
-    },
-    [draft]
-  );
+  const handleDeployComplete = useCallback(() => {
+    setDraft(null);
+    setState("list");
+    fetchSpaces();
+    toast.success("Meta Data Genie deployed!");
+  }, [fetchSpaces]);
 
   // -------------------------------------------------------------------
   // Trash
   // -------------------------------------------------------------------
 
-  const handleTrash = useCallback(
+  const confirmTrash = useCallback(
     async (id: string) => {
       try {
         const res = await fetch("/api/metadata-genie", {
@@ -160,6 +171,8 @@ export default function MetadataGeniePage() {
         toast.success("Space trashed");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Trash failed");
+      } finally {
+        setTrashTargetId(null);
       }
     },
     [draft]
@@ -184,13 +197,38 @@ export default function MetadataGeniePage() {
             Databricks Genie Space backed by curated metadata views.
           </p>
         </div>
-        {state === "list" && !draft && (
+        {state === "list" && !draft && deployedSpaces.length === 0 && (
           <Button onClick={handleGenerate}>
             <Sparkles className="mr-2 h-4 w-4" />
             Generate Metadata Genie
           </Button>
         )}
       </div>
+
+      {/* Permission error card */}
+      {permissionError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex items-start gap-3 pt-4">
+            <ShieldAlert className="mt-0.5 h-5 w-5 text-destructive" />
+            <div>
+              <p className="text-sm font-medium text-destructive">
+                Permission Denied
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {permissionError}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2"
+                onClick={() => setPermissionError(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* -------------------------------------------------------------- */}
       {/* State: Generating                                               */}
@@ -218,34 +256,25 @@ export default function MetadataGeniePage() {
       {/* -------------------------------------------------------------- */}
       {state === "summary" && draft && (
         <div className="space-y-4">
-          {/* Industry detection card */}
+          {/* Industry + domain header */}
           <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
             <CardContent className="pt-6">
-              <div className="grid gap-6 md:grid-cols-4">
-                <SummaryItem
-                  icon={<Sparkles className="h-4 w-4 text-blue-600" />}
-                  label="Industry"
-                  value={draft.industryName ?? "Not detected"}
-                />
-                <SummaryItem
-                  icon={<BarChart3 className="h-4 w-4 text-blue-600" />}
-                  label="Tables Scanned"
-                  value={draft.tableCount.toLocaleString()}
-                />
-                <SummaryItem
-                  icon={<Layers className="h-4 w-4 text-blue-600" />}
-                  label="Domains"
-                  value={
-                    draft.domains?.length
-                      ? draft.domains.join(", ")
-                      : "N/A"
-                  }
-                />
-                <SummaryItem
-                  icon={<Database className="h-4 w-4 text-blue-600" />}
-                  label="Curated Views"
-                  value="10 views"
-                />
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">{draft.title}</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {draft.industryName
+                      ? `${draft.industryName} industry detected`
+                      : "Industry not detected"}{" "}
+                    &middot; {draft.tableCount.toLocaleString()} tables scanned
+                    {draft.domains?.length
+                      ? ` · Domains: ${draft.domains.join(", ")}`
+                      : ""}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  Draft
+                </Badge>
               </div>
             </CardContent>
           </Card>
@@ -275,31 +304,10 @@ export default function MetadataGeniePage() {
               </Card>
             )}
 
-          {/* Sample questions */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <MessageSquare className="h-4 w-4" />
-                Sample Questions
-              </CardTitle>
-              <CardDescription>
-                Business-analyst-focused questions tailored to your data
-                estate. These will be displayed in the Genie Space.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="grid gap-1.5 md:grid-cols-2">
-                {(draft.sampleQuestions ?? []).map((q, i) => (
-                  <li
-                    key={i}
-                    className="rounded-md border px-3 py-2 text-sm text-muted-foreground"
-                  >
-                    &ldquo;{q}&rdquo;
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {/* Space content preview */}
+          {draft.serializedSpace && (
+            <SpaceContentPreview serializedSpace={draft.serializedSpace} />
+          )}
 
           {/* Deploy button */}
           <div className="flex items-center gap-3">
@@ -309,9 +317,7 @@ export default function MetadataGeniePage() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => {
-                handleTrash(draft.id);
-              }}
+              onClick={() => setTrashTargetId(draft.id)}
             >
               Discard
             </Button>
@@ -403,7 +409,7 @@ export default function MetadataGeniePage() {
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleTrash(space.id);
+                          setTrashTargetId(space.id);
                         }}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -420,7 +426,7 @@ export default function MetadataGeniePage() {
                           value={space.industryName ?? "Not detected"}
                         />
                         <DetailItem
-                          label="Tables"
+                          label="Tables Scanned"
                           value={space.tableCount.toLocaleString()}
                         />
                         <DetailItem
@@ -428,7 +434,7 @@ export default function MetadataGeniePage() {
                           value={space.domains?.join(", ") ?? "N/A"}
                         />
                         <DetailItem
-                          label="Views"
+                          label="View Schema"
                           value={
                             space.viewCatalog && space.viewSchema
                               ? `${space.viewCatalog}.${space.viewSchema}`
@@ -437,26 +443,11 @@ export default function MetadataGeniePage() {
                         />
                       </div>
 
-                      {space.sampleQuestions &&
-                        space.sampleQuestions.length > 0 && (
-                          <div className="mt-4">
-                            <p className="mb-2 text-xs font-medium text-muted-foreground">
-                              Sample Questions
-                            </p>
-                            <ul className="grid gap-1 md:grid-cols-2">
-                              {space.sampleQuestions
-                                .slice(0, 8)
-                                .map((q, i) => (
-                                  <li
-                                    key={i}
-                                    className="text-xs text-muted-foreground"
-                                  >
-                                    &ldquo;{q}&rdquo;
-                                  </li>
-                                ))}
-                            </ul>
-                          </div>
-                        )}
+                      <div className="mt-4">
+                        <SpaceContentPreview
+                          serializedSpace={space.serializedSpace}
+                        />
+                      </div>
 
                       <p className="mt-4 text-xs text-muted-foreground">
                         Created{" "}
@@ -479,6 +470,35 @@ export default function MetadataGeniePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Trash confirmation dialog */}
+      <AlertDialog
+        open={trashTargetId !== null}
+        onOpenChange={(open) => {
+          if (!open) setTrashTargetId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Metadata Genie Space?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will trash the Genie Space and drop all curated metadata views
+              from the target schema. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (trashTargetId) confirmTrash(trashTargetId);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -487,22 +507,11 @@ export default function MetadataGeniePage() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function SummaryItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex items-start gap-2">
-      <div className="mt-0.5">{icon}</div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium">{value}</p>
-      </div>
+    <div className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
+      <div className="text-sm font-semibold">{value}</div>
+      <div className="text-[10px] text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -512,6 +521,233 @@ function DetailItem({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
+function SpaceContentPreview({
+  serializedSpace,
+}: {
+  serializedSpace: string;
+}) {
+  const sp: SerializedSpace | null = useMemo(() => {
+    if (!serializedSpace) return null;
+    try {
+      return JSON.parse(serializedSpace) as SerializedSpace;
+    } catch {
+      return null;
+    }
+  }, [serializedSpace]);
+
+  if (!sp) return null;
+
+  const tables = sp.data_sources?.tables ?? [];
+  const questions = sp.config?.sample_questions ?? [];
+  const sqls = sp.instructions?.example_question_sqls ?? [];
+  const measures = sp.instructions?.sql_snippets?.measures ?? [];
+  const filters = sp.instructions?.sql_snippets?.filters ?? [];
+  const expressions = sp.instructions?.sql_snippets?.expressions ?? [];
+  const joins = sp.instructions?.join_specs ?? [];
+  const instructions = sp.instructions?.text_instructions ?? [];
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-4 gap-2">
+        <StatCard label="Tables" value={tables.length} />
+        <StatCard label="SQL Examples" value={sqls.length} />
+        <StatCard label="Joins" value={joins.length} />
+        <StatCard label="Questions" value={questions.length} />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <StatCard label="Measures" value={measures.length} />
+        <StatCard label="Filters" value={filters.length} />
+        <StatCard label="Dimensions" value={expressions.length} />
+      </div>
+
+      <Accordion type="multiple" className="w-full">
+        {tables.length > 0 && (
+          <AccordionItem value="tables">
+            <AccordionTrigger className="text-xs font-medium">
+              Tables &amp; Views ({tables.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="max-h-48 space-y-1 overflow-auto">
+                {tables.map((t) => (
+                  <div
+                    key={t.identifier}
+                    className="flex items-baseline gap-2 text-xs"
+                  >
+                    <span className="truncate font-mono text-muted-foreground">
+                      {t.identifier}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {questions.length > 0 && (
+          <AccordionItem value="questions">
+            <AccordionTrigger className="text-xs font-medium">
+              Sample Questions ({questions.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-1">
+                {questions.map((q) => (
+                  <div
+                    key={q.id}
+                    className="py-0.5 text-xs text-muted-foreground"
+                  >
+                    {q.question.join(" ")}
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {sqls.length > 0 && (
+          <AccordionItem value="sql">
+            <AccordionTrigger className="text-xs font-medium">
+              SQL Examples ({sqls.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="max-h-64 space-y-3 overflow-auto">
+                {sqls.map((ex) => (
+                  <div key={ex.id}>
+                    <p className="text-xs font-medium">
+                      {ex.question.join(" ")}
+                    </p>
+                    <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
+                      {ex.sql.join("\n")}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {measures.length > 0 && (
+          <AccordionItem value="measures">
+            <AccordionTrigger className="text-xs font-medium">
+              Measures ({measures.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-1">
+                {measures.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-baseline gap-2 py-0.5 text-xs"
+                  >
+                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
+                      {m.alias}
+                    </code>
+                    <span className="text-muted-foreground">
+                      {m.sql.join(" ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {filters.length > 0 && (
+          <AccordionItem value="filters">
+            <AccordionTrigger className="text-xs font-medium">
+              Filters ({filters.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-1">
+                {filters.map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-baseline gap-2 py-0.5 text-xs"
+                  >
+                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
+                      {f.display_name}
+                    </code>
+                    <span className="text-muted-foreground">
+                      {f.sql.join(" ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {expressions.length > 0 && (
+          <AccordionItem value="dimensions">
+            <AccordionTrigger className="text-xs font-medium">
+              Dimensions ({expressions.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-1">
+                {expressions.map((e) => (
+                  <div
+                    key={e.id}
+                    className="flex items-baseline gap-2 py-0.5 text-xs"
+                  >
+                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
+                      {e.alias}
+                    </code>
+                    <span className="text-muted-foreground">
+                      {e.sql.join(" ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {joins.length > 0 && (
+          <AccordionItem value="joins">
+            <AccordionTrigger className="text-xs font-medium">
+              Join Relationships ({joins.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-1 text-xs">
+                {joins.map((j) => (
+                  <div
+                    key={j.id}
+                    className="flex items-baseline gap-2 py-0.5"
+                  >
+                    <span className="truncate font-mono text-muted-foreground">
+                      {j.sql
+                        .filter((s: string) => !s.startsWith("--rt="))
+                        .join(" ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {instructions.length > 0 && (
+          <AccordionItem value="instructions">
+            <AccordionTrigger className="text-xs font-medium">
+              Text Instructions ({instructions.length})
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2">
+                {instructions.map((ti) => (
+                  <div
+                    key={ti.id}
+                    className="whitespace-pre-line text-xs text-muted-foreground"
+                  >
+                    {ti.content.join("\n")}
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+      </Accordion>
     </div>
   );
 }

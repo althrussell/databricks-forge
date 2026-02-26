@@ -23,7 +23,7 @@ interface ViewDef {
 }
 
 /** Catalogs excluded from all views -- system internals and sample datasets. */
-const EXCLUDED_CATALOGS = ["system", "__databricks_internal", "samples"];
+const EXCLUDED_CATALOGS = ["system", "__databricks_internal", "samples", "hive_metastore"];
 
 /** Schemas excluded from views that have a schema column. */
 const EXCLUDED_SCHEMAS = ["information_schema"];

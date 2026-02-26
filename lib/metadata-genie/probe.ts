@@ -7,7 +7,7 @@ import { executeSQL, executeSQLMapped } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import type { ProbeResult } from "./types";
 
-const EXCLUDED_CATALOGS = ["system", "__databricks_internal", "samples"];
+const EXCLUDED_CATALOGS = ["system", "__databricks_internal", "samples", "hive_metastore"];
 const EXCLUDED_SCHEMAS = ["information_schema"];
 
 /**

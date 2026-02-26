@@ -86,7 +86,7 @@ export async function getMetadataGenieSpace(
   });
 }
 
-/** Save a draft space (generate step -- no viewTarget or serializedSpace yet). */
+/** Save a draft space (generate step -- viewTarget chosen later at deploy). */
 export async function saveMetadataGenieSpace(opts: {
   id: string;
   title: string;
@@ -96,42 +96,30 @@ export async function saveMetadataGenieSpace(opts: {
   domains?: string[];
   detection?: IndustryDetectionResult;
   sampleQuestions?: string[];
+  serializedSpace?: string;
   tableCount: number;
 }): Promise<MetadataGenieSpace> {
   return withPrisma(async (prisma) => {
+    const shared = {
+      title: opts.title,
+      catalogScope: opts.catalogScope
+        ? JSON.stringify(opts.catalogScope)
+        : null,
+      industryId: opts.industryId ?? null,
+      industryName: opts.industryName ?? null,
+      domains: opts.domains ? JSON.stringify(opts.domains) : null,
+      detection: opts.detection ? JSON.stringify(opts.detection) : null,
+      sampleQuestions: opts.sampleQuestions
+        ? JSON.stringify(opts.sampleQuestions)
+        : null,
+      serializedSpace: opts.serializedSpace ?? null,
+      tableCount: opts.tableCount,
+      status: "draft" as const,
+    };
     const row = await prisma.forgeMetadataGenieSpace.upsert({
       where: { id: opts.id },
-      create: {
-        id: opts.id,
-        title: opts.title,
-        catalogScope: opts.catalogScope
-          ? JSON.stringify(opts.catalogScope)
-          : null,
-        industryId: opts.industryId ?? null,
-        industryName: opts.industryName ?? null,
-        domains: opts.domains ? JSON.stringify(opts.domains) : null,
-        detection: opts.detection ? JSON.stringify(opts.detection) : null,
-        sampleQuestions: opts.sampleQuestions
-          ? JSON.stringify(opts.sampleQuestions)
-          : null,
-        tableCount: opts.tableCount,
-        status: "draft",
-      },
-      update: {
-        title: opts.title,
-        catalogScope: opts.catalogScope
-          ? JSON.stringify(opts.catalogScope)
-          : null,
-        industryId: opts.industryId ?? null,
-        industryName: opts.industryName ?? null,
-        domains: opts.domains ? JSON.stringify(opts.domains) : null,
-        detection: opts.detection ? JSON.stringify(opts.detection) : null,
-        sampleQuestions: opts.sampleQuestions
-          ? JSON.stringify(opts.sampleQuestions)
-          : null,
-        tableCount: opts.tableCount,
-        status: "draft",
-      },
+      create: { id: opts.id, ...shared },
+      update: shared,
     });
     return dbRowToSpace(row);
   });

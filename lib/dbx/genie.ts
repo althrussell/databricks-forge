@@ -203,6 +203,33 @@ export function sanitizeSerializedSpace(raw: string): string {
       delete parsed.instructions.sql_functions;
     }
 
+    // Sort all id-keyed arrays (Genie API requirement)
+    for (const arr of [
+      parsed?.config?.sample_questions,
+      parsed?.instructions?.join_specs,
+      parsed?.instructions?.example_question_sqls,
+      parsed?.instructions?.text_instructions,
+      parsed?.instructions?.sql_snippets?.measures,
+      parsed?.instructions?.sql_snippets?.filters,
+      parsed?.instructions?.sql_snippets?.expressions,
+      parsed?.benchmarks?.questions,
+    ]) {
+      if (Array.isArray(arr)) {
+        arr.sort((a: { id?: string }, b: { id?: string }) =>
+          (a.id ?? "").localeCompare(b.id ?? "")
+        );
+      }
+    }
+
+    // Sort data_sources.tables by identifier (Genie API requirement)
+    const dsTables = parsed?.data_sources?.tables;
+    if (Array.isArray(dsTables)) {
+      dsTables.sort(
+        (a: { identifier?: string }, b: { identifier?: string }) =>
+          (a.identifier ?? "").localeCompare(b.identifier ?? "")
+      );
+    }
+
     return JSON.stringify(parsed);
   } catch (err) {
     logger.error("sanitizeSerializedSpace: failed to parse JSON, returning raw", {
