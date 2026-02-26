@@ -196,6 +196,12 @@ function scheduleProactiveRefresh(): void {
 
   globalForPrisma.__refreshTimer = setTimeout(async () => {
     globalForPrisma.__refreshTimer = undefined;
+
+    if (_rotationInFlight) {
+      logger.info("[prisma] Proactive refresh skipped — rotation already in flight");
+      return;
+    }
+
     try {
       logger.info("[prisma] Proactive credential rotation starting", {
         msBeforeExpiry: expiresAt - Date.now(),
@@ -363,11 +369,17 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
             });
             await new Promise((r) => setTimeout(r, delay));
           } else {
+            // Clear the broken client so the next getPrisma() builds a
+            // fresh pool instead of reusing the unverified one.
+            globalForPrisma.__prisma = undefined;
+            globalForPrisma.__prismaTokenId = undefined;
             throw verifyErr;
           }
         }
       }
 
+      globalForPrisma.__prisma = undefined;
+      globalForPrisma.__prismaTokenId = undefined;
       throw new Error("Rotation verification failed after all attempts");
     } finally {
       _rotationInFlight = null;
