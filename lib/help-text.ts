@@ -79,6 +79,8 @@ export const PIPELINE_STEPS = {
     "Generates industry context, value chain, and revenue model from your business name using the LLM.",
   "metadata-extraction":
     "Queries information_schema to discover tables, columns, and foreign keys in your selected catalogs.",
+  "asset-discovery":
+    "Discovers existing Genie spaces, AI/BI dashboards, and metric views in the workspace to avoid duplicates and identify gaps.",
   "table-filtering":
     "Classifies each table as business-relevant or technical/system using the LLM.",
   "usecase-generation":

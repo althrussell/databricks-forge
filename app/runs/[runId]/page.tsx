@@ -549,6 +549,7 @@ export default function RunDetailPage({
               progressPct={run.progressPct}
               status={run.status}
               statusMessage={run.statusMessage ?? undefined}
+              assetDiscoveryEnabled={run.config.assetDiscoveryEnabled}
             />
           </CardContent>
         </Card>
@@ -585,6 +586,7 @@ export default function RunDetailPage({
               currentStep={run.currentStep as PipelineStep}
               progressPct={run.progressPct}
               status={run.status}
+              assetDiscoveryEnabled={run.config.assetDiscoveryEnabled}
             />
           </CardContent>
         </Card>

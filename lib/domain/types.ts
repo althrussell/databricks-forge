@@ -12,6 +12,7 @@
 export enum PipelineStep {
   BusinessContext = "business-context",
   MetadataExtraction = "metadata-extraction",
+  AssetDiscovery = "asset-discovery",
   TableFiltering = "table-filtering",
   UsecaseGeneration = "usecase-generation",
   DomainClustering = "domain-clustering",
