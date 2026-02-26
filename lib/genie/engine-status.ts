@@ -44,7 +44,7 @@ function evictStaleJobs(): void {
   }
 }
 
-export function startJob(runId: string): void {
+export async function startJob(runId: string): Promise<void> {
   controllers.get(runId)?.abort();
 
   const controller = new AbortController();
@@ -66,7 +66,7 @@ export function startJob(runId: string): void {
     completedDomainNames: [],
   });
 
-  void upsertJobStatus(runId, "genie", "generating", "Starting Genie Engine...", 0, {
+  await upsertJobStatus(runId, "genie", "generating", "Starting Genie Engine...", 0, {
     startedAt: new Date(now),
   });
 }
@@ -79,7 +79,7 @@ export function getJobController(runId: string): AbortController | null {
  * Cancel a running job. Returns true if the job was actively generating
  * and has been cancelled, false otherwise (already finished or no job).
  */
-export function cancelJob(runId: string): boolean {
+export async function cancelJob(runId: string): Promise<boolean> {
   const job = jobs.get(runId);
   if (!job || job.status !== "generating") return false;
 
@@ -89,7 +89,7 @@ export function cancelJob(runId: string): boolean {
   job.message = "Generation cancelled by user";
   job.completedAt = Date.now();
 
-  void upsertJobStatus(runId, "genie", "cancelled", job.message, job.percent, {
+  await upsertJobStatus(runId, "genie", "cancelled", job.message, job.percent, {
     completedAt: new Date(job.completedAt),
   });
 
@@ -123,7 +123,7 @@ export function addCompletedDomainName(runId: string, domainName: string): void 
   }
 }
 
-export function completeJob(runId: string, domainCount: number): void {
+export async function completeJob(runId: string, domainCount: number): Promise<void> {
   const job = jobs.get(runId);
   if (job && job.status === "generating") {
     job.status = "completed";
@@ -132,7 +132,7 @@ export function completeJob(runId: string, domainCount: number): void {
     job.completedAt = Date.now();
     job.domainCount = domainCount;
 
-    void upsertJobStatus(runId, "genie", "completed", job.message, 100, {
+    await upsertJobStatus(runId, "genie", "completed", job.message, 100, {
       completedAt: new Date(job.completedAt),
       domainCount,
     });
@@ -140,7 +140,7 @@ export function completeJob(runId: string, domainCount: number): void {
   controllers.delete(runId);
 }
 
-export function failJob(runId: string, error: string): void {
+export async function failJob(runId: string, error: string): Promise<void> {
   const job = jobs.get(runId);
   if (job && job.status === "generating") {
     job.status = "failed";
@@ -149,7 +149,7 @@ export function failJob(runId: string, error: string): void {
     job.error = error;
     job.errorType = isAuthErrorMessage(error) ? "auth" : "general";
 
-    void upsertJobStatus(runId, "genie", "failed", job.message, job.percent, {
+    await upsertJobStatus(runId, "genie", "failed", job.message, job.percent, {
       completedAt: new Date(job.completedAt),
       error,
     });

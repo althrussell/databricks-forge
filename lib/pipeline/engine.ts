@@ -605,7 +605,7 @@ function startBackgroundEngines(
 ): void {
   (async () => {
     // --- Genie Engine ---
-    startJob(runId);
+    await startJob(runId);
     try {
       const genieCount = await runGenieRecommendations(
         ctx,
@@ -615,27 +615,27 @@ function startBackgroundEngines(
           updateJobDomainProgress(runId, completedDomains, totalDomains);
         },
       );
-      completeJob(runId, genieCount);
+      await completeJob(runId, genieCount);
       logger.info("Background Genie Engine completed", { runId, genieCount });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      failJob(runId, msg);
+      await failJob(runId, msg);
       logger.error("Background Genie Engine failed", { runId, error: msg });
     }
 
     // --- Dashboard Engine (always runs, even if Genie failed) ---
-    startDashboardJob(runId);
+    await startDashboardJob(runId);
     try {
       const dashCount = await runDashboardRecommendations(
         ctx,
         runId,
         (message, percent) => updateDashboardJob(runId, message, percent),
       );
-      completeDashboardJob(runId, dashCount);
+      await completeDashboardJob(runId, dashCount);
       logger.info("Background Dashboard Engine completed", { runId, dashboardCount: dashCount });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      failDashboardJob(runId, msg);
+      await failDashboardJob(runId, msg);
       logger.error("Background Dashboard Engine failed", { runId, error: msg });
     }
   })();

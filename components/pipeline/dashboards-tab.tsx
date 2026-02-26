@@ -54,6 +54,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
   const [databricksHost, setDatabricksHost] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detailDomain, setDetailDomain] = useState<string | null>(null);
@@ -125,6 +126,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setRegeneratingDomain(null);
           setGenProgress(100);
           setGenMessage("");
+          setEngineError(null);
           toast.success("Dashboard generation complete");
           fetchRecommendations();
         } else if (data.status === "failed") {
@@ -132,6 +134,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setGenerating(false);
           setRegeneratingDomain(null);
           setGenMessage("");
+          setEngineError(data.error ?? "Dashboard generation failed");
           toast.error(`Dashboard generation failed: ${data.error ?? "unknown error"}`);
           fetchRecommendations();
         }
@@ -155,7 +158,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           setGenMessage(data.message ?? "");
           startPolling();
         } else if (data.status === "failed") {
-          setError(data.error ?? "Dashboard generation failed. Try regenerating.");
+          setEngineError(data.error ?? "Dashboard generation failed. Try regenerating.");
         }
       } catch {
         /* no active job */
@@ -304,7 +307,9 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
           <CardDescription>
             {generating
               ? "Generating dashboard recommendations..."
-              : "No dashboard recommendations generated yet. Dashboard recommendations are created automatically when the pipeline completes."}
+              : engineError
+                ? engineError
+                : "No dashboard recommendations generated yet. Dashboard recommendations are created automatically when the pipeline completes."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -317,6 +322,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
             <Button
               variant="outline"
               onClick={async () => {
+                setEngineError(null);
                 try {
                   await fetch(`/api/runs/${runId}/dashboard-engine/generate`, { method: "POST" });
                   toast.success("Dashboard generation started");
@@ -327,7 +333,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                 }
               }}
             >
-              Generate Dashboards
+              {engineError ? "Retry Generation" : "Generate Dashboards"}
             </Button>
           )}
         </CardContent>

@@ -96,7 +96,7 @@ export async function POST(
       }
     } catch { /* non-critical */ }
 
-    startDashboardJob(runId);
+    await startDashboardJob(runId);
 
     runDashboardEngine({
       run,
@@ -109,16 +109,16 @@ export async function POST(
     })
       .then(async (result) => {
         await saveDashboardRecommendations(runId, result.recommendations, domains);
-        completeDashboardJob(runId, result.recommendations.length);
+        await completeDashboardJob(runId, result.recommendations.length);
         logger.info("Dashboard Engine generation complete (async)", {
           runId,
           recommendationCount: result.recommendations.length,
           domainFilter: domains ?? "all",
         });
       })
-      .catch((err) => {
+      .catch(async (err) => {
         const errMsg = err instanceof Error ? err.message : String(err);
-        failDashboardJob(runId, errMsg);
+        await failDashboardJob(runId, errMsg);
         logger.error("Dashboard Engine generation failed (async)", {
           runId,
           error: errMsg,

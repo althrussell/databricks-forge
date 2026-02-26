@@ -89,7 +89,7 @@ export async function POST(
       }
     } catch { /* non-critical */ }
 
-    startJob(runId);
+    await startJob(runId);
     const controller = getJobController(runId);
 
     runGenieEngine({
@@ -122,7 +122,7 @@ export async function POST(
           version,
           domains,
         );
-        completeJob(runId, result.recommendations.length);
+        await completeJob(runId, result.recommendations.length);
         if (result.failedDomains.length > 0) {
           logger.warn("Genie Engine completed with domain failures", {
             runId,
@@ -137,13 +137,13 @@ export async function POST(
           domainFilter: domains ?? "all",
         });
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (err instanceof EngineCancelledError) {
           logger.info("Genie Engine generation cancelled (async)", { runId });
           return;
         }
         const errMsg = err instanceof Error ? err.message : String(err);
-        failJob(runId, errMsg);
+        await failJob(runId, errMsg);
         logger.error("Genie Engine generation failed (async)", {
           runId,
           error: errMsg,

@@ -18,7 +18,7 @@ export async function POST(
     if (!isValidUUID(runId)) {
       return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
     }
-    const cancelled = cancelJob(runId);
+    const cancelled = await cancelJob(runId);
 
     if (!cancelled) {
       return NextResponse.json(

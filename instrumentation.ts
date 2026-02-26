@@ -50,5 +50,17 @@ export function register() {
     });
 
     console.log("[instrumentation] SIGTERM handler registered.");
+
+    // Eagerly mark any background jobs left in "generating" state as failed.
+    // These are orphans from a previous process that was killed mid-generation.
+    setTimeout(async () => {
+      try {
+        const { markOrphanedJobsFailed } = await import("@/lib/lakebase/background-jobs");
+        await markOrphanedJobsFailed();
+      } catch {
+        // DB may not be ready yet; the lazy check in getPersistedJobStatus
+        // will catch any remaining orphans on first poll.
+      }
+    }, 5_000);
   }
 }
