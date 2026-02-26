@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { loadSettings, saveSettings, type GenieEngineDefaults } from "@/lib/settings";
+import { loadSettings, saveSettings, type GenieEngineDefaults, type GenieAuthMode } from "@/lib/settings";
 import {
   Shield,
   Database,
@@ -96,6 +96,11 @@ export default function SettingsPage() {
     return loadSettings().estateScanEnabled;
   });
 
+  const [genieDeployAuthMode, setGenieDeployAuthMode] = useState<GenieAuthMode>(() => {
+    if (typeof window === "undefined") return "obo";
+    return loadSettings().genieDeployAuthMode;
+  });
+
   const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
     setDepthConfigs((prev) => ({
       ...prev,
@@ -124,7 +129,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, genieDeployAuthMode });
     toast.success("Settings saved");
   };
 
@@ -138,6 +143,7 @@ export default function SettingsPage() {
       setDepthConfigs({ ...DEFAULT_DEPTH_CONFIGS });
       setGenieDefaults({ engineEnabled: true, maxTablesPerSpace: 25, maxAutoSpaces: 0, llmRefinement: true, generateBenchmarks: true, generateMetricViews: true, autoTimePeriods: true, generateTrustedAssets: true, fiscalYearStartMonth: 1, entityMatchingMode: "auto" });
       setEstateScanEnabled(false);
+      setGenieDeployAuthMode("obo");
       toast.success("Local settings cleared");
     }
   };
@@ -679,6 +685,40 @@ export default function SettingsPage() {
                 checked={genieDefaults.autoTimePeriods}
                 onToggle={(v) => setGenieDefaults((prev) => ({ ...prev, autoTimePeriods: v }))}
               />
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* Deploy auth mode */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Label>Deploy Authentication</Label>
+                <InfoTip tip="Controls which identity is used when creating, updating, or deleting Genie Spaces in Databricks. User (OBO) uses the logged-in user's credentials; Service Principal uses the app's service principal." />
+              </div>
+              <div className="flex gap-2">
+                {([
+                  { value: "obo" as const, label: "User (recommended)" },
+                  { value: "sp" as const, label: "Service Principal" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setGenieDeployAuthMode(opt.value)}
+                    className={`rounded-md border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                      genieDeployAuthMode === opt.value
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-muted text-muted-foreground hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                {genieDeployAuthMode === "obo"
+                  ? "Spaces are created under your identity. You must have access to the referenced tables."
+                  : "Spaces are created under the app\u2019s service principal. The SP must have SELECT access to the referenced tables."}
+              </p>
             </div>
           </div>
         </CardContent>

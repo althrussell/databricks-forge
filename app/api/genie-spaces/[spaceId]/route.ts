@@ -11,6 +11,7 @@ import { executeSQL } from "@/lib/dbx/sql";
 import {
   trackGenieSpaceUpdated,
   trackGenieSpaceTrashed,
+  getSpaceAuthMode,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
 import { isSafeId, validateFqn } from "@/lib/validation";
@@ -31,10 +32,12 @@ export async function PATCH(
       serializedSpace?: string;
     };
 
+    const authMode = await getSpaceAuthMode(spaceId);
     const result = await updateGenieSpace(spaceId, {
       title,
       description,
       serializedSpace,
+      authMode,
     });
 
     await trackGenieSpaceUpdated(spaceId, title);
@@ -89,7 +92,8 @@ export async function DELETE(
       }
     }
 
-    await trashGenieSpace(spaceId);
+    const authMode = await getSpaceAuthMode(spaceId);
+    await trashGenieSpace(spaceId, authMode);
     await trackGenieSpaceTrashed(spaceId);
 
     return NextResponse.json({

@@ -8,6 +8,7 @@
 
 import { withPrisma } from "@/lib/prisma";
 import type { TrackedGenieSpace, GenieSpaceStatus } from "@/lib/genie/types";
+import type { GenieAuthMode } from "@/lib/settings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +31,7 @@ function dbRowToTracked(row: {
   title: string;
   status: string;
   deployedAssetsJson: string | null;
+  authMode: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): TrackedGenieSpace {
@@ -41,6 +43,7 @@ function dbRowToTracked(row: {
     title: row.title,
     status: row.status as GenieSpaceStatus,
     deployedAssets: parseDeployedAssets(row.deployedAssetsJson),
+    authMode: (row.authMode as GenieAuthMode) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -106,13 +109,14 @@ export async function trackGenieSpaceCreated(
   domain: string,
   title: string,
   deployedAssets?: DeployedAssets,
+  authMode?: GenieAuthMode,
 ): Promise<TrackedGenieSpace> {
   const assetsJson = deployedAssets ? JSON.stringify(deployedAssets) : null;
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeGenieSpace.upsert({
       where: { runId_domain: { runId, domain } },
-      create: { id, spaceId, runId, domain, title, status: "created", deployedAssetsJson: assetsJson },
-      update: { spaceId, title, status: "created", deployedAssetsJson: assetsJson },
+      create: { id, spaceId, runId, domain, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
+      update: { spaceId, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
     });
     return dbRowToTracked(row);
   });
@@ -162,6 +166,19 @@ export async function trackGenieSpaceTrashed(
       where: { spaceId },
       data: { status: "trashed" },
     });
+  });
+}
+
+/** Get the auth mode used to create a space (falls back to "sp" for legacy rows). */
+export async function getSpaceAuthMode(
+  spaceId: string,
+): Promise<GenieAuthMode> {
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeGenieSpace.findFirst({
+      where: { spaceId },
+      select: { authMode: true },
+    });
+    return (row?.authMode as GenieAuthMode) ?? "sp";
   });
 }
 

@@ -7,11 +7,17 @@
  * API docs: https://docs.databricks.com/api/workspace/genie
  */
 
-import { getConfig, getAppHeaders } from "./client";
+import { getConfig, getAppHeaders, getHeaders } from "./client";
 import { fetchWithTimeout, TIMEOUTS } from "./fetch-with-timeout";
 import { mkdirs } from "./workspace";
 import { logger } from "@/lib/logger";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
+import type { GenieAuthMode } from "@/lib/settings";
+
+/** Resolve auth headers based on the deploy auth mode. */
+async function resolveHeaders(authMode?: GenieAuthMode): Promise<Record<string, string>> {
+  return authMode === "obo" ? getHeaders() : getAppHeaders();
+}
 
 export const DEFAULT_GENIE_PARENT_PATH = "/Shared/Forge Genie Spaces/";
 const FALLBACK_GENIE_PARENT_PATH = "/Shared/";
@@ -217,10 +223,11 @@ export async function createGenieSpace(opts: {
   serializedSpace: string;
   warehouseId: string;
   parentPath?: string;
+  authMode?: GenieAuthMode;
 }): Promise<GenieSpaceResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces`;
-  const headers = await getAppHeaders();
+  const headers = await resolveHeaders(opts.authMode);
   const sanitized = sanitizeSerializedSpace(opts.serializedSpace);
 
   let parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
@@ -281,11 +288,12 @@ export async function updateGenieSpace(
     description?: string;
     serializedSpace?: string;
     warehouseId?: string;
+    authMode?: GenieAuthMode;
   }
 ): Promise<GenieSpaceResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}`;
-  const headers = await getAppHeaders();
+  const headers = await resolveHeaders(opts.authMode);
 
   const body: Record<string, string> = {};
   if (opts.title !== undefined) body.title = opts.title;
@@ -481,10 +489,10 @@ export async function sendFollowUp(
 // Trash (soft delete)
 // ---------------------------------------------------------------------------
 
-export async function trashGenieSpace(spaceId: string): Promise<void> {
+export async function trashGenieSpace(spaceId: string, authMode?: GenieAuthMode): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}`;
-  const headers = await getAppHeaders();
+  const headers = await resolveHeaders(authMode);
 
   const response = await fetchWithTimeout(
     url,

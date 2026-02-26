@@ -119,18 +119,25 @@ env:
 
 ### User Authorization Scopes
 
-The app uses on-behalf-of (OBO) user authorization for SQL queries. Configure
-these scopes in the Databricks App UI (**Configure** → **+Add Scope**):
+The app uses on-behalf-of (OBO) user authorization for SQL queries and
+(optionally) Genie Space management. Configure these scopes in the
+Databricks App UI (**Configure** → **+Add Scope**):
 
 | Scope | Purpose |
 |-------|---------|
 | `sql` | SQL Statement Execution API (metadata queries, generated SQL, health check) |
+| `catalog.tables:read` | Read tables in Unity Catalog |
+| `catalog.schemas:read` | Read schemas in Unity Catalog |
+| `catalog.catalogs:read` | Read catalogs in Unity Catalog |
+| `files.files` | Manage files and directories (notebook export) |
+| `dashboards.genie` | Manage Genie Spaces (create, update, trash) |
 | `iam.access-control:read` | (default -- auto-included) Access control resolution |
 | `iam.current-user:read` | (default -- auto-included) User identity from proxy headers |
 
-All other Databricks APIs (Model Serving, Workspace, Genie) use app
-authorization (service principal) because their scopes are not available in
-the user-auth scope picker.
+Model Serving and Workspace APIs use app authorization (service principal).
+Genie Space management defaults to user OBO auth (so the user's UC permissions
+apply to referenced tables) but can be switched to service principal in
+**Settings > Genie Engine > Deploy Authentication**.
 
 The `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`
 are automatically injected by the Databricks Apps runtime. `DATABASE_URL` is
@@ -182,9 +189,13 @@ control is fully delegated to the Databricks platform:
   (`getHeaders` with `files.files` scope) so notebooks are created under the
   user's identity and ownership. Falls back to service principal when no
   request context is available.
-- **Model Serving / Genie**: LLM inference and Genie Space management use
-  service principal credentials (`getAppHeaders`) because these operations
-  are performed by the app, not on behalf of individual users.
+- **Model Serving**: LLM inference uses service principal credentials
+  (`getAppHeaders`) because these operations are performed by the app.
+- **Genie Space management**: Defaults to user OBO auth (`getHeaders` with
+  `dashboards.genie` scope) so spaces are created under the user's identity
+  and inherit their UC table permissions. Can be switched to service principal
+  in Settings. The auth mode used to create each space is persisted and reused
+  for subsequent updates and deletions.
 - **Lakebase**: Application-level data (runs, use cases) is accessible to all
   authenticated users of the app. There is no per-user row-level isolation on
   pipeline runs.

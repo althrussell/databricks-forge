@@ -37,7 +37,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { BrainCircuit, Loader2 } from "lucide-react";
+import { AlertTriangle, BrainCircuit, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type {
   GenieEngineRecommendation,
@@ -67,6 +67,12 @@ interface TrashPreview {
 // Props
 // ---------------------------------------------------------------------------
 
+interface DeployStatus {
+  allowed: boolean;
+  warn: boolean;
+  reason?: string;
+}
+
 interface GenieSpacesTabProps {
   runId: string;
   /** Whether the Genie Engine is currently generating. */
@@ -75,6 +81,8 @@ interface GenieSpacesTabProps {
   completedDomainNames?: string[];
   /** Incremented when the engine completes; triggers a data refetch. */
   refreshKey?: number;
+  /** Whether the Genie Engine is enabled in settings. */
+  engineEnabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +94,7 @@ export function GenieSpacesTab({
   generating: engineGenerating = false,
   completedDomainNames = [],
   refreshKey = 0,
+  engineEnabled = true,
 }: GenieSpacesTabProps) {
   const [recommendations, setRecommendations] = useState<
     GenieEngineRecommendation[]
@@ -223,9 +232,28 @@ export function GenieSpacesTab({
     return `${host}/genie/rooms/${spaceId}`;
   }
 
-  // Selectable = not already deployed AND has at least one table
+  function isV1Domain(rec: GenieEngineRecommendation): boolean {
+    return rec.engineConfigVersion === 0;
+  }
+
+  function getDeployStatus(rec: GenieEngineRecommendation): DeployStatus {
+    if (!engineEnabled) return { allowed: true, warn: false };
+    if (engineGenerating) {
+      if (completedDomainNames.includes(rec.domain)) return { allowed: true, warn: false };
+      return { allowed: false, warn: false, reason: "Waiting for AI Engine to process this domain\u2026" };
+    }
+    if (isV1Domain(rec)) {
+      return { allowed: true, warn: true, reason: "This space has not been AI-enriched. Run the Genie Engine for better results." };
+    }
+    return { allowed: true, warn: false };
+  }
+
+  const hasV1Domains = engineEnabled && !engineGenerating &&
+    recommendations.some((r) => isV1Domain(r) && !isDeployed(r.domain) && r.tableCount > 0);
+
+  // Selectable = not already deployed AND has at least one table AND deploy allowed
   const selectableDomains = recommendations
-    .filter((r) => !isDeployed(r.domain) && r.tableCount > 0)
+    .filter((r) => !isDeployed(r.domain) && r.tableCount > 0 && getDeployStatus(r).allowed)
     .map((r) => r.domain);
 
   const allSelected =
@@ -255,9 +283,16 @@ export function GenieSpacesTab({
 
   function handleBulkDeploy() {
     const toDeploy = recommendations.filter(
-      (r) => selected.has(r.domain) && !isDeployed(r.domain)
+      (r) => selected.has(r.domain) && !isDeployed(r.domain) && getDeployStatus(r).allowed
     );
     if (toDeploy.length === 0) return;
+    const v1Count = toDeploy.filter((r) => engineEnabled && isV1Domain(r)).length;
+    if (v1Count > 0) {
+      toast.warning(
+        `${v1Count} space${v1Count !== 1 ? "s have" : " has"} not been AI-enriched. Consider running the Genie Engine first for better results.`,
+        { duration: 6000 },
+      );
+    }
     setDeployModalDomains(toDeploy);
     setDeployModalOpen(true);
   }
@@ -492,6 +527,21 @@ export function GenieSpacesTab({
 
   return (
     <div className="space-y-4">
+      {/* V1 warning banner */}
+      {hasV1Domains && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-950/30">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              Some spaces have not been processed by the AI Engine
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+              Run analysis for enriched spaces with benchmarks, metric views, and improved instructions.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardHeader className="pb-3">
@@ -536,6 +586,7 @@ export function GenieSpacesTab({
                   const tracking = getTracking(rec.domain);
 
                   const noTables = rec.tableCount === 0;
+                  const deployStatus = getDeployStatus(rec);
 
                   return (
                     <tr
@@ -550,7 +601,7 @@ export function GenieSpacesTab({
                         <Checkbox
                           checked={selected.has(rec.domain)}
                           onCheckedChange={() => toggleSelect(rec.domain)}
-                          disabled={deployed || noTables}
+                          disabled={deployed || noTables || !deployStatus.allowed}
                           aria-label={`Select ${rec.domain}`}
                         />
                       </td>
@@ -574,6 +625,11 @@ export function GenieSpacesTab({
                               className="h-3.5 w-3.5 text-violet-500"
                               aria-label="AI enriched"
                             />
+                          )}
+                          {!engineGenerating && engineEnabled && isV1Domain(rec) && !completedDomainNames.includes(rec.domain) && (
+                            <Badge variant="outline" className="text-[9px] border-amber-400 text-amber-600">
+                              Basic
+                            </Badge>
                           )}
                         </span>
                       </td>
@@ -1185,18 +1241,39 @@ export function GenieSpacesTab({
                   <Button className="w-full" variant="secondary" disabled>
                     Cannot Deploy — No Tables
                   </Button>
-                ) : (
-                  <Button
-                    className="w-full bg-green-600 hover:bg-green-700"
-                    onClick={() => {
-                      setDetailDomain(null);
-                      setDeployModalDomains([detailRec]);
-                      setDeployModalOpen(true);
-                    }}
-                  >
-                    Deploy
-                  </Button>
-                )}
+                ) : (() => {
+                  const ds = getDeployStatus(detailRec);
+                  if (!ds.allowed) {
+                    return (
+                      <Button className="w-full" variant="secondary" disabled>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {ds.reason}
+                      </Button>
+                    );
+                  }
+                  return (
+                    <>
+                      {ds.warn && (
+                        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-950/30">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                          <p className="text-xs text-amber-700 dark:text-amber-400">
+                            {ds.reason}
+                          </p>
+                        </div>
+                      )}
+                      <Button
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={() => {
+                          setDetailDomain(null);
+                          setDeployModalDomains([detailRec]);
+                          setDeployModalOpen(true);
+                        }}
+                      >
+                        Deploy{ds.warn ? " Anyway" : ""}
+                      </Button>
+                    </>
+                  );
+                })()}
               </SheetFooter>
             </>
           )}

@@ -391,6 +391,8 @@ export interface TrackedGenieSpace {
   status: GenieSpaceStatus;
   /** @deprecated `functions` is always empty — function deployment has been removed. */
   deployedAssets?: { functions: string[]; metricViews: string[] } | null;
+  /** Auth mode used when the space was created ("obo" = user token, "sp" = service principal). Null for legacy rows. */
+  authMode?: "obo" | "sp" | null;
   createdAt: string;
   updatedAt: string;
 }

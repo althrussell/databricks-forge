@@ -257,6 +257,7 @@ model ForgeGenieSpace {
   title              String
   status             String   @default("created") // created | updated | trashed
   deployedAssetsJson String?  @map("deployed_assets_json")
+  authMode           String?  @map("auth_mode") // "obo" | "sp" — null for legacy rows (treated as "sp")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 

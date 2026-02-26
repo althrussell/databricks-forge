@@ -425,6 +425,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             generating={generating}
             completedDomainNames={completedDomainNames}
             refreshKey={refreshKey}
+            engineEnabled={engineEnabled}
           />
         </TabsContent>
 

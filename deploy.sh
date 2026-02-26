@@ -215,7 +215,7 @@ else:
 # The app.yaml references resources via valueFrom: keys, which the platform
 # resolves to environment variables at runtime.
 # -------------------------------------------------------------------------
-APP_SCOPES='["sql","catalog.tables:read","catalog.schemas:read","catalog.catalogs:read","files.files"]'
+APP_SCOPES='["sql","catalog.tables:read","catalog.schemas:read","catalog.catalogs:read","files.files","dashboards.genie"]'
 
 create_app() {
   printf "\n"
@@ -230,7 +230,7 @@ import json
 print(json.dumps({
     'name': '''$APP_NAME''',
     'description': '''$APP_DESC''',
-    'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files']
+    'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']
 }))
 ")
     local create_err
@@ -296,7 +296,7 @@ print(json.dumps({
             }
         }
     ],
-    'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files']
+    'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']
 }))
 ")
 
@@ -392,7 +392,7 @@ print_success() {
   printf "\n"
   printf "    User scopes:\n"
   printf "      sql, catalog.tables:read, catalog.schemas:read,\n"
-  printf "      catalog.catalogs:read, files.files\n"
+  printf "      catalog.catalogs:read, files.files, dashboards.genie\n"
   printf "  ==========================================================\n"
   printf "\n"
 }

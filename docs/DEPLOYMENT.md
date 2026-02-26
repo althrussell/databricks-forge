@@ -69,6 +69,7 @@ logged-in user, enforcing their Unity Catalog permissions:
 | `catalog.schemas:read` | Read schemas in Unity Catalog |
 | `catalog.catalogs:read` | Read catalogs in Unity Catalog |
 | `files.files` | Manage files and directories |
+| `dashboards.genie` | Manage Genie Spaces (create, update, trash as user) |
 
 ### Platform-injected variables
 

@@ -21,6 +21,7 @@ import {
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
 import { isSafeId, validateFqn } from "@/lib/validation";
+import type { GenieAuthMode } from "@/lib/settings";
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -44,6 +45,7 @@ interface DomainDeployRequest {
 interface RequestBody {
   domains: DomainDeployRequest[];
   targetSchema: string; // "catalog.schema"
+  authMode?: GenieAuthMode;
 }
 
 interface AssetResult {
@@ -637,6 +639,7 @@ export async function POST(
         if (domainReq.existingSpaceId) {
           const result = await updateGenieSpace(domainReq.existingSpaceId, {
             serializedSpace: finalSpace,
+            authMode: body.authMode,
           });
           spaceId = result.space_id;
           try {
@@ -660,6 +663,7 @@ export async function POST(
             description: domainReq.description || "",
             serializedSpace: finalSpace,
             warehouseId: config.warehouseId,
+            authMode: body.authMode,
           });
           spaceId = result.space_id;
 
@@ -672,6 +676,7 @@ export async function POST(
               domainReq.domain,
               domainReq.title,
               deployedAssetsPayload,
+              body.authMode,
             );
           } catch (trackErr) {
             logger.error("Lakebase tracking failed after space creation (space exists in Genie)", {
@@ -681,7 +686,7 @@ export async function POST(
             });
             try {
               await trackGenieSpaceCreated(
-                trackingId, spaceId, runId, domainReq.domain, domainReq.title, deployedAssetsPayload,
+                trackingId, spaceId, runId, domainReq.domain, domainReq.title, deployedAssetsPayload, body.authMode,
               );
             } catch { /* exhausted retry */ }
           }

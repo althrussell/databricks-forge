@@ -8,11 +8,12 @@
 #
 # User authorization scopes (set by deploy.sh via Apps API):
 #   sql, catalog.tables:read, catalog.schemas:read,
-#   catalog.catalogs:read, files.files
+#   catalog.catalogs:read, files.files, dashboards.genie
 #
 # Auth model:
 #   - SQL queries run as the logged-in user (OBO via x-forwarded-access-token)
-#   - Model Serving, Workspace API, Genie API run as the app service principal
+#   - Genie Space management uses user OBO by default (configurable in Settings)
+#   - Model Serving, Workspace API run as the app service principal
 #   - Background pipeline tasks fall back to service principal
 #
 # Lakebase Autoscale is self-provisioned at startup using the platform-

@@ -14,6 +14,7 @@ import {
   trackGenieSpaceCreated,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import type { GenieAuthMode } from "@/lib/settings";
 
 export async function GET() {
   try {
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       runId,
       domain,
       parentPath,
+      authMode,
     } = body as {
       title: string;
       description: string;
@@ -50,6 +52,7 @@ export async function POST(request: NextRequest) {
       runId: string;
       domain: string;
       parentPath?: string;
+      authMode?: GenieAuthMode;
     };
 
     if (!title || !serializedSpace || !runId || !domain) {
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
       serializedSpace,
       warehouseId: config.warehouseId,
       parentPath,
+      authMode,
     });
 
     // Track in Lakebase
@@ -94,7 +98,9 @@ export async function POST(request: NextRequest) {
       result.space_id,
       runId,
       domain,
-      title
+      title,
+      undefined,
+      authMode,
     );
 
     logger.info("Genie space created successfully", {
