@@ -45,6 +45,7 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
        FROM system.information_schema.tables
        WHERE table_catalog NOT IN (${catExclusion})
          AND table_schema NOT IN (${schemaExclusion})
+         AND table_name NOT LIKE '!_%' ESCAPE '!'
        LIMIT 2000`,
       (row) => row[0]
     );

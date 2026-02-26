@@ -10,6 +10,7 @@ import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 import type {
   SerializedSpace,
   DataSourceTable,
+  JoinSpec,
   TextInstruction,
   ExampleQuestionSql,
   SampleQuestion,
@@ -66,6 +67,7 @@ export function buildMetadataGenieSpace(
   const prefix = `${viewTarget.catalog}.${viewTarget.schema}`;
 
   const tables = buildDataSourceTables(prefix);
+  const joinSpecs = buildJoinSpecs(prefix);
   const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection);
   const textInstructions = buildTextInstructions(
     outcomeMap,
@@ -86,7 +88,7 @@ export function buildMetadataGenieSpace(
     instructions: {
       text_instructions: textInstructions,
       example_question_sqls: exampleSqls,
-      join_specs: [],
+      join_specs: joinSpecs,
       sql_snippets: sqlSnippets,
     },
   };
@@ -105,25 +107,58 @@ function buildDataSourceTables(prefix: string): DataSourceTable[] {
 }
 
 // ---------------------------------------------------------------------------
-// Join Relationship Descriptions (expressed via text instructions)
+// Join Specs -- one join_spec per column equality (API spec format)
 // ---------------------------------------------------------------------------
-// The Genie API protobuf parser does not support composite (AND-joined) join
-// conditions in join_specs.sql.  Since all MDG view joins are composite-key
-// (catalog + schema + table_name), we express them as natural-language text
-// instructions instead.  This is the Databricks-recommended approach for
-// complex joins and works reliably with the Genie AI engine.
+// The Genie API uses `tablename.column = tablename.column` format (no
+// backticks, no FQN prefix, no AND).  Composite joins are expressed as
+// separate join_spec entries, each with a single column equality.
 
-const JOIN_DESCRIPTIONS: string[] = [
-  "mdg_catalogs → mdg_schemas: JOIN ON catalog_name = catalog_name",
-  "mdg_schemas → mdg_tables: JOIN ON catalog_name = table_catalog AND schema_name = table_schema",
-  "mdg_tables → mdg_columns: JOIN ON table_catalog, table_schema, table_name",
-  "mdg_tables → mdg_table_tags: JOIN ON table_catalog = catalog_name, table_schema = schema_name, table_name",
-  "mdg_columns → mdg_column_tags: JOIN ON table_catalog = catalog_name, table_schema = schema_name, table_name, column_name",
-  "mdg_tables → mdg_table_constraints: JOIN ON table_catalog, table_schema, table_name",
-  "mdg_tables → mdg_table_privileges: JOIN ON table_catalog, table_schema, table_name",
-  "mdg_tables → mdg_views: JOIN ON table_catalog, table_schema, table_name",
-  "mdg_schemas → mdg_volumes: JOIN ON catalog_name = volume_catalog, schema_name = volume_schema",
+type JoinDef = [left: string, right: string, leftCol: string, rightCol: string];
+
+const JOIN_DEFS: JoinDef[] = [
+  // mdg_catalogs → mdg_schemas
+  ["mdg_catalogs", "mdg_schemas", "catalog_name", "catalog_name"],
+  // mdg_schemas → mdg_tables
+  ["mdg_schemas", "mdg_tables", "catalog_name", "table_catalog"],
+  ["mdg_schemas", "mdg_tables", "schema_name", "table_schema"],
+  // mdg_tables → mdg_columns
+  ["mdg_tables", "mdg_columns", "table_catalog", "table_catalog"],
+  ["mdg_tables", "mdg_columns", "table_schema", "table_schema"],
+  ["mdg_tables", "mdg_columns", "table_name", "table_name"],
+  // mdg_tables → mdg_table_tags
+  ["mdg_tables", "mdg_table_tags", "table_catalog", "catalog_name"],
+  ["mdg_tables", "mdg_table_tags", "table_schema", "schema_name"],
+  ["mdg_tables", "mdg_table_tags", "table_name", "table_name"],
+  // mdg_columns → mdg_column_tags
+  ["mdg_columns", "mdg_column_tags", "table_catalog", "catalog_name"],
+  ["mdg_columns", "mdg_column_tags", "table_schema", "schema_name"],
+  ["mdg_columns", "mdg_column_tags", "table_name", "table_name"],
+  ["mdg_columns", "mdg_column_tags", "column_name", "column_name"],
+  // mdg_tables → mdg_table_constraints
+  ["mdg_tables", "mdg_table_constraints", "table_catalog", "table_catalog"],
+  ["mdg_tables", "mdg_table_constraints", "table_schema", "table_schema"],
+  ["mdg_tables", "mdg_table_constraints", "table_name", "table_name"],
+  // mdg_tables → mdg_table_privileges
+  ["mdg_tables", "mdg_table_privileges", "table_catalog", "table_catalog"],
+  ["mdg_tables", "mdg_table_privileges", "table_schema", "table_schema"],
+  ["mdg_tables", "mdg_table_privileges", "table_name", "table_name"],
+  // mdg_tables → mdg_views
+  ["mdg_tables", "mdg_views", "table_catalog", "table_catalog"],
+  ["mdg_tables", "mdg_views", "table_schema", "table_schema"],
+  ["mdg_tables", "mdg_views", "table_name", "table_name"],
+  // mdg_schemas → mdg_volumes
+  ["mdg_schemas", "mdg_volumes", "catalog_name", "volume_catalog"],
+  ["mdg_schemas", "mdg_volumes", "schema_name", "volume_schema"],
 ];
+
+function buildJoinSpecs(prefix: string): JoinSpec[] {
+  return JOIN_DEFS.map(([left, right, leftCol, rightCol]) => ({
+    id: randomUUID(),
+    left: { identifier: `${prefix}.${left}` },
+    right: { identifier: `${prefix}.${right}` },
+    sql: [`${left}.${leftCol} = ${right}.${rightCol}`],
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Sample Questions (BA-focused, derived from outcome map)
@@ -245,18 +280,13 @@ function buildTextInstructions(
 
   if (llmDetection.duplication_notes.length > 0) {
     parts.push(
-      `Potential duplication patterns observed: ${llmDetection.duplication_notes.join("; ")}.`
+      `${llmDetection.duplication_notes.length} potential data duplication pattern(s) detected across the estate. Ask about duplicates to learn more.`
     );
   }
 
   parts.push(
     "When searching for business-relevant tables, look at both table names and their comments/descriptions. " +
       "Tables without comments may still contain important data — infer purpose from naming conventions."
-  );
-
-  parts.push(
-    "TABLE RELATIONSHIPS — use these joins when combining data across views:\n" +
-      JOIN_DESCRIPTIONS.join("\n")
   );
 
   return [

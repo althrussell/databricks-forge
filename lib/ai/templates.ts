@@ -1230,6 +1230,22 @@ Return a single valid JSON object with these fields:
 3. **duplication_notes** — An array of observations about potential data duplication or redundancy patterns. For example, tables with the same name across different schemas, or near-identical table names suggesting copies. If none observed, return an empty array.
 
 Return ONLY the JSON object. No markdown fences, no preamble.`,
+
+  // -------------------------------------------------------------------------
+  // Meta Data Genie: AI Description Generation for Undocumented Tables
+  // -------------------------------------------------------------------------
+  METADATA_GENIE_DESCRIBE_TABLES_PROMPT: `Generate a concise 1-sentence business description for each table listed below. These tables have no existing description in the data catalog.
+
+Tables (with their column names for context):
+{table_list}
+
+Guidelines:
+- Describe the table's business purpose, not its technical structure.
+- Be factual and specific — infer purpose from the table name and column names.
+- Keep each description under 150 characters.
+- If you cannot determine the purpose, write "General data table" rather than guessing wildly.
+
+Return a JSON object: {"descriptions": [{"table_fqn": "catalog.schema.table", "description": "..."}]}`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1275,6 +1291,8 @@ export const PROMPT_SYSTEM_MESSAGES: Partial<Record<PromptKey, string>> = {
     "You are a senior management consultant writing executive briefings. You produce structured JSON output only. Be concise, specific, and action-oriented.",
   METADATA_GENIE_INDUSTRY_DETECT_PROMPT:
     "You are a Senior Data Industry Analyst who identifies business domains from data catalog metadata. You produce structured JSON output only.",
+  METADATA_GENIE_DESCRIBE_TABLES_PROMPT:
+    "You are a data catalog specialist who writes concise, business-friendly table descriptions from metadata. You produce structured JSON output only.",
 };
 
 /**

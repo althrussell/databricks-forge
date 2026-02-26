@@ -19,6 +19,8 @@ interface ViewDef {
   filterColumn: string;
   /** Column used for schema-level filtering, if applicable. */
   schemaColumn?: string;
+  /** Column containing the table name, used to exclude underscore-prefixed artefacts. */
+  tableNameColumn?: string;
   comment: string;
 }
 
@@ -79,6 +81,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
+    tableNameColumn: "table_name",
     comment: "Curated metadata view: tables and views in the data estate",
   },
   {
@@ -96,6 +99,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
+    tableNameColumn: "table_name",
     comment:
       "Curated metadata view: column definitions including types and descriptions",
   },
@@ -110,6 +114,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
+    tableNameColumn: "table_name",
     comment: "Curated metadata view: view definitions and their SQL",
   },
   {
@@ -144,6 +149,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "catalog_name",
     schemaColumn: "schema_name",
+    tableNameColumn: "table_name",
     comment: "Curated metadata view: tags applied to tables",
   },
   {
@@ -159,6 +165,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "catalog_name",
     schemaColumn: "schema_name",
+    tableNameColumn: "table_name",
     comment: "Curated metadata view: tags applied to columns",
   },
   {
@@ -176,6 +183,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
+    tableNameColumn: "table_name",
     comment:
       "Curated metadata view: primary key and foreign key constraints",
   },
@@ -192,6 +200,7 @@ const VIEW_DEFS: ViewDef[] = [
     ],
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
+    tableNameColumn: "table_name",
     comment: "Curated metadata view: table access privileges and grants",
   },
 ];
@@ -200,28 +209,58 @@ const VIEW_DEFS: ViewDef[] = [
 // DDL Generation
 // ---------------------------------------------------------------------------
 
+/** Escape single quotes for SQL string literals. */
+function sqlEscape(s: string): string {
+  return s.replace(/'/g, "''");
+}
+
+/**
+ * Build a VALUES CTE from AI-generated descriptions for a given view.
+ * Returns null if no descriptions match the view.
+ */
+function buildDescriptionsCTE(
+  viewName: string,
+  aiDescriptions: Record<string, string>
+): string | null {
+  if (viewName !== "mdg_tables") return null;
+
+  const entries = Object.entries(aiDescriptions);
+  if (entries.length === 0) return null;
+
+  const rows = entries
+    .map(([fqn, desc]) => {
+      const parts = fqn.split(".");
+      if (parts.length !== 3) return null;
+      return `('${sqlEscape(parts[0])}', '${sqlEscape(parts[1])}', '${sqlEscape(parts[2])}', '${sqlEscape(desc)}')`;
+    })
+    .filter(Boolean);
+
+  if (rows.length === 0) return null;
+
+  return `ai_descs AS (\n  SELECT * FROM VALUES\n    ${rows.join(",\n    ")}\n  AS t(table_catalog, table_schema, table_name, ai_description)\n)`;
+}
+
 /**
  * Generate CREATE OR REPLACE VIEW DDL for all 10 curated views.
  *
  * When catalogScope is provided, each view includes a WHERE clause
  * filtering to only those catalogs.
+ *
+ * When aiDescriptions is provided, the mdg_tables view is augmented
+ * with a VALUES CTE that LEFT JOINs AI-generated descriptions as an
+ * `ai_comment` column.
  */
 export function generateViewDDL(opts: {
   target: ViewTarget;
   catalogScope?: string[];
+  aiDescriptions?: Record<string, string>;
 }): string[] {
-  const { target, catalogScope } = opts;
+  const { target, catalogScope, aiDescriptions } = opts;
   const fqnPrefix = `\`${target.catalog}\`.\`${target.schema}\``;
 
   return VIEW_DEFS.map((def) => {
-    const cols = def.columns.join(", ");
-    let sql = `CREATE OR REPLACE VIEW ${fqnPrefix}.\`${def.name}\``;
-    sql += `\nCOMMENT '${def.comment}'`;
-    sql += `\nAS SELECT ${cols}\nFROM ${def.source}`;
-
     const conditions: string[] = [];
 
-    // Catalog scope: either user-chosen allowlist or exclusion of system catalogs
     if (catalogScope && catalogScope.length > 0) {
       const inList = catalogScope.map((c) => `'${c}'`).join(", ");
       conditions.push(`${def.filterColumn} IN (${inList})`);
@@ -230,14 +269,45 @@ export function generateViewDDL(opts: {
       conditions.push(`${def.filterColumn} NOT IN (${exList})`);
     }
 
-    // Exclude information_schema and other system-generated schemas
     if (def.schemaColumn) {
       const exSchemas = EXCLUDED_SCHEMAS.map((s) => `'${s}'`).join(", ");
       conditions.push(`${def.schemaColumn} NOT IN (${exSchemas})`);
     }
 
-    if (conditions.length > 0) {
-      sql += `\nWHERE ${conditions.join("\n  AND ")}`;
+    if (def.tableNameColumn) {
+      conditions.push(`${def.tableNameColumn} NOT LIKE '!_%' ESCAPE '!'`);
+    }
+
+    const whereClause =
+      conditions.length > 0
+        ? `\nWHERE ${conditions.join("\n  AND ")}`
+        : "";
+
+    // Check if this view gets an ai_comment column via CTE
+    const cte =
+      aiDescriptions && Object.keys(aiDescriptions).length > 0
+        ? buildDescriptionsCTE(def.name, aiDescriptions)
+        : null;
+
+    let sql = `CREATE OR REPLACE VIEW ${fqnPrefix}.\`${def.name}\``;
+    sql += `\nCOMMENT '${def.comment}'`;
+
+    if (cte) {
+      const cols = def.columns.map((c) => `src.${c}`).join(", ");
+      sql += `\nAS WITH ${cte}`;
+      sql += `\nSELECT ${cols}, COALESCE(src.comment, d.ai_description) AS ai_comment`;
+      sql += `\nFROM ${def.source} src`;
+      sql += `\nLEFT JOIN ai_descs d ON src.table_catalog = d.table_catalog AND src.table_schema = d.table_schema AND src.table_name = d.table_name`;
+      // Prefix conditions with src. alias
+      const aliasedConditions = conditions.map((c) => `src.${c}`);
+      if (aliasedConditions.length > 0) {
+        sql += `\nWHERE ${aliasedConditions.join("\n  AND ")}`;
+      }
+    } else {
+      const cols = def.columns.join(", ");
+      sql += `\nAS SELECT ${cols}`;
+      sql += `\nFROM ${def.source}`;
+      sql += whereClause;
     }
 
     return sql;

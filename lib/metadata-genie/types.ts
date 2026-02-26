@@ -80,6 +80,7 @@ export interface MetadataGenieSpace {
   domains: string[] | null;
   detection: IndustryDetectionResult | null;
   sampleQuestions: string[] | null;
+  aiDescriptions: Record<string, string> | null;
   viewCatalog: string | null;
   viewSchema: string | null;
   viewsDeployed: boolean;

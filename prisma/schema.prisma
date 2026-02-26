@@ -581,6 +581,7 @@ model ForgeMetadataGenieSpace {
   domains         String?
   detection        String?
   sampleQuestions  String?  @map("sample_questions")
+  aiDescriptions   String?  @map("ai_descriptions")
   viewCatalog      String?  @map("view_catalog")
   viewSchema       String?  @map("view_schema")
   viewsDeployed    Boolean  @default(false) @map("views_deployed")

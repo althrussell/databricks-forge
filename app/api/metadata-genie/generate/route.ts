@@ -11,6 +11,10 @@ import { randomUUID } from "crypto";
 import { probeSystemInformationSchema } from "@/lib/metadata-genie/probe";
 import { detectIndustry } from "@/lib/metadata-genie/industry-detect";
 import {
+  fetchUndocumentedTables,
+  generateTableDescriptions,
+} from "@/lib/metadata-genie/describe";
+import {
   buildPreviewQuestions,
   buildMetadataGenieSpace,
 } from "@/lib/metadata-genie/space-builder";
@@ -34,6 +38,22 @@ export async function POST(request: NextRequest) {
     const tableNames = probe.tableNames ?? [];
     const detection = await detectIndustry(tableNames);
 
+    // Generate AI descriptions for tables without comments
+    let aiDescriptions: Record<string, string> = {};
+    try {
+      const undocumented = await fetchUndocumentedTables(
+        probe.catalogs ?? undefined
+      );
+      if (undocumented.length > 0) {
+        const descMap = await generateTableDescriptions(undocumented);
+        aiDescriptions = Object.fromEntries(descMap);
+      }
+    } catch (err) {
+      logger.warn("AI description generation failed (non-fatal)", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     const sampleQuestions = buildPreviewQuestions(
       detection.outcomeMap,
       detection.llmDetection
@@ -46,7 +66,6 @@ export async function POST(request: NextRequest) {
       title: title ?? "Meta Data Genie",
     });
 
-
     const id = randomUUID();
     const saved = await saveMetadataGenieSpace({
       id,
@@ -56,6 +75,8 @@ export async function POST(request: NextRequest) {
       domains: detection.llmDetection.domains,
       detection: detection.llmDetection,
       sampleQuestions,
+      aiDescriptions:
+        Object.keys(aiDescriptions).length > 0 ? aiDescriptions : undefined,
       serializedSpace: JSON.stringify(previewSpace),
       tableCount: tableNames.length,
     });
@@ -65,6 +86,7 @@ export async function POST(request: NextRequest) {
       industryId: detection.outcomeMapId,
       tableCount: tableNames.length,
       questionCount: sampleQuestions.length,
+      aiDescriptionCount: Object.keys(aiDescriptions).length,
     });
 
     return NextResponse.json(saved);

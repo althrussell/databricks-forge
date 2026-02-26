@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
     const ddlStatements = generateViewDDL({
       target: viewTarget,
       catalogScope: space.catalogScope ?? undefined,
+      aiDescriptions: space.aiDescriptions ?? undefined,
     });
 
     const viewResults: { view: string; success: boolean; error?: string }[] =
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
         authMode: authMode ?? (space.authMode as GenieAuthMode),
       });
       spaceId = result.space_id;
-      spaceUrl = `${config.host}/explore/genie/${spaceId}`;
+      spaceUrl = `${config.host}/genie/rooms/${spaceId}`;
     } else {
       const result = await createGenieSpace({
         title: space.title,
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
         authMode: authMode ?? (space.authMode as GenieAuthMode),
       });
       spaceId = result.space_id;
-      spaceUrl = `${config.host}/explore/genie/${spaceId}`;
+      spaceUrl = `${config.host}/genie/rooms/${spaceId}`;
     }
 
     // 4. Persist everything
