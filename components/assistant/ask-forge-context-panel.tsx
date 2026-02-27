@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TableEnrichmentData, SourceData } from "./ask-forge-chat";
 import {
@@ -159,7 +158,7 @@ export function AskForgeContextPanel({
     : enrichments.map((e) => e.tableFqn);
 
   return (
-    <ScrollArea className="h-full w-full [&_[data-slot=scroll-area-viewport]]:!overflow-x-hidden">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
       <div className="min-w-0 space-y-5 p-4">
         {/* Referenced Tables */}
         {(tableFqns.length > 0 || loadingTables) && (
@@ -272,7 +271,7 @@ export function AskForgeContextPanel({
           onClose={() => setShowErdModal(false)}
         />
       )}
-    </ScrollArea>
+    </div>
   );
 }
 
