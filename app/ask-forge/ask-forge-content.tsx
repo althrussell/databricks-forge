@@ -180,7 +180,7 @@ export default function AskForgeContent() {
     } catch {
       // best-effort
     }
-  }, [activeConversationId]);
+  }, [activeConversationId, handleReferencedTables]);
 
   const handleNewConversation = React.useCallback(() => {
     setActiveConversationId(null);

@@ -110,12 +110,12 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
 const SIDEBAR_COLLAPSED_KEY = "forge-sidebar-collapsed";
 
 export function SidebarNav() {
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (stored === "true") setCollapsed(true);
-  }, []);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+    }
+    return false;
+  });
 
   const toggle = useCallback(() => {
     setCollapsed((prev) => {

@@ -9,7 +9,7 @@
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { getIndustryOutcomeAsync } from "@/lib/domain/industry-outcomes-server";
-import type { IndustryOutcome, StrategicPriority } from "@/lib/domain/industry-outcomes";
+import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 import type { AssistantPersona } from "./prompts";
 
 // ---------------------------------------------------------------------------
@@ -103,8 +103,6 @@ interface UseCaseSummary {
 export async function buildSuggestedQuestions(
   persona: AssistantPersona = "business",
 ): Promise<string[]> {
-  const fallback = persona === "tech" ? FALLBACK_QUESTIONS_TECH : FALLBACK_QUESTIONS;
-
   try {
     const { run, scan, useCases } = await fetchContext();
 

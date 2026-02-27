@@ -28,7 +28,6 @@ import {
   BookOpen,
   Keyboard,
   Globe,
-  Upload,
   GitCompare,
   Map,
   LayoutDashboard,
