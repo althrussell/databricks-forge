@@ -285,14 +285,12 @@ function extractTableReferences(chunks: RetrievedChunk[]): string[] {
     }
   }
 
-  // Fallback: regex-scan content of estate-scoped chunks for three-part FQNs
-  if (tables.size === 0) {
-    for (const chunk of chunks) {
-      if (["table_detail", "column_profile", "table_health", "lineage_context", "environment_insight", "data_product"].includes(chunk.kind)) {
-        for (const match of chunk.content.matchAll(THREE_PART_FQN)) {
-          tables.add(match[0]);
-        }
-      }
+  // Supplement: regex-scan ALL chunk content for three-part FQNs.
+  // Genie, use-case, and question chunks often contain table FQNs in their
+  // text but not in structured metadata, so we always scan broadly.
+  for (const chunk of chunks) {
+    for (const match of chunk.content.matchAll(THREE_PART_FQN)) {
+      tables.add(match[0]);
     }
   }
 

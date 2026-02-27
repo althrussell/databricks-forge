@@ -976,7 +976,7 @@ export default function SettingsPage() {
               </p>
               <p className="text-xs text-muted-foreground">
                 Permanently delete all pipeline runs, use cases, environment
-                scans, Genie spaces, exports, and cached data. This cannot be
+                scans, Genie spaces, conversations, exports, and cached data. This cannot be
                 undone.
               </p>
             </div>

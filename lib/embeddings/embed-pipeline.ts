@@ -24,6 +24,12 @@ import type { EmbeddingInput } from "./types";
 import { isEmbeddingEnabled } from "./config";
 import { logger } from "@/lib/logger";
 
+function parseTables(val: string[] | string | undefined): string[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val !== "string" || !val) return [];
+  try { return JSON.parse(val); } catch { return []; }
+}
+
 // ---------------------------------------------------------------------------
 // Use case + business context embedding
 // ---------------------------------------------------------------------------
@@ -81,6 +87,7 @@ export async function embedRunResults(
           subdomain: uc.subdomain,
           type: uc.type,
           technique: uc.analyticsTechnique,
+          tables: parseTables(uc.tablesInvolved),
         },
         embedding: [],
       });
@@ -172,7 +179,7 @@ export async function embedGenieRecommendations(
         sourceId: `${runId}:${rec.domain}`,
         runId,
         contentText: recText,
-        metadataJson: { domain: rec.domain, title: rec.title },
+        metadataJson: { domain: rec.domain, title: rec.title, tables: rec.tables ?? [] },
         embedding: [],
       });
 

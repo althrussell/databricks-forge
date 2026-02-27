@@ -14,6 +14,8 @@ import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
 import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
+import { Button } from "@/components/ui/button";
+import { PanelRightClose, PanelRight } from "lucide-react";
 
 export default function AskForgeContent() {
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
@@ -29,6 +31,7 @@ export default function AskForgeContent() {
   const chatRef = React.useRef<AskForgeChatHandle>(null);
 
   const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
+  const [contextCollapsed, setContextCollapsed] = React.useState(false);
   const [historyAvailable, setHistoryAvailable] = React.useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = React.useState(0);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
@@ -205,16 +208,31 @@ export default function AskForgeContent() {
           />
         </div>
 
-        {/* Context panel */}
-        <div className="hidden w-[400px] shrink-0 overflow-y-auto lg:block">
-          <AskForgeContextPanel
-            enrichments={tableEnrichments}
-            tableDetails={tableDetails}
-            referencedTables={referencedTables}
-            sources={sources}
-            loadingTables={loadingTables}
-            onAskAboutTable={handleAskAboutTable}
-          />
+        {/* Context panel toggle + panel */}
+        <div className="hidden shrink-0 lg:flex">
+          <div className="flex flex-col">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="m-1 h-8 w-8 p-0"
+              onClick={() => setContextCollapsed((p) => !p)}
+              title={contextCollapsed ? "Show context panel" : "Hide context panel"}
+            >
+              {contextCollapsed ? <PanelRight className="size-4" /> : <PanelRightClose className="size-4" />}
+            </Button>
+          </div>
+          {!contextCollapsed && (
+            <div className="w-[400px] overflow-y-auto">
+              <AskForgeContextPanel
+                enrichments={tableEnrichments}
+                tableDetails={tableDetails}
+                referencedTables={referencedTables}
+                sources={sources}
+                loadingTables={loadingTables}
+                onAskAboutTable={handleAskAboutTable}
+              />
+            </div>
+          )}
         </div>
       </div>
 

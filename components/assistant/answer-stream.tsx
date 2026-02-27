@@ -62,7 +62,7 @@ export function AnswerStream({ content, isStreaming }: AnswerStreamProps) {
 
   return (
     <div className="relative">
-      <div className="prose prose-sm dark:prose-invert max-w-none break-words text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:text-xs [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:text-xs [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1">
+      <div className="prose prose-sm dark:prose-invert max-w-none break-words text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-border [&_pre]:bg-muted/60 [&_pre]:p-4 [&_pre]:text-xs [&_pre]:text-foreground [&_code]:rounded [&_code]:border [&_code]:border-border/50 [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-xs [&_code]:text-foreground [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:text-xs [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1 [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
         <ReactMarkdown
           remarkPlugins={REMARK_PLUGINS}
           components={MD_COMPONENTS}

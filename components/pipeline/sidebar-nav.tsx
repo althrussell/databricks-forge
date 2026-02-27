@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -12,8 +12,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, PanelLeftClose, PanelLeft } from "lucide-react";
 import { VersionBadge } from "@/components/version-badge";
 
 interface NavItem {
@@ -50,7 +55,7 @@ function useEmbeddingEnabled(): boolean {
   return enabled;
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
   const embeddingEnabled = useEmbeddingEnabled();
 
@@ -60,37 +65,73 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 
   return (
-    <nav className="space-y-1 p-4">
+    <nav className={cn("space-y-1", collapsed ? "px-2 py-4" : "p-4")}>
       {visibleItems.map((item) => {
         const isActive =
           item.href === "/"
             ? pathname === "/"
             : pathname.startsWith(item.href);
-        return (
+
+        const link = (
           <Link
             key={item.href}
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center rounded-md text-sm font-medium transition-colors",
+              collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
               isActive
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <item.icon className="h-4 w-4" />
-            {item.label}
+            <item.icon className="h-4 w-4 shrink-0" />
+            {!collapsed && item.label}
           </Link>
         );
+
+        if (collapsed) {
+          return (
+            <Tooltip key={item.href} delayDuration={0}>
+              <TooltipTrigger asChild>{link}</TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {item.label}
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
+
+        return link;
       })}
     </nav>
   );
 }
 
+const SIDEBAR_COLLAPSED_KEY = "forge-sidebar-collapsed";
+
 export function SidebarNav() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (stored === "true") setCollapsed(true);
+  }, []);
+
+  const toggle = useCallback(() => {
+    setCollapsed((prev) => {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(!prev));
+      return !prev;
+    });
+  }, []);
+
   return (
-    <aside className="hidden w-64 border-r bg-muted/30 md:flex md:flex-col">
-      <div className="flex h-16 items-center border-b px-6">
+    <aside
+      className={cn(
+        "hidden border-r bg-muted/30 transition-all duration-200 md:flex md:flex-col",
+        collapsed ? "w-14" : "w-64",
+      )}
+    >
+      <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-6")}>
         <Link href="/" className="flex items-center gap-2.5 font-semibold">
           <Image
             src="/databricks-icon.svg"
@@ -99,12 +140,23 @@ export function SidebarNav() {
             height={23}
             className="shrink-0"
           />
-          <span>Forge AI</span>
+          {!collapsed && <span>Forge AI</span>}
         </Link>
       </div>
-      <NavLinks />
+      <NavLinks collapsed={collapsed} />
       <div className="mt-auto border-t">
-        <VersionBadge />
+        {!collapsed && <VersionBadge />}
+        <div className={cn("flex", collapsed ? "justify-center p-2" : "justify-end px-4 py-2")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={toggle}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <PanelLeft className="size-4" /> : <PanelLeftClose className="size-4" />}
+          </Button>
+        </div>
       </div>
     </aside>
   );
