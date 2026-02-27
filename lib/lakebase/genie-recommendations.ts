@@ -7,6 +7,7 @@
 
 import { withPrisma } from "@/lib/prisma";
 import type { GenieSpaceRecommendation, GenieEngineRecommendation, GenieEnginePassOutputs } from "@/lib/genie/types";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -184,4 +185,15 @@ export async function saveGenieRecommendations(
       });
     });
   });
+
+  // Generate vector embeddings for Genie recommendations (best-effort)
+  try {
+    const { embedGenieRecommendations } = await import("@/lib/embeddings/embed-pipeline");
+    await embedGenieRecommendations(runId, recommendations);
+  } catch (err) {
+    logger.warn("[genie-recommendations] Embedding failed (non-fatal)", {
+      runId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

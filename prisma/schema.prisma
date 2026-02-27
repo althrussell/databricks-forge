@@ -618,3 +618,22 @@ model ForgeAssetCoverage {
   @@index([runId])
   @@map("forge_asset_coverages")
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge Base: Uploaded documents for RAG
+// ---------------------------------------------------------------------------
+
+model ForgeDocument {
+  id         String   @id @default(uuid()) @map("id")
+  filename   String
+  mimeType   String   @map("mime_type")
+  category   String   @default("other")
+  chunkCount Int      @default(0) @map("chunk_count")
+  sizeBytes  Int      @map("size_bytes")
+  status     String   @default("processing")
+  uploadedBy String?  @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([status])
+  @@map("forge_documents")
+}

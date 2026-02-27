@@ -178,8 +178,16 @@ export async function getDomainsForRun(runId: string): Promise<string[]> {
 
 /**
  * Delete all use cases for a run (used when re-running).
+ * Also clears associated vector embeddings for the use cases.
  */
 export async function deleteUseCasesForRun(runId: string): Promise<void> {
+  try {
+    const { deleteEmbeddingsByKindAndRun } = await import("@/lib/embeddings/store");
+    await deleteEmbeddingsByKindAndRun("use_case", runId);
+  } catch {
+    // best-effort: embeddings table may not exist
+  }
+
   await withPrisma(async (prisma) => {
     await prisma.forgeUseCase.deleteMany({ where: { runId } });
   });

@@ -368,6 +368,21 @@ async function passDomainCategorisation(
   const allAssignments: Array<{ table_fqn: string; domain: string; subdomain: string }> = [];
   const lineageSummary = buildLineageSummary(lineageGraph, 20);
 
+  // Retrieve data dictionary context from knowledge base (RAG, best-effort)
+  let documentContext = "";
+  try {
+    const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
+    const chunks = await retrieveContext(
+      `Data domain classification for ${options.businessName || "organisation"}: table categories, business domains`,
+      { kinds: ["document_chunk", "outcome_map"], topK: 3, minScore: 0.4 },
+    );
+    if (chunks.length > 0) {
+      documentContext = formatRetrievedContext(chunks, 3000);
+    }
+  } catch {
+    // RAG is best-effort
+  }
+
   const base = basePromptTokens("ENV_DOMAIN_CATEGORISATION_PROMPT", {
     lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
     business_name_line: options.businessName ? `Business: ${options.businessName}` : "",
@@ -382,6 +397,7 @@ async function passDomainCategorisation(
       table_list: tableList,
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
       business_name_line: options.businessName ? `Business: ${options.businessName}` : "",
+      document_context: documentContext ? `\nRelevant context from uploaded documents:\n${documentContext}` : "",
     });
 
     const { content } = await callLLM(prompt, options.endpoint);

@@ -3,6 +3,7 @@
  */
 
 import { withPrisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 import packageJson from "@/package.json";
 import type {
   PipelineRun,
@@ -260,6 +261,17 @@ export async function updateRunMessage(
  * database schema.
  */
 export async function deleteRun(runId: string): Promise<void> {
+  // Delete vector embeddings before Prisma cascade deletes source records
+  try {
+    const { deleteEmbeddingsByRun } = await import("@/lib/embeddings/store");
+    await deleteEmbeddingsByRun(runId);
+  } catch (err) {
+    logger.warn("[runs] Embedding cleanup failed (non-fatal)", {
+      runId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.delete({ where: { runId } });
   });

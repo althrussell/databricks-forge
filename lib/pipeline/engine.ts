@@ -280,6 +280,18 @@ export async function startPipeline(runId: string): Promise<void> {
       });
     });
 
+    // Generate vector embeddings for use cases + business context (best-effort)
+    try {
+      const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
+      const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
+      await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
+    } catch (embedErr) {
+      logger.warn("Use case embedding failed (non-fatal)", {
+        runId,
+        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+      });
+    }
+
     // Mark as completed -- Genie Engine runs in the background
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
     await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
@@ -566,6 +578,18 @@ export async function resumePipeline(runId: string): Promise<void> {
     // Step 8: Genie Recommendations
     if (resumeIndex <= 8) {
       // Genie recommendations are handled by the background engine below
+    }
+
+    // Generate vector embeddings for use cases + business context (best-effort)
+    try {
+      const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
+      const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
+      await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
+    } catch (embedErr) {
+      logger.warn("Use case embedding failed (non-fatal)", {
+        runId,
+        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+      });
     }
 
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;

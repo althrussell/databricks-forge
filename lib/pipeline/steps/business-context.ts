@@ -82,6 +82,22 @@ export async function runBusinessContext(
       ? await buildIndustryContextPrompt(config.industry)
       : "";
 
+    // Retrieve relevant document context from the knowledge base (RAG)
+    let documentContext = "";
+    try {
+      const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
+      const chunks = await retrieveContext(
+        `Business context for ${config.businessName}: ${config.businessDomains || ""} ${config.businessPriorities?.join(", ") || ""}`,
+        { kinds: ["document_chunk", "business_context"], topK: 5, minScore: 0.4 },
+      );
+      if (chunks.length > 0) {
+        documentContext = formatRetrievedContext(chunks, 4000);
+        logger.debug("[business-context] RAG context retrieved", { chunks: chunks.length });
+      }
+    } catch {
+      // RAG is best-effort; proceed without it
+    }
+
     const result = await executeAIQuery({
       promptKey: "BUSINESS_CONTEXT_WORKER_PROMPT",
       variables: {
@@ -90,6 +106,7 @@ export async function runBusinessContext(
         type_description: "Full business context research",
         type_label: "business organisation",
         industry_context: industryContext,
+        document_context: documentContext,
       },
       modelEndpoint: getFastServingEndpoint(),
       responseFormat: "json_object",

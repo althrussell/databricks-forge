@@ -68,6 +68,17 @@ export async function createOutcomeMap(opts: {
       },
     });
 
+    // Embed outcome map for semantic search (best-effort)
+    try {
+      const { embedOutcomeMap } = await import("@/lib/embeddings/embed-pipeline");
+      await embedOutcomeMap({ ...opts.parsedOutcome, id });
+    } catch (err) {
+      logger.warn("[outcome-maps] Embedding failed (non-fatal)", {
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     return dbRowToRecord(row);
   });
 }
@@ -176,6 +187,20 @@ export async function updateOutcomeMap(
         where: { id },
         data,
       });
+
+      // Re-embed if the parsed outcome changed
+      if (opts.parsedOutcome) {
+        try {
+          const { embedOutcomeMap } = await import("@/lib/embeddings/embed-pipeline");
+          await embedOutcomeMap({ ...opts.parsedOutcome, id });
+        } catch (err) {
+          logger.warn("[outcome-maps] Re-embedding failed (non-fatal)", {
+            id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
       return dbRowToRecord(row);
     } catch {
       return null;
@@ -188,6 +213,14 @@ export async function updateOutcomeMap(
 // ---------------------------------------------------------------------------
 
 export async function deleteOutcomeMap(id: string): Promise<boolean> {
+  // Delete vector embeddings before deleting the record
+  try {
+    const { deleteEmbeddingsBySource } = await import("@/lib/embeddings/store");
+    await deleteEmbeddingsBySource(id);
+  } catch {
+    // best-effort
+  }
+
   return withPrisma(async (prisma) => {
     try {
       await prisma.forgeOutcomeMap.delete({ where: { id } });
