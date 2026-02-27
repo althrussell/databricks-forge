@@ -221,17 +221,15 @@ export async function detectIndustryFromContext(
       if (inputLower.includes(sv)) {
         score += 5;
       }
-      // Individual word matching for multi-word sub-verticals
-      const svWords = sv.split(/[\s&/,]+/).filter(
-        (w) => w.length > 3 && !STOP_WORDS.has(w)
-      );
+      // Partial token matching against the full sub-vertical string.
+      // Input tokens are NOT filtered by stop words -- the LLM output may
+      // legitimately contain words like "services" or "management" that
+      // carry meaningful signal when matched against sub-verticals.
       for (const token of inputTokens) {
         const trimmed = token.trim();
-        if (trimmed.length <= 3 || STOP_WORDS.has(trimmed)) continue;
-        for (const svWord of svWords) {
-          if (svWord === trimmed || svWord.includes(trimmed) || trimmed.includes(svWord)) {
-            score += 1;
-          }
+        if (trimmed.length <= 3) continue;
+        if (sv.includes(trimmed)) {
+          score += 2;
         }
       }
     }
