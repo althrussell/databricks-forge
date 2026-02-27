@@ -79,16 +79,13 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
     echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring pgvector schema..."
     DATABASE_URL="$SCHEMA_URL" node -e "
-      const { PrismaClient } = require('./lib/generated/prisma/client');
       const pg = require('pg');
-      const { PrismaPg } = require('@prisma/adapter-pg');
       async function main() {
         const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-        const adapter = new PrismaPg(pool);
-        const prisma = new PrismaClient({ adapter });
+        const client = await pool.connect();
         try {
-          await prisma.\$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector');
-          await prisma.\$executeRawUnsafe(\`
+          await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+          await client.query(\`
             CREATE TABLE IF NOT EXISTS forge_embeddings (
               id            TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
               kind          TEXT NOT NULL,
@@ -101,11 +98,11 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
               created_at    TIMESTAMPTZ DEFAULT NOW()
             )
           \`);
-          await prisma.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)');
-          await prisma.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)');
-          await prisma.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)');
-          await prisma.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)');
-          await prisma.\$executeRawUnsafe(\`
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)');
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)');
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)');
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)');
+          await client.query(\`
             CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw ON forge_embeddings
               USING hnsw (embedding vector_cosine_ops)
               WITH (m = 16, ef_construction = 64)
@@ -114,7 +111,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
         } catch (e) {
           console.log('[startup] pgvector schema setup note:', e.message || e);
         } finally {
-          await prisma.\$disconnect();
+          client.release();
           await pool.end();
         }
       }

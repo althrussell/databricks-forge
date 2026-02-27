@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { loadSettings } from "@/lib/settings";
 import {
   Search,
   Table2,
@@ -92,6 +93,75 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Provenance
+// ---------------------------------------------------------------------------
+
+type Provenance = "platform" | "insight" | "generated" | "uploaded" | "template";
+
+const PROVENANCE_CONFIG: Record<Provenance, { label: string; className: string }> = {
+  platform:  { label: "Platform",  className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  insight:   { label: "Insight",   className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
+  generated: { label: "Generated", className: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" },
+  uploaded:  { label: "Uploaded",  className: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300" },
+  template:  { label: "Template",  className: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300" },
+};
+
+function getProvenance(kind: string): Provenance {
+  switch (kind) {
+    case "table_detail":
+    case "column_profile":
+    case "table_health":
+    case "lineage_context":
+      return "platform";
+    case "environment_insight":
+    case "data_product":
+      return "insight";
+    case "use_case":
+    case "business_context":
+    case "genie_recommendation":
+    case "genie_question":
+      return "generated";
+    case "document_chunk":
+      return "uploaded";
+    case "outcome_map":
+      return "template";
+    default:
+      return "generated";
+  }
+}
+
+function resultSubtitle(r: SearchResult): string {
+  const m = r.metadata ?? {};
+  switch (r.kind) {
+    case "table_detail":
+    case "column_profile":
+    case "table_health":
+    case "lineage_context":
+      return [r.sourceId, m.domain, m.tier].filter(Boolean).join(" · ");
+    case "document_chunk":
+      return [(m.filename as string) || "Document", m.category, m.chunkIndex != null ? `Chunk ${Number(m.chunkIndex) + 1}` : null]
+        .filter(Boolean)
+        .join(" · ");
+    case "use_case":
+      return [m.domain, m.catalog, m.runDate].filter(Boolean).join(" · ");
+    case "genie_recommendation":
+      return [(m.spaceTitle as string) || m.domain, m.catalog].filter(Boolean).join(" · ");
+    case "genie_question":
+      return [(m.spaceTitle as string) || "Genie Space", m.domain].filter(Boolean).join(" · ");
+    case "environment_insight":
+      return [(m.insightType as string) || "Insight", r.sourceId].filter(Boolean).join(" · ");
+    case "data_product":
+      return [r.sourceId, m.domain].filter(Boolean).join(" · ");
+    case "business_context":
+      return [(m.businessName as string) || "Business Context"].filter(Boolean).join(" · ");
+    case "outcome_map":
+      return [(m.name as string) || "Outcome Map", m.industry].filter(Boolean).join(" · ");
+    default:
+      return [m.catalog, m.domain, m.tier].filter(Boolean).join(" · ");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -106,8 +176,13 @@ export function SearchBar() {
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
-  // Check if embedding feature is enabled
+  // Check if embedding feature is enabled (infra) AND user setting allows it
   React.useEffect(() => {
+    const settings = loadSettings();
+    if (!settings.semanticSearchEnabled) {
+      setEnabled(false);
+      return;
+    }
     fetch("/api/embeddings/status")
       .then((r) => r.json())
       .then((data) => setEnabled(data.enabled ?? false))
@@ -280,34 +355,42 @@ export function SearchBar() {
             <React.Fragment key={kind}>
               {idx > 0 && <CommandSeparator />}
               <CommandGroup heading={KIND_LABEL[kind] || kind}>
-                {items.map((r) => (
-                  <CommandItem
-                    key={r.id}
-                    value={r.content}
-                    onSelect={() => handleSelect(r)}
-                    className="flex items-start gap-2 py-2"
-                  >
-                    <span className="mt-0.5 shrink-0">
-                      {KIND_ICON[r.kind] || <Search className="size-4" />}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{firstLine(r.content)}</p>
-                      {r.metadata && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {[r.metadata.catalog, r.metadata.domain, r.metadata.tier]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[10px] font-mono ${scoreColor(r.score)}`}>
-                        {(r.score * 100).toFixed(0)}%
+                {items.map((r) => {
+                  const prov = getProvenance(r.kind);
+                  const provCfg = PROVENANCE_CONFIG[prov];
+                  const subtitle = resultSubtitle(r);
+                  return (
+                    <CommandItem
+                      key={r.id}
+                      value={r.content}
+                      onSelect={() => handleSelect(r)}
+                      className="flex items-start gap-2 py-2"
+                    >
+                      <span className="mt-0.5 shrink-0">
+                        {KIND_ICON[r.kind] || <Search className="size-4" />}
                       </span>
-                      <ArrowRight className="size-3 text-muted-foreground" />
-                    </div>
-                  </CommandItem>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm truncate">{firstLine(r.content)}</p>
+                          <Badge variant="outline" className={`shrink-0 text-[9px] px-1 py-0 leading-tight font-medium ${provCfg.className}`}>
+                            {provCfg.label}
+                          </Badge>
+                        </div>
+                        {subtitle && (
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {subtitle}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`text-[10px] font-mono ${scoreColor(r.score)}`}>
+                          {(r.score * 100).toFixed(0)}%
+                        </span>
+                        <ArrowRight className="size-3 text-muted-foreground" />
+                      </div>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             </React.Fragment>
           ))}

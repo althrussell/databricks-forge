@@ -73,9 +73,46 @@ export async function retrieveContext(
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Provenance labels
+// ---------------------------------------------------------------------------
+
+const RAG_PREAMBLE = `The following context is retrieved from multiple sources. Each entry is labelled:
+- [PLATFORM DATA] = verified metadata from the customer's Databricks estate
+- [PLATFORM INSIGHT] = AI-generated analysis of estate data
+- [GENERATED INTELLIGENCE] = previously generated use cases or business context
+- [UPLOADED DOCUMENT: filename] = customer-provided document (may describe aspirational goals, not current state)
+- [INDUSTRY TEMPLATE] = industry outcome map template
+
+Prioritise PLATFORM DATA for factual claims. Use UPLOADED DOCUMENT for strategic direction only.`;
+
+export function provenanceLabel(chunk: RetrievedChunk): string {
+  switch (chunk.kind) {
+    case "table_detail":
+    case "column_profile":
+    case "table_health":
+    case "lineage_context":
+      return "[PLATFORM DATA]";
+    case "environment_insight":
+    case "data_product":
+      return "[PLATFORM INSIGHT]";
+    case "use_case":
+    case "business_context":
+    case "genie_recommendation":
+    case "genie_question":
+      return "[GENERATED INTELLIGENCE]";
+    case "document_chunk":
+      return `[UPLOADED DOCUMENT: ${(chunk.metadata?.filename as string) || "unknown"}]`;
+    case "outcome_map":
+      return "[INDUSTRY TEMPLATE]";
+    default:
+      return `[${chunk.kind}]`;
+  }
+}
+
 /**
  * Format retrieved chunks into a string suitable for injection into
- * an LLM system prompt. Includes source attribution.
+ * an LLM system prompt. Includes provenance labels and a preamble.
  */
 export function formatRetrievedContext(
   chunks: RetrievedChunk[],
@@ -83,11 +120,11 @@ export function formatRetrievedContext(
 ): string {
   if (chunks.length === 0) return "";
 
-  const parts: string[] = [];
-  let totalChars = 0;
+  const parts: string[] = [RAG_PREAMBLE];
+  let totalChars = RAG_PREAMBLE.length;
 
   for (const chunk of chunks) {
-    const entry = `[${chunk.kind}] ${chunk.content}`;
+    const entry = `${provenanceLabel(chunk)} ${chunk.content}`;
     if (totalChars + entry.length > maxChars) break;
     parts.push(entry);
     totalChars += entry.length;

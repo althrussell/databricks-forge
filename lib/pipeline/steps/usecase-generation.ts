@@ -103,7 +103,7 @@ export async function runUsecaseGeneration(
       { kinds: ["document_chunk", "outcome_map", "business_context"], topK: 5, minScore: 0.4 },
     );
     if (chunks.length > 0) {
-      documentContext = "\n\n**RELEVANT CONTEXT FROM KNOWLEDGE BASE**:\n" + formatRetrievedContext(chunks, 4000);
+      documentContext = "\n\n" + formatRetrievedContext(chunks, 4000);
     }
   } catch {
     // RAG is best-effort

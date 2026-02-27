@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { loadSettings } from "@/lib/settings";
 import {
   Sheet,
   SheetContent,
@@ -38,6 +39,11 @@ const navItems: NavItem[] = [
 function useEmbeddingEnabled(): boolean {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
+    const settings = loadSettings();
+    if (!settings.semanticSearchEnabled) {
+      setEnabled(false);
+      return;
+    }
     fetch("/api/embeddings/status")
       .then((r) => r.json())
       .then((data) => setEnabled(data.enabled ?? false))

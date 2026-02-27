@@ -397,7 +397,7 @@ async function passDomainCategorisation(
       table_list: tableList,
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
       business_name_line: options.businessName ? `Business: ${options.businessName}` : "",
-      document_context: documentContext ? `\nRelevant context from uploaded documents:\n${documentContext}` : "",
+      document_context: documentContext ? `\n${documentContext}` : "",
     });
 
     const { content } = await callLLM(prompt, options.endpoint);

@@ -9,6 +9,7 @@
  */
 
 import * as React from "react";
+import { loadSettings } from "@/lib/settings";
 import {
   FileText,
   Upload,
@@ -73,14 +74,24 @@ export default function KnowledgeBasePage() {
   const [category, setCategory] = React.useState("other");
   const [dragActive, setDragActive] = React.useState(false);
   const [enabled, setEnabled] = React.useState<boolean | null>(null);
+  const [disabledReason, setDisabledReason] = React.useState<"infra" | "setting" | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const fetchDocuments = React.useCallback(async () => {
     try {
+      const settings = loadSettings();
+      if (!settings.semanticSearchEnabled) {
+        setEnabled(false);
+        setDisabledReason("setting");
+        setLoading(false);
+        return;
+      }
       const resp = await fetch("/api/knowledge-base");
       if (resp.ok) {
         const data = await resp.json();
-        setEnabled(data.enabled ?? true);
+        const isEnabled = data.enabled ?? true;
+        setEnabled(isEnabled);
+        if (!isEnabled) setDisabledReason("infra");
         setDocuments(data.documents ?? []);
       }
     } catch {
@@ -101,8 +112,9 @@ export default function KnowledgeBasePage() {
           <CardHeader className="text-center">
             <CardTitle className="text-lg">Knowledge Base Unavailable</CardTitle>
             <CardDescription>
-              The embedding endpoint (<code>serving-endpoint-embedding</code>) is not configured.
-              Deploy with the embedding resource binding to enable document uploads and semantic search.
+              {disabledReason === "setting"
+                ? "Semantic search and knowledge base have been disabled in Settings. Re-enable the toggle to use this feature."
+                : <>The embedding endpoint (<code>serving-endpoint-embedding</code>) is not configured. Deploy with the embedding resource binding to enable document uploads and semantic search.</>}
             </CardDescription>
           </CardHeader>
         </Card>
