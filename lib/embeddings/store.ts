@@ -13,9 +13,7 @@ import { logger } from "@/lib/logger";
 import type {
   EmbeddingInput,
   EmbeddingKind,
-  SearchOptions,
   SearchResult,
-  SEARCH_SCOPES,
 } from "./types";
 
 // ---------------------------------------------------------------------------

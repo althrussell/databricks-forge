@@ -81,6 +81,8 @@ ${USER_DATA_DEFENCE}
 
 {industry_context}
 
+{document_context}
+
 ### OUTPUT FORMAT
 
 Return a single valid JSON object with the 7 fields listed above. Do NOT include any text outside the JSON.`,

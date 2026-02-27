@@ -292,7 +292,7 @@ export function SqlDialog({ open, sql, onOpenChange, onRequestFix, onDeployNoteb
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-6xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[85vh] w-full max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
         <DialogHeader className="px-5 pt-5 pb-3">
           <DialogTitle className="flex items-center gap-2">
             SQL Query
@@ -423,7 +423,7 @@ export function SqlDialog({ open, sql, onOpenChange, onRequestFix, onDeployNoteb
         <div className="min-h-0 flex-1">
           <ResizablePanelGroup orientation="vertical" className="h-full">
             {/* SQL Editor panel */}
-            <ResizablePanel defaultSize={hasResults ? 35 : 100} minSize={15}>
+            <ResizablePanel defaultSize={result ? 35 : 50} minSize={15}>
               <div className="h-full overflow-hidden p-3 pb-0">
                 <SqlEditor
                   value={currentSql}
@@ -435,136 +435,149 @@ export function SqlDialog({ open, sql, onOpenChange, onRequestFix, onDeployNoteb
               </div>
             </ResizablePanel>
 
-            {/* Results panel -- only render divider + panel when we have results or error */}
-            {(result) && (
-              <>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={65} minSize={20}>
-                  <div className="flex h-full flex-col overflow-hidden px-3 pb-3">
-                    {/* Error */}
-                    {result && !result.success && result.error && (
-                      <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3">
-                        <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-destructive">Execution Error</p>
-                          <p className="mt-1 break-words text-xs text-muted-foreground">{result.error}</p>
-                          {onRequestFix && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 h-7 text-xs"
-                              onClick={() => {
-                                onRequestFix(currentSql, result.error!);
-                                onOpenChange(false);
-                              }}
-                            >
-                              Ask Forge to fix
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    )}
+            <ResizableHandle withHandle />
 
-                    {/* Success results */}
-                    {hasResults && result.result && (
-                      <>
-                        {/* Status bar */}
-                        <div className="flex items-center gap-2 py-2">
-                          <Badge variant="secondary" className="gap-1 text-xs">
-                            <Clock className="size-3" />
-                            {result.durationMs}ms
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">
-                            {result.result.totalRowCount} row{result.result.totalRowCount !== 1 ? "s" : ""}
-                          </Badge>
-                          <div className="flex-1" />
-                          {/* Pagination */}
-                          {totalPages > 1 && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                disabled={page === 0}
-                                onClick={() => setPage((p) => p - 1)}
-                              >
-                                <ChevronLeft className="size-3.5" />
-                              </Button>
-                              <span>
-                                Page {page + 1} of {totalPages}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                disabled={page >= totalPages - 1}
-                                onClick={() => setPage((p) => p + 1)}
-                              >
-                                <ChevronRight className="size-3.5" />
-                              </Button>
-                            </div>
-                          )}
-                          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleExportCsv}>
-                            <Download className="size-3" />
-                            Export CSV
+            {/* Results panel -- always visible */}
+            <ResizablePanel defaultSize={result ? 65 : 50} minSize={20}>
+              <div className="flex h-full flex-col overflow-hidden px-3 pb-3">
+                {/* Empty state -- no query run yet */}
+                {!result && !running && (
+                  <div className="flex flex-1 items-center justify-center">
+                    <div className="text-center text-muted-foreground">
+                      <Play className="mx-auto mb-2 size-8 opacity-20" />
+                      <p className="text-sm font-medium">No results yet</p>
+                      <p className="mt-1 text-xs">
+                        Click <span className="font-medium text-foreground">Run Query</span> or press{" "}
+                        <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">
+                          {typeof navigator !== "undefined" && navigator?.platform?.includes("Mac") ? "⌘" : "Ctrl"}+Enter
+                        </kbd>
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error */}
+                {result && !result.success && result.error && (
+                  <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-destructive">Execution Error</p>
+                      <p className="mt-1 break-words text-xs text-muted-foreground">{result.error}</p>
+                      {onRequestFix && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-7 text-xs"
+                          onClick={() => {
+                            onRequestFix(currentSql, result.error!);
+                            onOpenChange(false);
+                          }}
+                        >
+                          Ask Forge to fix
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Success results */}
+                {hasResults && result.result && (
+                  <>
+                    {/* Status bar */}
+                    <div className="flex items-center gap-2 py-2">
+                      <Badge variant="secondary" className="gap-1 text-xs">
+                        <Clock className="size-3" />
+                        {result.durationMs}ms
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {result.result.totalRowCount} row{result.result.totalRowCount !== 1 ? "s" : ""}
+                      </Badge>
+                      <div className="flex-1" />
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled={page === 0}
+                            onClick={() => setPage((p) => p - 1)}
+                          >
+                            <ChevronLeft className="size-3.5" />
+                          </Button>
+                          <span>
+                            Page {page + 1} of {totalPages}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled={page >= totalPages - 1}
+                            onClick={() => setPage((p) => p + 1)}
+                          >
+                            <ChevronRight className="size-3.5" />
                           </Button>
                         </div>
+                      )}
+                      <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleExportCsv}>
+                        <Download className="size-3" />
+                        Export CSV
+                      </Button>
+                    </div>
 
-                        {/* Results table */}
-                        <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-                          <Table>
-                            <TableHeader className="sticky top-0 z-10 bg-muted">
-                              <TableRow>
-                                <TableHead className="w-10 text-center text-[10px] text-muted-foreground">#</TableHead>
-                                {result.result.columns.map((col, ci) => (
-                                  <TableHead
-                                    key={col.name}
-                                    className="cursor-pointer whitespace-nowrap text-xs select-none hover:bg-accent"
-                                    onClick={() => handleSort(ci)}
-                                  >
-                                    <div className="flex items-center gap-1">
-                                      <span>{col.name}</span>
-                                      <span className="text-[10px] font-normal text-muted-foreground">{col.typeName}</span>
-                                      {sortCol === ci && (
-                                        sortAsc
-                                          ? <ArrowUp className="size-3 text-primary" />
-                                          : <ArrowDown className="size-3 text-primary" />
-                                      )}
-                                    </div>
-                                  </TableHead>
-                                ))}
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {pagedRows.map((row, ri) => (
-                                <TableRow key={ri}>
-                                  <TableCell className="w-10 text-center text-[10px] text-muted-foreground">
-                                    {page * PAGE_SIZE + ri + 1}
-                                  </TableCell>
-                                  {row.map((cell, ci) => (
-                                    <TableCell
-                                      key={ci}
-                                      className="max-w-[300px] cursor-pointer truncate text-xs hover:bg-accent/50"
-                                      onClick={() => setInspectedCell({ col: result.result!.columns[ci], value: cell })}
-                                    >
-                                      {cell === null || cell === undefined ? (
-                                        <span className="italic text-muted-foreground">null</span>
-                                      ) : (
-                                        cell
-                                      )}
-                                    </TableCell>
-                                  ))}
-                                </TableRow>
+                    {/* Results table */}
+                    <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+                      <Table>
+                        <TableHeader className="sticky top-0 z-10 bg-muted">
+                          <TableRow>
+                            <TableHead className="w-10 text-center text-[10px] text-muted-foreground">#</TableHead>
+                            {result.result.columns.map((col, ci) => (
+                              <TableHead
+                                key={col.name}
+                                className="cursor-pointer whitespace-nowrap text-xs select-none hover:bg-accent"
+                                onClick={() => handleSort(ci)}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>{col.name}</span>
+                                  <span className="text-[10px] font-normal text-muted-foreground">{col.typeName}</span>
+                                  {sortCol === ci && (
+                                    sortAsc
+                                      ? <ArrowUp className="size-3 text-primary" />
+                                      : <ArrowDown className="size-3 text-primary" />
+                                  )}
+                                </div>
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagedRows.map((row, ri) => (
+                            <TableRow key={ri}>
+                              <TableCell className="w-10 text-center text-[10px] text-muted-foreground">
+                                {page * PAGE_SIZE + ri + 1}
+                              </TableCell>
+                              {row.map((cell, ci) => (
+                                <TableCell
+                                  key={ci}
+                                  className="max-w-[300px] cursor-pointer truncate text-xs hover:bg-accent/50"
+                                  onClick={() => setInspectedCell({ col: result.result!.columns[ci], value: cell })}
+                                >
+                                  {cell === null || cell === undefined ? (
+                                    <span className="italic text-muted-foreground">null</span>
+                                  ) : (
+                                    cell
+                                  )}
+                                </TableCell>
                               ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </ResizablePanel>
-              </>
-            )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </ResizablePanel>
           </ResizablePanelGroup>
         </div>
 

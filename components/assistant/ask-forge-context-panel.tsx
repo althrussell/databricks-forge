@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TableEnrichmentData, SourceData } from "./ask-forge-chat";
 import {
@@ -24,8 +23,14 @@ import {
   MessageCircleQuestion,
   Loader2,
   FileSearch,
+  FileText,
   Sparkles,
   Network,
+  Table2,
+  Lightbulb,
+  BarChart3,
+  MessageSquare,
+  ChevronDown,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -153,8 +158,8 @@ export function AskForgeContextPanel({
     : enrichments.map((e) => e.tableFqn);
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-5 p-4">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
+      <div className="min-w-0 space-y-5 p-4">
         {/* Referenced Tables */}
         {(tableFqns.length > 0 || loadingTables) && (
           <section>
@@ -266,7 +271,7 @@ export function AskForgeContextPanel({
           onClose={() => setShowErdModal(false)}
         />
       )}
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -307,6 +312,10 @@ function RichTableCard({
   const governanceScore = d?.governanceScore ?? null;
   const description = d?.generatedDescription ?? d?.comment ?? null;
 
+  const aiSummary = !description && detail?.insights?.[0]
+    ? parseInsightSummary(detail.insights[0])
+    : null;
+
   const piiColumns = detail?.columns.filter((c) => c.is_pii) ?? [];
   const columnCount = detail?.columns.length ?? 0;
 
@@ -314,11 +323,11 @@ function RichTableCard({
   const useCases = detail?.useCases ?? [];
 
   return (
-    <div className="rounded-lg border bg-card text-xs">
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-xs">
       {/* Header */}
       <button
         onClick={onToggle}
-        className="flex w-full items-start justify-between gap-2 p-3 text-left"
+        className="flex w-full min-w-0 items-start justify-between gap-2 p-3 text-left"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -334,8 +343,14 @@ function RichTableCard({
           {schemaPath && (
             <p className="truncate text-muted-foreground">{schemaPath}</p>
           )}
-          {description && !isExpanded && (
+          {!isExpanded && description && (
             <p className="mt-1 line-clamp-1 text-muted-foreground">{description}</p>
+          )}
+          {!isExpanded && !description && aiSummary && (
+            <p className="mt-1 flex items-center gap-1 line-clamp-1 text-muted-foreground">
+              <Sparkles className="size-3 shrink-0 text-purple-500" />
+              {aiSummary}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -533,34 +548,73 @@ function LineageSummary({
   const shortName = parts.length >= 3 ? parts[2] : fqn;
 
   return (
-    <div className="rounded border bg-muted/30 p-2 text-[11px]">
-      <p className="font-medium">{shortName}</p>
+    <div className="min-w-0 overflow-hidden rounded border bg-muted/30 p-2 text-[11px]">
+      <p className="truncate font-medium">{shortName}</p>
       {upstream.length > 0 && (
         <div className="mt-1 flex items-start gap-1 text-muted-foreground">
           <ArrowDownRight className="mt-0.5 size-3 shrink-0 text-blue-500" />
-          <span>From: {upstream.map(shortFqn).join(", ")}</span>
+          <span className="min-w-0 truncate">From: {upstream.map(shortFqn).join(", ")}</span>
         </div>
       )}
       {downstream.length > 0 && (
         <div className="mt-0.5 flex items-start gap-1 text-muted-foreground">
           <ArrowUpRight className="mt-0.5 size-3 shrink-0 text-green-500" />
-          <span>To: {downstream.map(shortFqn).join(", ")}</span>
+          <span className="min-w-0 truncate">To: {downstream.map(shortFqn).join(", ")}</span>
         </div>
       )}
     </div>
   );
 }
 
+const SOURCE_KIND_ICONS: Record<string, React.ReactNode> = {
+  table_detail: <Table2 className="size-3 text-blue-500" />,
+  column_profile: <Database className="size-3 text-indigo-500" />,
+  use_case: <Lightbulb className="size-3 text-amber-500" />,
+  business_context: <BarChart3 className="size-3 text-green-500" />,
+  genie_recommendation: <Sparkles className="size-3 text-purple-500" />,
+  genie_question: <MessageSquare className="size-3 text-purple-400" />,
+  environment_insight: <ShieldAlert className="size-3 text-orange-500" />,
+  table_health: <Heart className="size-3 text-red-500" />,
+  data_product: <Database className="size-3 text-teal-500" />,
+  outcome_map: <FileText className="size-3 text-cyan-500" />,
+  lineage_context: <GitBranch className="size-3 text-gray-500" />,
+  document_chunk: <FileText className="size-3 text-gray-400" />,
+};
+
 function SourceRow({ source }: { source: SourceData }) {
+  const [expanded, setExpanded] = React.useState(false);
   const kindLabel = SOURCE_KIND_LABELS[source.kind] ?? source.kind;
+  const icon = SOURCE_KIND_ICONS[source.kind] ?? <FileSearch className="size-3" />;
   const scorePercent = (source.score * 100).toFixed(0);
+  const metadata = source.metadata;
 
   return (
-    <div className="flex items-center gap-2 rounded border bg-muted/30 px-2 py-1.5 text-[11px]">
-      <Badge variant="outline" className="shrink-0 text-[9px]">{kindLabel}</Badge>
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.label}</span>
-      <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
-    </div>
+    <button
+      onClick={() => setExpanded(!expanded)}
+      className="flex w-full min-w-0 flex-col rounded border bg-muted/30 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-muted/60"
+    >
+      <div className="flex w-full min-w-0 items-center gap-1.5">
+        {icon}
+        <Badge variant="outline" className="shrink-0 text-[9px]">{kindLabel}</Badge>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.sourceId}</span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
+        <ChevronDown className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </div>
+      {expanded && (
+        <div className="mt-2 space-y-1.5 border-t pt-2">
+          <p className="break-words text-muted-foreground">{source.label}</p>
+          {metadata && Object.keys(metadata).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(metadata).slice(0, 8).map(([k, v]) => (
+                <Badge key={k} variant="secondary" className="text-[9px]">
+                  {k}: {String(v).slice(0, 50)}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -690,5 +744,16 @@ function parseJsonArray(json: string | null | undefined): string[] {
     return Array.isArray(parsed) ? parsed.map(String) : [];
   } catch {
     return [];
+  }
+}
+
+function parseInsightSummary(
+  insight: { insightType: string; payloadJson: string },
+): string {
+  try {
+    const payload = JSON.parse(insight.payloadJson);
+    return payload.summary ?? payload.description ?? insight.insightType;
+  } catch {
+    return insight.insightType;
   }
 }

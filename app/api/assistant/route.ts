@@ -12,6 +12,7 @@
 
 import { NextRequest } from "next/server";
 import { runAssistantEngine, type ConversationTurn } from "@/lib/assistant/engine";
+import type { AssistantPersona } from "@/lib/assistant/prompts";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import {
   createConversation,
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
     const question = body.question as string;
     const history = (body.history ?? []) as ConversationTurn[];
     const sessionId = (body.sessionId as string) ?? crypto.randomUUID();
+    const persona = (body.persona === "tech" ? "tech" : "business") as AssistantPersona;
 
     if (!question || typeof question !== "string" || question.trim().length < 2) {
       return Response.json(
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
           await touchConversation(sessionId);
         } else {
           const title = question.trim().slice(0, 100);
-          conversationId = await createConversation(userEmail, title, sessionId);
+          conversationId = await createConversation(userEmail, title, sessionId, persona);
         }
       } catch (err) {
         logger.warn("[api/assistant] Conversation tracking failed", { error: String(err) });
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
             },
             sessionId,
             userEmail,
+            persona,
           );
 
           const doneEvent = `data: ${JSON.stringify({

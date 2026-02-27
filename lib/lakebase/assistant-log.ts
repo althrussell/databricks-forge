@@ -8,6 +8,15 @@
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
+export interface SourceCardInput {
+  index: number;
+  label: string;
+  kind: string;
+  sourceId: string;
+  score: number;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface CreateAssistantLogInput {
   sessionId: string;
   question: string;
@@ -21,6 +30,9 @@ export interface CreateAssistantLogInput {
   completionTokens?: number;
   totalTokens?: number;
   userId?: string;
+  sources?: SourceCardInput[];
+  referencedTables?: string[];
+  persona?: string;
 }
 
 export interface UpdateAssistantLogInput {
@@ -52,6 +64,9 @@ export async function createAssistantLog(
         completionTokens: input.completionTokens,
         totalTokens: input.totalTokens,
         userId: input.userId,
+        sourcesJson: input.sources ? JSON.stringify(input.sources) : null,
+        referencedTablesJson: input.referencedTables ? JSON.stringify(input.referencedTables) : null,
+        persona: input.persona,
       },
     });
 

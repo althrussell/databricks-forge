@@ -201,7 +201,6 @@ export default function EstatePage() {
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
   const [embeddingEnabled, setEmbeddingEnabled] = useState(false);
-  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
   const [semanticSourceIds, setSemanticSourceIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -218,7 +217,6 @@ export default function EstatePage() {
   }, []);
 
   const handleSemanticResults = React.useCallback((results: SemanticSearchResult[]) => {
-    setSemanticResults(results);
     setSemanticSourceIds(new Set(results.map((r) => r.sourceId)));
   }, []);
 

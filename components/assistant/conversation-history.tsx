@@ -12,6 +12,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   MessageSquarePlus,
   MoreHorizontal,
   Pencil,
@@ -162,6 +173,16 @@ export function ConversationHistory({
     }
   };
 
+  const handleDeleteAll = async () => {
+    try {
+      await fetch("/api/assistant/conversations", { method: "DELETE" });
+      setConversations([]);
+      onNewConversation();
+    } catch {
+      // best-effort
+    }
+  };
+
   const startEditing = (conv: ConversationSummary) => {
     setEditingId(conv.id);
     setEditTitle(conv.title);
@@ -200,6 +221,37 @@ export function ConversationHistory({
       <div className="flex items-center justify-between border-b px-3 py-2.5">
         <span className="text-xs font-medium text-muted-foreground">History</span>
         <div className="flex items-center gap-0.5">
+          {conversations.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                  title="Delete all conversations"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all conversations?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} and their messages. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={handleDeleteAll}
+                  >
+                    Delete all
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -304,7 +356,12 @@ export function ConversationHistory({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="ml-1 h-5 w-5 shrink-0 p-0 opacity-0 group-hover:opacity-100"
+                              className={cn(
+                                "ml-1 h-5 w-5 shrink-0 p-0",
+                                activeConversationId === conv.id
+                                  ? "opacity-70"
+                                  : "opacity-0 group-hover:opacity-100",
+                              )}
                             >
                               <MoreHorizontal className="size-3" />
                             </Button>

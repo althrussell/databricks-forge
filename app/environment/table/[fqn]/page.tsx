@@ -185,9 +185,9 @@ export default function TableDetailPage() {
         </div>
       </div>
 
-      {(detail.generatedDescription || detail.comment) && (
+      {(detail.comment || detail.generatedDescription) && (
         <p className="text-sm text-muted-foreground">
-          {detail.generatedDescription || detail.comment}
+          {detail.comment || detail.generatedDescription}
         </p>
       )}
 

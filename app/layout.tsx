@@ -47,7 +47,7 @@ export default function RootLayout({
           >
             Skip to main content
           </a>
-          <div className="flex min-h-screen">
+          <div className="flex h-screen">
             <SidebarNav />
             <div className="flex flex-1 flex-col overflow-auto">
               <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">

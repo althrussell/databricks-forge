@@ -9,7 +9,8 @@
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { getIndustryOutcomeAsync } from "@/lib/domain/industry-outcomes-server";
-import type { IndustryOutcome, StrategicPriority } from "@/lib/domain/industry-outcomes";
+import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
+import type { AssistantPersona } from "./prompts";
 
 // ---------------------------------------------------------------------------
 // Fallback (shown when no runs or scans exist)
@@ -20,6 +21,13 @@ export const FALLBACK_QUESTIONS = [
   "Which tables have PII data?",
   "Show me revenue trends by region",
   "What data quality issues exist?",
+];
+
+export const FALLBACK_QUESTIONS_TECH = [
+  "Which tables need VACUUM or OPTIMIZE?",
+  "Show me tables with stale data (no writes in 30+ days)",
+  "What schema drift or governance gaps exist?",
+  "Which tables have the most downstream dependencies?",
 ];
 
 const TARGET_COUNT = 6;
@@ -92,88 +100,126 @@ interface UseCaseSummary {
   domain: string;
 }
 
-export async function buildSuggestedQuestions(): Promise<string[]> {
+export async function buildSuggestedQuestions(
+  persona: AssistantPersona = "business",
+): Promise<string[]> {
   try {
     const { run, scan, useCases } = await fetchContext();
 
     const candidates: string[] = [];
 
-    // --- Industry outcome map questions ---
-    if (run?.industry) {
-      const outcome = await getIndustryOutcomeAsync(run.industry);
-      if (outcome) {
-        const kpis = collectKpis(outcome, 3);
-        for (const kpi of kpis) {
-          candidates.push(`How can we measure ${kpi.toLowerCase()}?`);
+    if (persona === "tech") {
+      // --- Tech-specific questions ---
+      if (scan) {
+        if (scan.tableCount > 0) {
+          candidates.push(
+            `Which of our ${scan.tableCount} tables need VACUUM or OPTIMIZE?`,
+          );
+          candidates.push(
+            `Show me tables with the lowest health scores`,
+          );
+        }
+        if (scan.piiTablesCount > 0) {
+          candidates.push(
+            `List the ${scan.piiTablesCount} tables with PII — who owns them?`,
+          );
+        }
+        if (scan.avgGovernanceScore > 0) {
+          const score = Math.round(scan.avgGovernanceScore);
+          candidates.push(
+            `Governance score is ${score}/100 — what are the top technical gaps?`,
+          );
+        }
+        candidates.push(`Which tables have stale data (no writes in 30+ days)?`);
+        candidates.push(`Show me tables with the most downstream dependencies`);
+        candidates.push(`What schema drift or missing owners exist in our estate?`);
+      }
+
+      if (run) {
+        const domains = run.domains
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        if (domains.length > 0) {
+          const domain = pickRandom(domains, 1)[0];
+          candidates.push(`What is the technical health of tables in ${domain}?`);
+        }
+      }
+    } else {
+      // --- Business persona questions ---
+      if (run?.industry) {
+        const outcome = await getIndustryOutcomeAsync(run.industry);
+        if (outcome) {
+          const kpis = collectKpis(outcome, 3);
+          for (const kpi of kpis) {
+            candidates.push(`How can we measure ${kpi.toLowerCase()}?`);
+          }
+
+          const ucNames = collectUseCaseNames(outcome, 2);
+          for (const name of ucNames) {
+            candidates.push(`How would we implement ${name}?`);
+          }
+
+          const personas = collectPersonas(outcome, 1);
+          for (const p of personas) {
+            candidates.push(`What insights does a ${p} need from our data?`);
+          }
+        }
+      }
+
+      if (useCases.length > 0) {
+        const topUc = pickRandom(useCases, 2);
+        for (const uc of topUc) {
+          candidates.push(`Tell me more about the ${uc.name} use case`);
+        }
+      }
+
+      if (run) {
+        const domains = run.domains
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        if (domains.length > 0) {
+          const domain = pickRandom(domains, 1)[0];
+          candidates.push(`What data assets exist in ${domain}?`);
         }
 
-        const ucNames = collectUseCaseNames(outcome, 2);
-        for (const name of ucNames) {
-          candidates.push(`How would we implement ${name}?`);
-        }
-
-        const personas = collectPersonas(outcome, 1);
-        for (const persona of personas) {
-          candidates.push(`What insights does a ${persona} need from our data?`);
+        if (run.goals) {
+          candidates.push(
+            `How can our data help us achieve our strategic goals?`,
+          );
         }
       }
-    }
 
-    // --- Generated use case questions ---
-    if (useCases.length > 0) {
-      const topUc = pickRandom(useCases, 2);
-      for (const uc of topUc) {
-        candidates.push(`Tell me more about the ${uc.name} use case`);
-      }
-    }
-
-    // --- Run context questions ---
-    if (run) {
-      const domains = run.domains
-        .split(",")
-        .map((d) => d.trim())
-        .filter(Boolean);
-      if (domains.length > 0) {
-        const domain = pickRandom(domains, 1)[0];
-        candidates.push(`What data assets exist in ${domain}?`);
-      }
-
-      if (run.goals) {
-        candidates.push(
-          `How can our data help us achieve our strategic goals?`,
-        );
+      if (scan) {
+        if (scan.tableCount > 0) {
+          candidates.push(
+            `Which of our ${scan.tableCount} tables have data quality issues?`,
+          );
+        }
+        if (scan.piiTablesCount > 0) {
+          candidates.push(
+            `Show me the ${scan.piiTablesCount} tables that contain PII data`,
+          );
+        }
+        if (scan.avgGovernanceScore > 0) {
+          const score = Math.round(scan.avgGovernanceScore);
+          candidates.push(
+            `Our governance score is ${score}/100 — how can we improve it?`,
+          );
+        }
+        candidates.push(`Give me an overview of our data estate`);
       }
     }
 
-    // --- Estate scan questions ---
-    if (scan) {
-      if (scan.tableCount > 0) {
-        candidates.push(
-          `Which of our ${scan.tableCount} tables have data quality issues?`,
-        );
-      }
-      if (scan.piiTablesCount > 0) {
-        candidates.push(
-          `Show me the ${scan.piiTablesCount} tables that contain PII data`,
-        );
-      }
-      if (scan.avgGovernanceScore > 0) {
-        const score = Math.round(scan.avgGovernanceScore);
-        candidates.push(
-          `Our governance score is ${score}/100 — how can we improve it?`,
-        );
-      }
-      candidates.push(`Give me an overview of our data estate`);
-    }
-
-    if (candidates.length === 0) return FALLBACK_QUESTIONS;
+    if (candidates.length === 0) return [];
 
     return pickRandom(candidates, TARGET_COUNT);
   } catch (err) {
     logger.warn("[suggested-questions] Failed to build dynamic questions", {
       error: err instanceof Error ? err.message : String(err),
     });
-    return FALLBACK_QUESTIONS;
+    return [];
   }
 }
 

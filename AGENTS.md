@@ -132,6 +132,39 @@ Key modules:
 Data model: `ForgeEnvironmentScan`, `ForgeTableDetail`, `ForgeTableHistorySummary`,
 `ForgeTableLineage`, `ForgeTableInsight` (see Prisma schema).
 
+## Ask Forge (Conversational Assistant)
+
+Ask Forge is a RAG-powered conversational AI assistant. See `ASK_FORGE.md`
+for full documentation.
+
+Key modules:
+- `lib/assistant/engine.ts` -- orchestrator (intent → context → LLM → actions)
+- `lib/assistant/intent.ts` -- LLM-based intent classification with heuristic fallback
+- `lib/assistant/context-builder.ts` -- dual-strategy context pipeline (Lakebase + RAG)
+- `lib/assistant/prompts.ts` -- system prompt, user template, message builder
+- `lib/assistant/sql-proposer.ts` -- SQL extraction, validation (EXPLAIN)
+- `lib/assistant/dashboard-proposer.ts` -- dashboard intent detection and proposal extraction
+- `lib/lakebase/assistant-log.ts` -- CRUD for `ForgeAssistantLog` table
+- `lib/lakebase/conversations.ts` -- CRUD for `ForgeConversation` (per-user chat history)
+- `components/assistant/ask-forge-chat.tsx` -- main chat component (SSE streaming, actions)
+- `components/assistant/ask-forge-context-panel.tsx` -- side panel (tables, sources, enrichments)
+- `components/assistant/conversation-history.tsx` -- ChatGPT-like history sidebar
+- `components/assistant/answer-stream.tsx` -- real-time markdown rendering (`react-markdown` + `remark-gfm`)
+- `app/ask-forge/page.tsx` -- thin client shell with dynamic import (`ssr: false`)
+- `app/ask-forge/ask-forge-content.tsx` -- main page content (history, chat, context panel)
+
+Data model: `ForgeAssistantLog`, `ForgeConversation`, `ConversationMessage`,
+`TableEnrichmentData`, `SourceData`, `ActionCardData` (see `lib/assistant/` and Prisma schema).
+
+API routes:
+- `POST /api/assistant` -- SSE streaming endpoint
+- `POST /api/assistant/feedback` -- thumbs up/down feedback
+- `GET /api/assistant/conversations` -- list user conversations
+- `POST /api/assistant/conversations` -- create conversation
+- `GET /api/assistant/conversations/[id]` -- load conversation with messages
+- `PATCH /api/assistant/conversations/[id]` -- rename conversation
+- `DELETE /api/assistant/conversations/[id]` -- delete conversation and logs
+
 ## Infrastructure
 
 | Concern            | Implementation                                              |

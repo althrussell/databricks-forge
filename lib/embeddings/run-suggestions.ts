@@ -10,7 +10,6 @@ import { generateEmbedding } from "./client";
 import { searchByVector } from "./store";
 import type { SearchResult } from "./types";
 import { isEmbeddingEnabled } from "./config";
-import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Types

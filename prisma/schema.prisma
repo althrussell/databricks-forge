@@ -668,6 +668,9 @@ model ForgeAssistantLog {
   completionTokens Int?    @map("completion_tokens")
   totalTokens     Int?     @map("total_tokens")
   userId          String?  @map("user_id")
+  sourcesJson     String?  @map("sources_json")
+  referencedTablesJson String? @map("referenced_tables_json")
+  persona         String?  @map("persona")
   createdAt       DateTime @default(now()) @map("created_at")
 
   @@index([sessionId])
@@ -686,6 +689,7 @@ model ForgeConversation {
   userId    String   @map("user_id")
   title     String
   sessionId String   @unique @map("session_id")
+  persona   String?  @map("persona")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 

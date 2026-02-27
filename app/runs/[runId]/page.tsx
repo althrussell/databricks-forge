@@ -45,6 +45,13 @@ import {
   type PromptLogStats,
 } from "@/components/pipeline/run-detail/ai-observability-tab";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Target,
   Database,
   Copy,
@@ -56,6 +63,9 @@ import {
   RotateCcw,
   ArrowLeft,
   GitCompareArrows,
+  Pencil,
+  X,
+  Loader2,
 } from "lucide-react";
 import {
   Tooltip,
@@ -81,7 +91,11 @@ export default function RunDetailPage({
 }) {
   const { runId } = use(params);
   const router = useRouter();
-  const { getOutcome: getIndustryOutcome } = useIndustryOutcomes();
+  const {
+    getOutcome: getIndustryOutcome,
+    getOptions: getIndustryOptions,
+    loading: outcomesLoading,
+  } = useIndustryOutcomes();
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [lineageDiscoveredFqns, setLineageDiscoveredFqns] = useState<
@@ -227,6 +241,43 @@ export default function RunDetailPage({
 
   // Rerun state
   const [isRerunning, setIsRerunning] = useState(false);
+
+  // Industry assignment state (retrospective)
+  const [industryEditing, setIndustryEditing] = useState(false);
+  const [industrySaving, setIndustrySaving] = useState(false);
+
+  const handleIndustryAssign = useCallback(
+    async (industryId: string | null) => {
+      if (!run) return;
+      setIndustrySaving(true);
+      try {
+        const res = await fetch(`/api/runs/${runId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ industry: industryId }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        setRun(data.run);
+        setIndustryEditing(false);
+        toast.success(
+          industryId
+            ? "Industry outcome map assigned"
+            : "Industry outcome map removed"
+        );
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to update industry"
+        );
+      } finally {
+        setIndustrySaving(false);
+      }
+    },
+    [run, runId]
+  );
 
   const fetchRun = useCallback(async () => {
     if (fetchingRef.current) return;
@@ -476,10 +527,66 @@ export default function RunDetailPage({
       </div>
 
       {/* Industry Outcome Map Banner */}
-      {run.config.industry &&
-        (() => {
-          const outcome = getIndustryOutcome(run.config.industry);
-          return outcome ? (
+      {(() => {
+        const outcome = run.config.industry
+          ? getIndustryOutcome(run.config.industry)
+          : null;
+
+        if (industryEditing) {
+          return (
+            <div className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950/30">
+              <Target className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+              <div className="flex-1">
+                <p className="mb-2 text-sm font-medium text-violet-900 dark:text-violet-200">
+                  {outcome ? "Change" : "Assign"} Industry Outcome Map
+                </p>
+                <Select
+                  defaultValue={run.config.industry || ""}
+                  onValueChange={(v) => handleIndustryAssign(v || null)}
+                  disabled={industrySaving || outcomesLoading}
+                >
+                  <SelectTrigger className="w-full max-w-sm bg-white dark:bg-background">
+                    <SelectValue placeholder="Select an industry..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getIndustryOptions().map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id}>
+                        {opt.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {industrySaving ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-600" />
+              ) : (
+                <div className="flex shrink-0 gap-1">
+                  {outcome && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-destructive hover:text-destructive"
+                      onClick={() => handleIndustryAssign(null)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setIndustryEditing(false)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        if (outcome) {
+          return (
             <div className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950/30">
               <Target className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
               <div className="flex-1">
@@ -490,7 +597,7 @@ export default function RunDetailPage({
                 <p className="text-xs text-violet-700 dark:text-violet-400">
                   {run.industryAutoDetected
                     ? "Automatically detected from business context"
-                    : "Manually selected during configuration"}
+                    : "Manually selected"}
                   {" \u2022 "}
                   {outcome.objectives.length} strategic objective
                   {outcome.objectives.length !== 1 ? "s" : ""}
@@ -521,9 +628,53 @@ export default function RunDetailPage({
                   auto-detected
                 </Badge>
               )}
+              {isCompleted && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-violet-600 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-200"
+                      onClick={() => setIndustryEditing(true)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Change industry outcome map</TooltipContent>
+                </Tooltip>
+              )}
             </div>
-          ) : null;
-        })()}
+          );
+        }
+
+        if (isCompleted && useCases.length > 0) {
+          return (
+            <div className="flex items-center gap-3 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950/20">
+              <Target className="h-5 w-5 shrink-0 text-violet-400 dark:text-violet-600" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-violet-800 dark:text-violet-300">
+                  No industry outcome map detected
+                </p>
+                <p className="text-xs text-violet-600 dark:text-violet-500">
+                  Assign one to unlock coverage analysis, gap report, and
+                  strategic priority mapping for your use cases.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-violet-300 text-violet-700 hover:bg-violet-100 dark:border-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
+                onClick={() => setIndustryEditing(true)}
+              >
+                <Target className="mr-1.5 h-3.5 w-3.5" />
+                Assign Industry
+              </Button>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* Progress (running/pending) */}
       {isActive && (
@@ -830,20 +981,28 @@ export default function RunDetailPage({
                           label="AI Model"
                           value={run.config.aiModel}
                         />
-                        <ConfigField
-                          label="Industry"
-                          value={
-                            run.config.industry
-                              ? (getIndustryOutcome(run.config.industry)
-                                  ?.name ?? run.config.industry)
-                              : "Not specified"
-                          }
-                          badge={
-                            run.config.industry && run.industryAutoDetected
-                              ? "auto-detected"
-                              : undefined
-                          }
-                        />
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Industry</p>
+                          <p className="mt-0.5 text-sm">
+                            {run.config.industry
+                              ? (getIndustryOutcome(run.config.industry)?.name ?? run.config.industry)
+                              : "Not specified"}
+                            {run.config.industry && run.industryAutoDetected && (
+                              <span className="ml-1.5 inline-block rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                auto-detected
+                              </span>
+                            )}
+                            {isCompleted && (
+                              <button
+                                className="ml-1.5 inline-flex items-center text-xs text-violet-600 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-200"
+                                onClick={() => setIndustryEditing(true)}
+                              >
+                                <Pencil className="mr-0.5 h-3 w-3" />
+                                {run.config.industry ? "change" : "assign"}
+                              </button>
+                            )}
+                          </p>
+                        </div>
                         <ConfigField
                           label="Priorities"
                           value={

@@ -7,7 +7,6 @@
  * but not so long that it dilutes the embedding signal.
  */
 
-import type { EmbeddingKind } from "./types";
 
 // ---------------------------------------------------------------------------
 // 1. table_detail

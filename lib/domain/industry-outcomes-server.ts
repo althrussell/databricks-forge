@@ -68,8 +68,95 @@ export async function getIndustryOutcomeAsync(
 // ---------------------------------------------------------------------------
 
 /**
+ * Curated aliases mapping common generic terms the LLM may produce to the
+ * canonical outcome map id.  Each key is lowercase; values are outcome ids.
+ * Multiple aliases can map to the same id.
+ */
+const INDUSTRY_ALIASES: Record<string, string> = {
+  "financial services": "banking",
+  "fintech": "banking",
+  "neobank": "banking",
+  "wealth management": "banking",
+  "capital markets": "banking",
+  "payments": "banking",
+  "pharma": "hls",
+  "pharmaceutical": "hls",
+  "pharmaceuticals": "hls",
+  "healthcare": "hls",
+  "life sciences": "hls",
+  "biotech": "hls",
+  "biotechnology": "hls",
+  "medical devices": "hls",
+  "retail": "rcg",
+  "consumer goods": "rcg",
+  "cpg": "rcg",
+  "ecommerce": "rcg",
+  "e-commerce": "rcg",
+  "grocery": "rcg",
+  "fashion": "rcg",
+  "hospitality": "rcg",
+  "travel": "rcg",
+  "telco": "communications",
+  "telecom": "communications",
+  "telecommunications": "communications",
+  "broadband": "communications",
+  "isp": "communications",
+  "energy": "energy-utilities",
+  "utilities": "energy-utilities",
+  "oil and gas": "energy-utilities",
+  "oil & gas": "energy-utilities",
+  "renewables": "energy-utilities",
+  "mining": "energy-utilities",
+  "water": "water-utilities",
+  "wastewater": "water-utilities",
+  "media": "media-advertising",
+  "advertising": "media-advertising",
+  "adtech": "media-advertising",
+  "streaming": "media-advertising",
+  "publishing": "media-advertising",
+  "technology": "digital-natives",
+  "saas": "digital-natives",
+  "software": "digital-natives",
+  "cloud": "digital-natives",
+  "platform": "digital-natives",
+  "gaming": "games",
+  "esports": "games",
+  "igaming": "sports-betting",
+  "rail": "rail-transport",
+  "railway": "rail-transport",
+  "freight": "rail-transport",
+  "logistics": "rail-transport",
+  "transport": "rail-transport",
+  "automotive": "automotive-mobility",
+  "mobility": "automotive-mobility",
+  "oem": "automotive-mobility",
+  "vehicle": "automotive-mobility",
+  "fleet": "automotive-mobility",
+  "betting": "sports-betting",
+  "wagering": "sports-betting",
+  "gambling": "sports-betting",
+  "lotteries": "sports-betting",
+  "underwriting": "insurance",
+  "reinsurance": "insurance",
+  "claims": "insurance",
+  "insurtech": "insurance",
+  "manufacturing": "manufacturing",
+  "industrial": "manufacturing",
+  "aerospace": "manufacturing",
+  "defense": "manufacturing",
+  "semiconductors": "manufacturing",
+};
+
+/** Words too generic to contribute meaningful signal on their own. */
+const STOP_WORDS = new Set([
+  "and", "the", "for", "with", "from", "services", "solutions",
+  "management", "data", "digital", "analytics", "operations",
+  "group", "company", "industry", "sector", "business",
+]);
+
+/**
  * Attempt to match a free-text industries description (from BusinessContext)
- * against available outcome maps using keyword matching.
+ * against available outcome maps using keyword matching + curated aliases.
  *
  * Returns the `id` of the best-matching outcome map, or `null` if no
  * confident match is found. Used by the pipeline engine to auto-select
@@ -92,23 +179,33 @@ export async function detectIndustryFromContext(
   // Also build a flat lowercase string for substring matching
   const inputLower = industriesStr.toLowerCase();
 
+  // --- Phase 1: Alias-based detection (handles generic LLM outputs) --------
+  // Tally alias hits per outcome id -- aliases are curated so high confidence.
+  const aliasHits: Record<string, number> = {};
+  for (const [alias, outcomeId] of Object.entries(INDUSTRY_ALIASES)) {
+    if (inputLower.includes(alias)) {
+      aliasHits[outcomeId] = (aliasHits[outcomeId] ?? 0) + 1;
+    }
+  }
+
+  // --- Phase 2: Keyword scoring against each outcome map -------------------
   let bestId: string | null = null;
   let bestScore = 0;
 
   for (const outcome of outcomes) {
     let score = 0;
 
-    // Build keyword phrases to check against the input
     const nameLower = outcome.name.toLowerCase();
     const nameWords = nameLower
       .split(/[\s&/,]+/)
-      .filter((w) => w.length > 2);
+      .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
     const subVerticals = (outcome.subVerticals ?? []).map((sv) =>
       sv.toLowerCase()
     );
 
-    // 1. Exact name match (strongest signal)
-    if (inputLower.includes(nameLower)) {
+    // 1. Exact name match (strongest signal, word-boundary aware)
+    const nameRe = new RegExp(`(?:^|[\\s,;&/])${nameLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[\\s,;&/])`, "i");
+    if (nameRe.test(inputLower) || inputLower === nameLower) {
       score += 10;
     }
 
@@ -124,12 +221,14 @@ export async function detectIndustryFromContext(
       if (inputLower.includes(sv)) {
         score += 5;
       }
-      // Also check if input tokens partially match sub-verticals
+      // Partial token matching against the full sub-vertical string.
+      // Input tokens are NOT filtered by stop words -- the LLM output may
+      // legitimately contain words like "services" or "management" that
+      // carry meaningful signal when matched against sub-verticals.
       for (const token of inputTokens) {
-        if (
-          sv.includes(token.trim()) &&
-          token.trim().length > 3
-        ) {
+        const trimmed = token.trim();
+        if (trimmed.length <= 3) continue;
+        if (sv.includes(trimmed)) {
           score += 2;
         }
       }
@@ -140,14 +239,17 @@ export async function detectIndustryFromContext(
       score += 4;
     }
 
+    // 5. Alias bonus -- curated aliases are high-confidence
+    const aliasCount = aliasHits[outcome.id] ?? 0;
+    score += aliasCount * 4;
+
     if (score > bestScore) {
       bestScore = score;
       bestId = outcome.id;
     }
   }
 
-  // Require a minimum confidence score to avoid false positives
-  // A score of 3+ means at least one strong keyword match
+  // A score of 3+ means at least one strong keyword or alias match
   return bestScore >= 3 ? bestId : null;
 }
 

@@ -25,7 +25,6 @@ import {
   Loader2,
   Rocket,
   ExternalLink,
-  ChevronLeft,
 } from "lucide-react";
 
 type Step = "schema" | "deploying" | "done";
