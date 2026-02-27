@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import {
   AskForgeChat,
   type AskForgeChatHandle,
@@ -9,11 +10,18 @@ import {
   type SourceData,
 } from "@/components/assistant/ask-forge-chat";
 import { AskForgeContextPanel, type TableDetailData } from "@/components/assistant/ask-forge-context-panel";
-import { ConversationHistory } from "@/components/assistant/conversation-history";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
 import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
+
+const ConversationHistory = dynamic(
+  () =>
+    import("@/components/assistant/conversation-history").then(
+      (mod) => mod.ConversationHistory,
+    ),
+  { ssr: false },
+);
 
 export default function AskForgePage() {
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
