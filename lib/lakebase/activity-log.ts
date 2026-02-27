@@ -19,7 +19,8 @@ export type ActivityAction =
   | "completed"
   | "failed"
   | "deleted_run"
-  | "exported";
+  | "exported"
+  | "updated_run_industry";
 
 export interface ActivityLogEntry {
   activityId: string;
