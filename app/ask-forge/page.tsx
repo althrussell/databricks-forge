@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { AskForgeChat, type TableEnrichmentData } from "@/components/assistant/ask-forge-chat";
-import { AskForgeContextPanel } from "@/components/assistant/ask-forge-context-panel";
+import { AskForgeChat, type TableEnrichmentData, type SourceData } from "@/components/assistant/ask-forge-chat";
+import { AskForgeContextPanel, type TableDetailData } from "@/components/assistant/ask-forge-context-panel";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
 import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
@@ -14,15 +14,57 @@ export default function AskForgePage() {
   const [dashboardSql, setDashboardSql] = React.useState<string | null>(null);
   const [dashboardProposal, setDashboardProposal] = React.useState<Record<string, unknown> | null>(null);
   const [tableEnrichments, setTableEnrichments] = React.useState<TableEnrichmentData[]>([]);
+  const [tableDetails, setTableDetails] = React.useState<Map<string, TableDetailData>>(new Map());
+  const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
+  const [sources, setSources] = React.useState<SourceData[]>([]);
+  const [loadingTables, setLoadingTables] = React.useState(false);
+  const chatRef = React.useRef<{ submitQuestion: (q: string) => void } | null>(null);
+
+  const fetchTableDetails = React.useCallback(async (fqns: string[]) => {
+    if (fqns.length === 0) {
+      setTableDetails(new Map());
+      return;
+    }
+
+    setLoadingTables(true);
+    const newDetails = new Map<string, TableDetailData>();
+
+    await Promise.all(
+      fqns.slice(0, 10).map(async (fqn) => {
+        try {
+          const resp = await fetch(`/api/environment/table/${encodeURIComponent(fqn)}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            newDetails.set(fqn, data);
+          }
+        } catch {
+          // best-effort per table
+        }
+      }),
+    );
+
+    setTableDetails(newDetails);
+    setLoadingTables(false);
+  }, []);
+
+  const handleReferencedTables = React.useCallback(
+    (tables: string[]) => {
+      setReferencedTables(tables);
+      fetchTableDetails(tables);
+    },
+    [fetchTableDetails],
+  );
+
+  const handleAskAboutTable = React.useCallback((fqn: string) => {
+    chatRef.current?.submitQuestion(`Tell me everything about the table ${fqn} - its health, lineage, columns, data quality, and how it's used.`);
+  }, []);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
-      {/* Knowledge status bar */}
       <EmbeddingStatus />
 
-      {/* Main two-panel layout */}
       <div className="flex min-h-0 flex-1">
-        {/* Chat panel -- left */}
+        {/* Chat panel */}
         <div className="flex min-w-0 flex-1 flex-col border-r">
           <AskForgeChat
             mode="full"
@@ -39,26 +81,34 @@ export default function AskForgePage() {
               setDashboardProposal(proposal);
             }}
             onTableEnrichments={setTableEnrichments}
+            onReferencedTables={handleReferencedTables}
+            onSources={setSources}
+            onAskAboutTable={handleAskAboutTable}
           />
         </div>
 
-        {/* Context panel -- right */}
-        <div className="hidden w-[380px] shrink-0 overflow-y-auto lg:block">
-          <AskForgeContextPanel enrichments={tableEnrichments} />
+        {/* Context panel */}
+        <div className="hidden w-[400px] shrink-0 overflow-y-auto lg:block">
+          <AskForgeContextPanel
+            enrichments={tableEnrichments}
+            tableDetails={tableDetails}
+            referencedTables={referencedTables}
+            sources={sources}
+            loadingTables={loadingTables}
+            onAskAboutTable={handleAskAboutTable}
+          />
         </div>
       </div>
 
-      {/* SQL Dialog */}
       <SqlDialog
         open={!!activeSql}
         sql={activeSql ?? ""}
         onOpenChange={(open) => { if (!open) setActiveSql(null); }}
-        onRequestFix={(sql, error) => {
+        onRequestFix={() => {
           setActiveSql(null);
         }}
       />
 
-      {/* Deploy as Notebook (inline in a dialog-like overlay) */}
       {deploySql && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg">
@@ -75,7 +125,6 @@ export default function AskForgePage() {
         </div>
       )}
 
-      {/* Deploy as Dashboard Dialog */}
       <DeployDashboardDialog
         open={!!dashboardSql}
         sql={dashboardSql ?? ""}

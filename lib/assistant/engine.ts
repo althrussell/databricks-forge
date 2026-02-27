@@ -129,21 +129,24 @@ export async function runAssistantEngine(
   const dashboardProposal = extractDashboardIntent(answer);
 
   let existingDashboards: ExistingDashboard[] = [];
-  if (intentResult.intent === "dashboard" && isEmbeddingEnabled()) {
+  if (intentResult.intent === "dashboard") {
     try {
-      const dashChunks = await retrieveContext(question, {
-        kinds: ["genie_recommendation"],
-        topK: 3,
-        minScore: 0.5,
-      });
-      existingDashboards = dashChunks.map((c) => ({
-        sourceId: c.sourceId,
-        title: (c.metadata?.title as string) ?? c.sourceId,
-        score: c.score,
-        metadata: c.metadata,
+      const { withPrisma } = await import("@/lib/prisma");
+      const dbDashboards = await withPrisma(async (prisma) =>
+        prisma.forgeDashboardRecommendation.findMany({
+          select: { id: true, title: true, domain: true, description: true },
+          take: 5,
+          orderBy: { createdAt: "desc" },
+        }),
+      );
+      existingDashboards = dbDashboards.map((d) => ({
+        sourceId: d.id,
+        title: d.title,
+        score: 1.0,
+        metadata: { domain: d.domain, description: d.description },
       }));
     } catch {
-      // best-effort dashboard search
+      // best-effort dashboard lookup
     }
   }
 

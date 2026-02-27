@@ -1,9 +1,12 @@
 /**
  * Context builder for the Ask Forge assistant.
  *
- * Retrieves relevant information from the vector store and formats it
- * into structured context for the LLM. Combines RAG retrieval with
- * metadata lookups to provide comprehensive grounding.
+ * Dual-strategy context pipeline:
+ *   Strategy 1: Direct Lakebase queries (business context, scan summary,
+ *               deployed assets, per-table deep detail)
+ *   Strategy 2: Vector semantic search (RAG retrieval across all embedding kinds)
+ *
+ * Both strategies are merged and deduplicated before injection into the LLM.
  */
 
 import { retrieveContext, formatRetrievedContext, provenanceLabel } from "@/lib/embeddings/retriever";
@@ -53,15 +56,24 @@ const INTENT_SCOPES: Record<AssistantIntent, string | undefined> = {
   exploration: undefined,
 };
 
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
+
 /**
- * Build full LLM context for the assistant, combining RAG retrieval
- * with conversation history.
+ * Build full LLM context using dual-strategy pipeline:
+ *   1. Direct Lakebase queries (always available, no embedding dependency)
+ *   2. Vector semantic search (when embeddings are enabled)
  */
 export async function buildAssistantContext(
   question: string,
   intent: AssistantIntent,
   history: ConversationTurn[] = [],
 ): Promise<AssistantContext> {
+  // --- Strategy 1: Direct Lakebase context (always runs) ---
+  const directContext = await fetchDirectLakebaseContext();
+
+  // --- Strategy 2: Vector semantic search (when embeddings enabled) ---
   let chunks: RetrievedChunk[] = [];
   let ragContext = "";
 
@@ -82,22 +94,33 @@ export async function buildAssistantContext(
     });
   }
 
+  // --- Merge: prepend direct context, then RAG, then table enrichment ---
+  let fullContext = "";
+
+  if (directContext) {
+    fullContext += directContext + "\n\n";
+  }
+
+  if (ragContext) {
+    fullContext += ragContext;
+  }
+
   const tables = extractTableReferences(chunks);
   const tableEnrichments = await fetchTableEnrichments(tables);
 
   if (tableEnrichments.length > 0) {
-    ragContext += "\n\n## Estate Metadata for Referenced Tables\n\n" + formatTableEnrichments(tableEnrichments);
+    fullContext += "\n\n## Estate Metadata for Referenced Tables\n\n" + formatTableEnrichments(tableEnrichments);
   }
 
   const conversationHistory = formatConversationHistory(history);
 
   return {
-    ragContext,
+    ragContext: fullContext,
     chunks,
     conversationHistory,
     tables,
     tableEnrichments,
-    hasDataGaps: chunks.length === 0,
+    hasDataGaps: chunks.length === 0 && !directContext,
   };
 }
 
@@ -122,44 +145,174 @@ export function buildSourceReferences(chunks: RetrievedChunk[]): Array<{
   }));
 }
 
-function extractTableReferences(chunks: RetrievedChunk[]): string[] {
-  const tables = new Set<string>();
-  for (const chunk of chunks) {
-    if (chunk.kind === "table_detail" || chunk.kind === "column_profile") {
-      tables.add(chunk.sourceId);
-    }
-    const fqn = chunk.metadata?.tableFqn as string | undefined;
-    if (fqn) tables.add(fqn);
-  }
-  return [...tables];
-}
-
-function formatConversationHistory(history: ConversationTurn[]): string {
-  if (history.length === 0) return "";
-
-  const recent = history.slice(-10);
-  return recent
-    .map((turn) => {
-      const role = turn.role === "user" ? "User" : "Assistant";
-      const content = turn.content.length > 500
-        ? turn.content.slice(0, 500) + "…"
-        : turn.content;
-      return `**${role}:** ${content}`;
-    })
-    .join("\n\n");
-}
+// ---------------------------------------------------------------------------
+// Strategy 1: Direct Lakebase context
+// ---------------------------------------------------------------------------
 
 /**
- * Fetch enrichment metadata (health, staleness, owner, lineage) for
- * a list of table FQNs directly from Lakebase. Best-effort -- returns
- * whatever is available without failing the overall context build.
+ * Fetch structured context directly from Lakebase, independent of vector search.
+ * Provides business grounding, estate overview, and deployed asset awareness.
+ */
+async function fetchDirectLakebaseContext(): Promise<string | null> {
+  try {
+    return await withPrisma(async (prisma) => {
+      const sections: string[] = [];
+
+      // 1. Business context from latest completed run
+      const latestRun = await prisma.forgeRun.findFirst({
+        where: { status: "completed" },
+        orderBy: { createdAt: "desc" },
+        select: {
+          businessName: true,
+          businessContext: true,
+          businessPriorities: true,
+          strategicGoals: true,
+          businessDomains: true,
+          ucMetadata: true,
+        },
+      });
+
+      if (latestRun) {
+        const parts = ["## Business Context"];
+        parts.push(`Organisation: ${latestRun.businessName}`);
+        if (latestRun.businessContext) parts.push(`Context: ${truncate(latestRun.businessContext, 800)}`);
+        if (latestRun.businessPriorities) parts.push(`Priorities: ${truncate(latestRun.businessPriorities, 400)}`);
+        if (latestRun.strategicGoals) parts.push(`Strategic Goals: ${truncate(latestRun.strategicGoals, 400)}`);
+        if (latestRun.businessDomains) parts.push(`Business Domains: ${latestRun.businessDomains}`);
+        sections.push(parts.join("\n"));
+      }
+
+      // 2. Estate summary from latest scan
+      const latestScan = await prisma.forgeEnvironmentScan.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: {
+          tableCount: true,
+          domainCount: true,
+          piiTablesCount: true,
+          avgGovernanceScore: true,
+          lineageDiscoveredCount: true,
+          dataProductCount: true,
+          createdAt: true,
+          ucPath: true,
+        },
+      });
+
+      if (latestScan) {
+        const parts = ["## Data Estate Summary"];
+        parts.push(`Scope: ${latestScan.ucPath}`);
+        parts.push(`Tables: ${latestScan.tableCount} | Domains: ${latestScan.domainCount} | PII tables: ${latestScan.piiTablesCount}`);
+        parts.push(`Lineage edges: ${latestScan.lineageDiscoveredCount} | Data products: ${latestScan.dataProductCount}`);
+        parts.push(`Avg governance score: ${latestScan.avgGovernanceScore.toFixed(0)}/100`);
+        parts.push(`Last scanned: ${latestScan.createdAt.toISOString()}`);
+        sections.push(parts.join("\n"));
+      }
+
+      // 3. Deployed assets (dashboards + Genie spaces)
+      const [deployedDashboards, deployedSpaces] = await Promise.all([
+        prisma.forgeDashboard.findMany({
+          where: { status: "deployed" },
+          select: { title: true, domain: true, dashboardId: true },
+          take: 20,
+        }),
+        prisma.forgeGenieSpace.findMany({
+          where: { status: "deployed" },
+          select: { title: true, domain: true, spaceId: true },
+          take: 20,
+        }),
+      ]);
+
+      if (deployedDashboards.length > 0 || deployedSpaces.length > 0) {
+        const parts = ["## Already Deployed Assets"];
+        if (deployedDashboards.length > 0) {
+          parts.push(`Dashboards (${deployedDashboards.length}):`);
+          for (const d of deployedDashboards) {
+            parts.push(`- ${d.title}${d.domain ? ` [${d.domain}]` : ""}`);
+          }
+        }
+        if (deployedSpaces.length > 0) {
+          parts.push(`Genie Spaces (${deployedSpaces.length}):`);
+          for (const s of deployedSpaces) {
+            parts.push(`- ${s.title}${s.domain ? ` [${s.domain}]` : ""}`);
+          }
+        }
+        sections.push(parts.join("\n"));
+      }
+
+      if (sections.length === 0) return null;
+      return sections.join("\n\n---\n\n");
+    });
+  } catch (err) {
+    logger.warn("[assistant/context] Failed to fetch direct Lakebase context", { error: String(err) });
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Table reference extraction (broadened)
+// ---------------------------------------------------------------------------
+
+const THREE_PART_FQN = /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\b/g;
+
+function extractTableReferences(chunks: RetrievedChunk[]): string[] {
+  const tables = new Set<string>();
+
+  for (const chunk of chunks) {
+    // Direct FQN kinds: sourceId IS the FQN
+    if (["table_detail", "column_profile", "table_health"].includes(chunk.kind)) {
+      tables.add(chunk.sourceId);
+    }
+
+    const m = chunk.metadata ?? {};
+
+    // metadata.tableFqn (table_health, environment_insight, column_profile)
+    if (typeof m.tableFqn === "string" && m.tableFqn.includes(".")) {
+      tables.add(m.tableFqn);
+    }
+
+    // metadata.source / metadata.target (lineage_context)
+    if (typeof m.source === "string" && m.source.includes(".")) {
+      tables.add(m.source);
+    }
+    if (typeof m.target === "string" && m.target.includes(".")) {
+      tables.add(m.target);
+    }
+
+    // metadata.tables (array, used by some genie/use-case chunks)
+    if (Array.isArray(m.tables)) {
+      for (const t of m.tables) {
+        if (typeof t === "string" && t.includes(".")) tables.add(t);
+      }
+    }
+  }
+
+  // Fallback: regex-scan content of estate-scoped chunks for three-part FQNs
+  if (tables.size === 0) {
+    for (const chunk of chunks) {
+      if (["table_detail", "column_profile", "table_health", "lineage_context", "environment_insight", "data_product"].includes(chunk.kind)) {
+        for (const match of chunk.content.matchAll(THREE_PART_FQN)) {
+          tables.add(match[0]);
+        }
+      }
+    }
+  }
+
+  return [...tables].slice(0, 20);
+}
+
+// ---------------------------------------------------------------------------
+// Table enrichment (per-table deep detail from Lakebase)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch enrichment metadata (health, staleness, owner, lineage, insights,
+ * related use cases) for a list of table FQNs directly from Lakebase.
  */
 async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]> {
   if (fqns.length === 0) return [];
 
   try {
     return await withPrisma(async (prisma) => {
-      const [details, histories, lineage] = await Promise.all([
+      const [details, histories, lineage, insights, useCases] = await Promise.all([
         prisma.forgeTableDetail.findMany({
           where: { tableFqn: { in: fqns } },
           orderBy: { scan: { createdAt: "desc" } },
@@ -177,6 +330,19 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
               { targetTableFqn: { in: fqns } },
             ],
           },
+        }),
+        prisma.forgeTableInsight.findMany({
+          where: { tableFqn: { in: fqns } },
+          orderBy: { scan: { createdAt: "desc" } },
+        }),
+        prisma.forgeUseCase.findMany({
+          where: {
+            OR: fqns.map((fqn) => ({
+              tablesInvolved: { contains: fqn },
+            })),
+          },
+          select: { name: true, domain: true, overallScore: true, tablesInvolved: true },
+          take: 30,
         }),
       ]);
 
@@ -224,14 +390,23 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
   }
 }
 
-function parseJsonArray(json: string | null | undefined): string[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
+// ---------------------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------------------
+
+function formatConversationHistory(history: ConversationTurn[]): string {
+  if (history.length === 0) return "";
+
+  const recent = history.slice(-10);
+  return recent
+    .map((turn) => {
+      const role = turn.role === "user" ? "User" : "Assistant";
+      const content = turn.content.length > 500
+        ? turn.content.slice(0, 500) + "…"
+        : turn.content;
+      return `**${role}:** ${content}`;
+    })
+    .join("\n\n");
 }
 
 function formatTableEnrichments(enrichments: TableEnrichment[]): string {
@@ -254,9 +429,23 @@ function formatTableEnrichments(enrichments: TableEnrichment[]): string {
     .join("\n\n");
 }
 
+function parseJsonArray(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function truncate(s: string, maxLen: number): string {
+  return s.length > maxLen ? s.slice(0, maxLen) + "…" : s;
 }

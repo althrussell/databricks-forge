@@ -25,15 +25,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 // Types (exported for consumers)
 // ---------------------------------------------------------------------------
 
-interface SourceData {
-  index: number;
-  label: string;
-  kind: string;
-  sourceId: string;
-  score: number;
-  metadata: Record<string, unknown> | null;
-}
-
 export interface TableEnrichmentData {
   tableFqn: string;
   owner: string | null;
@@ -66,6 +57,15 @@ export interface ConversationMessage {
   feedback?: "up" | "down" | null;
 }
 
+export interface SourceData {
+  index: number;
+  label: string;
+  kind: string;
+  sourceId: string;
+  score: number;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface AskForgeChatProps {
   /** Render mode -- 'full' gives a spacious layout, 'compact' is for the sheet */
   mode?: "full" | "compact";
@@ -77,6 +77,12 @@ export interface AskForgeChatProps {
   onDeployDashboard?: (sql: string, proposal: Record<string, unknown> | null) => void;
   /** Called when table enrichments are received for the latest message */
   onTableEnrichments?: (enrichments: TableEnrichmentData[]) => void;
+  /** Called when referenced table FQNs are available from the response */
+  onReferencedTables?: (tables: string[]) => void;
+  /** Called when source references are available from the response */
+  onSources?: (sources: SourceData[]) => void;
+  /** Called when the user wants to ask about a specific table */
+  onAskAboutTable?: (fqn: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +106,9 @@ export function AskForgeChat({
   onDeploySql,
   onDeployDashboard,
   onTableEnrichments,
+  onReferencedTables,
+  onSources,
+  onAskAboutTable,
 }: AskForgeChatProps) {
   const router = useRouter();
   const [messages, setMessages] = React.useState<ConversationMessage[]>([]);
@@ -190,6 +199,8 @@ export function AskForgeChat({
               scrollToBottom();
             } else if (parsed.type === "done") {
               const enrichments = parsed.tableEnrichments ?? [];
+              const tables: string[] = parsed.tables ?? [];
+              const sources: SourceData[] = parsed.sources ?? [];
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsg.id
@@ -197,7 +208,7 @@ export function AskForgeChat({
                         ...m,
                         content: parsed.answer,
                         isStreaming: false,
-                        sources: parsed.sources ?? [],
+                        sources,
                         actions: parsed.actions ?? [],
                         intent: parsed.intent ?? undefined,
                         sqlBlocks: parsed.sqlBlocks ?? [],
@@ -210,6 +221,12 @@ export function AskForgeChat({
               );
               if (enrichments.length > 0) {
                 onTableEnrichments?.(enrichments);
+              }
+              if (tables.length > 0) {
+                onReferencedTables?.(tables);
+              }
+              if (sources.length > 0) {
+                onSources?.(sources);
               }
             } else if (parsed.type === "error") {
               setMessages((prev) =>
@@ -322,6 +339,8 @@ export function AskForgeChat({
     setActiveSql(null);
     setDeploySql(null);
     onTableEnrichments?.([]);
+    onReferencedTables?.([]);
+    onSources?.([]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
