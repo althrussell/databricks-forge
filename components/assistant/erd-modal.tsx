@@ -83,54 +83,59 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Network className="size-5 text-primary" />
-          <h2 className="text-base font-semibold">
-            Entity Relationship Diagram
-          </h2>
-          <span className="text-sm text-muted-foreground">
-            {graph ? `${graph.nodes.length} tables, ${graph.edges.length} relationships` : ""}
-          </span>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="flex max-h-[90vh] w-full max-w-7xl flex-col rounded-xl border bg-background shadow-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Network className="size-5 text-primary" />
+            <h2 className="text-base font-semibold">
+              Entity Relationship Diagram
+            </h2>
+            <span className="text-sm text-muted-foreground">
+              {graph ? `${graph.nodes.length} tables, ${graph.edges.length} relationships` : ""}
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
-          <X className="size-4" />
-        </Button>
-      </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-hidden">
-        {loading && (
-          <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="size-5 animate-spin" />
-            <span>Loading ERD...</span>
-          </div>
-        )}
+        {/* Body */}
+        <div className="min-h-[500px] flex-1 overflow-hidden">
+          {loading && (
+            <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" />
+              <span>Loading ERD...</span>
+            </div>
+          )}
 
-        {error && (
-          <div className="flex h-full items-center justify-center text-sm text-destructive">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="flex h-full items-center justify-center text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-        {!loading && !error && graph && graph.nodes.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            No relationship data available for the referenced tables.
-          </div>
-        )}
+          {!loading && !error && graph && graph.nodes.length === 0 && (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              No relationship data available for the referenced tables.
+            </div>
+          )}
 
-        {!loading && !error && graph && graph.nodes.length > 0 && ERDViewer && (
-          <ERDViewer graph={graph} />
-        )}
+          {!loading && !error && graph && graph.nodes.length > 0 && ERDViewer && (
+            <ERDViewer graph={graph} />
+          )}
 
-        {!loading && !error && graph && graph.nodes.length > 0 && !ERDViewer && (
-          <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="size-5 animate-spin" />
-            <span>Loading viewer...</span>
-          </div>
-        )}
+          {!loading && !error && graph && graph.nodes.length > 0 && !ERDViewer && (
+            <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" />
+              <span>Loading viewer...</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

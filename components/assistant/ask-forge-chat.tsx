@@ -69,6 +69,12 @@ export interface SourceData {
 export interface AskForgeChatProps {
   /** Render mode -- 'full' gives a spacious layout, 'compact' is for the sheet */
   mode?: "full" | "compact";
+  /** External session ID tied to a conversation. If omitted, generates a new one. */
+  sessionId?: string;
+  /** Pre-loaded messages from a saved conversation */
+  initialMessages?: ConversationMessage[];
+  /** Dynamic suggested questions shown on the empty state (falls back to defaults) */
+  suggestedQuestions?: string[];
   /** Called when a SQL block should be opened in a dialog */
   onOpenSql?: (sql: string) => void;
   /** Called when a deploy-as-notebook action fires */
@@ -81,6 +87,8 @@ export interface AskForgeChatProps {
   onReferencedTables?: (tables: string[]) => void;
   /** Called when source references are available from the response */
   onSources?: (sources: SourceData[]) => void;
+  /** Called when the backend creates a conversation for this session */
+  onConversationCreated?: (conversationId: string) => void;
 }
 
 export interface AskForgeChatHandle {
@@ -88,10 +96,10 @@ export interface AskForgeChatHandle {
 }
 
 // ---------------------------------------------------------------------------
-// Suggested questions
+// Suggested questions (fallback when no dynamic questions are provided)
 // ---------------------------------------------------------------------------
 
-const SUGGESTED_QUESTIONS = [
+const FALLBACK_QUESTIONS = [
   "How can I calculate Customer Lifetime Value?",
   "Which tables have PII data?",
   "Show me revenue trends by region",
@@ -106,24 +114,33 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
   function AskForgeChat(
     {
       mode = "full",
+      sessionId: externalSessionId,
+      initialMessages,
+      suggestedQuestions,
       onOpenSql,
       onDeploySql,
       onDeployDashboard,
       onTableEnrichments,
       onReferencedTables,
       onSources,
+      onConversationCreated,
     },
     ref,
   ) {
   const router = useRouter();
-  const [messages, setMessages] = React.useState<ConversationMessage[]>([]);
+  const [messages, setMessages] = React.useState<ConversationMessage[]>(initialMessages ?? []);
   const [input, setInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
   const [deploySql, setDeploySql] = React.useState<string | null>(null);
-  const [sessionId] = React.useState(() => crypto.randomUUID());
+  const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
+  const sessionId = externalSessionId ?? fallbackSessionId;
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    setMessages(initialMessages ?? []);
+  }, [initialMessages]);
 
   const scrollToBottom = React.useCallback(() => {
     setTimeout(() => {
@@ -232,6 +249,9 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
               }
               if (sources.length > 0) {
                 onSources?.(sources);
+              }
+              if (parsed.conversationId) {
+                onConversationCreated?.(parsed.conversationId);
               }
             } else if (parsed.type === "error") {
               setMessages((prev) =>
@@ -384,7 +404,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
       {/* Messages */}
       <ScrollArea className="flex-1 overflow-y-auto" ref={scrollRef}>
-        <div className={`space-y-4 p-4 ${isCompact ? "" : "mx-auto max-w-3xl"}`}>
+        <div className={`space-y-4 p-4 ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
           {messages.length === 0 && (
             <div className={`flex flex-col items-center justify-center gap-3 text-center ${isCompact ? "py-16" : "py-24"}`}>
               <BrainCircuit className={`text-muted-foreground/30 ${isCompact ? "size-12" : "size-16"}`} />
@@ -396,7 +416,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTED_QUESTIONS.map((q) => (
+                {(suggestedQuestions ?? FALLBACK_QUESTIONS).map((q) => (
                   <button
                     key={q}
                     onClick={() => { setInput(q); inputRef.current?.focus(); }}
@@ -496,7 +516,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
       {/* Input */}
       <div className="border-t p-4">
-        <div className={`flex items-end gap-2 ${isCompact ? "" : "mx-auto max-w-3xl"}`}>
+        <div className={`flex items-end gap-2 ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
           <textarea
             ref={inputRef}
             value={input}
@@ -520,7 +540,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             )}
           </Button>
         </div>
-        <p className={`mt-1.5 text-[10px] text-muted-foreground ${isCompact ? "" : "mx-auto max-w-3xl"}`}>
+        <p className={`mt-1.5 text-[10px] text-muted-foreground ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
           Press Enter to send, Shift+Enter for new line. ⌘J to toggle.
         </p>
       </div>

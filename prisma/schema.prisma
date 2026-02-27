@@ -678,6 +678,22 @@ model ForgeAssistantLog {
 }
 
 // ---------------------------------------------------------------------------
+// Conversation History
+// ---------------------------------------------------------------------------
+
+model ForgeConversation {
+  id        String   @id @default(uuid()) @map("conversation_id")
+  userId    String   @map("user_id")
+  title     String
+  sessionId String   @unique @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([userId, updatedAt])
+  @@map("forge_conversations")
+}
+
+// ---------------------------------------------------------------------------
 // Knowledge Base: Uploaded documents for RAG
 // ---------------------------------------------------------------------------
 

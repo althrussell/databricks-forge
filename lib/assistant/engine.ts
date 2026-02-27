@@ -88,6 +88,7 @@ export async function runAssistantEngine(
   history: ConversationTurn[] = [],
   onChunk?: StreamCallback,
   sessionId?: string,
+  userId?: string | null,
 ): Promise<AssistantResponse> {
   const start = Date.now();
 
@@ -197,6 +198,7 @@ export async function runAssistantEngine(
       promptTokens: llmResponse.usage?.promptTokens,
       completionTokens: llmResponse.usage?.completionTokens,
       totalTokens: llmResponse.usage?.totalTokens,
+      userId: userId ?? undefined,
     });
   } catch (err) {
     logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) });

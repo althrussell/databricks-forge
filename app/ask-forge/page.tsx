@@ -1,8 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { AskForgeChat, type AskForgeChatHandle, type TableEnrichmentData, type SourceData } from "@/components/assistant/ask-forge-chat";
+import {
+  AskForgeChat,
+  type AskForgeChatHandle,
+  type ConversationMessage,
+  type TableEnrichmentData,
+  type SourceData,
+} from "@/components/assistant/ask-forge-chat";
 import { AskForgeContextPanel, type TableDetailData } from "@/components/assistant/ask-forge-context-panel";
+import { ConversationHistory } from "@/components/assistant/conversation-history";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
 import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
@@ -18,7 +25,33 @@ export default function AskForgePage() {
   const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
   const [sources, setSources] = React.useState<SourceData[]>([]);
   const [loadingTables, setLoadingTables] = React.useState(false);
+  const [suggestedQuestions, setSuggestedQuestions] = React.useState<string[] | undefined>();
   const chatRef = React.useRef<AskForgeChatHandle>(null);
+
+  const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
+  const [historyAvailable, setHistoryAvailable] = React.useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = React.useState(0);
+  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
+  const [chatSessionId, setChatSessionId] = React.useState(() => crypto.randomUUID());
+  const [initialMessages, setInitialMessages] = React.useState<ConversationMessage[] | undefined>();
+
+  React.useEffect(() => {
+    fetch("/api/assistant/suggestions")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.questions?.length) setSuggestedQuestions(data.questions);
+      })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    fetch("/api/assistant/conversations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.authenticated) setHistoryAvailable(true);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchTableDetails = React.useCallback(async (fqns: string[]) => {
     if (fqns.length === 0) {
@@ -59,16 +92,78 @@ export default function AskForgePage() {
     chatRef.current?.submitQuestion(`Tell me everything about the table ${fqn} - its health, lineage, columns, data quality, and how it's used.`);
   }, []);
 
+  const handleSelectConversation = React.useCallback(async (conversationId: string) => {
+    if (conversationId === activeConversationId) return;
+
+    try {
+      const resp = await fetch(`/api/assistant/conversations/${conversationId}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      const msgs: ConversationMessage[] = (data.messages ?? []).map(
+        (m: { id: string; role: string; content: string; intent?: string; intentConfidence?: number; sqlGenerated?: string; feedbackRating?: string; logId: string }) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          intent: m.intent ? { intent: m.intent, confidence: m.intentConfidence ?? 0 } : undefined,
+          sqlBlocks: m.sqlGenerated ? [m.sqlGenerated] : undefined,
+          logId: m.role === "assistant" ? m.logId : undefined,
+          feedback: m.feedbackRating as "up" | "down" | undefined ?? null,
+          isStreaming: false,
+        }),
+      );
+
+      setActiveConversationId(conversationId);
+      setChatSessionId(data.sessionId);
+      setInitialMessages(msgs);
+      setTableEnrichments([]);
+      setReferencedTables([]);
+      setSources([]);
+    } catch {
+      // best-effort
+    }
+  }, [activeConversationId]);
+
+  const handleNewConversation = React.useCallback(() => {
+    setActiveConversationId(null);
+    setChatSessionId(crypto.randomUUID());
+    setInitialMessages(undefined);
+    setTableEnrichments([]);
+    setReferencedTables([]);
+    setSources([]);
+  }, []);
+
+  const handleConversationCreated = React.useCallback((conversationId: string) => {
+    setActiveConversationId(conversationId);
+    setHistoryRefreshKey((k) => k + 1);
+  }, []);
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       <EmbeddingStatus />
 
       <div className="flex min-h-0 flex-1">
+        {/* History sidebar */}
+        {historyAvailable && (
+          <ConversationHistory
+            activeConversationId={activeConversationId}
+            refreshKey={historyRefreshKey}
+            onSelectConversation={handleSelectConversation}
+            onNewConversation={handleNewConversation}
+            collapsed={historyCollapsed}
+            onToggleCollapse={() => setHistoryCollapsed((p) => !p)}
+          />
+        )}
+
         {/* Chat panel */}
         <div className="flex min-w-0 flex-1 flex-col border-r">
           <AskForgeChat
+            key={chatSessionId}
             ref={chatRef}
             mode="full"
+            sessionId={chatSessionId}
+            initialMessages={initialMessages}
+            suggestedQuestions={suggestedQuestions}
             onOpenSql={(sql) => {
               setActiveSql(sql);
               setDeploySql(null);
@@ -84,6 +179,7 @@ export default function AskForgePage() {
             onTableEnrichments={setTableEnrichments}
             onReferencedTables={handleReferencedTables}
             onSources={setSources}
+            onConversationCreated={handleConversationCreated}
           />
         </div>
 

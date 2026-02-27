@@ -12,6 +12,12 @@
 
 import { NextRequest } from "next/server";
 import { runAssistantEngine, type ConversationTurn } from "@/lib/assistant/engine";
+import { getCurrentUserEmail } from "@/lib/dbx/client";
+import {
+  createConversation,
+  findConversationBySession,
+  touchConversation,
+} from "@/lib/lakebase/conversations";
 import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
@@ -31,6 +37,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const userEmail = await getCurrentUserEmail();
+
+    let conversationId: string | null = null;
+    if (userEmail) {
+      try {
+        const existingId = await findConversationBySession(sessionId);
+        if (existingId) {
+          conversationId = existingId;
+          await touchConversation(sessionId);
+        } else {
+          const title = question.trim().slice(0, 100);
+          conversationId = await createConversation(userEmail, title, sessionId);
+        }
+      } catch (err) {
+        logger.warn("[api/assistant] Conversation tracking failed", { error: String(err) });
+      }
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -43,6 +67,7 @@ export async function POST(req: NextRequest) {
               controller.enqueue(encoder.encode(event));
             },
             sessionId,
+            userEmail,
           );
 
           const doneEvent = `data: ${JSON.stringify({
@@ -59,6 +84,7 @@ export async function POST(req: NextRequest) {
             tokenUsage: result.tokenUsage,
             durationMs: result.durationMs,
             logId: result.logId,
+            conversationId,
           })}\n\n`;
           controller.enqueue(encoder.encode(doneEvent));
           controller.close();
