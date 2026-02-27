@@ -50,15 +50,23 @@ function logConnectionInfo(connectionString: string): void {
 // Singleton cache
 // ---------------------------------------------------------------------------
 
+// All mutable coordination state lives on globalThis so that separate
+// Next.js server bundles (RSC vs API routes) share a single set of guards,
+// preventing dueling credential rotations.
 const globalForPrisma = globalThis as unknown as {
   __prisma: PrismaClient | undefined;
   __prismaTokenId: string | undefined;
   __refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  __rotationInFlight: Promise<PrismaClient> | null | undefined;
+  __initInFlight: Promise<PrismaClient> | null | undefined;
+  __dbReady: boolean | undefined;
+  __rotationResolvedAt: number | undefined;
 };
 
-let _rotationInFlight: Promise<PrismaClient> | null = null;
-let _initInFlight: Promise<PrismaClient> | null = null;
-let _dbReady = false;
+globalForPrisma.__rotationInFlight ??= null;
+globalForPrisma.__initInFlight ??= null;
+globalForPrisma.__dbReady ??= false;
+globalForPrisma.__rotationResolvedAt ??= 0;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -84,7 +92,7 @@ export async function getPrisma(): Promise<PrismaClient> {
  * API routes can use this to return 503 instead of blocking on init.
  */
 export function isDatabaseReady(): boolean {
-  return _dbReady;
+  return globalForPrisma.__dbReady ?? false;
 }
 
 /**
@@ -118,13 +126,13 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
     return globalForPrisma.__prisma;
   }
 
-  if (_initInFlight) return _initInFlight;
+  if (globalForPrisma.__initInFlight) return globalForPrisma.__initInFlight;
 
-  _initInFlight = buildAutoProvisionedPool(tokenId, generation).finally(() => {
-    _initInFlight = null;
+  globalForPrisma.__initInFlight = buildAutoProvisionedPool(tokenId, generation).finally(() => {
+    globalForPrisma.__initInFlight = null;
   });
 
-  return _initInFlight;
+  return globalForPrisma.__initInFlight;
 }
 
 async function buildAutoProvisionedPool(
@@ -166,7 +174,7 @@ async function buildAutoProvisionedPool(
 
   globalForPrisma.__prisma = prisma;
   globalForPrisma.__prismaTokenId = tokenId;
-  _dbReady = true;
+  globalForPrisma.__dbReady = true;
 
   logger.info("[prisma] Client created (auto-provision mode)", {
     generation,
@@ -197,7 +205,7 @@ function scheduleProactiveRefresh(): void {
   globalForPrisma.__refreshTimer = setTimeout(async () => {
     globalForPrisma.__refreshTimer = undefined;
 
-    if (_rotationInFlight) {
+    if (globalForPrisma.__rotationInFlight) {
       logger.info("[prisma] Proactive refresh skipped — rotation already in flight");
       return;
     }
@@ -266,7 +274,7 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 
   globalForPrisma.__prisma = prisma;
   globalForPrisma.__prismaTokenId = "__static__";
-  _dbReady = true;
+  globalForPrisma.__dbReady = true;
 
   logger.info("[prisma] Client created (static mode)");
 
@@ -325,21 +333,20 @@ export async function withPrisma<T>(
 // Race-safe credential rotation with verification + cooldown
 // ---------------------------------------------------------------------------
 
-let _rotationResolvedAt = 0;
 const ROTATION_COOLDOWN_MS = 10_000;
 const VERIFY_MAX_ATTEMPTS = 4;
 
 async function rotatePrismaClient(): Promise<PrismaClient> {
   if (
     globalForPrisma.__prisma &&
-    Date.now() - _rotationResolvedAt < ROTATION_COOLDOWN_MS
+    Date.now() - (globalForPrisma.__rotationResolvedAt ?? 0) < ROTATION_COOLDOWN_MS
   ) {
     return globalForPrisma.__prisma;
   }
 
-  if (_rotationInFlight) return _rotationInFlight;
+  if (globalForPrisma.__rotationInFlight) return globalForPrisma.__rotationInFlight;
 
-  _rotationInFlight = (async () => {
+  globalForPrisma.__rotationInFlight = (async () => {
     try {
       delete process.env.DATABASE_URL;
       await invalidatePrismaClient();
@@ -352,7 +359,7 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
       for (let i = 0; i < VERIFY_MAX_ATTEMPTS; i++) {
         try {
           await client.$queryRaw`SELECT 1`;
-          _rotationResolvedAt = Date.now();
+          globalForPrisma.__rotationResolvedAt = Date.now();
           logger.info("[prisma] Credential rotation complete — connection verified");
           return client;
         } catch (verifyErr) {
@@ -369,8 +376,6 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
             });
             await new Promise((r) => setTimeout(r, delay));
           } else {
-            // Clear the broken client so the next getPrisma() builds a
-            // fresh pool instead of reusing the unverified one.
             globalForPrisma.__prisma = undefined;
             globalForPrisma.__prismaTokenId = undefined;
             throw verifyErr;
@@ -382,9 +387,9 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
       globalForPrisma.__prismaTokenId = undefined;
       throw new Error("Rotation verification failed after all attempts");
     } finally {
-      _rotationInFlight = null;
+      globalForPrisma.__rotationInFlight = null;
     }
   })();
 
-  return _rotationInFlight;
+  return globalForPrisma.__rotationInFlight;
 }
