@@ -163,7 +163,7 @@ export default function AskForgeContent() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    <div className="-m-6 flex h-[calc(100vh-3rem)] flex-col">
       <EmbeddingStatus />
 
       <div className="flex min-h-0 flex-1">
@@ -222,7 +222,7 @@ export default function AskForgeContent() {
             </Button>
           </div>
           {!contextCollapsed && (
-            <div className="w-[400px] overflow-y-auto">
+            <div className="w-[400px] min-w-0 overflow-hidden">
               <AskForgeContextPanel
                 enrichments={tableEnrichments}
                 tableDetails={tableDetails}

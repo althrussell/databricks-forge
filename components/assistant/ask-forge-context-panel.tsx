@@ -159,8 +159,8 @@ export function AskForgeContextPanel({
     : enrichments.map((e) => e.tableFqn);
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-5 p-4">
+    <ScrollArea className="h-full w-full">
+      <div className="min-w-0 space-y-5 overflow-hidden p-4">
         {/* Referenced Tables */}
         {(tableFqns.length > 0 || loadingTables) && (
           <section>
@@ -324,11 +324,11 @@ function RichTableCard({
   const useCases = detail?.useCases ?? [];
 
   return (
-    <div className="rounded-lg border bg-card text-xs">
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-xs">
       {/* Header */}
       <button
         onClick={onToggle}
-        className="flex w-full items-start justify-between gap-2 p-3 text-left"
+        className="flex w-full min-w-0 items-start justify-between gap-2 p-3 text-left"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -549,18 +549,18 @@ function LineageSummary({
   const shortName = parts.length >= 3 ? parts[2] : fqn;
 
   return (
-    <div className="rounded border bg-muted/30 p-2 text-[11px]">
-      <p className="font-medium">{shortName}</p>
+    <div className="min-w-0 overflow-hidden rounded border bg-muted/30 p-2 text-[11px]">
+      <p className="truncate font-medium">{shortName}</p>
       {upstream.length > 0 && (
         <div className="mt-1 flex items-start gap-1 text-muted-foreground">
           <ArrowDownRight className="mt-0.5 size-3 shrink-0 text-blue-500" />
-          <span>From: {upstream.map(shortFqn).join(", ")}</span>
+          <span className="min-w-0 truncate">From: {upstream.map(shortFqn).join(", ")}</span>
         </div>
       )}
       {downstream.length > 0 && (
         <div className="mt-0.5 flex items-start gap-1 text-muted-foreground">
           <ArrowUpRight className="mt-0.5 size-3 shrink-0 text-green-500" />
-          <span>To: {downstream.map(shortFqn).join(", ")}</span>
+          <span className="min-w-0 truncate">To: {downstream.map(shortFqn).join(", ")}</span>
         </div>
       )}
     </div>

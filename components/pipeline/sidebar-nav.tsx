@@ -131,7 +131,7 @@ export function SidebarNav() {
         collapsed ? "w-14" : "w-64",
       )}
     >
-      <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-6")}>
+      <div className={cn("flex h-16 shrink-0 items-center border-b", collapsed ? "justify-center px-2" : "px-6")}>
         <Link href="/" className="flex items-center gap-2.5 font-semibold">
           <Image
             src="/databricks-icon.svg"
@@ -143,8 +143,10 @@ export function SidebarNav() {
           {!collapsed && <span>Forge AI</span>}
         </Link>
       </div>
-      <NavLinks collapsed={collapsed} />
-      <div className="mt-auto border-t">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <NavLinks collapsed={collapsed} />
+      </div>
+      <div className="shrink-0 border-t">
         {!collapsed && <VersionBadge />}
         <div className={cn("flex", collapsed ? "justify-center p-2" : "justify-end px-4 py-2")}>
           <Button
