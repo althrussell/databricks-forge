@@ -413,7 +413,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
       {/* Messages */}
       <ScrollArea className="flex-1 overflow-y-auto">
-        <div className={`space-y-4 p-4 ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
+        <div className={`space-y-4 p-4 ${isCompact ? "" : "mx-auto w-full max-w-[min(90%,72rem)]"}`}>
           {messages.length === 0 && (
             suggestedQuestions && suggestedQuestions.length === 0 ? (
               <div className={`flex flex-col items-center justify-center gap-4 text-center ${isCompact ? "py-16" : "py-24"}`}>
@@ -548,7 +548,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
       {/* Input */}
       <div className="border-t p-4">
-        <div className={`flex items-end gap-2 ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
+        <div className={`flex items-end gap-2 ${isCompact ? "" : "mx-auto w-full max-w-[min(90%,72rem)]"}`}>
           <textarea
             ref={inputRef}
             value={input}
@@ -572,7 +572,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             )}
           </Button>
         </div>
-        <p className={`mt-1.5 text-[10px] text-muted-foreground ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
+        <p className={`mt-1.5 text-[10px] text-muted-foreground ${isCompact ? "" : "mx-auto w-full max-w-[min(90%,72rem)]"}`}>
           Press Enter to send, Shift+Enter for new line. ⌘J to toggle.
         </p>
       </div>
