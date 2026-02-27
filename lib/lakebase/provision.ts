@@ -17,20 +17,53 @@ import { logger } from "@/lib/logger";
 import { fetchWithTimeout, TIMEOUTS } from "@/lib/dbx/fetch-with-timeout";
 
 // ---------------------------------------------------------------------------
+// Shared mutable state on globalThis
+// ---------------------------------------------------------------------------
+// Next.js App Router bundles RSC and API routes separately. Module-scoped
+// `let` variables exist independently in each bundle, but they share a
+// single `globalThis`. All mutable provision state lives here so that
+// credential generation counters, cached tokens, and dedup guards are
+// consistent across bundles.
+
+interface CachedToken {
+  value: string;
+  expiresAt: number; // epoch ms
+}
+
+const globalForProvision = globalThis as unknown as {
+  __provisionInflightMap: Map<string, Promise<unknown>> | undefined;
+  __endpointHost: string | null | undefined;
+  __endpointName: string | null | undefined;
+  __username: string | null | undefined;
+  __wsToken: CachedToken | null | undefined;
+  __dbCredential: CachedToken | null | undefined;
+  __credentialGeneration: number | undefined;
+};
+
+if (!globalForProvision.__provisionInflightMap) {
+  globalForProvision.__provisionInflightMap = new Map();
+}
+globalForProvision.__endpointHost ??= null;
+globalForProvision.__endpointName ??= null;
+globalForProvision.__username ??= null;
+globalForProvision.__wsToken ??= null;
+globalForProvision.__dbCredential ??= null;
+globalForProvision.__credentialGeneration ??= 0;
+
+// ---------------------------------------------------------------------------
 // In-flight deduplication helper
 // ---------------------------------------------------------------------------
 
-const _inflightMap = new Map<string, Promise<unknown>>();
-
 function dedup<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const existing = _inflightMap.get(key) as Promise<T> | undefined;
+  const map = globalForProvision.__provisionInflightMap!;
+  const existing = map.get(key) as Promise<T> | undefined;
   if (existing) return existing;
 
   const promise = fn().finally(() => {
-    _inflightMap.delete(key);
+    map.delete(key);
   });
 
-  _inflightMap.set(key, promise);
+  map.set(key, promise);
   return promise;
 }
 
@@ -55,23 +88,7 @@ const LAKEBASE_API_TIMEOUT = 30_000;
 const PROJECT_CREATION_TIMEOUT = 120_000;
 const LRO_POLL_INTERVAL = 5_000;
 
-// ---------------------------------------------------------------------------
-// Cached state (survives across calls within the same process)
-// ---------------------------------------------------------------------------
-
-let _endpointHost: string | null = null;
-let _endpointName: string | null = null;
-let _username: string | null = null;
-
-interface CachedToken {
-  value: string;
-  expiresAt: number; // epoch ms
-}
-
-let _wsToken: CachedToken | null = null;
-let _dbCredential: CachedToken | null = null;
-
-let _credentialGeneration = 0;
+// (Cached state lives on globalForProvision — see top of file)
 
 // ---------------------------------------------------------------------------
 // Host helper
@@ -90,8 +107,9 @@ function getHost(): string {
 // ---------------------------------------------------------------------------
 
 async function getWorkspaceToken(): Promise<string> {
-  if (_wsToken && Date.now() < _wsToken.expiresAt - 60_000) {
-    return _wsToken.value;
+  const cached = globalForProvision.__wsToken;
+  if (cached && Date.now() < cached.expiresAt - 60_000) {
+    return cached.value;
   }
 
   return dedup("wsToken", async () => {
@@ -126,7 +144,7 @@ async function getWorkspaceToken(): Promise<string> {
     }
 
     const data: { access_token: string; expires_in: number } = await resp.json();
-    _wsToken = {
+    globalForProvision.__wsToken = {
       value: data.access_token,
       expiresAt: Date.now() + data.expires_in * 1_000,
     };
@@ -135,7 +153,7 @@ async function getWorkspaceToken(): Promise<string> {
       expiresInSec: data.expires_in,
     });
 
-    return _wsToken.value;
+    return globalForProvision.__wsToken!.value;
   });
 }
 
@@ -247,8 +265,8 @@ async function pollOperation(operationName: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function resolveEndpoint(): Promise<{ host: string; name: string }> {
-  if (_endpointHost && _endpointName) {
-    return { host: _endpointHost, name: _endpointName };
+  if (globalForProvision.__endpointHost && globalForProvision.__endpointName) {
+    return { host: globalForProvision.__endpointHost, name: globalForProvision.__endpointName };
   }
 
   return dedup("endpoint", async () => {
@@ -287,8 +305,8 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
       );
     }
 
-    _endpointHost = host;
-    _endpointName = epName;
+    globalForProvision.__endpointHost = host;
+    globalForProvision.__endpointName = epName;
 
     logger.info("[provision] Endpoint resolved", { host, endpoint: epName });
 
@@ -301,7 +319,7 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
 // ---------------------------------------------------------------------------
 
 async function resolveUsername(): Promise<string> {
-  if (_username) return _username;
+  if (globalForProvision.__username) return globalForProvision.__username;
 
   return dedup("username", async () => {
     const host = getHost();
@@ -327,11 +345,11 @@ async function resolveUsername(): Promise<string> {
         if (!identity) {
           throw new Error("Could not determine workspace identity from /Me");
         }
-        _username = identity;
+        globalForProvision.__username = identity;
 
         logger.info("[provision] Username resolved", { identity });
 
-        return _username;
+        return globalForProvision.__username;
       }
 
       const text = await resp.text();
@@ -358,15 +376,17 @@ async function resolveUsername(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 async function generateDbCredential(): Promise<string> {
-  if (_dbCredential && Date.now() < _dbCredential.expiresAt - 60_000) {
-    return _dbCredential.value;
+  const cached = globalForProvision.__dbCredential;
+  if (cached && Date.now() < cached.expiresAt - 60_000) {
+    return cached.value;
   }
 
   return dedup("dbCredential", async () => {
     // Re-check after acquiring the dedup slot — another caller may have
     // populated the cache while we waited.
-    if (_dbCredential && Date.now() < _dbCredential.expiresAt - 60_000) {
-      return _dbCredential.value;
+    const rechecked = globalForProvision.__dbCredential;
+    if (rechecked && Date.now() < rechecked.expiresAt - 60_000) {
+      return rechecked.value;
     }
 
     const { name: endpointName } = await resolveEndpoint();
@@ -388,18 +408,19 @@ async function generateDbCredential(): Promise<string> {
       ? new Date(data.expire_time).getTime()
       : Date.now() + 3_600_000;
 
-    _dbCredential = {
+    globalForProvision.__dbCredential = {
       value: data.token,
       expiresAt,
     };
-    _credentialGeneration++;
+    globalForProvision.__credentialGeneration =
+      (globalForProvision.__credentialGeneration ?? 0) + 1;
 
     logger.info("[provision] DB credential generated", {
-      generation: _credentialGeneration,
+      generation: globalForProvision.__credentialGeneration,
       expiresAt: new Date(expiresAt).toISOString(),
     });
 
-    return _dbCredential.value;
+    return globalForProvision.__dbCredential!.value;
   });
 }
 
@@ -481,7 +502,7 @@ export async function refreshDbCredential(): Promise<string> {
  * guarantee the stale credential is discarded.
  */
 export function invalidateDbCredential(): void {
-  _dbCredential = null;
+  globalForProvision.__dbCredential = null;
 }
 
 /**
@@ -490,7 +511,7 @@ export function invalidateDbCredential(): void {
  * and recreate the connection pool.
  */
 export function getCredentialGeneration(): number {
-  return _credentialGeneration;
+  return globalForProvision.__credentialGeneration ?? 0;
 }
 
 /**
@@ -499,5 +520,5 @@ export function getCredentialGeneration(): number {
  * to schedule proactive pool rotation before the credential expires.
  */
 export function getCredentialExpiresAt(): number | null {
-  return _dbCredential?.expiresAt ?? null;
+  return globalForProvision.__dbCredential?.expiresAt ?? null;
 }
