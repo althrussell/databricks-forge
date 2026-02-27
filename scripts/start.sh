@@ -51,6 +51,43 @@ MAX_DB_RETRIES=15
 DB_RETRY_INTERVAL=3
 
 if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
+  # -- Step A: Enable pgvector extension BEFORE Prisma schema push --------
+  # The ForgeEmbedding model uses Unsupported("vector(1024)") so the
+  # extension must exist before prisma db push tries to create the table.
+  echo "[startup] Enabling pgvector extension..."
+  PGVEC_ATTEMPT=0
+  PGVEC_READY=false
+
+  while [ "$PGVEC_ATTEMPT" -lt "$MAX_DB_RETRIES" ]; do
+    PGVEC_ATTEMPT=$((PGVEC_ATTEMPT + 1))
+
+    if DATABASE_URL="$SCHEMA_URL" node -e "
+      const pg = require('pg');
+      (async () => {
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+          await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+          console.log('[startup] pgvector extension enabled.');
+        } finally {
+          await pool.end();
+        }
+      })();
+    " 2>&1; then
+      PGVEC_READY=true
+      break
+    fi
+
+    if [ "$PGVEC_ATTEMPT" -lt "$MAX_DB_RETRIES" ]; then
+      echo "[startup] Database not ready for pgvector (attempt $PGVEC_ATTEMPT/$MAX_DB_RETRIES), retrying in ${DB_RETRY_INTERVAL}s..."
+      sleep "$DB_RETRY_INTERVAL"
+    fi
+  done
+
+  if [ "$PGVEC_READY" = false ]; then
+    echo "[startup] WARNING: Could not enable pgvector after $MAX_DB_RETRIES attempts. Prisma push may fail for vector columns."
+  fi
+
+  # -- Step B: Prisma schema push ----------------------------------------
   echo "[startup] Verifying database connectivity..."
   ATTEMPT=0
   DB_READY=false
@@ -75,50 +112,29 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     exit 1
   fi
 
-  # pgvector extension + forge_embeddings table (only when embedding endpoint is configured)
+  # -- Step C: Create HNSW index (not managed by Prisma) ------------------
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
-    echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring pgvector schema..."
+    echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring HNSW index..."
     DATABASE_URL="$SCHEMA_URL" node -e "
       const pg = require('pg');
-      async function main() {
+      (async () => {
         const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-        const client = await pool.connect();
         try {
-          await client.query('CREATE EXTENSION IF NOT EXISTS vector');
-          await client.query(\`
-            CREATE TABLE IF NOT EXISTS forge_embeddings (
-              id            TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-              kind          TEXT NOT NULL,
-              source_id     TEXT NOT NULL,
-              run_id        TEXT,
-              scan_id       TEXT,
-              content_text  TEXT NOT NULL,
-              metadata_json JSONB,
-              embedding     vector(1024) NOT NULL,
-              created_at    TIMESTAMPTZ DEFAULT NOW()
-            )
-          \`);
-          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)');
-          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)');
-          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)');
-          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)');
-          await client.query(\`
+          await pool.query(\`
             CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw ON forge_embeddings
               USING hnsw (embedding vector_cosine_ops)
               WITH (m = 16, ef_construction = 64)
           \`);
-          console.log('[startup] pgvector schema ready.');
+          console.log('[startup] HNSW index ready.');
         } catch (e) {
-          console.log('[startup] pgvector schema setup note:', e.message || e);
+          console.log('[startup] HNSW index note:', e.message || e);
         } finally {
-          client.release();
           await pool.end();
         }
-      }
-      main();
-    " 2>&1 || echo "[startup] pgvector setup completed (with warnings)."
+      })();
+    " 2>&1 || echo "[startup] HNSW index setup completed (with warnings)."
   else
-    echo "[startup] No embedding endpoint configured (serving-endpoint-embedding not bound), skipping pgvector setup."
+    echo "[startup] No embedding endpoint configured (serving-endpoint-embedding not bound), skipping HNSW index."
   fi
 
 else
