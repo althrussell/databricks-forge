@@ -27,6 +27,7 @@ const ACTION_CONFIG: Record<string, { icon: React.ReactNode; variant: "default" 
   run_sql: { icon: <Play className="size-3.5" />, variant: "default" },
   deploy_notebook: { icon: <BookOpen className="size-3.5" />, variant: "outline" },
   create_dashboard: { icon: <LayoutDashboard className="size-3.5" />, variant: "outline" },
+  deploy_dashboard: { icon: <LayoutDashboard className="size-3.5" />, variant: "default" },
   create_genie_space: { icon: <Sparkles className="size-3.5" />, variant: "outline" },
   view_tables: { icon: <Table2 className="size-3.5" />, variant: "secondary" },
   view_erd: { icon: <GitBranch className="size-3.5" />, variant: "secondary" },

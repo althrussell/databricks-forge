@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
             sources: result.sources,
             actions: result.actions,
             tables: result.tables,
+            tableEnrichments: result.tableEnrichments,
             sqlBlocks: result.sqlBlocks,
             dashboardProposal: result.dashboardProposal,
             existingDashboards: result.existingDashboards,

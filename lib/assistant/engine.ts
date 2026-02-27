@@ -7,7 +7,7 @@
  */
 
 import { classifyIntent, type AssistantIntent, type IntentClassification } from "./intent";
-import { buildAssistantContext, buildSourceReferences, type AssistantContext } from "./context-builder";
+import { buildAssistantContext, buildSourceReferences, type AssistantContext, type TableEnrichment } from "./context-builder";
 import { buildAssistantMessages } from "./prompts";
 import { extractSqlBlocks } from "./sql-proposer";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
@@ -32,6 +32,7 @@ export interface ActionCard {
     | "run_sql"
     | "deploy_notebook"
     | "create_dashboard"
+    | "deploy_dashboard"
     | "create_genie_space"
     | "view_tables"
     | "view_erd"
@@ -63,6 +64,7 @@ export interface AssistantResponse {
   sources: SourceCard[];
   actions: ActionCard[];
   tables: string[];
+  tableEnrichments: TableEnrichment[];
   sqlBlocks: string[];
   dashboardProposal: DashboardProposal | null;
   existingDashboards: ExistingDashboard[];
@@ -203,6 +205,7 @@ export async function runAssistantEngine(
     sources,
     actions,
     tables: context.tables,
+    tableEnrichments: context.tableEnrichments,
     sqlBlocks,
     dashboardProposal,
     existingDashboards,
@@ -234,7 +237,13 @@ function buildActions(
     });
   }
 
-  if (intent === "dashboard" || dashboardProposal) {
+  if (sqlBlocks.length > 0 && (intent === "dashboard" || dashboardProposal)) {
+    actions.push({
+      type: "deploy_dashboard",
+      label: "Deploy as Dashboard",
+      payload: { sql: sqlBlocks[0], proposal: dashboardProposal },
+    });
+  } else if (intent === "dashboard" || dashboardProposal) {
     actions.push({
       type: "create_dashboard",
       label: "Create Dashboard",
