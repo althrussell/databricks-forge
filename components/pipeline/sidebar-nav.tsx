@@ -41,10 +41,7 @@ function useEmbeddingEnabled(): boolean {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
     const settings = loadSettings();
-    if (!settings.semanticSearchEnabled) {
-      setEnabled(false);
-      return;
-    }
+    if (!settings.semanticSearchEnabled) return;
     fetch("/api/embeddings/status")
       .then((r) => r.json())
       .then((data) => setEnabled(data.enabled ?? false))
