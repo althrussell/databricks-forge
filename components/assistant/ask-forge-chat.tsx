@@ -81,8 +81,10 @@ export interface AskForgeChatProps {
   onReferencedTables?: (tables: string[]) => void;
   /** Called when source references are available from the response */
   onSources?: (sources: SourceData[]) => void;
-  /** Called when the user wants to ask about a specific table */
-  onAskAboutTable?: (fqn: string) => void;
+}
+
+export interface AskForgeChatHandle {
+  submitQuestion: (question: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,16 +102,19 @@ const SUGGESTED_QUESTIONS = [
 // Component
 // ---------------------------------------------------------------------------
 
-export function AskForgeChat({
-  mode = "full",
-  onOpenSql,
-  onDeploySql,
-  onDeployDashboard,
-  onTableEnrichments,
-  onReferencedTables,
-  onSources,
-  onAskAboutTable,
-}: AskForgeChatProps) {
+export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatProps>(
+  function AskForgeChat(
+    {
+      mode = "full",
+      onOpenSql,
+      onDeploySql,
+      onDeployDashboard,
+      onTableEnrichments,
+      onReferencedTables,
+      onSources,
+    },
+    ref,
+  ) {
   const router = useRouter();
   const [messages, setMessages] = React.useState<ConversationMessage[]>([]);
   const [input, setInput] = React.useState("");
@@ -126,8 +131,8 @@ export function AskForgeChat({
     }, 50);
   }, []);
 
-  const handleSubmit = async () => {
-    const question = input.trim();
+  const handleSubmit = async (externalQuestion?: string) => {
+    const question = (externalQuestion ?? input).trim();
     if (!question || loading) return;
 
     const userMsg: ConversationMessage = {
@@ -263,6 +268,13 @@ export function AskForgeChat({
       scrollToBottom();
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    submitQuestion: (q: string) => {
+      setInput(q);
+      setTimeout(() => handleSubmit(q), 0);
+    },
+  }));
 
   const handleAction = (action: ActionCardData) => {
     if (action.type === "run_sql" && action.payload.sql) {
@@ -498,7 +510,7 @@ export function AskForgeChat({
           <Button
             size="sm"
             className="h-9 w-9 shrink-0 p-0"
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={loading || !input.trim()}
           >
             {loading ? (
@@ -514,5 +526,6 @@ export function AskForgeChat({
       </div>
     </div>
   );
-}
+  },
+);
 

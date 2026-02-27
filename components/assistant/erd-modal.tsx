@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { X, Loader2, Network } from "lucide-react";
 import type { ERDGraph } from "@/lib/domain/types";
 

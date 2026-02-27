@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AskForgeChat, type TableEnrichmentData, type SourceData } from "@/components/assistant/ask-forge-chat";
+import { AskForgeChat, type AskForgeChatHandle, type TableEnrichmentData, type SourceData } from "@/components/assistant/ask-forge-chat";
 import { AskForgeContextPanel, type TableDetailData } from "@/components/assistant/ask-forge-context-panel";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
@@ -18,7 +18,7 @@ export default function AskForgePage() {
   const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
   const [sources, setSources] = React.useState<SourceData[]>([]);
   const [loadingTables, setLoadingTables] = React.useState(false);
-  const chatRef = React.useRef<{ submitQuestion: (q: string) => void } | null>(null);
+  const chatRef = React.useRef<AskForgeChatHandle>(null);
 
   const fetchTableDetails = React.useCallback(async (fqns: string[]) => {
     if (fqns.length === 0) {
@@ -67,6 +67,7 @@ export default function AskForgePage() {
         {/* Chat panel */}
         <div className="flex min-w-0 flex-1 flex-col border-r">
           <AskForgeChat
+            ref={chatRef}
             mode="full"
             onOpenSql={(sql) => {
               setActiveSql(sql);
@@ -83,7 +84,6 @@ export default function AskForgePage() {
             onTableEnrichments={setTableEnrichments}
             onReferencedTables={handleReferencedTables}
             onSources={setSources}
-            onAskAboutTable={handleAskAboutTable}
           />
         </div>
 

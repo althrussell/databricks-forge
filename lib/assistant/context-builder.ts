@@ -210,12 +210,12 @@ async function fetchDirectLakebaseContext(): Promise<string | null> {
       // 3. Deployed assets (dashboards + Genie spaces)
       const [deployedDashboards, deployedSpaces] = await Promise.all([
         prisma.forgeDashboard.findMany({
-          where: { status: "deployed" },
+          where: { status: { not: "trashed" } },
           select: { title: true, domain: true, dashboardId: true },
           take: 20,
         }),
         prisma.forgeGenieSpace.findMany({
-          where: { status: "deployed" },
+          where: { status: { not: "trashed" } },
           select: { title: true, domain: true, spaceId: true },
           take: 20,
         }),
@@ -312,7 +312,7 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
 
   try {
     return await withPrisma(async (prisma) => {
-      const [details, histories, lineage, insights, useCases] = await Promise.all([
+      const [details, histories, lineage] = await Promise.all([
         prisma.forgeTableDetail.findMany({
           where: { tableFqn: { in: fqns } },
           orderBy: { scan: { createdAt: "desc" } },
@@ -330,19 +330,6 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
               { targetTableFqn: { in: fqns } },
             ],
           },
-        }),
-        prisma.forgeTableInsight.findMany({
-          where: { tableFqn: { in: fqns } },
-          orderBy: { scan: { createdAt: "desc" } },
-        }),
-        prisma.forgeUseCase.findMany({
-          where: {
-            OR: fqns.map((fqn) => ({
-              tablesInvolved: { contains: fqn },
-            })),
-          },
-          select: { name: true, domain: true, overallScore: true, tablesInvolved: true },
-          take: 30,
         }),
       ]);
 
