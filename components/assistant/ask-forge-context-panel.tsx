@@ -24,8 +24,14 @@ import {
   MessageCircleQuestion,
   Loader2,
   FileSearch,
+  FileText,
   Sparkles,
   Network,
+  Table2,
+  Lightbulb,
+  BarChart3,
+  MessageSquare,
+  ChevronDown,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -307,6 +313,10 @@ function RichTableCard({
   const governanceScore = d?.governanceScore ?? null;
   const description = d?.generatedDescription ?? d?.comment ?? null;
 
+  const aiSummary = !description && detail?.insights?.[0]
+    ? parseInsightSummary(detail.insights[0])
+    : null;
+
   const piiColumns = detail?.columns.filter((c) => c.is_pii) ?? [];
   const columnCount = detail?.columns.length ?? 0;
 
@@ -334,8 +344,14 @@ function RichTableCard({
           {schemaPath && (
             <p className="truncate text-muted-foreground">{schemaPath}</p>
           )}
-          {description && !isExpanded && (
+          {!isExpanded && description && (
             <p className="mt-1 line-clamp-1 text-muted-foreground">{description}</p>
+          )}
+          {!isExpanded && !description && aiSummary && (
+            <p className="mt-1 flex items-center gap-1 line-clamp-1 text-muted-foreground">
+              <Sparkles className="size-3 shrink-0 text-purple-500" />
+              {aiSummary}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -551,16 +567,55 @@ function LineageSummary({
   );
 }
 
+const SOURCE_KIND_ICONS: Record<string, React.ReactNode> = {
+  table_detail: <Table2 className="size-3 text-blue-500" />,
+  column_profile: <Database className="size-3 text-indigo-500" />,
+  use_case: <Lightbulb className="size-3 text-amber-500" />,
+  business_context: <BarChart3 className="size-3 text-green-500" />,
+  genie_recommendation: <Sparkles className="size-3 text-purple-500" />,
+  genie_question: <MessageSquare className="size-3 text-purple-400" />,
+  environment_insight: <ShieldAlert className="size-3 text-orange-500" />,
+  table_health: <Heart className="size-3 text-red-500" />,
+  data_product: <Database className="size-3 text-teal-500" />,
+  outcome_map: <FileText className="size-3 text-cyan-500" />,
+  lineage_context: <GitBranch className="size-3 text-gray-500" />,
+  document_chunk: <FileText className="size-3 text-gray-400" />,
+};
+
 function SourceRow({ source }: { source: SourceData }) {
+  const [expanded, setExpanded] = React.useState(false);
   const kindLabel = SOURCE_KIND_LABELS[source.kind] ?? source.kind;
+  const icon = SOURCE_KIND_ICONS[source.kind] ?? <FileSearch className="size-3" />;
   const scorePercent = (source.score * 100).toFixed(0);
+  const metadata = source.metadata;
 
   return (
-    <div className="flex items-center gap-2 rounded border bg-muted/30 px-2 py-1.5 text-[11px]">
-      <Badge variant="outline" className="shrink-0 text-[9px]">{kindLabel}</Badge>
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.label}</span>
-      <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
-    </div>
+    <button
+      onClick={() => setExpanded(!expanded)}
+      className="flex w-full flex-col rounded border bg-muted/30 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-muted/60"
+    >
+      <div className="flex w-full items-center gap-1.5">
+        {icon}
+        <Badge variant="outline" className="shrink-0 text-[9px]">{kindLabel}</Badge>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.sourceId}</span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
+        <ChevronDown className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </div>
+      {expanded && (
+        <div className="mt-2 space-y-1.5 border-t pt-2">
+          <p className="break-words text-muted-foreground">{source.label}</p>
+          {metadata && Object.keys(metadata).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(metadata).slice(0, 8).map(([k, v]) => (
+                <Badge key={k} variant="secondary" className="text-[9px]">
+                  {k}: {String(v).slice(0, 50)}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -690,5 +745,16 @@ function parseJsonArray(json: string | null | undefined): string[] {
     return Array.isArray(parsed) ? parsed.map(String) : [];
   } catch {
     return [];
+  }
+}
+
+function parseInsightSummary(
+  insight: { insightType: string; payloadJson: string },
+): string {
+  try {
+    const payload = JSON.parse(insight.payloadJson);
+    return payload.summary ?? payload.description ?? insight.insightType;
+  } catch {
+    return insight.insightType;
   }
 }
