@@ -43,6 +43,7 @@ import type { PipelineRun } from "@/lib/domain/types";
 import type { RunComparisonResult, PromptDiff, RunMetrics, UseCaseAlignmentEntry, StepMetrics } from "@/lib/lakebase/run-comparison";
 import { InfoTip } from "@/components/ui/info-tip";
 import { COMPARE } from "@/lib/help-text";
+import { SemanticOverlap } from "@/components/compare/semantic-overlap";
 
 export default function ComparePage() {
   return (
@@ -370,6 +371,9 @@ function ComparePageInner() {
           {compareData.useCaseAlignment.length > 0 && (
             <UseCaseAlignmentCard entries={compareData.useCaseAlignment} />
           )}
+
+          {/* Semantic Overlap (embedding-based) */}
+          <SemanticOverlap runA={runA} runB={runB} />
 
           {/* Config Diff */}
           <Card>

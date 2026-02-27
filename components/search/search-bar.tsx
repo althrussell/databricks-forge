@@ -202,10 +202,9 @@ export function SearchBar() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [enabled]);
 
-  if (enabled === false || enabled === null) return null;
-
-  // Debounced search
+  // Debounced search (guarded by enabled so hook is always called)
   React.useEffect(() => {
+    if (!enabled) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (!query.trim() || query.trim().length < 2) {
@@ -242,7 +241,20 @@ export function SearchBar() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, scope]);
+  }, [query, scope, enabled]);
+
+  // Group results by kind (always called, returns empty map when inactive)
+  const grouped = React.useMemo(() => {
+    const groups = new Map<string, SearchResult[]>();
+    for (const r of results) {
+      const arr = groups.get(r.kind) ?? [];
+      arr.push(r);
+      groups.set(r.kind, arr);
+    }
+    return groups;
+  }, [results]);
+
+  if (enabled === false || enabled === null) return null;
 
   // Reset on close
   const handleOpenChange = (v: boolean) => {
@@ -254,34 +266,75 @@ export function SearchBar() {
     }
   };
 
-  // Navigate to result source
+  // Navigate to result source with deep-link query params
   const handleSelect = (result: SearchResult) => {
     setOpen(false);
-    if (result.kind === "table_detail" || result.kind === "column_profile" || result.kind === "table_health") {
-      router.push(`/environment`);
-    } else if (result.kind === "use_case" && result.runId) {
-      router.push(`/runs/${result.runId}`);
-    } else if ((result.kind === "genie_recommendation" || result.kind === "genie_question") && result.runId) {
-      router.push(`/runs/${result.runId}?tab=genie`);
-    } else if (result.kind === "environment_insight" || result.kind === "data_product" || result.kind === "lineage_context") {
-      router.push(`/environment`);
-    } else if (result.kind === "document_chunk") {
-      router.push(`/knowledge-base`);
-    } else {
-      router.push(`/environment`);
+    const m = result.metadata ?? {};
+
+    switch (result.kind) {
+      case "table_detail":
+      case "column_profile":
+      case "table_health":
+        router.push(`/environment/table/${encodeURIComponent(result.sourceId)}`);
+        break;
+
+      case "use_case":
+        if (result.runId) {
+          router.push(`/runs/${result.runId}?tab=usecases&uc=${result.sourceId}`);
+        } else {
+          router.push("/environment");
+        }
+        break;
+
+      case "genie_recommendation":
+      case "genie_question":
+        if (result.runId) {
+          const domain = (m.domain as string) ?? "";
+          router.push(`/runs/${result.runId}?tab=genie${domain ? `&domain=${encodeURIComponent(domain)}` : ""}`);
+        } else {
+          router.push("/environment");
+        }
+        break;
+
+      case "environment_insight":
+      case "data_product":
+        if (result.scanId) {
+          const fqn = (m.tableFqn as string) ?? result.sourceId;
+          router.push(`/environment?scan=${result.scanId}&highlight=${encodeURIComponent(fqn)}`);
+        } else {
+          router.push("/environment");
+        }
+        break;
+
+      case "lineage_context":
+        router.push(`/environment/table/${encodeURIComponent(result.sourceId)}?tab=lineage`);
+        break;
+
+      case "document_chunk": {
+        const docId = (m.documentId as string) ?? "";
+        router.push(`/knowledge-base${docId ? `?doc=${docId}` : ""}`);
+        break;
+      }
+
+      case "outcome_map": {
+        const industryId = (m.industryId as string) ?? "";
+        router.push(`/outcomes${industryId ? `?industry=${encodeURIComponent(industryId)}` : ""}`);
+        break;
+      }
+
+      case "business_context":
+        if (result.runId) {
+          router.push(`/runs/${result.runId}`);
+        } else {
+          router.push("/environment");
+        }
+        break;
+
+      default:
+        router.push("/environment");
+        break;
     }
   };
-
-  // Group results by kind
-  const grouped = React.useMemo(() => {
-    const groups = new Map<string, SearchResult[]>();
-    for (const r of results) {
-      const arr = groups.get(r.kind) ?? [];
-      arr.push(r);
-      groups.set(r.kind, arr);
-    }
-    return groups;
-  }, [results]);
 
   const firstLine = (text: string) => {
     const line = text.split("\n")[0] || text;

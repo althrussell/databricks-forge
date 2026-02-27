@@ -38,6 +38,7 @@ export async function deleteAllData(): Promise<void> {
       prisma.forgeActivityLog.deleteMany(),
       prisma.forgeOutcomeMap.deleteMany(),
       prisma.forgeDocument.deleteMany(),
+      prisma.forgeAssistantLog.deleteMany(),
     ]);
   });
 }

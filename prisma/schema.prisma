@@ -620,6 +620,38 @@ model ForgeAssetCoverage {
 }
 
 // ---------------------------------------------------------------------------
+// Assistant Interaction Log
+// ---------------------------------------------------------------------------
+
+model ForgeAssistantLog {
+  id              String   @id @default(uuid()) @map("log_id")
+  sessionId       String   @map("session_id")
+  question        String
+  intent          String?
+  intentConfidence Float?  @map("intent_confidence")
+  ragChunkIds     String?  @map("rag_chunk_ids")
+  response        String?
+  sqlGenerated    String?  @map("sql_generated")
+  sqlExecuted     Boolean  @default(false) @map("sql_executed")
+  sqlResult       String?  @map("sql_result")
+  actionsTaken    String?  @map("actions_taken")
+  feedbackRating  String?  @map("feedback_rating")
+  feedbackText    String?  @map("feedback_text")
+  durationMs      Int?     @map("duration_ms")
+  promptTokens    Int?     @map("prompt_tokens")
+  completionTokens Int?    @map("completion_tokens")
+  totalTokens     Int?     @map("total_tokens")
+  userId          String?  @map("user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([intent])
+  @@index([userId])
+  @@map("forge_assistant_logs")
+}
+
+// ---------------------------------------------------------------------------
 // Knowledge Base: Uploaded documents for RAG
 // ---------------------------------------------------------------------------
 

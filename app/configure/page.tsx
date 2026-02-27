@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import { ConfigForm } from "@/components/pipeline/config-form";
+import { SuggestionPanel } from "@/components/pipeline/suggestion-panel";
 import {
   Card,
   CardContent,
@@ -6,6 +10,8 @@ import {
 import { Lightbulb } from "lucide-react";
 
 export default function ConfigurePage() {
+  const [businessName, setBusinessName] = useState("");
+
   return (
     <div className="space-y-6">
       <div>
@@ -48,7 +54,9 @@ export default function ConfigurePage() {
         </CardContent>
       </Card>
 
-      <ConfigForm />
+      <SuggestionPanel businessName={businessName} />
+
+      <ConfigForm onBusinessNameChange={setBusinessName} />
     </div>
   );
 }

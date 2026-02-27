@@ -10,7 +10,8 @@
  * individual scan results.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +74,7 @@ import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { computeDataMaturity, type DataMaturityScore, type MaturityPillar } from "@/lib/domain/data-maturity";
 import { loadSettings } from "@/lib/settings";
 import type { ERDGraph } from "@/lib/domain/types";
+import { SemanticSearchInput, type SemanticSearchResult } from "@/components/search/semantic-search-input";
 
 const ERDViewer = dynamic(
   () =>
@@ -188,6 +190,9 @@ type ViewMode = "aggregate" | "single-scan" | "new-scan";
 // ---------------------------------------------------------------------------
 
 export default function EstatePage() {
+  const searchParams = useSearchParams();
+  const highlightFqn = useMemo(() => searchParams.get("highlight") ?? "", [searchParams]);
+
   const [viewMode, setViewMode] = useState<ViewMode>("aggregate");
   const [aggregate, setAggregate] = useState<AggregateData | null>(null);
   const [erdGraph, setErdGraph] = useState<ERDGraph | null>(null);
@@ -195,6 +200,27 @@ export default function EstatePage() {
   const [selectedErdGraph, setSelectedErdGraph] = useState<ERDGraph | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
+  const [embeddingEnabled, setEmbeddingEnabled] = useState(false);
+  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
+  const [semanticSourceIds, setSemanticSourceIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (highlightFqn) setSearchFilter(highlightFqn);
+  }, [highlightFqn]);
+
+  useEffect(() => {
+    const settings = loadSettings();
+    if (!settings.semanticSearchEnabled) return;
+    fetch("/api/embeddings/status")
+      .then((r) => r.json())
+      .then((d) => setEmbeddingEnabled(d.enabled ?? false))
+      .catch(() => {});
+  }, []);
+
+  const handleSemanticResults = React.useCallback((results: SemanticSearchResult[]) => {
+    setSemanticResults(results);
+    setSemanticSourceIds(new Set(results.map((r) => r.sourceId)));
+  }, []);
 
   // New scan form
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
@@ -499,12 +525,16 @@ export default function EstatePage() {
       ? selectedScan?.details ?? []
       : aggregate?.details ?? [];
 
-  const filteredTables = activeDetails.filter(
-    (t) =>
+  const filteredTables = activeDetails.filter((t) => {
+    if (semanticSourceIds.size > 0) {
+      return semanticSourceIds.has(t.tableFqn);
+    }
+    return (
       !searchFilter ||
       t.tableFqn.toLowerCase().includes(searchFilter.toLowerCase()) ||
       (t.dataDomain ?? "").toLowerCase().includes(searchFilter.toLowerCase())
-  );
+    );
+  });
 
   const activeErd = viewMode === "single-scan" ? selectedErdGraph : erdGraph;
 
@@ -726,15 +756,15 @@ export default function EstatePage() {
 
           {/* Tables */}
           <TabsContent value="tables" className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Filter by table name or domain..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                className="max-w-sm"
-              />
-            </div>
+            <SemanticSearchInput
+              placeholder="Filter by table name or domain..."
+              scope="estate"
+              scanId={selectedScan?.scanId}
+              onExactChange={setSearchFilter}
+              onSemanticResults={handleSemanticResults}
+              embeddingEnabled={embeddingEnabled}
+              className="max-w-md"
+            />
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
