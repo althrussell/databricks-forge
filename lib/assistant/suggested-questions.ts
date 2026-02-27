@@ -1,0 +1,262 @@
+/**
+ * Dynamic suggested questions for the Ask Forge empty state.
+ *
+ * Builds context-aware questions from the latest pipeline run, industry
+ * outcome map, environment scan, and generated use cases. Falls back to
+ * sensible defaults when no data exists.
+ */
+
+import { withPrisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+import { getIndustryOutcomeAsync } from "@/lib/domain/industry-outcomes-server";
+import type { IndustryOutcome, StrategicPriority } from "@/lib/domain/industry-outcomes";
+
+// ---------------------------------------------------------------------------
+// Fallback (shown when no runs or scans exist)
+// ---------------------------------------------------------------------------
+
+export const FALLBACK_QUESTIONS = [
+  "How can I calculate Customer Lifetime Value?",
+  "Which tables have PII data?",
+  "Show me revenue trends by region",
+  "What data quality issues exist?",
+];
+
+const TARGET_COUNT = 6;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function pickRandom<T>(arr: T[], count: number): T[] {
+  if (arr.length <= count) return arr;
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+function collectKpis(outcome: IndustryOutcome, max: number): string[] {
+  const all: string[] = [];
+  for (const obj of outcome.objectives) {
+    for (const pri of obj.priorities) {
+      all.push(...pri.kpis);
+    }
+  }
+  return pickRandom([...new Set(all)], max);
+}
+
+function collectUseCaseNames(outcome: IndustryOutcome, max: number): string[] {
+  const all: string[] = [];
+  for (const obj of outcome.objectives) {
+    for (const pri of obj.priorities) {
+      for (const uc of pri.useCases) {
+        all.push(uc.name);
+      }
+    }
+  }
+  return pickRandom([...new Set(all)], max);
+}
+
+function collectPersonas(outcome: IndustryOutcome, max: number): string[] {
+  const all: string[] = [];
+  for (const obj of outcome.objectives) {
+    for (const pri of obj.priorities) {
+      all.push(...pri.personas);
+    }
+  }
+  return pickRandom([...new Set(all)], max);
+}
+
+// ---------------------------------------------------------------------------
+// Core builder
+// ---------------------------------------------------------------------------
+
+interface RunContext {
+  businessName: string;
+  runId: string;
+  industry: string;
+  domains: string;
+  priorities: string;
+  goals: string;
+}
+
+interface ScanContext {
+  ucPath: string;
+  tableCount: number;
+  domainCount: number;
+  piiTablesCount: number;
+  avgGovernanceScore: number;
+}
+
+interface UseCaseSummary {
+  name: string;
+  domain: string;
+}
+
+export async function buildSuggestedQuestions(): Promise<string[]> {
+  try {
+    const { run, scan, useCases } = await fetchContext();
+
+    const candidates: string[] = [];
+
+    // --- Industry outcome map questions ---
+    if (run?.industry) {
+      const outcome = await getIndustryOutcomeAsync(run.industry);
+      if (outcome) {
+        const kpis = collectKpis(outcome, 3);
+        for (const kpi of kpis) {
+          candidates.push(`How can we measure ${kpi.toLowerCase()}?`);
+        }
+
+        const ucNames = collectUseCaseNames(outcome, 2);
+        for (const name of ucNames) {
+          candidates.push(`How would we implement ${name}?`);
+        }
+
+        const personas = collectPersonas(outcome, 1);
+        for (const persona of personas) {
+          candidates.push(`What insights does a ${persona} need from our data?`);
+        }
+      }
+    }
+
+    // --- Generated use case questions ---
+    if (useCases.length > 0) {
+      const topUc = pickRandom(useCases, 2);
+      for (const uc of topUc) {
+        candidates.push(`Tell me more about the ${uc.name} use case`);
+      }
+    }
+
+    // --- Run context questions ---
+    if (run) {
+      const domains = run.domains
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
+      if (domains.length > 0) {
+        const domain = pickRandom(domains, 1)[0];
+        candidates.push(`What data assets exist in ${domain}?`);
+      }
+
+      if (run.goals) {
+        candidates.push(
+          `How can our data help us achieve our strategic goals?`,
+        );
+      }
+    }
+
+    // --- Estate scan questions ---
+    if (scan) {
+      if (scan.tableCount > 0) {
+        candidates.push(
+          `Which of our ${scan.tableCount} tables have data quality issues?`,
+        );
+      }
+      if (scan.piiTablesCount > 0) {
+        candidates.push(
+          `Show me the ${scan.piiTablesCount} tables that contain PII data`,
+        );
+      }
+      if (scan.avgGovernanceScore > 0) {
+        const score = Math.round(scan.avgGovernanceScore);
+        candidates.push(
+          `Our governance score is ${score}/100 — how can we improve it?`,
+        );
+      }
+      candidates.push(`Give me an overview of our data estate`);
+    }
+
+    if (candidates.length === 0) return FALLBACK_QUESTIONS;
+
+    return pickRandom(candidates, TARGET_COUNT);
+  } catch (err) {
+    logger.warn("[suggested-questions] Failed to build dynamic questions", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return FALLBACK_QUESTIONS;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lakebase data fetch
+// ---------------------------------------------------------------------------
+
+async function fetchContext(): Promise<{
+  run: RunContext | null;
+  scan: ScanContext | null;
+  useCases: UseCaseSummary[];
+}> {
+  return withPrisma(async (prisma) => {
+    // Latest completed pipeline run
+    const latestRun = await prisma.forgeRun.findFirst({
+      where: { status: "completed" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        runId: true,
+        businessName: true,
+        generationOptions: true,
+        businessDomains: true,
+        businessPriorities: true,
+        strategicGoals: true,
+      },
+    });
+
+    let run: RunContext | null = null;
+    if (latestRun) {
+      let industry = "";
+      try {
+        const opts = latestRun.generationOptions
+          ? JSON.parse(latestRun.generationOptions)
+          : {};
+        industry = opts?.industry ?? "";
+      } catch { /* ignore */ }
+
+      run = {
+        businessName: latestRun.businessName,
+        runId: latestRun.runId,
+        industry,
+        domains: latestRun.businessDomains ?? "",
+        priorities: latestRun.businessPriorities ?? "",
+        goals: latestRun.strategicGoals ?? "",
+      };
+    }
+
+    // Latest environment scan
+    const latestScan = await prisma.forgeEnvironmentScan.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: {
+        ucPath: true,
+        tableCount: true,
+        domainCount: true,
+        piiTablesCount: true,
+        avgGovernanceScore: true,
+      },
+    });
+
+    const scan: ScanContext | null = latestScan
+      ? {
+          ucPath: latestScan.ucPath,
+          tableCount: latestScan.tableCount,
+          domainCount: latestScan.domainCount,
+          piiTablesCount: latestScan.piiTablesCount,
+          avgGovernanceScore: Number(latestScan.avgGovernanceScore),
+        }
+      : null;
+
+    // Top use cases from the latest completed run
+    let useCases: UseCaseSummary[] = [];
+    if (run) {
+      const rows = await prisma.forgeUseCase.findMany({
+        where: { runId: run.runId },
+        orderBy: { overallScore: "desc" },
+        select: { name: true, domain: true },
+        take: 10,
+      });
+      useCases = rows
+        .filter((r) => r.name)
+        .map((r) => ({ name: r.name ?? "", domain: r.domain ?? "" }));
+    }
+
+    return { run, scan, useCases };
+  });
+}

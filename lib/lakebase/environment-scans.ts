@@ -230,6 +230,17 @@ export async function saveEnvironmentScan(
  * Prisma cascade deletes handle child tables (details, histories, lineage, insights).
  */
 export async function deleteEnvironmentScan(scanId: string): Promise<void> {
+  // Delete vector embeddings before Prisma cascade deletes source records
+  try {
+    const { deleteEmbeddingsByScan } = await import("@/lib/embeddings/store");
+    await deleteEmbeddingsByScan(scanId);
+  } catch (err) {
+    logger.warn("[environment-scans] Embedding cleanup failed (non-fatal)", {
+      scanId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   await withPrisma(async (prisma) => {
     await prisma.forgeEnvironmentScan.delete({
       where: { scanId },

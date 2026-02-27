@@ -431,6 +431,17 @@ export async function runStandaloneEnrichment(
 
   await saveEnvironmentScan(scan, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
 
+  // Generate vector embeddings for semantic search (best-effort, non-blocking)
+  try {
+    const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
+    await embedScanResults(scanId, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
+  } catch (embedErr) {
+    logger.warn("[standalone-scan] Embedding generation failed (non-fatal)", {
+      scanId,
+      error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+    });
+  }
+
   updateScanProgress(scanId, {
     phase: "complete",
     message: `Scan complete — ${details.length} tables, ${lineageGraph.edges.length} lineage edges, ${intelligenceResult?.domains.length ?? 0} domains.`,

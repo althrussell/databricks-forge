@@ -2,9 +2,10 @@
 # Resources and scopes are bound automatically by deploy.sh.
 #
 # Resource bindings (set by deploy.sh via Apps API):
-#   sql-warehouse        → DATABRICKS_WAREHOUSE_ID
-#   serving-endpoint     → DATABRICKS_SERVING_ENDPOINT
-#   serving-endpoint-fast → DATABRICKS_SERVING_ENDPOINT_FAST
+#   sql-warehouse             → DATABRICKS_WAREHOUSE_ID
+#   serving-endpoint          → DATABRICKS_SERVING_ENDPOINT
+#   serving-endpoint-fast     → DATABRICKS_SERVING_ENDPOINT_FAST
+#   serving-endpoint-embedding → DATABRICKS_EMBEDDING_ENDPOINT
 #
 # User authorization scopes (set by deploy.sh via Apps API):
 #   sql, catalog.tables:read, catalog.schemas:read,
@@ -31,3 +32,5 @@ env:
     valueFrom: serving-endpoint
   - name: DATABRICKS_SERVING_ENDPOINT_FAST
     valueFrom: serving-endpoint-fast
+  - name: DATABRICKS_EMBEDDING_ENDPOINT
+    valueFrom: serving-endpoint-embedding

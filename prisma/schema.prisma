@@ -568,6 +568,37 @@ model ForgeDiscoveredDashboard {
   @@map("forge_discovered_dashboards")
 }
 
+// ---------------------------------------------------------------------------
+// Metadata Genie Spaces (standalone metadata exploration)
+// ---------------------------------------------------------------------------
+
+model ForgeMetadataGenieSpace {
+  id              String   @id @default(uuid()) @map("metadata_genie_id")
+  title           String   @default("Meta Data Genie")
+  catalogScope    String?  @map("catalog_scope")
+  industryId      String?  @map("industry_id")
+  industryName    String?  @map("industry_name")
+  domains         String?
+  detection        String?
+  sampleQuestions  String?  @map("sample_questions")
+  aiDescriptions       String?  @map("ai_descriptions")
+  lineageAccessible    Boolean  @default(false) @map("lineage_accessible")
+  viewCatalog          String?  @map("view_catalog")
+  viewSchema       String?  @map("view_schema")
+  viewsDeployed    Boolean  @default(false) @map("views_deployed")
+  viewNames        String?  @map("view_names")
+  serializedSpace  String?  @map("serialized_space")
+  spaceId         String?  @map("space_id")
+  spaceUrl        String?  @map("space_url")
+  status          String   @default("draft")
+  authMode        String   @default("obo") @map("auth_mode")
+  tableCount      Int      @default(0) @map("table_count")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("forge_metadata_genie_spaces")
+}
+
 model ForgeAssetCoverage {
   id                 String   @id @default(uuid())
   runId              String   @map("run_id")
@@ -586,4 +617,97 @@ model ForgeAssetCoverage {
   @@unique([runId])
   @@index([runId])
   @@map("forge_asset_coverages")
+}
+
+// ---------------------------------------------------------------------------
+// Embeddings (pgvector)
+//
+// The `vector(1024)` column has no Prisma equivalent, so all reads/writes
+// go through raw SQL in lib/embeddings/store.ts. This model exists so
+// `prisma db push` knows about the table and does not attempt to drop it.
+// ---------------------------------------------------------------------------
+
+model ForgeEmbedding {
+  id           String                      @id @default(dbgenerated("gen_random_uuid()"))
+  kind         String
+  sourceId     String                      @map("source_id")
+  runId        String?                     @map("run_id")
+  scanId       String?                     @map("scan_id")
+  contentText  String                      @map("content_text")
+  metadataJson Json?                       @map("metadata_json")
+  embedding    Unsupported("vector(1024)")
+  createdAt    DateTime                    @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([kind])
+  @@index([sourceId])
+  @@index([runId])
+  @@index([scanId])
+  @@map("forge_embeddings")
+}
+
+// ---------------------------------------------------------------------------
+// Assistant Interaction Log
+// ---------------------------------------------------------------------------
+
+model ForgeAssistantLog {
+  id              String   @id @default(uuid()) @map("log_id")
+  sessionId       String   @map("session_id")
+  question        String
+  intent          String?
+  intentConfidence Float?  @map("intent_confidence")
+  ragChunkIds     String?  @map("rag_chunk_ids")
+  response        String?
+  sqlGenerated    String?  @map("sql_generated")
+  sqlExecuted     Boolean  @default(false) @map("sql_executed")
+  sqlResult       String?  @map("sql_result")
+  actionsTaken    String?  @map("actions_taken")
+  feedbackRating  String?  @map("feedback_rating")
+  feedbackText    String?  @map("feedback_text")
+  durationMs      Int?     @map("duration_ms")
+  promptTokens    Int?     @map("prompt_tokens")
+  completionTokens Int?    @map("completion_tokens")
+  totalTokens     Int?     @map("total_tokens")
+  userId          String?  @map("user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([intent])
+  @@index([userId])
+  @@map("forge_assistant_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Conversation History
+// ---------------------------------------------------------------------------
+
+model ForgeConversation {
+  id        String   @id @default(uuid()) @map("conversation_id")
+  userId    String   @map("user_id")
+  title     String
+  sessionId String   @unique @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([userId, updatedAt])
+  @@map("forge_conversations")
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge Base: Uploaded documents for RAG
+// ---------------------------------------------------------------------------
+
+model ForgeDocument {
+  id         String   @id @default(uuid()) @map("id")
+  filename   String
+  mimeType   String   @map("mime_type")
+  category   String   @default("other")
+  chunkCount Int      @default(0) @map("chunk_count")
+  sizeBytes  Int      @map("size_bytes")
+  status     String   @default("processing")
+  uploadedBy String?  @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([status])
+  @@map("forge_documents")
 }

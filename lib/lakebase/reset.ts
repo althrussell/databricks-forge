@@ -7,12 +7,29 @@
  * scans (runId = null) are not linked to any run and would survive
  * the cascade. Scan children (details, histories, lineage, insights)
  * cascade from the scan. The remaining standalone tables are wiped last.
+ *
+ * The forge_embeddings table (pgvector, managed outside Prisma) and the
+ * forge_documents table are also truncated so no stale vectors or
+ * uploaded documents survive a factory reset.
  */
 
 import { withPrisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 
 export async function deleteAllData(): Promise<void> {
   await withPrisma(async (prisma) => {
+    // Truncate the pgvector embeddings table (not managed by Prisma)
+    try {
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE forge_embeddings`);
+    } catch {
+      // Table may not exist yet if pgvector was never initialised
+      try {
+        await prisma.$executeRawUnsafe(`DELETE FROM forge_embeddings`);
+      } catch {
+        logger.debug("[reset] forge_embeddings table does not exist, skipping");
+      }
+    }
+
     await prisma.$transaction([
       prisma.forgeEnvironmentScan.deleteMany(),
       prisma.forgeRun.deleteMany(),
@@ -20,6 +37,8 @@ export async function deleteAllData(): Promise<void> {
       prisma.forgePromptTemplate.deleteMany(),
       prisma.forgeActivityLog.deleteMany(),
       prisma.forgeOutcomeMap.deleteMany(),
+      prisma.forgeDocument.deleteMany(),
+      prisma.forgeAssistantLog.deleteMany(),
     ]);
   });
 }

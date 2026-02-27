@@ -44,6 +44,8 @@ export interface AppSettings {
   assetDiscoveryEnabled: boolean;
   /** Auth mode for Genie Space deployments: "obo" (user token) or "sp" (service principal) */
   genieDeployAuthMode: GenieAuthMode;
+  /** Whether semantic search, knowledge base, and RAG retrieval are enabled in the UI (default: true). Embeddings are still generated regardless. */
+  semanticSearchEnabled: boolean;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -71,6 +73,7 @@ const DEFAULTS: AppSettings = {
   estateScanEnabled: false,
   assetDiscoveryEnabled: false,
   genieDeployAuthMode: "obo",
+  semanticSearchEnabled: true,
 };
 
 export function loadSettings(): AppSettings {
@@ -112,6 +115,10 @@ export function loadSettings(): AppSettings {
         VALID_AUTH_MODES.has(parsed.genieDeployAuthMode as GenieAuthMode)
           ? (parsed.genieDeployAuthMode as GenieAuthMode)
           : DEFAULTS.genieDeployAuthMode,
+      semanticSearchEnabled:
+        typeof parsed.semanticSearchEnabled === "boolean"
+          ? parsed.semanticSearchEnabled
+          : DEFAULTS.semanticSearchEnabled,
     };
   } catch {
     return { ...DEFAULTS };

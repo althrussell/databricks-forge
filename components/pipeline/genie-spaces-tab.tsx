@@ -244,7 +244,7 @@ export function GenieSpacesTab({
   function getDeployStatus(rec: GenieEngineRecommendation): DeployStatus {
     if (!engineEnabled) return { allowed: true, warn: false };
     if (engineGenerating) {
-      if (completedDomainNames.includes(rec.domain) || !isV1Domain(rec)) return { allowed: true, warn: false };
+      if (completedDomainNames.includes(rec.domain)) return { allowed: true, warn: false };
       return { allowed: false, warn: false, reason: "Waiting for AI Engine to process this domain\u2026" };
     }
     if (isV1Domain(rec)) {

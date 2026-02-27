@@ -39,6 +39,7 @@ import {
   ScanLine,
   Search,
   Info,
+  BrainCircuit,
 } from "lucide-react";
 import packageJson from "@/package.json";
 import {
@@ -107,6 +108,20 @@ export default function SettingsPage() {
     return loadSettings().genieDeployAuthMode;
   });
 
+  const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return loadSettings().semanticSearchEnabled;
+  });
+
+  const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/embeddings/status")
+      .then((r) => r.json())
+      .then((data) => setEmbeddingAvailable(data.enabled ?? false))
+      .catch(() => setEmbeddingAvailable(false));
+  }, []);
+
   const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
     setDepthConfigs((prev) => ({
       ...prev,
@@ -135,7 +150,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode, semanticSearchEnabled });
     toast.success("Settings saved");
   };
 
@@ -151,6 +166,7 @@ export default function SettingsPage() {
       setEstateScanEnabled(false);
       setAssetDiscoveryEnabled(false);
       setGenieDeployAuthMode("obo");
+      setSemanticSearchEnabled(true);
       toast.success("Local settings cleared");
     }
   };
@@ -368,6 +384,54 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Semantic Search & RAG — only shown when embedding endpoint is configured */}
+      {embeddingAvailable && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BrainCircuit className="h-5 w-5" />
+              Semantic Search &amp; RAG
+            </CardTitle>
+            <CardDescription>
+              Enable semantic search, knowledge base, and AI-grounded retrieval
+              across your data estate. Turning this off hides search and
+              knowledge base features but does not delete existing embeddings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+                semanticSearchEnabled
+                  ? "border-violet-500/50 bg-violet-500/5"
+                  : "border-muted"
+              }`}
+            >
+              <div>
+                <p className="text-sm font-medium">Semantic Search &amp; RAG</p>
+                <p className="text-xs text-muted-foreground">
+                  {semanticSearchEnabled
+                    ? "Enabled — global search, knowledge base, and AI-grounded retrieval are active"
+                    : "Disabled — search bar and knowledge base are hidden; embeddings are preserved for re-activation"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSemanticSearchEnabled((prev) => !prev)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  semanticSearchEnabled ? "bg-violet-500" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                    semanticSearchEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Discovery Depth */}
       <Card>

@@ -20,6 +20,7 @@ APP_NAME="databricks-forge"
 APP_DESC="Discover AI-powered use cases from Unity Catalog metadata"
 DEFAULT_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
+DEFAULT_EMBEDDING_ENDPOINT="databricks-gte-large-en"
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
@@ -36,6 +37,7 @@ WORKSPACE_PATH=""
 ARG_WAREHOUSE=""
 ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
+ARG_EMBEDDING_ENDPOINT=""
 ARG_DESTROY=false
 
 print_usage() {
@@ -49,9 +51,10 @@ Usage:
 
 Options:
   --warehouse NAME        SQL Warehouse name (skips interactive prompt)
-  --endpoint NAME         Premium model endpoint  (default: databricks-claude-sonnet-4-6)
-  --fast-endpoint NAME    Fast model endpoint     (default: databricks-claude-sonnet-4-6)
-  --destroy               Remove the app and clean up workspace files
+  --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
+  --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
+  --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-gte-large-en)
+  --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
 Prerequisites:
@@ -63,9 +66,10 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --warehouse)      ARG_WAREHOUSE="$2"; shift 2 ;;
-    --endpoint)       ARG_ENDPOINT="$2"; shift 2 ;;
-    --fast-endpoint)  ARG_FAST_ENDPOINT="$2"; shift 2 ;;
-    --destroy)        ARG_DESTROY=true; shift ;;
+    --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
+    --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
+    --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
+    --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
   esac
@@ -73,6 +77,7 @@ done
 
 ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
+EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
 
 # -------------------------------------------------------------------------
 # Output helpers
@@ -294,6 +299,13 @@ print(json.dumps({
                 'name': '$FAST_ENDPOINT',
                 'permission': 'CAN_QUERY'
             }
+        },
+        {
+            'name': 'serving-endpoint-embedding',
+            'serving_endpoint': {
+                'name': '$EMBEDDING_ENDPOINT',
+                'permission': 'CAN_QUERY'
+            }
         }
     ],
     'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']
@@ -386,9 +398,10 @@ print_success() {
   printf "    URL: %s\n" "$app_url"
   printf "\n"
   printf "    Resources:\n"
-  printf "      SQL Warehouse:   %s\n" "$WAREHOUSE_NAME"
-  printf "      Premium model:   %s\n" "$ENDPOINT"
-  printf "      Fast model:      %s\n" "$FAST_ENDPOINT"
+  printf "      SQL Warehouse:    %s\n" "$WAREHOUSE_NAME"
+  printf "      Premium model:    %s\n" "$ENDPOINT"
+  printf "      Fast model:       %s\n" "$FAST_ENDPOINT"
+  printf "      Embedding model:  %s\n" "$EMBEDDING_ENDPOINT"
   printf "\n"
   printf "    User scopes:\n"
   printf "      sql, catalog.tables:read, catalog.schemas:read,\n"

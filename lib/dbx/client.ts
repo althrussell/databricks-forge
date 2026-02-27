@@ -110,6 +110,23 @@ export function getFastServingEndpoint(): string {
   return process.env.DATABRICKS_SERVING_ENDPOINT_FAST || getServingEndpoint();
 }
 
+/**
+ * Returns the embedding Model Serving endpoint name.
+ *
+ * Used by the embedding client (lib/embeddings/client.ts) to generate
+ * vector embeddings for semantic search across estate and pipeline data.
+ *
+ * Reads `DATABRICKS_EMBEDDING_ENDPOINT` (set via the
+ * `serving-endpoint-embedding` app resource binding, or `.env.local`
+ * for local dev).  Throws if called when the resource is not bound —
+ * callers must check `isEmbeddingEnabled()` first.
+ */
+export function getEmbeddingEndpoint(): string {
+  const ep = process.env.DATABRICKS_EMBEDDING_ENDPOINT;
+  if (!ep) throw new Error("Embedding endpoint not configured (serving-endpoint-embedding resource not bound)");
+  return ep;
+}
+
 // ---------------------------------------------------------------------------
 // Authentication
 // ---------------------------------------------------------------------------

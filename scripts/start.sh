@@ -74,6 +74,53 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     echo "[startup] FATAL: Database schema sync failed after $MAX_DB_RETRIES attempts."
     exit 1
   fi
+
+  # pgvector extension + forge_embeddings table (only when embedding endpoint is configured)
+  if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
+    echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring pgvector schema..."
+    DATABASE_URL="$SCHEMA_URL" node -e "
+      const pg = require('pg');
+      async function main() {
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+        const client = await pool.connect();
+        try {
+          await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+          await client.query(\`
+            CREATE TABLE IF NOT EXISTS forge_embeddings (
+              id            TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+              kind          TEXT NOT NULL,
+              source_id     TEXT NOT NULL,
+              run_id        TEXT,
+              scan_id       TEXT,
+              content_text  TEXT NOT NULL,
+              metadata_json JSONB,
+              embedding     vector(1024) NOT NULL,
+              created_at    TIMESTAMPTZ DEFAULT NOW()
+            )
+          \`);
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)');
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)');
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)');
+          await client.query('CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)');
+          await client.query(\`
+            CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw ON forge_embeddings
+              USING hnsw (embedding vector_cosine_ops)
+              WITH (m = 16, ef_construction = 64)
+          \`);
+          console.log('[startup] pgvector schema ready.');
+        } catch (e) {
+          console.log('[startup] pgvector schema setup note:', e.message || e);
+        } finally {
+          client.release();
+          await pool.end();
+        }
+      }
+      main();
+    " 2>&1 || echo "[startup] pgvector setup completed (with warnings)."
+  else
+    echo "[startup] No embedding endpoint configured (serving-endpoint-embedding not bound), skipping pgvector setup."
+  fi
+
 else
   echo "[startup] FATAL: Prisma CLI not found or no DB URL — cannot sync schema."
   exit 1

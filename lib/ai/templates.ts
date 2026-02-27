@@ -1203,6 +1203,49 @@ Return ONLY a valid JSON object:
 {"executiveSummary": "...", "domainSummaries": {"Domain A": "...", "Domain B": "..."}}
 
 No markdown fences, no preamble.`,
+
+  // -------------------------------------------------------------------------
+  // Meta Data Genie: Industry Detection from Table/Schema Names
+  // -------------------------------------------------------------------------
+  METADATA_GENIE_INDUSTRY_DETECT_PROMPT: `### PERSONA
+
+You are a **Senior Data Industry Analyst** with deep expertise in identifying business domains from data catalog metadata. You can determine an organisation's industry and key business areas purely from table and schema naming conventions.
+
+### TASK
+
+Given the following table names from a Unity Catalog metastore, identify the primary and secondary industries this data estate serves. Be specific — say "Commercial Banking, Wealth Management, Insurance" not just "Financial Services".
+
+### TABLE / SCHEMA NAMES
+
+{table_names}
+
+### OUTPUT (JSON)
+
+Return a single valid JSON object with these fields:
+
+1. **industries** — A descriptive string of the primary and secondary industries represented. Be specific and use industry terminology that a business analyst would recognise.
+
+2. **domains** — An array of key business domains you can identify from the table names (e.g. ["Claims", "Members", "Providers", "Pharmacy"] for insurance, or ["Orders", "Products", "Customers", "Inventory"] for retail). Include 3-10 domains.
+
+3. **duplication_notes** — An array of observations about potential data duplication or redundancy patterns. For example, tables with the same name across different schemas, or near-identical table names suggesting copies. If none observed, return an empty array.
+
+Return ONLY the JSON object. No markdown fences, no preamble.`,
+
+  // -------------------------------------------------------------------------
+  // Meta Data Genie: AI Description Generation for Undocumented Tables
+  // -------------------------------------------------------------------------
+  METADATA_GENIE_DESCRIBE_TABLES_PROMPT: `Generate a concise 1-sentence business description for each table listed below. These tables have no existing description in the data catalog.
+
+Tables (with their column names for context):
+{table_list}
+
+Guidelines:
+- Describe the table's business purpose, not its technical structure.
+- Be factual and specific — infer purpose from the table name and column names.
+- Keep each description under 150 characters.
+- If you cannot determine the purpose, write "General data table" rather than guessing wildly.
+
+Return a JSON object: {"descriptions": [{"table_fqn": "catalog.schema.table", "description": "..."}]}`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1246,6 +1289,10 @@ export const PROMPT_SYSTEM_MESSAGES: Partial<Record<PromptKey, string>> = {
     "You are a Senior Databricks SQL Engineer specializing in debugging SQL queries. Fix only the reported error, preserve all business logic. You produce raw SQL only.",
   SUMMARY_GEN_PROMPT:
     "You are a senior management consultant writing executive briefings. You produce structured JSON output only. Be concise, specific, and action-oriented.",
+  METADATA_GENIE_INDUSTRY_DETECT_PROMPT:
+    "You are a Senior Data Industry Analyst who identifies business domains from data catalog metadata. You produce structured JSON output only.",
+  METADATA_GENIE_DESCRIBE_TABLES_PROMPT:
+    "You are a data catalog specialist who writes concise, business-friendly table descriptions from metadata. You produce structured JSON output only.",
 };
 
 /**

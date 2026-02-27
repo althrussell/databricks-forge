@@ -99,6 +99,7 @@ Pull the latest changes and re-run `./deploy.sh`. The script detects the existin
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | Set by `deploy.sh` in `app.yaml` |
 | `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
 | `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
+| `DATABRICKS_EMBEDDING_ENDPOINT` | Embedding Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-gte-large-en`) |
 | `DATABASE_URL` | Lakebase connection string | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 
 > `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically. `DATABASE_URL` is generated dynamically. You never set these manually.
@@ -122,6 +123,7 @@ The app uses **two complementary auth models** ([docs](https://docs.databricks.c
 | SQL Warehouse | **Can use** | Background pipeline tasks |
 | Model Serving endpoint (premium) | **Can query** | Use case generation, scoring, SQL generation |
 | Model Serving endpoint (fast) | **Can query** | Business context, table filtering, domain clustering, deduplication |
+| Model Serving endpoint (embedding) | **Can query** | Embedding generation for semantic search |
 | Workspace REST API | **Can manage** | Notebook export (mkdirs + import to `/Shared/forge_gen/`) |
 | Unity Catalog | **USE CATALOG / USE SCHEMA / SELECT** | Background metadata queries |
 | `system.access.table_lineage` | **SELECT** | Lineage graph walking |
@@ -137,6 +139,7 @@ The app uses **two complementary auth models** ([docs](https://docs.databricks.c
 | Schema push fails at startup | Lakebase compute still waking from scale-to-zero | Restart the app -- compute wakes automatically and retries succeed |
 | "Failed to connect to warehouse" | Warehouse binding missing or stopped | Verify `sql-warehouse` resource is configured and warehouse is running |
 | "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured. If fast tasks fail, check `serving-endpoint-fast` or remove it to fall back to premium |
+| Semantic search returns no results | Embeddings not yet generated | Run an estate scan or pipeline; embeddings are generated automatically after each scan/run |
 | "USE CATALOG denied" on discovery | User lacks UC grants | The logged-in user needs `USE CATALOG` / `USE SCHEMA` / `SELECT` on the catalogs they want to discover |
 | Lineage discovery returns 0 tables | Missing lineage permissions | Grant `SELECT` on `system.access.table_lineage` to the user |
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { loadSettings } from "@/lib/settings";
 import {
   Sheet,
   SheetContent,
@@ -15,23 +16,52 @@ import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { VersionBadge } from "@/components/version-badge";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiresEmbedding?: boolean;
+}
+
+const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
+  { href: "/ask-forge", label: "Ask Forge", icon: AskForgeIcon, requiresEmbedding: true },
   { href: "/configure", label: "New Discovery", icon: PlusIcon },
   { href: "/runs", label: "Runs", icon: ListIcon },
   { href: "/runs/compare", label: "Compare", icon: CompareIcon },
   { href: "/environment", label: "Estate", icon: EnvironmentIcon },
   { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
+  { href: "/metadata-genie", label: "Meta Data Genie", icon: MetadataGenieIcon },
+  { href: "/knowledge-base", label: "Knowledge Base", icon: KnowledgeBaseIcon, requiresEmbedding: true },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/help", label: "Help", icon: HelpIcon },
 ];
 
+function useEmbeddingEnabled(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    const settings = loadSettings();
+    if (!settings.semanticSearchEnabled) return;
+    fetch("/api/embeddings/status")
+      .then((r) => r.json())
+      .then((data) => setEnabled(data.enabled ?? false))
+      .catch(() => setEnabled(false));
+  }, []);
+  return enabled;
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const embeddingEnabled = useEmbeddingEnabled();
+
+  const visibleItems = useMemo(
+    () => navItems.filter((item) => !item.requiresEmbedding || embeddingEnabled),
+    [embeddingEnabled],
+  );
 
   return (
     <nav className="space-y-1 p-4">
-      {navItems.map((item) => {
+      {visibleItems.map((item) => {
         const isActive =
           item.href === "/"
             ? pathname === "/"
@@ -116,6 +146,31 @@ export function MobileNav() {
 }
 
 // Inline SVG icons (avoids extra dependency)
+function AskForgeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+      <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+      <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+      <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+      <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+      <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
+      <path d="M6 18a4 4 0 0 1-1.967-.516" />
+      <path d="M19.967 17.484A4 4 0 0 1 18 18" />
+    </svg>
+  );
+}
+
 function HomeIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -245,6 +300,43 @@ function HelpIcon({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="10" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
       <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function MetadataGenieIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+      <path d="M3 12A9 3 0 0 0 21 12" />
+    </svg>
+  );
+}
+
+function KnowledgeBaseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+      <path d="m9 10 2 2 4-4" />
     </svg>
   );
 }

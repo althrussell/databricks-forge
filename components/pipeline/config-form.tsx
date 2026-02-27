@@ -85,7 +85,7 @@ const SUGGESTED_DOMAINS = [
 ];
 
 
-export function ConfigForm() {
+export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (name: string) => void } = {}) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -330,6 +330,7 @@ export function ConfigForm() {
               value={businessName}
               onChange={(e) => {
                 setBusinessName(e.target.value);
+                onBusinessNameChange?.(e.target.value);
                 if (fieldErrors.businessName) setFieldErrors((prev) => { const next = { ...prev }; delete next.businessName; return next; });
               }}
               aria-invalid={!!fieldErrors.businessName}

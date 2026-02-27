@@ -203,6 +203,38 @@ export function sanitizeSerializedSpace(raw: string): string {
       delete parsed.instructions.sql_functions;
     }
 
+    // Normalize + sort all id-keyed arrays (Genie API requires lowercase 32-hex UUIDs without hyphens, sorted)
+    for (const arr of [
+      parsed?.config?.sample_questions,
+      parsed?.instructions?.join_specs,
+      parsed?.instructions?.example_question_sqls,
+      parsed?.instructions?.text_instructions,
+      parsed?.instructions?.sql_snippets?.measures,
+      parsed?.instructions?.sql_snippets?.filters,
+      parsed?.instructions?.sql_snippets?.expressions,
+      parsed?.benchmarks?.questions,
+    ]) {
+      if (Array.isArray(arr)) {
+        for (const item of arr) {
+          if (typeof item?.id === "string") {
+            item.id = item.id.replace(/-/g, "").toLowerCase();
+          }
+        }
+        arr.sort((a: { id?: string }, b: { id?: string }) =>
+          (a.id ?? "").localeCompare(b.id ?? "")
+        );
+      }
+    }
+
+    // Sort data_sources.tables by identifier (Genie API requirement)
+    const dsTables = parsed?.data_sources?.tables;
+    if (Array.isArray(dsTables)) {
+      dsTables.sort(
+        (a: { identifier?: string }, b: { identifier?: string }) =>
+          (a.identifier ?? "").localeCompare(b.identifier ?? "")
+      );
+    }
+
     return JSON.stringify(parsed);
   } catch (err) {
     logger.error("sanitizeSerializedSpace: failed to parse JSON, returning raw", {
@@ -238,6 +270,19 @@ export async function createGenieSpace(opts: {
   } catch {
     // Will be caught by the retry below if the path doesn't exist
   }
+
+  // Debug: log join_specs from the final payload so we can diagnose API rejections
+  try {
+    const debugParsed = JSON.parse(sanitized);
+    const debugJoins = debugParsed?.instructions?.join_specs;
+    if (Array.isArray(debugJoins) && debugJoins.length > 0) {
+      logger.info("createGenieSpace: join_specs sample", {
+        count: debugJoins.length,
+        first: JSON.stringify(debugJoins[0]),
+        last: JSON.stringify(debugJoins[debugJoins.length - 1]),
+      });
+    }
+  } catch { /* non-critical debug log */ }
 
   const body = {
     title: opts.title,

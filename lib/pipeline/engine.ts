@@ -280,13 +280,24 @@ export async function startPipeline(runId: string): Promise<void> {
       });
     });
 
+    // Generate vector embeddings for use cases + business context (best-effort)
+    try {
+      const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
+      const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
+      await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
+    } catch (embedErr) {
+      logger.warn("Use case embedding failed (non-fatal)", {
+        runId,
+        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+      });
+    }
+
     // Mark as completed -- Genie Engine runs in the background
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
     await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
     logger.info("Pipeline completed, starting Genie Engine in background", { runId, useCaseCount: ctx.useCases.length, sqlOk });
 
-    // Fire Genie Engine then Dashboard Engine sequentially in the background.
-    // Dashboard runs after Genie so it can use Genie recommendations for enrichment.
+    // Fire Genie Engine and Dashboard Engine concurrently in the background.
     startBackgroundEngines(ctx, runId);
   } catch (error) {
     const message =
@@ -569,6 +580,18 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Genie recommendations are handled by the background engine below
     }
 
+    // Generate vector embeddings for use cases + business context (best-effort)
+    try {
+      const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
+      const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
+      await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
+    } catch (embedErr) {
+      logger.warn("Use case embedding failed (non-fatal)", {
+        runId,
+        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+      });
+    }
+
     const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
     await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
     logger.info("Resumed pipeline completed", { runId, useCaseCount: ctx.useCases.length, sqlOk });
@@ -590,21 +613,20 @@ export async function resumePipeline(runId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Background Engines (sequential: Genie first, then Dashboard)
+// Background Engines (concurrent: Genie + Dashboard)
 // ---------------------------------------------------------------------------
 
 /**
- * Fire-and-forget background engine chain. Genie runs first so its
- * recommendations are available in Lakebase when Dashboard starts,
- * enabling richer dashboard enrichment. Each engine's progress is
- * tracked independently via its own status module.
+ * Fire-and-forget background engines. Genie and Dashboard run concurrently
+ * since the Dashboard Engine gracefully handles missing Genie data (it
+ * fetches whatever recommendations exist in Lakebase at the time it runs).
+ * Each engine's progress is tracked independently via its own status module.
  */
 function startBackgroundEngines(
   ctx: PipelineContext,
   runId: string
 ): void {
-  (async () => {
-    // --- Genie Engine ---
+  const genieTask = async () => {
     await startJob(runId);
     try {
       const genieCount = await runGenieRecommendations(
@@ -622,8 +644,9 @@ function startBackgroundEngines(
       await failJob(runId, msg);
       logger.error("Background Genie Engine failed", { runId, error: msg });
     }
+  };
 
-    // --- Dashboard Engine (always runs, even if Genie failed) ---
+  const dashboardTask = async () => {
     await startDashboardJob(runId);
     try {
       const dashCount = await runDashboardRecommendations(
@@ -638,7 +661,9 @@ function startBackgroundEngines(
       await failDashboardJob(runId, msg);
       logger.error("Background Dashboard Engine failed", { runId, error: msg });
     }
-  })();
+  };
+
+  Promise.allSettled([genieTask(), dashboardTask()]);
 }
 
 /**

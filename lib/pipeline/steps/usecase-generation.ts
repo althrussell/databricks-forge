@@ -94,6 +94,21 @@ export async function runUsecaseGeneration(
     // Non-critical: proceed without feedback examples
   }
 
+  // Retrieve relevant strategy/priority context from knowledge base (RAG)
+  let documentContext = "";
+  try {
+    const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
+    const chunks = await retrieveContext(
+      `Use case generation for ${run.config.businessName}: ${bc.industries || ""} ${bc.businessPriorities || ""} ${bc.strategicGoals || ""}`,
+      { kinds: ["document_chunk", "outcome_map", "business_context"], topK: 5, minScore: 0.4 },
+    );
+    if (chunks.length > 0) {
+      documentContext = "\n\n" + formatRetrievedContext(chunks, 4000);
+    }
+  } catch {
+    // RAG is best-effort
+  }
+
   // Estimate base token cost (everything except schema_markdown which varies per batch)
   const sharedContextTokens = estimateTokens(
     JSON.stringify(bc) +
@@ -192,6 +207,7 @@ export async function runUsecaseGeneration(
         target_use_case_count: String(targetCount),
         lineage_context: lineageContext,
         asset_context: assetContext,
+        document_context: documentContext,
       };
 
       // Generate both AI and Stats use cases per batch

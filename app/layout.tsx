@@ -7,6 +7,8 @@ import { SidebarNav, MobileNav } from "@/components/pipeline/sidebar-nav";
 import { HeaderPageTitle } from "@/components/header-title";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SearchBar } from "@/components/search/search-bar";
+import { AskForgePanel } from "@/components/assistant/ask-forge-panel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,6 +56,8 @@ export default function RootLayout({
                 <div className="hidden flex-1 md:block">
                   <HeaderPageTitle />
                 </div>
+                <SearchBar />
+                <AskForgePanel />
                 <ThemeToggle />
               </header>
               <main id="main-content" className="flex-1">
