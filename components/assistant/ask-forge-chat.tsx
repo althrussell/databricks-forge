@@ -89,6 +89,8 @@ export interface AskForgeChatProps {
   onSources?: (sources: SourceData[]) => void;
   /** Called when the backend creates a conversation for this session */
   onConversationCreated?: (conversationId: string) => void;
+  /** Called when the user clears the conversation (parent should start a new session) */
+  onClear?: () => void;
 }
 
 export interface AskForgeChatHandle {
@@ -124,6 +126,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       onReferencedTables,
       onSources,
       onConversationCreated,
+      onClear,
     },
     ref,
   ) {
@@ -136,7 +139,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
   const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
   const sessionId = externalSessionId ?? fallbackSessionId;
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     setMessages(initialMessages ?? []);
@@ -144,7 +147,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
   const scrollToBottom = React.useCallback(() => {
     setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }, 50);
   }, []);
 
@@ -373,6 +376,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     onTableEnrichments?.([]);
     onReferencedTables?.([]);
     onSources?.([]);
+    onClear?.();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -403,7 +407,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 overflow-y-auto" ref={scrollRef}>
+      <ScrollArea className="flex-1 overflow-y-auto">
         <div className={`space-y-4 p-4 ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
           {messages.length === 0 && (
             <div className={`flex flex-col items-center justify-center gap-3 text-center ${isCompact ? "py-16" : "py-24"}`}>
@@ -511,6 +515,8 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
               <DeployOptions sql={deploySql} />
             </div>
           )}
+
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 

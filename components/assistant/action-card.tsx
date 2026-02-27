@@ -10,6 +10,8 @@ import {
   GitBranch,
   Rocket,
   Download,
+  ExternalLink,
+  Eye,
 } from "lucide-react";
 
 export interface ActionCardData {
@@ -33,6 +35,8 @@ const ACTION_CONFIG: Record<string, { icon: React.ReactNode; variant: "default" 
   view_erd: { icon: <GitBranch className="size-3.5" />, variant: "secondary" },
   start_discovery: { icon: <Rocket className="size-3.5" />, variant: "outline" },
   export_report: { icon: <Download className="size-3.5" />, variant: "secondary" },
+  view_run: { icon: <Eye className="size-3.5" />, variant: "secondary" },
+  ask_genie: { icon: <ExternalLink className="size-3.5" />, variant: "outline" },
 };
 
 export function ActionCard({ action, onAction }: ActionCardProps) {

@@ -37,7 +37,9 @@ export interface ActionCard {
     | "view_tables"
     | "view_erd"
     | "start_discovery"
-    | "export_report";
+    | "export_report"
+    | "view_run"
+    | "ask_genie";
   label: string;
   payload: Record<string, unknown>;
 }
@@ -279,10 +281,15 @@ function buildActions(
   }
 
   if (genieMatch) {
+    const host = process.env.DATABRICKS_HOST?.replace(/\/+$/, "") ?? "";
     actions.unshift({
-      type: "view_tables",
+      type: "ask_genie",
       label: `Ask Genie: ${genieMatch.spaceTitle}`,
-      payload: { genieSpaceId: genieMatch.spaceId, genieSpaceTitle: genieMatch.spaceTitle },
+      payload: {
+        genieSpaceId: genieMatch.spaceId,
+        genieSpaceTitle: genieMatch.spaceTitle,
+        url: host ? `${host}/ml/genie/rooms/${genieMatch.spaceId}` : "",
+      },
     });
   }
 

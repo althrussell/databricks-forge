@@ -53,11 +53,18 @@ export default function AskForgeContent() {
       .catch(() => {});
   }, []);
 
+  const abortRef = React.useRef<AbortController | null>(null);
+
   const fetchTableDetails = React.useCallback(async (fqns: string[]) => {
+    abortRef.current?.abort();
+
     if (fqns.length === 0) {
       setTableDetails(new Map());
       return;
     }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setLoadingTables(true);
     const newDetails = new Map<string, TableDetailData>();
@@ -65,19 +72,23 @@ export default function AskForgeContent() {
     await Promise.all(
       fqns.slice(0, 10).map(async (fqn) => {
         try {
-          const resp = await fetch(`/api/environment/table/${encodeURIComponent(fqn)}`);
-          if (resp.ok) {
+          const resp = await fetch(`/api/environment/table/${encodeURIComponent(fqn)}`, {
+            signal: controller.signal,
+          });
+          if (resp.ok && !controller.signal.aborted) {
             const data = await resp.json();
             newDetails.set(fqn, data);
           }
         } catch {
-          // best-effort per table
+          // best-effort per table (including AbortError)
         }
       }),
     );
 
-    setTableDetails(newDetails);
-    setLoadingTables(false);
+    if (!controller.signal.aborted) {
+      setTableDetails(newDetails);
+      setLoadingTables(false);
+    }
   }, []);
 
   const handleReferencedTables = React.useCallback(
@@ -92,12 +103,20 @@ export default function AskForgeContent() {
     chatRef.current?.submitQuestion(`Tell me everything about the table ${fqn} - its health, lineage, columns, data quality, and how it's used.`);
   }, []);
 
+  const conversationAbortRef = React.useRef<AbortController | null>(null);
+
   const handleSelectConversation = React.useCallback(async (conversationId: string) => {
     if (conversationId === activeConversationId) return;
 
+    conversationAbortRef.current?.abort();
+    const controller = new AbortController();
+    conversationAbortRef.current = controller;
+
     try {
-      const resp = await fetch(`/api/assistant/conversations/${conversationId}`);
-      if (!resp.ok) return;
+      const resp = await fetch(`/api/assistant/conversations/${conversationId}`, {
+        signal: controller.signal,
+      });
+      if (!resp.ok || controller.signal.aborted) return;
       const data = await resp.json();
 
       const msgs: ConversationMessage[] = (data.messages ?? []).map(
@@ -117,6 +136,7 @@ export default function AskForgeContent() {
       setChatSessionId(data.sessionId);
       setInitialMessages(msgs);
       setTableEnrichments([]);
+      setTableDetails(new Map());
       setReferencedTables([]);
       setSources([]);
     } catch {
@@ -129,6 +149,7 @@ export default function AskForgeContent() {
     setChatSessionId(crypto.randomUUID());
     setInitialMessages(undefined);
     setTableEnrichments([]);
+    setTableDetails(new Map());
     setReferencedTables([]);
     setSources([]);
   }, []);
@@ -180,6 +201,7 @@ export default function AskForgeContent() {
             onReferencedTables={handleReferencedTables}
             onSources={setSources}
             onConversationCreated={handleConversationCreated}
+            onClear={handleNewConversation}
           />
         </div>
 

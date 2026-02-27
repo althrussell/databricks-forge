@@ -30,31 +30,33 @@ back to the vector store chunks that informed it.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       /ask-forge (Page)                         │
-│  ┌───────────────────────────┐  ┌───────────────────────────┐   │
-│  │     AskForgeChat          │  │   AskForgeContextPanel    │   │
-│  │  • Message thread         │  │  • Referenced tables      │   │
-│  │  • SSE streaming          │  │  • Health / lineage / PII │   │
-│  │  • Action cards           │  │  • RAG source cards       │   │
-│  │  • Source citations       │  │  • ERD viewer             │   │
-│  │  • Feedback buttons       │  │  • "Ask about table" CTA  │   │
-│  └─────────────┬─────────────┘  └───────────────────────────┘   │
-│                │                                                │
-│        POST /api/assistant (SSE stream)                         │
-│                │                                                │
-│  ┌─────────────▼──────────────┐                                 │
-│  │    Assistant Engine        │                                 │
-│  │  1. classifyIntent()       │───► Fast model (JSON mode)      │
-│  │  2. buildAssistantContext()│───► Lakebase + pgvector RAG     │
-│  │  3. buildAssistantMessages │───► System + user prompts       │
-│  │  4. chatCompletionStream() │───► Premium model (streaming)   │
-│  │  5. extractSqlBlocks()     │                                 │
-│  │  6. extractDashboardIntent │                                 │
-│  │  7. buildActions()         │                                 │
-│  │  8. createAssistantLog()   │───► Lakebase persistence        │
-│  └────────────────────────────┘                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                  /ask-forge (Page → dynamic import, ssr: false)          │
+│  ┌──────────────┐ ┌───────────────────────┐ ┌────────────────────────┐  │
+│  │ Conversation  │ │    AskForgeChat        │ │  AskForgeContextPanel  │  │
+│  │ History       │ │  • Message thread      │ │  • Referenced tables   │  │
+│  │ (sidebar)     │ │  • SSE streaming       │ │  • Health / lineage    │  │
+│  │  • Per-user   │ │  • Action cards        │ │  • Expandable sources  │  │
+│  │  • Rename     │ │  • Source citations     │ │  • AI insight fallback │  │
+│  │  • Delete     │ │  • Feedback buttons    │ │  • ERD viewer          │  │
+│  │  • Date groups│ │  • react-markdown GFM  │ │  • "Ask about table"   │  │
+│  └──────┬───────┘ └────────────┬───────────┘ └────────────────────────┘  │
+│         │                      │                                         │
+│   GET/POST /api/assistant/conversations    POST /api/assistant (SSE)     │
+│         │                      │                                         │
+│  ┌──────▼──────────────────────▼─────────┐                               │
+│  │         Assistant Engine               │                               │
+│  │  1. classifyIntent()                  │───► Fast model (JSON mode)     │
+│  │  2. buildAssistantContext()           │───► Lakebase + pgvector RAG    │
+│  │  3. buildAssistantMessages            │───► System + user prompts      │
+│  │  4. chatCompletionStream()            │───► Premium model (streaming)  │
+│  │  5. extractSqlBlocks()                │                                │
+│  │  6. extractDashboardIntent            │                                │
+│  │  7. buildActions()                    │                                │
+│  │  8. createAssistantLog()              │───► Lakebase persistence       │
+│  │  9. createConversation() (first msg)  │───► Lakebase persistence       │
+│  └───────────────────────────────────────┘                               │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -314,15 +316,59 @@ Submits feedback for a specific assistant response.
 
 Updates the `ForgeAssistantLog` entry with the rating.
 
+### GET /api/assistant/conversations
+
+**File:** `app/api/assistant/conversations/route.ts`
+
+Lists conversations for the authenticated user.
+
+**Response:**
+
+```json
+{
+  "conversations": [
+    { "id": "uuid", "title": "...", "sessionId": "uuid", "createdAt": "...", "updatedAt": "..." }
+  ],
+  "authenticated": true
+}
+```
+
+Returns `{ conversations: [], authenticated: false }` when no user identity.
+
+### POST /api/assistant/conversations
+
+Creates a new conversation. Used by the SSE endpoint on first message.
+
+### GET /api/assistant/conversations/[conversationId]
+
+**File:** `app/api/assistant/conversations/[conversationId]/route.ts`
+
+Loads a conversation with all its `ForgeAssistantLog` messages. Verifies
+user ownership.
+
+### PATCH /api/assistant/conversations/[conversationId]
+
+Renames a conversation. Body: `{ title: "New title" }`.
+
+### DELETE /api/assistant/conversations/[conversationId]
+
+Deletes a conversation and all its `ForgeAssistantLog` entries. Verifies
+user ownership.
+
 ---
 
 ## Frontend Components
 
-### Page Layout (`app/ask-forge/page.tsx`)
+### Page Layout (`app/ask-forge/page.tsx` + `ask-forge-content.tsx`)
 
-Two-panel layout occupying the full viewport below the navigation bar:
+The page entry point is a thin `"use client"` shell that dynamically imports
+`AskForgeContent` with `ssr: false` to avoid `navigator is not defined` errors
+during Next.js prerendering.
 
-- **Left panel (flexible width):** `AskForgeChat` -- the conversation thread
+Three-panel layout occupying the full viewport below the navigation bar:
+
+- **Left sidebar (collapsible):** `ConversationHistory` -- per-user chat history
+- **Center panel (flexible width):** `AskForgeChat` -- the conversation thread
 - **Right panel (400px, desktop only):** `AskForgeContextPanel` -- live metadata
 
 Above the panels, `EmbeddingStatus` shows the knowledge base health.
@@ -333,7 +379,22 @@ Overlay dialogs:
 - `DeployDashboardDialog` -- opens when "Deploy as Dashboard" is clicked
 
 Table details are fetched lazily via `GET /api/environment/table/{fqn}` when
-the assistant references tables (up to 10 concurrent requests).
+the assistant references tables (up to 10 concurrent requests). An AbortController
+cancels in-flight detail requests when the user switches conversations.
+
+### ConversationHistory (`components/assistant/conversation-history.tsx`)
+
+ChatGPT-style history sidebar showing the current user's conversations:
+
+- Fetches from `GET /api/assistant/conversations` (per-user, most recent first)
+- Groups conversations by date: Today, Yesterday, Last 7 Days, Last 30 Days, Older
+- **New Conversation** button resets the chat to a fresh session
+- Click a conversation to load its messages via `GET /api/assistant/conversations/[id]`
+- Inline rename (pencil icon) via `PATCH /api/assistant/conversations/[id]`
+- Delete with confirmation via `DELETE /api/assistant/conversations/[id]`
+- Collapsible: chevron button toggles between full sidebar and icon-only strip
+- Only shown when `authenticated: true` from the conversations API
+- Auto-refreshes when the chat creates a new conversation (`historyRefreshKey`)
 
 ### AskForgeChat (`components/assistant/ask-forge-chat.tsx`)
 
@@ -347,9 +408,11 @@ The core chat component. Supports two render modes:
 - Real-time streaming with blinking cursor indicator
 - Intent badge displayed above each assistant response
 - Suggested starter questions (CLV, PII, revenue trends, data quality)
-- Clear conversation button
+- Clear conversation button (invokes `onClear` to start a new session in the parent)
 - Feedback thumbs up/down on each response (persisted via `/api/assistant/feedback`)
-- Session ID generated per component mount (`crypto.randomUUID()`)
+- External `sessionId` prop ties the component to a specific conversation
+- `initialMessages` prop hydrates messages when loading a saved conversation
+- `onConversationCreated` callback fired when the backend creates a new conversation
 - Imperative handle (`AskForgeChatHandle`) for programmatic question submission
 
 **SSE parsing:** Reads the response stream line-by-line, parsing `data:` prefixed
@@ -405,18 +468,21 @@ assistant's response.
 ### AnswerStream (`components/assistant/answer-stream.tsx`)
 
 Renders the assistant's markdown response in real-time with a blinking cursor
-animation during streaming. Converts markdown to HTML client-side:
+animation during streaming. Uses `react-markdown` with `remark-gfm` for full
+GitHub Flavored Markdown support:
 
-- Code blocks with language class
-- Inline code
-- Headers (h1-h4)
-- Bold, italic, bold-italic
-- Citation markers `[1]` rendered as styled superscripts
-- Unordered and ordered lists
-- Paragraph breaks
-- HTML entity escaping for code blocks
+- GFM tables with styled headers and compact cells
+- Fenced code blocks with `SyntaxHighlighter` and copy button
+- Inline code with muted background
+- Headers (h1-h4) with proper spacing
+- Bold, italic, strikethrough, links
+- Citation markers `[1]` injected as styled superscript spans before markdown parsing
+- Ordered and unordered lists
+- Blockquotes
+- Tailwind Typography (`prose`) classes for consistent styling
 
-Auto-scrolls to keep the latest content visible.
+Auto-scrolls to keep the latest content visible. The `@tailwindcss/typography`
+plugin is enabled in `globals.css`.
 
 ### SourceCardList / SourceCard (`components/assistant/source-card.tsx`)
 
@@ -446,6 +512,8 @@ Horizontally wrapped action buttons with type-specific icons and styling:
 | `view_erd` | GitBranch | Secondary |
 | `start_discovery` | Rocket | Outline |
 | `export_report` | Download | Secondary |
+| `view_run` | Eye | Secondary |
+| `ask_genie` | ExternalLink | Outline |
 
 ### SqlRunner (`components/assistant/sql-runner.tsx`)
 
@@ -573,7 +641,24 @@ User provides feedback
       └── updateAssistantLog() ──► Lakebase update
 ```
 
-### Conversation Memory
+### Conversation Persistence
+
+Conversations are persisted to the `ForgeConversation` Lakebase table. Each
+conversation is associated with a `userId` (from `x-forwarded-email` header)
+and linked to `ForgeAssistantLog` entries via the shared `sessionId`.
+
+**On first message:** The API route creates a new `ForgeConversation` record
+with the question as the title and returns the `conversationId` in the SSE
+`done` event. The frontend adds it to the history sidebar.
+
+**On subsequent messages:** The API route calls `touchConversation()` to
+update the `updatedAt` timestamp.
+
+**Loading a conversation:** The frontend fetches
+`GET /api/assistant/conversations/[id]` which returns the conversation metadata
+plus all `ForgeAssistantLog` entries (mapped to `ConversationMessage[]`).
+
+### In-Flight Conversation Memory
 
 The frontend maintains the full conversation history in component state.
 On each new question, the last 10 non-streaming messages are sent as
@@ -622,23 +707,28 @@ using only the direct Lakebase context strategy. The `hasDataGaps` flag in
 
 | File | Purpose |
 |------|---------|
-| `app/api/assistant/route.ts` | SSE streaming endpoint |
+| `app/api/assistant/route.ts` | SSE streaming endpoint (creates conversations) |
 | `app/api/assistant/feedback/route.ts` | Feedback submission endpoint |
+| `app/api/assistant/conversations/route.ts` | List / create conversations |
+| `app/api/assistant/conversations/[conversationId]/route.ts` | Get / rename / delete a conversation |
+| `app/api/assistant/suggestions/route.ts` | Dynamic suggested questions |
 
 ### Backend (persistence)
 
 | File | Purpose |
 |------|---------|
 | `lib/lakebase/assistant-log.ts` | CRUD for `ForgeAssistantLog` table |
+| `lib/lakebase/conversations.ts` | CRUD for `ForgeConversation` table (per-user chat history) |
 
 ### Frontend (components/assistant/)
 
 | File | Purpose |
 |------|---------|
-| `ask-forge-chat.tsx` | Main chat component (messages, input, SSE, actions) |
-| `ask-forge-context-panel.tsx` | Side panel with table detail, lineage, sources |
+| `ask-forge-chat.tsx` | Main chat component (messages, input, SSE, actions, onClear) |
+| `ask-forge-context-panel.tsx` | Side panel with table detail, expandable sources, AI insight fallback |
 | `ask-forge-panel.tsx` | Header button and Cmd+J keyboard shortcut |
-| `answer-stream.tsx` | Real-time markdown rendering with cursor animation |
+| `conversation-history.tsx` | ChatGPT-style per-user conversation sidebar |
+| `answer-stream.tsx` | Real-time markdown rendering via react-markdown + remark-gfm |
 | `source-card.tsx` | RAG source cards with provenance and score |
 | `action-card.tsx` | Contextual action buttons |
 | `sql-runner.tsx` | Inline SQL execution with results table |
@@ -655,7 +745,8 @@ using only the direct Lakebase context strategy. The `hasDataGaps` flag in
 
 | File | Purpose |
 |------|---------|
-| `app/ask-forge/page.tsx` | Two-panel page layout with dialog orchestration |
+| `app/ask-forge/page.tsx` | Thin client shell with dynamic import (ssr: false) |
+| `app/ask-forge/ask-forge-content.tsx` | Three-panel layout: history, chat, context panel + dialog orchestration |
 
 ---
 
