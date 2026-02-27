@@ -159,8 +159,8 @@ export function AskForgeContextPanel({
     : enrichments.map((e) => e.tableFqn);
 
   return (
-    <ScrollArea className="h-full w-full">
-      <div className="min-w-0 space-y-5 overflow-hidden p-4">
+    <ScrollArea className="h-full w-full [&_[data-slot=scroll-area-viewport]]:!overflow-x-hidden">
+      <div className="min-w-0 space-y-5 p-4">
         {/* Referenced Tables */}
         {(tableFqns.length > 0 || loadingTables) && (
           <section>
@@ -592,9 +592,9 @@ function SourceRow({ source }: { source: SourceData }) {
   return (
     <button
       onClick={() => setExpanded(!expanded)}
-      className="flex w-full flex-col rounded border bg-muted/30 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-muted/60"
+      className="flex w-full min-w-0 flex-col rounded border bg-muted/30 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-muted/60"
     >
-      <div className="flex w-full items-center gap-1.5">
+      <div className="flex w-full min-w-0 items-center gap-1.5">
         {icon}
         <Badge variant="outline" className="shrink-0 text-[9px]">{kindLabel}</Badge>
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.sourceId}</span>
