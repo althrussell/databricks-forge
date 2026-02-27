@@ -40,6 +40,7 @@ import {
   Search,
   Info,
   BrainCircuit,
+  RefreshCw,
 } from "lucide-react";
 import packageJson from "@/package.json";
 import {
@@ -114,13 +115,40 @@ export default function SettingsPage() {
   });
 
   const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
+  const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
+  const [embeddingCount, setEmbeddingCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/embeddings/status")
       .then((r) => r.json())
-      .then((data) => setEmbeddingAvailable(data.enabled ?? false))
+      .then((data) => {
+        setEmbeddingAvailable(data.enabled ?? false);
+        if (typeof data.totalRecords === "number") setEmbeddingCount(data.totalRecords);
+      })
       .catch(() => setEmbeddingAvailable(false));
   }, []);
+
+  const handleRebuildEmbeddings = async () => {
+    setRebuildingEmbeddings(true);
+    try {
+      const resp = await fetch("/api/embeddings/backfill", { method: "POST" });
+      const data = await resp.json();
+      if (resp.ok) {
+        toast.success(data.message ?? "Embeddings rebuilt successfully");
+        const statsResp = await fetch("/api/embeddings/status");
+        if (statsResp.ok) {
+          const stats = await statsResp.json();
+          if (typeof stats.totalRecords === "number") setEmbeddingCount(stats.totalRecords);
+        }
+      } else {
+        toast.error(data.message ?? "Failed to rebuild embeddings");
+      }
+    } catch {
+      toast.error("Network error while rebuilding embeddings");
+    } finally {
+      setRebuildingEmbeddings(false);
+    }
+  };
 
   const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
     setDepthConfigs((prev) => ({
@@ -399,7 +427,7 @@ export default function SettingsPage() {
               knowledge base features but does not delete existing embeddings.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div
               className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
                 semanticSearchEnabled
@@ -428,6 +456,32 @@ export default function SettingsPage() {
                   }`}
                 />
               </button>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="text-sm font-medium">Rebuild Embeddings</p>
+                <p className="text-xs text-muted-foreground">
+                  Re-generate the vector knowledge base from all estate scans, pipelines, and documents.
+                  {embeddingCount !== null && (
+                    <span className="ml-1 font-medium">{embeddingCount.toLocaleString()} vectors currently stored.</span>
+                  )}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={handleRebuildEmbeddings}
+                disabled={rebuildingEmbeddings}
+              >
+                {rebuildingEmbeddings ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+                {rebuildingEmbeddings ? "Rebuilding..." : "Rebuild"}
+              </Button>
             </div>
           </CardContent>
         </Card>

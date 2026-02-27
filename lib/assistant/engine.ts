@@ -8,7 +8,7 @@
 
 import { classifyIntent, type AssistantIntent, type IntentClassification } from "./intent";
 import { buildAssistantContext, buildSourceReferences, type AssistantContext, type TableEnrichment } from "./context-builder";
-import { buildAssistantMessages } from "./prompts";
+import { buildAssistantMessages, type AssistantPersona } from "./prompts";
 import { extractSqlBlocks } from "./sql-proposer";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
 import { retrieveContext } from "@/lib/embeddings/retriever";
@@ -91,6 +91,7 @@ export async function runAssistantEngine(
   onChunk?: StreamCallback,
   sessionId?: string,
   userId?: string | null,
+  persona: AssistantPersona = "business",
 ): Promise<AssistantResponse> {
   const start = Date.now();
 
@@ -106,12 +107,55 @@ export async function runAssistantEngine(
     history,
   );
 
+  // Short-circuit when no data exists -- avoid burning LLM tokens on generic answers
+  if (context.hasDataGaps) {
+    const noDataAnswer = `**No data available yet.**\n\nAsk Forge needs data from your Unity Catalog estate to provide grounded answers. To get started:\n\n1. **Run an Environment Scan** -- go to the Environment page and scan your catalogs\n2. **Run a Discovery Pipeline** -- go to Configure and generate use cases\n3. **Upload documents** to the Knowledge Base for additional context\n\nOnce data is available, I can answer questions about your tables, columns, health, lineage, and more.`;
+
+    if (onChunk) {
+      onChunk(noDataAnswer);
+    }
+
+    let logId: string | null = null;
+    try {
+      logId = await createAssistantLog({
+        sessionId: sessionId ?? "anonymous",
+        question,
+        intent: intentResult.intent,
+        intentConfidence: intentResult.confidence,
+        response: noDataAnswer,
+        durationMs: Date.now() - start,
+        userId: userId ?? undefined,
+        persona,
+      });
+    } catch {
+      // best-effort logging
+    }
+
+    return {
+      answer: noDataAnswer,
+      intent: intentResult,
+      sources: [],
+      actions: [
+        { type: "start_discovery", label: "Start Discovery", payload: {} },
+      ],
+      tables: [],
+      tableEnrichments: [],
+      sqlBlocks: [],
+      dashboardProposal: null,
+      existingDashboards: [],
+      tokenUsage: null,
+      durationMs: Date.now() - start,
+      logId,
+    };
+  }
+
   const sources = buildSourceReferences(context.chunks);
 
   const { system, user } = buildAssistantMessages(
     context.ragContext,
     context.conversationHistory,
     question,
+    persona,
   );
 
   const llmResponse = await chatCompletionStream(
@@ -201,6 +245,9 @@ export async function runAssistantEngine(
       completionTokens: llmResponse.usage?.completionTokens,
       totalTokens: llmResponse.usage?.totalTokens,
       userId: userId ?? undefined,
+      sources,
+      referencedTables: context.tables,
+      persona,
     });
   } catch (err) {
     logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) });
@@ -222,6 +269,17 @@ export async function runAssistantEngine(
   };
 }
 
+function isSubstantiveSql(sql: string): boolean {
+  const upper = sql.toUpperCase();
+  return (
+    sql.length > 100 ||
+    upper.includes("JOIN") ||
+    upper.includes("GROUP BY") ||
+    upper.includes("WINDOW") ||
+    upper.includes("WITH ")
+  );
+}
+
 function buildActions(
   intent: AssistantIntent,
   sqlBlocks: string[],
@@ -237,14 +295,16 @@ function buildActions(
       label: "Run this SQL",
       payload: { sql: sqlBlocks[0] },
     });
-    actions.push({
-      type: "deploy_notebook",
-      label: "Deploy as Notebook",
-      payload: { sql: sqlBlocks[0] },
-    });
+    if (isSubstantiveSql(sqlBlocks[0])) {
+      actions.push({
+        type: "deploy_notebook",
+        label: "Deploy as Notebook",
+        payload: { sql: sqlBlocks[0] },
+      });
+    }
   }
 
-  if (sqlBlocks.length > 0 && (intent === "dashboard" || dashboardProposal)) {
+  if (sqlBlocks.length > 0 && intent === "dashboard" && dashboardProposal) {
     actions.push({
       type: "deploy_dashboard",
       label: "Deploy as Dashboard",
@@ -271,13 +331,13 @@ function buildActions(
         label: "View ERD",
         payload: { tables },
       });
-    }
 
-    actions.push({
-      type: "create_genie_space",
-      label: "Create Genie Space",
-      payload: { tables },
-    });
+      actions.push({
+        type: "create_genie_space",
+        label: "Create Genie Space",
+        payload: { tables },
+      });
+    }
   }
 
   if (genieMatch) {

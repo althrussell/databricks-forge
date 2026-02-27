@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Database,
   RefreshCw,
-  Loader2,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -24,8 +23,6 @@ interface EmbeddingStats {
 export function EmbeddingStatus() {
   const [stats, setStats] = React.useState<EmbeddingStats | null>(null);
   const [expanded, setExpanded] = React.useState(false);
-  const [rebuilding, setRebuilding] = React.useState(false);
-  const [rebuildResult, setRebuildResult] = React.useState<{ success: boolean; message?: string } | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   const fetchStats = React.useCallback(async () => {
@@ -52,24 +49,6 @@ export function EmbeddingStatus() {
   }, []);
 
   React.useEffect(() => { fetchStats(); }, [fetchStats]);
-
-  const handleRebuild = async () => {
-    setRebuilding(true);
-    setRebuildResult(null);
-    try {
-      const resp = await fetch("/api/embeddings/backfill", { method: "POST" });
-      const data = await resp.json();
-      setRebuildResult({
-        success: resp.ok,
-        message: data.message ?? (resp.ok ? "Embeddings rebuilt successfully" : "Rebuild failed"),
-      });
-      if (resp.ok) fetchStats();
-    } catch {
-      setRebuildResult({ success: false, message: "Network error" });
-    } finally {
-      setRebuilding(false);
-    }
-  };
 
   if (loading) return null;
 
@@ -106,27 +85,15 @@ export function EmbeddingStatus() {
           {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
         </button>
 
-        <div className="flex items-center gap-2">
-          {rebuildResult && (
-            <span className={`text-[10px] ${rebuildResult.success ? "text-green-600" : "text-red-600"}`}>
-              {rebuildResult.message}
-            </span>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 gap-1 text-[10px]"
-            onClick={handleRebuild}
-            disabled={rebuilding}
-          >
-            {rebuilding ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3" />
-            )}
-            {rebuilding ? "Rebuilding..." : "Rebuild Embeddings"}
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 text-[10px]"
+          onClick={() => fetchStats()}
+        >
+          <RefreshCw className="size-3" />
+          Refresh
+        </Button>
       </div>
 
       {expanded && stats && (

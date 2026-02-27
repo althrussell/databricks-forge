@@ -9,6 +9,7 @@ import { SourceCardList } from "./source-card";
 import { ActionCardList, type ActionCardData } from "./action-card";
 import { SqlRunner } from "./sql-runner";
 import { DeployOptions } from "./deploy-options";
+import type { AssistantPersona } from "@/lib/assistant/prompts";
 import {
   BrainCircuit,
   Send,
@@ -18,6 +19,7 @@ import {
   Trash2,
   ThumbsUp,
   ThumbsDown,
+  AlertCircle,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -69,6 +71,8 @@ export interface SourceData {
 export interface AskForgeChatProps {
   /** Render mode -- 'full' gives a spacious layout, 'compact' is for the sheet */
   mode?: "full" | "compact";
+  /** Active persona controlling response style */
+  persona?: AssistantPersona;
   /** External session ID tied to a conversation. If omitted, generates a new one. */
   sessionId?: string;
   /** Pre-loaded messages from a saved conversation */
@@ -116,6 +120,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
   function AskForgeChat(
     {
       mode = "full",
+      persona = "business",
       sessionId: externalSessionId,
       initialMessages,
       suggestedQuestions,
@@ -182,7 +187,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       const resp = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, history, sessionId }),
+        body: JSON.stringify({ question, history, sessionId, persona }),
       });
 
       if (!resp.ok) {
@@ -410,27 +415,48 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       <ScrollArea className="flex-1 overflow-y-auto">
         <div className={`space-y-4 p-4 ${isCompact ? "" : "mx-auto max-w-4xl"}`}>
           {messages.length === 0 && (
-            <div className={`flex flex-col items-center justify-center gap-3 text-center ${isCompact ? "py-16" : "py-24"}`}>
-              <BrainCircuit className={`text-muted-foreground/30 ${isCompact ? "size-12" : "size-16"}`} />
-              <div>
-                <p className={`font-medium ${isCompact ? "" : "text-lg"}`}>Ask Forge anything about your data</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Ask business questions, explore your estate, or request SQL and dashboards.
-                  Answers are grounded in your actual metadata.
-                </p>
+            suggestedQuestions && suggestedQuestions.length === 0 ? (
+              <div className={`flex flex-col items-center justify-center gap-4 text-center ${isCompact ? "py-16" : "py-24"}`}>
+                <AlertCircle className={`text-muted-foreground/40 ${isCompact ? "size-10" : "size-14"}`} />
+                <div>
+                  <p className={`font-medium ${isCompact ? "" : "text-lg"}`}>No data available yet</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                    Run an environment scan or discovery pipeline to start asking questions.
+                    Ask Forge answers are grounded in your actual metadata.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => router.push("/environment")}>
+                    Go to Environment
+                  </Button>
+                  <Button variant="default" size="sm" onClick={() => router.push("/configure")}>
+                    Go to Configure
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {(suggestedQuestions ?? FALLBACK_QUESTIONS).map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => { setInput(q); inputRef.current?.focus(); }}
-                    className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
-                  >
-                    {q}
-                  </button>
-                ))}
+            ) : (
+              <div className={`flex flex-col items-center justify-center gap-3 text-center ${isCompact ? "py-16" : "py-24"}`}>
+                <BrainCircuit className={`text-muted-foreground/30 ${isCompact ? "size-12" : "size-16"}`} />
+                <div>
+                  <p className={`font-medium ${isCompact ? "" : "text-lg"}`}>Ask Forge anything about your data</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Ask business questions, explore your estate, or request SQL and dashboards.
+                    Answers are grounded in your actual metadata.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {(suggestedQuestions ?? FALLBACK_QUESTIONS).map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => { setInput(q); inputRef.current?.focus(); }}
+                      className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )
           )}
 
           {messages.map((msg) => (

@@ -15,7 +15,9 @@ import { SqlDialog } from "@/components/assistant/sql-dialog";
 import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
 import { Button } from "@/components/ui/button";
-import { PanelRightClose, PanelRight } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { AssistantPersona } from "@/lib/assistant/prompts";
+import { PanelRightClose, PanelRight, Briefcase, Wrench } from "lucide-react";
 
 export default function AskForgeContent() {
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
@@ -37,15 +39,26 @@ export default function AskForgeContent() {
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [chatSessionId, setChatSessionId] = React.useState(() => crypto.randomUUID());
   const [initialMessages, setInitialMessages] = React.useState<ConversationMessage[] | undefined>();
+  const [persona, setPersona] = React.useState<AssistantPersona>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("askforge-persona");
+      if (stored === "tech") return "tech";
+    }
+    return "business";
+  });
 
-  React.useEffect(() => {
-    fetch("/api/assistant/suggestions")
+  const fetchSuggestions = React.useCallback((p: AssistantPersona) => {
+    fetch(`/api/assistant/suggestions?persona=${p}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.questions?.length) setSuggestedQuestions(data.questions);
       })
       .catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    fetchSuggestions(persona);
+  }, [persona, fetchSuggestions]);
 
   React.useEffect(() => {
     fetch("/api/assistant/conversations")
@@ -122,26 +135,48 @@ export default function AskForgeContent() {
       if (!resp.ok || controller.signal.aborted) return;
       const data = await resp.json();
 
-      const msgs: ConversationMessage[] = (data.messages ?? []).map(
-        (m: { id: string; role: string; content: string; intent?: string; intentConfidence?: number; sqlGenerated?: string; feedbackRating?: string; logId: string }) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawMessages: any[] = data.messages ?? [];
+      const msgs: ConversationMessage[] = rawMessages.map(
+        (m) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
           content: m.content,
           intent: m.intent ? { intent: m.intent, confidence: m.intentConfidence ?? 0 } : undefined,
           sqlBlocks: m.sqlGenerated ? [m.sqlGenerated] : undefined,
+          sources: m.sources ?? undefined,
           logId: m.role === "assistant" ? m.logId : undefined,
           feedback: m.feedbackRating as "up" | "down" | undefined ?? null,
           isStreaming: false,
         }),
       );
 
+      // Restore context panel from the last assistant message that has context
+      const lastAssistantWithContext = [...msgs].reverse().find(
+        (m) => m.role === "assistant" && (m.sources?.length || false),
+      );
+      const restoredSources = lastAssistantWithContext?.sources ?? [];
+      const lastAssistantWithTables = [...rawMessages].reverse().find(
+        (m: { role: string; referencedTables?: string[] }) =>
+          m.role === "assistant" && m.referencedTables?.length,
+      );
+      const restoredTables: string[] = lastAssistantWithTables?.referencedTables ?? [];
+
+      if (data.persona === "tech" || data.persona === "business") {
+        setPersona(data.persona);
+      }
+
       setActiveConversationId(conversationId);
       setChatSessionId(data.sessionId);
       setInitialMessages(msgs);
+      setSources(restoredSources);
+      if (restoredTables.length > 0) {
+        handleReferencedTables(restoredTables);
+      } else {
+        setReferencedTables([]);
+        setTableDetails(new Map());
+      }
       setTableEnrichments([]);
-      setTableDetails(new Map());
-      setReferencedTables([]);
-      setSources([]);
     } catch {
       // best-effort
     }
@@ -155,16 +190,57 @@ export default function AskForgeContent() {
     setTableDetails(new Map());
     setReferencedTables([]);
     setSources([]);
+    const stored = localStorage.getItem("askforge-persona");
+    setPersona(stored === "tech" ? "tech" : "business");
   }, []);
+
+  const handleClearOrDelete = React.useCallback(async () => {
+    if (activeConversationId) {
+      try {
+        await fetch(`/api/assistant/conversations/${activeConversationId}`, { method: "DELETE" });
+      } catch {
+        // best-effort
+      }
+      setHistoryRefreshKey((k) => k + 1);
+    }
+    handleNewConversation();
+  }, [activeConversationId, handleNewConversation]);
 
   const handleConversationCreated = React.useCallback((conversationId: string) => {
     setActiveConversationId(conversationId);
     setHistoryRefreshKey((k) => k + 1);
   }, []);
 
+  const handlePersonaChange = React.useCallback((value: string) => {
+    if (value !== "business" && value !== "tech") return;
+    setPersona(value);
+    localStorage.setItem("askforge-persona", value);
+  }, []);
+
   return (
     <div className="-m-6 flex h-[calc(100vh-3rem)] flex-col">
       <EmbeddingStatus />
+
+      {/* Persona toggle banner */}
+      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Mode</span>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={persona}
+          onValueChange={handlePersonaChange}
+        >
+          <ToggleGroupItem value="business" className="gap-1 px-2.5 text-xs">
+            <Briefcase className="size-3.5" />
+            Business
+          </ToggleGroupItem>
+          <ToggleGroupItem value="tech" className="gap-1 px-2.5 text-xs">
+            <Wrench className="size-3.5" />
+            Tech
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
       <div className="flex min-h-0 flex-1">
         {/* History sidebar */}
@@ -185,6 +261,7 @@ export default function AskForgeContent() {
             key={chatSessionId}
             ref={chatRef}
             mode="full"
+            persona={persona}
             sessionId={chatSessionId}
             initialMessages={initialMessages}
             suggestedQuestions={suggestedQuestions}
@@ -204,7 +281,7 @@ export default function AskForgeContent() {
             onReferencedTables={handleReferencedTables}
             onSources={setSources}
             onConversationCreated={handleConversationCreated}
-            onClear={handleNewConversation}
+            onClear={handleClearOrDelete}
           />
         </div>
 

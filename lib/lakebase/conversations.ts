@@ -12,8 +12,18 @@ export interface ConversationSummary {
   id: string;
   title: string;
   sessionId: string;
+  persona: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ConversationSourceCard {
+  index: number;
+  label: string;
+  kind: string;
+  sourceId: string;
+  score: number;
+  metadata: Record<string, unknown> | null;
 }
 
 export interface ConversationMessage {
@@ -24,6 +34,8 @@ export interface ConversationMessage {
   intentConfidence?: number;
   sqlGenerated?: string;
   feedbackRating?: string;
+  sources?: ConversationSourceCard[];
+  referencedTables?: string[];
   createdAt: string;
   logId: string;
 }
@@ -32,6 +44,7 @@ export interface ConversationDetail {
   id: string;
   title: string;
   sessionId: string;
+  persona: string | null;
   createdAt: string;
   updatedAt: string;
   messages: ConversationMessage[];
@@ -44,15 +57,17 @@ export async function createConversation(
   userId: string,
   title: string,
   sessionId: string,
+  persona?: string,
 ): Promise<string> {
   return withPrisma(async (prisma) => {
     const conv = await prisma.forgeConversation.create({
-      data: { userId, title, sessionId },
+      data: { userId, title, sessionId, persona: persona ?? null },
     });
     logger.debug("[conversations] Created conversation", {
       id: conv.id,
       userId,
       sessionId,
+      persona,
     });
     return conv.id;
   });
@@ -74,6 +89,7 @@ export async function getUserConversations(
         id: true,
         title: true,
         sessionId: true,
+        persona: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -82,6 +98,7 @@ export async function getUserConversations(
       id: r.id,
       title: r.title,
       sessionId: r.sessionId,
+      persona: r.persona,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     }));
@@ -114,6 +131,8 @@ export async function getConversationWithMessages(
         intentConfidence: true,
         sqlGenerated: true,
         feedbackRating: true,
+        sourcesJson: true,
+        referencedTablesJson: true,
         createdAt: true,
       },
     });
@@ -128,6 +147,15 @@ export async function getConversationWithMessages(
         logId: log.id,
       });
       if (log.response) {
+        let sources: ConversationSourceCard[] | undefined;
+        let referencedTables: string[] | undefined;
+        try {
+          if (log.sourcesJson) sources = JSON.parse(log.sourcesJson);
+        } catch { /* ignore malformed JSON */ }
+        try {
+          if (log.referencedTablesJson) referencedTables = JSON.parse(log.referencedTablesJson);
+        } catch { /* ignore malformed JSON */ }
+
         messages.push({
           id: `${log.id}-a`,
           role: "assistant",
@@ -136,6 +164,8 @@ export async function getConversationWithMessages(
           intentConfidence: log.intentConfidence ?? undefined,
           sqlGenerated: log.sqlGenerated ?? undefined,
           feedbackRating: log.feedbackRating ?? undefined,
+          sources,
+          referencedTables,
           createdAt: log.createdAt.toISOString(),
           logId: log.id,
         });
@@ -146,6 +176,7 @@ export async function getConversationWithMessages(
       id: conv.id,
       title: conv.title,
       sessionId: conv.sessionId,
+      persona: conv.persona,
       createdAt: conv.createdAt.toISOString(),
       updatedAt: conv.updatedAt.toISOString(),
       messages,
@@ -200,6 +231,30 @@ export async function deleteConversation(
 
     logger.debug("[conversations] Deleted conversation", { conversationId });
     return true;
+  });
+}
+
+/**
+ * Delete all conversations and associated logs for a user.
+ */
+export async function deleteAllConversations(userId: string): Promise<number> {
+  return withPrisma(async (prisma) => {
+    const convs = await prisma.forgeConversation.findMany({
+      where: { userId },
+      select: { id: true, sessionId: true },
+    });
+    if (convs.length === 0) return 0;
+
+    const sessionIds = convs.map((c) => c.sessionId);
+    await prisma.forgeAssistantLog.deleteMany({
+      where: { sessionId: { in: sessionIds } },
+    });
+    const result = await prisma.forgeConversation.deleteMany({
+      where: { userId },
+    });
+
+    logger.debug("[conversations] Deleted all conversations", { userId, count: result.count });
+    return result.count;
   });
 }
 
