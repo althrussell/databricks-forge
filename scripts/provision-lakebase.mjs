@@ -230,7 +230,8 @@ async function generateCredential(epName) {
     throw new Error(`Generate credential failed (${resp.status}): ${text}`);
   }
   const data = await resp.json();
-  return data.token;
+  const expireTime = data.expire_time || new Date(Date.now() + 3_600_000).toISOString();
+  return { token: data.token, expireTime };
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +302,7 @@ async function main() {
   ]);
 
   for (let gen = 1; gen <= CREDENTIAL_MAX_GENERATIONS; gen++) {
-    const dbToken = await generateCredential(epName);
+    const { token: dbToken, expireTime } = await generateCredential(epName);
 
     // Direct URL for startup DDL (pgvector, prisma push, HNSW)
     const directUrl =
@@ -311,13 +312,15 @@ async function main() {
     const verified = await verifyCredential(directUrl);
 
     if (verified) {
-      // 4-line output consumed by start.sh:
+      // 6-line output consumed by start.sh:
       //   Line 1: Direct URL (for startup DDL operations)
       //   Line 2: Endpoint resource name (for runtime credential generation)
       //   Line 3: Pooler hostname (for runtime pg.Pool)
       //   Line 4: Username (cached to avoid SCIM /Me at runtime)
+      //   Line 5: Initial DB token (seeded into runtime cache — already propagated)
+      //   Line 6: Token expiry ISO timestamp
       process.stdout.write(
-        `${directUrl}\n${epName}\n${poolerHost}\n${username}`
+        `${directUrl}\n${epName}\n${poolerHost}\n${username}\n${dbToken}\n${expireTime}`
       );
       log("Provisioning complete.");
       return;

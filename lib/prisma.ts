@@ -108,6 +108,7 @@ async function initPrisma(): Promise<PrismaClient> {
       host: config.host,
       database: config.database,
       user: config.user,
+      credentialSeeded: !!process.env.LAKEBASE_INITIAL_TOKEN,
     });
     pool = new pg.Pool({ ...config, ...POOL_OPTIONS });
   } else {

@@ -26,10 +26,16 @@ interface CachedToken {
   expiresAt: number; // epoch ms
 }
 
+interface DbCredentialCache {
+  token: string;
+  expires: number; // epoch ms
+}
+
 const globalForProvision = globalThis as unknown as {
   __provisionInflightMap: Map<string, Promise<unknown>> | undefined;
   __endpointName: string | null | undefined;
   __wsToken: CachedToken | null | undefined;
+  __dbCredentialCache: DbCredentialCache | null | undefined;
 };
 
 if (!globalForProvision.__provisionInflightMap) {
@@ -37,6 +43,22 @@ if (!globalForProvision.__provisionInflightMap) {
 }
 globalForProvision.__endpointName ??= null;
 globalForProvision.__wsToken ??= null;
+
+// Seed the DB credential cache from start.sh env vars (already-propagated
+// startup credential). This avoids generating a fresh credential at runtime
+// that hasn't had time to propagate to PgBouncer.
+if (globalForProvision.__dbCredentialCache === undefined) {
+  const initToken = process.env.LAKEBASE_INITIAL_TOKEN;
+  const initExpires = process.env.LAKEBASE_INITIAL_TOKEN_EXPIRES;
+  if (initToken && initExpires) {
+    globalForProvision.__dbCredentialCache = {
+      token: initToken,
+      expires: new Date(initExpires).getTime(),
+    };
+  } else {
+    globalForProvision.__dbCredentialCache = null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // In-flight deduplication helper
@@ -302,12 +324,7 @@ async function resolveEndpointName(): Promise<string> {
 
 const REFRESH_LEAD_MS = 5 * 60_000;
 
-let _dbCredentialCache: { token: string; expires: number } | null = null;
-
-async function fetchDbCredential(): Promise<{
-  token: string;
-  expires: number;
-}> {
+async function fetchDbCredential(): Promise<DbCredentialCache> {
   const endpointName = await resolveEndpointName();
 
   const resp = await lakebaseApi("POST", "credentials", {
@@ -336,25 +353,27 @@ async function fetchDbCredential(): Promise<{
  * Cached DB password function. Returns the current token if still valid,
  * otherwise fetches a fresh one. Safe to call concurrently — dedup
  * ensures only one in-flight fetch.
+ *
+ * The cache lives on globalThis so it is shared across all Next.js route
+ * chunks (Turbopack bundles each route separately; module-level variables
+ * are NOT shared, but globalThis is).
  */
 async function cachedDbPassword(): Promise<string> {
+  const cache = globalForProvision.__dbCredentialCache;
   const now = Date.now();
-  if (_dbCredentialCache && now < _dbCredentialCache.expires - REFRESH_LEAD_MS) {
-    return _dbCredentialCache.token;
+  if (cache && now < cache.expires - REFRESH_LEAD_MS) {
+    return cache.token;
   }
 
   return dedup("dbCredential", async () => {
-    // Re-check after acquiring dedup slot
+    const cache2 = globalForProvision.__dbCredentialCache;
     const now2 = Date.now();
-    if (
-      _dbCredentialCache &&
-      now2 < _dbCredentialCache.expires - REFRESH_LEAD_MS
-    ) {
-      return _dbCredentialCache.token;
+    if (cache2 && now2 < cache2.expires - REFRESH_LEAD_MS) {
+      return cache2.token;
     }
 
-    _dbCredentialCache = await fetchDbCredential();
-    return _dbCredentialCache.token;
+    globalForProvision.__dbCredentialCache = await fetchDbCredential();
+    return globalForProvision.__dbCredentialCache.token;
   });
 }
 
