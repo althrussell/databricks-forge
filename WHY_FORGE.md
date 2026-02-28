@@ -304,10 +304,6 @@ Point Forge AI at your customer's Unity Catalog and run a discovery. Share the r
 
 <sub>
 
-**Disclaimer** -- Databricks Forge AI is NOT an official Databricks product, feature, or service. It was developed by the Databricks Field Engineering team as a field accelerator and is provided as-is under the Apache 2.0 license. No warranty, no official support, no SLAs. See [NOTICE](NOTICE) for full details.
+**Disclaimer** -- Databricks Forge AI is provided subject to the [Databricks License](LICENSE). It is NOT an official Databricks product, feature, or service. It is provided "as-is" without warranty of any kind. Databricks and its contributors accept no liability for damages arising from the use of this software. Use of the Licensed Materials requires an active Databricks Services agreement. See [NOTICE](NOTICE) for support policy and [SECURITY](SECURITY.md) for vulnerability reporting.
 
 </sub>
-
----
-
-> **Note for AEs:** Screenshots are sourced from `docs/images/`. To refresh them, capture new screenshots from a running Forge AI instance and save to that directory with the same filenames.
