@@ -321,6 +321,17 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
 async function resolveUsername(): Promise<string> {
   if (globalForProvision.__username) return globalForProvision.__username;
 
+  // Use the cached username from the startup provisioning script to avoid
+  // a redundant SCIM /Me call that risks 429 rate limiting.
+  const envUsername = process.env.LAKEBASE_USERNAME;
+  if (envUsername) {
+    globalForProvision.__username = envUsername;
+    logger.info("[provision] Username resolved from LAKEBASE_USERNAME env", {
+      identity: envUsername,
+    });
+    return envUsername;
+  }
+
   return dedup("username", async () => {
     const host = getHost();
     const token = await getWorkspaceToken();
@@ -347,7 +358,7 @@ async function resolveUsername(): Promise<string> {
         }
         globalForProvision.__username = identity;
 
-        logger.info("[provision] Username resolved", { identity });
+        logger.info("[provision] Username resolved via SCIM /Me", { identity });
 
         return globalForProvision.__username;
       }

@@ -54,15 +54,32 @@ export function register() {
     // Eagerly mark any background jobs left in "generating" state as failed.
     // These are orphans from a previous process that was killed mid-generation.
     // Also set the flag so the lazy check in getPersistedJobStatus doesn't re-run.
-    setTimeout(async () => {
+    //
+    // Wait for the DB to be marked ready by the Prisma singleton before
+    // attempting the query. This avoids triggering an immediate credential
+    // rotation + SCIM /Me call on a cold start.
+    const ORPHAN_CHECK_DELAY = 2_000;
+    const ORPHAN_CHECK_MAX_WAIT = 60_000;
+
+    const runOrphanCheck = async () => {
+      const { isDatabaseReady } = await import("@/lib/prisma");
+      const start = Date.now();
+
+      while (!isDatabaseReady() && Date.now() - start < ORPHAN_CHECK_MAX_WAIT) {
+        await new Promise((r) => setTimeout(r, ORPHAN_CHECK_DELAY));
+      }
+
+      if (!isDatabaseReady()) return;
+
       try {
         const { markOrphanedJobsFailed, markOrphanCheckComplete } = await import("@/lib/lakebase/background-jobs");
         await markOrphanedJobsFailed();
         markOrphanCheckComplete();
       } catch {
-        // DB may not be ready yet; the lazy check in getPersistedJobStatus
-        // will catch any remaining orphans on first poll.
+        // The lazy check in getPersistedJobStatus will catch any remaining orphans.
       }
-    }, 5_000);
+    };
+
+    setTimeout(() => { void runOrphanCheck(); }, ORPHAN_CHECK_DELAY);
   }
 }
