@@ -12,9 +12,17 @@ import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { embeddingsTableExists } from "@/lib/embeddings/store";
 import { getEmbeddingStats } from "@/lib/embeddings/re-embed";
 import { logger } from "@/lib/logger";
+import { isDatabaseReady } from "@/lib/prisma";
 
 export async function GET() {
   try {
+    if (!isDatabaseReady()) {
+      return NextResponse.json(
+        { enabled: false, error: "Database is warming up. Please retry shortly." },
+        { status: 503, headers: { "Retry-After": "3" } }
+      );
+    }
+
     const enabled = isEmbeddingEnabled();
 
     if (!enabled) {

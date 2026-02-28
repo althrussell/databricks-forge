@@ -140,9 +140,11 @@ apply to referenced tables) but can be switched to service principal in
 **Settings > Genie Engine > Deploy Authentication**.
 
 The `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`
-are automatically injected by the Databricks Apps runtime. `DATABASE_URL` is
-generated dynamically at startup by `scripts/provision-lakebase.mjs` using
-Lakebase Autoscale OAuth credentials -- no secrets or manual bindings needed.
+are automatically injected by the Databricks Apps runtime. Runtime Lakebase
+access uses short-lived OAuth DB credentials plus startup-generated endpoint
+metadata (`LAKEBASE_ENDPOINT_NAME`, `LAKEBASE_POOLER_HOST`, `LAKEBASE_USERNAME`)
+from `scripts/provision-lakebase.mjs` -- no static runtime DB secrets or
+manual bindings needed.
 No credentials are hardcoded or bundled with the application image.
 
 ---
@@ -233,7 +235,7 @@ application makes zero calls to public internet endpoints.
 - All Databricks API calls use HTTPS (TLS 1.2+).
 - TLS termination for inbound traffic is handled by the Databricks Apps
   reverse proxy.
-- Lakebase connections use TLS via the `DATABASE_URL` connection string.
+- Lakebase connections use TLS via runtime-generated Postgres URLs.
 
 ---
 
@@ -437,7 +439,10 @@ Invalid items are logged and dropped; they do not crash the pipeline.
 | `DATABRICKS_CLIENT_ID` | Databricks Apps runtime | Platform-injected |
 | `DATABRICKS_CLIENT_SECRET` | Databricks Apps runtime | Platform-injected |
 | `DATABRICKS_WAREHOUSE_ID` | `app.yaml` resource binding | Platform-injected |
-| `DATABASE_URL` | Auto-generated at startup | Lakebase Autoscale OAuth |
+| `LAKEBASE_ENDPOINT_NAME` | Auto-generated at startup | Lakebase endpoint resource name |
+| `LAKEBASE_POOLER_HOST` | Auto-generated at startup | Lakebase runtime pooler host |
+| `LAKEBASE_USERNAME` | Auto-generated at startup | Lakebase runtime username |
+| `DATABASE_URL` | `.env.local` (local dev only) | Local fallback connection string |
 | `DATABRICKS_TOKEN` | `.env.local` (local dev only) | Developer machine |
 
 ### Controls
@@ -731,7 +736,10 @@ third-party API, or cross-region endpoint.
 |----------|----------|--------|-------------|
 | `DATABRICKS_HOST` | Yes | Platform | Workspace URL (e.g. `https://workspace.cloud.databricks.com`) |
 | `DATABRICKS_WAREHOUSE_ID` | Yes | app.yaml | Bound SQL Warehouse ID |
-| `DATABASE_URL` | Yes | Auto-provisioned | Lakebase PostgreSQL connection string (generated at startup) |
+| `LAKEBASE_ENDPOINT_NAME` | Auto | Startup script | Lakebase endpoint resource name used by `/api/2.0/postgres/credentials` |
+| `LAKEBASE_POOLER_HOST` | Auto | Startup script | Pooler hostname for runtime queries |
+| `LAKEBASE_USERNAME` | Auto | Startup script | Cached runtime username (service principal identity) |
+| `DATABASE_URL` | Dev only | `.env.local` | Local development Lakebase PostgreSQL connection string |
 | `DATABRICKS_CLIENT_ID` | Auto | Platform | Service principal client ID |
 | `DATABRICKS_CLIENT_SECRET` | Auto | Platform | Service principal client secret |
 | `DATABRICKS_TOKEN` | Dev only | `.env.local` | Personal access token for local development |

@@ -8,14 +8,11 @@
  * of concurrent queries hit Lakebase's connection rate limiter.
  *
  * Two modes (chosen automatically):
- *   1. **Static URL** (startup credential or local dev) -- DATABASE_URL is
- *      set. Used directly. In Databricks Apps the startup script passes the
- *      provisioned credential as DATABASE_URL; when it expires (~1h),
- *      withPrisma catches the auth error, deletes DATABASE_URL, and switches
- *      to auto-provision mode permanently.
- *   2. **Auto-provisioned** (Databricks Apps) -- DATABRICKS_CLIENT_ID is
- *      present and DATABASE_URL is absent. The provision module generates
- *      short-lived OAuth DB credentials with automatic rotation.
+ *   1. **Auto-provisioned** (Databricks Apps) -- DATABRICKS_CLIENT_ID is
+ *      present. The provision module generates short-lived OAuth DB
+ *      credentials with automatic rotation and uses the pooler endpoint.
+ *   2. **Static URL** (local dev fallback) -- DATABASE_URL is set and app
+ *      service principal credentials are not available.
  *
  * The standard Next.js pattern caches the client on `globalThis` to survive
  * HMR reloads in development.
@@ -25,15 +22,19 @@ import pg from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
-  isAutoProvisionEnabled,
   canAutoProvision,
   getLakebaseConnectionUrl,
+  getRuntimeEndpointInfo,
   getCredentialGeneration,
   getCredentialExpiresAt,
   refreshDbCredential,
   invalidateDbCredential,
 } from "@/lib/lakebase/provision";
-import { isAuthError } from "@/lib/lakebase/auth-errors";
+import {
+  isAuthError,
+  isCredentialPropagationError,
+  isRateLimitError,
+} from "@/lib/lakebase/auth-errors";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ const globalForPrisma = globalThis as unknown as {
   __refreshTimer: ReturnType<typeof setTimeout> | undefined;
   __rotationInFlight: Promise<PrismaClient> | null | undefined;
   __initInFlight: Promise<PrismaClient> | null | undefined;
+  __staticInitInFlight: Promise<PrismaClient> | null | undefined;
   __dbReady: boolean | undefined;
   __rotationResolvedAt: number | undefined;
   __lastRotationAttemptAt: number | undefined;
@@ -68,6 +70,7 @@ const globalForPrisma = globalThis as unknown as {
 
 globalForPrisma.__rotationInFlight ??= null;
 globalForPrisma.__initInFlight ??= null;
+globalForPrisma.__staticInitInFlight ??= null;
 globalForPrisma.__dbReady ??= false;
 globalForPrisma.__rotationResolvedAt ??= 0;
 globalForPrisma.__lastRotationAttemptAt ??= 0;
@@ -82,7 +85,7 @@ const POOL_OPTIONS: pg.PoolConfig = {
   max: 10,
 };
 
-const POOL_WARM_TARGET = 5;
+const POOL_WARM_TARGET = 2;
 
 // ---------------------------------------------------------------------------
 // Pool creation + pre-warming
@@ -146,6 +149,23 @@ async function createAndWarmPool(
     );
     const warmed =
       results.filter((r) => r.status === "fulfilled").length + 1;
+    const rejected = results.filter((r) => r.status === "rejected");
+    if (rejected.length > 0) {
+      const firstReason = rejected[0];
+      const message =
+        firstReason.status === "rejected"
+          ? firstReason.reason instanceof Error
+            ? firstReason.reason.message
+            : String(firstReason.reason)
+          : "";
+      logger.warn("[prisma] Pool warm-up partially failed", {
+        warmed,
+        target: POOL_WARM_TARGET,
+        rejected: rejected.length,
+        rateLimited: isRateLimitError(message),
+        error: message,
+      });
+    }
     logger.info("[prisma] Pool connections warmed", {
       warmed,
       target: POOL_WARM_TARGET,
@@ -160,7 +180,9 @@ async function createAndWarmPool(
 // ---------------------------------------------------------------------------
 
 export async function getPrisma(): Promise<PrismaClient> {
-  if (isAutoProvisionEnabled()) {
+  // Databricks Apps runtime should always prefer auto-provisioned credentials
+  // when app service principal credentials are available.
+  if (canAutoProvision()) {
     return getAutoProvisionedPrisma();
   }
   return getStaticPrisma();
@@ -236,8 +258,17 @@ async function buildAutoProvisionedClient(
     globalForPrisma.__pool = undefined;
   }
 
-  const connectionString = await getLakebaseConnectionUrl();
+  const [endpointInfo, connectionString] = await Promise.all([
+    getRuntimeEndpointInfo(),
+    getLakebaseConnectionUrl(),
+  ]);
   logConnectionInfo(connectionString);
+  logger.info("[prisma] Runtime endpoint selected", {
+    endpointKind: "pooler",
+    endpointName: endpointInfo.endpointName,
+    poolerHost: endpointInfo.poolerHost,
+    directHost: endpointInfo.directHost,
+  });
 
   // Create pool with retry for credential propagation (up to ~24s)
   const pool = await createAndWarmPool(connectionString, 7, 3_000);
@@ -324,28 +355,38 @@ async function getStaticPrisma(): Promise<PrismaClient> {
     return globalForPrisma.__prisma;
   }
 
-  if (globalForPrisma.__prisma) {
-    await globalForPrisma.__prisma.$disconnect();
-  }
-  if (globalForPrisma.__pool) {
-    await globalForPrisma.__pool.end().catch(() => {});
+  if (globalForPrisma.__staticInitInFlight) {
+    return globalForPrisma.__staticInitInFlight;
   }
 
-  logConnectionInfo(url);
+  globalForPrisma.__staticInitInFlight = (async () => {
+    if (globalForPrisma.__prisma) {
+      await globalForPrisma.__prisma.$disconnect();
+    }
+    if (globalForPrisma.__pool) {
+      await globalForPrisma.__pool.end().catch(() => {});
+    }
 
-  const pool = await createAndWarmPool(url);
-  globalForPrisma.__pool = pool;
+    logConnectionInfo(url);
 
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
+    const pool = await createAndWarmPool(url);
+    globalForPrisma.__pool = pool;
 
-  globalForPrisma.__prisma = prisma;
-  globalForPrisma.__prismaTokenId = "__static__";
-  globalForPrisma.__dbReady = true;
+    const adapter = new PrismaPg(pool);
+    const prisma = new PrismaClient({ adapter });
 
-  logger.info("[prisma] Client created (static mode)");
+    globalForPrisma.__prisma = prisma;
+    globalForPrisma.__prismaTokenId = "__static__";
+    globalForPrisma.__dbReady = true;
 
-  return prisma;
+    logger.info("[prisma] Client created (static mode)");
+
+    return prisma;
+  })().finally(() => {
+    globalForPrisma.__staticInitInFlight = null;
+  });
+
+  return globalForPrisma.__staticInitInFlight;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,20 +426,35 @@ export async function withPrisma<T>(
       return await fn(prisma);
     } catch (err) {
       lastErr = err;
+      if (isRateLimitError(err) && attempt < MAX_AUTH_RETRIES) {
+        const backoffMs = RETRY_DELAY_MS * (attempt + 1);
+        logger.warn("[prisma] Connection rate-limited, retrying", {
+          attempt: attempt + 1,
+          maxRetries: MAX_AUTH_RETRIES,
+          backoffMs,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await new Promise((r) => setTimeout(r, backoffMs));
+        continue;
+      }
+
       if (!isAuthError(err) || !canAutoProvision()) throw err;
 
       if (attempt < MAX_AUTH_RETRIES) {
+        const propagationLikely = isCredentialPropagationError(err);
+        const strategy = propagationLikely && attempt === 0 ? "delay" : "rotate";
         logger.warn("[prisma] Auth error, retrying", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
-          strategy: attempt === 0 ? "delay" : "rotate",
+          strategy,
+          propagationLikely,
           error: err instanceof Error ? err.message : String(err),
         });
 
-        if (attempt === 0) {
+        if (strategy === "delay") {
           await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         } else {
-          await rotatePrismaClient();
+          await rotatePrismaClient("auth_error");
         }
       }
     }
@@ -413,7 +469,7 @@ export async function withPrisma<T>(
 
 const ROTATION_COOLDOWN_MS = 30_000;
 
-async function rotatePrismaClient(): Promise<PrismaClient> {
+async function rotatePrismaClient(reason: string): Promise<PrismaClient> {
   const now = Date.now();
   if (
     globalForPrisma.__prisma &&
@@ -435,11 +491,8 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
     globalForPrisma.__lastRotationAttemptAt = Date.now();
 
     try {
-      delete process.env.DATABASE_URL;
       await invalidatePrismaClient();
-      logger.info(
-        "[prisma] Credential rotation — switching to auto-provision mode"
-      );
+      logger.info("[prisma] Credential rotation starting", { reason });
 
       // getPrisma → buildAutoProvisionedClient → createAndWarmPool
       // handles credential propagation retries and pool pre-warming.

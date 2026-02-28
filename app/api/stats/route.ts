@@ -5,12 +5,19 @@
  */
 
 import { NextResponse } from "next/server";
-import { withPrisma } from "@/lib/prisma";
+import { isDatabaseReady, withPrisma } from "@/lib/prisma";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
+    if (!isDatabaseReady()) {
+      return NextResponse.json(
+        { error: "Database is warming up. Please retry shortly." },
+        { status: 503, headers: { "Retry-After": "3" } }
+      );
+    }
+
     await ensureMigrated();
 
     // Sequential batches instead of 10-way Promise.all.

@@ -22,14 +22,18 @@ set -e
 # ---------------------------------------------------------------------------
 
 LAKEBASE_STARTUP_URL=""
+LAKEBASE_ENDPOINT_NAME=""
+LAKEBASE_POOLER_HOST=""
 LAKEBASE_STARTUP_USERNAME=""
 
 if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
   echo "[startup] Auto-provisioning Lakebase Autoscale..."
 
   PROVISION_OUTPUT=$(node scripts/provision-lakebase.mjs)
-  LAKEBASE_STARTUP_URL=$(echo "$PROVISION_OUTPUT" | head -n 1)
-  LAKEBASE_STARTUP_USERNAME=$(echo "$PROVISION_OUTPUT" | tail -n 1)
+  LAKEBASE_STARTUP_URL=$(printf "%s\n" "$PROVISION_OUTPUT" | awk 'NR==1 { print; exit }')
+  LAKEBASE_ENDPOINT_NAME=$(printf "%s\n" "$PROVISION_OUTPUT" | awk 'NR==2 { print; exit }')
+  LAKEBASE_POOLER_HOST=$(printf "%s\n" "$PROVISION_OUTPUT" | awk 'NR==3 { print; exit }')
+  LAKEBASE_STARTUP_USERNAME=$(printf "%s\n" "$PROVISION_OUTPUT" | awk 'NR==4 { print; exit }')
 
   if [ -n "$LAKEBASE_STARTUP_URL" ]; then
     echo "[startup] Lakebase connection URL generated (credential verified)."
@@ -168,10 +172,9 @@ fi
 # ---------------------------------------------------------------------------
 # Start the standalone Next.js server
 #
-# Pass the verified startup credential as DATABASE_URL so the server has
-# an immediately working connection. When the credential expires (~1h),
-# withPrisma catches the auth error, deletes DATABASE_URL, and switches
-# to auto-provision mode with proactive refresh permanently.
+# Pass runtime Lakebase metadata to the server. In Databricks Apps mode,
+# runtime connections should use short-lived credentials + pooler endpoint,
+# not the startup direct URL used for DDL.
 # ---------------------------------------------------------------------------
 
 export PORT="${DATABRICKS_APP_PORT:-8000}"
@@ -180,8 +183,14 @@ echo "[startup] Starting server on port $PORT..."
 cd .next/standalone
 
 if [ -n "$LAKEBASE_STARTUP_URL" ]; then
-  echo "[startup] Passing verified credential to server."
-  export DATABASE_URL="$LAKEBASE_STARTUP_URL"
+  echo "[startup] Passing Lakebase runtime contract to server."
+  unset DATABASE_URL
+  if [ -n "$LAKEBASE_ENDPOINT_NAME" ]; then
+    export LAKEBASE_ENDPOINT_NAME="$LAKEBASE_ENDPOINT_NAME"
+  fi
+  if [ -n "$LAKEBASE_POOLER_HOST" ]; then
+    export LAKEBASE_POOLER_HOST="$LAKEBASE_POOLER_HOST"
+  fi
   if [ -n "$LAKEBASE_STARTUP_USERNAME" ]; then
     export LAKEBASE_USERNAME="$LAKEBASE_STARTUP_USERNAME"
   fi

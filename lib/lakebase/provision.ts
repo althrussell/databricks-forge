@@ -32,7 +32,8 @@ interface CachedToken {
 
 const globalForProvision = globalThis as unknown as {
   __provisionInflightMap: Map<string, Promise<unknown>> | undefined;
-  __endpointHost: string | null | undefined;
+  __endpointDirectHost: string | null | undefined;
+  __endpointPoolerHost: string | null | undefined;
   __endpointName: string | null | undefined;
   __username: string | null | undefined;
   __wsToken: CachedToken | null | undefined;
@@ -43,7 +44,8 @@ const globalForProvision = globalThis as unknown as {
 if (!globalForProvision.__provisionInflightMap) {
   globalForProvision.__provisionInflightMap = new Map();
 }
-globalForProvision.__endpointHost ??= null;
+globalForProvision.__endpointDirectHost ??= null;
+globalForProvision.__endpointPoolerHost ??= null;
 globalForProvision.__endpointName ??= null;
 globalForProvision.__username ??= null;
 globalForProvision.__wsToken ??= null;
@@ -89,6 +91,10 @@ const PROJECT_CREATION_TIMEOUT = 120_000;
 const LRO_POLL_INTERVAL = 5_000;
 
 // (Cached state lives on globalForProvision — see top of file)
+
+function derivePoolerHost(directHost: string): string {
+  return directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
+}
 
 // ---------------------------------------------------------------------------
 // Host helper
@@ -264,12 +270,59 @@ async function pollOperation(operationName: string): Promise<void> {
 // Endpoint resolution
 // ---------------------------------------------------------------------------
 
-async function resolveEndpoint(): Promise<{ host: string; name: string }> {
-  if (globalForProvision.__endpointHost && globalForProvision.__endpointName) {
-    return { host: globalForProvision.__endpointHost, name: globalForProvision.__endpointName };
+async function resolveEndpoint(): Promise<{
+  directHost: string;
+  poolerHost: string;
+  name: string;
+}> {
+  if (
+    globalForProvision.__endpointDirectHost &&
+    globalForProvision.__endpointPoolerHost &&
+    globalForProvision.__endpointName
+  ) {
+    return {
+      directHost: globalForProvision.__endpointDirectHost,
+      poolerHost: globalForProvision.__endpointPoolerHost,
+      name: globalForProvision.__endpointName,
+    };
   }
 
   return dedup("endpoint", async () => {
+    const envEndpointName = process.env.LAKEBASE_ENDPOINT_NAME;
+    const envPoolerHost = process.env.LAKEBASE_POOLER_HOST;
+
+    if (envEndpointName && envPoolerHost) {
+      const detailResp = await lakebaseApi("GET", envEndpointName);
+      if (!detailResp.ok) {
+        const text = await detailResp.text();
+        throw new Error(`Get endpoint failed (${detailResp.status}): ${text}`);
+      }
+      const detail = await detailResp.json();
+      const directHost: string | undefined = detail.status?.hosts?.host;
+      if (!directHost) {
+        throw new Error(
+          `Endpoint ${envEndpointName} has no host — is the compute still starting? ` +
+            `Detail: ${JSON.stringify(detail)}`
+        );
+      }
+
+      globalForProvision.__endpointDirectHost = directHost;
+      globalForProvision.__endpointPoolerHost = envPoolerHost;
+      globalForProvision.__endpointName = envEndpointName;
+
+      logger.info("[provision] Endpoint resolved from startup contract", {
+        endpoint: envEndpointName,
+        directHost,
+        poolerHost: envPoolerHost,
+      });
+
+      return {
+        directHost,
+        poolerHost: envPoolerHost,
+        name: envEndpointName,
+      };
+    }
+
     const listResp = await lakebaseApi(
       "GET",
       `projects/${getProjectId()}/branches/${BRANCH_ID}/endpoints`
@@ -280,8 +333,7 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
     }
 
     const data = await listResp.json();
-    const endpoints: Array<{ name: string }> =
-      data.endpoints ?? data.items ?? [];
+    const endpoints: Array<{ name: string }> = data.endpoints ?? data.items ?? [];
 
     if (endpoints.length === 0) {
       throw new Error(
@@ -297,20 +349,26 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
     }
 
     const detail = await detailResp.json();
-    const host: string | undefined = detail.status?.hosts?.host;
-    if (!host) {
+    const directHost: string | undefined = detail.status?.hosts?.host;
+    if (!directHost) {
       throw new Error(
         `Endpoint ${epName} has no host — is the compute still starting? ` +
           `Detail: ${JSON.stringify(detail)}`
       );
     }
 
-    globalForProvision.__endpointHost = host;
+    const poolerHost = derivePoolerHost(directHost);
+    globalForProvision.__endpointDirectHost = directHost;
+    globalForProvision.__endpointPoolerHost = poolerHost;
     globalForProvision.__endpointName = epName;
 
-    logger.info("[provision] Endpoint resolved", { host, endpoint: epName });
+    logger.info("[provision] Endpoint resolved", {
+      endpoint: epName,
+      directHost,
+      poolerHost,
+    });
 
-    return { host, name: epName };
+    return { directHost, poolerHost, name: epName };
   });
 }
 
@@ -486,16 +544,30 @@ export async function ensureLakebaseProject(): Promise<void> {
  * expiry, then transparently mints a new one.
  */
 export async function getLakebaseConnectionUrl(): Promise<string> {
-  const [{ host }, username, token] = await Promise.all([
+  const [{ poolerHost }, username, token] = await Promise.all([
     resolveEndpoint(),
     resolveUsername(),
     generateDbCredential(),
   ]);
 
+  logger.info("[provision] Building runtime connection URL", {
+    endpointKind: "pooler",
+    host: poolerHost,
+  });
+
   return (
     `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(token)}` +
-    `@${host}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`
+    `@${poolerHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`
   );
+}
+
+export async function getRuntimeEndpointInfo(): Promise<{
+  endpointName: string;
+  directHost: string;
+  poolerHost: string;
+}> {
+  const { name, directHost, poolerHost } = await resolveEndpoint();
+  return { endpointName: name, directHost, poolerHost };
 }
 
 /**

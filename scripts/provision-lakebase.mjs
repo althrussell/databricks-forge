@@ -5,10 +5,14 @@
  *
  * Called by scripts/start.sh BEFORE prisma db push. Ensures the Lakebase
  * project exists, resolves the endpoint, generates a DB credential, and
- * prints the full DATABASE_URL to stdout.
+ * prints startup/runtime connection metadata to stdout.
  *
- * Exits 0 + prints URL on success, exits 1 on failure.
- * All diagnostic output goes to stderr so stdout contains only the URL.
+ * Exits 0 on success, exits 1 on failure.
+ * All diagnostic output goes to stderr so stdout only contains:
+ *   1) direct endpoint URL (startup DDL only)
+ *   2) endpoint resource name
+ *   3) pooler hostname (runtime queries)
+ *   4) username
  */
 
 const PROJECT_ID_BASE = "databricks-forge";
@@ -19,6 +23,10 @@ const DISPLAY_NAME = "Databricks Forge AI";
 const API_TIMEOUT = 30_000;
 const LRO_TIMEOUT = 120_000;
 const LRO_POLL = 5_000;
+
+function derivePoolerHost(directHost) {
+  return directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
+}
 
 function getProjectId() {
   if (process.env.LAKEBASE_PROJECT_ID) return process.env.LAKEBASE_PROJECT_ID;
@@ -298,6 +306,7 @@ async function main() {
     getEndpointHost(),
     getUsername(),
   ]);
+  const poolerHost = derivePoolerHost(epHost);
 
   for (let gen = 1; gen <= CREDENTIAL_MAX_GENERATIONS; gen++) {
     const dbToken = await generateCredential(epName);
@@ -309,11 +318,8 @@ async function main() {
     const verified = await verifyCredential(url);
 
     if (verified) {
-      // Print URL to stdout (start.sh captures this).
-      // Also print the username on a second line so start.sh can cache it
-      // as LAKEBASE_USERNAME for the runtime, avoiding duplicate SCIM /Me calls.
-      process.stdout.write(`${url}\n${username}`);
-      log("Connection URL generated.");
+      process.stdout.write(`${url}\n${epName}\n${poolerHost}\n${username}`);
+      log("Connection metadata generated.");
       return;
     }
 
