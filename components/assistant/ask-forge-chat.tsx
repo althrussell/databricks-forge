@@ -341,7 +341,12 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     } else if (action.type === "create_dashboard") {
       router.push("/dashboards");
     } else if (action.type === "create_genie_space") {
-      router.push("/metadata-genie");
+      const tables = (action.payload.tables as string[]) ?? [];
+      const params = new URLSearchParams();
+      if (tables.length > 0) params.set("tables", tables.join(","));
+      if (action.payload.domainHint) params.set("domain", action.payload.domainHint as string);
+      if (action.payload.conversationSummary) params.set("context", action.payload.conversationSummary as string);
+      router.push(`/genie/new?${params.toString()}`);
     } else if (action.type === "start_discovery") {
       router.push("/configure");
     } else if (action.type === "view_run" && action.payload.runId) {

@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
   { href: "/runs/compare", label: "Compare", icon: CompareIcon },
   { href: "/environment", label: "Estate", icon: EnvironmentIcon },
   { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
-  { href: "/metadata-genie", label: "Meta Data Genie", icon: MetadataGenieIcon },
+  { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
   { href: "/knowledge-base", label: "Knowledge Base", icon: KnowledgeBaseIcon, requiresEmbedding: true },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/help", label: "Help", icon: HelpIcon },
@@ -358,7 +358,7 @@ function HelpIcon({ className }: { className?: string }) {
   );
 }
 
-function MetadataGenieIcon({ className }: { className?: string }) {
+function GenieSpacesIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -370,9 +370,11 @@ function MetadataGenieIcon({ className }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M3 5V19A9 3 0 0 0 21 19V5" />
-      <path d="M3 12A9 3 0 0 0 21 12" />
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      <path d="M5 3v4" />
+      <path d="M19 17v4" />
+      <path d="M3 5h4" />
+      <path d="M17 19h4" />
     </svg>
   );
 }

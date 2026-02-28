@@ -218,7 +218,10 @@ export async function runAssistantEngine(
     }
   }
 
-  const actions = buildActions(intentResult.intent, sqlBlocks, dashboardProposal, context.tables, genieSpaceMatch);
+  const actions = buildActions(
+    intentResult.intent, sqlBlocks, dashboardProposal, context.tables,
+    genieSpaceMatch, context.tableEnrichments, question,
+  );
 
   const durationMs = Date.now() - start;
 
@@ -286,6 +289,8 @@ function buildActions(
   dashboardProposal: DashboardProposal | null,
   tables: string[],
   genieMatch: { spaceTitle: string; spaceId: string; score: number } | null = null,
+  tableEnrichments: TableEnrichment[] = [],
+  conversationSummary: string = "",
 ): ActionCard[] {
   const actions: ActionCard[] = [];
 
@@ -332,10 +337,29 @@ function buildActions(
         payload: { tables },
       });
 
+      const schemas = tables
+        .map((t) => t.split(".")[1])
+        .filter(Boolean);
+      const schemaCounts = new Map<string, number>();
+      for (const s of schemas) schemaCounts.set(s, (schemaCounts.get(s) || 0) + 1);
+      let domainHint = "";
+      let bestCount = 0;
+      for (const [schema, count] of schemaCounts) {
+        if (count > bestCount) { bestCount = count; domainHint = schema; }
+      }
+
+      const enrichmentMap = new Map(tableEnrichments.map((e) => [e.tableFqn, e]));
       actions.push({
         type: "create_genie_space",
         label: "Create Genie Space",
-        payload: { tables },
+        payload: {
+          tables,
+          domainHint: domainHint || undefined,
+          tableEnrichments: tables.map((t) => enrichmentMap.get(t)).filter(Boolean),
+          sqlBlocks: sqlBlocks.slice(0, 3),
+          conversationSummary: conversationSummary || undefined,
+          intent,
+        },
       });
     }
   }
