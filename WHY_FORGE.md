@@ -92,7 +92,7 @@ A multi-dimensional scoring model evaluates every use case against your stated p
 
 ### Industry-Aligned Analysis
 
-Choose from 10+ built-in industry outcome maps (Banking, Retail, Manufacturing, Healthcare, and more) or ingest your own from markdown. The pipeline uses curated strategic objectives, KPIs, personas, and reference use cases to steer generation and scoring toward industry-specific patterns. A gap report highlights which strategic outcomes are covered and where blind spots remain.
+Choose from 10+ built-in industry outcome maps (Banking, Retail, Manufacturing, Healthcare, and more) or upload your own. The pipeline uses curated strategic objectives, KPIs, personas, and reference use cases to steer generation and scoring toward industry-specific patterns. A gap report highlights which strategic outcomes are covered and where blind spots remain.
 
 <p align="center">
   <img src="docs/images/guide-24-outcomes-grid.png" alt="Industry Outcome Maps -- curated strategic frameworks by industry" width="100%" />
@@ -102,15 +102,14 @@ Choose from 10+ built-in industry outcome maps (Banking, Retail, Manufacturing, 
 
 ### Ask Forge -- Conversational AI Assistant
 
-Ask Forge is a RAG-powered conversational assistant that knows your entire data estate, pipeline results, and uploaded knowledge. Ask questions in natural language and get grounded, contextual answers with cited sources.
+Ask Forge is a conversational assistant that knows your entire data estate, pipeline results, and uploaded knowledge. Ask questions in natural language and get grounded, contextual answers with cited sources.
 
 - **Propose and run SQL** against your warehouse directly from the chat
 - **Deploy SQL notebooks** to the workspace with one click
 - **Create AI/BI dashboards** from a conversation
 - **Launch Genie Spaces** for specific domains on the fly
-- **Switch personas** between business and technical modes
-- **Conversation history** persisted per user, ChatGPT-style
-- **Quick access** from any page via `⌘J` / `Ctrl+J`
+- **Switch personas** between business and technical response styles
+- **Conversation history** persisted per user with full context recall
 
 <p align="center">
   <img src="docs/images/guide-25-ask-forge.png" alt="Ask Forge -- conversational assistant with SQL proposals, context panel, and actions" width="100%" />
@@ -122,7 +121,7 @@ Ask Forge is a RAG-powered conversational assistant that knows your entire data 
 
 For every business domain discovered, Forge AI generates a complete Genie Space recommendation -- pre-configured with tables, join relationships, sample questions, SQL examples, metric views, and a knowledge store. Deploy with one click. Business users can start asking questions in natural language immediately.
 
-The standalone **Meta Data Genie** lets you generate Genie Spaces directly from `information_schema` without running a full discovery pipeline -- ideal for quick demos or targeted domain exploration.
+A standalone **Meta Data Genie** mode lets you generate Genie Spaces directly from your catalog metadata without running a full discovery pipeline -- ideal for targeted domain exploration or rapid deployment.
 
 <p align="center">
   <img src="docs/images/guide-15-genie-tab.png" alt="Genie workbench -- deploy domain-specific Genie Spaces with one click" width="100%" />
@@ -150,10 +149,9 @@ Share findings in the format your stakeholders expect:
 | **PowerPoint** | Presentation-ready deck with executive summary and top opportunities |
 | **PDF** | Branded report with cover page, domain pages, and individual use case details |
 | **SQL Notebooks** | Runnable Databricks notebooks deployed to the workspace, organised by domain |
-| **Executive Briefing** | Combined estate + use case deck for VP-level stakeholders |
-| **CSV / JSON** | Raw data exports for integration with other tools |
-| **Gap Report** | Industry coverage gap analysis showing strategic blind spots |
-| **Comparison Report** | Side-by-side run comparison exported as Excel |
+| **Executive Briefing** | Combined estate + use case deck for senior stakeholders |
+| **Gap Report** | Industry coverage gap analysis highlighting strategic blind spots |
+| **Comparison Report** | Side-by-side run comparison showing improvements across iterations |
 
 <p align="center">
   <img src="docs/images/guide-07-run-overview.png" alt="Run overview -- summary cards, business context, charts, and export options" width="100%" />
@@ -182,7 +180,7 @@ Before discovering use cases, understand what you have. The estate scanner profi
 
 ### Knowledge Base
 
-Upload strategy documents, data dictionaries, governance policies, or architecture specs (PDF, Markdown, or plain text). Forge AI chunks, embeds, and indexes them for semantic retrieval. Ask Forge and the discovery pipeline use this knowledge to ground their analysis in your organisation's specific context.
+Upload strategy documents, data dictionaries, governance policies, or architecture specs (PDF, Markdown, or plain text). Forge AI indexes them for intelligent retrieval, so both the conversational assistant and the discovery pipeline can ground their analysis in your organisation's specific context -- not just generic patterns.
 
 <p align="center">
   <img src="docs/images/guide-27-knowledge-base.png" alt="Knowledge Base -- upload documents for RAG-powered context enrichment" width="100%" />
@@ -192,7 +190,7 @@ Upload strategy documents, data dictionaries, governance policies, or architectu
 
 ### Compare and Iterate
 
-Run multiple discoveries with different scopes, depths, or models. Compare them side by side to see what changed -- metrics, use case overlap, semantic similarity, prompt diffs, configuration differences, and quality improvements. Export the comparison as Excel.
+Run multiple discoveries with different scopes, depths, or models. Compare them side by side to see what changed -- metrics, use case overlap, configuration differences, and quality improvements over time. Export the comparison as Excel.
 
 <p align="center">
   <img src="docs/images/guide-18-compare.png" alt="Compare runs -- side-by-side metrics, overlap analysis, and config diff" width="100%" />
@@ -200,9 +198,9 @@ Run multiple discoveries with different scopes, depths, or models. Compare them 
 
 ---
 
-### AI Observability
+### Full Transparency and Auditability
 
-Every LLM call in the pipeline is logged with full prompt and response detail. Inspect token usage, latency, and model behaviour at each step. Useful for debugging, tuning prompts, and demonstrating transparency to governance-conscious customers.
+Every AI-generated insight is traceable. Forge AI logs each step of the pipeline with full detail -- what was asked, what was returned, and how long it took. This gives your governance and compliance teams the visibility they need to trust AI-generated recommendations before acting on them.
 
 <p align="center">
   <img src="docs/images/guide-28-observability.png" alt="AI Observability -- prompt logs with token counts and response detail" width="100%" />
@@ -232,28 +230,28 @@ Forge AI runs as a **Databricks App** -- deployed directly from a Git repository
 | **Auth** | Automatic via Databricks Apps platform |
 | **Updates** | Push to Git, click Deploy |
 
-No VMs. No containers. No secrets management. The entire app runs on platform services your customer already has.
+No VMs. No containers. No secrets management. The entire app runs on platform services you already have.
 
 ---
 
 ## Built on the Databricks Platform
 
-Forge AI is a showcase for the breadth of the Databricks Data Intelligence Platform:
+Forge AI is built entirely on the Databricks Data Intelligence Platform:
 
 | Capability | Databricks Service |
 | --- | --- |
 | Metadata discovery | **Unity Catalog** |
 | SQL execution | **SQL Warehouse** (Serverless) |
 | AI inference | **Model Serving** (Foundation Models) |
-| Embeddings + vector search | **Model Serving** + **pgvector in Lakebase** |
+| Semantic search | **Model Serving** + **Lakebase** |
 | Natural language analytics | **Genie Spaces** |
 | Dashboard generation | **AI/BI Dashboards** |
 | Application hosting | **Databricks Apps** |
 | OLTP persistence | **Lakebase** (Autoscaling) |
-| Data lineage | **System Tables** (`system.access.table_lineage`) |
+| Data lineage | **System Tables** |
 | Notebook deployment | **Workspace REST API** |
 
-Everything runs inside the customer's workspace. No external services. No third-party dependencies for core functionality.
+Everything runs inside your workspace. No external services. No third-party dependencies for core functionality.
 
 ---
 
@@ -264,8 +262,8 @@ Everything runs inside the customer's workspace. No external services. No third-
 | **Chief Data Officer** | A data-driven roadmap of AI opportunities, scored and prioritised against strategic goals |
 | **VP of Analytics** | A curated backlog of use cases with business domains, ready for sprint planning |
 | **Data Platform Lead** | Estate intelligence -- health scores, governance gaps, lineage, and maturity benchmarks |
-| **Account Executive** | A compelling demo that turns a catalog walkthrough into a scored opportunity map in minutes |
-| **Solutions Architect** | Production-ready SQL, Genie Spaces, dashboards, and notebooks that accelerate proof-of-concept delivery |
+| **Head of Data Science** | Scored AI and ML use cases grounded in actual data availability, not hypotheticals |
+| **Data Engineering Lead** | Production-ready SQL, deployed notebooks, and Genie Spaces that accelerate time to value |
 
 ---
 
@@ -278,7 +276,7 @@ Everything runs inside the customer's workspace. No external services. No third-
 ### Step 1
 **Request Access**
 
-Contact your Databricks account team to get the Forge AI repository and deployment guide.
+Contact your Databricks account team to get access to Forge AI and the deployment guide.
 
 </td>
 <td width="33%" align="center">
@@ -286,7 +284,7 @@ Contact your Databricks account team to get the Forge AI repository and deployme
 ### Step 2
 **Deploy**
 
-Create a Databricks App from the Git repo, bind a SQL Warehouse and Model Serving endpoint, and deploy. First run takes under 5 minutes.
+Deploy as a Databricks App in your workspace. Bind a SQL Warehouse and Model Serving endpoint. First run takes under 5 minutes.
 
 </td>
 <td width="33%" align="center">
@@ -294,7 +292,7 @@ Create a Databricks App from the Git repo, bind a SQL Warehouse and Model Servin
 ### Step 3
 **Discover**
 
-Point Forge AI at your customer's Unity Catalog and run a discovery. Share the results in the format that resonates -- Excel, PowerPoint, PDF, a live Genie Space, or a conversation with Ask Forge.
+Point Forge AI at your Unity Catalog and run a discovery. Review scored use cases, explore your estate, and share findings in the format that works for your team.
 
 </td>
 </tr>

@@ -233,6 +233,35 @@ async function generateCredential(epName) {
 }
 
 // ---------------------------------------------------------------------------
+// Credential verification — wait until the credential is actually usable
+// ---------------------------------------------------------------------------
+
+const VERIFY_MAX_ATTEMPTS = 10;
+const VERIFY_INTERVAL_MS = 2_000;
+
+async function verifyCredential(url) {
+  const pg = (await import("pg")).default;
+
+  for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
+    const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 5_000 });
+    try {
+      await pool.query("SELECT 1");
+      log(`Credential verified (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}).`);
+      return;
+    } catch (err) {
+      if (attempt < VERIFY_MAX_ATTEMPTS) {
+        log(`Credential not yet usable (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}), waiting ${VERIFY_INTERVAL_MS / 1_000}s...`);
+        await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
+      } else {
+        log(`WARNING: Credential verification failed after ${VERIFY_MAX_ATTEMPTS} attempts: ${err.message}`);
+      }
+    } finally {
+      await pool.end().catch(() => {});
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -259,8 +288,13 @@ async function main() {
     `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(dbToken)}` +
     `@${epHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
 
-  // Print ONLY the URL to stdout (start.sh captures this)
-  process.stdout.write(url);
+  // Wait for Lakebase to accept the credential before returning
+  await verifyCredential(url);
+
+  // Print URL to stdout (start.sh captures this).
+  // Also print the username on a second line so start.sh can cache it
+  // as LAKEBASE_USERNAME for the runtime, avoiding duplicate SCIM /Me calls.
+  process.stdout.write(`${url}\n${username}`);
   log("Connection URL generated.");
 }
 

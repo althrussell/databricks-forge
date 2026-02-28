@@ -22,14 +22,17 @@ set -e
 # ---------------------------------------------------------------------------
 
 LAKEBASE_STARTUP_URL=""
+LAKEBASE_STARTUP_USERNAME=""
 
 if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
   echo "[startup] Auto-provisioning Lakebase Autoscale..."
 
-  LAKEBASE_STARTUP_URL=$(node scripts/provision-lakebase.mjs)
+  PROVISION_OUTPUT=$(node scripts/provision-lakebase.mjs)
+  LAKEBASE_STARTUP_URL=$(echo "$PROVISION_OUTPUT" | head -n 1)
+  LAKEBASE_STARTUP_USERNAME=$(echo "$PROVISION_OUTPUT" | tail -n 1)
 
   if [ -n "$LAKEBASE_STARTUP_URL" ]; then
-    echo "[startup] Lakebase connection URL generated."
+    echo "[startup] Lakebase connection URL generated (credential verified)."
   else
     echo "[startup] ERROR: Lakebase provisioning returned empty URL."
     exit 1
@@ -54,6 +57,8 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   # -- Step A: Enable pgvector extension BEFORE Prisma schema push --------
   # The ForgeEmbedding model uses Unsupported("vector(1024)") so the
   # extension must exist before prisma db push tries to create the table.
+  # The credential is pre-verified by provision-lakebase.mjs, so this
+  # should succeed on the first attempt. Retries are kept as a safety net.
   echo "[startup] Enabling pgvector extension..."
   PGVEC_ATTEMPT=0
   PGVEC_READY=false
@@ -115,24 +120,42 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   # -- Step C: Create HNSW index (not managed by Prisma) ------------------
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
     echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring HNSW index..."
-    DATABASE_URL="$SCHEMA_URL" node -e "
-      const pg = require('pg');
-      (async () => {
-        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-        try {
-          await pool.query(\`
-            CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw ON forge_embeddings
-              USING hnsw (embedding vector_cosine_ops)
-              WITH (m = 16, ef_construction = 64)
-          \`);
-          console.log('[startup] HNSW index ready.');
-        } catch (e) {
-          console.log('[startup] HNSW index note:', e.message || e);
-        } finally {
-          await pool.end();
-        }
-      })();
-    " 2>&1 || echo "[startup] HNSW index setup completed (with warnings)."
+    HNSW_ATTEMPT=0
+    HNSW_MAX_RETRIES=3
+    HNSW_READY=false
+
+    while [ "$HNSW_ATTEMPT" -lt "$HNSW_MAX_RETRIES" ]; do
+      HNSW_ATTEMPT=$((HNSW_ATTEMPT + 1))
+
+      if DATABASE_URL="$SCHEMA_URL" node -e "
+        const pg = require('pg');
+        (async () => {
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            await pool.query(\`
+              CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw ON forge_embeddings
+                USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64)
+            \`);
+            console.log('[startup] HNSW index ready.');
+          } finally {
+            await pool.end();
+          }
+        })();
+      " 2>&1; then
+        HNSW_READY=true
+        break
+      fi
+
+      if [ "$HNSW_ATTEMPT" -lt "$HNSW_MAX_RETRIES" ]; then
+        echo "[startup] HNSW index not ready (attempt $HNSW_ATTEMPT/$HNSW_MAX_RETRIES), retrying in ${DB_RETRY_INTERVAL}s..."
+        sleep "$DB_RETRY_INTERVAL"
+      fi
+    done
+
+    if [ "$HNSW_READY" = false ]; then
+      echo "[startup] WARNING: HNSW index creation failed after $HNSW_MAX_RETRIES attempts. Semantic search may be slow."
+    fi
   else
     echo "[startup] No embedding endpoint configured (serving-endpoint-embedding not bound), skipping HNSW index."
   fi
@@ -158,7 +181,11 @@ cd .next/standalone
 
 if [ -n "$LAKEBASE_STARTUP_URL" ]; then
   echo "[startup] Passing verified credential to server."
-  DATABASE_URL="$LAKEBASE_STARTUP_URL" exec node server.js
+  export DATABASE_URL="$LAKEBASE_STARTUP_URL"
+  if [ -n "$LAKEBASE_STARTUP_USERNAME" ]; then
+    export LAKEBASE_USERNAME="$LAKEBASE_STARTUP_USERNAME"
+  fi
+  exec node server.js
 else
   exec node server.js
 fi

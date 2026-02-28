@@ -61,12 +61,14 @@ const globalForPrisma = globalThis as unknown as {
   __initInFlight: Promise<PrismaClient> | null | undefined;
   __dbReady: boolean | undefined;
   __rotationResolvedAt: number | undefined;
+  __lastRotationAttemptAt: number | undefined;
 };
 
 globalForPrisma.__rotationInFlight ??= null;
 globalForPrisma.__initInFlight ??= null;
 globalForPrisma.__dbReady ??= false;
 globalForPrisma.__rotationResolvedAt ??= 0;
+globalForPrisma.__lastRotationAttemptAt ??= 0;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -333,20 +335,35 @@ export async function withPrisma<T>(
 // Race-safe credential rotation with verification + cooldown
 // ---------------------------------------------------------------------------
 
-const ROTATION_COOLDOWN_MS = 10_000;
-const VERIFY_MAX_ATTEMPTS = 4;
+const ROTATION_COOLDOWN_MS = 30_000;
+const VERIFY_MAX_ATTEMPTS = 8;
+const VERIFY_BASE_DELAY_MS = 2_000;
 
 async function rotatePrismaClient(): Promise<PrismaClient> {
+  // Cooldown: skip rotation if a recent one succeeded (and client exists),
+  // OR if a rotation was attempted recently (even if it failed). This
+  // prevents a thundering herd of credential mints when Lakebase is slow
+  // to propagate a new credential.
+  const now = Date.now();
   if (
     globalForPrisma.__prisma &&
-    Date.now() - (globalForPrisma.__rotationResolvedAt ?? 0) < ROTATION_COOLDOWN_MS
+    now - (globalForPrisma.__rotationResolvedAt ?? 0) < ROTATION_COOLDOWN_MS
   ) {
     return globalForPrisma.__prisma;
+  }
+  if (now - (globalForPrisma.__lastRotationAttemptAt ?? 0) < ROTATION_COOLDOWN_MS) {
+    if (globalForPrisma.__prisma) return globalForPrisma.__prisma;
+    logger.warn("[prisma] Rotation skipped — cooldown active after recent failed attempt", {
+      msSinceLastAttempt: now - (globalForPrisma.__lastRotationAttemptAt ?? 0),
+    });
+    throw new Error("Credential rotation on cooldown after recent failure");
   }
 
   if (globalForPrisma.__rotationInFlight) return globalForPrisma.__rotationInFlight;
 
   globalForPrisma.__rotationInFlight = (async () => {
+    globalForPrisma.__lastRotationAttemptAt = Date.now();
+
     try {
       delete process.env.DATABASE_URL;
       await invalidatePrismaClient();
@@ -356,6 +373,8 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
 
       const client = await getPrisma();
 
+      // Lakebase credentials can take 15-20s to propagate after minting.
+      // Use a generous verification window (8 attempts, 2s base, ~30s total).
       for (let i = 0; i < VERIFY_MAX_ATTEMPTS; i++) {
         try {
           await client.$queryRaw`SELECT 1`;
@@ -364,7 +383,7 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
           return client;
         } catch (verifyErr) {
           if (i < VERIFY_MAX_ATTEMPTS - 1) {
-            const delay = 1_000 * Math.pow(2, i);
+            const delay = VERIFY_BASE_DELAY_MS * Math.min(Math.pow(2, i), 4);
             logger.warn("[prisma] Rotation: connection not ready, waiting", {
               attempt: i + 1,
               maxAttempts: VERIFY_MAX_ATTEMPTS,
