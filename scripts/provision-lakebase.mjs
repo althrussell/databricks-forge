@@ -163,7 +163,7 @@ async function pollOp(name) {
 // Endpoint + username + credential
 // ---------------------------------------------------------------------------
 
-async function getEndpointInfo() {
+async function getEndpointHost() {
   const projectId = getProjectId();
   const listResp = await api(
     "GET",
@@ -184,10 +184,9 @@ async function getEndpointInfo() {
     throw new Error(`Get endpoint failed (${detResp.status}): ${text}`);
   }
   const detail = await detResp.json();
-  const directHost = detail.status?.hosts?.host;
-  if (!directHost) throw new Error(`Endpoint has no host: ${JSON.stringify(detail)}`);
-  const poolerHost = directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
-  return { directHost, poolerHost, epName };
+  const host = detail.status?.hosts?.host;
+  if (!host) throw new Error(`Endpoint has no host: ${JSON.stringify(detail)}`);
+  return { host, epName };
 }
 
 async function getUsername() {
@@ -230,8 +229,7 @@ async function generateCredential(epName) {
     throw new Error(`Generate credential failed (${resp.status}): ${text}`);
   }
   const data = await resp.json();
-  const expireTime = data.expire_time || new Date(Date.now() + 3_600_000).toISOString();
-  return { token: data.token, expireTime };
+  return data.token;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,33 +294,26 @@ async function main() {
 
   await ensureProject();
 
-  const [{ directHost, poolerHost, epName }, username] = await Promise.all([
-    getEndpointInfo(),
+  const [{ host: epHost, epName }, username] = await Promise.all([
+    getEndpointHost(),
     getUsername(),
   ]);
 
   for (let gen = 1; gen <= CREDENTIAL_MAX_GENERATIONS; gen++) {
-    const { token: dbToken, expireTime } = await generateCredential(epName);
+    const dbToken = await generateCredential(epName);
 
-    // Direct URL for startup DDL (pgvector, prisma push, HNSW)
-    const directUrl =
+    const url =
       `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(dbToken)}` +
-      `@${directHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
+      `@${epHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
 
-    const verified = await verifyCredential(directUrl);
+    const verified = await verifyCredential(url);
 
     if (verified) {
-      // 6-line output consumed by start.sh:
-      //   Line 1: Direct URL (for startup DDL operations)
-      //   Line 2: Endpoint resource name (for runtime credential generation)
-      //   Line 3: Pooler hostname (for runtime pg.Pool)
-      //   Line 4: Username (cached to avoid SCIM /Me at runtime)
-      //   Line 5: Initial DB token (seeded into runtime cache — already propagated)
-      //   Line 6: Token expiry ISO timestamp
-      process.stdout.write(
-        `${directUrl}\n${epName}\n${poolerHost}\n${username}\n${dbToken}\n${expireTime}`
-      );
-      log("Provisioning complete.");
+      // Print URL to stdout (start.sh captures this).
+      // Also print the username on a second line so start.sh can cache it
+      // as LAKEBASE_USERNAME for the runtime, avoiding duplicate SCIM /Me calls.
+      process.stdout.write(`${url}\n${username}`);
+      log("Connection URL generated.");
       return;
     }
 

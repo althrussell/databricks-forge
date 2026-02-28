@@ -52,9 +52,12 @@ export function register() {
     console.log("[instrumentation] SIGTERM handler registered.");
 
     // Proactively warm the database connection so the first user request
-    // doesn't trigger a cold pool initialization (which may need to wake
-    // a scale-to-zero Lakebase endpoint). After the connection is
-    // established, mark orphaned background jobs as failed.
+    // (typically the dashboard with 10 parallel queries) doesn't trigger a
+    // cold credential rotation. If the startup credential is stale, withPrisma
+    // handles the retry/rotation cycle here — well before any user request.
+    //
+    // After the connection is established, mark orphaned background jobs as
+    // failed (leftovers from a prior process killed mid-generation).
     const warmupAndOrphanCheck = async () => {
       try {
         const { withPrisma } = await import("@/lib/prisma");
