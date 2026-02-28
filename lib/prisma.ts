@@ -100,6 +100,7 @@ async function createAndWarmPool(
   connectionString: string,
   verifyRetries = 0,
   retryDelayMs = 3_000,
+  initialDelayMs = 0,
 ): Promise<pg.Pool> {
   const pool = new pg.Pool({ connectionString, ...POOL_OPTIONS });
 
@@ -109,6 +110,13 @@ async function createAndWarmPool(
     });
   });
 
+  if (initialDelayMs > 0) {
+    logger.info("[prisma] Waiting before first pool verification", {
+      initialDelayMs,
+    });
+    await new Promise((r) => setTimeout(r, initialDelayMs));
+  }
+
   // Verify first connection (with retry for credential propagation)
   let lastError: unknown;
   for (let i = 0; i <= verifyRetries; i++) {
@@ -117,6 +125,8 @@ async function createAndWarmPool(
         attempt: i,
         maxAttempts: verifyRetries + 1,
         nextDelayMs: retryDelayMs,
+        error:
+          lastError instanceof Error ? lastError.message : String(lastError),
       });
       await new Promise((r) => setTimeout(r, retryDelayMs));
     }
@@ -258,11 +268,7 @@ async function buildAutoProvisionedClient(
     globalForPrisma.__pool = undefined;
   }
 
-  const [endpointInfo, connectionString] = await Promise.all([
-    getRuntimeEndpointInfo(),
-    getLakebaseConnectionUrl(),
-  ]);
-  logConnectionInfo(connectionString);
+  const endpointInfo = await getRuntimeEndpointInfo();
   logger.info("[prisma] Runtime endpoint selected", {
     endpointKind: "pooler",
     endpointName: endpointInfo.endpointName,
@@ -270,8 +276,47 @@ async function buildAutoProvisionedClient(
     directHost: endpointInfo.directHost,
   });
 
-  // Create pool with retry for credential propagation (up to ~24s)
-  const pool = await createAndWarmPool(connectionString, 7, 3_000);
+  // Pooler credential propagation can lag on cold starts; retry with
+  // regenerated credentials rather than reusing a single potentially stale token.
+  const MAX_CREDENTIAL_GENERATIONS = 3;
+  let pool: pg.Pool | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_CREDENTIAL_GENERATIONS; attempt++) {
+    if (attempt > 1) {
+      invalidateDbCredential();
+      await refreshDbCredential();
+    }
+
+    const connectionString = await getLakebaseConnectionUrl();
+    logConnectionInfo(connectionString);
+
+    try {
+      // ~65s max per credential generation (5s initial + 20 * 3s retries)
+      pool = await createAndWarmPool(connectionString, 20, 3_000, 5_000);
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn("[prisma] Auto-provision pool bootstrap failed", {
+        attempt,
+        maxAttempts: MAX_CREDENTIAL_GENERATIONS,
+        authError: isAuthError(err),
+        rateLimited: isRateLimitError(err),
+        propagationLikely: isCredentialPropagationError(err),
+        error: msg,
+      });
+      if (attempt < MAX_CREDENTIAL_GENERATIONS) {
+        await new Promise((r) => setTimeout(r, 2_000 * attempt));
+      }
+    }
+  }
+
+  if (!pool || lastError) {
+    throw lastError ?? new Error("Failed to initialize pool");
+  }
+
   globalForPrisma.__pool = pool;
 
   const adapter = new PrismaPg(pool);
