@@ -1,7 +1,7 @@
 /**
  * Prisma client singleton for Lakebase.
  *
- * Uses @prisma/adapter-pg with node-postgres (pg) Pool over standard TCP.
+ * Uses @prisma/adapter-pg (v7) which manages its own pg Pool internally.
  *
  * Two modes (chosen automatically):
  *   1. **Static URL** (startup credential or local dev) -- DATABASE_URL is
@@ -17,7 +17,6 @@
  * HMR reloads in development.
  */
 
-import pg from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
@@ -71,6 +70,16 @@ globalForPrisma.__rotationResolvedAt ??= 0;
 globalForPrisma.__lastRotationAttemptAt ??= 0;
 
 // ---------------------------------------------------------------------------
+// Shared pool configuration for PrismaPg v7
+// ---------------------------------------------------------------------------
+
+const POOL_OPTIONS = {
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+  max: 10,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -78,9 +87,9 @@ globalForPrisma.__lastRotationAttemptAt ??= 0;
  * Returns a PrismaClient connected to Lakebase.
  *
  * In Databricks Apps the connection URL (including the OAuth token) is built
- * dynamically by the provision module. The pool + client are recreated when
- * the credential rotates (~every 50 min). In local dev or when a startup
- * credential is passed, the static DATABASE_URL is used directly.
+ * dynamically by the provision module. The adapter + client are recreated
+ * when the credential rotates (~every 50 min). In local dev or when a
+ * startup credential is passed, the static DATABASE_URL is used directly.
  */
 export async function getPrisma(): Promise<PrismaClient> {
   if (isAutoProvisionEnabled()) {
@@ -99,7 +108,7 @@ export function isDatabaseReady(): boolean {
 
 /**
  * Invalidate the cached Prisma client so the next `getPrisma()` call
- * creates a fresh pool with new credentials. Call this when an auth
+ * creates a fresh adapter with new credentials. Call this when an auth
  * error is caught to force immediate credential rotation.
  */
 export async function invalidatePrismaClient(): Promise<void> {
@@ -130,14 +139,14 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
 
   if (globalForPrisma.__initInFlight) return globalForPrisma.__initInFlight;
 
-  globalForPrisma.__initInFlight = buildAutoProvisionedPool(tokenId, generation).finally(() => {
+  globalForPrisma.__initInFlight = buildAutoProvisionedClient(tokenId, generation).finally(() => {
     globalForPrisma.__initInFlight = null;
   });
 
   return globalForPrisma.__initInFlight;
 }
 
-async function buildAutoProvisionedPool(
+async function buildAutoProvisionedClient(
   tokenId: string,
   generation: number
 ): Promise<PrismaClient> {
@@ -154,26 +163,7 @@ async function buildAutoProvisionedPool(
   const connectionString = await getLakebaseConnectionUrl();
   logConnectionInfo(connectionString);
 
-  const pool = new pg.Pool({
-    connectionString,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 10_000,
-    max: 10,
-    min: 0,
-  });
-
-  const capturedTokenId = tokenId;
-  pool.on("error", (err) => {
-    if (globalForPrisma.__prismaTokenId !== capturedTokenId) return;
-    logger.warn("[prisma] Pool background error — will recreate on next request", {
-      error: err.message,
-    });
-    globalForPrisma.__prisma = undefined;
-    globalForPrisma.__prismaTokenId = undefined;
-    invalidateDbCredential();
-  });
-
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg({ connectionString, ...POOL_OPTIONS });
   const prisma = new PrismaClient({ adapter });
 
   globalForPrisma.__prisma = prisma;
@@ -262,18 +252,7 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 
   logConnectionInfo(url);
 
-  const pool = new pg.Pool({ connectionString: url });
-
-  pool.on("error", (err) => {
-    if (globalForPrisma.__prismaTokenId !== "__static__") return;
-    logger.warn("[prisma] Pool background error (static) — will recreate on next request", {
-      error: err.message,
-    });
-    globalForPrisma.__prisma = undefined;
-    globalForPrisma.__prismaTokenId = undefined;
-  });
-
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg({ connectionString: url, ...POOL_OPTIONS });
   const prisma = new PrismaClient({ adapter });
 
   globalForPrisma.__prisma = prisma;
