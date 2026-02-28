@@ -51,25 +51,25 @@ export function register() {
 
     console.log("[instrumentation] SIGTERM handler registered.");
 
-    // Eagerly mark any background jobs left in "generating" state as failed.
-    // These are orphans from a previous process that was killed mid-generation.
-    // Also set the flag so the lazy check in getPersistedJobStatus doesn't re-run.
+    // Proactively warm the database connection so the first user request
+    // (typically the dashboard with 10 parallel queries) doesn't trigger a
+    // cold credential rotation. If the startup credential is stale, withPrisma
+    // handles the retry/rotation cycle here — well before any user request.
     //
-    // Wait for the DB to be marked ready by the Prisma singleton before
-    // attempting the query. This avoids triggering an immediate credential
-    // rotation + SCIM /Me call on a cold start.
-    const ORPHAN_CHECK_DELAY = 2_000;
-    const ORPHAN_CHECK_MAX_WAIT = 60_000;
-
-    const runOrphanCheck = async () => {
-      const { isDatabaseReady } = await import("@/lib/prisma");
-      const start = Date.now();
-
-      while (!isDatabaseReady() && Date.now() - start < ORPHAN_CHECK_MAX_WAIT) {
-        await new Promise((r) => setTimeout(r, ORPHAN_CHECK_DELAY));
+    // After the connection is established, mark orphaned background jobs as
+    // failed (leftovers from a prior process killed mid-generation).
+    const warmupAndOrphanCheck = async () => {
+      try {
+        const { withPrisma } = await import("@/lib/prisma");
+        await withPrisma((prisma) => prisma.forgeRun.count());
+        console.log("[instrumentation] Database connection warmed up.");
+      } catch (err) {
+        console.warn(
+          "[instrumentation] Database warm-up failed (will retry on first request):",
+          err instanceof Error ? err.message : String(err)
+        );
+        return;
       }
-
-      if (!isDatabaseReady()) return;
 
       try {
         const { markOrphanedJobsFailed, markOrphanCheckComplete } = await import("@/lib/lakebase/background-jobs");
@@ -80,6 +80,6 @@ export function register() {
       }
     };
 
-    setTimeout(() => { void runOrphanCheck(); }, ORPHAN_CHECK_DELAY);
+    setTimeout(() => { void warmupAndOrphanCheck(); }, 500);
   }
 }

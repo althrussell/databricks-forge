@@ -112,16 +112,22 @@ export function isDatabaseReady(): boolean {
  * error is caught to force immediate credential rotation.
  */
 export async function invalidatePrismaClient(): Promise<void> {
-  if (globalForPrisma.__prisma) {
+  // Grab reference before clearing, then invalidate credential cache and
+  // singleton BEFORE the potentially slow $disconnect(). This prevents a
+  // race where a concurrent caller generates a fresh credential during
+  // $disconnect() and then invalidateDbCredential() clears it afterward.
+  const oldClient = globalForPrisma.__prisma;
+  invalidateDbCredential();
+  globalForPrisma.__prisma = undefined;
+  globalForPrisma.__prismaTokenId = undefined;
+
+  if (oldClient) {
     try {
-      await globalForPrisma.__prisma.$disconnect();
+      await oldClient.$disconnect();
     } catch {
       // best-effort disconnect
     }
-    globalForPrisma.__prisma = undefined;
-    globalForPrisma.__prismaTokenId = undefined;
   }
-  invalidateDbCredential();
 }
 
 // ---------------------------------------------------------------------------
@@ -268,17 +274,22 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 // Resilient wrapper with auth-error retry
 // ---------------------------------------------------------------------------
 
-const MAX_AUTH_RETRIES = 2;
+const MAX_AUTH_RETRIES = 3;
+const RETRY_DELAY_MS = 2_000;
 
 /**
  * Execute a callback with a PrismaClient. If the call fails with a
  * database authentication error (stale credential), the client and
  * credential are invalidated and the call is retried.
  *
- * The retry fires whenever Databricks App SP credentials are available
- * (canAutoProvision), even if the initial connection used a static
- * DATABASE_URL. On retry, DATABASE_URL is cleared so the fresh client
- * enters auto-provision mode with dynamic credential rotation.
+ * Strategy on auth error:
+ *   1. **Quick retry** — Wait briefly and retry. Lakebase credential
+ *      propagation is eventually consistent across backends; a short
+ *      delay often resolves transient auth failures without the cost of
+ *      a full credential rotation.
+ *   2. **Rotate** — If the quick retry also fails, invalidate the client
+ *      and mint a new credential.
+ *   3. **Final retry** — One last attempt after rotation.
  *
  * Concurrent callers that all hit an auth error at the same time share
  * a single rotation promise — rotatePrismaClient verifies the connection
@@ -299,12 +310,20 @@ export async function withPrisma<T>(
       if (!isAuthError(err) || !canAutoProvision()) throw err;
 
       if (attempt < MAX_AUTH_RETRIES) {
-        logger.warn("[prisma] Auth error, rotating credentials", {
+        logger.warn("[prisma] Auth error, retrying", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
+          strategy: attempt === 0 ? "delay" : "rotate",
           error: err instanceof Error ? err.message : String(err),
         });
-        await rotatePrismaClient();
+
+        if (attempt === 0) {
+          // Quick retry: credential may be valid but the pool connection
+          // landed on a backend that hasn't received it yet.
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        } else {
+          await rotatePrismaClient();
+        }
       }
     }
   }
@@ -365,7 +384,30 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
 
       for (let i = 0; i < VERIFY_MAX_ATTEMPTS; i++) {
         try {
-          await client.$queryRaw`SELECT 1`;
+          // Use a model query (not $queryRaw) for verification. Model queries
+          // go through PrismaPg's transaction-wrapped connection path, which is
+          // different from $queryRaw's simple pool.query() path. Verifying with
+          // the same path that real queries use ensures the connection is fully
+          // established for subsequent model operations.
+          await client.forgeRun.count();
+
+          // Pre-warm the pool with concurrent queries. Lakebase Autoscale
+          // may route new connections to different backends, and credential
+          // propagation is eventually consistent. Establishing several pool
+          // connections now prevents a burst of auth failures when concurrent
+          // callers resume after rotation.
+          const POOL_WARM_COUNT = 3;
+          logger.info("[prisma] Rotation: warming pool connections", {
+            count: POOL_WARM_COUNT,
+          });
+          await Promise.all(
+            Array.from({ length: POOL_WARM_COUNT }, () =>
+              client.forgeRun.count().catch(() => {
+                /* best-effort pre-warm */
+              })
+            )
+          );
+
           globalForPrisma.__rotationResolvedAt = Date.now();
           logger.info("[prisma] Credential rotation complete — connection verified");
           return client;
