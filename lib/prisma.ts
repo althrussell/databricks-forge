@@ -1,7 +1,11 @@
 /**
  * Prisma client singleton for Lakebase.
  *
- * Uses @prisma/adapter-pg (v7) which manages its own pg Pool internally.
+ * Uses an **external pg.Pool** passed to @prisma/adapter-pg (v7). We manage
+ * the pool ourselves so we can pre-warm multiple connections before handing
+ * control to PrismaClient. This prevents the "dashboard fails on first load"
+ * problem where PrismaPg's internal pool creates connections lazily and bursts
+ * of concurrent queries hit Lakebase's connection rate limiter.
  *
  * Two modes (chosen automatically):
  *   1. **Static URL** (startup credential or local dev) -- DATABASE_URL is
@@ -17,6 +21,7 @@
  * HMR reloads in development.
  */
 
+import pg from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
@@ -49,11 +54,9 @@ function logConnectionInfo(connectionString: string): void {
 // Singleton cache
 // ---------------------------------------------------------------------------
 
-// All mutable coordination state lives on globalThis so that separate
-// Next.js server bundles (RSC vs API routes) share a single set of guards,
-// preventing dueling credential rotations.
 const globalForPrisma = globalThis as unknown as {
   __prisma: PrismaClient | undefined;
+  __pool: pg.Pool | undefined;
   __prismaTokenId: string | undefined;
   __refreshTimer: ReturnType<typeof setTimeout> | undefined;
   __rotationInFlight: Promise<PrismaClient> | null | undefined;
@@ -70,27 +73,92 @@ globalForPrisma.__rotationResolvedAt ??= 0;
 globalForPrisma.__lastRotationAttemptAt ??= 0;
 
 // ---------------------------------------------------------------------------
-// Shared pool configuration for PrismaPg v7
+// Pool configuration
 // ---------------------------------------------------------------------------
 
-const POOL_OPTIONS = {
+const POOL_OPTIONS: pg.PoolConfig = {
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
   max: 10,
-} as const;
+};
+
+const POOL_WARM_TARGET = 5;
+
+// ---------------------------------------------------------------------------
+// Pool creation + pre-warming
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a pg.Pool, verify the first connection (with optional retries for
+ * credential propagation), then pre-warm additional connections so the pool
+ * is ready for concurrent query bursts.
+ */
+async function createAndWarmPool(
+  connectionString: string,
+  verifyRetries = 0,
+  retryDelayMs = 3_000,
+): Promise<pg.Pool> {
+  const pool = new pg.Pool({ connectionString, ...POOL_OPTIONS });
+
+  pool.on("error", (err) => {
+    logger.warn("[prisma] Idle pool connection error", {
+      error: err.message,
+    });
+  });
+
+  // Verify first connection (with retry for credential propagation)
+  let lastError: unknown;
+  for (let i = 0; i <= verifyRetries; i++) {
+    if (i > 0) {
+      logger.warn("[prisma] Pool connection not ready, retrying", {
+        attempt: i,
+        maxAttempts: verifyRetries + 1,
+        nextDelayMs: retryDelayMs,
+      });
+      await new Promise((r) => setTimeout(r, retryDelayMs));
+    }
+    try {
+      const conn = await pool.connect();
+      conn.release();
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (lastError) {
+    await pool.end().catch(() => {});
+    throw lastError;
+  }
+
+  // Pre-warm additional connections concurrently (best-effort).
+  // pg.Pool creates connections lazily, so concurrent connect() calls force
+  // it to open multiple TCP connections. These stay idle in the pool for
+  // idleTimeoutMillis, ready for the dashboard's burst of parallel queries.
+  if (POOL_WARM_TARGET > 1) {
+    const results = await Promise.allSettled(
+      Array.from({ length: POOL_WARM_TARGET - 1 }, () =>
+        pool.connect().then((c) => {
+          c.release();
+        })
+      )
+    );
+    const warmed =
+      results.filter((r) => r.status === "fulfilled").length + 1;
+    logger.info("[prisma] Pool connections warmed", {
+      warmed,
+      target: POOL_WARM_TARGET,
+    });
+  }
+
+  return pool;
+}
 
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/**
- * Returns a PrismaClient connected to Lakebase.
- *
- * In Databricks Apps the connection URL (including the OAuth token) is built
- * dynamically by the provision module. The adapter + client are recreated
- * when the credential rotates (~every 50 min). In local dev or when a
- * startup credential is passed, the static DATABASE_URL is used directly.
- */
 export async function getPrisma(): Promise<PrismaClient> {
   if (isAutoProvisionEnabled()) {
     return getAutoProvisionedPrisma();
@@ -98,34 +166,31 @@ export async function getPrisma(): Promise<PrismaClient> {
   return getStaticPrisma();
 }
 
-/**
- * True once a Prisma client has been successfully created.
- * API routes can use this to return 503 instead of blocking on init.
- */
 export function isDatabaseReady(): boolean {
   return globalForPrisma.__dbReady ?? false;
 }
 
-/**
- * Invalidate the cached Prisma client so the next `getPrisma()` call
- * creates a fresh adapter with new credentials. Call this when an auth
- * error is caught to force immediate credential rotation.
- */
 export async function invalidatePrismaClient(): Promise<void> {
-  // Grab reference before clearing, then invalidate credential cache and
-  // singleton BEFORE the potentially slow $disconnect(). This prevents a
-  // race where a concurrent caller generates a fresh credential during
-  // $disconnect() and then invalidateDbCredential() clears it afterward.
   const oldClient = globalForPrisma.__prisma;
+  const oldPool = globalForPrisma.__pool;
+
   invalidateDbCredential();
   globalForPrisma.__prisma = undefined;
   globalForPrisma.__prismaTokenId = undefined;
+  globalForPrisma.__pool = undefined;
 
   if (oldClient) {
     try {
       await oldClient.$disconnect();
     } catch {
       // best-effort disconnect
+    }
+  }
+  if (oldPool) {
+    try {
+      await oldPool.end();
+    } catch {
+      // best-effort pool cleanup
     }
   }
 }
@@ -156,6 +221,7 @@ async function buildAutoProvisionedClient(
   tokenId: string,
   generation: number
 ): Promise<PrismaClient> {
+  // Clean up previous client + pool
   if (globalForPrisma.__prisma) {
     try {
       await globalForPrisma.__prisma.$disconnect();
@@ -165,11 +231,19 @@ async function buildAutoProvisionedClient(
       });
     }
   }
+  if (globalForPrisma.__pool) {
+    await globalForPrisma.__pool.end().catch(() => {});
+    globalForPrisma.__pool = undefined;
+  }
 
   const connectionString = await getLakebaseConnectionUrl();
   logConnectionInfo(connectionString);
 
-  const adapter = new PrismaPg({ connectionString, ...POOL_OPTIONS });
+  // Create pool with retry for credential propagation (up to ~24s)
+  const pool = await createAndWarmPool(connectionString, 7, 3_000);
+  globalForPrisma.__pool = pool;
+
+  const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
   globalForPrisma.__prisma = prisma;
@@ -214,9 +288,7 @@ function scheduleProactiveRefresh(): void {
       logger.info("[prisma] Proactive credential rotation starting", {
         msBeforeExpiry: expiresAt - Date.now(),
       });
-      invalidateDbCredential();
-      globalForPrisma.__prisma = undefined;
-      globalForPrisma.__prismaTokenId = undefined;
+      await invalidatePrismaClient();
       await getPrisma();
       logger.info("[prisma] Proactive credential rotation complete");
     } catch (err) {
@@ -255,10 +327,16 @@ async function getStaticPrisma(): Promise<PrismaClient> {
   if (globalForPrisma.__prisma) {
     await globalForPrisma.__prisma.$disconnect();
   }
+  if (globalForPrisma.__pool) {
+    await globalForPrisma.__pool.end().catch(() => {});
+  }
 
   logConnectionInfo(url);
 
-  const adapter = new PrismaPg({ connectionString: url, ...POOL_OPTIONS });
+  const pool = await createAndWarmPool(url);
+  globalForPrisma.__pool = pool;
+
+  const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
   globalForPrisma.__prisma = prisma;
@@ -318,8 +396,6 @@ export async function withPrisma<T>(
         });
 
         if (attempt === 0) {
-          // Quick retry: credential may be valid but the pool connection
-          // landed on a backend that hasn't received it yet.
           await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         } else {
           await rotatePrismaClient();
@@ -336,15 +412,8 @@ export async function withPrisma<T>(
 // ---------------------------------------------------------------------------
 
 const ROTATION_COOLDOWN_MS = 30_000;
-const VERIFY_INITIAL_DELAY_MS = 3_000;
-const VERIFY_MAX_ATTEMPTS = 8;
-const VERIFY_INTERVAL_MS = 3_000;
 
 async function rotatePrismaClient(): Promise<PrismaClient> {
-  // Cooldown: skip rotation if a recent one succeeded (and client exists),
-  // OR if a rotation was attempted recently (even if it failed). This
-  // prevents a thundering herd of credential mints when Lakebase is slow
-  // to propagate a new credential.
   const now = Date.now();
   if (
     globalForPrisma.__prisma &&
@@ -372,68 +441,20 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
         "[prisma] Credential rotation — switching to auto-provision mode"
       );
 
+      // getPrisma → buildAutoProvisionedClient → createAndWarmPool
+      // handles credential propagation retries and pool pre-warming.
       const client = await getPrisma();
 
-      // Lakebase credentials can take 15-30s to propagate after minting.
-      // Wait before first attempt, then use generous intervals to avoid
-      // exhausting the connection rate limiter.
-      logger.info("[prisma] Rotation: waiting for credential propagation", {
-        initialDelayMs: VERIFY_INITIAL_DELAY_MS,
-      });
-      await new Promise((r) => setTimeout(r, VERIFY_INITIAL_DELAY_MS));
+      // Final verification with a model query
+      await client.forgeRun.count();
 
-      for (let i = 0; i < VERIFY_MAX_ATTEMPTS; i++) {
-        try {
-          // Use a model query (not $queryRaw) for verification. Model queries
-          // go through PrismaPg's transaction-wrapped connection path, which is
-          // different from $queryRaw's simple pool.query() path. Verifying with
-          // the same path that real queries use ensures the connection is fully
-          // established for subsequent model operations.
-          await client.forgeRun.count();
-
-          // Pre-warm the pool with concurrent queries. Lakebase Autoscale
-          // may route new connections to different backends, and credential
-          // propagation is eventually consistent. Establishing several pool
-          // connections now prevents a burst of auth failures when concurrent
-          // callers resume after rotation.
-          const POOL_WARM_COUNT = 3;
-          logger.info("[prisma] Rotation: warming pool connections", {
-            count: POOL_WARM_COUNT,
-          });
-          await Promise.all(
-            Array.from({ length: POOL_WARM_COUNT }, () =>
-              client.forgeRun.count().catch(() => {
-                /* best-effort pre-warm */
-              })
-            )
-          );
-
-          globalForPrisma.__rotationResolvedAt = Date.now();
-          logger.info("[prisma] Credential rotation complete — connection verified");
-          return client;
-        } catch (verifyErr) {
-          if (i < VERIFY_MAX_ATTEMPTS - 1) {
-            logger.warn("[prisma] Rotation: connection not ready, waiting", {
-              attempt: i + 1,
-              maxAttempts: VERIFY_MAX_ATTEMPTS,
-              nextDelayMs: VERIFY_INTERVAL_MS,
-              error:
-                verifyErr instanceof Error
-                  ? verifyErr.message
-                  : String(verifyErr),
-            });
-            await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
-          } else {
-            globalForPrisma.__prisma = undefined;
-            globalForPrisma.__prismaTokenId = undefined;
-            throw verifyErr;
-          }
-        }
-      }
-
+      globalForPrisma.__rotationResolvedAt = Date.now();
+      logger.info("[prisma] Credential rotation complete — connection verified");
+      return client;
+    } catch (err) {
       globalForPrisma.__prisma = undefined;
       globalForPrisma.__prismaTokenId = undefined;
-      throw new Error("Rotation verification failed after all attempts");
+      throw err;
     } finally {
       globalForPrisma.__rotationInFlight = null;
     }
