@@ -15,41 +15,15 @@ async function fetchDashboardStats(): Promise<{
   error: string | null;
 }> {
   try {
-    const [
-      totalRuns,
-      completedRuns,
-      failedRuns,
-      runningRuns,
-      totalUseCases,
-      typeGroups,
-      scoreAgg,
-      domainGroups,
-      scoreHistogramRaw,
-      recentRuns,
-    ] = await withPrisma((prisma) =>
-      Promise.all([
-        prisma.forgeRun.count(),
-        prisma.forgeRun.count({ where: { status: "completed" } }),
-        prisma.forgeRun.count({ where: { status: "failed" } }),
-        prisma.forgeRun.count({
-          where: { status: { in: ["running", "pending"] } },
-        }),
-        prisma.forgeUseCase.count(),
-        prisma.forgeUseCase.groupBy({
-          by: ["type"],
+    // Sequential queries instead of 10-way Promise.all.
+    // Uses 1-2 pool connections at a time instead of 10, avoiding
+    // Lakebase connection rate limits on cold start.
+    const stats = await withPrisma(async (prisma) => {
+      // ---- Batch 1: Run data (above the fold — KPI cards + recent runs) ----
+      const [runStatusGroups, recentRuns] = await Promise.all([
+        prisma.forgeRun.groupBy({
+          by: ["status"],
           _count: { _all: true },
-        }),
-        prisma.forgeUseCase.aggregate({
-          _avg: { overallScore: true },
-        }),
-        prisma.forgeUseCase.groupBy({
-          by: ["domain"],
-          _count: { _all: true },
-          orderBy: { _count: { domain: "desc" } },
-        }),
-        prisma.forgeUseCase.findMany({
-          select: { overallScore: true },
-          where: { overallScore: { not: null } },
         }),
         prisma.forgeRun.findMany({
           orderBy: { createdAt: "desc" },
@@ -64,39 +38,67 @@ async function fetchDashboardStats(): Promise<{
             _count: { select: { useCases: true } },
           },
         }),
-      ])
-    );
+      ]);
 
-    const typeLookup = new Map(
-      typeGroups.map((g) => [g.type, g._count._all])
-    );
-    const aiCount = typeLookup.get("AI") ?? 0;
-    const statisticalCount = typeLookup.get("Statistical") ?? 0;
-    const geospatialCount = typeLookup.get("Geospatial") ?? 0;
-    const avgScore =
-      scoreAgg._avg.overallScore != null
-        ? Math.round(scoreAgg._avg.overallScore * 100)
-        : 0;
+      // ---- Batch 2: Use case data (charts + KPI enrichment) ----
+      const [typeGroups, domainGroups, scoreRows] = await Promise.all([
+        prisma.forgeUseCase.groupBy({
+          by: ["type"],
+          _count: { _all: true },
+        }),
+        prisma.forgeUseCase.groupBy({
+          by: ["domain"],
+          _count: { _all: true },
+          orderBy: { _count: { domain: "desc" } },
+        }),
+        prisma.forgeUseCase.findMany({
+          select: { overallScore: true },
+          where: { overallScore: { not: null } },
+        }),
+      ]);
 
-    const domainBreakdown = domainGroups.map((g) => ({
-      domain: g.domain ?? "Unknown",
-      count: g._count._all,
-    }));
+      // Derive all KPIs from the grouped/raw results
+      const statusLookup = new Map(
+        runStatusGroups.map((g) => [g.status, g._count._all])
+      );
+      const completedRuns = statusLookup.get("completed") ?? 0;
+      const failedRuns = statusLookup.get("failed") ?? 0;
+      const runningRuns =
+        (statusLookup.get("running") ?? 0) + (statusLookup.get("pending") ?? 0);
+      const totalRuns = runStatusGroups.reduce((sum, g) => sum + g._count._all, 0);
 
-    const scores = scoreHistogramRaw.map((r) => r.overallScore!);
+      const typeLookup = new Map(
+        typeGroups.map((g) => [g.type, g._count._all])
+      );
+      const aiCount = typeLookup.get("AI") ?? 0;
+      const statisticalCount = typeLookup.get("Statistical") ?? 0;
+      const geospatialCount = typeLookup.get("Geospatial") ?? 0;
+      const totalUseCases = typeGroups.reduce((sum, g) => sum + g._count._all, 0);
 
-    const recent = recentRuns.map((r) => ({
-      runId: r.runId,
-      businessName: r.businessName,
-      status: r.status,
-      progressPct: r.progressPct,
-      useCaseCount: r._count.useCases,
-      createdAt: r.createdAt.toISOString(),
-      completedAt: r.completedAt?.toISOString() ?? null,
-    }));
+      const scores = scoreRows.map((r) => r.overallScore!);
+      const avgScore =
+        scores.length > 0
+          ? Math.round(
+              (scores.reduce((a, b) => a + b, 0) / scores.length) * 100
+            )
+          : 0;
 
-    return {
-      stats: {
+      const domainBreakdown = domainGroups.map((g) => ({
+        domain: g.domain ?? "Unknown",
+        count: g._count._all,
+      }));
+
+      const recent = recentRuns.map((r) => ({
+        runId: r.runId,
+        businessName: r.businessName,
+        status: r.status,
+        progressPct: r.progressPct,
+        useCaseCount: r._count.useCases,
+        createdAt: r.createdAt.toISOString(),
+        completedAt: r.completedAt?.toISOString() ?? null,
+      }));
+
+      return {
         totalRuns,
         completedRuns,
         failedRuns,
@@ -110,9 +112,10 @@ async function fetchDashboardStats(): Promise<{
         domainBreakdown,
         scores,
         recentRuns: recent,
-      },
-      error: null,
-    };
+      };
+    });
+
+    return { stats, error: null };
   } catch (err) {
     logger.error("[dashboard] Failed to fetch stats", {
       error: err instanceof Error ? err.message : String(err),
