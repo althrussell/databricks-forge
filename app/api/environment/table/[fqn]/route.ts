@@ -55,6 +55,13 @@ export async function GET(
           ...detail,
           sizeInBytes: detail.sizeInBytes?.toString() ?? null,
           numRows: detail.numRows?.toString() ?? null,
+          scan: detail.scan
+            ? {
+                ...detail.scan,
+                totalSizeBytes: detail.scan.totalSizeBytes.toString(),
+                totalRows: detail.scan.totalRows.toString(),
+              }
+            : null,
         },
         columns,
         history: history

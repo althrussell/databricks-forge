@@ -53,7 +53,7 @@ interface SpaceCardData {
   source: "pipeline" | "metadata" | "workspace";
   status: "created" | "updated" | "trashed" | "active";
   domain?: string;
-  runId?: string;
+  runId?: string | null;
   tableCount?: number;
   measureCount?: number;
   sampleQuestionCount?: number;

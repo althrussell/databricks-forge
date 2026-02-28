@@ -23,7 +23,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -35,18 +34,21 @@ import {
   Rocket,
   Sparkles,
   Table2,
-  Trash2,
   X,
   BarChart3,
   MessageSquare,
   Link2,
   FileText,
+  Zap,
+  RefreshCw,
 } from "lucide-react";
 import type {
   GenieSpaceRecommendation,
   SerializedSpace,
 } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
+
+type GenerationMode = "fast" | "full";
 
 type WizardStep = "tables" | "config" | "generate" | "preview" | "deploy";
 
@@ -82,6 +84,7 @@ export default function NewGenieSpacePage() {
   const [conversationSummary, setConversationSummary] = useState("");
 
   // Generation
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("fast");
   const [jobId, setJobId] = useState<string | null>(null);
   const [genStatus, setGenStatus] = useState<"idle" | "generating" | "completed" | "failed">("idle");
   const [genMessage, setGenMessage] = useState("");
@@ -92,11 +95,15 @@ export default function NewGenieSpacePage() {
   // Result
   const [recommendation, setRecommendation] = useState<GenieSpaceRecommendation | null>(null);
   const [parsedSpace, setParsedSpace] = useState<SerializedSpace | null>(null);
+  const [resultMode, setResultMode] = useState<GenerationMode>("fast");
 
   // Deploy
   const [deploying, setDeploying] = useState(false);
   const [deployedSpaceId, setDeployedSpaceId] = useState<string | null>(null);
   const [databricksHost, setDatabricksHost] = useState("");
+
+  // Enhancing (running full engine on a fast result)
+  const [enhancing, setEnhancing] = useState(false);
 
   // Load user settings as defaults + read query params from Ask Forge
   useEffect(() => {
@@ -148,32 +155,72 @@ export default function NewGenieSpacePage() {
     setTables((prev) => prev.filter((t) => t !== fqn));
   };
 
-  const startGeneration = async () => {
-    setStep("generate");
+  const buildConfig = (mode: GenerationMode) => ({
+    title: title || undefined,
+    description: description || undefined,
+    domain: domain || undefined,
+    llmRefinement,
+    autoTimePeriods,
+    generateTrustedAssets,
+    generateBenchmarks,
+    generateMetricViews,
+    globalInstructions: globalInstructions || undefined,
+    conversationSummary: conversationSummary || undefined,
+    mode,
+  });
+
+  const handleFastGeneration = async () => {
+    setGenerationMode("fast");
     setGenStatus("generating");
-    setGenMessage("Starting...");
-    setGenPercent(0);
+    setGenMessage("Building space from metadata...");
+    setGenPercent(50);
     setGenError(null);
+    setStep("generate");
 
     try {
       const res = await fetch("/api/genie-spaces/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tables,
-          config: {
-            title: title || undefined,
-            description: description || undefined,
-            domain: domain || undefined,
-            llmRefinement,
-            autoTimePeriods,
-            generateTrustedAssets,
-            generateBenchmarks,
-            generateMetricViews,
-            globalInstructions: globalInstructions || undefined,
-            conversationSummary: conversationSummary || undefined,
-          },
-        }),
+        body: JSON.stringify({ tables, config: buildConfig("fast") }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to generate");
+      }
+
+      const data = await res.json();
+
+      if (data.status === "completed" && data.result) {
+        setGenStatus("completed");
+        setRecommendation(data.result.recommendation);
+        setResultMode("fast");
+        try {
+          setParsedSpace(JSON.parse(data.result.recommendation.serializedSpace));
+        } catch { /* ignore parse error */ }
+        setStep("preview");
+      } else {
+        throw new Error(data.error || "Unexpected response");
+      }
+    } catch (err) {
+      setGenStatus("failed");
+      setGenError(err instanceof Error ? err.message : "Unknown error");
+    }
+  };
+
+  const handleFullGeneration = async () => {
+    setGenerationMode("full");
+    setGenStatus("generating");
+    setGenMessage("Starting full Genie Engine...");
+    setGenPercent(0);
+    setGenError(null);
+    setStep("generate");
+
+    try {
+      const res = await fetch("/api/genie-spaces/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tables, config: buildConfig("full") }),
       });
 
       if (!res.ok) {
@@ -184,7 +231,6 @@ export default function NewGenieSpacePage() {
       const { jobId: id } = await res.json();
       setJobId(id);
 
-      // Start polling
       pollRef.current = setInterval(async () => {
         try {
           const pollRes = await fetch(`/api/genie-spaces/generate?jobId=${id}`);
@@ -199,6 +245,7 @@ export default function NewGenieSpacePage() {
             pollRef.current = null;
             setGenStatus("completed");
             setRecommendation(data.result.recommendation);
+            setResultMode("full");
             try {
               setParsedSpace(JSON.parse(data.result.recommendation.serializedSpace));
             } catch { /* ignore parse error */ }
@@ -214,6 +261,67 @@ export default function NewGenieSpacePage() {
     } catch (err) {
       setGenStatus("failed");
       setGenError(err instanceof Error ? err.message : "Unknown error");
+    }
+  };
+
+  const handleEnhance = async () => {
+    setEnhancing(true);
+    setGenerationMode("full");
+    setGenStatus("generating");
+    setGenMessage("Running full Genie Engine...");
+    setGenPercent(0);
+    setGenError(null);
+    setStep("generate");
+
+    try {
+      const res = await fetch("/api/genie-spaces/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tables, config: buildConfig("full") }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to start enhancement");
+      }
+
+      const { jobId: id } = await res.json();
+      setJobId(id);
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/genie-spaces/generate?jobId=${id}`);
+          if (!pollRes.ok) return;
+          const data = await pollRes.json();
+
+          setGenMessage(data.message ?? "");
+          setGenPercent(data.percent ?? 0);
+
+          if (data.status === "completed" && data.result) {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setGenStatus("completed");
+            setRecommendation(data.result.recommendation);
+            setResultMode("full");
+            try {
+              setParsedSpace(JSON.parse(data.result.recommendation.serializedSpace));
+            } catch { /* ignore parse error */ }
+            setStep("preview");
+            setEnhancing(false);
+            toast.success("Space enhanced with full Genie Engine!");
+          } else if (data.status === "failed") {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setGenStatus("failed");
+            setGenError(data.error ?? "Enhancement failed");
+            setEnhancing(false);
+          }
+        } catch { /* polling error, retry */ }
+      }, 2000);
+    } catch (err) {
+      setGenStatus("failed");
+      setGenError(err instanceof Error ? err.message : "Unknown error");
+      setEnhancing(false);
     }
   };
 
@@ -237,7 +345,6 @@ export default function NewGenieSpacePage() {
           title: deployTitle,
           description: description || recommendation.description,
           serializedSpace: recommendation.serializedSpace,
-          runId: `adhoc-${Date.now()}`,
           domain: recommendation.domain,
         }),
       });
@@ -252,7 +359,6 @@ export default function NewGenieSpacePage() {
       setStep("deploy");
       toast.success("Genie Space deployed successfully!");
 
-      // Trigger embedding backfill (best-effort)
       fetch("/api/embeddings/backfill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -506,10 +612,16 @@ export default function NewGenieSpacePage() {
                 <ArrowLeft className="mr-2 size-4" />
                 Back
               </Button>
-              <Button onClick={startGeneration}>
-                <Sparkles className="mr-2 size-4" />
-                Generate Space
-              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={handleFullGeneration}>
+                  <Sparkles className="mr-2 size-4" />
+                  Full Engine
+                </Button>
+                <Button onClick={handleFastGeneration}>
+                  <Zap className="mr-2 size-4" />
+                  Quick Build
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -521,14 +633,20 @@ export default function NewGenieSpacePage() {
           <CardHeader>
             <CardTitle>
               {genStatus === "generating"
-                ? "Generating Genie Space..."
+                ? generationMode === "fast"
+                  ? "Building Genie Space..."
+                  : enhancing
+                    ? "Enhancing with Genie Engine..."
+                    : "Running Full Genie Engine..."
                 : genStatus === "failed"
                   ? "Generation Failed"
                   : "Generation Complete"}
             </CardTitle>
             <CardDescription>
               {genStatus === "generating"
-                ? "Running AI-powered analysis on your tables."
+                ? generationMode === "fast"
+                  ? "Analysing schema metadata — this only takes a few seconds."
+                  : "Running AI-powered analysis on your tables. This may take 1–3 minutes."
                 : genStatus === "failed"
                   ? genError
                   : "Your Genie Space is ready for review."}
@@ -550,7 +668,7 @@ export default function NewGenieSpacePage() {
                   <ArrowLeft className="mr-2 size-4" />
                   Back to Config
                 </Button>
-                <Button onClick={startGeneration}>
+                <Button onClick={generationMode === "fast" ? handleFastGeneration : handleFullGeneration}>
                   Retry
                 </Button>
               </div>
@@ -562,6 +680,50 @@ export default function NewGenieSpacePage() {
       {/* Step 4: Preview */}
       {step === "preview" && recommendation && parsedSpace && (
         <div className="space-y-4">
+          {/* Fast mode enhancement banner */}
+          {resultMode === "fast" && (
+            <Card className="border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20">
+              <CardContent className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <Zap className="size-5 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="text-sm font-medium">Quick Build</p>
+                    <p className="text-xs text-muted-foreground">
+                      Built from schema metadata. Enhance with AI for richer measures, trusted assets, and benchmarks.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEnhance}
+                  disabled={enhancing}
+                >
+                  {enhancing ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 size-4" />
+                  )}
+                  Enhance with Genie Engine
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {resultMode === "full" && (
+            <Card className="border-green-200 bg-green-50 dark:border-green-900/50 dark:bg-green-950/20">
+              <CardContent className="flex items-center gap-3 py-3">
+                <Sparkles className="size-5 text-green-600 dark:text-green-400" />
+                <div>
+                  <p className="text-sm font-medium">Full Engine</p>
+                  <p className="text-xs text-muted-foreground">
+                    AI-enhanced with trusted assets, benchmarks, and semantic expressions.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>{recommendation.title}</CardTitle>
@@ -582,7 +744,6 @@ export default function NewGenieSpacePage() {
 
           {/* Space detail accordion */}
           <Accordion type="multiple" className="space-y-2">
-            {/* Tables */}
             <AccordionItem value="tables" className="rounded-lg border px-4">
               <AccordionTrigger className="text-sm font-medium">
                 Tables ({parsedSpace.data_sources.tables.length})
@@ -604,7 +765,6 @@ export default function NewGenieSpacePage() {
               </AccordionContent>
             </AccordionItem>
 
-            {/* Measures */}
             {parsedSpace.instructions.sql_snippets.measures.length > 0 && (
               <AccordionItem value="measures" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">
@@ -625,7 +785,6 @@ export default function NewGenieSpacePage() {
               </AccordionItem>
             )}
 
-            {/* Filters */}
             {parsedSpace.instructions.sql_snippets.filters.length > 0 && (
               <AccordionItem value="filters" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">
@@ -646,7 +805,6 @@ export default function NewGenieSpacePage() {
               </AccordionItem>
             )}
 
-            {/* Dimensions (expressions) */}
             {parsedSpace.instructions.sql_snippets.expressions.length > 0 && (
               <AccordionItem value="dimensions" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">
@@ -667,7 +825,6 @@ export default function NewGenieSpacePage() {
               </AccordionItem>
             )}
 
-            {/* Join Specs */}
             {parsedSpace.instructions.join_specs.length > 0 && (
               <AccordionItem value="joins" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">
@@ -690,7 +847,6 @@ export default function NewGenieSpacePage() {
               </AccordionItem>
             )}
 
-            {/* Instructions */}
             {parsedSpace.instructions.text_instructions.length > 0 && (
               <AccordionItem value="instructions" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">
@@ -708,7 +864,6 @@ export default function NewGenieSpacePage() {
               </AccordionItem>
             )}
 
-            {/* Sample Questions */}
             {parsedSpace.config.sample_questions.length > 0 && (
               <AccordionItem value="questions" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">

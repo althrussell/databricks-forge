@@ -391,7 +391,7 @@ export type GenieSpaceStatus = "created" | "updated" | "trashed";
 export interface TrackedGenieSpace {
   id: string;
   spaceId: string;
-  runId: string;
+  runId: string | null;
   domain: string;
   title: string;
   status: GenieSpaceStatus;

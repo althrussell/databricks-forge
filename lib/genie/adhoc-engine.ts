@@ -1,20 +1,27 @@
 /**
- * Ad-Hoc Genie Engine — full-power space generator from a table list.
+ * Ad-Hoc Genie Engine — two-tier space generator from a table list.
  *
- * Runs all 7 Genie Engine passes (column intelligence, semantic expressions,
- * join inference, trusted assets, instruction generation, benchmarks, metric
- * views) without requiring a pipeline run. Designed for the /genie/new
- * construction flow and Ask Forge integration.
+ * **Fast mode** (default): Scrapes metadata from information_schema and
+ * generates a usable Genie Space using only rule-based passes (FK joins,
+ * schema entity extraction, time-period generation, numeric measure
+ * inference). Zero LLM calls — completes in seconds.
  *
- * Mirrors the parallel execution structure of the pipeline engine's
- * `processDomain` function for equivalent output quality.
+ * **Full mode**: Runs all 7 Genie Engine LLM passes (column intelligence,
+ * semantic expressions, join inference, trusted assets, instruction
+ * generation, benchmarks, metric views). Takes 1–3 minutes but produces
+ * production-grade output.
+ *
+ * Designed for the /genie/new construction flow and Ask Forge integration.
  */
 
-import type { MetadataSnapshot, BusinessContext } from "@/lib/domain/types";
+import type { MetadataSnapshot, BusinessContext, ColumnInfo } from "@/lib/domain/types";
 import type {
   GenieEngineConfig,
   GenieEnginePassOutputs,
   GenieSpaceRecommendation,
+  EnrichedSqlSnippetMeasure,
+  EnrichedSqlSnippetFilter,
+  EnrichedSqlSnippetDimension,
 } from "./types";
 import { defaultGenieEngineConfig } from "./types";
 import { buildSchemaAllowlist } from "./schema-allowlist";
@@ -25,6 +32,8 @@ import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
+import { extractEntityCandidatesFromSchema } from "./entity-extraction";
+import { generateTimePeriods } from "./time-periods";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { fetchTableInfoBatch, fetchColumnsBatch, fetchForeignKeysBatch } from "@/lib/queries/metadata";
 import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
@@ -44,6 +53,7 @@ export interface AdHocGenieConfig {
   generateBenchmarks?: boolean;
   generateMetricViews?: boolean;
   generateTrustedAssets?: boolean;
+  mode?: "fast" | "full";
 }
 
 export interface AdHocEngineInput {
@@ -57,7 +67,14 @@ export interface AdHocEngineResult {
   recommendation: GenieSpaceRecommendation;
   passOutputs: GenieEnginePassOutputs;
   metadata: MetadataSnapshot;
+  mode: "fast" | "full";
 }
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+const NUMERIC_TYPE_PATTERN = /^(int|bigint|smallint|tinyint|float|double|decimal|numeric|real)/i;
 
 function buildEngineConfig(adhoc?: AdHocGenieConfig): GenieEngineConfig {
   const base = defaultGenieEngineConfig();
@@ -73,11 +90,6 @@ function buildEngineConfig(adhoc?: AdHocGenieConfig): GenieEngineConfig {
   return base;
 }
 
-/**
- * Synthesize a minimal BusinessContext from the conversation summary
- * when no explicit context is provided. Gives the semantic expressions
- * and instruction generation passes something to ground on.
- */
 function resolveBusinessContext(adhoc?: AdHocGenieConfig): BusinessContext | null {
   if (adhoc?.businessContext) return adhoc.businessContext;
   if (adhoc?.conversationSummary) {
@@ -93,6 +105,316 @@ function resolveBusinessContext(adhoc?: AdHocGenieConfig): BusinessContext | nul
   }
   return null;
 }
+
+function inferDomain(tables: string[]): string {
+  const schemas = tables
+    .map((t) => t.split(".")[1])
+    .filter(Boolean);
+  const counts = new Map<string, number>();
+  for (const s of schemas) {
+    counts.set(s, (counts.get(s) || 0) + 1);
+  }
+  let best = "Analytics";
+  let bestCount = 0;
+  for (const [schema, count] of counts) {
+    if (count > bestCount) {
+      bestCount = count;
+      best = schema.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  }
+  return best;
+}
+
+function buildSchemaMarkdown(
+  tables: { fqn: string; comment?: string | null }[],
+  columns: { tableFqn: string; columnName: string; dataType: string; comment?: string | null }[],
+): string {
+  const colsByTable = new Map<string, typeof columns>();
+  for (const c of columns) {
+    const list = colsByTable.get(c.tableFqn) ?? [];
+    list.push(c);
+    colsByTable.set(c.tableFqn, list);
+  }
+  const parts: string[] = [];
+  for (const t of tables) {
+    const cols = colsByTable.get(t.fqn) ?? [];
+    const colLines = cols.map((c) => `  - ${c.columnName} (${c.dataType})${c.comment ? ` -- ${c.comment}` : ""}`);
+    parts.push(`### ${t.fqn}${t.comment ? `\n${t.comment}` : ""}\n${colLines.join("\n")}`);
+  }
+  return parts.join("\n\n");
+}
+
+async function scrapeMetadata(tables: string[]): Promise<MetadataSnapshot> {
+  const [tableInfos, columns, foreignKeys] = await Promise.all([
+    fetchTableInfoBatch(tables),
+    fetchColumnsBatch(tables),
+    fetchForeignKeysBatch(tables),
+  ]);
+
+  if (tableInfos.length === 0) {
+    throw new Error("No tables found. Verify the table names and your access permissions.");
+  }
+
+  return {
+    cacheKey: `adhoc-${Date.now()}`,
+    ucPath: tables.map((t) => t.split(".").slice(0, 2).join(".")).filter((v, i, a) => a.indexOf(v) === i).join(", "),
+    tables: tableInfos,
+    columns,
+    foreignKeys,
+    metricViews: [],
+    schemaMarkdown: buildSchemaMarkdown(tableInfos, columns),
+    tableCount: tableInfos.length,
+    columnCount: columns.length,
+    cachedAt: new Date().toISOString(),
+    lineageDiscoveredFqns: [],
+  };
+}
+
+function buildFkJoins(
+  foreignKeys: MetadataSnapshot["foreignKeys"],
+  tableSet: Set<string>,
+) {
+  return foreignKeys
+    .filter((fk) =>
+      tableSet.has(fk.tableFqn.toLowerCase()) &&
+      tableSet.has(fk.referencedTableFqn.toLowerCase())
+    )
+    .map((fk) => ({
+      leftTable: fk.tableFqn,
+      rightTable: fk.referencedTableFqn,
+      sql: `${fk.tableFqn}.${fk.columnName} = ${fk.referencedTableFqn}.${fk.referencedColumnName}`,
+      relationshipType: "many_to_one" as const,
+    }));
+}
+
+function humanize(name: string): string {
+  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ---------------------------------------------------------------------------
+// Fast mode — rule-based, zero LLM
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate numeric measures from column metadata (SUM, AVG, COUNT for each
+ * numeric column). This is the fast-mode substitute for LLM semantic
+ * expressions.
+ */
+function generateNumericMeasures(
+  columns: ColumnInfo[],
+  tableFqns: string[],
+): EnrichedSqlSnippetMeasure[] {
+  const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
+  const measures: EnrichedSqlSnippetMeasure[] = [];
+
+  for (const col of columns) {
+    if (!tableSet.has(col.tableFqn.toLowerCase())) continue;
+    if (!NUMERIC_TYPE_PATTERN.test(col.dataType)) continue;
+    // Skip likely ID/key columns
+    const lower = col.columnName.toLowerCase();
+    if (lower.endsWith("_id") || lower === "id" || lower.endsWith("_key")) continue;
+
+    const label = humanize(col.columnName);
+    const ref = `${col.tableFqn}.${col.columnName}`;
+
+    measures.push({
+      name: `Total ${label}`,
+      sql: `SUM(${ref})`,
+      synonyms: [`sum of ${label.toLowerCase()}`, `total ${label.toLowerCase()}`],
+      instructions: `Sum of ${col.columnName} from ${col.tableFqn.split(".").pop()}`,
+    });
+
+    measures.push({
+      name: `Average ${label}`,
+      sql: `AVG(${ref})`,
+      synonyms: [`avg ${label.toLowerCase()}`, `mean ${label.toLowerCase()}`],
+      instructions: `Average of ${col.columnName} from ${col.tableFqn.split(".").pop()}`,
+    });
+  }
+
+  return measures;
+}
+
+/**
+ * Generate basic string-column filters (IS NOT NULL, IS NULL) and
+ * add a row-count measure for each table.
+ */
+function generateBasicFilters(
+  columns: ColumnInfo[],
+  tableFqns: string[],
+): EnrichedSqlSnippetFilter[] {
+  const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
+  const filters: EnrichedSqlSnippetFilter[] = [];
+  const seenTables = new Set<string>();
+
+  for (const col of columns) {
+    if (!tableSet.has(col.tableFqn.toLowerCase())) continue;
+
+    // Add one "has data" filter per table
+    if (!seenTables.has(col.tableFqn.toLowerCase())) {
+      seenTables.add(col.tableFqn.toLowerCase());
+      const tableName = col.tableFqn.split(".").pop() ?? col.tableFqn;
+      if (col.isNullable) {
+        filters.push({
+          name: `${humanize(tableName)} has ${humanize(col.columnName)}`,
+          sql: `${col.tableFqn}.${col.columnName} IS NOT NULL`,
+          synonyms: [],
+          instructions: `Filter to rows where ${col.columnName} is present`,
+          isTimePeriod: false,
+        });
+      }
+    }
+  }
+
+  return filters;
+}
+
+/**
+ * Build simple instructions from table/column comments (no LLM).
+ */
+function buildRuleBasedInstructions(
+  metadata: MetadataSnapshot,
+  tableFqns: string[],
+  domain: string,
+  conversationSummary?: string,
+): string[] {
+  const instructions: string[] = [];
+
+  if (conversationSummary) {
+    instructions.push(`User intent: ${conversationSummary}`);
+  }
+
+  instructions.push(
+    `This space covers the ${domain} domain with ${tableFqns.length} table${tableFqns.length !== 1 ? "s" : ""}.`
+  );
+
+  for (const t of metadata.tables) {
+    if (!tableFqns.some((fqn) => fqn.toLowerCase() === t.fqn.toLowerCase())) continue;
+    if (t.comment) {
+      const shortName = t.fqn.split(".").pop();
+      instructions.push(`${shortName}: ${t.comment}`);
+    }
+  }
+
+  return instructions;
+}
+
+/**
+ * Run the fast Genie Engine: scrape metadata, then build a space using
+ * only rule-based passes. Zero LLM calls — typically completes in 2–5
+ * seconds. The result is a usable space that can be enhanced later with
+ * the full engine.
+ */
+export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHocEngineResult> {
+  const { tables, config: adhocConfig } = input;
+
+  if (tables.length === 0) {
+    throw new Error("At least one table is required");
+  }
+
+  const domain = adhocConfig?.domain || inferDomain(tables);
+  const fiscalYearStartMonth = adhocConfig?.fiscalYearStartMonth ?? 1;
+
+  logger.info("Fast Genie Engine starting", { tableCount: tables.length, domain });
+
+  // Step 1: Scrape metadata (SQL queries only, no LLM)
+  const metadata = await scrapeMetadata(tables);
+  const validTableFqns = metadata.tables.map((t) => t.fqn);
+  const allowlist = buildSchemaAllowlist(metadata);
+
+  // Step 2: Rule-based joins from foreign keys
+  const tableSet = new Set(validTableFqns.map((t) => t.toLowerCase()));
+  const allJoins = buildFkJoins(metadata.foreignKeys, tableSet);
+
+  // Step 3: Rule-based entity extraction from schema
+  const entityCandidates = extractEntityCandidatesFromSchema(
+    metadata.columns.map((c) => ({
+      tableFqn: c.tableFqn,
+      columnName: c.columnName,
+      dataType: c.dataType,
+    })),
+    validTableFqns,
+  );
+
+  // Step 4: Rule-based measures from numeric columns
+  const measures = generateNumericMeasures(metadata.columns, validTableFqns);
+
+  // Step 5: Rule-based time periods from date columns
+  const autoTimePeriods = adhocConfig?.autoTimePeriods ?? true;
+  let timePeriodFilters: EnrichedSqlSnippetFilter[] = [];
+  let timePeriodDimensions: EnrichedSqlSnippetDimension[] = [];
+
+  if (autoTimePeriods) {
+    const tpResult = generateTimePeriods(
+      metadata.columns,
+      validTableFqns,
+      { fiscalYearStartMonth },
+    );
+    timePeriodFilters = tpResult.filters;
+    timePeriodDimensions = tpResult.dimensions;
+  }
+
+  // Step 6: Basic filters
+  const basicFilters = generateBasicFilters(metadata.columns, validTableFqns);
+
+  // Step 7: Rule-based instructions from comments
+  const instructions = buildRuleBasedInstructions(
+    metadata, validTableFqns, domain, adhocConfig?.conversationSummary,
+  );
+
+  // Step 8: Sample questions from entity candidates
+  const sampleQuestions = entityCandidates
+    .slice(0, 5)
+    .map((ec) => `What are the top ${ec.columnName.replace(/_/g, " ")}s?`);
+
+  const passOutputs: GenieEnginePassOutputs = {
+    domain,
+    subdomains: [],
+    tables: validTableFqns,
+    metricViews: [],
+    columnEnrichments: [],
+    entityMatchingCandidates: entityCandidates,
+    measures,
+    filters: [...basicFilters, ...timePeriodFilters],
+    dimensions: timePeriodDimensions,
+    trustedQueries: [],
+    trustedFunctions: [],
+    textInstructions: instructions,
+    sampleQuestions,
+    benchmarkQuestions: [],
+    metricViewProposals: [],
+    joinSpecs: allJoins,
+  };
+
+  // Step 9: Assemble via same pipeline as full engine
+  const seedId = `fast-${Date.now()}`;
+  const space = assembleSerializedSpace(passOutputs, {
+    runId: seedId,
+    businessName: adhocConfig?.title || domain,
+    allowlist,
+    metadata,
+  });
+
+  const recommendation = buildRecommendation(passOutputs, space, adhocConfig?.title || domain);
+  if (adhocConfig?.title) recommendation.title = adhocConfig.title;
+  if (adhocConfig?.description) recommendation.description = adhocConfig.description;
+
+  logger.info("Fast Genie Engine complete", {
+    domain,
+    tables: validTableFqns.length,
+    measures: measures.length,
+    filters: basicFilters.length + timePeriodFilters.length,
+    joins: allJoins.length,
+    entities: entityCandidates.length,
+    timePeriodDimensions: timePeriodDimensions.length,
+  });
+
+  return { recommendation, passOutputs, metadata, mode: "fast" };
+}
+
+// ---------------------------------------------------------------------------
+// Full mode — all 7 LLM passes
+// ---------------------------------------------------------------------------
 
 /**
  * Run the ad-hoc Genie Engine with full pass coverage: scrape metadata
@@ -113,7 +435,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   const domain = adhocConfig?.domain || inferDomain(tables);
   const businessContext = resolveBusinessContext(adhocConfig);
 
-  logger.info("Ad-hoc Genie Engine starting", {
+  logger.info("Full ad-hoc Genie Engine starting", {
     tableCount: tables.length,
     domain,
     llmRefinement: engineConfig.llmRefinement,
@@ -123,36 +445,12 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     hasBusinessContext: !!businessContext,
   });
 
-  // Step 1: Scrape metadata for the selected tables
   onProgress?.("Fetching table metadata...", 5);
-  const [tableInfos, columns, foreignKeys] = await Promise.all([
-    fetchTableInfoBatch(tables),
-    fetchColumnsBatch(tables),
-    fetchForeignKeysBatch(tables),
-  ]);
-
-  if (tableInfos.length === 0) {
-    throw new Error("No tables found. Verify the table names and your access permissions.");
-  }
-
-  const metadata: MetadataSnapshot = {
-    cacheKey: `adhoc-${Date.now()}`,
-    ucPath: tables.map((t) => t.split(".").slice(0, 2).join(".")).filter((v, i, a) => a.indexOf(v) === i).join(", "),
-    tables: tableInfos,
-    columns,
-    foreignKeys,
-    metricViews: [],
-    schemaMarkdown: buildSchemaMarkdown(tableInfos, columns),
-    tableCount: tableInfos.length,
-    columnCount: columns.length,
-    cachedAt: new Date().toISOString(),
-    lineageDiscoveredFqns: [],
-  };
-
-  const validTableFqns = tableInfos.map((t) => t.fqn);
+  const metadata = await scrapeMetadata(tables);
+  const validTableFqns = metadata.tables.map((t) => t.fqn);
   const allowlist = buildSchemaAllowlist(metadata);
 
-  // Pass 1 (fast) + Pass 2 (premium) in parallel -- no shared dependencies
+  // Pass 1 (fast) + Pass 2 (premium) in parallel
   onProgress?.("Analyzing columns & generating SQL expressions...", 10);
   const [columnResult, exprResult] = await Promise.all([
     runColumnIntelligence({
@@ -179,17 +477,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   // Build join specs from foreign keys + LLM inference
   onProgress?.("Inferring table relationships...", 35);
   const tableSet = new Set(validTableFqns.map((t) => t.toLowerCase()));
-  const fkJoins = foreignKeys
-    .filter((fk) =>
-      tableSet.has(fk.tableFqn.toLowerCase()) &&
-      tableSet.has(fk.referencedTableFqn.toLowerCase())
-    )
-    .map((fk) => ({
-      leftTable: fk.tableFqn,
-      rightTable: fk.referencedTableFqn,
-      sql: `${fk.tableFqn}.${fk.columnName} = ${fk.referencedTableFqn}.${fk.referencedColumnName}`,
-      relationshipType: "many_to_one" as const,
-    }));
+  const fkJoins = buildFkJoins(metadata.foreignKeys, tableSet);
 
   const existingJoinKeys = new Set(
     fkJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
@@ -226,7 +514,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   // Passes 3-6 in parallel (mirrors processDomain structure)
   onProgress?.("Creating trusted assets, instructions, benchmarks & metric views...", 50);
   const [trustedResult, instructionResult, benchmarkResult, metricViewResult] = await Promise.all([
-    // Pass 3: Trusted Asset Authoring (premium)
     engineConfig.generateTrustedAssets
       ? runTrustedAssetAuthoring({
           tableFqns: validTableFqns,
@@ -240,7 +527,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
         })
       : Promise.resolve({ queries: [], functions: [] }),
 
-    // Pass 4: Instruction Generation (fast)
     runInstructionGeneration({
       domain,
       subdomains: [],
@@ -253,7 +539,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
       signal,
     }),
 
-    // Pass 5: Benchmark Generation (premium)
     engineConfig.generateBenchmarks
       ? runBenchmarkGeneration({
           tableFqns: validTableFqns,
@@ -268,7 +553,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
         })
       : Promise.resolve({ benchmarks: [...engineConfig.benchmarkQuestions] }),
 
-    // Pass 6: Metric View Proposals (premium)
     engineConfig.generateMetricViews
       ? runMetricViewProposals({
           domain,
@@ -288,8 +572,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
 
   onProgress?.("Assembling Genie Space...", 90);
 
-  // Sample questions: prefer trusted query questions (column-grounded)
-  // with entity-based fallback -- mirrors the full engine logic
   const trustedQuestionTexts = trustedResult.queries
     .filter((tq) => tq.question.trim().length > 0)
     .map((tq) => tq.question);
@@ -322,7 +604,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     joinSpecs: allJoins,
   };
 
-  // Build SerializedSpace via the same assembler as the pipeline engine
   const seedId = `adhoc-${Date.now()}`;
   const space = assembleSerializedSpace(passOutputs, {
     runId: seedId,
@@ -337,7 +618,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
 
   onProgress?.("Complete", 100);
 
-  logger.info("Ad-hoc Genie Engine complete", {
+  logger.info("Full ad-hoc Genie Engine complete", {
     domain,
     tables: validTableFqns.length,
     measures: exprResult.measures.length,
@@ -350,44 +631,5 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     sampleQuestions: sampleQuestions.length,
   });
 
-  return { recommendation, passOutputs, metadata };
-}
-
-function inferDomain(tables: string[]): string {
-  const schemas = tables
-    .map((t) => t.split(".")[1])
-    .filter(Boolean);
-  const counts = new Map<string, number>();
-  for (const s of schemas) {
-    counts.set(s, (counts.get(s) || 0) + 1);
-  }
-  let best = "Analytics";
-  let bestCount = 0;
-  for (const [schema, count] of counts) {
-    if (count > bestCount) {
-      bestCount = count;
-      best = schema.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-  }
-  return best;
-}
-
-function buildSchemaMarkdown(
-  tables: { fqn: string; comment?: string | null }[],
-  columns: { tableFqn: string; columnName: string; dataType: string; comment?: string | null }[],
-): string {
-  const colsByTable = new Map<string, typeof columns>();
-  for (const c of columns) {
-    const list = colsByTable.get(c.tableFqn) ?? [];
-    list.push(c);
-    colsByTable.set(c.tableFqn, list);
-  }
-
-  const parts: string[] = [];
-  for (const t of tables) {
-    const cols = colsByTable.get(t.fqn) ?? [];
-    const colLines = cols.map((c) => `  - ${c.columnName} (${c.dataType})${c.comment ? ` -- ${c.comment}` : ""}`);
-    parts.push(`### ${t.fqn}${t.comment ? `\n${t.comment}` : ""}\n${colLines.join("\n")}`);
-  }
-  return parts.join("\n\n");
+  return { recommendation, passOutputs, metadata, mode: "full" };
 }

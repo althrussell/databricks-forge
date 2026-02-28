@@ -257,8 +257,8 @@ model ForgeGenieEngineConfig {
 
 model ForgeGenieSpace {
   id                 String   @id @map("genie_tracking_id")
-  spaceId            String   @map("space_id")
-  runId              String   @map("run_id")
+  spaceId            String   @unique @map("space_id")
+  runId              String?  @map("run_id")
   domain             String
   title              String
   status             String   @default("created") // created | updated | trashed
@@ -267,11 +267,9 @@ model ForgeGenieSpace {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
-  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  run ForgeRun? @relation(fields: [runId], references: [runId], onDelete: Cascade)
 
-  @@unique([runId, domain])
   @@index([runId])
-  @@index([spaceId])
   @@map("forge_genie_spaces")
 }
 

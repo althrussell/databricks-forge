@@ -26,7 +26,7 @@ export interface DeployedAssets {
 function dbRowToTracked(row: {
   id: string;
   spaceId: string;
-  runId: string;
+  runId: string | null;
   domain: string;
   title: string;
   status: string;
@@ -81,7 +81,7 @@ export async function getTrackedBySpaceId(
   spaceId: string
 ): Promise<TrackedGenieSpace | null> {
   return withPrisma(async (prisma) => {
-    const row = await prisma.forgeGenieSpace.findFirst({
+    const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
     });
     return row ? dbRowToTracked(row) : null;
@@ -94,18 +94,23 @@ export async function getTrackedByRunDomain(
   domain: string
 ): Promise<TrackedGenieSpace | null> {
   return withPrisma(async (prisma) => {
-    const row = await prisma.forgeGenieSpace.findUnique({
-      where: { runId_domain: { runId, domain } },
+    const row = await prisma.forgeGenieSpace.findFirst({
+      where: { runId, domain },
     });
     return row ? dbRowToTracked(row) : null;
   });
 }
 
-/** Record a newly created Genie space, optionally with deployed asset FQNs. */
+/**
+ * Record a newly created Genie space, optionally with deployed asset FQNs.
+ * When runId is provided, attempts to find an existing record for that
+ * run+domain and update it; otherwise creates a new record.
+ * When runId is null (ad-hoc spaces), always creates a new record.
+ */
 export async function trackGenieSpaceCreated(
   id: string,
   spaceId: string,
-  runId: string,
+  runId: string | null,
   domain: string,
   title: string,
   deployedAssets?: DeployedAssets,
@@ -113,10 +118,20 @@ export async function trackGenieSpaceCreated(
 ): Promise<TrackedGenieSpace> {
   const assetsJson = deployedAssets ? JSON.stringify(deployedAssets) : null;
   return withPrisma(async (prisma) => {
-    const row = await prisma.forgeGenieSpace.upsert({
-      where: { runId_domain: { runId, domain } },
-      create: { id, spaceId, runId, domain, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
-      update: { spaceId, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
+    if (runId) {
+      const existing = await prisma.forgeGenieSpace.findFirst({
+        where: { runId, domain },
+      });
+      if (existing) {
+        const row = await prisma.forgeGenieSpace.update({
+          where: { id: existing.id },
+          data: { spaceId, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
+        });
+        return dbRowToTracked(row);
+      }
+    }
+    const row = await prisma.forgeGenieSpace.create({
+      data: { id, spaceId, runId, domain, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
     });
     return dbRowToTracked(row);
   });
@@ -130,7 +145,7 @@ export async function trackGenieSpaceUpdated(
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     if (deployedAssets) {
-      const existing = await prisma.forgeGenieSpace.findFirst({
+      const existing = await prisma.forgeGenieSpace.findUnique({
         where: { spaceId },
       });
       const merged = mergeAssets(
@@ -142,14 +157,14 @@ export async function trackGenieSpaceUpdated(
         deployedAssetsJson: JSON.stringify(merged),
       };
       if (title) data.title = title;
-      await prisma.forgeGenieSpace.updateMany({
+      await prisma.forgeGenieSpace.update({
         where: { spaceId },
         data,
       });
     } else {
       const data: Record<string, unknown> = { status: "updated" };
       if (title) data.title = title;
-      await prisma.forgeGenieSpace.updateMany({
+      await prisma.forgeGenieSpace.update({
         where: { spaceId },
         data,
       });
@@ -162,7 +177,7 @@ export async function trackGenieSpaceTrashed(
   spaceId: string
 ): Promise<void> {
   await withPrisma(async (prisma) => {
-    await prisma.forgeGenieSpace.updateMany({
+    await prisma.forgeGenieSpace.update({
       where: { spaceId },
       data: { status: "trashed" },
     });
@@ -174,7 +189,7 @@ export async function getSpaceAuthMode(
   spaceId: string,
 ): Promise<GenieAuthMode> {
   return withPrisma(async (prisma) => {
-    const row = await prisma.forgeGenieSpace.findFirst({
+    const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
       select: { authMode: true },
     });
@@ -191,7 +206,7 @@ export async function getDeployedAssets(
   spaceId: string,
 ): Promise<DeployedAssets | null> {
   return withPrisma(async (prisma) => {
-    const row = await prisma.forgeGenieSpace.findFirst({
+    const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
     });
     if (!row) return null;

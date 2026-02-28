@@ -1,14 +1,19 @@
 /**
  * API: /api/genie-spaces/generate
  *
- * POST -- Start ad-hoc Genie Space generation from a table list.
- *         Returns a jobId; the client polls GET for progress.
- * GET  -- Poll generation status by jobId.
+ * POST -- Start Genie Space generation from a table list.
+ *         mode=fast (default): synchronous, returns result immediately.
+ *         mode=full: async, returns jobId; the client polls GET for progress.
+ * GET  -- Poll full-mode generation status by jobId.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { runAdHocGenieEngine, type AdHocGenieConfig } from "@/lib/genie/adhoc-engine";
+import {
+  runAdHocGenieEngine,
+  runFastGenieEngine,
+  type AdHocGenieConfig,
+} from "@/lib/genie/adhoc-engine";
 import { logger } from "@/lib/logger";
 
 interface AdHocJobStatus {
@@ -21,6 +26,7 @@ interface AdHocJobStatus {
   error: string | null;
   result: {
     recommendation: import("@/lib/genie/types").GenieSpaceRecommendation;
+    mode: "fast" | "full";
   } | null;
 }
 
@@ -38,37 +44,60 @@ function evictStale(): void {
   }
 }
 
+function validateTables(tables: unknown): string[] | null {
+  if (!Array.isArray(tables) || tables.length === 0) return null;
+  const invalid = (tables as string[]).filter(
+    (t) => typeof t !== "string" || t.split(".").length < 3
+  );
+  if (invalid.length > 0) return null;
+  return tables as string[];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tables, config } = body as {
-      tables: string[];
+    const { tables: rawTables, config } = body as {
+      tables: unknown;
       config?: AdHocGenieConfig;
     };
 
-    if (!Array.isArray(tables) || tables.length === 0) {
+    const tables = validateTables(rawTables);
+    if (!tables) {
       return NextResponse.json(
-        { error: "At least one table FQN is required" },
+        { error: "At least one valid table FQN (catalog.schema.table) is required" },
         { status: 400 }
       );
     }
 
-    const invalid = tables.filter(
-      (t) => typeof t !== "string" || t.split(".").length < 3
-    );
-    if (invalid.length > 0) {
-      return NextResponse.json(
-        { error: `Invalid table FQNs (must be catalog.schema.table): ${invalid.join(", ")}` },
-        { status: 400 }
-      );
+    const mode = config?.mode ?? "fast";
+
+    // -----------------------------------------------------------------------
+    // Fast mode: synchronous — no polling needed
+    // -----------------------------------------------------------------------
+    if (mode === "fast") {
+      try {
+        const result = await runFastGenieEngine({ tables, config });
+        return NextResponse.json({
+          status: "completed",
+          mode: "fast",
+          result: { recommendation: result.recommendation, mode: "fast" },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error("Fast Genie generation failed", { error: msg });
+        return NextResponse.json({ error: msg }, { status: 500 });
+      }
     }
 
+    // -----------------------------------------------------------------------
+    // Full mode: async with polling
+    // -----------------------------------------------------------------------
     const jobId = uuidv4();
     const now = Date.now();
     jobs.set(jobId, {
       jobId,
       status: "generating",
-      message: "Starting ad-hoc Genie Engine...",
+      message: "Starting full Genie Engine...",
       percent: 0,
       startedAt: now,
       completedAt: null,
@@ -76,7 +105,6 @@ export async function POST(request: NextRequest) {
       result: null,
     });
 
-    // Fire and forget -- client polls GET for status
     runAdHocGenieEngine({
       tables,
       config,
@@ -95,12 +123,12 @@ export async function POST(request: NextRequest) {
           job.message = "Generation complete";
           job.percent = 100;
           job.completedAt = Date.now();
-          job.result = { recommendation: result.recommendation };
+          job.result = { recommendation: result.recommendation, mode: "full" };
         }
       })
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error("Ad-hoc Genie generation failed", { jobId, error: msg });
+        logger.error("Full Genie generation failed", { jobId, error: msg });
         const job = jobs.get(jobId);
         if (job) {
           job.status = "failed";
@@ -110,7 +138,7 @@ export async function POST(request: NextRequest) {
         }
       });
 
-    return NextResponse.json({ jobId });
+    return NextResponse.json({ jobId, mode: "full" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
