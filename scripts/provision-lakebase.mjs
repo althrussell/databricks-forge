@@ -184,8 +184,14 @@ async function getEndpointHost() {
     throw new Error(`Get endpoint failed (${detResp.status}): ${text}`);
   }
   const detail = await detResp.json();
-  const host = detail.status?.hosts?.host;
-  if (!host) throw new Error(`Endpoint has no host: ${JSON.stringify(detail)}`);
+  const directHost = detail.status?.hosts?.host;
+  if (!directHost) throw new Error(`Endpoint has no host: ${JSON.stringify(detail)}`);
+
+  // Use the PgBouncer pooler endpoint (built-in to Lakebase Autoscale).
+  // Multiplexes many client connections through fewer server connections,
+  // preventing connection burst rate-limits on cold start.
+  const host = directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
+  log(`Using pooler endpoint: ${host}`);
   return { host, epName };
 }
 
