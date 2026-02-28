@@ -163,7 +163,7 @@ async function pollOp(name) {
 // Endpoint + username + credential
 // ---------------------------------------------------------------------------
 
-async function getEndpointHost() {
+async function getEndpointInfo() {
   const projectId = getProjectId();
   const listResp = await api(
     "GET",
@@ -186,13 +186,8 @@ async function getEndpointHost() {
   const detail = await detResp.json();
   const directHost = detail.status?.hosts?.host;
   if (!directHost) throw new Error(`Endpoint has no host: ${JSON.stringify(detail)}`);
-
-  // Use the PgBouncer pooler endpoint (built-in to Lakebase Autoscale).
-  // Multiplexes many client connections through fewer server connections,
-  // preventing connection burst rate-limits on cold start.
-  const host = directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
-  log(`Using pooler endpoint: ${host}`);
-  return { host, epName };
+  const poolerHost = directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
+  return { directHost, poolerHost, epName };
 }
 
 async function getUsername() {
@@ -300,26 +295,31 @@ async function main() {
 
   await ensureProject();
 
-  const [{ host: epHost, epName }, username] = await Promise.all([
-    getEndpointHost(),
+  const [{ directHost, poolerHost, epName }, username] = await Promise.all([
+    getEndpointInfo(),
     getUsername(),
   ]);
 
   for (let gen = 1; gen <= CREDENTIAL_MAX_GENERATIONS; gen++) {
     const dbToken = await generateCredential(epName);
 
-    const url =
+    // Direct URL for startup DDL (pgvector, prisma push, HNSW)
+    const directUrl =
       `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(dbToken)}` +
-      `@${epHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
+      `@${directHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
 
-    const verified = await verifyCredential(url);
+    const verified = await verifyCredential(directUrl);
 
     if (verified) {
-      // Print URL to stdout (start.sh captures this).
-      // Also print the username on a second line so start.sh can cache it
-      // as LAKEBASE_USERNAME for the runtime, avoiding duplicate SCIM /Me calls.
-      process.stdout.write(`${url}\n${username}`);
-      log("Connection URL generated.");
+      // 4-line output consumed by start.sh:
+      //   Line 1: Direct URL (for startup DDL operations)
+      //   Line 2: Endpoint resource name (for runtime credential generation)
+      //   Line 3: Pooler hostname (for runtime pg.Pool)
+      //   Line 4: Username (cached to avoid SCIM /Me at runtime)
+      process.stdout.write(
+        `${directUrl}\n${epName}\n${poolerHost}\n${username}`
+      );
+      log("Provisioning complete.");
       return;
     }
 

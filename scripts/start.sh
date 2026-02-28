@@ -22,17 +22,21 @@ set -e
 # ---------------------------------------------------------------------------
 
 LAKEBASE_STARTUP_URL=""
+LAKEBASE_STARTUP_ENDPOINT_NAME=""
+LAKEBASE_STARTUP_POOLER_HOST=""
 LAKEBASE_STARTUP_USERNAME=""
 
 if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
   echo "[startup] Auto-provisioning Lakebase Autoscale..."
 
   PROVISION_OUTPUT=$(node scripts/provision-lakebase.mjs)
-  LAKEBASE_STARTUP_URL=$(echo "$PROVISION_OUTPUT" | head -n 1)
-  LAKEBASE_STARTUP_USERNAME=$(echo "$PROVISION_OUTPUT" | tail -n 1)
+  LAKEBASE_STARTUP_URL=$(echo "$PROVISION_OUTPUT" | sed -n '1p')
+  LAKEBASE_STARTUP_ENDPOINT_NAME=$(echo "$PROVISION_OUTPUT" | sed -n '2p')
+  LAKEBASE_STARTUP_POOLER_HOST=$(echo "$PROVISION_OUTPUT" | sed -n '3p')
+  LAKEBASE_STARTUP_USERNAME=$(echo "$PROVISION_OUTPUT" | sed -n '4p')
 
   if [ -n "$LAKEBASE_STARTUP_URL" ]; then
-    echo "[startup] Lakebase connection URL generated (credential verified)."
+    echo "[startup] Lakebase provisioned (direct URL for DDL, pooler for runtime)."
   else
     echo "[startup] ERROR: Lakebase provisioning returned empty URL."
     exit 1
@@ -168,10 +172,9 @@ fi
 # ---------------------------------------------------------------------------
 # Start the standalone Next.js server
 #
-# Pass the verified startup credential as DATABASE_URL so the server has
-# an immediately working connection. When the credential expires (~1h),
-# withPrisma catches the auth error, deletes DATABASE_URL, and switches
-# to auto-provision mode with proactive refresh permanently.
+# The server uses the pooler endpoint with an async password function that
+# generates fresh OAuth tokens per connection. We pass ENDPOINT_NAME,
+# POOLER_HOST, and USERNAME so the server never needs the startup credential.
 # ---------------------------------------------------------------------------
 
 export PORT="${DATABRICKS_APP_PORT:-8000}"
@@ -179,13 +182,11 @@ echo "[startup] Starting server on port $PORT..."
 
 cd .next/standalone
 
-if [ -n "$LAKEBASE_STARTUP_URL" ]; then
-  echo "[startup] Passing verified credential to server."
-  export DATABASE_URL="$LAKEBASE_STARTUP_URL"
-  if [ -n "$LAKEBASE_STARTUP_USERNAME" ]; then
-    export LAKEBASE_USERNAME="$LAKEBASE_STARTUP_USERNAME"
-  fi
-  exec node server.js
-else
-  exec node server.js
+if [ -n "$LAKEBASE_STARTUP_ENDPOINT_NAME" ]; then
+  export LAKEBASE_ENDPOINT_NAME="$LAKEBASE_STARTUP_ENDPOINT_NAME"
+  export LAKEBASE_POOLER_HOST="$LAKEBASE_STARTUP_POOLER_HOST"
+  export LAKEBASE_USERNAME="$LAKEBASE_STARTUP_USERNAME"
+  echo "[startup] Runtime env: ENDPOINT_NAME=$LAKEBASE_ENDPOINT_NAME POOLER_HOST=$LAKEBASE_POOLER_HOST USER=$LAKEBASE_USERNAME"
 fi
+
+exec node server.js

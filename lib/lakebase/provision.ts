@@ -1,14 +1,15 @@
 /**
- * Lakebase Autoscale self-provisioning.
+ * Lakebase Autoscale provisioning and pool configuration.
  *
- * Automatically creates and connects to a Lakebase Autoscale project using
- * OAuth tokens from the Databricks Apps service principal. No secrets, no
- * manual setup, no passwords.
+ * Uses the official Databricks Node.js pattern: pg.Pool with an async
+ * `password` function that returns cached OAuth tokens, refreshing them
+ * 5 minutes before expiry. The pool calls the function each time it
+ * creates a new connection, so tokens are always fresh.
  *
  * Two modes:
- *   1. Auto-provision (Databricks Apps) -- DATABRICKS_CLIENT_ID present,
- *      DATABASE_URL absent. Creates the project on first boot, generates
- *      short-lived DB credentials, rotates tokens automatically.
+ *   1. Auto-provision (Databricks Apps) -- LAKEBASE_ENDPOINT_NAME +
+ *      LAKEBASE_POOLER_HOST are set by start.sh. The async password
+ *      function generates DB credentials via the Lakebase API.
  *   2. Static URL (local dev) -- DATABASE_URL set in .env. Falls through
  *      to the caller (lib/prisma.ts) to use the URL directly.
  */
@@ -19,11 +20,6 @@ import { fetchWithTimeout, TIMEOUTS } from "@/lib/dbx/fetch-with-timeout";
 // ---------------------------------------------------------------------------
 // Shared mutable state on globalThis
 // ---------------------------------------------------------------------------
-// Next.js App Router bundles RSC and API routes separately. Module-scoped
-// `let` variables exist independently in each bundle, but they share a
-// single `globalThis`. All mutable provision state lives here so that
-// credential generation counters, cached tokens, and dedup guards are
-// consistent across bundles.
 
 interface CachedToken {
   value: string;
@@ -32,23 +28,15 @@ interface CachedToken {
 
 const globalForProvision = globalThis as unknown as {
   __provisionInflightMap: Map<string, Promise<unknown>> | undefined;
-  __endpointHost: string | null | undefined;
   __endpointName: string | null | undefined;
-  __username: string | null | undefined;
   __wsToken: CachedToken | null | undefined;
-  __dbCredential: CachedToken | null | undefined;
-  __credentialGeneration: number | undefined;
 };
 
 if (!globalForProvision.__provisionInflightMap) {
   globalForProvision.__provisionInflightMap = new Map();
 }
-globalForProvision.__endpointHost ??= null;
 globalForProvision.__endpointName ??= null;
-globalForProvision.__username ??= null;
 globalForProvision.__wsToken ??= null;
-globalForProvision.__dbCredential ??= null;
-globalForProvision.__credentialGeneration ??= 0;
 
 // ---------------------------------------------------------------------------
 // In-flight deduplication helper
@@ -87,8 +75,6 @@ function getProjectId(): string {
 const LAKEBASE_API_TIMEOUT = 30_000;
 const PROJECT_CREATION_TIMEOUT = 120_000;
 const LRO_POLL_INTERVAL = 5_000;
-
-// (Cached state lives on globalForProvision — see top of file)
 
 // ---------------------------------------------------------------------------
 // Host helper
@@ -143,7 +129,8 @@ async function getWorkspaceToken(): Promise<string> {
       throw new Error(`Workspace OAuth failed (${resp.status}): ${text}`);
     }
 
-    const data: { access_token: string; expires_in: number } = await resp.json();
+    const data: { access_token: string; expires_in: number } =
+      await resp.json();
     globalForProvision.__wsToken = {
       value: data.access_token,
       expiresAt: Date.now() + data.expires_in * 1_000,
@@ -197,7 +184,9 @@ async function projectExists(): Promise<boolean> {
 
 async function createProject(): Promise<void> {
   const projectId = getProjectId();
-  logger.info("[provision] Creating Lakebase Autoscale project...", { projectId });
+  logger.info("[provision] Creating Lakebase Autoscale project...", {
+    projectId,
+  });
 
   const resp = await lakebaseApi(
     "POST",
@@ -261,12 +250,19 @@ async function pollOperation(operationName: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Endpoint resolution
+// Endpoint name resolution (for credential generation)
 // ---------------------------------------------------------------------------
 
-async function resolveEndpoint(): Promise<{ host: string; name: string }> {
-  if (globalForProvision.__endpointHost && globalForProvision.__endpointName) {
-    return { host: globalForProvision.__endpointHost, name: globalForProvision.__endpointName };
+async function resolveEndpointName(): Promise<string> {
+  if (globalForProvision.__endpointName) {
+    return globalForProvision.__endpointName;
+  }
+
+  // Prefer the env var set by start.sh (avoids an API call at runtime)
+  const envName = process.env.LAKEBASE_ENDPOINT_NAME;
+  if (envName) {
+    globalForProvision.__endpointName = envName;
+    return envName;
   }
 
   return dedup("endpoint", async () => {
@@ -290,152 +286,75 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
     }
 
     const epName = endpoints[0].name;
-    const detailResp = await lakebaseApi("GET", epName);
-    if (!detailResp.ok) {
-      const text = await detailResp.text();
-      throw new Error(`Get endpoint failed (${detailResp.status}): ${text}`);
-    }
-
-    const detail = await detailResp.json();
-    const directHost: string | undefined = detail.status?.hosts?.host;
-    if (!directHost) {
-      throw new Error(
-        `Endpoint ${epName} has no host — is the compute still starting? ` +
-          `Detail: ${JSON.stringify(detail)}`
-      );
-    }
-
-    // Use the PgBouncer pooler endpoint (built-in to Lakebase Autoscale).
-    // Multiplexes many client connections through fewer server connections,
-    // preventing connection burst rate-limits on cold start.
-    const host = directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
-    globalForProvision.__endpointHost = host;
     globalForProvision.__endpointName = epName;
 
-    logger.info("[provision] Endpoint resolved", { host, endpoint: epName });
-
-    return { host, name: epName };
+    logger.info("[provision] Endpoint resolved", { endpoint: epName });
+    return epName;
   });
 }
 
 // ---------------------------------------------------------------------------
-// Username (SCIM Me)
+// Cached async password function (official Databricks Node.js pattern)
+//
+// pg.Pool calls `password()` each time it creates a new connection.
+// We cache the DB credential and refresh it 5 minutes before expiry.
 // ---------------------------------------------------------------------------
 
-async function resolveUsername(): Promise<string> {
-  if (globalForProvision.__username) return globalForProvision.__username;
+const REFRESH_LEAD_MS = 5 * 60_000;
 
-  // Use the cached username from the startup provisioning script to avoid
-  // a redundant SCIM /Me call that risks 429 rate limiting.
-  const envUsername = process.env.LAKEBASE_USERNAME;
-  if (envUsername) {
-    globalForProvision.__username = envUsername;
-    logger.info("[provision] Username resolved from LAKEBASE_USERNAME env", {
-      identity: envUsername,
-    });
-    return envUsername;
+let _dbCredentialCache: { token: string; expires: number } | null = null;
+
+async function fetchDbCredential(): Promise<{
+  token: string;
+  expires: number;
+}> {
+  const endpointName = await resolveEndpointName();
+
+  const resp = await lakebaseApi("POST", "credentials", {
+    endpoint: endpointName,
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Generate DB credential failed (${resp.status}): ${text}`);
   }
 
-  return dedup("username", async () => {
-    const host = getHost();
-    const token = await getWorkspaceToken();
-    const maxRetries = 5;
-    let lastErr: Error | undefined;
+  const data: { token: string; expire_time?: string } = await resp.json();
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const resp = await fetchWithTimeout(
-        `${host}/api/2.0/preview/scim/v2/Me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-        TIMEOUTS.AUTH
-      );
+  const expires = data.expire_time
+    ? new Date(data.expire_time).getTime()
+    : Date.now() + 3_600_000;
 
-      if (resp.ok) {
-        const data: { userName?: string; displayName?: string } = await resp.json();
-        const identity = data.userName ?? data.displayName ?? null;
-        if (!identity) {
-          throw new Error("Could not determine workspace identity from /Me");
-        }
-        globalForProvision.__username = identity;
-
-        logger.info("[provision] Username resolved via SCIM /Me", { identity });
-
-        return globalForProvision.__username;
-      }
-
-      const text = await resp.text();
-
-      if (resp.status === 429 && attempt < maxRetries - 1) {
-        const delaySec = Math.pow(2, attempt + 1);
-        logger.warn(`[provision] SCIM /Me rate-limited (429), retrying in ${delaySec}s`, {
-          attempt: attempt + 1,
-          maxRetries,
-        });
-        await new Promise((r) => setTimeout(r, delaySec * 1000));
-        continue;
-      }
-
-      lastErr = new Error(`SCIM /Me failed (${resp.status}): ${text}`);
-    }
-
-    throw lastErr!;
+  logger.info("[provision] DB credential generated", {
+    expiresAt: new Date(expires).toISOString(),
   });
+
+  return { token: data.token, expires };
 }
 
-// ---------------------------------------------------------------------------
-// DB credential (Postgres password token, 1-hour TTL)
-// ---------------------------------------------------------------------------
-
-async function generateDbCredential(): Promise<string> {
-  const cached = globalForProvision.__dbCredential;
-  if (cached && Date.now() < cached.expiresAt - 60_000) {
-    return cached.value;
+/**
+ * Cached DB password function. Returns the current token if still valid,
+ * otherwise fetches a fresh one. Safe to call concurrently — dedup
+ * ensures only one in-flight fetch.
+ */
+async function cachedDbPassword(): Promise<string> {
+  const now = Date.now();
+  if (_dbCredentialCache && now < _dbCredentialCache.expires - REFRESH_LEAD_MS) {
+    return _dbCredentialCache.token;
   }
 
   return dedup("dbCredential", async () => {
-    // Re-check after acquiring the dedup slot — another caller may have
-    // populated the cache while we waited.
-    const rechecked = globalForProvision.__dbCredential;
-    if (rechecked && Date.now() < rechecked.expiresAt - 60_000) {
-      return rechecked.value;
+    // Re-check after acquiring dedup slot
+    const now2 = Date.now();
+    if (
+      _dbCredentialCache &&
+      now2 < _dbCredentialCache.expires - REFRESH_LEAD_MS
+    ) {
+      return _dbCredentialCache.token;
     }
 
-    const { name: endpointName } = await resolveEndpoint();
-
-    const resp = await lakebaseApi("POST", "credentials", {
-      endpoint: endpointName,
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(
-        `Generate DB credential failed (${resp.status}): ${text}`
-      );
-    }
-
-    const data: { token: string; expire_time?: string } = await resp.json();
-
-    const expiresAt = data.expire_time
-      ? new Date(data.expire_time).getTime()
-      : Date.now() + 3_600_000;
-
-    globalForProvision.__dbCredential = {
-      value: data.token,
-      expiresAt,
-    };
-    globalForProvision.__credentialGeneration =
-      (globalForProvision.__credentialGeneration ?? 0) + 1;
-
-    logger.info("[provision] DB credential generated", {
-      generation: globalForProvision.__credentialGeneration,
-      expiresAt: new Date(expiresAt).toISOString(),
-    });
-
-    return globalForProvision.__dbCredential!.value;
+    _dbCredentialCache = await fetchDbCredential();
+    return _dbCredentialCache.token;
   });
 }
 
@@ -444,15 +363,16 @@ async function generateDbCredential(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * True when running as a Databricks App (SP credentials available) and no
- * static DATABASE_URL has been provided. In this mode the app self-provisions
- * its Lakebase project and manages tokens automatically.
+ * True when running as a Databricks App with the pooler endpoint
+ * configured. In this mode the server uses pg.Pool with an async
+ * password function against the pooler host.
  */
 export function isAutoProvisionEnabled(): boolean {
   return !!(
     process.env.DATABRICKS_CLIENT_ID &&
     process.env.DATABRICKS_CLIENT_SECRET &&
     process.env.DATABRICKS_HOST &&
+    process.env.LAKEBASE_POOLER_HOST &&
     !process.env.DATABASE_URL
   );
 }
@@ -460,9 +380,7 @@ export function isAutoProvisionEnabled(): boolean {
 /**
  * True when Databricks App SP credentials are available, regardless of
  * whether DATABASE_URL is set. Used by withPrisma to decide whether
- * auth-error retry can fall back to auto-provisioned credentials even
- * when a static URL was initially configured (e.g. platform resource
- * binding or leaked startup env).
+ * auth-error retry is meaningful.
  */
 export function canAutoProvision(): boolean {
   return !!(
@@ -478,62 +396,43 @@ export function canAutoProvision(): boolean {
  */
 export async function ensureLakebaseProject(): Promise<void> {
   if (await projectExists()) {
-    logger.info("[provision] Lakebase project exists", { projectId: getProjectId() });
+    logger.info("[provision] Lakebase project exists", {
+      projectId: getProjectId(),
+    });
     return;
   }
   await createProject();
 }
 
 /**
- * Build a complete Postgres connection URL with a fresh OAuth credential.
- * Safe to call repeatedly -- returns cached values until the token nears
- * expiry, then transparently mints a new one.
+ * Returns pg.Pool configuration for the Lakebase pooler endpoint.
+ * The `password` field is an async function that returns a cached
+ * OAuth DB credential, refreshing it 5 minutes before expiry.
  */
-export async function getLakebaseConnectionUrl(): Promise<string> {
-  const [{ host }, username, token] = await Promise.all([
-    resolveEndpoint(),
-    resolveUsername(),
-    generateDbCredential(),
-  ]);
+export function getPoolConfig(): {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: () => Promise<string>;
+  ssl: { rejectUnauthorized: boolean };
+} {
+  const host = process.env.LAKEBASE_POOLER_HOST;
+  const user = process.env.LAKEBASE_USERNAME;
 
-  return (
-    `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(token)}` +
-    `@${host}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`
-  );
-}
+  if (!host || !user) {
+    throw new Error(
+      "LAKEBASE_POOLER_HOST / LAKEBASE_USERNAME not set. " +
+        "These are set by start.sh during Lakebase provisioning."
+    );
+  }
 
-/**
- * Get a fresh DB credential token (for pool rotation).
- * Returns the cached token if still valid.
- */
-export async function refreshDbCredential(): Promise<string> {
-  return generateDbCredential();
-}
-
-/**
- * Force-invalidate the cached DB credential so the next
- * `refreshDbCredential()` / `getLakebaseConnectionUrl()` call mints
- * a new one. Use this when an authentication error is caught to
- * guarantee the stale credential is discarded.
- */
-export function invalidateDbCredential(): void {
-  globalForProvision.__dbCredential = null;
-}
-
-/**
- * Monotonically increasing counter that bumps every time a genuinely new
- * DB credential is minted. Used by lib/prisma.ts to detect token rotation
- * and recreate the connection pool.
- */
-export function getCredentialGeneration(): number {
-  return globalForProvision.__credentialGeneration ?? 0;
-}
-
-/**
- * Returns the epoch-ms expiry time of the current DB credential,
- * or null if no credential has been minted yet. Used by lib/prisma.ts
- * to schedule proactive pool rotation before the credential expires.
- */
-export function getCredentialExpiresAt(): number | null {
-  return globalForProvision.__dbCredential?.expiresAt ?? null;
+  return {
+    host,
+    port: 5432,
+    database: DATABASE_NAME,
+    user,
+    password: cachedDbPassword,
+    ssl: { rejectUnauthorized: true },
+  };
 }
