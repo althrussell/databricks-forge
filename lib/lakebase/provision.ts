@@ -297,18 +297,14 @@ async function resolveEndpoint(): Promise<{ host: string; name: string }> {
     }
 
     const detail = await detailResp.json();
-    const directHost: string | undefined = detail.status?.hosts?.host;
-    if (!directHost) {
+    const host: string | undefined = detail.status?.hosts?.host;
+    if (!host) {
       throw new Error(
         `Endpoint ${epName} has no host — is the compute still starting? ` +
           `Detail: ${JSON.stringify(detail)}`
       );
     }
 
-    // Use the PgBouncer pooler endpoint (built-in to Lakebase Autoscale).
-    // Multiplexes many client connections through fewer server connections,
-    // preventing connection burst rate-limits on cold start.
-    const host = directHost.replace(/^(ep-[^.]+)/, "$1-pooler");
     globalForProvision.__endpointHost = host;
     globalForProvision.__endpointName = epName;
 
