@@ -1,6 +1,6 @@
 # Databricks Forge AI
 
-> **IMPORTANT: This is NOT a Databricks product.** This project was built by the Databricks Field Engineering team as an internal accelerator. It is provided as-is under the Apache 2.0 license with no warranty, no official support, and no liability. **Status: Alpha** -- see [NOTICE](NOTICE) for full disclaimer.
+> **IMPORTANT: This is NOT a Databricks product.** This project was built by the Databricks Field Engineering team as a field accelerator. It is provided "as-is" subject to the [Databricks License](LICENSE) with no warranty and no official support. See [NOTICE](NOTICE) for support policy.
 
 **Transform your Unity Catalog metadata into actionable, AI-generated use cases.**
 
@@ -327,20 +327,4 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
-
-```
-Copyright 2024-2026 Databricks, Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+Copyright 2024-2026 Databricks, Inc. Provided subject to the [Databricks License](LICENSE). See [NOTICE](NOTICE) for third-party attributions.

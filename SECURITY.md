@@ -36,8 +36,7 @@ mitigations, see [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md).
 
 ## Supported Versions
 
-This project is in **alpha** status. Only the latest version on the `dev` branch
-receives security fixes.
+Only the latest version on the `dev` branch receives security fixes.
 
 | Version | Supported |
 | ------- | --------- |

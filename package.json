@@ -1,13 +1,13 @@
 {
   "name": "databricks-forge",
   "version": "0.5.0",
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build && sh scripts/postbuild.sh",
     "postinstall": "prisma generate",
-    "start": "prisma db push && next start",
+    "start": "prisma db push --accept-data-loss && next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",

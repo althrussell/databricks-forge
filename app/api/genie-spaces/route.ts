@@ -49,15 +49,15 @@ export async function POST(request: NextRequest) {
       title: string;
       description: string;
       serializedSpace: string;
-      runId: string;
+      runId?: string;
       domain: string;
       parentPath?: string;
       authMode?: GenieAuthMode;
     };
 
-    if (!title || !serializedSpace || !runId || !domain) {
+    if (!title || !serializedSpace || !domain) {
       return NextResponse.json(
-        { error: "Missing required fields: title, serializedSpace, runId, domain" },
+        { error: "Missing required fields: title, serializedSpace, domain" },
         { status: 400 }
       );
     }
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     await trackGenieSpaceCreated(
       trackingId,
       result.space_id,
-      runId,
+      runId ?? null,
       domain,
       title,
       undefined,

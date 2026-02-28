@@ -393,6 +393,69 @@ export function assembleSerializedSpace(
 }
 
 /**
+ * Generate an insightful title that avoids redundancy when businessName
+ * equals domain (the ad-hoc default when no explicit title is provided).
+ */
+function generateTitle(
+  businessName: string,
+  domain: string,
+  subdomains: string[],
+  tables: string[],
+): string {
+  const bizLower = businessName.toLowerCase().trim();
+  const domLower = domain.toLowerCase().trim();
+
+  if (bizLower !== domLower) {
+    return `${businessName} - ${domain} Analytics`;
+  }
+
+  if (subdomains.length > 0) {
+    return `${domain} ${subdomains[0]} Analytics`;
+  }
+
+  if (tables.length > 0 && tables.length <= 3) {
+    const shortNames = tables.map((t) => {
+      const parts = t.split(".");
+      const name = parts[parts.length - 1];
+      return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    });
+    return `${domain} Analytics — ${shortNames.join(", ")}`;
+  }
+
+  if (tables.length > 3) {
+    return `${domain} Analytics — ${tables.length} Tables`;
+  }
+
+  return `${domain} Analytics`;
+}
+
+function generateDescription(
+  businessName: string,
+  domain: string,
+  subdomains: string[],
+  measureCount: number,
+  filterCount: number,
+  dimensionCount: number,
+): string[] {
+  const descParts: string[] = [];
+  const bizLower = businessName.toLowerCase().trim();
+  const domLower = domain.toLowerCase().trim();
+
+  if (bizLower !== domLower) {
+    descParts.push(`Genie space for the ${domain} domain of ${businessName}.`);
+  } else {
+    descParts.push(`Genie space for ${domain} data exploration and analytics.`);
+  }
+
+  if (subdomains.length > 0) {
+    descParts.push(`Covers: ${subdomains.join(", ")}.`);
+  }
+
+  descParts.push(`${measureCount} measures, ${filterCount} filters, ${dimensionCount} dimensions.`);
+  return descParts;
+}
+
+/**
  * Build a GenieSpaceRecommendation from engine pass outputs + assembled space.
  */
 export function buildRecommendation(
@@ -400,18 +463,12 @@ export function buildRecommendation(
   space: SerializedSpace,
   businessName: string
 ): GenieSpaceRecommendation {
-  const title = `${businessName} - ${outputs.domain} Analytics`;
-
-  const descParts: string[] = [
-    `Genie space for the ${outputs.domain} domain of ${businessName}.`,
-  ];
-  if (outputs.subdomains.length > 0) {
-    descParts.push(`Covers: ${outputs.subdomains.join(", ")}.`);
-  }
-  descParts.push(
-    `${space.instructions.sql_snippets.measures.length} measures, ` +
-    `${space.instructions.sql_snippets.filters.length} filters, ` +
-    `${space.instructions.sql_snippets.expressions.length} dimensions.`
+  const title = generateTitle(businessName, outputs.domain, outputs.subdomains, outputs.tables);
+  const descParts = generateDescription(
+    businessName, outputs.domain, outputs.subdomains,
+    space.instructions.sql_snippets.measures.length,
+    space.instructions.sql_snippets.filters.length,
+    space.instructions.sql_snippets.expressions.length,
   );
 
   const spaceTables = space.data_sources.tables.map((t) => t.identifier);

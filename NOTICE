@@ -2,54 +2,11 @@ Databricks Forge AI
 Copyright 2024-2026 Databricks, Inc.
 
 ================================================================================
-IMPORTANT DISCLAIMER
+SUPPORT
 ================================================================================
 
-THIS PROJECT IS NOT A DATABRICKS PRODUCT.
-
-This software was developed by the Databricks Field Engineering team as an
-internal accelerator and is shared as-is for informational and experimental
-purposes only. It is NOT an official Databricks product, feature, or service.
-
-PROJECT STATUS: ALPHA
-
-This project is in early-stage development (alpha). It is incomplete, likely
-contains bugs, and may change significantly or be discontinued without notice.
-It has NOT been reviewed, tested, or approved by Databricks product, security,
-or legal teams for production use.
-
-NO WARRANTY OR SUPPORT
-
-This software is provided under the Apache License 2.0 on an "AS IS" basis,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-Databricks, Inc. and its contributors:
-
-  - Make NO guarantees about the correctness, completeness, reliability,
-    suitability, or availability of this software
-  - Provide NO official support, SLAs, or maintenance commitments
-  - Accept NO liability for any damages, data loss, security incidents,
-    or other consequences arising from the use of this software
-  - Make NO representations that this software meets any regulatory,
-    compliance, or security standards
-
-USE AT YOUR OWN RISK
-
-You are solely responsible for:
-  - Evaluating whether this software is appropriate for your use case
-  - Testing thoroughly before any non-trivial use
-  - Ensuring compliance with your organisation's security and data policies
-  - Any and all consequences of deploying or running this software
-
-This software reads Unity Catalog metadata (table and column names/schemas).
-While it does not read row-level data by default, optional data sampling
-features exist. You are responsible for reviewing and configuring access
-controls appropriately.
-
-TRADEMARKS
-
-"Databricks" and the Databricks logo are trademarks or registered trademarks
-of Databricks, Inc. Use of these marks in this project does not imply
-endorsement of this project as an official Databricks product.
+Databricks does not offer official support for this project. For any issues,
+please open a GitHub issue and the team will respond on a best-effort basis.
 
 ================================================================================
 THIRD-PARTY NOTICES
@@ -64,7 +21,6 @@ This project includes or depends on the following open-source software:
   - pptxgenjs (MIT License) - https://github.com/gitbrent/PptxGenJS
   - PDFKit (MIT License) - https://github.com/foliojs/pdfkit
   - ExcelJS (MIT License) - https://github.com/exceljs/exceljs
-  - Prisma (Apache 2.0 License) - https://github.com/prisma/prisma
   - Zod (MIT License) - https://github.com/colinhacks/zod
   - Lucide Icons (ISC License) - https://github.com/lucide-icons/lucide
 
