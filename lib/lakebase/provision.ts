@@ -471,7 +471,10 @@ async function generateDbCredential(): Promise<string> {
       );
     }
 
-    const data: { token: string; expire_time?: string } = await resp.json();
+    const data: { token?: string; expire_time?: string } = await resp.json();
+    if (!data.token) {
+      throw new Error("Generate DB credential returned no token");
+    }
 
     const expiresAt = data.expire_time
       ? new Date(data.expire_time).getTime()
@@ -486,6 +489,8 @@ async function generateDbCredential(): Promise<string> {
 
     logger.info("[provision] DB credential generated", {
       generation: globalForProvision.__credentialGeneration,
+      hasToken: true,
+      tokenLength: data.token.length,
       expiresAt: new Date(expiresAt).toISOString(),
     });
 

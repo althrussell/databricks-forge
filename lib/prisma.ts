@@ -51,6 +51,12 @@ function logConnectionInfo(connectionString: string): void {
   });
 }
 
+function withHost(connectionString: string, host: string): string {
+  const parsed = new URL(connectionString);
+  parsed.hostname = host;
+  return parsed.toString();
+}
+
 // ---------------------------------------------------------------------------
 // Singleton cache
 // ---------------------------------------------------------------------------
@@ -269,8 +275,7 @@ async function buildAutoProvisionedClient(
   }
 
   const endpointInfo = await getRuntimeEndpointInfo();
-  logger.info("[prisma] Runtime endpoint selected", {
-    endpointKind: "pooler",
+  logger.info("[prisma] Runtime endpoint candidates resolved", {
     endpointName: endpointInfo.endpointName,
     poolerHost: endpointInfo.poolerHost,
     directHost: endpointInfo.directHost,
@@ -281,6 +286,8 @@ async function buildAutoProvisionedClient(
   const MAX_CREDENTIAL_GENERATIONS = 3;
   let pool: pg.Pool | null = null;
   let lastError: unknown;
+  let selectedEndpointKind: "pooler" | "direct" | null = null;
+  let selectedHost: string | null = null;
 
   for (let attempt = 1; attempt <= MAX_CREDENTIAL_GENERATIONS; attempt++) {
     if (attempt > 1) {
@@ -288,33 +295,70 @@ async function buildAutoProvisionedClient(
       await refreshDbCredential();
     }
 
-    const connectionString = await getLakebaseConnectionUrl();
-    logConnectionInfo(connectionString);
+    const poolerConnectionString = await getLakebaseConnectionUrl();
+    const endpointCandidates: Array<{
+      endpointKind: "pooler" | "direct";
+      host: string;
+      connectionString: string;
+    }> = [
+      {
+        endpointKind: "pooler",
+        host: endpointInfo.poolerHost,
+        connectionString: poolerConnectionString,
+      },
+      {
+        endpointKind: "direct",
+        host: endpointInfo.directHost,
+        connectionString: withHost(poolerConnectionString, endpointInfo.directHost),
+      },
+    ];
 
-    try {
-      // ~65s max per credential generation (5s initial + 20 * 3s retries)
-      pool = await createAndWarmPool(connectionString, 20, 3_000, 5_000);
-      lastError = null;
-      break;
-    } catch (err) {
-      lastError = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn("[prisma] Auto-provision pool bootstrap failed", {
-        attempt,
-        maxAttempts: MAX_CREDENTIAL_GENERATIONS,
-        authError: isAuthError(err),
-        rateLimited: isRateLimitError(err),
-        propagationLikely: isCredentialPropagationError(err),
-        error: msg,
-      });
-      if (attempt < MAX_CREDENTIAL_GENERATIONS) {
-        await new Promise((r) => setTimeout(r, 2_000 * attempt));
+    for (const candidate of endpointCandidates) {
+      logConnectionInfo(candidate.connectionString);
+
+      try {
+        // ~65s max per endpoint attempt (5s initial + 20 * 3s retries)
+        pool = await createAndWarmPool(candidate.connectionString, 20, 3_000, 5_000);
+        selectedEndpointKind = candidate.endpointKind;
+        selectedHost = candidate.host;
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn("[prisma] Auto-provision pool bootstrap failed", {
+          attempt,
+          maxAttempts: MAX_CREDENTIAL_GENERATIONS,
+          endpointKind: candidate.endpointKind,
+          host: candidate.host,
+          authError: isAuthError(err),
+          rateLimited: isRateLimitError(err),
+          propagationLikely: isCredentialPropagationError(err),
+          error: msg,
+        });
       }
+    }
+
+    if (pool && selectedEndpointKind) break;
+
+    if (attempt < MAX_CREDENTIAL_GENERATIONS) {
+      await new Promise((r) => setTimeout(r, 2_000 * attempt));
     }
   }
 
   if (!pool || lastError) {
     throw lastError ?? new Error("Failed to initialize pool");
+  }
+
+  logger.info("[prisma] Runtime endpoint selected", {
+    endpointName: endpointInfo.endpointName,
+    endpointKind: selectedEndpointKind,
+    host: selectedHost,
+  });
+  if (selectedEndpointKind === "direct") {
+    logger.warn(
+      "[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime"
+    );
   }
 
   globalForPrisma.__pool = pool;
