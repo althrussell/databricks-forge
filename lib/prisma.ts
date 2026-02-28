@@ -157,7 +157,9 @@ async function buildAutoProvisionedPool(
   const pool = new pg.Pool({
     connectionString,
     idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
     max: 10,
+    min: 0,
   });
 
   const capturedTokenId = tokenId;
@@ -336,8 +338,9 @@ export async function withPrisma<T>(
 // ---------------------------------------------------------------------------
 
 const ROTATION_COOLDOWN_MS = 30_000;
+const VERIFY_INITIAL_DELAY_MS = 3_000;
 const VERIFY_MAX_ATTEMPTS = 8;
-const VERIFY_BASE_DELAY_MS = 2_000;
+const VERIFY_INTERVAL_MS = 3_000;
 
 async function rotatePrismaClient(): Promise<PrismaClient> {
   // Cooldown: skip rotation if a recent one succeeded (and client exists),
@@ -373,8 +376,14 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
 
       const client = await getPrisma();
 
-      // Lakebase credentials can take 15-20s to propagate after minting.
-      // Use a generous verification window (8 attempts, 2s base, ~30s total).
+      // Lakebase credentials can take 15-30s to propagate after minting.
+      // Wait before first attempt, then use generous intervals to avoid
+      // exhausting the connection rate limiter.
+      logger.info("[prisma] Rotation: waiting for credential propagation", {
+        initialDelayMs: VERIFY_INITIAL_DELAY_MS,
+      });
+      await new Promise((r) => setTimeout(r, VERIFY_INITIAL_DELAY_MS));
+
       for (let i = 0; i < VERIFY_MAX_ATTEMPTS; i++) {
         try {
           await client.$queryRaw`SELECT 1`;
@@ -383,17 +392,16 @@ async function rotatePrismaClient(): Promise<PrismaClient> {
           return client;
         } catch (verifyErr) {
           if (i < VERIFY_MAX_ATTEMPTS - 1) {
-            const delay = VERIFY_BASE_DELAY_MS * Math.min(Math.pow(2, i), 4);
             logger.warn("[prisma] Rotation: connection not ready, waiting", {
               attempt: i + 1,
               maxAttempts: VERIFY_MAX_ATTEMPTS,
-              nextDelayMs: delay,
+              nextDelayMs: VERIFY_INTERVAL_MS,
               error:
                 verifyErr instanceof Error
                   ? verifyErr.message
                   : String(verifyErr),
             });
-            await new Promise((r) => setTimeout(r, delay));
+            await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
           } else {
             globalForPrisma.__prisma = undefined;
             globalForPrisma.__prismaTokenId = undefined;

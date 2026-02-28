@@ -50,7 +50,7 @@ fi
 
 PRISMA_BIN="./node_modules/.bin/prisma"
 SCHEMA_URL="${DATABASE_URL:-$LAKEBASE_STARTUP_URL}"
-MAX_DB_RETRIES=15
+MAX_DB_RETRIES=5
 DB_RETRY_INTERVAL=3
 
 if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
@@ -121,7 +121,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
     echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring HNSW index..."
     HNSW_ATTEMPT=0
-    HNSW_MAX_RETRIES=3
+    HNSW_MAX_RETRIES=5
     HNSW_READY=false
 
     while [ "$HNSW_ATTEMPT" -lt "$HNSW_MAX_RETRIES" ]; do

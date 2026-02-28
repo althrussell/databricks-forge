@@ -233,37 +233,54 @@ async function generateCredential(epName) {
 }
 
 // ---------------------------------------------------------------------------
-// Credential verification — wait until the credential is actually usable
+// Credential verification — wait until the credential is actually usable.
+//
+// Lakebase credentials can take 15-30s to propagate, especially on cold
+// endpoints (scale-from-zero). Strategy:
+//   1. Wait an initial delay before first attempt (reduces wasted connections)
+//   2. Use generous intervals between attempts (avoids connection rate limiter)
+//   3. Reuse a single Pool to minimise TCP churn
+//   4. Return true/false — caller decides whether to retry with a new credential
 // ---------------------------------------------------------------------------
 
-const VERIFY_MAX_ATTEMPTS = 10;
-const VERIFY_INTERVAL_MS = 2_000;
+const VERIFY_INITIAL_DELAY_MS = 5_000;
+const VERIFY_MAX_ATTEMPTS = 8;
+const VERIFY_INTERVAL_MS = 3_000;
 
 async function verifyCredential(url) {
   const pg = (await import("pg")).default;
 
-  for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
-    const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 5_000 });
-    try {
-      await pool.query("SELECT 1");
-      log(`Credential verified (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}).`);
-      return;
-    } catch (err) {
-      if (attempt < VERIFY_MAX_ATTEMPTS) {
-        log(`Credential not yet usable (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}), waiting ${VERIFY_INTERVAL_MS / 1_000}s...`);
-        await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
-      } else {
-        log(`WARNING: Credential verification failed after ${VERIFY_MAX_ATTEMPTS} attempts: ${err.message}`);
+  log(`Waiting ${VERIFY_INITIAL_DELAY_MS / 1_000}s for credential propagation...`);
+  await new Promise((r) => setTimeout(r, VERIFY_INITIAL_DELAY_MS));
+
+  const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 10_000, max: 1 });
+
+  try {
+    for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
+      try {
+        await pool.query("SELECT 1");
+        log(`Credential verified (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}).`);
+        return true;
+      } catch (err) {
+        if (attempt < VERIFY_MAX_ATTEMPTS) {
+          log(`Credential not yet usable (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}), waiting ${VERIFY_INTERVAL_MS / 1_000}s...`);
+          await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
+        } else {
+          log(`Credential verification failed after ${VERIFY_MAX_ATTEMPTS} attempts: ${err.message}`);
+        }
       }
-    } finally {
-      await pool.end().catch(() => {});
     }
+    return false;
+  } finally {
+    await pool.end().catch(() => {});
   }
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+
+const CREDENTIAL_MAX_GENERATIONS = 2;
 
 async function main() {
   const clientId = process.env.DATABRICKS_CLIENT_ID;
@@ -282,20 +299,31 @@ async function main() {
     getUsername(),
   ]);
 
-  const dbToken = await generateCredential(epName);
+  for (let gen = 1; gen <= CREDENTIAL_MAX_GENERATIONS; gen++) {
+    const dbToken = await generateCredential(epName);
 
-  const url =
-    `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(dbToken)}` +
-    `@${epHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
+    const url =
+      `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(dbToken)}` +
+      `@${epHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
 
-  // Wait for Lakebase to accept the credential before returning
-  await verifyCredential(url);
+    const verified = await verifyCredential(url);
 
-  // Print URL to stdout (start.sh captures this).
-  // Also print the username on a second line so start.sh can cache it
-  // as LAKEBASE_USERNAME for the runtime, avoiding duplicate SCIM /Me calls.
-  process.stdout.write(`${url}\n${username}`);
-  log("Connection URL generated.");
+    if (verified) {
+      // Print URL to stdout (start.sh captures this).
+      // Also print the username on a second line so start.sh can cache it
+      // as LAKEBASE_USERNAME for the runtime, avoiding duplicate SCIM /Me calls.
+      process.stdout.write(`${url}\n${username}`);
+      log("Connection URL generated.");
+      return;
+    }
+
+    if (gen < CREDENTIAL_MAX_GENERATIONS) {
+      log(`Regenerating credential (attempt ${gen + 1}/${CREDENTIAL_MAX_GENERATIONS})...`);
+    }
+  }
+
+  log("FATAL: Could not verify database credential after multiple generations.");
+  process.exit(1);
 }
 
 main().catch((err) => {
