@@ -142,7 +142,90 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     fi
   fi
 
-  # -- Step C: Prisma schema push ----------------------------------------
+  # -- Step C: Optional user bootstrap grants -------------------------------
+  # Allows operators to grant one or more Databricks users DB access
+  # without manual SQL editor access.
+  #
+  # Set either:
+  #   LAKEBASE_BOOTSTRAP_USER="user@company.com"
+  #   LAKEBASE_BOOTSTRAP_USERS="user1@company.com,user2@company.com"
+  #
+  # Grants are idempotent and non-fatal if they fail.
+  BOOTSTRAP_USERS_RAW="${LAKEBASE_BOOTSTRAP_USERS:-$LAKEBASE_BOOTSTRAP_USER}"
+
+  if [ -z "$BOOTSTRAP_USERS_RAW" ]; then
+    DETECTED_BOOTSTRAP_USER=$(DATABASE_URL="$SCHEMA_URL" node -e "
+      const pg = require('pg');
+      (async () => {
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+        try {
+          const r = await pool.query('SELECT pg_get_userbyid(datdba) AS owner_role FROM pg_database WHERE datname = current_database()');
+          const owner = String(r.rows?.[0]?.owner_role || '').trim();
+          const disallowed = owner === '' || owner === 'postgres' || owner === 'cloud_admin' || owner.startsWith('databricks_');
+          if (!disallowed) {
+            console.log(owner);
+          }
+        } finally {
+          await pool.end();
+        }
+      })().catch(() => {});
+    " 2>/dev/null | tr -d '\r' | awk 'NF{print; exit}')
+
+    if [ -n "$DETECTED_BOOTSTRAP_USER" ]; then
+      BOOTSTRAP_USERS_RAW="$DETECTED_BOOTSTRAP_USER"
+      echo "[startup] Auto-detected bootstrap user from database owner role: $DETECTED_BOOTSTRAP_USER"
+    else
+      echo "[startup] No explicit bootstrap users configured and no eligible database owner role detected."
+    fi
+  fi
+
+  if [ -n "$BOOTSTRAP_USERS_RAW" ]; then
+    echo "[startup] Applying optional Lakebase bootstrap grants for configured users..."
+    if ! DATABASE_URL="$SCHEMA_URL" BOOTSTRAP_USERS_RAW="$BOOTSTRAP_USERS_RAW" node -e "
+      const pg = require('pg');
+      (async () => {
+        const raw = process.env.BOOTSTRAP_USERS_RAW || '';
+        const users = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        if (users.length === 0) return;
+
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+        try {
+          await pool.query('CREATE EXTENSION IF NOT EXISTS databricks_auth');
+
+          for (const user of users) {
+            const roleExists = await pool.query(
+              'SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok',
+              [user]
+            );
+            if (!roleExists.rows[0]?.ok) {
+              await pool.query(\"SELECT databricks_create_role($1, 'user')\", [user]);
+              console.log('[startup] Created Databricks OAuth role for user:', user);
+            } else {
+              console.log('[startup] Databricks OAuth role already exists for user:', user);
+            }
+
+            const safeRole = '\"' + user.replace(/\"/g, '\"\"') + '\"';
+            await pool.query('GRANT CONNECT ON DATABASE databricks_postgres TO ' + safeRole);
+            await pool.query('GRANT USAGE, CREATE ON SCHEMA public TO ' + safeRole);
+            await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
+            await pool.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' + safeRole);
+            await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ' + safeRole);
+            await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ' + safeRole);
+            console.log('[startup] Granted Lakebase privileges to user:', user);
+          }
+        } finally {
+          await pool.end();
+        }
+      })().catch((err) => {
+        console.error('[startup] WARNING: Optional Lakebase bootstrap grants failed:', err.message);
+        process.exit(0);
+      });
+    " 2>&1; then
+      echo "[startup] WARNING: Optional Lakebase bootstrap grant step encountered an error."
+    fi
+  fi
+
+  # -- Step D: Prisma schema push ----------------------------------------
   echo "[startup] Verifying database connectivity..."
   ATTEMPT=0
   DB_READY=false
@@ -167,7 +250,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     exit 1
   fi
 
-  # -- Step D: Create HNSW index (not managed by Prisma) ------------------
+  # -- Step E: Create HNSW index (not managed by Prisma) ------------------
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
     echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring HNSW index..."
     HNSW_ATTEMPT=0
