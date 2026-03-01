@@ -149,8 +149,4 @@ If your organization wants faster time to value from data and AI investments, Fo
 
 ---
 
-<sub>
-
 **Disclaimer** -- Databricks Forge AI is provided subject to the [Databricks License](LICENSE). It is NOT an official Databricks product, feature, or service. It is provided "as-is" without warranty of any kind. Databricks and its contributors accept no liability for damages arising from the use of this software. Use of the Licensed Materials requires an active Databricks Services agreement. See [NOTICE](NOTICE) for support policy and [SECURITY](SECURITY.md) for vulnerability reporting.
-
-</sub>
