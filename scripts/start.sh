@@ -106,10 +106,10 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
         const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
         try {
           const ext = await pool.query(\"SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'databricks_auth') AS ok\");
-          const roleExists = await pool.query('SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok', [role]);
-          const dbConnect = await pool.query(\"SELECT has_database_privilege($1, current_database(), 'CONNECT') AS ok\", [role]);
-          const schemaUsage = await pool.query(\"SELECT has_schema_privilege($1, 'public', 'USAGE') AS ok\", [role]);
-          const tableGrantCount = await pool.query('SELECT COUNT(*)::int AS count FROM information_schema.role_table_grants WHERE grantee = $1', [role]);
+          const roleExists = await pool.query('SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = \$1) AS ok', [role]);
+          const dbConnect = await pool.query(\"SELECT has_database_privilege(\$1, current_database(), 'CONNECT') AS ok\", [role]);
+          const schemaUsage = await pool.query(\"SELECT has_schema_privilege(\$1, 'public', 'USAGE') AS ok\", [role]);
+          const tableGrantCount = await pool.query('SELECT COUNT(*)::int AS count FROM information_schema.role_table_grants WHERE grantee = \$1', [role]);
 
           const checks = {
             databricksAuthExtension: !!ext.rows[0]?.ok,
@@ -194,11 +194,11 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
 
           for (const user of users) {
             const roleExists = await pool.query(
-              'SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok',
+              'SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = \$1) AS ok',
               [user]
             );
             if (!roleExists.rows[0]?.ok) {
-              await pool.query(\"SELECT databricks_create_role($1, 'user')\", [user]);
+              await pool.query(\"SELECT databricks_create_role(\$1, 'USER')\", [user]);
               console.log('[startup] Created Databricks OAuth role for user:', user);
             } else {
               console.log('[startup] Databricks OAuth role already exists for user:', user);
