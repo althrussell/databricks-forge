@@ -11,6 +11,9 @@
 #   ./deploy.sh --endpoint "model" --fast-endpoint "fast-model"
 # Optional Lakebase bootstrap grants:
 #   ./deploy.sh --lakebase-bootstrap-user "user@company.com"
+# Optional Lakebase runtime auth mode:
+#   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
+#               --lakebase-enable-pooler-experiment
 # =========================================================================
 
 set -euo pipefail
@@ -41,6 +44,8 @@ ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
 ARG_LAKEBASE_BOOTSTRAP_USER=""
+ARG_LAKEBASE_RUNTIME_MODE=""
+ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
 ARG_DESTROY=false
 
 print_usage() {
@@ -60,6 +65,11 @@ Options:
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
+  --lakebase-runtime-mode MODE
+                             Lakebase runtime mode:
+                             oauth_direct_only (default), pooler_preferred
+  --lakebase-enable-pooler-experiment
+                             Enables pooler attempts for future testing
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -76,6 +86,8 @@ while [[ $# -gt 0 ]]; do
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
     --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
+    --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
+    --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -86,6 +98,12 @@ ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
 EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
 LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
+LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
+LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
+
+if [[ -n "$LAKEBASE_RUNTIME_MODE" && "$LAKEBASE_RUNTIME_MODE" != "oauth_direct_only" && "$LAKEBASE_RUNTIME_MODE" != "pooler_preferred" ]]; then
+  die "Invalid --lakebase-runtime-mode '$LAKEBASE_RUNTIME_MODE'. Expected oauth_direct_only or pooler_preferred."
+fi
 
 # -------------------------------------------------------------------------
 # Output helpers
@@ -101,7 +119,7 @@ json_val() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ]; then
+  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ]; then
     return
   fi
 
@@ -109,26 +127,34 @@ prepare_app_yaml() {
   cp "app.yaml" "$APP_YAML_BACKUP"
 
   export LAKEBASE_BOOTSTRAP_USER
+  export LAKEBASE_RUNTIME_MODE
+  export LAKEBASE_ENABLE_POOLER_EXPERIMENT
   python3 - <<'PY'
 import os
 from pathlib import Path
 
 bootstrap_user = os.environ.get("LAKEBASE_BOOTSTRAP_USER", "").strip()
-if not bootstrap_user:
-    raise SystemExit(0)
+runtime_mode = os.environ.get("LAKEBASE_RUNTIME_MODE", "").strip()
+pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").strip().lower() == "true"
 
 path = Path("app.yaml")
 lines = path.read_text().splitlines()
 out: list[str] = []
 i = 0
 
-def is_bootstrap_name_line(s: str) -> bool:
+def is_managed_name_line(s: str) -> bool:
     t = s.strip()
-    return t.startswith("- name:") and "LAKEBASE_BOOTSTRAP_USER" in t
+    if not t.startswith("- name:"):
+        return False
+    return (
+        "LAKEBASE_BOOTSTRAP_USER" in t
+        or "LAKEBASE_RUNTIME_MODE" in t
+        or "LAKEBASE_ENABLE_POOLER_EXPERIMENT" in t
+    )
 
 while i < len(lines):
     line = lines[i]
-    if is_bootstrap_name_line(line):
+    if is_managed_name_line(line):
         i += 1
         while i < len(lines):
             nxt = lines[i]
@@ -139,8 +165,14 @@ while i < len(lines):
     out.append(line)
     i += 1
 
-out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
-out.append(f'    value: "{bootstrap_user}"')
+if bootstrap_user:
+    out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
+    out.append(f'    value: "{bootstrap_user}"')
+if runtime_mode:
+    out.append("  - name: LAKEBASE_RUNTIME_MODE")
+    out.append(f'    value: "{runtime_mode}"')
+out.append("  - name: LAKEBASE_ENABLE_POOLER_EXPERIMENT")
+out.append(f'    value: "{"true" if pooler_experiment else "false"}"')
 path.write_text("\n".join(out) + "\n")
 PY
 }
@@ -467,6 +499,8 @@ print_success() {
   if [ -n "$LAKEBASE_BOOTSTRAP_USER" ]; then
     printf "      Bootstrap user:   %s\n" "$LAKEBASE_BOOTSTRAP_USER"
   fi
+  printf "      Runtime mode:     %s\n" "${LAKEBASE_RUNTIME_MODE:-oauth_direct_only (default)}"
+  printf "      Pooler experiment:%s\n" "$( [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" = "true" ] && echo " enabled" || echo " disabled" )"
   printf "\n"
   printf "    User scopes:\n"
   printf "      sql, catalog.tables:read, catalog.schemas:read,\n"
