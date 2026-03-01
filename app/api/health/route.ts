@@ -26,10 +26,16 @@ interface HealthCheck {
   };
   authRuntime?: {
     ready: boolean;
+    authMode: "oauth" | "native_password";
     poolerFailoverCount: number;
     poolerConsecutiveSuccesses: number;
     lastSelectedEndpointKind: "pooler" | "direct" | null;
     requirePooler: boolean;
+    runtimeMode: string;
+    enablePoolerExperiment: boolean;
+    poolerAttemptEnabled: boolean;
+    poolerReadinessSuccessTarget: number;
+    poolerReadinessGatePassed: boolean;
   };
 }
 

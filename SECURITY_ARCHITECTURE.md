@@ -141,10 +141,11 @@ apply to referenced tables) but can be switched to service principal in
 
 The `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`
 are automatically injected by the Databricks Apps runtime. Runtime Lakebase
-access uses short-lived OAuth DB credentials plus startup-generated endpoint
-metadata (`LAKEBASE_ENDPOINT_NAME`, `LAKEBASE_POOLER_HOST`, `LAKEBASE_USERNAME`)
-from `scripts/provision-lakebase.mjs` -- no static runtime DB secrets or
-manual bindings needed.
+access defaults to native Postgres password auth against the pooler endpoint
+(`LAKEBASE_AUTH_MODE=native_password`), with startup-generated endpoint metadata
+(`LAKEBASE_ENDPOINT_NAME`, `LAKEBASE_POOLER_HOST`, `LAKEBASE_USERNAME`) from
+`scripts/provision-lakebase.mjs`. OAuth runtime mode remains available as an
+explicit deploy override.
 No credentials are hardcoded or bundled with the application image.
 
 ---
@@ -442,6 +443,9 @@ Invalid items are logged and dropped; they do not crash the pipeline.
 | `LAKEBASE_ENDPOINT_NAME` | Auto-generated at startup | Lakebase endpoint resource name |
 | `LAKEBASE_POOLER_HOST` | Auto-generated at startup | Lakebase runtime pooler host |
 | `LAKEBASE_USERNAME` | Auto-generated at startup | Lakebase runtime username |
+| `LAKEBASE_AUTH_MODE` | Deploy/startup configuration | Runtime DB auth mode |
+| `LAKEBASE_NATIVE_USER` | Deploy/startup configuration | Native Postgres runtime role |
+| `LAKEBASE_NATIVE_PASSWORD` | Deploy rotation or startup fallback | Native Postgres runtime password |
 | `DATABASE_URL` | `.env.local` (local dev only) | Local fallback connection string |
 | `DATABRICKS_TOKEN` | `.env.local` (local dev only) | Developer machine |
 
@@ -453,7 +457,7 @@ Invalid items are logged and dropped; they do not crash the pipeline.
 | **gitignore** | `.env*` files excluded (except `.env.local.example`) |
 | **No secrets in Docker image** | Multi-stage build; env vars provided at runtime |
 | **Token caching** | OAuth tokens cached in-memory with 60s expiry buffer; no disk persistence |
-| **Secret rotation** | OAuth M2M tokens are short-lived (auto-refreshed); Databricks Apps rotates service principal credentials |
+| **Secret rotation** | Native password rotation is controlled via `deploy.sh` flags (`--rotate-lakebase-native-password`) with explicit deploy audit trail; OAuth fallback mode remains available |
 
 ---
 

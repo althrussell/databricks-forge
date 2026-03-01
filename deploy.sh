@@ -5,6 +5,7 @@
 # Usage:
 #   ./deploy.sh                          Interactive (pick a warehouse)
 #   ./deploy.sh --warehouse "Name"       Non-interactive
+#   ./deploy.sh --profile "my-profile"   Use a specific CLI profile
 #   ./deploy.sh --destroy                Remove the app
 #
 # Override model endpoints (advanced):
@@ -12,6 +13,11 @@
 # Optional Lakebase bootstrap grants:
 #   ./deploy.sh --lakebase-bootstrap-user "user@company.com"
 # Optional Lakebase runtime auth mode:
+#   ./deploy.sh --lakebase-auth-mode "oauth|native_password"
+#               --lakebase-native-user "forge_app_runtime"
+#               --lakebase-native-password "..."
+#               --rotate-lakebase-native-password
+# Optional Lakebase OAuth runtime behavior:
 #   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
 #               --lakebase-enable-pooler-experiment
 # =========================================================================
@@ -40,10 +46,16 @@ WORKSPACE_PATH=""
 # Parse arguments
 # -------------------------------------------------------------------------
 ARG_WAREHOUSE=""
+ARG_PROFILE=""
 ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
 ARG_LAKEBASE_BOOTSTRAP_USER=""
+ARG_LAKEBASE_AUTH_MODE=""
+ARG_LAKEBASE_NATIVE_USER=""
+ARG_LAKEBASE_NATIVE_PASSWORD=""
+ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=false
+ARG_PRINT_GENERATED_NATIVE_PASSWORD=false
 ARG_LAKEBASE_RUNTIME_MODE=""
 ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
 ARG_DESTROY=false
@@ -55,16 +67,29 @@ Databricks Forge AI — One-command deployment
 Usage:
   ./deploy.sh                                  Interactive deployment
   ./deploy.sh --warehouse "My Warehouse"       Skip warehouse prompt
+  ./deploy.sh --profile "my-profile"           Use a specific CLI profile
   ./deploy.sh --destroy                        Remove the app
 
 Options:
   --warehouse NAME        SQL Warehouse name (skips interactive prompt)
+  --profile NAME         Databricks CLI profile name
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
   --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-gte-large-en)
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
+  --lakebase-auth-mode MODE
+                             Optional auth mode override:
+                             native_password or oauth
+  --lakebase-native-user USER
+                             Optional native runtime DB user override
+  --lakebase-native-password PASSWORD
+                             Optional native runtime DB password override
+  --rotate-lakebase-native-password
+                             Generate and rotate native DB password at deploy time
+  --print-generated-native-password
+                             Print generated native password (use with caution)
   --lakebase-runtime-mode MODE
                              Lakebase runtime mode:
                              oauth_direct_only (default), pooler_preferred
@@ -82,10 +107,16 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --warehouse)      ARG_WAREHOUSE="$2"; shift 2 ;;
+    --profile)        ARG_PROFILE="$2"; shift 2 ;;
     --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
     --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
+    --lakebase-auth-mode) ARG_LAKEBASE_AUTH_MODE="$2"; shift 2 ;;
+    --lakebase-native-user) ARG_LAKEBASE_NATIVE_USER="$2"; shift 2 ;;
+    --lakebase-native-password) ARG_LAKEBASE_NATIVE_PASSWORD="$2"; shift 2 ;;
+    --rotate-lakebase-native-password) ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=true; shift ;;
+    --print-generated-native-password) ARG_PRINT_GENERATED_NATIVE_PASSWORD=true; shift ;;
     --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
     --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
@@ -94,12 +125,53 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -n "$ARG_PROFILE" ]]; then
+  export DATABRICKS_CONFIG_PROFILE="$ARG_PROFILE"
+fi
+
 ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
 EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
 LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
+LAKEBASE_AUTH_MODE="${ARG_LAKEBASE_AUTH_MODE:-}"
+LAKEBASE_NATIVE_USER="${ARG_LAKEBASE_NATIVE_USER:-}"
+LAKEBASE_NATIVE_PASSWORD="${ARG_LAKEBASE_NATIVE_PASSWORD:-}"
+ROTATE_LAKEBASE_NATIVE_PASSWORD="${ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD}"
+PRINT_GENERATED_NATIVE_PASSWORD="${ARG_PRINT_GENERATED_NATIVE_PASSWORD}"
+GENERATED_NATIVE_PASSWORD=false
 LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
 LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
+
+if [[ -n "$LAKEBASE_AUTH_MODE" && "$LAKEBASE_AUTH_MODE" != "oauth" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
+  die "Invalid --lakebase-auth-mode '$LAKEBASE_AUTH_MODE'. Expected oauth or native_password."
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" && -z "$LAKEBASE_AUTH_MODE" ]]; then
+  LAKEBASE_AUTH_MODE="native_password"
+fi
+if [[ -n "$LAKEBASE_NATIVE_USER" || -n "$LAKEBASE_NATIVE_PASSWORD" ]]; then
+  if [[ "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
+    die "--lakebase-native-user/--lakebase-native-password require --lakebase-auth-mode native_password."
+  fi
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
+  die "--rotate-lakebase-native-password requires --lakebase-auth-mode native_password (or leave auth mode unset)."
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" && -n "$LAKEBASE_NATIVE_PASSWORD" ]]; then
+  die "Cannot combine --rotate-lakebase-native-password with --lakebase-native-password."
+fi
+if [[ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" && "$ROTATE_LAKEBASE_NATIVE_PASSWORD" != "true" ]]; then
+  die "--print-generated-native-password is only valid with --rotate-lakebase-native-password."
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" ]]; then
+  LAKEBASE_NATIVE_PASSWORD="$(python3 - <<'PY'
+import secrets
+import string
+alphabet = string.ascii_letters + string.digits + "-_@#%+=."
+print("".join(secrets.choice(alphabet) for _ in range(48)))
+PY
+)"
+  GENERATED_NATIVE_PASSWORD=true
+fi
 
 if [[ -n "$LAKEBASE_RUNTIME_MODE" && "$LAKEBASE_RUNTIME_MODE" != "oauth_direct_only" && "$LAKEBASE_RUNTIME_MODE" != "pooler_preferred" ]]; then
   die "Invalid --lakebase-runtime-mode '$LAKEBASE_RUNTIME_MODE'. Expected oauth_direct_only or pooler_preferred."
@@ -119,7 +191,7 @@ json_val() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ]; then
+  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ]; then
     return
   fi
 
@@ -127,6 +199,9 @@ prepare_app_yaml() {
   cp "app.yaml" "$APP_YAML_BACKUP"
 
   export LAKEBASE_BOOTSTRAP_USER
+  export LAKEBASE_AUTH_MODE
+  export LAKEBASE_NATIVE_USER
+  export LAKEBASE_NATIVE_PASSWORD
   export LAKEBASE_RUNTIME_MODE
   export LAKEBASE_ENABLE_POOLER_EXPERIMENT
   python3 - <<'PY'
@@ -134,6 +209,9 @@ import os
 from pathlib import Path
 
 bootstrap_user = os.environ.get("LAKEBASE_BOOTSTRAP_USER", "").strip()
+auth_mode = os.environ.get("LAKEBASE_AUTH_MODE", "").strip()
+native_user = os.environ.get("LAKEBASE_NATIVE_USER", "").strip()
+native_password = os.environ.get("LAKEBASE_NATIVE_PASSWORD", "")
 runtime_mode = os.environ.get("LAKEBASE_RUNTIME_MODE", "").strip()
 pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").strip().lower() == "true"
 
@@ -148,6 +226,9 @@ def is_managed_name_line(s: str) -> bool:
         return False
     return (
         "LAKEBASE_BOOTSTRAP_USER" in t
+        or "LAKEBASE_AUTH_MODE" in t
+        or "LAKEBASE_NATIVE_USER" in t
+        or "LAKEBASE_NATIVE_PASSWORD" in t
         or "LAKEBASE_RUNTIME_MODE" in t
         or "LAKEBASE_ENABLE_POOLER_EXPERIMENT" in t
     )
@@ -168,6 +249,15 @@ while i < len(lines):
 if bootstrap_user:
     out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
     out.append(f'    value: "{bootstrap_user}"')
+if auth_mode:
+    out.append("  - name: LAKEBASE_AUTH_MODE")
+    out.append(f'    value: "{auth_mode}"')
+if auth_mode == "native_password" and native_user:
+    out.append("  - name: LAKEBASE_NATIVE_USER")
+    out.append(f'    value: "{native_user}"')
+if auth_mode == "native_password" and native_password:
+    out.append("  - name: LAKEBASE_NATIVE_PASSWORD")
+    out.append(f'    value: "{native_password}"')
 if runtime_mode:
     out.append("  - name: LAKEBASE_RUNTIME_MODE")
     out.append(f'    value: "{runtime_mode}"')
@@ -198,6 +288,9 @@ check_prerequisites() {
   local cli_ver
   cli_ver=$(databricks version 2>/dev/null || databricks --version 2>/dev/null || echo "unknown")
   ok "$cli_ver"
+
+  info "CLI profile..."
+  ok "${DATABRICKS_CONFIG_PROFILE:-DEFAULT}"
 
   info "Authentication..."
   local user_json
@@ -499,8 +592,18 @@ print_success() {
   if [ -n "$LAKEBASE_BOOTSTRAP_USER" ]; then
     printf "      Bootstrap user:   %s\n" "$LAKEBASE_BOOTSTRAP_USER"
   fi
+  printf "      Auth mode:        %s\n" "${LAKEBASE_AUTH_MODE:-repo default (start.sh)}"
+  if [ "$LAKEBASE_AUTH_MODE" = "native_password" ] && [ -n "$LAKEBASE_NATIVE_USER" ]; then
+    printf "      Native db user:   %s\n" "$LAKEBASE_NATIVE_USER"
+  fi
+  if [ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" ]; then
+    printf "      Native password:  rotated\n"
+  fi
   printf "      Runtime mode:     %s\n" "${LAKEBASE_RUNTIME_MODE:-oauth_direct_only (default)}"
   printf "      Pooler experiment:%s\n" "$( [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" = "true" ] && echo " enabled" || echo " disabled" )"
+  if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
+    printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"
+  fi
   printf "\n"
   printf "    User scopes:\n"
   printf "      sql, catalog.tables:read, catalog.schemas:read,\n"

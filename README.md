@@ -14,9 +14,7 @@ Databricks Forge AI is a web application deployed as a [Databricks App](https://
 
 ## Deployment (Databricks Apps)
 
-The recommended way to deploy is **directly from Git** using the Databricks Apps UI, or via the CLI using the included deploy script. No manual infrastructure setup needed -- Lakebase is auto-provisioned on first boot.
-
-> For background on the "Install from Git" feature, see [Deploy Databricks Apps directly from Git](https://community.databricks.com/t5/technical-blog/deploy-databricks-apps-directly-from-git/ba-p/147766).
+The supported deployment path is the included `deploy.sh` script. It keeps resource bindings, auth mode, and Lakebase secret rotation behavior consistent and auditable.
 
 ### Prerequisites
 
@@ -37,6 +35,19 @@ The recommended way to deploy is **directly from Git** using the Databricks Apps
 git clone <repo-url> databricks-forge
 cd databricks-forge
 ./deploy.sh
+```
+
+Native password rotation and rollback examples:
+
+```bash
+# Rotate native password during deploy (recommended for production rotations)
+./deploy.sh --rotate-lakebase-native-password
+
+# Optional: print generated password to terminal (use with caution)
+./deploy.sh --rotate-lakebase-native-password --print-generated-native-password
+
+# Emergency rollback to OAuth mode
+./deploy.sh --lakebase-auth-mode oauth
 ```
 
 The deploy script discovers your SQL Warehouses, lets you pick one, creates
@@ -103,9 +114,13 @@ Pull the latest changes and re-run `./deploy.sh`. The script detects the existin
 | `LAKEBASE_ENDPOINT_NAME` | Lakebase endpoint resource name | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 | `LAKEBASE_POOLER_HOST` | Lakebase pooler hostname | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 | `LAKEBASE_USERNAME` | Lakebase runtime username | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
+| `LAKEBASE_AUTH_MODE` | Runtime DB auth mode | Set by `deploy.sh` override or startup default (`native_password`) |
+| `LAKEBASE_NATIVE_USER` | Native Postgres runtime user | Set by `deploy.sh` override or startup default (`forge_app_runtime`) |
+| `LAKEBASE_NATIVE_PASSWORD` | Native Postgres runtime password | Set/rotated by `deploy.sh` or fallback-generated at startup |
+| `LAKEBASE_REQUIRE_NATIVE_PASSWORD` | Native password policy guardrail | Optional; when `true`, startup fails if native password is missing |
 | `DATABASE_URL` | Lakebase connection string | Local development fallback only |
 
-> `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically. In Databricks Apps mode, runtime connections use short-lived credentials + pooler endpoint metadata generated at startup (not a long-lived runtime `DATABASE_URL`).
+> `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` are injected automatically. Runtime mode is `native_password` by default (pooler endpoint); OAuth mode remains available as an explicit deploy override.
 
 ### Auth model
 
@@ -139,6 +154,7 @@ The app uses **two complementary auth models** ([docs](https://docs.databricks.c
 | "DATABASE_URL is not set and Lakebase auto-provisioning is not available" | Running locally without `.env` | Set `DATABASE_URL` in `.env` for local dev |
 | "Lakebase provisioning returned empty URL" | SP lacks permission to create Lakebase projects | Ensure the app's service principal can manage Lakebase resources |
 | "Create project failed (403)" | Lakebase Autoscale not available in region | Check [supported regions](https://docs.databricks.com/aws/en/oltp/projects/authentication); for local fallback use a manual `DATABASE_URL` |
+| Native mode fails with missing password | Password not provided and strict mode enabled | Use `./deploy.sh --rotate-lakebase-native-password` or provide `--lakebase-native-password` |
 | Schema push fails at startup | Lakebase compute still waking from scale-to-zero | Restart the app -- compute wakes automatically and retries succeed |
 | "Failed to connect to warehouse" | Warehouse binding missing or stopped | Verify `sql-warehouse` resource is configured and warehouse is running |
 | "Model serving request failed" | Serving endpoint binding missing | Verify `serving-endpoint` resource is configured. If fast tasks fail, check `serving-endpoint-fast` or remove it to fall back to premium |
@@ -226,10 +242,15 @@ The app persists all state (pipeline runs, use cases, exports) in [Lakebase Auto
 **No manual database setup is required.** When deployed as a Databricks App, the app automatically:
 
 1. **Creates a Lakebase Autoscale project** (`databricks-forge`) on first boot using the platform-injected service principal credentials
-2. **Generates short-lived OAuth DB credentials** for Postgres connections (rotated automatically every ~50 minutes)
-3. **Pushes the Prisma schema** (`prisma db push`) to create all tables on first deploy, and applies additive changes on subsequent deploys
+2. **Uses direct endpoint for startup DDL/schema sync** (`prisma db push`, extensions, index setup)
+3. **Bootstraps a native runtime role** (`forge_app_runtime` by default) and grants required privileges
+4. **Runs runtime traffic through pooler endpoint** in `native_password` mode by default
+5. **Allows explicit OAuth fallback** via `./deploy.sh --lakebase-auth-mode oauth`
 
-There are no Databricks secrets, no password management, and no manual resource bindings for the database. The service principal that Databricks Apps injects (`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` / `DATABRICKS_HOST`) is all the app needs.
+Use `deploy.sh` for deterministic password lifecycle:
+
+- `./deploy.sh --rotate-lakebase-native-password` to rotate password during deployment
+- `./deploy.sh --lakebase-native-password "<value>" --lakebase-auth-mode native_password` to pin an explicit password
 
 ### First deploy vs subsequent deploys
 

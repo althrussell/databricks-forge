@@ -78,6 +78,24 @@ const BRANCH_ID = "production";
 const DATABASE_NAME = "databricks_postgres";
 const PG_VERSION = "17";
 const DISPLAY_NAME = "Databricks Forge AI";
+const LAKEBASE_AUTH_MODES = ["oauth", "native_password"] as const;
+export type LakebaseAuthMode = (typeof LAKEBASE_AUTH_MODES)[number];
+
+export function getLakebaseAuthMode(): LakebaseAuthMode {
+  const raw = process.env.LAKEBASE_AUTH_MODE ?? "oauth";
+  if (raw === "oauth" || raw === "native_password") {
+    return raw;
+  }
+  logger.warn("[provision] Invalid LAKEBASE_AUTH_MODE, defaulting to oauth", {
+    value: raw,
+    allowed: LAKEBASE_AUTH_MODES,
+  });
+  return "oauth";
+}
+
+export function isNativePasswordMode(): boolean {
+  return getLakebaseAuthMode() === "native_password";
+}
 
 function getProjectId(): string {
   if (process.env.LAKEBASE_PROJECT_ID) return process.env.LAKEBASE_PROJECT_ID;
