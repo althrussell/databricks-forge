@@ -15,6 +15,7 @@
 #   ./deploy.sh --lakebase-auth-mode "oauth|native_password"
 #               --lakebase-native-user "forge_app_runtime"
 #               --lakebase-native-password "..."
+#               --rotate-lakebase-native-password
 # Optional Lakebase OAuth runtime behavior:
 #   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
 #               --lakebase-enable-pooler-experiment
@@ -51,6 +52,8 @@ ARG_LAKEBASE_BOOTSTRAP_USER=""
 ARG_LAKEBASE_AUTH_MODE=""
 ARG_LAKEBASE_NATIVE_USER=""
 ARG_LAKEBASE_NATIVE_PASSWORD=""
+ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=false
+ARG_PRINT_GENERATED_NATIVE_PASSWORD=false
 ARG_LAKEBASE_RUNTIME_MODE=""
 ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
 ARG_DESTROY=false
@@ -79,6 +82,10 @@ Options:
                              Optional native runtime DB user override
   --lakebase-native-password PASSWORD
                              Optional native runtime DB password override
+  --rotate-lakebase-native-password
+                             Generate and rotate native DB password at deploy time
+  --print-generated-native-password
+                             Print generated native password (use with caution)
   --lakebase-runtime-mode MODE
                              Lakebase runtime mode:
                              oauth_direct_only (default), pooler_preferred
@@ -103,6 +110,8 @@ while [[ $# -gt 0 ]]; do
     --lakebase-auth-mode) ARG_LAKEBASE_AUTH_MODE="$2"; shift 2 ;;
     --lakebase-native-user) ARG_LAKEBASE_NATIVE_USER="$2"; shift 2 ;;
     --lakebase-native-password) ARG_LAKEBASE_NATIVE_PASSWORD="$2"; shift 2 ;;
+    --rotate-lakebase-native-password) ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=true; shift ;;
+    --print-generated-native-password) ARG_PRINT_GENERATED_NATIVE_PASSWORD=true; shift ;;
     --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
     --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
@@ -118,16 +127,41 @@ LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
 LAKEBASE_AUTH_MODE="${ARG_LAKEBASE_AUTH_MODE:-}"
 LAKEBASE_NATIVE_USER="${ARG_LAKEBASE_NATIVE_USER:-}"
 LAKEBASE_NATIVE_PASSWORD="${ARG_LAKEBASE_NATIVE_PASSWORD:-}"
+ROTATE_LAKEBASE_NATIVE_PASSWORD="${ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD}"
+PRINT_GENERATED_NATIVE_PASSWORD="${ARG_PRINT_GENERATED_NATIVE_PASSWORD}"
+GENERATED_NATIVE_PASSWORD=false
 LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
 LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
 
 if [[ -n "$LAKEBASE_AUTH_MODE" && "$LAKEBASE_AUTH_MODE" != "oauth" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
   die "Invalid --lakebase-auth-mode '$LAKEBASE_AUTH_MODE'. Expected oauth or native_password."
 fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" && -z "$LAKEBASE_AUTH_MODE" ]]; then
+  LAKEBASE_AUTH_MODE="native_password"
+fi
 if [[ -n "$LAKEBASE_NATIVE_USER" || -n "$LAKEBASE_NATIVE_PASSWORD" ]]; then
   if [[ "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
     die "--lakebase-native-user/--lakebase-native-password require --lakebase-auth-mode native_password."
   fi
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
+  die "--rotate-lakebase-native-password requires --lakebase-auth-mode native_password (or leave auth mode unset)."
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" && -n "$LAKEBASE_NATIVE_PASSWORD" ]]; then
+  die "Cannot combine --rotate-lakebase-native-password with --lakebase-native-password."
+fi
+if [[ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" && "$ROTATE_LAKEBASE_NATIVE_PASSWORD" != "true" ]]; then
+  die "--print-generated-native-password is only valid with --rotate-lakebase-native-password."
+fi
+if [[ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" ]]; then
+  LAKEBASE_NATIVE_PASSWORD="$(python3 - <<'PY'
+import secrets
+import string
+alphabet = string.ascii_letters + string.digits + "-_@#%+=."
+print("".join(secrets.choice(alphabet) for _ in range(48)))
+PY
+)"
+  GENERATED_NATIVE_PASSWORD=true
 fi
 
 if [[ -n "$LAKEBASE_RUNTIME_MODE" && "$LAKEBASE_RUNTIME_MODE" != "oauth_direct_only" && "$LAKEBASE_RUNTIME_MODE" != "pooler_preferred" ]]; then
@@ -550,8 +584,14 @@ print_success() {
   if [ "$LAKEBASE_AUTH_MODE" = "native_password" ] && [ -n "$LAKEBASE_NATIVE_USER" ]; then
     printf "      Native db user:   %s\n" "$LAKEBASE_NATIVE_USER"
   fi
+  if [ "$ROTATE_LAKEBASE_NATIVE_PASSWORD" = "true" ]; then
+    printf "      Native password:  rotated\n"
+  fi
   printf "      Runtime mode:     %s\n" "${LAKEBASE_RUNTIME_MODE:-oauth_direct_only (default)}"
   printf "      Pooler experiment:%s\n" "$( [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" = "true" ] && echo " enabled" || echo " disabled" )"
+  if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
+    printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"
+  fi
   printf "\n"
   printf "    User scopes:\n"
   printf "      sql, catalog.tables:read, catalog.schemas:read,\n"

@@ -2,7 +2,7 @@
 
 ## Quick Deploy (Recommended)
 
-The easiest way to deploy is the interactive deploy script. It discovers
+The supported deployment path is the interactive deploy script. It discovers
 your resources, creates the app, uploads code, and deploys -- all in one
 command with a single prompt (which SQL Warehouse to use).
 
@@ -15,6 +15,22 @@ endpoints. Override with flags if needed:
 
 ```bash
 ./deploy.sh --warehouse "My Warehouse" --endpoint "my-model" --fast-endpoint "my-fast-model"
+```
+
+Native password auth and rotation examples:
+
+```bash
+# Default deployment path (repo startup default is native_password)
+./deploy.sh
+
+# Rotate native DB password during deploy
+./deploy.sh --rotate-lakebase-native-password
+
+# Provide explicit native password (non-rotating)
+./deploy.sh --lakebase-auth-mode native_password --lakebase-native-user forge_app_runtime --lakebase-native-password "<password>"
+
+# Emergency rollback to OAuth runtime mode
+./deploy.sh --lakebase-auth-mode oauth
 ```
 
 To remove the app:
@@ -44,6 +60,22 @@ authentication.
 6. Deploys the app from that workspace folder
 
 No manual UI configuration is needed. The script handles everything.
+
+### Lakebase auth/secret controls
+
+Use `deploy.sh` to keep auth and password lifecycle auditable:
+
+- `--lakebase-auth-mode native_password|oauth` (optional override)
+- `--lakebase-native-user <user>` (requires native mode)
+- `--lakebase-native-password <password>` (requires native mode)
+- `--rotate-lakebase-native-password` (native mode only; generates and applies a new password)
+- `--print-generated-native-password` (only with rotate; use with caution)
+
+Validation rules enforced by the script:
+
+- Native user/password flags require `native_password` mode.
+- Rotate cannot be combined with explicit `--lakebase-native-password`.
+- Print-generated-password requires rotate.
 
 ### Resource bindings
 
@@ -94,8 +126,21 @@ needed -- the platform handles containerisation.
 3. `scripts/start.sh`:
    - Auto-provisions Lakebase Autoscale (if `DATABRICKS_CLIENT_ID` is set)
    - Uses the direct endpoint for startup DDL/schema sync
-   - Passes pooler runtime metadata (`LAKEBASE_ENDPOINT_NAME`, `LAKEBASE_POOLER_HOST`, `LAKEBASE_USERNAME`) to the server
+   - Bootstraps native runtime DB role/password/grants in `native_password` mode
+   - Passes pooler runtime metadata (`LAKEBASE_ENDPOINT_NAME`, `LAKEBASE_POOLER_HOST`, `LAKEBASE_USERNAME`) plus auth mode/runtime credentials to the server
    - Starts the Next.js standalone server on `DATABRICKS_APP_PORT`
+
+### Rotation runbook
+
+1. Rotate:
+   - `./deploy.sh --rotate-lakebase-native-password`
+2. Verify runtime mode and health:
+   - `curl -s "$APP_URL/api/health" | jq '.authRuntime'`
+3. Confirm logs show:
+   - `Client created (native password mode)`
+   - pooler host + `forge_app_runtime`
+4. Rollback (if needed):
+   - `./deploy.sh --lakebase-auth-mode oauth`
 
 ---
 
