@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getPrisma } from "@/lib/prisma";
+import { getDatabaseAuthRuntimeState, getPrisma } from "@/lib/prisma";
 import { executeSQL } from "@/lib/dbx/sql";
 import { getCurrentUserEmail, getConfig } from "@/lib/dbx/client";
 import packageJson from "@/package.json";
@@ -23,6 +23,13 @@ interface HealthCheck {
   checks: {
     database: CheckResult;
     warehouse: CheckResult;
+  };
+  authRuntime?: {
+    ready: boolean;
+    poolerFailoverCount: number;
+    poolerConsecutiveSuccesses: number;
+    lastSelectedEndpointKind: "pooler" | "direct" | null;
+    requirePooler: boolean;
   };
 }
 
@@ -69,6 +76,7 @@ export async function GET() {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     timestamp: new Date().toISOString(),
     checks: { database, warehouse },
+    authRuntime: getDatabaseAuthRuntimeState(),
     userEmail,
     host,
   };

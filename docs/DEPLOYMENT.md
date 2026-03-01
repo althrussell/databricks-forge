@@ -93,7 +93,8 @@ needed -- the platform handles containerisation.
 2. `npm run build` (runs `prisma generate && next build && sh scripts/postbuild.sh`)
 3. `scripts/start.sh`:
    - Auto-provisions Lakebase Autoscale (if `DATABRICKS_CLIENT_ID` is set)
-   - Syncs the Prisma schema to Lakebase
+   - Uses the direct endpoint for startup DDL/schema sync
+   - Passes pooler runtime metadata (`LAKEBASE_ENDPOINT_NAME`, `LAKEBASE_POOLER_HOST`, `LAKEBASE_USERNAME`) to the server
    - Starts the Next.js standalone server on `DATABRICKS_APP_PORT`
 
 ---

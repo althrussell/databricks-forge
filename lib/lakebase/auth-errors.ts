@@ -13,11 +13,38 @@ export const AUTH_ERROR_PATTERNS = [
   "FATAL:  password",
 ] as const;
 
+export const RATE_LIMIT_ERROR_PATTERNS = [
+  "connection attempt rate limit exceeded",
+  "too many connections",
+  "remaining connection slots are reserved",
+] as const;
+
+export const CREDENTIAL_PROPAGATION_PATTERNS = [
+  "password authentication failed",
+  "provided database credentials",
+  "not valid",
+] as const;
+
 export function isAuthError(err: unknown): boolean {
   const msg =
     err instanceof Error ? err.message : typeof err === "string" ? err : "";
   const lower = msg.toLowerCase();
   return AUTH_ERROR_PATTERNS.some((p) => lower.includes(p));
+}
+
+export function isRateLimitError(err: unknown): boolean {
+  const msg =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const lower = msg.toLowerCase();
+  return RATE_LIMIT_ERROR_PATTERNS.some((p) => lower.includes(p));
+}
+
+export function isCredentialPropagationError(err: unknown): boolean {
+  if (!isAuthError(err)) return false;
+  const msg =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const lower = msg.toLowerCase();
+  return CREDENTIAL_PROPAGATION_PATTERNS.some((p) => lower.includes(p));
 }
 
 /**
@@ -27,4 +54,9 @@ export function isAuthError(err: unknown): boolean {
 export function isAuthErrorMessage(message: string): boolean {
   const lower = message.toLowerCase();
   return AUTH_ERROR_PATTERNS.some((p) => lower.includes(p));
+}
+
+export function isRateLimitErrorMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return RATE_LIMIT_ERROR_PATTERNS.some((p) => lower.includes(p));
 }
