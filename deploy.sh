@@ -5,6 +5,7 @@
 # Usage:
 #   ./deploy.sh                          Interactive (pick a warehouse)
 #   ./deploy.sh --warehouse "Name"       Non-interactive
+#   ./deploy.sh --profile "my-profile"   Use a specific CLI profile
 #   ./deploy.sh --destroy                Remove the app
 #
 # Override model endpoints (advanced):
@@ -45,6 +46,7 @@ WORKSPACE_PATH=""
 # Parse arguments
 # -------------------------------------------------------------------------
 ARG_WAREHOUSE=""
+ARG_PROFILE=""
 ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
@@ -65,10 +67,12 @@ Databricks Forge AI — One-command deployment
 Usage:
   ./deploy.sh                                  Interactive deployment
   ./deploy.sh --warehouse "My Warehouse"       Skip warehouse prompt
+  ./deploy.sh --profile "my-profile"           Use a specific CLI profile
   ./deploy.sh --destroy                        Remove the app
 
 Options:
   --warehouse NAME        SQL Warehouse name (skips interactive prompt)
+  --profile NAME         Databricks CLI profile name
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
   --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-gte-large-en)
@@ -103,6 +107,7 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --warehouse)      ARG_WAREHOUSE="$2"; shift 2 ;;
+    --profile)        ARG_PROFILE="$2"; shift 2 ;;
     --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
@@ -119,6 +124,10 @@ while [[ $# -gt 0 ]]; do
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
   esac
 done
+
+if [[ -n "$ARG_PROFILE" ]]; then
+  export DATABRICKS_CONFIG_PROFILE="$ARG_PROFILE"
+fi
 
 ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
@@ -279,6 +288,9 @@ check_prerequisites() {
   local cli_ver
   cli_ver=$(databricks version 2>/dev/null || databricks --version 2>/dev/null || echo "unknown")
   ok "$cli_ver"
+
+  info "CLI profile..."
+  ok "${DATABRICKS_CONFIG_PROFILE:-DEFAULT}"
 
   info "Authentication..."
   local user_json
