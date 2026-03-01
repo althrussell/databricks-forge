@@ -23,7 +23,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
   canAutoProvision,
-  getLakebaseConnectionUrl,
+  getLakebaseConnectionUrls,
   getRuntimeEndpointInfo,
   getCredentialGeneration,
   getCredentialExpiresAt,
@@ -51,10 +51,28 @@ function logConnectionInfo(connectionString: string): void {
   });
 }
 
-function withHost(connectionString: string, host: string): string {
-  const parsed = new URL(connectionString);
-  parsed.hostname = host;
-  return parsed.toString();
+type AuthErrorClass =
+  | "sasl_auth"
+  | "password_auth"
+  | "rate_limit"
+  | "network"
+  | "unknown";
+
+function classifyDbError(err: unknown): AuthErrorClass {
+  const msg =
+    err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  if (msg.includes("sasl")) return "sasl_auth";
+  if (msg.includes("password authentication failed")) return "password_auth";
+  if (isRateLimitError(err)) return "rate_limit";
+  if (
+    msg.includes("timeout") ||
+    msg.includes("connect") ||
+    msg.includes("econn") ||
+    msg.includes("enotfound")
+  ) {
+    return "network";
+  }
+  return "unknown";
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +90,9 @@ const globalForPrisma = globalThis as unknown as {
   __dbReady: boolean | undefined;
   __rotationResolvedAt: number | undefined;
   __lastRotationAttemptAt: number | undefined;
+  __poolerFailoverCount: number | undefined;
+  __poolerConsecutiveSuccesses: number | undefined;
+  __lastSelectedEndpointKind: "pooler" | "direct" | null | undefined;
 };
 
 globalForPrisma.__rotationInFlight ??= null;
@@ -80,6 +101,9 @@ globalForPrisma.__staticInitInFlight ??= null;
 globalForPrisma.__dbReady ??= false;
 globalForPrisma.__rotationResolvedAt ??= 0;
 globalForPrisma.__lastRotationAttemptAt ??= 0;
+globalForPrisma.__poolerFailoverCount ??= 0;
+globalForPrisma.__poolerConsecutiveSuccesses ??= 0;
+globalForPrisma.__lastSelectedEndpointKind ??= null;
 
 // ---------------------------------------------------------------------------
 // Pool configuration
@@ -92,6 +116,10 @@ const POOL_OPTIONS: pg.PoolConfig = {
 };
 
 const POOL_WARM_TARGET = 2;
+const REQUIRE_POOLER = process.env.LAKEBASE_REQUIRE_POOLER === "true";
+const POOLER_READINESS_SUCCESS_TARGET = Number(
+  process.env.LAKEBASE_POOLER_READINESS_SUCCESS_TARGET ?? "3"
+);
 
 // ---------------------------------------------------------------------------
 // Pool creation + pre-warming
@@ -208,6 +236,29 @@ export function isDatabaseReady(): boolean {
   return globalForPrisma.__dbReady ?? false;
 }
 
+export function getDatabaseAuthRuntimeState(): {
+  ready: boolean;
+  poolerFailoverCount: number;
+  poolerConsecutiveSuccesses: number;
+  lastSelectedEndpointKind: "pooler" | "direct" | null;
+  requirePooler: boolean;
+  poolerReadinessSuccessTarget: number;
+  poolerReadinessGatePassed: boolean;
+} {
+  const consecutive = globalForPrisma.__poolerConsecutiveSuccesses ?? 0;
+  const failovers = globalForPrisma.__poolerFailoverCount ?? 0;
+  return {
+    ready: isDatabaseReady(),
+    poolerFailoverCount: failovers,
+    poolerConsecutiveSuccesses: consecutive,
+    lastSelectedEndpointKind: globalForPrisma.__lastSelectedEndpointKind ?? null,
+    requirePooler: REQUIRE_POOLER,
+    poolerReadinessSuccessTarget: POOLER_READINESS_SUCCESS_TARGET,
+    poolerReadinessGatePassed:
+      failovers === 0 && consecutive >= POOLER_READINESS_SUCCESS_TARGET,
+  };
+}
+
 export async function invalidatePrismaClient(): Promise<void> {
   const oldClient = globalForPrisma.__prisma;
   const oldPool = globalForPrisma.__pool;
@@ -295,7 +346,54 @@ async function buildAutoProvisionedClient(
       await refreshDbCredential();
     }
 
-    const poolerConnectionString = await getLakebaseConnectionUrl();
+    const {
+      poolerUrl,
+      directUrl,
+      tokenGeneration,
+      tokenExpiresAt,
+    } = await getLakebaseConnectionUrls();
+
+    const probeResults: Record<"pooler" | "direct", "ok" | "error"> = {
+      pooler: "error",
+      direct: "error",
+    };
+    const endpointProbe = async (
+      endpointKind: "pooler" | "direct",
+      host: string,
+      connectionString: string
+    ): Promise<void> => {
+      const probePool = new pg.Pool({
+        connectionString,
+        max: 1,
+        connectionTimeoutMillis: 8_000,
+      });
+      try {
+        await probePool.query("SELECT 1");
+        probeResults[endpointKind] = "ok";
+      } catch (err) {
+        logger.warn("[prisma] Endpoint auth probe failed", {
+          endpointKind,
+          host,
+          tokenGeneration,
+          tokenExpiresInSec: tokenExpiresAt
+            ? Math.max(Math.round((tokenExpiresAt - Date.now()) / 1000), 0)
+            : null,
+          errorClass: classifyDbError(err),
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        await probePool.end().catch(() => {});
+      }
+    };
+
+    await endpointProbe("pooler", endpointInfo.poolerHost, poolerUrl);
+    await endpointProbe("direct", endpointInfo.directHost, directUrl);
+    logger.info("[prisma] Endpoint auth probes complete", {
+      tokenGeneration,
+      probeResultPooler: probeResults.pooler,
+      probeResultDirect: probeResults.direct,
+    });
+
     const endpointCandidates: Array<{
       endpointKind: "pooler" | "direct";
       host: string;
@@ -304,16 +402,20 @@ async function buildAutoProvisionedClient(
       {
         endpointKind: "pooler",
         host: endpointInfo.poolerHost,
-        connectionString: poolerConnectionString,
+        connectionString: poolerUrl,
       },
       {
         endpointKind: "direct",
         host: endpointInfo.directHost,
-        connectionString: withHost(poolerConnectionString, endpointInfo.directHost),
+        connectionString: directUrl,
       },
     ];
 
-    for (const candidate of endpointCandidates) {
+    const orderedCandidates = REQUIRE_POOLER
+      ? endpointCandidates.filter((c) => c.endpointKind === "pooler")
+      : endpointCandidates;
+
+    for (const candidate of orderedCandidates) {
       logConnectionInfo(candidate.connectionString);
 
       try {
@@ -331,6 +433,11 @@ async function buildAutoProvisionedClient(
           maxAttempts: MAX_CREDENTIAL_GENERATIONS,
           endpointKind: candidate.endpointKind,
           host: candidate.host,
+          tokenGeneration,
+          tokenExpiresInSec: tokenExpiresAt
+            ? Math.max(Math.round((tokenExpiresAt - Date.now()) / 1000), 0)
+            : null,
+          errorClass: classifyDbError(err),
           authError: isAuthError(err),
           rateLimited: isRateLimitError(err),
           propagationLikely: isCredentialPropagationError(err),
@@ -354,12 +461,34 @@ async function buildAutoProvisionedClient(
     endpointName: endpointInfo.endpointName,
     endpointKind: selectedEndpointKind,
     host: selectedHost,
+    fallbackTriggered: selectedEndpointKind === "direct",
+    poolerFailoverCount: globalForPrisma.__poolerFailoverCount ?? 0,
   });
   if (selectedEndpointKind === "direct") {
+    globalForPrisma.__poolerFailoverCount =
+      (globalForPrisma.__poolerFailoverCount ?? 0) + 1;
+    globalForPrisma.__poolerConsecutiveSuccesses = 0;
+    globalForPrisma.__lastSelectedEndpointKind = "direct";
     logger.warn(
-      "[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime"
+      "[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime",
+      {
+        fallbackTriggered: true,
+        poolerFailoverCount: globalForPrisma.__poolerFailoverCount,
+      }
     );
+  } else {
+    globalForPrisma.__poolerConsecutiveSuccesses =
+      (globalForPrisma.__poolerConsecutiveSuccesses ?? 0) + 1;
+    globalForPrisma.__lastSelectedEndpointKind = "pooler";
   }
+
+  const runtimeState = getDatabaseAuthRuntimeState();
+  logger.info("[prisma] Pooler readiness gate status", {
+    poolerConsecutiveSuccesses: runtimeState.poolerConsecutiveSuccesses,
+    poolerFailoverCount: runtimeState.poolerFailoverCount,
+    poolerReadinessSuccessTarget: runtimeState.poolerReadinessSuccessTarget,
+    poolerReadinessGatePassed: runtimeState.poolerReadinessGatePassed,
+  });
 
   globalForPrisma.__pool = pool;
 
@@ -521,6 +650,7 @@ export async function withPrisma<T>(
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
           backoffMs,
+          errorClass: classifyDbError(err),
           error: err instanceof Error ? err.message : String(err),
         });
         await new Promise((r) => setTimeout(r, backoffMs));
@@ -537,6 +667,7 @@ export async function withPrisma<T>(
           maxRetries: MAX_AUTH_RETRIES,
           strategy,
           propagationLikely,
+          errorClass: classifyDbError(err),
           error: err instanceof Error ? err.message : String(err),
         });
 

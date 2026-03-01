@@ -96,7 +96,53 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     echo "[startup] WARNING: Could not enable pgvector after $MAX_DB_RETRIES attempts. Prisma push may fail for vector columns."
   fi
 
-  # -- Step B: Prisma schema push ----------------------------------------
+  # -- Step B: Validate Databricks OAuth DB prerequisites ------------------
+  if [ -n "$DATABRICKS_CLIENT_ID" ]; then
+    echo "[startup] Validating Databricks OAuth DB prerequisites..."
+    if ! DATABASE_URL="$SCHEMA_URL" DATABRICKS_CLIENT_ID="$DATABRICKS_CLIENT_ID" node -e "
+      const pg = require('pg');
+      (async () => {
+        const role = process.env.DATABRICKS_CLIENT_ID;
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+        try {
+          const ext = await pool.query(\"SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'databricks_auth') AS ok\");
+          const roleExists = await pool.query('SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok', [role]);
+          const dbConnect = await pool.query(\"SELECT has_database_privilege($1, current_database(), 'CONNECT') AS ok\", [role]);
+          const schemaUsage = await pool.query(\"SELECT has_schema_privilege($1, 'public', 'USAGE') AS ok\", [role]);
+          const tableGrantCount = await pool.query('SELECT COUNT(*)::int AS count FROM information_schema.role_table_grants WHERE grantee = $1', [role]);
+
+          const checks = {
+            databricksAuthExtension: !!ext.rows[0]?.ok,
+            servicePrincipalRole: !!roleExists.rows[0]?.ok,
+            databaseConnect: !!dbConnect.rows[0]?.ok,
+            publicSchemaUsage: !!schemaUsage.rows[0]?.ok,
+            tableGrantCount: Number(tableGrantCount.rows[0]?.count || 0),
+          };
+
+          const pass = checks.databricksAuthExtension && checks.servicePrincipalRole && checks.databaseConnect && checks.publicSchemaUsage;
+          console.log('[startup] OAuth DB prerequisite check', JSON.stringify({ role, pass, ...checks }));
+
+          if (!pass) {
+            console.error('[startup] WARNING: OAuth DB prerequisites are incomplete.');
+            console.error('[startup] Suggested remediation SQL:');
+            console.error('  CREATE EXTENSION IF NOT EXISTS databricks_auth;');
+            console.error(\"  SELECT databricks_create_role('\" + role + \"', 'service_principal');\");
+            console.error('  GRANT CONNECT ON DATABASE databricks_postgres TO \"' + role + '\";');
+            console.error('  GRANT CREATE, USAGE ON SCHEMA public TO \"' + role + '\";');
+          }
+        } finally {
+          await pool.end();
+        }
+      })().catch((err) => {
+        console.error('[startup] WARNING: OAuth DB prerequisite validation failed:', err.message);
+        process.exit(0);
+      });
+    " 2>&1; then
+      echo "[startup] WARNING: OAuth DB prerequisite validation encountered an error."
+    fi
+  fi
+
+  # -- Step C: Prisma schema push ----------------------------------------
   echo "[startup] Verifying database connectivity..."
   ATTEMPT=0
   DB_READY=false
@@ -121,7 +167,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     exit 1
   fi
 
-  # -- Step C: Create HNSW index (not managed by Prisma) ------------------
+  # -- Step D: Create HNSW index (not managed by Prisma) ------------------
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
     echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring HNSW index..."
     HNSW_ATTEMPT=0

@@ -491,6 +491,7 @@ async function generateDbCredential(): Promise<string> {
       generation: globalForProvision.__credentialGeneration,
       hasToken: true,
       tokenLength: data.token.length,
+      tokenExpiresInSec: Math.max(Math.round((expiresAt - Date.now()) / 1_000), 0),
       expiresAt: new Date(expiresAt).toISOString(),
     });
 
@@ -564,6 +565,30 @@ export async function getLakebaseConnectionUrl(): Promise<string> {
     `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(token)}` +
     `@${poolerHost}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`
   );
+}
+
+export async function getLakebaseConnectionUrls(): Promise<{
+  poolerUrl: string;
+  directUrl: string;
+  tokenGeneration: number;
+  tokenExpiresAt: number | null;
+}> {
+  const [{ poolerHost, directHost }, username, token] = await Promise.all([
+    resolveEndpoint(),
+    resolveUsername(),
+    generateDbCredential(),
+  ]);
+
+  const encodedUser = encodeURIComponent(username);
+  const encodedToken = encodeURIComponent(token);
+  const suffix = `/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`;
+
+  return {
+    poolerUrl: `postgresql://${encodedUser}:${encodedToken}@${poolerHost}${suffix}`,
+    directUrl: `postgresql://${encodedUser}:${encodedToken}@${directHost}${suffix}`,
+    tokenGeneration: getCredentialGeneration(),
+    tokenExpiresAt: getCredentialExpiresAt(),
+  };
 }
 
 export async function getRuntimeEndpointInfo(): Promise<{
