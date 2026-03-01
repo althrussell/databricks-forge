@@ -22,7 +22,7 @@
 # No secret scope or DATABASE_URL binding needed.
 #
 # Runtime DB auth mode is injected by deploy.sh at deploy-time:
-#   LAKEBASE_AUTH_MODE=oauth (default) OR native_password
+#   LAKEBASE_AUTH_MODE=native_password (default) OR oauth
 # In native_password mode, deploy.sh also injects:
 #   LAKEBASE_NATIVE_USER, LAKEBASE_NATIVE_PASSWORD
 

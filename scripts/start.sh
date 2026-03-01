@@ -25,9 +25,22 @@ LAKEBASE_STARTUP_URL=""
 LAKEBASE_ENDPOINT_NAME=""
 LAKEBASE_POOLER_HOST=""
 LAKEBASE_STARTUP_USERNAME=""
-LAKEBASE_AUTH_MODE="${LAKEBASE_AUTH_MODE:-oauth}"
+LAKEBASE_AUTH_MODE="${LAKEBASE_AUTH_MODE:-native_password}"
 LAKEBASE_NATIVE_USER="${LAKEBASE_NATIVE_USER:-forge_app_runtime}"
 LAKEBASE_NATIVE_PASSWORD="${LAKEBASE_NATIVE_PASSWORD:-}"
+
+if [ "$LAKEBASE_AUTH_MODE" = "native_password" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ]; then
+  # Repo-controlled default for direct git deployments:
+  # generate a strong ephemeral password and apply it during startup bootstrap.
+  LAKEBASE_NATIVE_PASSWORD="$(python3 - <<'PY'
+import secrets
+import string
+alphabet = string.ascii_letters + string.digits + "-_@#%+=."
+print("".join(secrets.choice(alphabet) for _ in range(48)))
+PY
+)"
+  echo "[startup] Generated native runtime password for this deployment."
+fi
 
 if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
   echo "[startup] Auto-provisioning Lakebase Autoscale..."
