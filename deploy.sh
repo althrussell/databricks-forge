@@ -9,6 +9,8 @@
 #
 # Override model endpoints (advanced):
 #   ./deploy.sh --endpoint "model" --fast-endpoint "fast-model"
+# Optional Lakebase bootstrap grants:
+#   ./deploy.sh --lakebase-bootstrap-user "user@company.com"
 # =========================================================================
 
 set -euo pipefail
@@ -38,6 +40,7 @@ ARG_WAREHOUSE=""
 ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
+ARG_LAKEBASE_BOOTSTRAP_USER=""
 ARG_DESTROY=false
 
 print_usage() {
@@ -54,6 +57,9 @@ Options:
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
   --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-gte-large-en)
+  --lakebase-bootstrap-user EMAIL
+                             Optional Databricks user email to bootstrap
+                             Lakebase OAuth role/grants during startup
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -69,6 +75,7 @@ while [[ $# -gt 0 ]]; do
     --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
+    --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -78,6 +85,7 @@ done
 ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
 EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
+LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
 
 # -------------------------------------------------------------------------
 # Output helpers
@@ -89,6 +97,60 @@ ok()   { if [ -n "${1:-}" ]; then printf "OK  (%s)\n" "$1"; else printf "OK\n"; 
 # Extract a value from JSON via Python 3.
 # Usage: echo '{"k":"v"}' | json_val "['k']"
 json_val() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
+
+APP_YAML_BACKUP=""
+
+prepare_app_yaml() {
+  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ]; then
+    return
+  fi
+
+  APP_YAML_BACKUP="$(mktemp)"
+  cp "app.yaml" "$APP_YAML_BACKUP"
+
+  export LAKEBASE_BOOTSTRAP_USER
+  python3 - <<'PY'
+import os
+from pathlib import Path
+
+bootstrap_user = os.environ.get("LAKEBASE_BOOTSTRAP_USER", "").strip()
+if not bootstrap_user:
+    raise SystemExit(0)
+
+path = Path("app.yaml")
+lines = path.read_text().splitlines()
+out: list[str] = []
+i = 0
+
+def is_bootstrap_name_line(s: str) -> bool:
+    t = s.strip()
+    return t.startswith("- name:") and "LAKEBASE_BOOTSTRAP_USER" in t
+
+while i < len(lines):
+    line = lines[i]
+    if is_bootstrap_name_line(line):
+        i += 1
+        while i < len(lines):
+            nxt = lines[i]
+            if nxt.startswith("  - name:"):
+                break
+            i += 1
+        continue
+    out.append(line)
+    i += 1
+
+out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
+out.append(f'    value: "{bootstrap_user}"')
+path.write_text("\n".join(out) + "\n")
+PY
+}
+
+restore_app_yaml() {
+  if [ -n "$APP_YAML_BACKUP" ] && [ -f "$APP_YAML_BACKUP" ]; then
+    mv "$APP_YAML_BACKUP" "app.yaml"
+    APP_YAML_BACKUP=""
+  fi
+}
 
 # -------------------------------------------------------------------------
 # Step 1: Check prerequisites
@@ -402,6 +464,9 @@ print_success() {
   printf "      Premium model:    %s\n" "$ENDPOINT"
   printf "      Fast model:       %s\n" "$FAST_ENDPOINT"
   printf "      Embedding model:  %s\n" "$EMBEDDING_ENDPOINT"
+  if [ -n "$LAKEBASE_BOOTSTRAP_USER" ]; then
+    printf "      Bootstrap user:   %s\n" "$LAKEBASE_BOOTSTRAP_USER"
+  fi
   printf "\n"
   printf "    User scopes:\n"
   printf "      sql, catalog.tables:read, catalog.schemas:read,\n"
@@ -436,6 +501,8 @@ destroy() {
 # Main
 # -------------------------------------------------------------------------
 main() {
+  trap restore_app_yaml EXIT
+
   printf "\n"
   printf "  Databricks Forge AI -- Deployment\n"
   printf "  ==================================\n"
@@ -451,6 +518,7 @@ main() {
   create_app
   wait_for_stable_state
   configure_app
+  prepare_app_yaml
   upload_code
   start_compute
   deploy_app

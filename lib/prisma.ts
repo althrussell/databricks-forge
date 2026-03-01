@@ -117,9 +117,19 @@ const POOL_OPTIONS: pg.PoolConfig = {
 
 const POOL_WARM_TARGET = 2;
 const REQUIRE_POOLER = process.env.LAKEBASE_REQUIRE_POOLER === "true";
+const RUNTIME_MODE = process.env.LAKEBASE_RUNTIME_MODE ?? "oauth_direct_only";
+const ENABLE_POOLER_EXPERIMENT =
+  process.env.LAKEBASE_ENABLE_POOLER_EXPERIMENT === "true";
 const POOLER_READINESS_SUCCESS_TARGET = Number(
   process.env.LAKEBASE_POOLER_READINESS_SUCCESS_TARGET ?? "3"
 );
+
+function shouldAttemptPooler(): boolean {
+  if (REQUIRE_POOLER) return true;
+  if (RUNTIME_MODE === "pooler_preferred") return true;
+  if (ENABLE_POOLER_EXPERIMENT) return true;
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Pool creation + pre-warming
@@ -242,6 +252,9 @@ export function getDatabaseAuthRuntimeState(): {
   poolerConsecutiveSuccesses: number;
   lastSelectedEndpointKind: "pooler" | "direct" | null;
   requirePooler: boolean;
+  runtimeMode: string;
+  enablePoolerExperiment: boolean;
+  poolerAttemptEnabled: boolean;
   poolerReadinessSuccessTarget: number;
   poolerReadinessGatePassed: boolean;
 } {
@@ -253,6 +266,9 @@ export function getDatabaseAuthRuntimeState(): {
     poolerConsecutiveSuccesses: consecutive,
     lastSelectedEndpointKind: globalForPrisma.__lastSelectedEndpointKind ?? null,
     requirePooler: REQUIRE_POOLER,
+    runtimeMode: RUNTIME_MODE,
+    enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
+    poolerAttemptEnabled: shouldAttemptPooler(),
     poolerReadinessSuccessTarget: POOLER_READINESS_SUCCESS_TARGET,
     poolerReadinessGatePassed:
       failovers === 0 && consecutive >= POOLER_READINESS_SUCCESS_TARGET,
@@ -353,8 +369,9 @@ async function buildAutoProvisionedClient(
       tokenExpiresAt,
     } = await getLakebaseConnectionUrls();
 
-    const probeResults: Record<"pooler" | "direct", "ok" | "error"> = {
-      pooler: "error",
+    const poolerAttemptEnabled = shouldAttemptPooler();
+    const probeResults: Record<"pooler" | "direct", "ok" | "error" | "skipped"> = {
+      pooler: poolerAttemptEnabled ? "error" : "skipped",
       direct: "error",
     };
     const endpointProbe = async (
@@ -386,12 +403,22 @@ async function buildAutoProvisionedClient(
       }
     };
 
-    await endpointProbe("pooler", endpointInfo.poolerHost, poolerUrl);
+    if (poolerAttemptEnabled) {
+      await endpointProbe("pooler", endpointInfo.poolerHost, poolerUrl);
+    }
     await endpointProbe("direct", endpointInfo.directHost, directUrl);
+    const fastFailoverTriggered =
+      !REQUIRE_POOLER &&
+      probeResults.pooler === "error" &&
+      probeResults.direct === "ok";
     logger.info("[prisma] Endpoint auth probes complete", {
       tokenGeneration,
       probeResultPooler: probeResults.pooler,
       probeResultDirect: probeResults.direct,
+      poolerAttemptEnabled,
+      fastFailoverTriggered,
+      runtimeMode: RUNTIME_MODE,
+      enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
     });
 
     const endpointCandidates: Array<{
@@ -413,7 +440,26 @@ async function buildAutoProvisionedClient(
 
     const orderedCandidates = REQUIRE_POOLER
       ? endpointCandidates.filter((c) => c.endpointKind === "pooler")
-      : endpointCandidates;
+      : !poolerAttemptEnabled
+        ? endpointCandidates.filter((c) => c.endpointKind === "direct")
+        : fastFailoverTriggered
+          ? endpointCandidates.filter((c) => c.endpointKind === "direct")
+          : endpointCandidates;
+
+    if (fastFailoverTriggered) {
+      logger.warn("[prisma] Fast failover activated after probe results", {
+        tokenGeneration,
+        endpointKindAttempted: "pooler",
+        endpointKindSelected: "direct",
+      });
+    }
+    if (!poolerAttemptEnabled) {
+      logger.info("[prisma] Pooler attempts disabled by runtime flags", {
+        runtimeMode: RUNTIME_MODE,
+        enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
+        endpointKindSelected: "direct",
+      });
+    }
 
     for (const candidate of orderedCandidates) {
       logConnectionInfo(candidate.connectionString);
