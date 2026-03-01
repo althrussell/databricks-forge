@@ -23,6 +23,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import {
   canAutoProvision,
+  getLakebaseAuthMode,
   getLakebaseConnectionUrls,
   getRuntimeEndpointInfo,
   getCredentialGeneration,
@@ -116,6 +117,7 @@ const POOL_OPTIONS: pg.PoolConfig = {
 };
 
 const POOL_WARM_TARGET = 2;
+const LAKEBASE_AUTH_MODE = getLakebaseAuthMode();
 const REQUIRE_POOLER = process.env.LAKEBASE_REQUIRE_POOLER === "true";
 const RUNTIME_MODE = process.env.LAKEBASE_RUNTIME_MODE ?? "oauth_direct_only";
 const ENABLE_POOLER_EXPERIMENT =
@@ -123,6 +125,22 @@ const ENABLE_POOLER_EXPERIMENT =
 const POOLER_READINESS_SUCCESS_TARGET = Number(
   process.env.LAKEBASE_POOLER_READINESS_SUCCESS_TARGET ?? "3"
 );
+const DATABASE_NAME = process.env.LAKEBASE_DATABASE ?? "databricks_postgres";
+
+function getNativePoolerConnectionUrl(): string {
+  const host = process.env.LAKEBASE_POOLER_HOST;
+  const user = process.env.LAKEBASE_NATIVE_USER;
+  const password = process.env.LAKEBASE_NATIVE_PASSWORD;
+  if (!host || !user || !password) {
+    throw new Error(
+      "LAKEBASE_AUTH_MODE=native_password requires LAKEBASE_POOLER_HOST, LAKEBASE_NATIVE_USER, and LAKEBASE_NATIVE_PASSWORD"
+    );
+  }
+  return (
+    `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}` +
+    `@${host}/${DATABASE_NAME}?sslmode=require&uselibpqcompat=true`
+  );
+}
 
 function shouldAttemptPooler(): boolean {
   if (REQUIRE_POOLER) return true;
@@ -234,6 +252,9 @@ async function createAndWarmPool(
 // ---------------------------------------------------------------------------
 
 export async function getPrisma(): Promise<PrismaClient> {
+  if (LAKEBASE_AUTH_MODE === "native_password") {
+    return getNativePasswordPrisma();
+  }
   // Databricks Apps runtime should always prefer auto-provisioned credentials
   // when app service principal credentials are available.
   if (canAutoProvision()) {
@@ -248,6 +269,7 @@ export function isDatabaseReady(): boolean {
 
 export function getDatabaseAuthRuntimeState(): {
   ready: boolean;
+  authMode: "oauth" | "native_password";
   poolerFailoverCount: number;
   poolerConsecutiveSuccesses: number;
   lastSelectedEndpointKind: "pooler" | "direct" | null;
@@ -260,18 +282,24 @@ export function getDatabaseAuthRuntimeState(): {
 } {
   const consecutive = globalForPrisma.__poolerConsecutiveSuccesses ?? 0;
   const failovers = globalForPrisma.__poolerFailoverCount ?? 0;
+  const poolerAttemptEnabled =
+    LAKEBASE_AUTH_MODE === "native_password" ? true : shouldAttemptPooler();
+  const poolerReadinessGatePassed =
+    LAKEBASE_AUTH_MODE === "native_password"
+      ? true
+      : failovers === 0 && consecutive >= POOLER_READINESS_SUCCESS_TARGET;
   return {
     ready: isDatabaseReady(),
+    authMode: LAKEBASE_AUTH_MODE,
     poolerFailoverCount: failovers,
     poolerConsecutiveSuccesses: consecutive,
     lastSelectedEndpointKind: globalForPrisma.__lastSelectedEndpointKind ?? null,
     requirePooler: REQUIRE_POOLER,
     runtimeMode: RUNTIME_MODE,
     enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
-    poolerAttemptEnabled: shouldAttemptPooler(),
+    poolerAttemptEnabled,
     poolerReadinessSuccessTarget: POOLER_READINESS_SUCCESS_TARGET,
-    poolerReadinessGatePassed:
-      failovers === 0 && consecutive >= POOLER_READINESS_SUCCESS_TARGET,
+    poolerReadinessGatePassed,
   };
 }
 
@@ -355,6 +383,8 @@ async function buildAutoProvisionedClient(
   let lastError: unknown;
   let selectedEndpointKind: "pooler" | "direct" | null = null;
   let selectedHost: string | null = null;
+  let poolerAttempted = false;
+  let poolerFailureObserved = false;
 
   for (let attempt = 1; attempt <= MAX_CREDENTIAL_GENERATIONS; attempt++) {
     if (attempt > 1) {
@@ -404,6 +434,7 @@ async function buildAutoProvisionedClient(
     };
 
     if (poolerAttemptEnabled) {
+      poolerAttempted = true;
       await endpointProbe("pooler", endpointInfo.poolerHost, poolerUrl);
     }
     await endpointProbe("direct", endpointInfo.directHost, directUrl);
@@ -411,6 +442,9 @@ async function buildAutoProvisionedClient(
       !REQUIRE_POOLER &&
       probeResults.pooler === "error" &&
       probeResults.direct === "ok";
+    if (fastFailoverTriggered) {
+      poolerFailureObserved = true;
+    }
     logger.info("[prisma] Endpoint auth probes complete", {
       tokenGeneration,
       probeResultPooler: probeResults.pooler,
@@ -462,6 +496,9 @@ async function buildAutoProvisionedClient(
     }
 
     for (const candidate of orderedCandidates) {
+      if (candidate.endpointKind === "pooler") {
+        poolerAttempted = true;
+      }
       logConnectionInfo(candidate.connectionString);
 
       try {
@@ -472,6 +509,9 @@ async function buildAutoProvisionedClient(
         lastError = null;
         break;
       } catch (err) {
+        if (candidate.endpointKind === "pooler") {
+          poolerFailureObserved = true;
+        }
         lastError = err;
         const msg = err instanceof Error ? err.message : String(err);
         logger.warn("[prisma] Auto-provision pool bootstrap failed", {
@@ -503,25 +543,30 @@ async function buildAutoProvisionedClient(
     throw lastError ?? new Error("Failed to initialize pool");
   }
 
-  logger.info("[prisma] Runtime endpoint selected", {
-    endpointName: endpointInfo.endpointName,
-    endpointKind: selectedEndpointKind,
-    host: selectedHost,
-    fallbackTriggered: selectedEndpointKind === "direct",
-    poolerFailoverCount: globalForPrisma.__poolerFailoverCount ?? 0,
-  });
+  const fallbackTriggered =
+    selectedEndpointKind === "direct" && poolerAttempted && poolerFailureObserved;
   if (selectedEndpointKind === "direct") {
-    globalForPrisma.__poolerFailoverCount =
-      (globalForPrisma.__poolerFailoverCount ?? 0) + 1;
+    if (fallbackTriggered) {
+      globalForPrisma.__poolerFailoverCount =
+        (globalForPrisma.__poolerFailoverCount ?? 0) + 1;
+    }
     globalForPrisma.__poolerConsecutiveSuccesses = 0;
     globalForPrisma.__lastSelectedEndpointKind = "direct";
-    logger.warn(
-      "[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime",
-      {
-        fallbackTriggered: true,
-        poolerFailoverCount: globalForPrisma.__poolerFailoverCount,
-      }
-    );
+    if (fallbackTriggered) {
+      logger.warn(
+        "[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime",
+        {
+          fallbackTriggered: true,
+          poolerFailoverCount: globalForPrisma.__poolerFailoverCount,
+        }
+      );
+    } else {
+      logger.info("[prisma] Direct endpoint selected by runtime policy", {
+        runtimeMode: RUNTIME_MODE,
+        enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
+        requirePooler: REQUIRE_POOLER,
+      });
+    }
   } else {
     globalForPrisma.__poolerConsecutiveSuccesses =
       (globalForPrisma.__poolerConsecutiveSuccesses ?? 0) + 1;
@@ -529,6 +574,13 @@ async function buildAutoProvisionedClient(
   }
 
   const runtimeState = getDatabaseAuthRuntimeState();
+  logger.info("[prisma] Runtime endpoint selected", {
+    endpointName: endpointInfo.endpointName,
+    endpointKind: selectedEndpointKind,
+    host: selectedHost,
+    fallbackTriggered,
+    poolerFailoverCount: runtimeState.poolerFailoverCount,
+  });
   logger.info("[prisma] Pooler readiness gate status", {
     poolerConsecutiveSuccesses: runtimeState.poolerConsecutiveSuccesses,
     poolerFailoverCount: runtimeState.poolerFailoverCount,
@@ -653,6 +705,53 @@ async function getStaticPrisma(): Promise<PrismaClient> {
   return globalForPrisma.__staticInitInFlight;
 }
 
+async function getNativePasswordPrisma(): Promise<PrismaClient> {
+  if (
+    globalForPrisma.__prisma &&
+    globalForPrisma.__prismaTokenId === "__native_password__"
+  ) {
+    return globalForPrisma.__prisma;
+  }
+
+  if (globalForPrisma.__staticInitInFlight) {
+    return globalForPrisma.__staticInitInFlight;
+  }
+
+  globalForPrisma.__staticInitInFlight = (async () => {
+    if (globalForPrisma.__prisma) {
+      await globalForPrisma.__prisma.$disconnect().catch(() => {});
+    }
+    if (globalForPrisma.__pool) {
+      await globalForPrisma.__pool.end().catch(() => {});
+    }
+
+    const url = getNativePoolerConnectionUrl();
+    logConnectionInfo(url);
+
+    const pool = await createAndWarmPool(url, 3, 2_000, 2_000);
+    globalForPrisma.__pool = pool;
+    globalForPrisma.__lastSelectedEndpointKind = "pooler";
+
+    const adapter = new PrismaPg(pool);
+    const prisma = new PrismaClient({ adapter });
+
+    globalForPrisma.__prisma = prisma;
+    globalForPrisma.__prismaTokenId = "__native_password__";
+    globalForPrisma.__dbReady = true;
+
+    logger.info("[prisma] Client created (native password mode)", {
+      authMode: LAKEBASE_AUTH_MODE,
+      endpointKind: "pooler",
+    });
+
+    return prisma;
+  })().finally(() => {
+    globalForPrisma.__staticInitInFlight = null;
+  });
+
+  return globalForPrisma.__staticInitInFlight;
+}
+
 // ---------------------------------------------------------------------------
 // Resilient wrapper with auth-error retry
 // ---------------------------------------------------------------------------
@@ -703,7 +802,21 @@ export async function withPrisma<T>(
         continue;
       }
 
-      if (!isAuthError(err) || !canAutoProvision()) throw err;
+      if (!isAuthError(err)) throw err;
+      if (LAKEBASE_AUTH_MODE === "native_password") {
+        logger.warn("[prisma] Native password auth error (no rotation path)", {
+          attempt: attempt + 1,
+          maxRetries: MAX_AUTH_RETRIES,
+          errorClass: classifyDbError(err),
+          error: err instanceof Error ? err.message : String(err),
+        });
+        if (attempt < MAX_AUTH_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          continue;
+        }
+        throw err;
+      }
+      if (!canAutoProvision()) throw err;
 
       if (attempt < MAX_AUTH_RETRIES) {
         const propagationLikely = isCredentialPropagationError(err);

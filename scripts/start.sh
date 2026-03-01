@@ -25,6 +25,9 @@ LAKEBASE_STARTUP_URL=""
 LAKEBASE_ENDPOINT_NAME=""
 LAKEBASE_POOLER_HOST=""
 LAKEBASE_STARTUP_USERNAME=""
+LAKEBASE_AUTH_MODE="${LAKEBASE_AUTH_MODE:-oauth}"
+LAKEBASE_NATIVE_USER="${LAKEBASE_NATIVE_USER:-forge_app_runtime}"
+LAKEBASE_NATIVE_PASSWORD="${LAKEBASE_NATIVE_PASSWORD:-}"
 
 if [ -n "$DATABRICKS_CLIENT_ID" ] && [ -z "$DATABASE_URL" ]; then
   echo "[startup] Auto-provisioning Lakebase Autoscale..."
@@ -97,7 +100,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
   fi
 
   # -- Step B: Validate Databricks OAuth DB prerequisites ------------------
-  if [ -n "$DATABRICKS_CLIENT_ID" ]; then
+  if [ "$LAKEBASE_AUTH_MODE" = "oauth" ] && [ -n "$DATABRICKS_CLIENT_ID" ]; then
     echo "[startup] Validating Databricks OAuth DB prerequisites..."
     if ! DATABASE_URL="$SCHEMA_URL" DATABRICKS_CLIENT_ID="$DATABRICKS_CLIENT_ID" node -e "
       const pg = require('pg');
@@ -225,7 +228,61 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     fi
   fi
 
-  # -- Step D: Prisma schema push ----------------------------------------
+  # -- Step D: Native password runtime role bootstrap -----------------------
+  if [ "$LAKEBASE_AUTH_MODE" = "native_password" ]; then
+    if [ -z "$LAKEBASE_NATIVE_PASSWORD" ]; then
+      echo "[startup] FATAL: LAKEBASE_AUTH_MODE=native_password requires LAKEBASE_NATIVE_PASSWORD."
+      exit 1
+    fi
+
+    echo "[startup] Ensuring native runtime role exists and has grants..."
+    if ! DATABASE_URL="$SCHEMA_URL" LAKEBASE_NATIVE_USER="$LAKEBASE_NATIVE_USER" LAKEBASE_NATIVE_PASSWORD="$LAKEBASE_NATIVE_PASSWORD" node -e "
+      const pg = require('pg');
+      (async () => {
+        const role = String(process.env.LAKEBASE_NATIVE_USER || '').trim();
+        const password = String(process.env.LAKEBASE_NATIVE_PASSWORD || '');
+        if (!role) throw new Error('LAKEBASE_NATIVE_USER is empty');
+        if (!password) throw new Error('LAKEBASE_NATIVE_PASSWORD is empty');
+
+        const safeRole = '\"' + role.replace(/\"/g, '\"\"') + '\"';
+        const safePasswordLiteral = \"'\" + password.replace(/'/g, \"''\") + \"'\";
+
+        const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+        try {
+          const roleExists = await pool.query(
+            'SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = \$1) AS ok',
+            [role]
+          );
+          if (!roleExists.rows[0]?.ok) {
+            await pool.query('CREATE ROLE ' + safeRole + ' LOGIN');
+            console.log('[startup] Created native Lakebase role:', role);
+          } else {
+            await pool.query('ALTER ROLE ' + safeRole + ' WITH LOGIN');
+            console.log('[startup] Native Lakebase role already exists:', role);
+          }
+
+          await pool.query('ALTER ROLE ' + safeRole + ' PASSWORD ' + safePasswordLiteral);
+          await pool.query('GRANT CONNECT ON DATABASE databricks_postgres TO ' + safeRole);
+          await pool.query('GRANT USAGE, CREATE ON SCHEMA public TO ' + safeRole);
+          await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
+          await pool.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' + safeRole);
+          await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ' + safeRole);
+          await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ' + safeRole);
+          console.log('[startup] Native runtime role grants ensured:', role);
+        } finally {
+          await pool.end();
+        }
+      })().catch((err) => {
+        console.error('[startup] FATAL: Native runtime role bootstrap failed:', err.message);
+        process.exit(1);
+      });
+    " 2>&1; then
+      echo "[startup] FATAL: Native runtime role bootstrap step failed."
+      exit 1
+    fi
+  fi
+
+  # -- Step E: Prisma schema push ----------------------------------------
   echo "[startup] Verifying database connectivity..."
   ATTEMPT=0
   DB_READY=false
@@ -250,7 +307,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     exit 1
   fi
 
-  # -- Step E: Create HNSW index (not managed by Prisma) ------------------
+  # -- Step F: Create HNSW index (not managed by Prisma) ------------------
   if [ -n "$DATABRICKS_EMBEDDING_ENDPOINT" ]; then
     echo "[startup] Embedding endpoint configured ($DATABRICKS_EMBEDDING_ENDPOINT), ensuring HNSW index..."
     HNSW_ATTEMPT=0
@@ -314,6 +371,7 @@ cd .next/standalone
 if [ -n "$LAKEBASE_STARTUP_URL" ]; then
   echo "[startup] Passing Lakebase runtime contract to server."
   unset DATABASE_URL
+  export LAKEBASE_AUTH_MODE="$LAKEBASE_AUTH_MODE"
   if [ -n "$LAKEBASE_ENDPOINT_NAME" ]; then
     export LAKEBASE_ENDPOINT_NAME="$LAKEBASE_ENDPOINT_NAME"
   fi
@@ -322,6 +380,10 @@ if [ -n "$LAKEBASE_STARTUP_URL" ]; then
   fi
   if [ -n "$LAKEBASE_STARTUP_USERNAME" ]; then
     export LAKEBASE_USERNAME="$LAKEBASE_STARTUP_USERNAME"
+  fi
+  if [ "$LAKEBASE_AUTH_MODE" = "native_password" ]; then
+    export LAKEBASE_NATIVE_USER="$LAKEBASE_NATIVE_USER"
+    export LAKEBASE_NATIVE_PASSWORD="$LAKEBASE_NATIVE_PASSWORD"
   fi
   exec node server.js
 else

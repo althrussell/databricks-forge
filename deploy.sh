@@ -12,6 +12,10 @@
 # Optional Lakebase bootstrap grants:
 #   ./deploy.sh --lakebase-bootstrap-user "user@company.com"
 # Optional Lakebase runtime auth mode:
+#   ./deploy.sh --lakebase-auth-mode "oauth|native_password"
+#               --lakebase-native-user "forge_app_runtime"
+#               --lakebase-native-password "..."
+# Optional Lakebase OAuth runtime behavior:
 #   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
 #               --lakebase-enable-pooler-experiment
 # =========================================================================
@@ -44,6 +48,9 @@ ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
 ARG_LAKEBASE_BOOTSTRAP_USER=""
+ARG_LAKEBASE_AUTH_MODE=""
+ARG_LAKEBASE_NATIVE_USER=""
+ARG_LAKEBASE_NATIVE_PASSWORD=""
 ARG_LAKEBASE_RUNTIME_MODE=""
 ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
 ARG_DESTROY=false
@@ -65,6 +72,13 @@ Options:
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
+  --lakebase-auth-mode MODE
+                             Lakebase runtime auth mode:
+                             oauth (default), native_password
+  --lakebase-native-user USER
+                             Native runtime DB user (default: forge_app_runtime)
+  --lakebase-native-password PASSWORD
+                             Native runtime DB password (auto-generated if omitted)
   --lakebase-runtime-mode MODE
                              Lakebase runtime mode:
                              oauth_direct_only (default), pooler_preferred
@@ -86,6 +100,9 @@ while [[ $# -gt 0 ]]; do
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
     --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
+    --lakebase-auth-mode) ARG_LAKEBASE_AUTH_MODE="$2"; shift 2 ;;
+    --lakebase-native-user) ARG_LAKEBASE_NATIVE_USER="$2"; shift 2 ;;
+    --lakebase-native-password) ARG_LAKEBASE_NATIVE_PASSWORD="$2"; shift 2 ;;
     --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
     --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
@@ -98,8 +115,25 @@ ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
 EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
 LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
+LAKEBASE_AUTH_MODE="${ARG_LAKEBASE_AUTH_MODE:-oauth}"
+LAKEBASE_NATIVE_USER="${ARG_LAKEBASE_NATIVE_USER:-forge_app_runtime}"
+LAKEBASE_NATIVE_PASSWORD="${ARG_LAKEBASE_NATIVE_PASSWORD:-}"
 LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
 LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
+
+if [[ "$LAKEBASE_AUTH_MODE" != "oauth" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
+  die "Invalid --lakebase-auth-mode '$LAKEBASE_AUTH_MODE'. Expected oauth or native_password."
+fi
+
+if [[ "$LAKEBASE_AUTH_MODE" = "native_password" && -z "$LAKEBASE_NATIVE_PASSWORD" ]]; then
+  LAKEBASE_NATIVE_PASSWORD="$(python3 - <<'PY'
+import secrets
+import string
+alphabet = string.ascii_letters + string.digits + "-_@#%+=."
+print("".join(secrets.choice(alphabet) for _ in range(48)))
+PY
+)"
+fi
 
 if [[ -n "$LAKEBASE_RUNTIME_MODE" && "$LAKEBASE_RUNTIME_MODE" != "oauth_direct_only" && "$LAKEBASE_RUNTIME_MODE" != "pooler_preferred" ]]; then
   die "Invalid --lakebase-runtime-mode '$LAKEBASE_RUNTIME_MODE'. Expected oauth_direct_only or pooler_preferred."
@@ -119,7 +153,7 @@ json_val() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ]; then
+  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$LAKEBASE_AUTH_MODE" = "oauth" ]; then
     return
   fi
 
@@ -127,6 +161,9 @@ prepare_app_yaml() {
   cp "app.yaml" "$APP_YAML_BACKUP"
 
   export LAKEBASE_BOOTSTRAP_USER
+  export LAKEBASE_AUTH_MODE
+  export LAKEBASE_NATIVE_USER
+  export LAKEBASE_NATIVE_PASSWORD
   export LAKEBASE_RUNTIME_MODE
   export LAKEBASE_ENABLE_POOLER_EXPERIMENT
   python3 - <<'PY'
@@ -134,6 +171,9 @@ import os
 from pathlib import Path
 
 bootstrap_user = os.environ.get("LAKEBASE_BOOTSTRAP_USER", "").strip()
+auth_mode = os.environ.get("LAKEBASE_AUTH_MODE", "").strip() or "oauth"
+native_user = os.environ.get("LAKEBASE_NATIVE_USER", "").strip()
+native_password = os.environ.get("LAKEBASE_NATIVE_PASSWORD", "")
 runtime_mode = os.environ.get("LAKEBASE_RUNTIME_MODE", "").strip()
 pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").strip().lower() == "true"
 
@@ -148,6 +188,9 @@ def is_managed_name_line(s: str) -> bool:
         return False
     return (
         "LAKEBASE_BOOTSTRAP_USER" in t
+        or "LAKEBASE_AUTH_MODE" in t
+        or "LAKEBASE_NATIVE_USER" in t
+        or "LAKEBASE_NATIVE_PASSWORD" in t
         or "LAKEBASE_RUNTIME_MODE" in t
         or "LAKEBASE_ENABLE_POOLER_EXPERIMENT" in t
     )
@@ -168,6 +211,13 @@ while i < len(lines):
 if bootstrap_user:
     out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
     out.append(f'    value: "{bootstrap_user}"')
+out.append("  - name: LAKEBASE_AUTH_MODE")
+out.append(f'    value: "{auth_mode}"')
+if auth_mode == "native_password":
+    out.append("  - name: LAKEBASE_NATIVE_USER")
+    out.append(f'    value: "{native_user}"')
+    out.append("  - name: LAKEBASE_NATIVE_PASSWORD")
+    out.append(f'    value: "{native_password}"')
 if runtime_mode:
     out.append("  - name: LAKEBASE_RUNTIME_MODE")
     out.append(f'    value: "{runtime_mode}"')
@@ -498,6 +548,10 @@ print_success() {
   printf "      Embedding model:  %s\n" "$EMBEDDING_ENDPOINT"
   if [ -n "$LAKEBASE_BOOTSTRAP_USER" ]; then
     printf "      Bootstrap user:   %s\n" "$LAKEBASE_BOOTSTRAP_USER"
+  fi
+  printf "      Auth mode:        %s\n" "$LAKEBASE_AUTH_MODE"
+  if [ "$LAKEBASE_AUTH_MODE" = "native_password" ]; then
+    printf "      Native db user:   %s\n" "$LAKEBASE_NATIVE_USER"
   fi
   printf "      Runtime mode:     %s\n" "${LAKEBASE_RUNTIME_MODE:-oauth_direct_only (default)}"
   printf "      Pooler experiment:%s\n" "$( [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" = "true" ] && echo " enabled" || echo " disabled" )"
