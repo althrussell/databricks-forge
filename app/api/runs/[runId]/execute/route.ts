@@ -6,8 +6,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { getRunById } from "@/lib/lakebase/runs";
-import { startPipeline, resumePipeline } from "@/lib/pipeline/engine";
+import { failOrphanedRunningRun, getRunById } from "@/lib/lakebase/runs";
+import {
+  startPipeline,
+  resumePipeline,
+  getActivePipelineRunIds,
+} from "@/lib/pipeline/engine";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
 
@@ -23,6 +27,8 @@ export async function POST(
       logger.warn("[execute] Invalid run ID format", { runId });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
+
+    await failOrphanedRunningRun(runId, getActivePipelineRunIds());
 
     const run = await getRunById(runId);
 

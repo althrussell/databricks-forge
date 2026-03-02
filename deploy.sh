@@ -188,6 +188,36 @@ ok()   { if [ -n "${1:-}" ]; then printf "OK  (%s)\n" "$1"; else printf "OK\n"; 
 # Usage: echo '{"k":"v"}' | json_val "['k']"
 json_val() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 
+get_app_compute_state() {
+  local app_json
+  if ! app_json=$(databricks apps get "$APP_NAME" --output json 2>/dev/null); then
+    echo "MISSING"
+    return
+  fi
+  echo "$app_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN"
+}
+
+wait_for_app_absent() {
+  local attempts=0
+  local max_attempts=30
+  local sleep_secs=10
+  local state
+
+  info "Waiting for app deletion..."
+  while [ $attempts -lt $max_attempts ]; do
+    state="$(get_app_compute_state)"
+    if [ "$state" = "MISSING" ]; then
+      ok "deleted"
+      return 0
+    fi
+    sleep "$sleep_secs"
+    attempts=$((attempts + 1))
+  done
+
+  printf "TIMEOUT\n"
+  return 1
+}
+
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
@@ -413,9 +443,18 @@ create_app() {
   printf "\n"
   info "App \"$APP_NAME\"..."
 
-  if databricks apps get "$APP_NAME" &>/dev/null; then
-    ok "already exists"
-  else
+  local existing_state
+  existing_state="$(get_app_compute_state)"
+
+  if [ "$existing_state" = "DELETING" ]; then
+    printf "WAIT  (currently deleting)\n"
+    if ! wait_for_app_absent; then
+      die "App is still deleting and could not be recreated yet. Wait a few minutes and retry."
+    fi
+    info "App \"$APP_NAME\"..."
+  fi
+
+  if [ "$existing_state" = "MISSING" ] || [ "$existing_state" = "DELETING" ]; then
     local create_json
     create_json=$(python3 -c "
 import json
@@ -431,6 +470,8 @@ print(json.dumps({
       die "Failed to create app.\n  $create_err"
     fi
     ok "created with scopes"
+  else
+    ok "already exists"
   fi
 }
 
@@ -619,13 +660,44 @@ destroy() {
   printf "\n  Removing Databricks Forge AI...\n"
 
   info "Stopping app..."
-  if databricks apps stop "$APP_NAME" --no-wait 2>/dev/null; then ok; else ok "already stopped"; fi
+  local stop_err
+  if ! stop_err=$(databricks apps stop "$APP_NAME" --no-wait 2>&1); then
+    case "$stop_err" in
+      *"does not exist"*|*"RESOURCE_DOES_NOT_EXIST"*|*"not found"*)
+        ok "already stopped"
+        ;;
+      *)
+        ok "stop skipped"
+        ;;
+    esac
+  else
+    ok
+  fi
 
   info "Deleting app..."
-  if ! databricks apps delete "$APP_NAME" 2>/dev/null; then
-    die "Failed to delete app. It may not exist or you lack permissions."
+  local delete_err
+  if ! delete_err=$(databricks apps delete "$APP_NAME" 2>&1); then
+    case "$delete_err" in
+      *"does not exist"*|*"RESOURCE_DOES_NOT_EXIST"*|*"not found"*)
+        ok "already deleted"
+        ;;
+      *"state DELETING"*|*"updated less than 20 minutes ago"*)
+        ok "already deleting"
+        ;;
+      *)
+        printf "FAILED\n"
+        die "Failed to delete app.\n  $delete_err"
+        ;;
+    esac
+  else
+    ok
   fi
-  ok
+
+  if [ "$(get_app_compute_state)" != "MISSING" ]; then
+    if ! wait_for_app_absent; then
+      die "Delete requested but app still exists after waiting. Retry destroy in a few minutes."
+    fi
+  fi
 
   WORKSPACE_PATH="/Workspace/Users/${USER_EMAIL}/${APP_NAME}"
   info "Cleaning workspace files..."

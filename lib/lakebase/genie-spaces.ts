@@ -17,6 +17,10 @@ import type { GenieAuthMode } from "@/lib/settings";
 export interface DeployedAssets {
   functions: string[];
   metricViews: string[];
+  metadata?: {
+    promptVersion?: string;
+    gateDecision?: "allow" | "warn" | "block";
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -262,5 +266,9 @@ function mergeAssets(
   if (!existing) return incoming;
   const fns = new Set([...existing.functions, ...incoming.functions]);
   const mvs = new Set([...existing.metricViews, ...incoming.metricViews]);
-  return { functions: [...fns], metricViews: [...mvs] };
+  return {
+    functions: [...fns],
+    metricViews: [...mvs],
+    metadata: incoming.metadata ?? existing.metadata,
+  };
 }

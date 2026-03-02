@@ -169,14 +169,19 @@ export function DashboardContent({
 
       {/* Recent Runs & Activity */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardHeader className="pb-2">
           <Tabs defaultValue="runs" className="w-full">
-            <div className="flex items-center justify-between">
-              <TabsList>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <TabsList className="shrink-0">
                 <TabsTrigger value="runs">Recent Runs</TabsTrigger>
                 <TabsTrigger value="activity">Activity</TabsTrigger>
               </TabsList>
-              <Button variant="outline" size="sm" asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 gap-1 px-2.5 text-xs"
+                asChild
+              >
                 <Link href="/runs">
                   View All
                   <ArrowRight className="ml-1 h-3 w-3" />

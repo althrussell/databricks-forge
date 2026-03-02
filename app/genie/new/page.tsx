@@ -41,6 +41,7 @@ import {
   FileText,
   Zap,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import type {
   GenieSpaceRecommendation,
@@ -334,6 +335,10 @@ export default function NewGenieSpacePage() {
 
   const handleDeploy = async () => {
     if (!recommendation) return;
+    if (recommendation.quality?.gateDecision === "block") {
+      toast.error("Deployment blocked by quality gate. Regenerate or fix diagnostics first.");
+      return;
+    }
     setDeploying(true);
 
     try {
@@ -346,6 +351,7 @@ export default function NewGenieSpacePage() {
           description: description || recommendation.description,
           serializedSpace: recommendation.serializedSpace,
           domain: recommendation.domain,
+          quality: recommendation.quality,
         }),
       });
 
@@ -730,6 +736,37 @@ export default function NewGenieSpacePage() {
               <CardDescription>{recommendation.description}</CardDescription>
             </CardHeader>
             <CardContent>
+                {recommendation.quality && recommendation.quality.degradedReasons.length > 0 && (
+                  <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                      <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+                      Quality {recommendation.quality?.gateDecision === "block" ? "blocker" : "warnings"}
+                    </div>
+                    {recommendation.quality?.gateReasons && recommendation.quality.gateReasons.length > 0 && (
+                      <ul className="mb-2 space-y-1 text-xs text-muted-foreground">
+                        {recommendation.quality.gateReasons.map((reason) => (
+                          <li key={reason}>- {reason}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {recommendation.quality.degradedReasons.map((reason) => (
+                        <li key={reason}>- {reason.replace(/_/g, " ")}</li>
+                      ))}
+                    </ul>
+                    <div className="mt-3 flex gap-2">
+                      {resultMode === "fast" && (
+                        <Button variant="outline" size="sm" onClick={handleEnhance} disabled={enhancing}>
+                          {enhancing ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <RefreshCw className="mr-2 size-3.5" />}
+                          Regenerate with Full Engine
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => setStep("config")}>
+                        Edit Config
+                      </Button>
+                    </div>
+                  </div>
+                )}
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
                 <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
@@ -738,6 +775,9 @@ export default function NewGenieSpacePage() {
                 <StatItem icon={FileText} label="Instructions" value={recommendation.instructionCount} />
                 <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
                 <StatItem icon={MessageSquare} label="Sample Questions" value={recommendation.sampleQuestionCount} />
+                  {recommendation.quality && (
+                    <StatItem icon={Sparkles} label="Quality Score" value={recommendation.quality.score} />
+                  )}
               </div>
             </CardContent>
           </Card>
@@ -847,6 +887,31 @@ export default function NewGenieSpacePage() {
               </AccordionItem>
             )}
 
+            {recommendation.quality?.joinDiagnostics && recommendation.quality.joinDiagnostics.length > 0 && (
+              <AccordionItem value="join-diagnostics" className="rounded-lg border px-4">
+                <AccordionTrigger className="text-sm font-medium">
+                  Join Diagnostics ({recommendation.quality.joinDiagnostics.length})
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-2">
+                    {recommendation.quality.joinDiagnostics.map((diag, idx) => (
+                      <div key={`${diag.source}-${idx}`} className="text-xs">
+                        <span className="font-medium">{diag.status.toUpperCase()}</span>{" "}
+                        <span className="text-muted-foreground">
+                          {diag.source} ({diag.confidence}) - {diag.reason}
+                        </span>
+                        {diag.leftTable && diag.rightTable && (
+                          <div className="font-mono text-[10px]">
+                            {diag.leftTable} ↔ {diag.rightTable}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
             {parsedSpace.instructions.text_instructions.length > 0 && (
               <AccordionItem value="instructions" className="rounded-lg border px-4">
                 <AccordionTrigger className="text-sm font-medium">
@@ -857,6 +922,26 @@ export default function NewGenieSpacePage() {
                     {parsedSpace.instructions.text_instructions.map((inst) => (
                       <div key={inst.id} className="whitespace-pre-wrap text-xs text-muted-foreground">
                         {inst.content.join("\n")}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
+            {parsedSpace.instructions.example_question_sqls.length > 0 && (
+              <AccordionItem value="example-sql" className="rounded-lg border px-4">
+                <AccordionTrigger className="text-sm font-medium">
+                  Example SQL ({parsedSpace.instructions.example_question_sqls.length})
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3">
+                    {parsedSpace.instructions.example_question_sqls.map((q) => (
+                      <div key={q.id} className="rounded border bg-muted/30 p-2 text-xs">
+                        <div className="font-medium">{q.question.join(" ")}</div>
+                        <code className="mt-1 block whitespace-pre-wrap rounded bg-muted px-1.5 py-1 text-[10px]">
+                          {q.sql.join("\n")}
+                        </code>
                       </div>
                     ))}
                   </div>
@@ -887,13 +972,13 @@ export default function NewGenieSpacePage() {
               <ArrowLeft className="mr-2 size-4" />
               Back to Config
             </Button>
-            <Button onClick={handleDeploy} disabled={deploying}>
+            <Button onClick={handleDeploy} disabled={deploying || recommendation.quality?.gateDecision === "block"}>
               {deploying ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />
               ) : (
                 <Rocket className="mr-2 size-4" />
               )}
-              Deploy to Databricks
+              {recommendation.quality?.gateDecision === "block" ? "Deployment Blocked" : "Deploy to Databricks"}
             </Button>
           </div>
         </div>

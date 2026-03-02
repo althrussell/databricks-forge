@@ -7,7 +7,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRunById, deleteRun, updateRunIndustry } from "@/lib/lakebase/runs";
+import {
+  getRunById,
+  deleteRun,
+  updateRunIndustry,
+  failOrphanedRunningRun,
+} from "@/lib/lakebase/runs";
 import { getUseCasesByRunId, getUseCaseSummariesByRunId } from "@/lib/lakebase/usecases";
 import { loadLineageFqnsForRun } from "@/lib/lakebase/metadata-cache";
 import { getLatestScanIdForRun } from "@/lib/lakebase/environment-scans";
@@ -17,6 +22,7 @@ import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
+import { getActivePipelineRunIds } from "@/lib/pipeline/engine";
 
 export async function GET(
   request: NextRequest,
@@ -31,6 +37,8 @@ export async function GET(
       logger.warn("[api/runs] GET invalid run ID", { runId });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
+
+    await failOrphanedRunningRun(runId, getActivePipelineRunIds());
 
     const run = await getRunById(runId);
 

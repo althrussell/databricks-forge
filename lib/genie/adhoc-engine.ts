@@ -2,9 +2,8 @@
  * Ad-Hoc Genie Engine — two-tier space generator from a table list.
  *
  * **Fast mode** (default): Scrapes metadata from information_schema and
- * generates a usable Genie Space using only rule-based passes (FK joins,
- * schema entity extraction, time-period generation, numeric measure
- * inference). Zero LLM calls — completes in seconds.
+ * generates a usable Genie Space using mostly rule-based passes with
+ * focused fast-LLM refinements for title/instructions/example SQL.
  *
  * **Full mode**: Runs all 7 Genie Engine LLM passes (column intelligence,
  * semantic expressions, join inference, trusted assets, instruction
@@ -32,6 +31,11 @@ import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
+import { runTitleGeneration } from "./passes/title-generation";
+import { runExampleQueryGeneration } from "./passes/example-query-generation";
+import { inferNormalizedDomainFromTables, normalizeDomainLabel } from "./domain-normalization";
+import { tableHasSynonymPair } from "./key-synonyms";
+import { evaluateJoinCandidates } from "./join-diagnostics";
 import { extractEntityCandidatesFromSchema } from "./entity-extraction";
 import { generateTimePeriods } from "./time-periods";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
@@ -107,22 +111,7 @@ function resolveBusinessContext(adhoc?: AdHocGenieConfig): BusinessContext | nul
 }
 
 function inferDomain(tables: string[]): string {
-  const schemas = tables
-    .map((t) => t.split(".")[1])
-    .filter(Boolean);
-  const counts = new Map<string, number>();
-  for (const s of schemas) {
-    counts.set(s, (counts.get(s) || 0) + 1);
-  }
-  let best = "Analytics";
-  let bestCount = 0;
-  for (const [schema, count] of counts) {
-    if (count > bestCount) {
-      bestCount = count;
-      best = schema.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-  }
-  return best;
+  return inferNormalizedDomainFromTables(tables, "Analytics");
 }
 
 function buildSchemaMarkdown(
@@ -191,8 +180,52 @@ function humanize(name: string): string {
   return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function inferHeuristicJoins(
+  columns: ColumnInfo[],
+  tableFqns: string[],
+  existingKeys: Set<string>,
+): Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> {
+  const byTable = new Map<string, Set<string>>();
+  for (const c of columns) {
+    const key = c.tableFqn.toLowerCase();
+    const cols = byTable.get(key) ?? new Set<string>();
+    cols.add(c.columnName.toLowerCase());
+    byTable.set(key, cols);
+  }
+
+  const joins: Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> = [];
+  for (let i = 0; i < tableFqns.length; i++) {
+    for (let j = i + 1; j < tableFqns.length; j++) {
+      const left = tableFqns[i];
+      const right = tableFqns[j];
+      const pair = `${left.toLowerCase()}|${right.toLowerCase()}`;
+      const reverse = `${right.toLowerCase()}|${left.toLowerCase()}`;
+      if (existingKeys.has(pair) || existingKeys.has(reverse)) continue;
+
+      const leftCols = byTable.get(left.toLowerCase()) ?? new Set<string>();
+      const rightCols = byTable.get(right.toLowerCase()) ?? new Set<string>();
+      const synonym = tableHasSynonymPair(leftCols, rightCols);
+      if (!synonym) continue;
+
+      joins.push({
+        leftTable: left,
+        rightTable: right,
+        sql: `${left}.${synonym.leftColumn} = ${right}.${synonym.rightColumn}`,
+        relationshipType: "many_to_one",
+      });
+      existingKeys.add(pair);
+      existingKeys.add(reverse);
+    }
+  }
+  return joins;
+}
+
+function scoreQuality(degradedReasons: string[]): number {
+  return Math.max(40, 100 - degradedReasons.length * 12);
+}
+
 // ---------------------------------------------------------------------------
-// Fast mode — rule-based, zero LLM
+// Fast mode — mostly rule-based with lightweight LLM
 // ---------------------------------------------------------------------------
 
 /**
@@ -301,8 +334,8 @@ function buildRuleBasedInstructions(
 
 /**
  * Run the fast Genie Engine: scrape metadata, then build a space using
- * only rule-based passes. Zero LLM calls — typically completes in 2–5
- * seconds. The result is a usable space that can be enhanced later with
+ * mostly rule-based passes plus fast-LLM title/instruction/query generation.
+ * Typically completes in seconds. The result is a usable space that can be enhanced later with
  * the full engine.
  */
 export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHocEngineResult> {
@@ -312,9 +345,11 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     throw new Error("At least one table is required");
   }
 
-  const domain = adhocConfig?.domain || inferDomain(tables);
+  const domain = normalizeDomainLabel(adhocConfig?.domain || inferDomain(tables));
   const fiscalYearStartMonth = adhocConfig?.fiscalYearStartMonth ?? 1;
 
+  const fastEndpoint = getFastServingEndpoint();
+  const premiumEndpoint = getServingEndpoint();
   logger.info("Fast Genie Engine starting", { tableCount: tables.length, domain });
 
   // Step 1: Scrape metadata (SQL queries only, no LLM)
@@ -324,7 +359,25 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
 
   // Step 2: Rule-based joins from foreign keys
   const tableSet = new Set(validTableFqns.map((t) => t.toLowerCase()));
-  const allJoins = buildFkJoins(metadata.foreignKeys, tableSet);
+  const fkJoins = buildFkJoins(metadata.foreignKeys, tableSet);
+  const existingJoinKeys = new Set(
+    fkJoins.flatMap((j) => [
+      `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
+      `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`,
+    ])
+  );
+  const heuristicJoins = fkJoins.length === 0 && validTableFqns.length > 1
+    ? inferHeuristicJoins(metadata.columns, validTableFqns, existingJoinKeys)
+    : [];
+  const { accepted: acceptedJoinCandidates, diagnostics: joinDiagnostics } = evaluateJoinCandidates(
+    allowlist,
+    [
+      ...fkJoins.map((j) => ({ ...j, source: "fk" as const, confidence: "high" as const })),
+      ...heuristicJoins.map((j) => ({ ...j, source: "heuristic" as const, confidence: "low" as const })),
+    ],
+    "adhoc_fast_join",
+  );
+  const allJoins = acceptedJoinCandidates;
 
   // Step 3: Rule-based entity extraction from schema
   const entityCandidates = extractEntityCandidatesFromSchema(
@@ -358,9 +411,33 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   const basicFilters = generateBasicFilters(metadata.columns, validTableFqns);
 
   // Step 7: Rule-based instructions from comments
-  const instructions = buildRuleBasedInstructions(
-    metadata, validTableFqns, domain, adhocConfig?.conversationSummary,
-  );
+  const instructionResult = await runInstructionGeneration({
+    domain,
+    subdomains: [],
+    businessName: adhocConfig?.title || domain,
+    businessContext: resolveBusinessContext(adhocConfig),
+    config: buildEngineConfig(adhocConfig),
+    entityCandidates,
+    joinSpecs: allJoins,
+    endpoint: fastEndpoint,
+    fallbackEndpoint: premiumEndpoint,
+    metadata,
+    tableFqns: validTableFqns,
+    conversationSummary: adhocConfig?.conversationSummary,
+  });
+  const instructions = instructionResult.instructions.length > 0
+    ? instructionResult.instructions
+    : buildRuleBasedInstructions(metadata, validTableFqns, domain, adhocConfig?.conversationSummary);
+
+  const exampleQueryResult = await runExampleQueryGeneration({
+    domain,
+    tableFqns: validTableFqns,
+    metadata,
+    allowlist,
+    joinSpecs: allJoins,
+    endpoint: fastEndpoint,
+    fallbackEndpoint: premiumEndpoint,
+  });
 
   // Step 8: Sample questions from entity candidates
   const sampleQuestions = entityCandidates
@@ -377,25 +454,50 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     measures,
     filters: [...basicFilters, ...timePeriodFilters],
     dimensions: timePeriodDimensions,
-    trustedQueries: [],
+    trustedQueries: exampleQueryResult.queries,
     trustedFunctions: [],
     textInstructions: instructions,
     sampleQuestions,
     benchmarkQuestions: [],
     metricViewProposals: [],
     joinSpecs: allJoins,
+    joinDiagnostics,
   };
 
   // Step 9: Assemble via same pipeline as full engine
   const seedId = `fast-${Date.now()}`;
+  const titleInputBusinessName = adhocConfig?.title || domain;
+  const titleResult = adhocConfig?.title
+    ? { title: adhocConfig.title, source: "fallback" as const }
+    : await runTitleGeneration({
+        businessName: titleInputBusinessName,
+        domain,
+        subdomains: [],
+        tableFqns: validTableFqns,
+        conversationSummary: adhocConfig?.conversationSummary,
+        endpoint: fastEndpoint,
+        fallbackEndpoint: premiumEndpoint,
+      });
+  const degradedReasons: string[] = [];
+  if (validTableFqns.length > 1 && allJoins.length === 0) degradedReasons.push("no_validated_joins");
+  if (allJoins.length > 0 && exampleQueryResult.queries.length < 2) degradedReasons.push("insufficient_sample_sql");
+  if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
+
   const space = assembleSerializedSpace(passOutputs, {
     runId: seedId,
-    businessName: adhocConfig?.title || domain,
+    businessName: titleInputBusinessName,
     allowlist,
     metadata,
   });
 
-  const recommendation = buildRecommendation(passOutputs, space, adhocConfig?.title || domain);
+  const recommendation = buildRecommendation(passOutputs, space, titleInputBusinessName, {
+    titleOverride: titleResult.title,
+    titleSource: titleResult.source,
+    degradedReasons,
+    qualityScore: scoreQuality(degradedReasons),
+    joinDiagnostics,
+    promptVersion: "genie-v2-phase2",
+  });
   if (adhocConfig?.title) recommendation.title = adhocConfig.title;
   if (adhocConfig?.description) recommendation.description = adhocConfig.description;
 
@@ -405,8 +507,10 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     measures: measures.length,
     filters: basicFilters.length + timePeriodFilters.length,
     joins: allJoins.length,
+    heuristicJoins: heuristicJoins.length,
     entities: entityCandidates.length,
     timePeriodDimensions: timePeriodDimensions.length,
+    sampleSqlQueries: exampleQueryResult.queries.length,
   });
 
   return { recommendation, passOutputs, metadata, mode: "fast" };
@@ -432,7 +536,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   const engineConfig = buildEngineConfig(adhocConfig);
   const premiumEndpoint = getServingEndpoint();
   const fastEndpoint = getFastServingEndpoint();
-  const domain = adhocConfig?.domain || inferDomain(tables);
+  const domain = normalizeDomainLabel(adhocConfig?.domain || inferDomain(tables));
   const businessContext = resolveBusinessContext(adhocConfig);
 
   logger.info("Full ad-hoc Genie Engine starting", {
@@ -502,7 +606,26 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     }
   }
 
-  const allJoins = [...fkJoins, ...llmJoins];
+  const existingAllJoinKeys = new Set(
+    [...fkJoins, ...llmJoins].flatMap((j) => [
+      `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
+      `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`,
+    ])
+  );
+  const heuristicJoins =
+    validTableFqns.length > 1 && fkJoins.length + llmJoins.length === 0
+      ? inferHeuristicJoins(metadata.columns, validTableFqns, existingAllJoinKeys)
+      : [];
+  const { accepted: acceptedJoinCandidates, diagnostics: joinDiagnostics } = evaluateJoinCandidates(
+    allowlist,
+    [
+      ...fkJoins.map((j) => ({ ...j, source: "fk" as const, confidence: "high" as const })),
+      ...llmJoins.map((j) => ({ ...j, source: "llm" as const, confidence: "medium" as const })),
+      ...heuristicJoins.map((j) => ({ ...j, source: "heuristic" as const, confidence: "low" as const })),
+    ],
+    "adhoc_full_join",
+  );
+  const allJoins = acceptedJoinCandidates;
 
   logger.info("Ad-hoc join specs assembled", {
     domain,
@@ -536,6 +659,10 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
       entityCandidates: columnResult.entityCandidates,
       joinSpecs: allJoins,
       endpoint: fastEndpoint,
+      fallbackEndpoint: premiumEndpoint,
+      metadata,
+      tableFqns: validTableFqns,
+      conversationSummary: adhocConfig?.conversationSummary,
       signal,
     }),
 
@@ -572,7 +699,22 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
 
   onProgress?.("Assembling Genie Space...", 90);
 
-  const trustedQuestionTexts = trustedResult.queries
+  let trustedQueries = trustedResult.queries;
+  if (trustedQueries.length === 0) {
+    const exampleResult = await runExampleQueryGeneration({
+      domain,
+      tableFqns: validTableFqns,
+      metadata,
+      allowlist,
+      joinSpecs: allJoins,
+      endpoint: fastEndpoint,
+      fallbackEndpoint: premiumEndpoint,
+      signal,
+    });
+    trustedQueries = exampleResult.queries;
+  }
+
+  const trustedQuestionTexts = trustedQueries
     .filter((tq) => tq.question.trim().length > 0)
     .map((tq) => tq.question);
   const entityFallbackQuestions = columnResult.entityCandidates
@@ -595,24 +737,50 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     measures: exprResult.measures,
     filters: exprResult.filters,
     dimensions: exprResult.dimensions,
-    trustedQueries: trustedResult.queries,
+    trustedQueries,
     trustedFunctions: [],
     textInstructions: instructionResult.instructions,
     sampleQuestions,
     benchmarkQuestions: benchmarkResult.benchmarks,
     metricViewProposals: metricViewResult.proposals,
     joinSpecs: allJoins,
+    joinDiagnostics,
   };
 
   const seedId = `adhoc-${Date.now()}`;
+  const titleInputBusinessName = adhocConfig?.title || domain;
+  const titleResult = adhocConfig?.title
+    ? { title: adhocConfig.title, source: "fallback" as const }
+    : await runTitleGeneration({
+        businessName: titleInputBusinessName,
+        domain,
+        subdomains: [],
+        tableFqns: validTableFqns,
+        conversationSummary: adhocConfig?.conversationSummary,
+        endpoint: fastEndpoint,
+        fallbackEndpoint: premiumEndpoint,
+        signal,
+      });
+  const degradedReasons: string[] = [];
+  if (validTableFqns.length > 1 && allJoins.length === 0) degradedReasons.push("no_validated_joins");
+  if (allJoins.length > 0 && trustedQueries.length < 2) degradedReasons.push("insufficient_sample_sql");
+  if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
+
   const space = assembleSerializedSpace(passOutputs, {
     runId: seedId,
-    businessName: adhocConfig?.title || domain,
+    businessName: titleInputBusinessName,
     allowlist,
     metadata,
   });
 
-  const recommendation = buildRecommendation(passOutputs, space, adhocConfig?.title || domain);
+  const recommendation = buildRecommendation(passOutputs, space, titleInputBusinessName, {
+    titleOverride: titleResult.title,
+    titleSource: titleResult.source,
+    degradedReasons,
+    qualityScore: scoreQuality(degradedReasons),
+    joinDiagnostics,
+    promptVersion: "genie-v2-phase2",
+  });
   if (adhocConfig?.title) recommendation.title = adhocConfig.title;
   if (adhocConfig?.description) recommendation.description = adhocConfig.description;
 
@@ -625,7 +793,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     filters: exprResult.filters.length,
     joins: allJoins.length,
     instructions: instructionResult.instructions.length,
-    trustedQueries: trustedResult.queries.length,
+    trustedQueries: trustedQueries.length,
     benchmarks: benchmarkResult.benchmarks.length,
     metricViews: metricViewResult.proposals.length,
     sampleQuestions: sampleQuestions.length,

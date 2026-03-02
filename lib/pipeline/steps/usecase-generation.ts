@@ -143,6 +143,9 @@ export async function runUsecaseGeneration(
   });
 
   const allUseCases: UseCase[] = [];
+  let attemptedBatchCalls = 0;
+  let failedBatchCalls = 0;
+  let emptyBatchCalls = 0;
 
   // Process batches with controlled concurrency and cross-batch feedback
   let batchGroupIdx = 0;
@@ -240,12 +243,18 @@ export async function runUsecaseGeneration(
         ),
       ];
     });
+    attemptedBatchCalls += batchPromises.length;
 
     const results = await Promise.allSettled(batchPromises);
     for (const result of results) {
       if (result.status === "fulfilled") {
-        allUseCases.push(...result.value);
+        if (result.value.length > 0) {
+          allUseCases.push(...result.value);
+        } else {
+          emptyBatchCalls++;
+        }
       } else {
+        failedBatchCalls++;
         logger.warn("Use case generation batch failed", { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
       }
     }
@@ -257,6 +266,20 @@ export async function runUsecaseGeneration(
   });
 
   if (runId) await updateRunMessage(runId, `Generated ${allUseCases.length} raw use cases from ${tables.length} tables`);
+
+  if (allUseCases.length === 0 && tables.length > 0) {
+    const allRequestsFailed = attemptedBatchCalls > 0 && failedBatchCalls === attemptedBatchCalls;
+    const message = allRequestsFailed
+      ? "Use case generation failed for all model requests. Please retry this run."
+      : "No use cases were generated from model responses. Please retry this run.";
+    logger.error("Use case generation produced no output", {
+      tableCount: tables.length,
+      attemptedBatchCalls,
+      failedBatchCalls,
+      emptyBatchCalls,
+    });
+    throw new Error(message);
+  }
 
   logger.info("Use case generation complete", { useCaseCount: allUseCases.length });
 

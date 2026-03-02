@@ -54,6 +54,8 @@ interface StepDef {
   label: string;
 }
 
+const activePipelineRuns = new Set<string>();
+
 const STEPS: StepDef[] = [
   { step: PipelineStep.BusinessContext, progressPct: 10, label: "Generating business context" },
   { step: PipelineStep.MetadataExtraction, progressPct: 18, label: "Extracting metadata" },
@@ -77,6 +79,8 @@ const STEPS: StepDef[] = [
  * Progress is tracked in Lakebase so the frontend can poll.
  */
 export async function startPipeline(runId: string): Promise<void> {
+  activePipelineRuns.add(runId);
+  try {
   const run = await getRunById(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
 
@@ -214,6 +218,12 @@ export async function startPipeline(runId: string): Promise<void> {
         });
       }
 
+      if (ctx.useCases.length === 0) {
+        throw new Error(
+          "Use case generation returned only invalid results after table validation. Please retry this run."
+        );
+      }
+
       await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed — invalid table refs)` : ""}`);
     });
 
@@ -320,6 +330,9 @@ export async function startPipeline(runId: string): Promise<void> {
       });
     }
   }
+  } finally {
+    activePipelineRuns.delete(runId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +345,8 @@ export async function startPipeline(runId: string): Promise<void> {
  * so that expensive early steps are not re-run.
  */
 export async function resumePipeline(runId: string): Promise<void> {
+  activePipelineRuns.add(runId);
+  try {
   const run = await getRunById(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
   if (run.status !== "failed") {
@@ -515,6 +530,11 @@ export async function resumePipeline(runId: string): Promise<void> {
         if (hallucinated > 0) {
           logger.warn("Removed use cases with hallucinated table references", { runId, removedCount: hallucinated, remainingCount: ctx.useCases.length });
         }
+        if (ctx.useCases.length === 0) {
+          throw new Error(
+            "Use case generation returned only invalid results after table validation. Please retry this run."
+          );
+        }
         await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed)` : ""}`);
       });
     }
@@ -610,6 +630,9 @@ export async function resumePipeline(runId: string): Promise<void> {
       });
     }
   }
+  } finally {
+    activePipelineRuns.delete(runId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -672,4 +695,12 @@ function startBackgroundEngines(
  */
 export function getPipelineSteps(): StepDef[] {
   return STEPS;
+}
+
+export function getActivePipelineRunIds(): string[] {
+  return [...activePipelineRuns];
+}
+
+export function isPipelineActive(runId: string): boolean {
+  return activePipelineRuns.has(runId);
 }

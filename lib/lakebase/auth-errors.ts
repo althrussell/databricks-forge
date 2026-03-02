@@ -15,6 +15,9 @@ export const AUTH_ERROR_PATTERNS = [
 
 export const RATE_LIMIT_ERROR_PATTERNS = [
   "connection attempt rate limit exceeded",
+  "too many requests",
+  "request limit exceeded",
+  "rate limit",
   "too many connections",
   "remaining connection slots are reserved",
 ] as const;

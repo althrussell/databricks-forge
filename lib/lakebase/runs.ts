@@ -237,6 +237,31 @@ export async function updateRunStatus(
   });
 }
 
+export async function failOrphanedRunningRun(
+  runId: string,
+  activeRunIds: string[]
+): Promise<boolean> {
+  return withPrisma(async (prisma) => {
+    if (activeRunIds.includes(runId)) return false;
+
+    const result = await prisma.forgeRun.updateMany({
+      where: {
+        runId,
+        status: "running",
+      },
+      data: {
+        status: "failed",
+        errorMessage:
+          "Run was interrupted by app restart or deployment. Please retry or resume this run.",
+        statusMessage:
+          "Run interrupted by app restart/deployment. Please retry or resume.",
+        completedAt: new Date(),
+      },
+    });
+    return result.count > 0;
+  });
+}
+
 /**
  * Lightweight helper that updates just statusMessage (and optionally progressPct).
  * Called frequently from pipeline steps to report granular progress.

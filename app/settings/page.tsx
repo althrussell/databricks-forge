@@ -204,10 +204,18 @@ export default function SettingsPage() {
   const handleDeleteAllData = async () => {
     setDeleting(true);
     try {
-      const res = await fetch("/api/data", {
-        method: "DELETE",
-        headers: { "x-confirm-delete": "delete-all-data" },
-      });
+      const requestDelete = async () =>
+        fetch("/api/data", {
+          method: "DELETE",
+          headers: { "x-confirm-delete": "delete-all-data" },
+        });
+
+      let res = await requestDelete();
+      if (res.status === 429) {
+        // Database poolers can briefly rate-limit destructive bursts.
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        res = await requestDelete();
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Request failed (${res.status})`);

@@ -18,6 +18,7 @@ import type {
   BenchmarkQuestion,
   GenieEnginePassOutputs,
   GenieSpaceRecommendation,
+  JoinDiagnostic,
 } from "./types";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import { isValidTable, validateSqlExpression, type SchemaAllowlist } from "./schema-allowlist";
@@ -76,6 +77,22 @@ export interface AssembleOptions {
   businessName: string;
   allowlist: SchemaAllowlist;
   metadata: MetadataSnapshot;
+}
+
+export function determineQualityGate(
+  qualityScore: number,
+  degradedReasons: string[],
+): { gateDecision: "allow" | "warn" | "block"; gateReasons: string[] } {
+  const gateReasons: string[] = [];
+  let gateDecision: "allow" | "warn" | "block" = "allow";
+  if (degradedReasons.includes("no_validated_joins")) {
+    gateDecision = "block";
+    gateReasons.push("Missing validated joins for multi-table space.");
+  } else if (qualityScore < 70 || degradedReasons.length > 0) {
+    gateDecision = "warn";
+    gateReasons.push("Space quality is degraded; review preview diagnostics before deploy.");
+  }
+  return { gateDecision, gateReasons };
 }
 
 /**
@@ -461,9 +478,19 @@ function generateDescription(
 export function buildRecommendation(
   outputs: GenieEnginePassOutputs,
   space: SerializedSpace,
-  businessName: string
+  businessName: string,
+  options?: {
+    titleOverride?: string;
+    titleSource?: "llm" | "fallback";
+    degradedReasons?: string[];
+    qualityScore?: number;
+    promptVersion?: string;
+    joinDiagnostics?: JoinDiagnostic[];
+  }
 ): GenieSpaceRecommendation {
-  const title = generateTitle(businessName, outputs.domain, outputs.subdomains, outputs.tables);
+  const title = options?.titleOverride
+    ? options.titleOverride
+    : generateTitle(businessName, outputs.domain, outputs.subdomains, outputs.tables);
   const descParts = generateDescription(
     businessName, outputs.domain, outputs.subdomains,
     space.instructions.sql_snippets.measures.length,
@@ -473,6 +500,10 @@ export function buildRecommendation(
 
   const spaceTables = space.data_sources.tables.map((t) => t.identifier);
   const spaceMvs = space.data_sources.metric_views?.map((mv) => mv.identifier) ?? [];
+
+  const degradedReasons = options?.degradedReasons ?? [];
+  const qualityScore = options?.qualityScore ?? 100;
+  const { gateDecision, gateReasons } = determineQualityGate(qualityScore, degradedReasons);
 
   return {
     domain: outputs.domain,
@@ -494,5 +525,19 @@ export function buildRecommendation(
     tables: spaceTables,
     metricViews: spaceMvs,
     serializedSpace: JSON.stringify(space),
+    quality: {
+      promptVersion: options?.promptVersion ?? "genie-v2",
+      titleSource: options?.titleSource ?? "fallback",
+      instructionChars: space.instructions.text_instructions
+        .flatMap((t) => t.content)
+        .reduce((sum, block) => sum + block.length, 0),
+      joinsCount: space.instructions.join_specs.length,
+      sampleQueriesCount: space.instructions.example_question_sqls.length,
+      degradedReasons,
+      score: qualityScore,
+      gateDecision,
+      gateReasons,
+      joinDiagnostics: options?.joinDiagnostics ?? outputs.joinDiagnostics ?? [],
+    },
   };
 }

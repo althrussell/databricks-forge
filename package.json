@@ -10,6 +10,7 @@
     "start": "prisma db push --accept-data-loss && next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:quality": "vitest run __tests__/genie/quality-evaluation.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "version:patch": "bash scripts/bump-version.sh patch",

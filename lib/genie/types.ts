@@ -201,6 +201,19 @@ export interface MetricViewProposal {
   validationIssues: string[];
 }
 
+export type JoinSource = "fk" | "override" | "sql_mined" | "llm" | "heuristic";
+export type JoinConfidence = "high" | "medium" | "low";
+
+export interface JoinDiagnostic {
+  status: "accepted" | "rejected";
+  source: JoinSource;
+  confidence: JoinConfidence;
+  leftTable?: string;
+  rightTable?: string;
+  sql?: string;
+  reason: string;
+}
+
 /** Aggregated output from all engine passes for a single domain. */
 export interface GenieEnginePassOutputs {
   domain: string;
@@ -223,7 +236,10 @@ export interface GenieEnginePassOutputs {
     rightTable: string;
     sql: string;
     relationshipType: "many_to_one" | "one_to_many" | "one_to_one";
+    source?: JoinSource;
+    confidence?: JoinConfidence;
   }>;
+  joinDiagnostics?: JoinDiagnostic[];
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +396,19 @@ export interface GenieSpaceRecommendation {
   existingAssetId?: string;
   /** Human-readable summary of what changed vs the existing space */
   changeSummary?: string;
+  /** Quality diagnostics surfaced in generation preview. */
+  quality?: {
+    promptVersion?: string;
+    titleSource: "llm" | "fallback";
+    instructionChars: number;
+    joinsCount: number;
+    sampleQueriesCount: number;
+    degradedReasons: string[];
+    score: number;
+    gateDecision?: "allow" | "warn" | "block";
+    gateReasons?: string[];
+    joinDiagnostics?: JoinDiagnostic[];
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -396,7 +425,11 @@ export interface TrackedGenieSpace {
   title: string;
   status: GenieSpaceStatus;
   /** @deprecated `functions` is always empty — function deployment has been removed. */
-  deployedAssets?: { functions: string[]; metricViews: string[] } | null;
+  deployedAssets?: {
+    functions: string[];
+    metricViews: string[];
+    metadata?: { promptVersion?: string; gateDecision?: "allow" | "warn" | "block" };
+  } | null;
   /** Auth mode used when the space was created ("obo" = user token, "sp" = service principal). Null for legacy rows. */
   authMode?: "obo" | "sp" | null;
   createdAt: string;
