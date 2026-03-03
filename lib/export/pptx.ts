@@ -18,6 +18,11 @@ import fs from "fs";
 import path from "path";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import { groupByDomain, computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
+import {
+  buildExecutiveSummaryItems,
+  paginateSummaryItems,
+  type ExecutiveSummaryLine,
+} from "@/lib/export/pptx-exec-summary";
 
 // ---------------------------------------------------------------------------
 // Databricks logo — loaded once from public/databricks-icon.svg as base64 PNG
@@ -298,90 +303,42 @@ export async function generatePptx(
   // 2. EXECUTIVE SUMMARY (paginated across multiple slides when long)
   // =====================================================================
 
-  // LLM-generated narrative summary (prepended when available)
-  const bc = run.businessContext;
-  const summaryBullets: Array<{ text: string; options: PptxGenJS.TextPropsOptions }> = [];
-
-  if (summaries?.executiveSummary) {
-    summaryBullets.push({
-      text: summaries.executiveSummary,
-      options: {
-        fontSize: 13,
-        color: TEXT_COLOR,
-        breakLine: true,
-        paraSpaceAfter: 10,
-      },
-    });
-  }
-
-  const bulletOpts: PptxGenJS.TextPropsOptions = {
-    fontSize: 14,
-    color: TEXT_COLOR,
-    bullet: true,
-    breakLine: true,
-  };
-
-  if (bc) {
-    if (bc.industries) {
-      summaryBullets.push({ text: `Industry: ${bc.industries}`, options: { ...bulletOpts } });
-    }
-    if (bc.strategicGoals) {
-      summaryBullets.push({ text: `Strategic Goals: ${bc.strategicGoals}`, options: { ...bulletOpts } });
-    }
-    if (bc.valueChain) {
-      summaryBullets.push({ text: `Value Chain: ${bc.valueChain}`, options: { ...bulletOpts } });
-    }
-    if (bc.revenueModel) {
-      summaryBullets.push({ text: `Revenue Model: ${bc.revenueModel}`, options: { ...bulletOpts } });
-    }
-  }
-
-  summaryBullets.push({
-    text: `${useCases.length} use cases discovered across ${domainStats.length} domains`,
-    options: { ...bulletOpts },
-  });
-  summaryBullets.push({
-    text: `${aiCount} AI use cases, ${statsCount} Statistical use cases`,
-    options: { ...bulletOpts },
-  });
-  summaryBullets.push({
-    text: `Average overall score: ${avgScore}%`,
-    options: { ...bulletOpts },
-  });
-  summaryBullets.push({
-    text: `Business Priorities: ${run.config.businessPriorities.join(", ")}`,
-    options: { ...bulletOpts },
+  const summaryLines = buildExecutiveSummaryItems({
+    executiveSummary: summaries?.executiveSummary,
+    businessContext: run.businessContext,
+    useCaseCount: useCases.length,
+    domainCount: domainStats.length,
+    aiCount,
+    statsCount,
+    avgScore,
+    businessPriorities: run.config.businessPriorities,
   });
 
-  // Paginate bullets across slides based on estimated text height
+  // Paginate content across slides using per-line style-aware estimates.
   const EXEC_CONTENT_Y = 1.2;
   const EXEC_MAX_Y = 6.7;
   const EXEC_AVAILABLE_H = EXEC_MAX_Y - EXEC_CONTENT_Y;
   const EXEC_CONTENT_W = CONTENT_W - 0.6;
-  const CHARS_PER_LINE_EXEC = 110; // approx chars per line at font 14 in content width
-  const LINE_HEIGHT_EXEC = 0.22; // approx line height at font 14
-  const BULLET_GAP = 0.12;
 
-  function estimateBulletH(text: string): number {
-    const lines = Math.ceil(text.length / CHARS_PER_LINE_EXEC);
-    return Math.max(LINE_HEIGHT_EXEC, lines * LINE_HEIGHT_EXEC) + BULLET_GAP;
+  const execPages = paginateSummaryItems(summaryLines, {
+    availableHeight: EXEC_AVAILABLE_H,
+    contentWidth: EXEC_CONTENT_W,
+  });
+
+  function toPptxLine(line: ExecutiveSummaryLine): PptxGenJS.TextProps {
+    const isNarrative = line.kind === "narrative";
+    return {
+      text: line.text,
+      options: {
+        fontSize: line.kind === "sub-bullet" ? 13 : isNarrative ? 13 : 14,
+        color: TEXT_COLOR,
+        bullet: isNarrative ? false : true,
+        breakLine: true,
+        paraSpaceAfter: isNarrative ? 10 : line.kind === "sub-bullet" ? 4 : 6,
+        bold: isNarrative ? false : line.keepWithNext === true,
+      },
+    };
   }
-
-  const execPages: Array<typeof summaryBullets> = [];
-  let currentPage: typeof summaryBullets = [];
-  let currentH = 0;
-
-  for (const bullet of summaryBullets) {
-    const h = estimateBulletH(bullet.text);
-    if (currentH + h > EXEC_AVAILABLE_H && currentPage.length > 0) {
-      execPages.push(currentPage);
-      currentPage = [];
-      currentH = 0;
-    }
-    currentPage.push(bullet);
-    currentH += h;
-  }
-  if (currentPage.length > 0) execPages.push(currentPage);
 
   for (let ep = 0; ep < execPages.length; ep++) {
     const execSlide = pptx.addSlide();
@@ -400,7 +357,7 @@ export async function generatePptx(
     });
     addRedSeparator(execSlide, CONTENT_MARGIN, 0.95, 4);
 
-    execSlide.addText(execPages[ep], {
+    execSlide.addText(execPages[ep].map(toPptxLine), {
       x: CONTENT_MARGIN + 0.3,
       y: EXEC_CONTENT_Y,
       w: EXEC_CONTENT_W,
