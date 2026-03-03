@@ -8,6 +8,7 @@
 
 import { classifyIntent, type AssistantIntent, type IntentClassification } from "./intent";
 import { buildAssistantContext, buildSourceReferences, type AssistantContext, type TableEnrichment } from "./context-builder";
+import { extractTableFqnsFromText, mergeTableReferenceLists } from "./context-builder";
 import { buildAssistantMessages, type AssistantPersona } from "./prompts";
 import { extractSqlBlocks } from "./sql-proposer";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
@@ -86,6 +87,10 @@ function enforceSourceCitations(answer: string, sources: SourceCard[]): string {
     .map((s) => `[${s.index}] ${s.label} (${s.kind})`)
     .join("\n");
   return `${answer}\n\n### Sources\n${sourceLines}`;
+}
+
+export function inferTablesFromSqlBlocks(sqlBlocks: string[]): string[] {
+  return extractTableFqnsFromText(sqlBlocks.join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +195,8 @@ export async function runAssistantEngine(
   }
   answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
+  const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);
+  const reconciledTables = mergeTableReferenceLists(context.tables, sqlTables);
   const dashboardProposal = extractDashboardIntent(answer);
 
   let existingDashboards: ExistingDashboard[] = [];
@@ -236,7 +243,7 @@ export async function runAssistantEngine(
   }
 
   const actions = buildActions(
-    intentResult.intent, sqlBlocks, dashboardProposal, context.tables,
+    intentResult.intent, sqlBlocks, dashboardProposal, reconciledTables,
     genieSpaceMatch, context.tableEnrichments, question,
   );
 
@@ -245,10 +252,17 @@ export async function runAssistantEngine(
   logger.info("[assistant/engine] Response complete", {
     intent: intentResult.intent,
     sourceCount: sources.length,
+    tableCount: reconciledTables.length,
     sqlBlockCount: sqlBlocks.length,
     actionCount: actions.length,
     durationMs,
   });
+  if (sources.length > 0 && reconciledTables.length === 0) {
+    logger.warn("[assistant/engine] Sources present but no referenced tables inferred", {
+      sourceCount: sources.length,
+      sqlBlockCount: sqlBlocks.length,
+    });
+  }
 
   let logId: string | null = null;
   try {
@@ -266,7 +280,7 @@ export async function runAssistantEngine(
       totalTokens: llmResponse.usage?.totalTokens,
       userId: userId ?? undefined,
       sources,
-      referencedTables: context.tables,
+      referencedTables: reconciledTables,
       persona,
     });
     const evalResult = scoreAssistantResponse({
@@ -307,7 +321,7 @@ export async function runAssistantEngine(
     intent: intentResult,
     sources,
     actions,
-    tables: context.tables,
+    tables: reconciledTables,
     tableEnrichments: context.tableEnrichments,
     sqlBlocks,
     dashboardProposal,

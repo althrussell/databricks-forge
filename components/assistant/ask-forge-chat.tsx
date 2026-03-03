@@ -249,15 +249,9 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                     : m,
                 ),
               );
-              if (enrichments.length > 0) {
-                onTableEnrichments?.(enrichments);
-              }
-              if (tables.length > 0) {
-                onReferencedTables?.(tables);
-              }
-              if (sources.length > 0) {
-                onSources?.(sources);
-              }
+              onTableEnrichments?.(enrichments);
+              onReferencedTables?.(tables);
+              onSources?.(sources);
               if (parsed.conversationId) {
                 onConversationCreated?.(parsed.conversationId);
               }

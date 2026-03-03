@@ -89,6 +89,14 @@ interface DirectContextResult {
   latestScanId: string | null;
 }
 
+interface RetrievalPlan {
+  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | undefined;
+  topK: number;
+  minScore: number;
+  useLatestRun?: boolean;
+  useLatestScan?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -112,32 +120,7 @@ export async function buildAssistantContext(
 
   if (isEmbeddingEnabled()) {
     const plans = INTENT_SCOPES[intent];
-    const retrievals = await Promise.all(
-      plans.map((plan) =>
-        retrieveContext(question, {
-          scope: plan.scope,
-          topK: plan.topK,
-          minScore: plan.minScore,
-          enforceSourcePriority: true,
-          runId: plan.useLatestRun ? directContext.latestRunId ?? undefined : undefined,
-          scanId: plan.useLatestScan ? directContext.latestScanId ?? undefined : undefined,
-        }),
-      ),
-    );
-
-    const deduped = new Map<string, RetrievedChunk>();
-    for (const list of retrievals) {
-      for (const chunk of list) {
-        const key = `${chunk.kind}:${chunk.sourceId}`;
-        const existing = deduped.get(key);
-        if (!existing || chunk.score > existing.score) {
-          deduped.set(key, chunk);
-        }
-      }
-    }
-    chunks = Array.from(deduped.values())
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 20);
+    chunks = await retrieveWithFallback(question, plans, directContext.latestRunId, directContext.latestScanId);
 
     ragContext = formatRetrievedContext(chunks, 12000);
 
@@ -159,11 +142,22 @@ export async function buildAssistantContext(
     fullContext += ragContext;
   }
 
-  const tables = extractTableReferences(chunks);
+  const tables = mergeTableReferenceLists(
+    extractTableReferencesFromChunks(chunks),
+    extractTableFqnsFromText(directContext.text ?? ""),
+    extractTableFqnsFromText(question),
+  );
+  if (chunks.length > 0 && tables.length === 0) {
+    logger.warn("[assistant/context] Retrieved chunks but inferred zero table references", {
+      chunkCount: chunks.length,
+    });
+  }
   const tableEnrichments = await fetchTableEnrichments(tables);
 
   if (tableEnrichments.length > 0) {
     fullContext += "\n\n## Estate Metadata for Referenced Tables\n\n" + formatTableEnrichments(tableEnrichments);
+  } else if (tables.length > 0) {
+    fullContext += "\n\n## Referenced Tables\n\n" + tables.map((t) => `- ${t}`).join("\n");
   }
 
   const conversationHistory = formatConversationHistory(history);
@@ -330,8 +324,9 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
 // ---------------------------------------------------------------------------
 
 const THREE_PART_FQN = /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\b/g;
+const TABLE_LIMIT = 20;
 
-function extractTableReferences(chunks: RetrievedChunk[]): string[] {
+function extractTableReferencesFromChunks(chunks: RetrievedChunk[]): string[] {
   const tables = new Set<string>();
 
   for (const chunk of chunks) {
@@ -372,7 +367,98 @@ function extractTableReferences(chunks: RetrievedChunk[]): string[] {
     }
   }
 
-  return [...tables].slice(0, 20);
+  return [...tables];
+}
+
+export function extractTableFqnsFromText(text: string): string[] {
+  if (!text) return [];
+  const tables = new Set<string>();
+  for (const match of text.matchAll(THREE_PART_FQN)) {
+    tables.add(match[0]);
+  }
+  return [...tables];
+}
+
+function normalizeTableFqn(input: string): string {
+  return input.replace(/[`"']/g, "").trim();
+}
+
+export function mergeTableReferenceLists(...lists: string[][]): string[] {
+  const normalized = new Map<string, string>();
+  for (const list of lists) {
+    for (const item of list) {
+      const value = normalizeTableFqn(item);
+      if (!value || value.split(".").length < 3) continue;
+      const key = value.toLowerCase();
+      if (!normalized.has(key)) {
+        normalized.set(key, value);
+      }
+    }
+  }
+  return Array.from(normalized.values()).slice(0, TABLE_LIMIT);
+}
+
+async function retrieveWithFallback(
+  question: string,
+  plans: RetrievalPlan[],
+  latestRunId: string | null,
+  latestScanId: string | null,
+): Promise<RetrievedChunk[]> {
+  const strict = await retrieveForPlans(question, plans, latestRunId, latestScanId, false);
+  if (strict.length > 0) {
+    return strict;
+  }
+
+  const hasStrictFilters = plans.some((plan) => plan.useLatestRun || plan.useLatestScan);
+  if (!hasStrictFilters) {
+    return strict;
+  }
+
+  logger.info("[assistant/context] Strict retrieval returned no chunks, retrying relaxed filters");
+  return retrieveForPlans(question, plans, latestRunId, latestScanId, true);
+}
+
+async function retrieveForPlans(
+  question: string,
+  plans: RetrievalPlan[],
+  latestRunId: string | null,
+  latestScanId: string | null,
+  relaxed: boolean,
+): Promise<RetrievedChunk[]> {
+  const retrievals = await Promise.all(
+    plans.map((plan) =>
+      retrieveContext(question, {
+        scope: plan.scope,
+        topK: plan.topK,
+        minScore: relaxed ? Math.max(0.25, plan.minScore - 0.1) : plan.minScore,
+        enforceSourcePriority: true,
+        runId: !relaxed && plan.useLatestRun ? latestRunId ?? undefined : undefined,
+        scanId: !relaxed && plan.useLatestScan ? latestScanId ?? undefined : undefined,
+      }),
+    ),
+  );
+
+  const deduped = new Map<string, RetrievedChunk>();
+  for (let i = 0; i < retrievals.length; i++) {
+    const plan = plans[i];
+    const list = retrievals[i];
+    logger.debug("[assistant/context] Retrieval scope result", {
+      scope: plan.scope ?? "all",
+      relaxed,
+      resultCount: list.length,
+      topScore: list[0]?.score,
+    });
+    for (const chunk of list) {
+      const key = `${chunk.kind}:${chunk.sourceId}`;
+      const existing = deduped.get(key);
+      if (!existing || chunk.score > existing.score) {
+        deduped.set(key, chunk);
+      }
+    }
+  }
+  return Array.from(deduped.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, TABLE_LIMIT);
 }
 
 // ---------------------------------------------------------------------------
