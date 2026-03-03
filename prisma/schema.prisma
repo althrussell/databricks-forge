@@ -40,6 +40,7 @@ model ForgeRun {
   createdBy          String?   @map("created_by")
   filteredTablesJson String?   @map("filtered_tables_json")
   metadataCacheKey   String?   @map("metadata_cache_key")
+  contextSourcesJson String?  @map("context_sources_json")
 
   useCases             ForgeUseCase[]
   exports              ForgeExport[]
@@ -90,6 +91,7 @@ model ForgeUseCase {
   sqlStatus              String? @map("sql_status")
   feedback               String?                              // "accepted" | "rejected" | "dismissed"
   feedbackAt             DateTime? @map("feedback_at")
+  enrichmentTags         String? @map("enrichment_tags")
 
   run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
 

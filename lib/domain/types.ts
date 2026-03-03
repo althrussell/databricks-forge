@@ -120,9 +120,29 @@ export interface PipelineRun {
   promptVersions: Record<string, string> | null; // promptKey -> SHA-256 hash
   stepLog: StepLogEntry[];
   industryAutoDetected: boolean; // true when the industry was set by auto-detection, not user
+  contextSources: RunContextSources | null;
   createdBy: string | null; // email of the user who created this run
   createdAt: string; // ISO timestamp
   completedAt: string | null;
+}
+
+/** Enrichment provenance recorded across pipeline steps. */
+export interface RunContextSources {
+  benchmarks: {
+    strategy: string;
+    recordIds: string[];
+    chunkCount: number;
+  };
+  outcomeMap: {
+    industryId: string | null;
+    sections: string[];
+  };
+  documents: {
+    sourceIds: string[];
+    kinds: string[];
+    chunkCount: number;
+  };
+  steps: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +193,7 @@ export interface UseCase {
   sqlStatus: string | null;
   feedback: "accepted" | "rejected" | "dismissed" | null;
   feedbackAt: string | null;
+  enrichmentTags: string[] | null;
 }
 
 export type UseCaseFeedback = "accepted" | "rejected" | "dismissed";

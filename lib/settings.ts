@@ -46,6 +46,8 @@ export interface AppSettings {
   genieDeployAuthMode: GenieAuthMode;
   /** Whether semantic search, knowledge base, and RAG retrieval are enabled in the UI (default: true). Embeddings are still generated regardless. */
   semanticSearchEnabled: boolean;
+  /** Whether the benchmark catalog UI, embedding, and RAG retrieval are enabled (default: false). Requires FORGE_BENCHMARKS_ENABLED=true server-side. */
+  benchmarksEnabled: boolean;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -74,6 +76,7 @@ const DEFAULTS: AppSettings = {
   assetDiscoveryEnabled: false,
   genieDeployAuthMode: "obo",
   semanticSearchEnabled: true,
+  benchmarksEnabled: false,
 };
 
 export function loadSettings(): AppSettings {
@@ -119,6 +122,10 @@ export function loadSettings(): AppSettings {
         typeof parsed.semanticSearchEnabled === "boolean"
           ? parsed.semanticSearchEnabled
           : DEFAULTS.semanticSearchEnabled,
+      benchmarksEnabled:
+        typeof parsed.benchmarksEnabled === "boolean"
+          ? parsed.benchmarksEnabled
+          : DEFAULTS.benchmarksEnabled,
     };
   } catch {
     return { ...DEFAULTS };

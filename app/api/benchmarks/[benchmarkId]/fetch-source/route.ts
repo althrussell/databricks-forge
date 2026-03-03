@@ -4,12 +4,16 @@ import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { getBenchmarkById, updateBenchmarkSourceContent } from "@/lib/lakebase/benchmarks";
 import { fetchAndConvertSource } from "@/lib/benchmarks/source-fetcher";
 import { isBenchmarkAdmin } from "@/lib/benchmarks/admin-guard";
+import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { logger } from "@/lib/logger";
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ benchmarkId: string }> },
 ) {
+  if (!isBenchmarksEnabled()) {
+    return NextResponse.json({ error: "Benchmark catalog is disabled" }, { status: 404 });
+  }
   const userEmail = await getCurrentUserEmail();
   if (!isBenchmarkAdmin(userEmail)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

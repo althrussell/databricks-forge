@@ -681,6 +681,13 @@ export async function generatePdf(
           });
         }
 
+        if (uc.enrichmentTags && uc.enrichmentTags.length > 0) {
+          fields.push({
+            label: "Enrichment",
+            value: uc.enrichmentTags.join(", "),
+          });
+        }
+
         for (const field of fields) {
           if (!field.value) continue;
           if (yPos > PAGE_H - 100) break; // Don't overflow

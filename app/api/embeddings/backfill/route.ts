@@ -328,6 +328,9 @@ async function backfillDocuments(
 async function backfillBenchmarks(
   results: { benchmarks: { total: number; embedded: number; failed: number } },
 ): Promise<void> {
+  const { isBenchmarksEnabled } = await import("@/lib/benchmarks/config");
+  if (!isBenchmarksEnabled()) return;
+
   const { listBenchmarkRecords } = await import("@/lib/lakebase/benchmarks");
   const { embedBenchmarkRecords } = await import("@/lib/embeddings/embed-pipeline");
 

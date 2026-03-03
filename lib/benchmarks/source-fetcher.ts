@@ -9,8 +9,37 @@
 import TurndownService from "turndown";
 import { logger } from "@/lib/logger";
 
-const FETCH_TIMEOUT_MS = 30_000;
+const FETCH_TIMEOUT_MS = 15_000;
 const MAX_HTML_BYTES = 2 * 1024 * 1024; // 2 MB cap on raw HTML
+
+/**
+ * Domains known to block server-side fetches (Cloudflare, JS-only rendering).
+ * We skip the network call entirely for these and return null immediately
+ * so the caller falls back to the hand-written summary without waiting.
+ */
+const BLOCKED_DOMAINS = new Set([
+  "mckinsey.com",
+  "hbr.org",
+  "wsj.com",
+  "ft.com",
+  "bloomberg.com",
+  "gartner.com",
+  "forrester.com",
+  "bcg.com",
+  "bain.com",
+  "deloitte.com",
+]);
+
+function isDomainBlocked(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return [...BLOCKED_DOMAINS].some(
+      (d) => hostname === d || hostname.endsWith(`.${d}`),
+    );
+  } catch {
+    return false;
+  }
+}
 
 const NOISE_TAGS: (keyof HTMLElementTagNameMap)[] = [
   "script", "style", "nav", "footer", "header", "aside", "noscript", "iframe",
@@ -36,6 +65,13 @@ function initTurndown(): TurndownService {
 }
 
 export async function fetchAndConvertSource(url: string): Promise<string | null> {
+  if (isDomainBlocked(url)) {
+    logger.info("[source-fetcher] Skipping blocked domain, will use summary fallback", {
+      url,
+    });
+    return null;
+  }
+
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -43,8 +79,10 @@ export async function fetchAndConvertSource(url: string): Promise<string | null>
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "DatabricksForgeBot/1.0 (benchmark-content-ingestion)",
-        Accept: "text/html,application/xhtml+xml,*/*",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; DatabricksForgeBot/1.0; +https://databricks.com)",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
       redirect: "follow",
     });

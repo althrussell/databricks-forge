@@ -114,6 +114,19 @@ export default function SettingsPage() {
     return loadSettings().semanticSearchEnabled;
   });
 
+  const [benchmarksEnabled, setBenchmarksEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return loadSettings().benchmarksEnabled;
+  });
+  const [benchmarksServerEnabled, setBenchmarksServerEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/benchmarks/status")
+      .then((r) => r.json())
+      .then((data) => setBenchmarksServerEnabled(data.enabled ?? false))
+      .catch(() => setBenchmarksServerEnabled(false));
+  }, []);
+
   const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
   const [embeddingCount, setEmbeddingCount] = useState<number | null>(null);
@@ -178,7 +191,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode, semanticSearchEnabled });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode, semanticSearchEnabled, benchmarksEnabled });
     toast.success("Settings saved");
   };
 
@@ -414,6 +427,46 @@ export default function SettingsPage() {
               <span
                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
                   assetDiscoveryEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              benchmarksEnabled && benchmarksServerEnabled
+                ? "border-amber-500/50 bg-amber-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <Target className={`mt-0.5 h-4 w-4 shrink-0 ${benchmarksEnabled && benchmarksServerEnabled ? "text-amber-500" : "text-muted-foreground"}`} />
+              <div>
+                <p className="text-sm font-medium">Benchmark Catalog</p>
+                <p className="text-xs text-muted-foreground">
+                  {benchmarksServerEnabled === false
+                    ? "Unavailable — server-side flag FORGE_BENCHMARKS_ENABLED is not set in the deployment configuration"
+                    : benchmarksEnabled
+                      ? "Enabled — industry benchmarks are embedded and injected into pipeline prompts and Ask Forge retrieval"
+                      : "Disabled — pipeline uses generic advisory context; benchmark catalog page and API are hidden"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => benchmarksServerEnabled && setBenchmarksEnabled((prev) => !prev)}
+              disabled={!benchmarksServerEnabled}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                !benchmarksServerEnabled
+                  ? "cursor-not-allowed bg-muted opacity-50"
+                  : benchmarksEnabled
+                    ? "cursor-pointer bg-amber-500"
+                    : "cursor-pointer bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                  benchmarksEnabled && benchmarksServerEnabled ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>

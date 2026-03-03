@@ -10,6 +10,7 @@ import type {
   PipelineRunConfig,
   PipelineStep,
   RunStatus,
+  RunContextSources,
   BusinessContext,
   BusinessPriority,
   GenerationOption,
@@ -50,6 +51,7 @@ function dbRowToRun(row: {
   businessContext: string | null;
   errorMessage: string | null;
   createdBy: string | null;
+  contextSourcesJson: string | null;
   createdAt: Date;
   completedAt: Date | null;
 }): PipelineRun {
@@ -88,6 +90,7 @@ function dbRowToRun(row: {
     promptVersions: genOpts.promptVersions,
     stepLog: genOpts.stepLog,
     industryAutoDetected: genOpts.industryAutoDetected,
+    contextSources: parseJSON<RunContextSources | null>(row.contextSourcesJson, null),
     createdBy: row.createdBy ?? null,
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,

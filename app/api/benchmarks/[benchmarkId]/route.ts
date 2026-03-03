@@ -8,12 +8,19 @@ import {
   updateBenchmarkSourceContent,
 } from "@/lib/lakebase/benchmarks";
 import { isBenchmarkAdmin } from "@/lib/benchmarks/admin-guard";
+import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { logger } from "@/lib/logger";
+
+const DISABLED_RESPONSE = NextResponse.json(
+  { error: "Benchmark catalog is disabled" },
+  { status: 404 },
+);
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ benchmarkId: string }> },
 ) {
+  if (!isBenchmarksEnabled()) return DISABLED_RESPONSE;
   const userEmail = await getCurrentUserEmail();
   if (!isBenchmarkAdmin(userEmail)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -106,6 +113,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ benchmarkId: string }> },
 ) {
+  if (!isBenchmarksEnabled()) return DISABLED_RESPONSE;
   const userEmail = await getCurrentUserEmail();
   if (!isBenchmarkAdmin(userEmail)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

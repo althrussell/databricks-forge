@@ -66,6 +66,8 @@ import {
   Pencil,
   X,
   Loader2,
+  BookOpen,
+  FileText,
 } from "lucide-react";
 import {
   Tooltip,
@@ -952,6 +954,81 @@ export default function RunDetailPage({
                   {/* Business Context */}
                   {run.businessContext && (
                     <BusinessContextCard context={run.businessContext} />
+                  )}
+
+                  {/* Context Sources (Enrichment Provenance) */}
+                  {run.contextSources && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-amber-500" />
+                          <CardTitle className="text-sm font-medium">Enrichment Context Sources</CardTitle>
+                        </div>
+                        <CardDescription>
+                          External knowledge sources that informed this pipeline run
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          {/* Benchmarks */}
+                          <div className="rounded-md border p-3">
+                            <div className="flex items-center gap-1.5">
+                              <BarChart3 className="h-3.5 w-3.5 text-amber-500" />
+                              <p className="text-xs font-semibold">Benchmarks</p>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              {run.contextSources.benchmarks.strategy === "default"
+                                ? "Default pack (no custom benchmarks)"
+                                : `${run.contextSources.benchmarks.recordIds.length} records via ${run.contextSources.benchmarks.strategy.replace("_", " ")}`}
+                            </p>
+                            {run.contextSources.benchmarks.chunkCount > 0 && (
+                              <p className="text-xs text-muted-foreground">{run.contextSources.benchmarks.chunkCount} chunks</p>
+                            )}
+                          </div>
+
+                          {/* Outcome Map */}
+                          <div className="rounded-md border p-3">
+                            <div className="flex items-center gap-1.5">
+                              <Target className="h-3.5 w-3.5 text-blue-500" />
+                              <p className="text-xs font-semibold">Outcome Map</p>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              {run.contextSources.outcomeMap.sections.length > 0
+                                ? `${run.contextSources.outcomeMap.industryId ?? "cross-industry"}`
+                                : "Not used"}
+                            </p>
+                            {run.contextSources.outcomeMap.sections.length > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                Sections: {run.contextSources.outcomeMap.sections.join(", ")}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Documents */}
+                          <div className="rounded-md border p-3">
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5 text-purple-500" />
+                              <p className="text-xs font-semibold">RAG Documents</p>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              {run.contextSources.documents.sourceIds.length > 0
+                                ? `${run.contextSources.documents.sourceIds.length} sources`
+                                : "None retrieved"}
+                            </p>
+                            {run.contextSources.documents.chunkCount > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {run.contextSources.documents.chunkCount} chunks ({run.contextSources.documents.kinds.join(", ")})
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {run.contextSources.steps.length > 0 && (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Enriched in: {run.contextSources.steps.join(", ")}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
 
                   {/* Run Configuration */}

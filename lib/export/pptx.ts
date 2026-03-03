@@ -569,6 +569,13 @@ export async function generatePptx(
         });
       }
 
+      if (uc.enrichmentTags && uc.enrichmentTags.length > 0) {
+        fields.push({
+          label: "Enrichment",
+          value: uc.enrichmentTags.join(", "),
+        });
+      }
+
       for (const field of fields) {
         if (!field.value) continue;
 

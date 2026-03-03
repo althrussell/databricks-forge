@@ -11,6 +11,7 @@ import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
+import { persistManifest } from "@/lib/pipeline/context-manifest";
 import { logger } from "@/lib/logger";
 import {
   ScoreItemSchema,
@@ -35,10 +36,25 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   const industryKpis = run.config.industry
     ? await buildIndustryKPIsPrompt(run.config.industry)
     : "";
-  const benchmarkContext = await buildBenchmarkContextPrompt(
+  const benchmarkResult = await buildBenchmarkContextPrompt(
     run.config.industry || undefined,
     run.config.customerMaturity,
   );
+
+  // Persist scoring-step provenance
+  if (runId) {
+    const outcomeMapSections: string[] = [];
+    if (industryKpis) outcomeMapSections.push("kpis");
+    try {
+      await persistManifest(runId, {
+        benchmarks: benchmarkResult.sources,
+        outcomeMap: { industryId: run.config.industry || null, sections: outcomeMapSections },
+        steps: ["scoring"],
+      });
+    } catch (e) {
+      logger.warn("[scoring] persistManifest failed (non-fatal)", { error: e });
+    }
+  }
 
   // Build existing asset context for scoring (higher scores for gap-filling use cases)
   let assetContext = "";
@@ -63,7 +79,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         industryKpis,
         runId,
         assetContext,
-        benchmarkContext,
+        benchmarkResult.text,
         `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
       );
     } catch (error) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { loadSettings } from "@/lib/settings";
 
 interface BenchmarkRow {
   benchmarkId: string;
@@ -35,14 +37,38 @@ function isSourceOutdated(row: BenchmarkRow): boolean {
 
 const LIFECYCLE_OPTIONS: Array<BenchmarkRow["lifecycleStatus"]> = ["draft", "reviewed", "published", "deprecated"];
 
-const FETCH_STATUS_STYLE: Record<string, { variant: "secondary" | "outline" | "default" | "destructive"; label: string }> = {
-  pending: { variant: "outline", label: "Not fetched" },
-  fetched: { variant: "secondary", label: "Fetched" },
-  failed: { variant: "destructive", label: "Fetch failed" },
-  manual: { variant: "secondary", label: "Manual paste" },
-};
+function fetchStatusStyle(row: BenchmarkRow): { variant: "secondary" | "outline" | "default" | "destructive"; label: string } {
+  if (row.sourceFetchStatus === "fetched") return { variant: "secondary", label: "Source fetched" };
+  if (row.sourceFetchStatus === "manual") return { variant: "secondary", label: "Manual paste" };
+  if (row.sourceFetchStatus === "failed" && row.sourceChunkCount > 0) {
+    return { variant: "outline", label: "Embedded from summary" };
+  }
+  if (row.sourceFetchStatus === "failed") return { variant: "destructive", label: "Fetch failed" };
+  return { variant: "outline", label: "Not fetched" };
+}
 
 export default function BenchmarksPage() {
+  const [enabled] = useState(() => loadSettings().benchmarksEnabled);
+
+  if (!enabled) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+        <h1 className="text-2xl font-bold tracking-tight">Benchmark Catalog</h1>
+        <p className="max-w-md text-muted-foreground">
+          The benchmark catalog is currently disabled. Enable it in Settings to manage
+          industry benchmarks for pipeline prompt enrichment.
+        </p>
+        <Link href="/settings">
+          <Button>Open Settings</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return <BenchmarksContent />;
+}
+
+function BenchmarksContent() {
   const [rows, setRows] = useState<BenchmarkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -206,7 +232,7 @@ export default function BenchmarksPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {filtered.map((row) => {
-            const fetchInfo = FETCH_STATUS_STYLE[row.sourceFetchStatus] ?? FETCH_STATUS_STYLE.pending;
+            const fetchInfo = fetchStatusStyle(row);
             const isFetching = fetchingIds.has(row.benchmarkId);
             const showPaste = pasteId === row.benchmarkId;
 

@@ -13,6 +13,7 @@ import { retrieveContext, formatRetrievedContext, provenanceLabel } from "@/lib/
 import type { RetrievedChunk } from "@/lib/embeddings/types";
 import type { AssistantIntent } from "./intent";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
+import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -119,7 +120,10 @@ export async function buildAssistantContext(
   let ragContext = "";
 
   if (isEmbeddingEnabled()) {
-    const plans = INTENT_SCOPES[intent];
+    const allPlans = INTENT_SCOPES[intent];
+    const plans = isBenchmarksEnabled()
+      ? allPlans
+      : allPlans.filter((p) => p.scope !== "benchmarks");
     chunks = await retrieveWithFallback(question, plans, directContext.latestRunId, directContext.latestScanId);
 
     ragContext = formatRetrievedContext(chunks, 12000);

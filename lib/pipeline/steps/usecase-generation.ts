@@ -14,6 +14,7 @@ import {
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
+import { persistManifest, deriveTags, type EnrichmentTag } from "@/lib/pipeline/context-manifest";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
@@ -82,7 +83,7 @@ export async function runUsecaseGeneration(
   const industryReferenceUseCases = run.config.industry
     ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
     : "";
-  const benchmarkContext = await buildBenchmarkContextPrompt(
+  const benchmarkResult = await buildBenchmarkContextPrompt(
     run.config.industry || undefined,
     run.config.customerMaturity,
   );
@@ -102,6 +103,9 @@ export async function runUsecaseGeneration(
 
   // Retrieve relevant strategy/priority context from knowledge base (RAG)
   let documentContext = "";
+  let docSourceIds: string[] = [];
+  let docKinds: string[] = [];
+  let docChunkCount = 0;
   try {
     const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
     const chunks = await retrieveContext(
@@ -110,9 +114,33 @@ export async function runUsecaseGeneration(
     );
     if (chunks.length > 0) {
       documentContext = "\n\n" + formatRetrievedContext(chunks, 4000);
+      docSourceIds = [...new Set(chunks.map((c) => c.sourceId))];
+      docKinds = [...new Set(chunks.map((c) => c.kind))];
+      docChunkCount = chunks.length;
     }
   } catch {
     // RAG is best-effort
+  }
+
+  // Persist enrichment provenance and derive use-case-level tags
+  const outcomeMapSections: string[] = [];
+  if (industryReferenceUseCases) outcomeMapSections.push("reference_usecases");
+  const stepManifest = {
+    benchmarks: benchmarkResult.sources,
+    outcomeMap: { industryId: run.config.industry || null, sections: outcomeMapSections },
+    documents: { sourceIds: docSourceIds, kinds: docKinds, chunkCount: docChunkCount },
+    steps: ["usecase-generation"],
+  };
+  const enrichmentTags: EnrichmentTag[] = deriveTags({
+    ...stepManifest,
+    outcomeMap: { ...stepManifest.outcomeMap, sections: outcomeMapSections },
+  });
+  if (runId) {
+    try {
+      await persistManifest(runId, stepManifest);
+    } catch (e) {
+      logger.warn("[usecase-generation] persistManifest failed (non-fatal)", { error: e });
+    }
   }
 
   // Estimate base token cost (everything except schema_markdown which varies per batch)
@@ -217,7 +245,7 @@ export async function runUsecaseGeneration(
         lineage_context: lineageContext,
         asset_context: assetContext,
         document_context: documentContext,
-        benchmark_context: benchmarkContext,
+        benchmark_context: benchmarkResult.text,
         customer_profile_context: `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
       };
 
@@ -234,7 +262,8 @@ export async function runUsecaseGeneration(
           "AI",
           run.runId,
           run.config.aiModel,
-          runId
+          runId,
+          enrichmentTags,
         ),
         generateBatch(
           "STATS_USE_CASE_GEN_PROMPT",
@@ -247,7 +276,8 @@ export async function runUsecaseGeneration(
           "Statistical",
           run.runId,
           run.config.aiModel,
-          runId
+          runId,
+          enrichmentTags,
         ),
       ];
     });
@@ -317,7 +347,8 @@ async function generateBatch(
   type: UseCaseType,
   useCaseRunId: string,
   aiModel: string,
-  logRunId?: string
+  logRunId?: string,
+  tags?: EnrichmentTag[],
 ): Promise<UseCase[]> {
   const result = await executeAIQuery({
     promptKey,
@@ -387,6 +418,7 @@ async function generateBatch(
         sqlStatus: null,
         feedback: null,
         feedbackAt: null,
+        enrichmentTags: tags && tags.length > 0 ? tags : null,
       };
     });
 }

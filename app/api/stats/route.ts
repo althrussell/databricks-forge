@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { isDatabaseReady, withPrisma } from "@/lib/prisma";
 import { ensureMigrated } from "@/lib/lakebase/schema";
+import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { logger } from "@/lib/logger";
 
 export async function GET() {
@@ -74,14 +75,16 @@ export async function GET() {
             passed: true,
           },
         }),
-        prisma.forgeBenchmarkRecord.findMany({
-          where: { lifecycleStatus: "published" },
-          select: {
-            industry: true,
-            publishedAt: true,
-            ttlDays: true,
-          },
-        }),
+        isBenchmarksEnabled()
+          ? prisma.forgeBenchmarkRecord.findMany({
+              where: { lifecycleStatus: "published" },
+              select: {
+                industry: true,
+                publishedAt: true,
+                ttlDays: true,
+              },
+            })
+          : Promise.resolve([]),
       ]);
 
       const statusLookup = new Map(

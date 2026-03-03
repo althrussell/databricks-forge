@@ -1,6 +1,20 @@
 import { listBenchmarkRecords } from "@/lib/lakebase/benchmarks";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
+import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { logger } from "@/lib/logger";
+
+export type BenchmarkStrategy = "rag_distill" | "db_fallback" | "default";
+
+export interface BenchmarkSourceMeta {
+  strategy: BenchmarkStrategy;
+  recordIds: string[];
+  chunkCount: number;
+}
+
+export interface BenchmarkContextResult {
+  text: string;
+  sources: BenchmarkSourceMeta;
+}
 
 interface BenchmarkPack {
   kpis: string[];
@@ -72,7 +86,7 @@ Keep each bullet to one sentence. Omit sections with no relevant content. Total 
 export async function buildBenchmarkContextPrompt(
   industryId: string | undefined,
   customerMaturity: "nascent" | "developing" | "advanced",
-): Promise<string> {
+): Promise<BenchmarkContextResult> {
   const maturityLine = `Customer maturity: ${customerMaturity}. ${parseMaturityGuidance(customerMaturity)}`;
   const preamble = [
     "### BENCHMARK CONTEXT",
@@ -81,23 +95,35 @@ export async function buildBenchmarkContextPrompt(
     maturityLine,
   ].join("\n");
 
+  const defaultSources: BenchmarkSourceMeta = { strategy: "default", recordIds: [], chunkCount: 0 };
+
+  if (!isBenchmarksEnabled()) {
+    return { text: formatDefaultPack(preamble), sources: defaultSources };
+  }
+
   const distilled = await tryRagDistill(industryId, customerMaturity);
   if (distilled) {
-    return `${preamble}\n\n${distilled}`;
+    return {
+      text: `${preamble}\n\n${distilled.text}`,
+      sources: distilled.sources,
+    };
   }
 
-  const formatted = await tryDbFallback(industryId);
-  if (formatted) {
-    return `${preamble}\n\n${formatted}`;
+  const dbResult = await tryDbFallback(industryId);
+  if (dbResult) {
+    return {
+      text: `${preamble}\n\n${dbResult.text}`,
+      sources: dbResult.sources,
+    };
   }
 
-  return formatDefaultPack(preamble);
+  return { text: formatDefaultPack(preamble), sources: defaultSources };
 }
 
 async function tryRagDistill(
   industryId: string | undefined,
   customerMaturity: string,
-): Promise<string | null> {
+): Promise<{ text: string; sources: BenchmarkSourceMeta } | null> {
   if (!isEmbeddingEnabled()) return null;
 
   try {
@@ -116,6 +142,8 @@ async function tryRagDistill(
 
     if (chunks.length === 0) return null;
 
+    const recordIds = [...new Set(chunks.map((c) => c.sourceId))];
+    const sources: BenchmarkSourceMeta = { strategy: "rag_distill", recordIds, chunkCount: chunks.length };
     const contextText = formatRetrievedContext(chunks, 6000);
 
     try {
@@ -138,7 +166,7 @@ async function tryRagDistill(
           chunks: chunks.length,
           tokens: response.usage?.totalTokens,
         });
-        return response.content.trim();
+        return { text: response.content.trim(), sources };
       }
     } catch (distillErr) {
       logger.warn("[benchmark-context] Fast distill failed, falling back", {
@@ -146,7 +174,8 @@ async function tryRagDistill(
       });
     }
 
-    return formatChunksDirectly(chunks);
+    const directText = formatChunksDirectly(chunks);
+    return directText ? { text: directText, sources } : null;
   } catch (err) {
     logger.warn("[benchmark-context] RAG retrieval failed", {
       error: err instanceof Error ? err.message : String(err),
@@ -163,7 +192,9 @@ function formatChunksDirectly(
   return lines.join("\n");
 }
 
-async function tryDbFallback(industryId: string | undefined): Promise<string | null> {
+async function tryDbFallback(
+  industryId: string | undefined,
+): Promise<{ text: string; sources: BenchmarkSourceMeta } | null> {
   try {
     const records = await listBenchmarkRecords({
       lifecycleStatus: "published",
@@ -173,6 +204,9 @@ async function tryDbFallback(industryId: string | undefined): Promise<string | n
     });
 
     if (records.length === 0) return null;
+
+    const recordIds = records.map((r) => r.benchmarkId);
+    const sources: BenchmarkSourceMeta = { strategy: "db_fallback", recordIds, chunkCount: records.length };
 
     const pack: BenchmarkPack = {
       kpis: dedupe(records.filter((r) => r.kind === "kpi").map((r) => r.title)).slice(0, 25),
@@ -191,7 +225,7 @@ async function tryDbFallback(industryId: string | undefined): Promise<string | n
           : DEFAULT_PACK.platformBestPractices,
     };
 
-    return [
+    const text = [
       "**Reference KPI lens:**",
       ...effective.kpis.map((k) => `- ${k}`),
       "",
@@ -204,6 +238,8 @@ async function tryDbFallback(industryId: string | undefined): Promise<string | n
       "**Consulting guidance:**",
       ...effective.advisoryThemes.map((t) => `- ${t}`),
     ].join("\n");
+
+    return { text, sources };
   } catch {
     return null;
   }

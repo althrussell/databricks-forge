@@ -4,8 +4,15 @@ import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { safeParseBody, CreateBenchmarkSchema } from "@/lib/validation";
 import { listBenchmarkRecords, upsertBenchmarkRecord } from "@/lib/lakebase/benchmarks";
 import { isBenchmarkAdmin } from "@/lib/benchmarks/admin-guard";
+import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
+
+const DISABLED_RESPONSE = NextResponse.json(
+  { error: "Benchmark catalog is disabled" },
+  { status: 404 },
+);
 
 export async function GET(request: NextRequest) {
+  if (!isBenchmarksEnabled()) return DISABLED_RESPONSE;
   try {
     await ensureMigrated();
     const { searchParams } = request.nextUrl;
@@ -30,6 +37,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isBenchmarksEnabled()) return DISABLED_RESPONSE;
   const userEmail = await getCurrentUserEmail();
   if (!isBenchmarkAdmin(userEmail)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
