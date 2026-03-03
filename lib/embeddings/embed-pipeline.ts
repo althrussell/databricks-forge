@@ -19,6 +19,7 @@ import {
   composeGenieRecommendation,
   composeGenieQuestion,
   composeOutcomeMap,
+  composeBenchmarkContext,
 } from "./compose";
 import type { EmbeddingInput } from "./types";
 import { isEmbeddingEnabled } from "./config";
@@ -300,6 +301,61 @@ export async function embedOutcomeMap(map: OutcomeMapLike): Promise<void> {
   } catch (err) {
     logger.warn("[embed-pipeline] Outcome map embedding failed (non-fatal)", {
       id: map.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark record embedding
+// ---------------------------------------------------------------------------
+
+interface BenchmarkLike {
+  benchmarkId: string;
+  kind: string;
+  title: string;
+  summary: string;
+  sourceUrl: string;
+  publisher: string;
+  industry?: string | null;
+  region?: string | null;
+  publishedAt?: string | null;
+  ttlDays: number;
+}
+
+export async function embedBenchmarkRecords(records: BenchmarkLike[]): Promise<void> {
+  if (!isEmbeddingEnabled() || records.length === 0) return;
+  try {
+    const texts = records.map((r) =>
+      composeBenchmarkContext({
+        kind: r.kind,
+        title: r.title,
+        summary: r.summary,
+        industry: r.industry ?? null,
+        region: r.region ?? null,
+        publisher: r.publisher,
+        sourceUrl: r.sourceUrl,
+      }),
+    );
+    const vectors = await generateEmbeddings(texts);
+    const inputs: EmbeddingInput[] = records.map((r, idx) => ({
+      kind: "benchmark_context",
+      sourceId: r.benchmarkId,
+      contentText: texts[idx],
+      metadataJson: {
+        kind: r.kind,
+        industry: r.industry ?? null,
+        region: r.region ?? null,
+        sourcePriority: "IndustryBenchmark",
+        publishedAt: r.publishedAt ?? null,
+        ttlDays: r.ttlDays,
+      },
+      embedding: vectors[idx],
+    }));
+    await Promise.all(records.map((r) => deleteEmbeddingsBySource(r.benchmarkId)));
+    await insertEmbeddings(inputs);
+  } catch (err) {
+    logger.warn("[embed-pipeline] Benchmark embedding failed (non-fatal)", {
       error: err instanceof Error ? err.message : String(err),
     });
   }

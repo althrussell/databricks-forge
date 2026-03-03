@@ -10,6 +10,7 @@ import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
 import { logger } from "@/lib/logger";
 import {
   ScoreItemSchema,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/validation";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
+import { scoreUseCaseConsultingQuality } from "@/lib/pipeline/usecase-scorecard";
 
 export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, useCases } = ctx;
@@ -33,6 +35,10 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   const industryKpis = run.config.industry
     ? await buildIndustryKPIsPrompt(run.config.industry)
     : "";
+  const benchmarkContext = await buildBenchmarkContextPrompt(
+    run.config.industry || undefined,
+    run.config.customerMaturity,
+  );
 
   // Build existing asset context for scoring (higher scores for gap-filling use cases)
   let assetContext = "";
@@ -44,14 +50,25 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   // Step 6a: Score per domain
   const domains = [...new Set(scored.map((uc) => uc.domain))];
   const bcRecord = bc as unknown as Record<string, string>;
+  let failedScoringDomains = 0;
   for (let di = 0; di < domains.length; di++) {
     const domain = domains[di];
     const domainCases = scored.filter((uc) => uc.domain === domain);
     if (runId) await updateRunMessage(runId, `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`);
     try {
-      await scoreDomain(domainCases, bcRecord, run.config.aiModel, industryKpis, runId, assetContext);
+      await scoreDomain(
+        domainCases,
+        bcRecord,
+        run.config.aiModel,
+        industryKpis,
+        runId,
+        assetContext,
+        benchmarkContext,
+        `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
+      );
     } catch (error) {
       logger.warn("Scoring failed for domain", { domain, error: error instanceof Error ? error.message : String(error) });
+      failedScoringDomains++;
       // Assign default scores
       domainCases.forEach((uc) => {
         uc.priorityScore = 0.5;
@@ -59,6 +76,12 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         uc.impactScore = 0.5;
         uc.overallScore = 0.5;
       });
+    }
+  }
+  if (failedScoringDomains > 0) {
+    const failureRate = failedScoringDomains / Math.max(domains.length, 1);
+    if (failureRate >= 0.4) {
+      throw new Error(`Scoring failed for ${failedScoringDomains}/${domains.length} domains (>=40%). Failing closed to prevent low-quality output.`);
     }
   }
 
@@ -110,6 +133,12 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   }
 
   // Step 6e: Sort by overall score and re-number with domain prefix
+  // Blend LLM scores with deterministic consulting scorecard signals.
+  for (const uc of scored) {
+    const scorecard = scoreUseCaseConsultingQuality(uc);
+    uc.overallScore = scorecard.blendedScore;
+  }
+
   scored.sort((a, b) => b.overallScore - a.overallScore);
 
   const domainCounters: Record<string, number> = {};
@@ -154,7 +183,9 @@ async function scoreDomain(
   aiModel: string,
   industryKpis: string = "",
   runId?: string,
-  assetContext: string = ""
+  assetContext: string = "",
+  benchmarkContext: string = "",
+  customerProfileContext: string = "",
 ): Promise<void> {
   const renderScoreRow = (uc: UseCase) =>
     `| ${uc.useCaseNo} | ${uc.name} | ${uc.type} | ${uc.analyticsTechnique} | ${uc.statement} |`;
@@ -181,6 +212,8 @@ async function scoreDomain(
         revenue_model: businessContext.revenueModel ?? "",
         industry_kpis: industryKpis,
         asset_context: assetContext,
+        benchmark_context: benchmarkContext,
+        customer_profile_context: customerProfileContext,
         use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
       },
       modelEndpoint: aiModel,

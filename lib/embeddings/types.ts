@@ -23,6 +23,7 @@ export const EMBEDDING_KINDS = [
   "outcome_map",
   "lineage_context",
   "document_chunk",
+  "benchmark_context",
 ] as const;
 
 export type EmbeddingKind = (typeof EMBEDDING_KINDS)[number];
@@ -41,6 +42,7 @@ export const SEARCH_SCOPES: Record<string, readonly EmbeddingKind[]> = {
   genie: ["genie_recommendation", "genie_question"],
   insights: ["environment_insight", "table_health", "data_product"],
   documents: ["document_chunk"],
+  benchmarks: ["benchmark_context", "outcome_map"],
   all: EMBEDDING_KINDS,
 };
 

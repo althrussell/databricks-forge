@@ -149,6 +149,10 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
     BusinessPriority[]
   >(["Increase Revenue"]);
   const [strategicGoals, setStrategicGoals] = useState("");
+  const [additionalContext, setAdditionalContext] = useState("");
+  const [customerMaturity, setCustomerMaturity] = useState<"nascent" | "developing" | "advanced">("developing");
+  const [riskPosture, setRiskPosture] = useState<"conservative" | "balanced" | "aggressive">("balanced");
+  const [transformationHorizon, setTransformationHorizon] = useState<"quarter" | "half-year" | "year-plus">("half-year");
 
   // Hydrate from sessionStorage (for "Duplicate Config" flow)
   useEffect(() => {
@@ -172,6 +176,10 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
       }
       if (cfg.businessPriorities?.length) setSelectedPriorities(cfg.businessPriorities);
       if (cfg.strategicGoals) setStrategicGoals(cfg.strategicGoals);
+      if (cfg.additionalContext) setAdditionalContext(cfg.additionalContext);
+      if (cfg.customerMaturity) setCustomerMaturity(cfg.customerMaturity);
+      if (cfg.riskPosture) setRiskPosture(cfg.riskPosture);
+      if (cfg.transformationHorizon) setTransformationHorizon(cfg.transformationHorizon);
     } catch {
       // Ignore malformed data
     }
@@ -221,6 +229,10 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
           businessDomains: businessDomains.join(", "),
           businessPriorities: selectedPriorities,
           strategicGoals: strategicGoals.trim(),
+          additionalContext: additionalContext.trim(),
+          customerMaturity,
+          riskPosture,
+          transformationHorizon,
           languages: ["English"],
           sampleRowsPerTable: appSettings.sampleRowsPerTable,
           discoveryDepth,
@@ -599,6 +611,55 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
             <p className="text-xs text-muted-foreground">
               Leave blank for AI-generated goals
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="additionalContext">
+              <LabelWithTip label="Additional Context (optional)" tip="Provide KPI targets, constraints, regulatory context, and must-win initiatives." />
+            </Label>
+            <Textarea
+              id="additionalContext"
+              placeholder="e.g. Reduce claim leakage by 15% in 2 quarters, prioritize regulatory reporting readiness, avoid high-change architecture..."
+              value={additionalContext}
+              onChange={(e) => setAdditionalContext(e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Customer Maturity</Label>
+              <Select value={customerMaturity} onValueChange={(v) => setCustomerMaturity(v as typeof customerMaturity)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nascent">Nascent</SelectItem>
+                  <SelectItem value="developing">Developing</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Risk Posture</Label>
+              <Select value={riskPosture} onValueChange={(v) => setRiskPosture(v as typeof riskPosture)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="conservative">Conservative</SelectItem>
+                  <SelectItem value="balanced">Balanced</SelectItem>
+                  <SelectItem value="aggressive">Aggressive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Transformation Horizon</Label>
+              <Select value={transformationHorizon} onValueChange={(v) => setTransformationHorizon(v as typeof transformationHorizon)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="quarter">Quarter</SelectItem>
+                  <SelectItem value="half-year">Half-Year</SelectItem>
+                  <SelectItem value="year-plus">Year Plus</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div

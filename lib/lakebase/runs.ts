@@ -63,6 +63,10 @@ function dbRowToRun(row: {
       businessDomains: row.businessDomains ?? "",
       businessPriorities: parseJSON<BusinessPriority[]>(row.businessPriorities, []),
       strategicGoals: row.strategicGoals ?? "",
+      additionalContext: genOpts.additionalContext ?? "",
+      customerMaturity: genOpts.customerMaturity ?? "developing",
+      riskPosture: genOpts.riskPosture ?? "balanced",
+      transformationHorizon: genOpts.transformationHorizon ?? "half-year",
       generationOptions: genOpts.generationOptions,
       sampleRowsPerTable: genOpts.sampleRowsPerTable,
       industry: genOpts.industry,
@@ -102,6 +106,10 @@ function parseGenerationOptions(raw: string | null): {
   generationOptions: GenerationOption[];
   sampleRowsPerTable: number;
   industry: string;
+  additionalContext: string;
+  customerMaturity: PipelineRunConfig["customerMaturity"];
+  riskPosture: PipelineRunConfig["riskPosture"];
+  transformationHorizon: PipelineRunConfig["transformationHorizon"];
   discoveryDepth: string;
   depthConfig: PipelineRunConfig["depthConfig"];
   estateScanEnabled: boolean;
@@ -111,7 +119,23 @@ function parseGenerationOptions(raw: string | null): {
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", depthConfig: undefined as PipelineRunConfig["depthConfig"], estateScanEnabled: false, assetDiscoveryEnabled: false, industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  const defaults = {
+    generationOptions: ["SQL Code"] as GenerationOption[],
+    sampleRowsPerTable: 0,
+    industry: "",
+    additionalContext: "",
+    customerMaturity: "developing" as PipelineRunConfig["customerMaturity"],
+    riskPosture: "balanced" as PipelineRunConfig["riskPosture"],
+    transformationHorizon: "half-year" as PipelineRunConfig["transformationHorizon"],
+    discoveryDepth: "balanced",
+    depthConfig: undefined as PipelineRunConfig["depthConfig"],
+    estateScanEnabled: false,
+    assetDiscoveryEnabled: false,
+    industryAutoDetected: false,
+    appVersion: null as string | null,
+    promptVersions: null as Record<string, string> | null,
+    stepLog: [] as StepLogEntry[],
+  };
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
@@ -123,6 +147,10 @@ function parseGenerationOptions(raw: string | null): {
         generationOptions: parsed.options ?? ["SQL Code"],
         sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
         industry: parsed.industry ?? "",
+        additionalContext: parsed.additionalContext ?? "",
+        customerMaturity: parsed.customerMaturity ?? "developing",
+        riskPosture: parsed.riskPosture ?? "balanced",
+        transformationHorizon: parsed.transformationHorizon ?? "half-year",
         discoveryDepth: parsed.discoveryDepth ?? "balanced",
         depthConfig: parsed.depthConfig ?? undefined,
         estateScanEnabled: parsed.estateScanEnabled === true,
@@ -142,6 +170,10 @@ function serializeGenerationOptions(config: PipelineRunConfig): string {
     options: config.generationOptions,
     sampleRowsPerTable: config.sampleRowsPerTable,
     industry: config.industry,
+    additionalContext: config.additionalContext,
+    customerMaturity: config.customerMaturity,
+    riskPosture: config.riskPosture,
+    transformationHorizon: config.transformationHorizon,
     discoveryDepth: config.discoveryDepth,
     depthConfig: config.depthConfig ?? null,
     estateScanEnabled: config.estateScanEnabled,

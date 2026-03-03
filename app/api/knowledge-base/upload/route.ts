@@ -10,7 +10,7 @@
  * Processing pipeline:
  *   1. Parse file contents (PDF via pdf-parse, MD/TXT natively)
  *   2. Chunk into 512-token windows with 64-token overlap
- *   3. Embed chunks via databricks-gte-large-en
+ *   3. Embed chunks via databricks-qwen3-embedding-0-6b
  *   4. Store in forge_embeddings as document_chunk kind
  */
 

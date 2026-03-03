@@ -16,6 +16,8 @@ import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { chatCompletionStream, type StreamCallback, type TokenUsage } from "@/lib/dbx/model-serving";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
+import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
+import { scoreAssistantResponse } from "@/lib/assistant/evaluation";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +75,17 @@ export interface AssistantResponse {
   tokenUsage: TokenUsage | null;
   durationMs: number;
   logId: string | null;
+}
+
+function enforceSourceCitations(answer: string, sources: SourceCard[]): string {
+  if (sources.length === 0) return answer;
+  if (/\[\d+\]/.test(answer)) return answer;
+
+  const sourceLines = sources
+    .slice(0, 3)
+    .map((s) => `[${s.index}] ${s.label} (${s.kind})`)
+    .join("\n");
+  return `${answer}\n\n### Sources\n${sourceLines}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +184,11 @@ export async function runAssistantEngine(
     onChunk,
   );
 
-  const answer = llmResponse.content;
+  let answer = llmResponse.content;
+  if (context.lowConfidenceRetrieval) {
+    answer = `${answer}\n\n### Confidence Note\nRetrieved context relevance is weak for this question. Validate critical decisions against source metadata before execution.`;
+  }
+  answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
   const dashboardProposal = extractDashboardIntent(answer);
 
@@ -252,6 +269,35 @@ export async function runAssistantEngine(
       referencedTables: context.tables,
       persona,
     });
+    const evalResult = scoreAssistantResponse({
+      question,
+      answer,
+      sourceCount: sources.length,
+      retrievalTopScore: context.retrievalTopScore,
+      sqlBlocks,
+    });
+    await insertQualityMetrics([
+      {
+        metricType: "assistant",
+        metricName: "assistant_overall_score",
+        metricValue: evalResult.overallScore / 100,
+        floorValue: Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+        passed: evalResult.overallScore / 100 >= Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+        assistantLogId: logId,
+      },
+      {
+        metricType: "assistant",
+        metricName: "assistant_grounding_score",
+        metricValue: evalResult.groundingScore / 100,
+        assistantLogId: logId,
+      },
+      {
+        metricType: "assistant",
+        metricName: "assistant_citation_score",
+        metricValue: evalResult.citationScore / 100,
+        assistantLogId: logId,
+      },
+    ]);
   } catch (err) {
     logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) });
   }

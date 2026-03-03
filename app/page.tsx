@@ -57,6 +57,24 @@ async function fetchDashboardStats(): Promise<{
         }),
       ]);
 
+      const [qualityRows, benchmarkRows] = await Promise.all([
+        prisma.forgeQualityMetric.findMany({
+          where: {
+            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          },
+          select: {
+            metricType: true,
+            metricName: true,
+            metricValue: true,
+            passed: true,
+          },
+        }),
+        prisma.forgeBenchmarkRecord.findMany({
+          where: { lifecycleStatus: "published" },
+          select: { industry: true, publishedAt: true, ttlDays: true },
+        }),
+      ]);
+
       // Derive all KPIs from the grouped/raw results
       const statusLookup = new Map(
         runStatusGroups.map((g) => [g.status, g._count._all])
@@ -88,6 +106,35 @@ async function fetchDashboardStats(): Promise<{
         count: g._count._all,
       }));
 
+      const consultantRows = qualityRows.filter(
+        (m) => m.metricType === "run" && m.metricName === "consultant_readiness",
+      );
+      const assistantRows = qualityRows.filter(
+        (m) => m.metricType === "assistant" && m.metricName === "assistant_overall_score",
+      );
+      const avgConsultantReadiness = consultantRows.length > 0
+        ? consultantRows.reduce((s, m) => s + m.metricValue, 0) / consultantRows.length
+        : null;
+      const avgAssistantScore = assistantRows.length > 0
+        ? assistantRows.reduce((s, m) => s + m.metricValue, 0) / assistantRows.length
+        : null;
+      const releaseGatePassRate = consultantRows.length > 0
+        ? consultantRows.filter((m) => m.passed === true).length / consultantRows.length
+        : null;
+
+      const now = Date.now();
+      const freshBenchmarks = benchmarkRows.filter((r) => {
+        const start = r.publishedAt ? r.publishedAt.getTime() : now;
+        const expiry = start + r.ttlDays * 24 * 60 * 60 * 1000;
+        return expiry >= now;
+      });
+      const benchmarkFreshnessRate = benchmarkRows.length > 0
+        ? freshBenchmarks.length / benchmarkRows.length
+        : null;
+      const benchmarkIndustryCoverage = new Set(
+        benchmarkRows.map((r) => (r.industry ?? "").trim()).filter(Boolean),
+      ).size;
+
       const recent = recentRuns.map((r) => ({
         runId: r.runId,
         businessName: r.businessName,
@@ -112,6 +159,13 @@ async function fetchDashboardStats(): Promise<{
         domainBreakdown,
         scores,
         recentRuns: recent,
+        quality: {
+          avgConsultantReadiness,
+          avgAssistantScore,
+          releaseGatePassRate,
+          benchmarkFreshnessRate,
+          benchmarkIndustryCoverage,
+        },
       };
     });
 

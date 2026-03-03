@@ -80,6 +80,10 @@ export interface PipelineRunConfig {
   businessDomains: string;
   businessPriorities: BusinessPriority[];
   strategicGoals: string;
+  additionalContext: string;
+  customerMaturity: "nascent" | "developing" | "advanced";
+  riskPosture: "conservative" | "balanced" | "aggressive";
+  transformationHorizon: "quarter" | "half-year" | "year-plus";
   generationOptions: GenerationOption[];
   generationPath: string;
   languages: string[];
@@ -478,6 +482,10 @@ export interface EnvironmentScan {
   redundancyPairsCount: number;
   dataProductCount: number;
   avgGovernanceScore: number;
+  genieSpaceCount: number;
+  dashboardCount: number;
+  metricViewCount: number;
+  analyticsCoveragePercent: number;
   scanDurationMs: number;
   passResults: Record<string, "success" | "failed" | "skipped">;
 }

@@ -41,6 +41,9 @@ export interface AssistantContext {
   tables: string[];
   tableEnrichments: TableEnrichment[];
   hasDataGaps: boolean;
+  retrievalTopScore: number | null;
+  retrievalAvgScore: number | null;
+  lowConfidenceRetrieval: boolean;
 }
 
 interface ConversationTurn {
@@ -48,13 +51,43 @@ interface ConversationTurn {
   content: string;
 }
 
-const INTENT_SCOPES: Record<AssistantIntent, string | undefined> = {
-  business: undefined,
-  technical: "estate",
-  dashboard: undefined,
-  navigation: undefined,
-  exploration: undefined,
+const INTENT_SCOPES: Record<AssistantIntent, Array<{
+  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | undefined;
+  topK: number;
+  minScore: number;
+  useLatestRun?: boolean;
+  useLatestScan?: boolean;
+}>> = {
+  business: [
+    { scope: "usecases", topK: 10, minScore: 0.4, useLatestRun: true },
+    { scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true },
+    { scope: "benchmarks", topK: 6, minScore: 0.35 },
+  ],
+  technical: [
+    { scope: "estate", topK: 15, minScore: 0.4, useLatestScan: true },
+    { scope: "insights", topK: 8, minScore: 0.4, useLatestScan: true },
+  ],
+  dashboard: [
+    { scope: "insights", topK: 10, minScore: 0.4, useLatestScan: true },
+    { scope: "usecases", topK: 8, minScore: 0.4, useLatestRun: true },
+  ],
+  navigation: [
+    { scope: "estate", topK: 10, minScore: 0.35, useLatestScan: true },
+    { scope: "usecases", topK: 8, minScore: 0.35, useLatestRun: true },
+    { scope: "documents", topK: 5, minScore: 0.35 },
+  ],
+  exploration: [
+    { scope: "estate", topK: 10, minScore: 0.35, useLatestScan: true },
+    { scope: "usecases", topK: 8, minScore: 0.35, useLatestRun: true },
+    { scope: "documents", topK: 5, minScore: 0.35 },
+  ],
 };
+
+interface DirectContextResult {
+  text: string | null;
+  latestRunId: string | null;
+  latestScanId: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Main entry point
@@ -78,12 +111,33 @@ export async function buildAssistantContext(
   let ragContext = "";
 
   if (isEmbeddingEnabled()) {
-    const scope = INTENT_SCOPES[intent];
-    chunks = await retrieveContext(question, {
-      scope: scope as "estate" | "usecases" | "genie" | "insights" | "documents" | undefined,
-      topK: 15,
-      minScore: 0.35,
-    });
+    const plans = INTENT_SCOPES[intent];
+    const retrievals = await Promise.all(
+      plans.map((plan) =>
+        retrieveContext(question, {
+          scope: plan.scope,
+          topK: plan.topK,
+          minScore: plan.minScore,
+          enforceSourcePriority: true,
+          runId: plan.useLatestRun ? directContext.latestRunId ?? undefined : undefined,
+          scanId: plan.useLatestScan ? directContext.latestScanId ?? undefined : undefined,
+        }),
+      ),
+    );
+
+    const deduped = new Map<string, RetrievedChunk>();
+    for (const list of retrievals) {
+      for (const chunk of list) {
+        const key = `${chunk.kind}:${chunk.sourceId}`;
+        const existing = deduped.get(key);
+        if (!existing || chunk.score > existing.score) {
+          deduped.set(key, chunk);
+        }
+      }
+    }
+    chunks = Array.from(deduped.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
 
     ragContext = formatRetrievedContext(chunks, 12000);
 
@@ -97,8 +151,8 @@ export async function buildAssistantContext(
   // --- Merge: prepend direct context, then RAG, then table enrichment ---
   let fullContext = "";
 
-  if (directContext) {
-    fullContext += directContext + "\n\n";
+  if (directContext.text) {
+    fullContext += directContext.text + "\n\n";
   }
 
   if (ragContext) {
@@ -114,13 +168,28 @@ export async function buildAssistantContext(
 
   const conversationHistory = formatConversationHistory(history);
 
+  const retrievalTopScore = chunks.length > 0 ? chunks[0].score : null;
+  const retrievalAvgScore = chunks.length > 0
+    ? chunks.reduce((sum, c) => sum + c.score, 0) / chunks.length
+    : null;
+  const lowConfidenceRetrieval = retrievalTopScore !== null && retrievalTopScore < 0.5;
+
+  if (lowConfidenceRetrieval) {
+    fullContext =
+      "## Retrieval Confidence\nTop retrieval score is low. Answer conservatively and explicitly call out uncertainty where context is thin.\n\n" +
+      fullContext;
+  }
+
   return {
     ragContext: fullContext,
     chunks,
     conversationHistory,
     tables,
     tableEnrichments,
-    hasDataGaps: chunks.length === 0 && !directContext,
+    hasDataGaps: chunks.length === 0 && !directContext.text,
+    retrievalTopScore,
+    retrievalAvgScore,
+    lowConfidenceRetrieval,
   };
 }
 
@@ -153,16 +222,19 @@ export function buildSourceReferences(chunks: RetrievedChunk[]): Array<{
  * Fetch structured context directly from Lakebase, independent of vector search.
  * Provides business grounding, estate overview, and deployed asset awareness.
  */
-async function fetchDirectLakebaseContext(): Promise<string | null> {
+async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
   try {
     return await withPrisma(async (prisma) => {
       const sections: string[] = [];
+      let latestRunId: string | null = null;
+      let latestScanId: string | null = null;
 
       // 1. Business context from latest completed run
       const latestRun = await prisma.forgeRun.findFirst({
         where: { status: "completed" },
         orderBy: { createdAt: "desc" },
         select: {
+          runId: true,
           businessName: true,
           businessContext: true,
           businessPriorities: true,
@@ -173,6 +245,7 @@ async function fetchDirectLakebaseContext(): Promise<string | null> {
       });
 
       if (latestRun) {
+        latestRunId = latestRun.runId;
         const parts = ["## Business Context"];
         parts.push(`Organisation: ${latestRun.businessName}`);
         if (latestRun.businessContext) parts.push(`Context: ${truncate(latestRun.businessContext, 800)}`);
@@ -186,6 +259,7 @@ async function fetchDirectLakebaseContext(): Promise<string | null> {
       const latestScan = await prisma.forgeEnvironmentScan.findFirst({
         orderBy: { createdAt: "desc" },
         select: {
+          scanId: true,
           tableCount: true,
           domainCount: true,
           piiTablesCount: true,
@@ -198,6 +272,7 @@ async function fetchDirectLakebaseContext(): Promise<string | null> {
       });
 
       if (latestScan) {
+        latestScanId = latestScan.scanId;
         const parts = ["## Data Estate Summary"];
         parts.push(`Scope: ${latestScan.ucPath}`);
         parts.push(`Tables: ${latestScan.tableCount} | Domains: ${latestScan.domainCount} | PII tables: ${latestScan.piiTablesCount}`);
@@ -238,12 +313,15 @@ async function fetchDirectLakebaseContext(): Promise<string | null> {
         sections.push(parts.join("\n"));
       }
 
-      if (sections.length === 0) return null;
-      return sections.join("\n\n---\n\n");
+      return {
+        text: sections.length === 0 ? null : sections.join("\n\n---\n\n"),
+        latestRunId,
+        latestScanId,
+      };
     });
   } catch (err) {
     logger.warn("[assistant/context] Failed to fetch direct Lakebase context", { error: String(err) });
-    return null;
+    return { text: null, latestRunId: null, latestScanId: null };
   }
 }
 

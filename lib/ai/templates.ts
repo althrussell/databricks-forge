@@ -81,6 +81,12 @@ ${USER_DATA_DEFENCE}
 
 {industry_context}
 
+{customer_profile_context}
+
+{benchmark_context}
+
+Source-priority ordering for all claims: CustomerFact > PlatformBestPractice > IndustryBenchmark > AdvisoryGuidance.
+
 {document_context}
 
 ### OUTPUT FORMAT
@@ -217,6 +223,16 @@ ${USER_DATA_DEFENCE}
 
 ---
 
+### CUSTOMER PROFILE & BENCHMARK CONTEXT
+
+{customer_profile_context}
+
+{benchmark_context}
+
+Source-priority ordering for all claims: CustomerFact > PlatformBestPractice > IndustryBenchmark > AdvisoryGuidance.
+
+---
+
 ### CRITICAL: AI-FIRST APPROACH
 
 **YOUR MISSION**: Generate use cases where **AI FUNCTIONS ARE THE PRIMARY ANALYTICAL TECHNIQUE**. Every use case MUST use at least one AI function as the core technique.
@@ -321,7 +337,21 @@ You are a highly experienced **Principal Enterprise Data Architect** and **Fraud
 **Value Chain:** {value_chain}
 **Revenue Model:** {revenue_model}
 
+### HIGHEST PRIORITY: USER-PROVIDED ADDITIONAL CONTEXT
+
+{additional_context_section}
+
 ${USER_DATA_DEFENCE}
+
+---
+
+### CUSTOMER PROFILE & BENCHMARK CONTEXT
+
+{customer_profile_context}
+
+{benchmark_context}
+
+Source-priority ordering for all claims: CustomerFact > PlatformBestPractice > IndustryBenchmark > AdvisoryGuidance.
 
 ---
 
@@ -362,6 +392,8 @@ Generate **{target_use_case_count}** unique, actionable statistics-focused busin
 {lineage_context}
 
 Tables connected via lineage represent actual data pipelines. When multiple tables at different refinement levels (raw -> clean -> aggregated) appear, focus use cases on the highest-quality version unless the lower-level table provides unique columns or granularity not available in the refined version.
+
+{asset_context}
 
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
@@ -613,6 +645,8 @@ Map your internal computations to the output format:
 6. **NONSENSICAL EXTERNAL DATA = LOW SCORE**: Use cases that reference external data without a clear, industry-recognized business connection MUST be penalized heavily.
 7. **RELEVANCY TEST**: For EVERY use case, ask: "Can I explain in ONE sentence why these variables/factors are logically connected?" If NO, score LOW.
 8. **BOARDROOM TEST**: Would a senior executive approve budget for this analysis without questioning the logic? If the correlation seems invented, score LOW.
+9. **EVIDENCE STRENGTH RULE**: Reward use cases that clearly anchor claims to concrete tables, fields, and operational signals from the provided context.
+10. **NON-GENERICITY RULE**: Penalize vague formulations (e.g., "improve operations", "analyze data for insights") unless they include measurable outcomes and owner/accountability context.
 
 # CHAIN-OF-THOUGHT WORKFLOW (follow this for EACH use case)
 
@@ -629,6 +663,12 @@ This internal reasoning produces more accurate, calibrated scores. You do NOT ne
 {industry_kpis}
 
 {asset_context}
+
+{customer_profile_context}
+
+{benchmark_context}
+
+Source-priority ordering for all claims: CustomerFact > PlatformBestPractice > IndustryBenchmark > AdvisoryGuidance.
 
 # SCORE EVERY SINGLE USE CASE
 

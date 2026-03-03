@@ -412,6 +412,32 @@ export function composeDocumentChunk(
 }
 
 // ---------------------------------------------------------------------------
+// 13. benchmark_context
+// ---------------------------------------------------------------------------
+
+interface BenchmarkInput {
+  kind: string;
+  title: string;
+  summary: string;
+  industry?: string | null;
+  region?: string | null;
+  publisher: string;
+  sourceUrl: string;
+}
+
+export function composeBenchmarkContext(b: BenchmarkInput): string {
+  return lines([
+    `Benchmark: ${b.title}`,
+    `Kind: ${b.kind}`,
+    b.industry ? `Industry: ${b.industry}` : null,
+    b.region ? `Region: ${b.region}` : null,
+    `Summary: ${b.summary}`,
+    `Publisher: ${b.publisher}`,
+    `Source: ${b.sourceUrl}`,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

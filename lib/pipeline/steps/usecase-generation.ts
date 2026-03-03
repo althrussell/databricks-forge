@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
@@ -22,6 +23,7 @@ import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
 const MAX_CONCURRENT_BATCHES = 2;
+const MAX_GENERATION_RETRIES = 2;
 
 /** Shape of each use case object in the JSON array returned by the LLM. */
 interface UseCaseItem {
@@ -80,6 +82,10 @@ export async function runUsecaseGeneration(
   const industryReferenceUseCases = run.config.industry
     ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
     : "";
+  const benchmarkContext = await buildBenchmarkContextPrompt(
+    run.config.industry || undefined,
+    run.config.customerMaturity,
+  );
 
   // Load accepted use cases from prior runs as few-shot examples
   let feedbackExamplesSection = "";
@@ -211,6 +217,8 @@ export async function runUsecaseGeneration(
         lineage_context: lineageContext,
         asset_context: assetContext,
         document_context: documentContext,
+        benchmark_context: benchmarkContext,
+        customer_profile_context: `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
       };
 
       // Generate both AI and Stats use cases per batch
@@ -318,6 +326,7 @@ async function generateBatch(
     responseFormat: "json_object",
     runId: logRunId,
     step: "usecase-generation",
+    retries: MAX_GENERATION_RETRIES,
   });
 
   let items: UseCaseItem[];
@@ -334,7 +343,12 @@ async function generateBatch(
   }
 
   return items
-    .filter((item) => item.name)
+    .filter((item) =>
+      typeof item.name === "string" &&
+      typeof item.statement === "string" &&
+      typeof item.business_value === "string" &&
+      typeof item.analytics_technique === "string"
+    )
     .map((item) => {
       // tables_involved can be an array (expected) or comma-separated string (fallback)
       let tablesInvolved: string[];
@@ -350,14 +364,14 @@ async function generateBatch(
         id: uuidv4(),
         runId: useCaseRunId,
         useCaseNo: item.no ?? 0,
-        name: item.name ?? "",
+        name: item.name?.trim() ?? "",
         type: ((item.type?.trim() as UseCaseType) || type),
-        analyticsTechnique: item.analytics_technique ?? "",
-        statement: item.statement ?? "",
-        solution: item.solution ?? "",
-        businessValue: item.business_value ?? "",
-        beneficiary: item.beneficiary ?? "",
-        sponsor: item.sponsor ?? "",
+        analyticsTechnique: item.analytics_technique?.trim() ?? "",
+        statement: item.statement?.trim() ?? "",
+        solution: item.solution?.trim() ?? "",
+        businessValue: item.business_value?.trim() ?? "",
+        beneficiary: item.beneficiary?.trim() ?? "",
+        sponsor: item.sponsor?.trim() ?? "",
         domain: "", // assigned in Step 5
         subdomain: "", // assigned in Step 5
         tablesInvolved,

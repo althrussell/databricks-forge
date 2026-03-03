@@ -602,14 +602,24 @@ export async function listMetricViews(
 // ---------------------------------------------------------------------------
 
 function parseFqn(fqn: string): { catalog: string; schema: string; tableName: string } | null {
-  const parts = fqn.split(".");
-  if (parts.length !== 3) return null;
-  return { catalog: parts[0], schema: parts[1], tableName: parts[2] };
+  const normalized = fqn.replace(/`/g, "").trim();
+  const parts = normalized.split(".");
+  if (parts.length < 3) return null;
+  const tableName = parts.pop();
+  const schema = parts.pop();
+  const catalog = parts.join(".");
+  if (!tableName || !schema || !catalog) return null;
+  return { catalog, schema, tableName };
 }
 
 function buildFqnWhereClause(fqns: string[]): string {
+  let dropped = 0;
   const conditions = fqns
-    .map((fqn) => parseFqn(fqn))
+    .map((fqn) => {
+      const parsed = parseFqn(fqn);
+      if (!parsed) dropped++;
+      return parsed;
+    })
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .map((p) => {
       const safeCatalog = validateIdentifier(p.catalog, "catalog");
@@ -617,6 +627,12 @@ function buildFqnWhereClause(fqns: string[]): string {
       const safeTable = validateIdentifier(p.tableName, "table");
       return `(table_catalog = '${safeCatalog}' AND table_schema = '${safeSchema}' AND table_name = '${safeTable}')`;
     });
+  if (dropped > 0) {
+    logger.warn("[metadata] Dropped malformed FQNs in batch where clause", {
+      dropped,
+      total: fqns.length,
+    });
+  }
   return conditions.join(" OR ");
 }
 

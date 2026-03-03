@@ -117,7 +117,7 @@ embedding/vector search system:
 
 Uses pgvector cosine similarity to retrieve the most relevant knowledge chunks:
 
-- **Embedding model:** `databricks-gte-large-en` (1024-dim vectors)
+- **Embedding model:** `databricks-qwen3-embedding-0-6b` (1024-dim vectors)
 - **Top K:** 15 chunks
 - **Min score:** 0.35 cosine similarity
 - **Scope routing:** Technical intents scope to `estate` kinds; others search all kinds
@@ -676,7 +676,7 @@ pipeline is documented separately but the key integration points are:
 | Concern | Module | Detail |
 |---------|--------|--------|
 | Feature gate | `lib/embeddings/config.ts` | `isEmbeddingEnabled()` checks `DATABRICKS_EMBEDDING_ENDPOINT` env var |
-| Embedding client | `lib/embeddings/client.ts` | `databricks-gte-large-en`, 1024-dim, batches of 16, retry on 429/5xx |
+| Embedding client | `lib/embeddings/client.ts` | `databricks-qwen3-embedding-0-6b`, 1024-dim, batches of 16, retry on 429/5xx |
 | Vector store | `lib/embeddings/store.ts` | pgvector in Lakebase, HNSW index, `forge_embeddings` table |
 | Retriever | `lib/embeddings/retriever.ts` | `retrieveContext()` with scope/kind filtering, `formatRetrievedContext()` with provenance labels |
 | Text composition | `lib/embeddings/compose.ts` | 12 composing functions, one per embedding kind |

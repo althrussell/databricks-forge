@@ -32,6 +32,8 @@ export interface RetrieveOptions {
   scanId?: string;
   /** JSONB metadata filter. */
   metadataFilter?: Record<string, unknown>;
+  /** Prioritize source types and freshness in final ranking. */
+  enforceSourcePriority?: boolean;
 }
 
 /**
@@ -64,13 +66,75 @@ export async function retrieveContext(
     topScore: results[0]?.score,
   });
 
-  return results.map((r) => ({
+  const ranked = (opts.enforceSourcePriority === false ? results : rerankByProvenance(results));
+  return ranked.map((r) => ({
     content: r.contentText,
     kind: r.kind,
     sourceId: r.sourceId,
     score: r.score,
     metadata: r.metadataJson,
   }));
+}
+
+type SourcePriority =
+  | "CustomerFact"
+  | "PlatformBestPractice"
+  | "IndustryBenchmark"
+  | "AdvisoryGuidance";
+
+const PRIORITY_WEIGHT: Record<SourcePriority, number> = {
+  CustomerFact: 1.0,
+  PlatformBestPractice: 0.85,
+  IndustryBenchmark: 0.7,
+  AdvisoryGuidance: 0.55,
+};
+
+function inferSourcePriority(result: SearchResult): SourcePriority {
+  const label = (result.metadataJson?.sourcePriority as string | undefined) ?? "";
+  if (label === "CustomerFact" || label === "PlatformBestPractice" || label === "IndustryBenchmark" || label === "AdvisoryGuidance") {
+    return label;
+  }
+  switch (result.kind) {
+    case "table_detail":
+    case "column_profile":
+    case "table_health":
+    case "lineage_context":
+      return "CustomerFact";
+    case "benchmark_context":
+      return "IndustryBenchmark";
+    case "outcome_map":
+      return "AdvisoryGuidance";
+    default:
+      return "PlatformBestPractice";
+  }
+}
+
+function freshnessMultiplier(result: SearchResult): number {
+  const md = result.metadataJson ?? {};
+  const validUntil = typeof md.validUntil === "string" ? Date.parse(md.validUntil) : NaN;
+  if (Number.isFinite(validUntil)) {
+    return validUntil >= Date.now() ? 1 : 0.5;
+  }
+  const publishedAt = typeof md.publishedAt === "string" ? Date.parse(md.publishedAt) : NaN;
+  if (Number.isFinite(publishedAt) && typeof md.ttlDays === "number") {
+    const maxAgeMs = md.ttlDays * 24 * 60 * 60 * 1000;
+    const expiry = publishedAt + maxAgeMs;
+    return expiry >= Date.now() ? 1 : 0.5;
+  }
+  return 1;
+}
+
+function rerankByProvenance(results: SearchResult[]): SearchResult[] {
+  return [...results]
+    .sort((a, b) => {
+      const aScore = a.score * PRIORITY_WEIGHT[inferSourcePriority(a)] * freshnessMultiplier(a);
+      const bScore = b.score * PRIORITY_WEIGHT[inferSourcePriority(b)] * freshnessMultiplier(b);
+      return bScore - aScore;
+    });
+}
+
+export function rerankByProvenanceForTest(results: SearchResult[]): SearchResult[] {
+  return rerankByProvenance(results);
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +147,7 @@ const RAG_PREAMBLE = `The following context is retrieved from multiple sources. 
 - [GENERATED INTELLIGENCE] = previously generated use cases or business context
 - [UPLOADED DOCUMENT: filename] = customer-provided document (may describe aspirational goals, not current state)
 - [INDUSTRY TEMPLATE] = industry outcome map template
+- [INDUSTRY BENCHMARK] = public benchmark prior (advisory only)
 
 Prioritise PLATFORM DATA for factual claims. Use UPLOADED DOCUMENT for strategic direction only.`;
 
@@ -105,6 +170,8 @@ export function provenanceLabel(chunk: RetrievedChunk): string {
       return `[UPLOADED DOCUMENT: ${(chunk.metadata?.filename as string) || "unknown"}]`;
     case "outcome_map":
       return "[INDUSTRY TEMPLATE]";
+    case "benchmark_context":
+      return "[INDUSTRY BENCHMARK]";
     default:
       return `[${chunk.kind}]`;
   }

@@ -27,6 +27,9 @@ import { runUsecaseGeneration } from "./steps/usecase-generation";
 import { runDomainClustering } from "./steps/domain-clustering";
 import { runScoring } from "./steps/scoring";
 import { runSqlGeneration } from "./steps/sql-generation";
+import { applyDeterministicQualityFilter } from "./usecase-quality";
+import { computeRunQualityBaseline } from "./run-quality";
+import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { runAssetDiscovery } from "./steps/asset-discovery";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
 import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
@@ -218,6 +221,17 @@ export async function startPipeline(runId: string): Promise<void> {
         });
       }
 
+      // Deterministic anti-slop quality gate (pre-scoring).
+      const qualityFilter = applyDeterministicQualityFilter(ctx.useCases, ctx.filteredTables);
+      if (qualityFilter.rejected.length > 0) {
+        logger.warn("Rejected low-quality use cases by deterministic gate", {
+          runId,
+          rejected: qualityFilter.rejected.length,
+          sampleReasons: qualityFilter.rejected.slice(0, 5).map((r) => r.reasons.join("; ")),
+        });
+      }
+      ctx.useCases = qualityFilter.accepted;
+
       if (ctx.useCases.length === 0) {
         throw new Error(
           "Use case generation returned only invalid results after table validation. Please retry this run."
@@ -242,6 +256,55 @@ export async function startPipeline(runId: string): Promise<void> {
       await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${preScoringCount} use cases...`);
       logger.info(`Step 6: ${STEPS[5].label}`, { runId, step: "scoring" });
       ctx.useCases = await runScoring(ctx, runId);
+      const baseline = computeRunQualityBaseline(ctx.useCases, ctx.filteredTables);
+      const minReadiness = Number(process.env.FORGE_MIN_CONSULTANT_READINESS ?? "0.55");
+      await insertQualityMetrics([
+        {
+          metricType: "run",
+          metricName: "consultant_readiness",
+          metricValue: baseline.consultantReadinessScore,
+          floorValue: minReadiness,
+          passed: baseline.consultantReadinessScore >= minReadiness,
+          runId,
+          metadata: { findings: baseline.findings },
+        },
+        {
+          metricType: "run",
+          metricName: "low_specificity_rate",
+          metricValue: baseline.lowSpecificityRate,
+          floorValue: 0.25,
+          passed: baseline.lowSpecificityRate <= 0.25,
+          runId,
+        },
+        {
+          metricType: "run",
+          metricName: "schema_coverage_pct",
+          metricValue: baseline.schemaCoveragePct,
+          floorValue: 0.3,
+          passed: baseline.schemaCoveragePct >= 0.3,
+          runId,
+        },
+        {
+          metricType: "run",
+          metricName: "sql_generated_rate",
+          metricValue: baseline.sqlGeneratedRate,
+          floorValue: 0.7,
+          passed: baseline.sqlGeneratedRate >= 0.7,
+          runId,
+        },
+      ]);
+      logger.info("Run quality baseline computed", {
+        runId,
+        consultantReadiness: baseline.consultantReadinessScore,
+        lowSpecificityRate: baseline.lowSpecificityRate,
+        schemaCoveragePct: baseline.schemaCoveragePct,
+        sqlGeneratedRate: baseline.sqlGeneratedRate,
+      });
+      if (baseline.consultantReadinessScore < minReadiness) {
+        throw new Error(
+          `Run quality gate failed (consultantReadiness=${baseline.consultantReadinessScore.toFixed(2)} < ${minReadiness.toFixed(2)}). ${baseline.findings.join(" | ") || "Insufficient quality for customer-facing output."}`,
+        );
+      }
       await updateRunStatus(runId, "running", PipelineStep.Scoring, 65, undefined, `Scored ${ctx.useCases.length} use cases`);
     });
 

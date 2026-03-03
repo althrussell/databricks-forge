@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/runs": "Pipeline Runs",
   "/runs/compare": "Compare Runs",
   "/environment": "Estate Overview",
+  "/benchmarks": "Benchmark Catalog",
   "/outcomes": "Outcome Maps",
   "/outcomes/ingest": "Ingest Outcome Map",
   "/genie": "Genie Spaces",

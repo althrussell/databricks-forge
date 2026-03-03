@@ -20,6 +20,9 @@
 # Optional Lakebase OAuth runtime behavior:
 #   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
 #               --lakebase-enable-pooler-experiment
+# Optional benchmark seeding behavior:
+#   ./deploy.sh --seed-benchmarks --seed-benchmarks-all-industries
+#               --seed-benchmark-industries "banking,hls,rcg"
 # =========================================================================
 
 set -euo pipefail
@@ -31,7 +34,7 @@ APP_NAME="databricks-forge"
 APP_DESC="Discover AI-powered use cases from Unity Catalog metadata"
 DEFAULT_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
-DEFAULT_EMBEDDING_ENDPOINT="databricks-gte-large-en"
+DEFAULT_EMBEDDING_ENDPOINT="databricks-qwen3-embedding-0-6b"
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
@@ -58,6 +61,9 @@ ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=false
 ARG_PRINT_GENERATED_NATIVE_PASSWORD=false
 ARG_LAKEBASE_RUNTIME_MODE=""
 ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
+ARG_SEED_BENCHMARKS=false
+ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=false
+ARG_SEED_BENCHMARK_INDUSTRIES=""
 ARG_DESTROY=false
 
 print_usage() {
@@ -75,7 +81,7 @@ Options:
   --profile NAME         Databricks CLI profile name
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
-  --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-gte-large-en)
+  --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-qwen3-embedding-0-6b)
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
@@ -95,6 +101,13 @@ Options:
                              oauth_direct_only (default), pooler_preferred
   --lakebase-enable-pooler-experiment
                              Enables pooler attempts for future testing
+  --seed-benchmarks          Seed benchmark catalog during app startup
+  --seed-benchmarks-all-industries
+                             Include generated baseline records for every
+                             industry in lib/domain/industry-outcomes/
+  --seed-benchmark-industries CSV
+                             Seed only these industry ids (e.g. banking,hls).
+                             Applies to curated packs and generated baselines.
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -119,6 +132,9 @@ while [[ $# -gt 0 ]]; do
     --print-generated-native-password) ARG_PRINT_GENERATED_NATIVE_PASSWORD=true; shift ;;
     --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
     --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
+    --seed-benchmarks) ARG_SEED_BENCHMARKS=true; shift ;;
+    --seed-benchmarks-all-industries) ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=true; shift ;;
+    --seed-benchmark-industries) ARG_SEED_BENCHMARK_INDUSTRIES="$2"; shift 2 ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -141,6 +157,16 @@ PRINT_GENERATED_NATIVE_PASSWORD="${ARG_PRINT_GENERATED_NATIVE_PASSWORD}"
 GENERATED_NATIVE_PASSWORD=false
 LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
 LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
+SEED_BENCHMARKS="${ARG_SEED_BENCHMARKS}"
+SEED_BENCHMARKS_ALL_INDUSTRIES="${ARG_SEED_BENCHMARKS_ALL_INDUSTRIES}"
+SEED_BENCHMARK_INDUSTRIES="${ARG_SEED_BENCHMARK_INDUSTRIES:-}"
+
+if [[ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" && "$SEED_BENCHMARKS" != "true" ]]; then
+  SEED_BENCHMARKS=true
+fi
+if [[ -n "$SEED_BENCHMARK_INDUSTRIES" && "$SEED_BENCHMARKS" != "true" ]]; then
+  SEED_BENCHMARKS=true
+fi
 
 if [[ -n "$LAKEBASE_AUTH_MODE" && "$LAKEBASE_AUTH_MODE" != "oauth" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
   die "Invalid --lakebase-auth-mode '$LAKEBASE_AUTH_MODE'. Expected oauth or native_password."
@@ -221,7 +247,7 @@ wait_for_app_absent() {
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ]; then
+  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ]; then
     return
   fi
 
@@ -234,6 +260,9 @@ prepare_app_yaml() {
   export LAKEBASE_NATIVE_PASSWORD
   export LAKEBASE_RUNTIME_MODE
   export LAKEBASE_ENABLE_POOLER_EXPERIMENT
+  export SEED_BENCHMARKS
+  export SEED_BENCHMARKS_ALL_INDUSTRIES
+  export SEED_BENCHMARK_INDUSTRIES
   python3 - <<'PY'
 import os
 from pathlib import Path
@@ -244,6 +273,9 @@ native_user = os.environ.get("LAKEBASE_NATIVE_USER", "").strip()
 native_password = os.environ.get("LAKEBASE_NATIVE_PASSWORD", "")
 runtime_mode = os.environ.get("LAKEBASE_RUNTIME_MODE", "").strip()
 pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").strip().lower() == "true"
+seed_benchmarks = os.environ.get("SEED_BENCHMARKS", "").strip().lower() == "true"
+seed_benchmarks_all = os.environ.get("SEED_BENCHMARKS_ALL_INDUSTRIES", "").strip().lower() == "true"
+seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").strip()
 
 path = Path("app.yaml")
 lines = path.read_text().splitlines()
@@ -261,6 +293,9 @@ def is_managed_name_line(s: str) -> bool:
         or "LAKEBASE_NATIVE_PASSWORD" in t
         or "LAKEBASE_RUNTIME_MODE" in t
         or "LAKEBASE_ENABLE_POOLER_EXPERIMENT" in t
+        or "FORGE_SEED_BENCHMARKS" in t
+        or "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES" in t
+        or "FORGE_SEED_BENCHMARK_INDUSTRIES" in t
     )
 
 while i < len(lines):
@@ -293,6 +328,13 @@ if runtime_mode:
     out.append(f'    value: "{runtime_mode}"')
 out.append("  - name: LAKEBASE_ENABLE_POOLER_EXPERIMENT")
 out.append(f'    value: "{"true" if pooler_experiment else "false"}"')
+out.append("  - name: FORGE_SEED_BENCHMARKS")
+out.append(f'    value: "{"true" if seed_benchmarks else "false"}"')
+out.append("  - name: FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES")
+out.append(f'    value: "{"true" if seed_benchmarks_all else "false"}"')
+if seed_benchmark_industries:
+    out.append("  - name: FORGE_SEED_BENCHMARK_INDUSTRIES")
+    out.append(f'    value: "{seed_benchmark_industries}"')
 path.write_text("\n".join(out) + "\n")
 PY
 }
@@ -642,6 +684,9 @@ print_success() {
   fi
   printf "      Runtime mode:     %s\n" "${LAKEBASE_RUNTIME_MODE:-oauth_direct_only (default)}"
   printf "      Pooler experiment:%s\n" "$( [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" = "true" ] && echo " enabled" || echo " disabled" )"
+  printf "      Seed benchmarks:  %s\n" "$( [ "$SEED_BENCHMARKS" = "true" ] && echo "enabled" || echo "disabled" )"
+  printf "      Seed all industries: %s\n" "$( [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" ] && echo "enabled" || echo "disabled" )"
+  printf "      Seed industry filter: %s\n" "${SEED_BENCHMARK_INDUSTRIES:-none}"
   if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
     printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"
   fi

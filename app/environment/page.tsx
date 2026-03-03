@@ -185,6 +185,14 @@ interface ScanProgressData {
 
 type ViewMode = "aggregate" | "single-scan" | "new-scan";
 
+interface GovernanceQualityStats {
+  avgConsultantReadiness: number | null;
+  avgAssistantScore: number | null;
+  releaseGatePassRate: number | null;
+  benchmarkFreshnessRate: number | null;
+  benchmarkIndustryCoverage: number | null;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -198,6 +206,7 @@ export default function EstatePage() {
   const [erdGraph, setErdGraph] = useState<ERDGraph | null>(null);
   const [selectedScan, setSelectedScan] = useState<SingleScanData | null>(null);
   const [selectedErdGraph, setSelectedErdGraph] = useState<ERDGraph | null>(null);
+  const [governanceQuality, setGovernanceQuality] = useState<GovernanceQualityStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
   const [embeddingEnabled, setEmbeddingEnabled] = useState(false);
@@ -238,6 +247,19 @@ export default function EstatePage() {
       setAggregate(null);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const fetchGovernanceQuality = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/stats");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data?.quality) {
+        setGovernanceQuality(data.quality as GovernanceQualityStats);
+      }
+    } catch {
+      // Non-fatal for estate page
     }
   }, []);
 
@@ -426,6 +448,7 @@ export default function EstatePage() {
   useEffect(() => {
     fetchAggregate();
     fetchAggregateErd();
+    fetchGovernanceQuality();
 
     // Check for scans that are still running server-side (e.g. user
     // navigated away mid-scan and came back).
@@ -447,7 +470,7 @@ export default function EstatePage() {
     })();
 
     return () => { cancelled = true; };
-  }, [fetchAggregate, fetchAggregateErd, pollForScan]);
+  }, [fetchAggregate, fetchAggregateErd, fetchGovernanceQuality, pollForScan]);
 
   const [exporting, setExporting] = useState(false);
 
@@ -725,6 +748,9 @@ export default function EstatePage() {
             {viewMode === "aggregate" && (
               <TabsTrigger value="coverage">Table Coverage</TabsTrigger>
             )}
+            {viewMode === "aggregate" && (
+              <TabsTrigger value="governance">Governance</TabsTrigger>
+            )}
             {viewMode === "single-scan" && (
               <TabsTrigger value="export">Export</TabsTrigger>
             )}
@@ -926,6 +952,12 @@ export default function EstatePage() {
             </TabsContent>
           )}
 
+          {viewMode === "aggregate" && (
+            <TabsContent value="governance" className="space-y-4">
+              <GovernanceQualityView quality={governanceQuality} />
+            </TabsContent>
+          )}
+
           {/* Export (single scan only) */}
           {viewMode === "single-scan" && selectedScan && (
             <TabsContent value="export" className="space-y-4">
@@ -965,6 +997,61 @@ export default function EstatePage() {
           )}
         </Tabs>
       )}
+    </div>
+  );
+}
+
+function pctOrNA(value: number | null | undefined): string {
+  if (value == null) return "N/A";
+  return `${Math.round(value * 100)}%`;
+}
+
+function GovernanceQualityView({
+  quality,
+}: {
+  quality: GovernanceQualityStats | null;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Governance Quality</CardTitle>
+          <CardDescription>
+            Quality and governance KPIs moved from dashboard into this Estate-focused view.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatCard
+              title="Consultant Readiness"
+              value={pctOrNA(quality?.avgConsultantReadiness)}
+              icon={<BarChart3 className="h-4 w-4" />}
+              tooltip="30-day average consultant-readiness across completed runs."
+            />
+            <StatCard
+              title="Assistant Quality"
+              value={pctOrNA(quality?.avgAssistantScore)}
+              icon={<Search className="h-4 w-4" />}
+              tooltip="30-day average assistant response quality score."
+            />
+            <StatCard
+              title="Gate Pass Rate"
+              value={pctOrNA(quality?.releaseGatePassRate)}
+              icon={<ShieldAlert className="h-4 w-4" />}
+              tooltip="Share of runs passing consultant-readiness release gates."
+            />
+            <StatCard
+              title="Benchmark Freshness"
+              value={pctOrNA(quality?.benchmarkFreshnessRate)}
+              icon={<Clock className="h-4 w-4" />}
+              tooltip="Share of published benchmarks still within freshness TTL."
+            />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Benchmark industry coverage: {quality?.benchmarkIndustryCoverage ?? 0} industries.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

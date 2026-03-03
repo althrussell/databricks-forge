@@ -21,6 +21,8 @@ export interface TableClassification {
 
 const BATCH_SIZE = 100; // tables per Model Serving call
 const MAX_COLUMNS_PER_TABLE = 8; // top columns shown to aid classification
+const MAX_FILTER_RETRIES = 2;
+const TECHNICAL_TABLE_RE = /(logs?|audit|changelog|snapshot|backup|monitor|health|debug|error|etl|pipeline|staging|temp|tmp|config|setting|metric)/i;
 
 /**
  * Build a markdown table list for the prompt, including top column names
@@ -85,19 +87,25 @@ export async function runTableFiltering(
     const batch = tables.slice(i, i + BATCH_SIZE);
     if (runId) await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
     try {
-      const { filteredFqns, classifications } = await filterBatch(batch, columnIndex, run.config.businessName, run.businessContext, getFastServingEndpoint(), runId);
+      const { filteredFqns, classifications } = await filterBatchWithRetry(
+        batch,
+        columnIndex,
+        run.config.businessName,
+        run.businessContext,
+        getFastServingEndpoint(),
+        runId,
+      );
       businessTables.push(...filteredFqns);
       allClassifications.push(...classifications);
     } catch (error) {
-      // Fail-open: include all tables from failed batch
-      logger.warn("Table filtering batch failed, including all tables", {
+      // Deterministic fallback to avoid broad fail-open behavior.
+      logger.warn("Table filtering batch failed, using deterministic fallback", {
         batch: batchNum,
         error: error instanceof Error ? error.message : String(error),
       });
-      businessTables.push(...batch.map((t) => t.fqn));
-      allClassifications.push(
-        ...batch.map((t) => ({ fqn: t.fqn, classification: "business", reason: "batch failed — included by default" }))
-      );
+      const fallback = deterministicFallbackClassify(batch);
+      businessTables.push(...fallback.filteredFqns);
+      allClassifications.push(...fallback.classifications);
     }
   }
 
@@ -128,6 +136,60 @@ export async function runTableFiltering(
   });
 
   return businessTables;
+}
+
+async function filterBatchWithRetry(
+  tables: TableInfo[],
+  columnIndex: Map<string, string[]>,
+  businessName: string,
+  businessContext: { industries: string },
+  aiModel: string,
+  runId?: string,
+): Promise<{ filteredFqns: string[]; classifications: TableClassification[] }> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= MAX_FILTER_RETRIES; attempt++) {
+    try {
+      return await filterBatch(tables, columnIndex, businessName, businessContext, aiModel, runId);
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_FILTER_RETRIES) {
+        logger.warn("Retrying table filtering batch", { attempt: attempt + 1, maxRetries: MAX_FILTER_RETRIES });
+      }
+    }
+  }
+  throw (lastError instanceof Error ? lastError : new Error("Table filtering failed after retries"));
+}
+
+function deterministicFallbackClassify(
+  tables: TableInfo[],
+): { filteredFqns: string[]; classifications: TableClassification[] } {
+  const classifications: TableClassification[] = [];
+  const filteredFqns: string[] = [];
+  for (const t of tables) {
+    const haystack = `${t.fqn} ${t.tableName} ${t.comment ?? ""}`;
+    const technical = TECHNICAL_TABLE_RE.test(haystack);
+    const classification = technical ? "technical" : "business";
+    classifications.push({
+      fqn: t.fqn,
+      classification,
+      reason: technical
+        ? "deterministic fallback: technical naming pattern"
+        : "deterministic fallback: business default",
+    });
+    if (!technical) filteredFqns.push(t.fqn);
+  }
+  if (filteredFqns.length === 0) {
+    // Fail-safe: if deterministic classifier is too aggressive, keep all.
+    return {
+      filteredFqns: tables.map((t) => t.fqn),
+      classifications: tables.map((t) => ({
+        fqn: t.fqn,
+        classification: "business",
+        reason: "deterministic fallback safety override",
+      })),
+    };
+  }
+  return { filteredFqns, classifications };
 }
 
 /** Shape of each item in the JSON array returned by the LLM. */
@@ -170,14 +232,10 @@ async function filterBatch(
     // Handle both direct array and wrapped object responses
     items = Array.isArray(parsed) ? parsed : (parsed.classifications ?? []);
   } catch (parseErr) {
-    logger.warn("Failed to parse table filtering JSON, including all tables", {
+    logger.warn("Failed to parse table filtering JSON", {
       error: parseErr instanceof Error ? parseErr.message : String(parseErr),
     });
-    const allFqns = tables.map((t) => t.fqn);
-    return {
-      filteredFqns: allFqns,
-      classifications: allFqns.map((fqn) => ({ fqn, classification: "business", reason: "parse failed — included by default" })),
-    };
+    throw parseErr instanceof Error ? parseErr : new Error("Parse failure in table filtering");
   }
 
   const businessFQNs: string[] = [];
@@ -197,12 +255,7 @@ async function filterBatch(
 
   // If the model classified nothing as business, include all (fail-open)
   if (businessFQNs.length === 0) {
-    return {
-      filteredFqns: tables.map((t) => t.fqn),
-      classifications: classifications.length > 0
-        ? classifications
-        : tables.map((t) => ({ fqn: t.fqn, classification: "business", reason: "no business tables found — included all by default" })),
-    };
+    throw new Error("Model classified zero business tables in batch");
   }
 
   return { filteredFqns: businessFQNs, classifications };

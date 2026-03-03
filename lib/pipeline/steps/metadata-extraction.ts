@@ -441,6 +441,10 @@ async function runEnrichmentPass(
     avgGovernanceScore: intelligenceResult?.governanceGaps.length
       ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) / intelligenceResult.governanceGaps.length
       : 0,
+    genieSpaceCount: 0,
+    dashboardCount: 0,
+    metricViewCount: snapshot.metricViews.length,
+    analyticsCoveragePercent: 0,
     scanDurationMs: Date.now() - startTime,
     passResults: intelligenceResult?.passResults ?? {},
   };
@@ -501,7 +505,9 @@ async function runEnrichmentPass(
     historiesWithHealth,
     lineageGraph.edges,
     insightRecords,
-    allColumns
+    allColumns,
+    allTableTags,
+    allColumnTags,
   );
 
   logger.info("[metadata-extraction] Environment scan saved", {

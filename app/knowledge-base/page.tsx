@@ -4,7 +4,7 @@
  * Knowledge Base page — document management for RAG.
  *
  * Upload strategy packs, data dictionaries, governance policies, and other
- * documents. Documents are chunked, embedded via databricks-gte-large-en,
+ * documents. Documents are chunked, embedded via databricks-qwen3-embedding-0-6b,
  * and stored in pgvector for semantic search and RAG retrieval.
  */
 

@@ -54,6 +54,7 @@ model ForgeRun {
   discoveredGenieSpaces    ForgeDiscoveredGenieSpace[]
   discoveredDashboards     ForgeDiscoveredDashboard[]
   assetCoverages           ForgeAssetCoverage[]
+  qualityMetrics           ForgeQualityMetric[]
 
   @@map("forge_runs")
 }
@@ -670,12 +671,79 @@ model ForgeAssistantLog {
   referencedTablesJson String? @map("referenced_tables_json")
   persona         String?  @map("persona")
   createdAt       DateTime @default(now()) @map("created_at")
+  qualityMetrics  ForgeQualityMetric[]
 
   @@index([sessionId])
   @@index([createdAt])
   @@index([intent])
   @@index([userId])
   @@map("forge_assistant_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark Catalog (public-source, provenance-governed)
+// ---------------------------------------------------------------------------
+
+model ForgeBenchmarkRecord {
+  benchmarkId      String    @id @default(uuid()) @map("benchmark_id")
+  kind             String    // kpi | benchmark_principle | advisory_theme | platform_best_practice
+  title            String
+  summary          String
+  sourceType       String    @map("source_type")
+  sourceUrl        String    @map("source_url")
+  publisher        String
+  publishedAt      DateTime? @map("published_at")
+  industry         String?
+  region           String?
+  metricDefinition String?   @map("metric_definition")
+  methodologyNote  String?   @map("methodology_note")
+  licenseClass     String    @map("license_class")
+  confidence       Float     @default(0.7)
+  ttlDays          Int       @default(180) @map("ttl_days")
+  lifecycleStatus  String    @default("draft") @map("lifecycle_status") // draft | reviewed | published | deprecated
+  provenanceJson   String?   @map("provenance_json")
+  tagsJson         String?   @map("tags_json")
+  createdBy        String?   @map("created_by")
+  reviewedBy       String?   @map("reviewed_by")
+  reviewedAt       DateTime? @map("reviewed_at")
+  publishedBy      String?   @map("published_by")
+  publishedAtAudit DateTime? @map("published_at_audit")
+  deprecatedAt     DateTime? @map("deprecated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([kind, title, sourceUrl])
+  @@index([kind])
+  @@index([industry])
+  @@index([lifecycleStatus])
+  @@index([publishedAt])
+  @@index([updatedAt])
+  @@map("forge_benchmark_records")
+}
+
+// ---------------------------------------------------------------------------
+// Unified Quality Metrics (run + assistant governance)
+// ---------------------------------------------------------------------------
+
+model ForgeQualityMetric {
+  metricId      String   @id @default(uuid()) @map("metric_id")
+  metricType    String   @map("metric_type") // run | assistant
+  metricName    String   @map("metric_name")
+  metricValue   Float    @map("metric_value")
+  floorValue    Float?   @map("floor_value")
+  passed        Boolean? @map("passed")
+  runId         String?  @map("run_id")
+  assistantLogId String? @map("assistant_log_id")
+  metadataJson  String?  @map("metadata_json")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  run          ForgeRun?          @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  assistantLog ForgeAssistantLog? @relation(fields: [assistantLogId], references: [id], onDelete: Cascade)
+
+  @@index([metricType, metricName, createdAt])
+  @@index([runId])
+  @@index([assistantLogId])
+  @@map("forge_quality_metrics")
 }
 
 // ---------------------------------------------------------------------------

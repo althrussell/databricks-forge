@@ -1,7 +1,7 @@
 /**
  * Embedding generation client for Databricks Model Serving.
  *
- * Calls the configured embedding endpoint (default: databricks-gte-large-en)
+ * Calls the configured embedding endpoint (default: databricks-qwen3-embedding-0-6b)
  * via the Foundation Model API to produce 1024-dimension vectors.
  *
  * Uses the same service-principal auth as chat completions (getAppHeaders).

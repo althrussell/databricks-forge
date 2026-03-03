@@ -370,6 +370,21 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     echo "[startup] No embedding endpoint configured (serving-endpoint-embedding not bound), skipping HNSW index."
   fi
 
+  # -- Step G: Optional benchmark seed --------------------------------------
+  if [ "${FORGE_SEED_BENCHMARKS:-false}" = "true" ]; then
+    echo "[startup] Seeding benchmark catalog..."
+    if DATABASE_URL="$SCHEMA_URL" \
+      FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES="${FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES:-false}" \
+      FORGE_SEED_BENCHMARK_INDUSTRIES="${FORGE_SEED_BENCHMARK_INDUSTRIES:-}" \
+      node scripts/seed-benchmarks.mjs; then
+      echo "[startup] Benchmark seed complete."
+    else
+      echo "[startup] WARNING: Benchmark seed failed; continuing startup."
+    fi
+  else
+    echo "[startup] Benchmark seed disabled."
+  fi
+
 else
   echo "[startup] FATAL: Prisma CLI not found or no DB URL — cannot sync schema."
   exit 1

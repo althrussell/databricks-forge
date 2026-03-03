@@ -9,6 +9,7 @@ import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
 import { logger } from "@/lib/logger";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 
@@ -81,13 +82,17 @@ export async function runBusinessContext(
     const industryContext = config.industry
       ? await buildIndustryContextPrompt(config.industry)
       : "";
+    const benchmarkContext = await buildBenchmarkContextPrompt(
+      config.industry || undefined,
+      config.customerMaturity,
+    );
 
     // Retrieve relevant document context from the knowledge base (RAG)
     let documentContext = "";
     try {
       const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
       const chunks = await retrieveContext(
-        `Business context for ${config.businessName}: ${config.businessDomains || ""} ${config.businessPriorities?.join(", ") || ""}`,
+        `Business context for ${config.businessName}: ${config.businessDomains || ""} ${config.businessPriorities?.join(", ") || ""} ${config.strategicGoals || ""} ${config.additionalContext || ""}`,
         { kinds: ["document_chunk", "business_context"], topK: 5, minScore: 0.4 },
       );
       if (chunks.length > 0) {
@@ -106,6 +111,8 @@ export async function runBusinessContext(
         type_description: "Full business context research",
         type_label: "business organisation",
         industry_context: industryContext,
+        customer_profile_context: `Customer maturity: ${config.customerMaturity}\nRisk posture: ${config.riskPosture}\nTransformation horizon: ${config.transformationHorizon}\nUser strategic goals: ${config.strategicGoals || "Not provided"}\nAdditional context: ${config.additionalContext || "None provided"}`,
+        benchmark_context: benchmarkContext,
         document_context: documentContext,
       },
       modelEndpoint: getFastServingEndpoint(),

@@ -48,6 +48,28 @@ Run `./deploy.sh` again. It detects the existing app and updates it.
 
 # Use different model endpoints
 ./deploy.sh --endpoint "my-custom-model" --fast-endpoint "my-fast-model"
+
+# Seed benchmark catalog at startup
+./deploy.sh --seed-benchmarks
+
+# Seed curated + generated baselines for all outcome-map industries
+./deploy.sh --seed-benchmarks-all-industries
+
+# Seed only selected industries
+./deploy.sh --seed-benchmark-industries "banking,hls,rcg"
+```
+
+### Manual benchmark seeding
+
+```bash
+# Seed curated packs from data/benchmark/*.json
+npm run seed:benchmarks
+
+# Seed all industries (generate missing baseline records)
+npm run seed:benchmarks:all-industries
+
+# Seed a specific set of industries
+FORGE_SEED_BENCHMARK_INDUSTRIES="banking,hls" npm run seed:benchmarks:industries
 ```
 
 For local development setup and architecture details, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

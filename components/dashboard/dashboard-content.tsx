@@ -53,6 +53,13 @@ export interface DashboardStats {
     createdAt: string;
     completedAt: string | null;
   }[];
+  quality?: {
+    avgConsultantReadiness: number | null;
+    avgAssistantScore: number | null;
+    releaseGatePassRate: number | null;
+    benchmarkFreshnessRate: number | null;
+    benchmarkIndustryCoverage: number | null;
+  };
 }
 
 const STATUS_STYLES: Record<string, string> = {

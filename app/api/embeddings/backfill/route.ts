@@ -29,6 +29,7 @@ export async function POST() {
     genieRecs: { total: 0, embedded: 0, failed: 0 },
     outcomeMaps: { total: 0, embedded: 0, failed: 0 },
     documents: { total: 0, embedded: 0, failed: 0 },
+    benchmarks: { total: 0, embedded: 0, failed: 0 },
   };
 
   try {
@@ -49,6 +50,9 @@ export async function POST() {
 
     // 5. Re-embed all uploaded documents
     await backfillDocuments(results);
+
+    // 6. Embed benchmark context records
+    await backfillBenchmarks(results);
 
     logger.info("[backfill] Embedding backfill complete", results);
     return NextResponse.json({ success: true, results });
@@ -314,5 +318,44 @@ async function backfillDocuments(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backfill: Benchmark records
+// ---------------------------------------------------------------------------
+
+async function backfillBenchmarks(
+  results: { benchmarks: { total: number; embedded: number; failed: number } },
+): Promise<void> {
+  const { listBenchmarkRecords } = await import("@/lib/lakebase/benchmarks");
+  const { embedBenchmarkRecords } = await import("@/lib/embeddings/embed-pipeline");
+
+  const rows = await listBenchmarkRecords({
+    lifecycleStatus: "published",
+    includeExpired: true,
+    limit: 2000,
+  });
+  results.benchmarks.total = rows.length;
+  if (rows.length === 0) return;
+  try {
+    await embedBenchmarkRecords(rows.map((r) => ({
+      benchmarkId: r.benchmarkId,
+      kind: r.kind,
+      title: r.title,
+      summary: r.summary,
+      sourceUrl: r.sourceUrl,
+      publisher: r.publisher,
+      industry: r.industry,
+      region: r.region,
+      publishedAt: r.publishedAt,
+      ttlDays: r.ttlDays,
+    })));
+    results.benchmarks.embedded = rows.length;
+  } catch (err) {
+    results.benchmarks.failed = rows.length;
+    logger.warn("[backfill] Benchmark embedding failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }

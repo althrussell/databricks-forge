@@ -14,6 +14,8 @@ import type {
   LineageEdge,
   TableHealthInsight,
   ColumnInfo,
+  TableTag,
+  ColumnTag,
 } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
@@ -40,7 +42,9 @@ export async function saveEnvironmentScan(
   histories: Array<TableHistorySummary & TableHealthInsight>,
   lineageEdges: LineageEdge[],
   insights: InsightRecord[],
-  columns: ColumnInfo[] = []
+  columns: ColumnInfo[] = [],
+  tableTags: TableTag[] = [],
+  columnTags: ColumnTag[] = [],
 ): Promise<void> {
   // Build a per-table column lookup (lowercase FQN keys for case-insensitive matching)
   const columnsByTable = new Map<string, Array<{ name: string; type: string; nullable: boolean; comment: string | null }>>();
@@ -53,6 +57,22 @@ export async function saveEnvironmentScan(
       nullable: col.isNullable,
       comment: col.comment,
     });
+  }
+
+  const tagsByTable = new Map<string, Array<{ tagName: string; tagValue: string }>>();
+  for (const tag of tableTags) {
+    const key = tag.tableFqn.toLowerCase();
+    const arr = tagsByTable.get(key) ?? [];
+    arr.push({ tagName: tag.tagName, tagValue: tag.tagValue });
+    tagsByTable.set(key, arr);
+  }
+
+  const columnTagsByTable = new Map<string, Array<{ columnName: string; tagName: string; tagValue: string }>>();
+  for (const tag of columnTags) {
+    const key = tag.tableFqn.toLowerCase();
+    const arr = columnTagsByTable.get(key) ?? [];
+    arr.push({ columnName: tag.columnName, tagName: tag.tagName, tagValue: tag.tagValue });
+    columnTagsByTable.set(key, arr);
   }
 
   const BATCH_SIZE = 500;
@@ -84,8 +104,35 @@ export async function saveEnvironmentScan(
             scanDurationMs: scan.scanDurationMs,
             scanSummaryJson: null,
             passResultsJson: JSON.stringify(scan.passResults),
+            genieSpaceCount: scan.genieSpaceCount,
+            dashboardCount: scan.dashboardCount,
+            metricViewCount: scan.metricViewCount,
+            analyticsCoveragePercent: scan.analyticsCoveragePercent,
           },
-          update: {},
+          update: {
+            runId: scan.runId,
+            ucPath: scan.ucPath,
+            tableCount: scan.tableCount,
+            totalSizeBytes: BigInt(scan.totalSizeBytes),
+            totalFiles: scan.totalFiles,
+            totalRows: BigInt(scan.totalRows),
+            tablesWithStreaming: scan.tablesWithStreaming,
+            tablesWithCDF: scan.tablesWithCDF,
+            tablesNeedingOptimize: scan.tablesNeedingOptimize,
+            tablesNeedingVacuum: scan.tablesNeedingVacuum,
+            lineageDiscoveredCount: scan.lineageDiscoveredCount,
+            domainCount: scan.domainCount,
+            piiTablesCount: scan.piiTablesCount,
+            redundancyPairsCount: scan.redundancyPairsCount,
+            dataProductCount: scan.dataProductCount,
+            avgGovernanceScore: scan.avgGovernanceScore,
+            scanDurationMs: scan.scanDurationMs,
+            passResultsJson: JSON.stringify(scan.passResults),
+            genieSpaceCount: scan.genieSpaceCount,
+            dashboardCount: scan.dashboardCount,
+            metricViewCount: scan.metricViewCount,
+            analyticsCoveragePercent: scan.analyticsCoveragePercent,
+          },
         });
 
         // Build a lookup for health scores from histories
@@ -127,8 +174,8 @@ export async function saveEnvironmentScan(
               isManagedLocation: d.isManagedLocation,
               columnsJson: JSON.stringify(columnsByTable.get(d.fqn.toLowerCase()) ?? []),
               propertiesJson: JSON.stringify(d.tableProperties),
-              tagsJson: null,
-              columnTagsJson: null,
+              tagsJson: JSON.stringify(tagsByTable.get(d.fqn.toLowerCase()) ?? []),
+              columnTagsJson: JSON.stringify(columnTagsByTable.get(d.fqn.toLowerCase()) ?? []),
               dataDomain: d.dataDomain,
               dataSubdomain: d.dataSubdomain,
               dataTier: d.dataTier,

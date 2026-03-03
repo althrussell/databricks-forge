@@ -23,6 +23,40 @@ export interface SqlExecutionResult {
   durationMs: number;
 }
 
+const WRITE_SQL_RE =
+  /\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|ALTER|DROP|CREATE|GRANT|REVOKE|CALL|EXEC|EXECUTE|USE|MSCK|OPTIMIZE|VACUUM|COPY)\b/i;
+
+function stripSqlComments(sql: string): string {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--.*$/gm, " ")
+    .trim();
+}
+
+function hasMultipleStatements(sql: string): boolean {
+  const normalized = stripSqlComments(sql).replace(/\s+/g, " ").trim();
+  if (!normalized) return false;
+  const withoutTrailing = normalized.replace(/;+\s*$/, "");
+  return withoutTrailing.includes(";");
+}
+
+export function validateReadOnlySql(sql: string): string | null {
+  const normalized = stripSqlComments(sql);
+  if (!normalized) return "SQL statement is empty.";
+  if (hasMultipleStatements(normalized)) {
+    return "Only a single SQL statement is allowed.";
+  }
+  const upper = normalized.toUpperCase();
+  const startsReadOnly = upper.startsWith("SELECT") || upper.startsWith("WITH");
+  if (!startsReadOnly) {
+    return "Only read-only SELECT queries are allowed from Ask Forge.";
+  }
+  if (WRITE_SQL_RE.test(upper)) {
+    return "Detected non-read-only SQL keywords in the statement.";
+  }
+  return null;
+}
+
 /**
  * Execute SQL proposed by the assistant against the configured warehouse.
  * Wraps executeSQL with error handling and timing.
@@ -30,6 +64,15 @@ export interface SqlExecutionResult {
 export async function executeSql(sql: string): Promise<SqlExecutionResult> {
   const start = Date.now();
   try {
+    const readOnlyError = validateReadOnlySql(sql);
+    if (readOnlyError) {
+      return {
+        success: false,
+        error: readOnlyError,
+        durationMs: Date.now() - start,
+      };
+    }
+
     const result = await executeSQL(sql, undefined, undefined, {
       waitTimeout: "30s",
     });
@@ -53,6 +96,9 @@ export async function executeSql(sql: string): Promise<SqlExecutionResult> {
  * Validate SQL by running EXPLAIN (dry-run).
  */
 export async function validateSql(sql: string): Promise<string | null> {
+  const readOnlyError = validateReadOnlySql(sql);
+  if (readOnlyError) return readOnlyError;
+
   try {
     await executeSQL(`EXPLAIN ${sql}`);
     return null;

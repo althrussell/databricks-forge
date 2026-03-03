@@ -13,6 +13,9 @@
     "test:quality": "vitest run __tests__/genie/quality-evaluation.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "seed:benchmarks": "node scripts/seed-benchmarks.mjs",
+    "seed:benchmarks:all-industries": "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES=true node scripts/seed-benchmarks.mjs",
+    "seed:benchmarks:industries": "FORGE_SEED_BENCHMARKS=true FORGE_SEED_BENCHMARK_INDUSTRIES=${FORGE_SEED_BENCHMARK_INDUSTRIES:-banking} node scripts/seed-benchmarks.mjs",
     "version:patch": "bash scripts/bump-version.sh patch",
     "version:minor": "bash scripts/bump-version.sh minor",
     "version:major": "bash scripts/bump-version.sh major"

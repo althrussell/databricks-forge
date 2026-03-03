@@ -13,6 +13,7 @@
 import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import type { LineageEdge, LineageGraph } from "@/lib/domain/types";
+import { validateFqn } from "@/lib/validation";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -173,7 +174,17 @@ async function queryLineageForTables(
 ): Promise<LineageEdge[]> {
   if (tableFqns.length === 0) return [];
 
-  const quotedFqns = tableFqns.map((f) => `'${escapeSql(f)}'`).join(", ");
+  const safeFqns: string[] = [];
+  for (const fqn of tableFqns) {
+    try {
+      safeFqns.push(validateFqn(fqn, "lineage table FQN"));
+    } catch {
+      logger.warn("[lineage] Skipping invalid FQN during lineage query", { fqn });
+    }
+  }
+  if (safeFqns.length === 0) return [];
+
+  const quotedFqns = safeFqns.map((f) => `'${f.replace(/'/g, "''")}'`).join(", ");
 
   const conditions: string[] = [];
   if (direction === "both" || direction === "upstream") {
@@ -217,13 +228,6 @@ async function queryLineageForTables(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Escape single quotes in SQL string literals.
- */
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
-}
 
 /**
  * Deduplicate edges by source+target FQN (keep the one with highest event count).
