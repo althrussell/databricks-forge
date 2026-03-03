@@ -709,6 +709,9 @@ model ForgeBenchmarkRecord {
   publishedBy      String?   @map("published_by")
   publishedAtAudit DateTime? @map("published_at_audit")
   deprecatedAt     DateTime? @map("deprecated_at")
+  sourceContent     String?   @map("source_content")
+  sourceFetchStatus String    @default("pending") @map("source_fetch_status")
+  sourceChunkCount  Int       @default(0) @map("source_chunk_count")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
 

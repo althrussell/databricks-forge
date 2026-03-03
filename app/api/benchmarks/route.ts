@@ -55,25 +55,6 @@ export async function POST(request: NextRequest) {
       createdBy: userEmail,
       lifecycleStatus: "draft",
     });
-    try {
-      const { embedBenchmarkRecords } = await import("@/lib/embeddings/embed-pipeline");
-      await embedBenchmarkRecords([
-        {
-          benchmarkId: row.benchmarkId,
-          kind: row.kind,
-          title: row.title,
-          summary: row.summary,
-          sourceUrl: row.sourceUrl,
-          publisher: row.publisher,
-          industry: row.industry,
-          region: row.region,
-          publishedAt: row.publishedAt,
-          ttlDays: row.ttlDays,
-        },
-      ]);
-    } catch {
-      // non-fatal
-    }
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
     return NextResponse.json(

@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import {
   BenchmarkPackSchema,
@@ -53,4 +55,56 @@ describe("benchmark provenance validation", () => {
     });
     expect(parsed.records).toHaveLength(1);
   });
+});
+
+describe("benchmark seed pack files", () => {
+  const BENCHMARK_DIR = join(process.cwd(), "data", "benchmark");
+  const files = readdirSync(BENCHMARK_DIR).filter((f) => f.endsWith(".json"));
+
+  it("has at least one benchmark file", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  for (const file of files) {
+    describe(file, () => {
+      const raw = JSON.parse(readFileSync(join(BENCHMARK_DIR, file), "utf-8"));
+
+      it("passes BenchmarkPackSchema validation", () => {
+        expect(() => BenchmarkPackSchema.parse(raw)).not.toThrow();
+      });
+
+      it("has exactly 8 records", () => {
+        expect(raw.records).toHaveLength(8);
+      });
+
+      it("has pack_id matching {industry}-baseline", () => {
+        expect(raw.pack_id).toBe(`${raw.industry}-baseline`);
+      });
+
+      it("has correct record kind distribution (2 of each)", () => {
+        const counts: Record<string, number> = {};
+        for (const r of raw.records) {
+          counts[r.kind] = (counts[r.kind] || 0) + 1;
+        }
+        expect(counts["kpi"]).toBe(2);
+        expect(counts["benchmark_principle"]).toBe(2);
+        expect(counts["advisory_theme"]).toBe(2);
+        expect(counts["platform_best_practice"]).toBe(2);
+      });
+
+      it("has all record industry fields matching pack industry", () => {
+        for (const r of raw.records) {
+          if (r.industry) {
+            expect(r.industry).toBe(raw.industry);
+          }
+        }
+      });
+
+      it("has all source_urls from the public allowlist", () => {
+        for (const r of raw.records) {
+          expect(isPublicSourceUrl(r.source_url)).toBe(true);
+        }
+      });
+    });
+  }
 });

@@ -9,6 +9,8 @@ import {
   isPublicSourceUrl,
 } from "@/lib/domain/benchmarks";
 
+export type SourceFetchStatus = "pending" | "fetched" | "failed" | "manual";
+
 export interface BenchmarkRecord {
   benchmarkId: string;
   kind: BenchmarkKind;
@@ -28,6 +30,9 @@ export interface BenchmarkRecord {
   lifecycleStatus: BenchmarkLifecycle;
   tags: string[];
   provenance: Record<string, unknown> | null;
+  sourceContent: string | null;
+  sourceFetchStatus: SourceFetchStatus;
+  sourceChunkCount: number;
   createdBy: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
@@ -66,6 +71,9 @@ function toRecord(row: {
   lifecycleStatus: string;
   tagsJson: string | null;
   provenanceJson: string | null;
+  sourceContent: string | null;
+  sourceFetchStatus: string;
+  sourceChunkCount: number;
   createdBy: string | null;
   reviewedBy: string | null;
   reviewedAt: Date | null;
@@ -94,6 +102,9 @@ function toRecord(row: {
     lifecycleStatus: row.lifecycleStatus as BenchmarkLifecycle,
     tags: parseJson<string[]>(row.tagsJson, []),
     provenance: parseJson<Record<string, unknown> | null>(row.provenanceJson, null),
+    sourceContent: row.sourceContent,
+    sourceFetchStatus: row.sourceFetchStatus as SourceFetchStatus,
+    sourceChunkCount: row.sourceChunkCount,
     createdBy: row.createdBy,
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
@@ -225,6 +236,33 @@ export async function updateBenchmarkLifecycle(
       return toRecord(row);
     } catch (err) {
       logger.warn("[benchmarks] Failed to update lifecycle", { benchmarkId, status, error: String(err) });
+      return null;
+    }
+  });
+}
+
+export async function updateBenchmarkSourceContent(
+  benchmarkId: string,
+  data: {
+    sourceContent?: string | null;
+    sourceFetchStatus?: SourceFetchStatus;
+    sourceChunkCount?: number;
+  },
+): Promise<BenchmarkRecord | null> {
+  return withPrisma(async (prisma) => {
+    try {
+      const row = await prisma.forgeBenchmarkRecord.update({
+        where: { benchmarkId },
+        data: {
+          sourceContent: data.sourceContent,
+          sourceFetchStatus: data.sourceFetchStatus,
+          sourceChunkCount: data.sourceChunkCount,
+          updatedAt: new Date(),
+        },
+      });
+      return toRecord(row);
+    } catch (err) {
+      logger.warn("[benchmarks] Failed to update source content", { benchmarkId, error: String(err) });
       return null;
     }
   });

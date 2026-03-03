@@ -76,11 +76,16 @@ const PUBLIC_HOST_ALLOWLIST = [
   "who.int",
   "cms.gov",
   "fda.gov",
+  "hhs.gov",
   "federalreserve.gov",
   "ecb.europa.eu",
   "bis.org",
   "nist.gov",
   "iso.org",
+  "iea.org",
+  "itu.int",
+  "era.europa.eu",
+  "deloitte.com",
 ];
 
 export function isPublicSourceUrl(sourceUrl: string): boolean {

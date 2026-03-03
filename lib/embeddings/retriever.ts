@@ -113,13 +113,13 @@ function freshnessMultiplier(result: SearchResult): number {
   const md = result.metadataJson ?? {};
   const validUntil = typeof md.validUntil === "string" ? Date.parse(md.validUntil) : NaN;
   if (Number.isFinite(validUntil)) {
-    return validUntil >= Date.now() ? 1 : 0.5;
+    return validUntil >= Date.now() ? 1 : 0.85;
   }
   const publishedAt = typeof md.publishedAt === "string" ? Date.parse(md.publishedAt) : NaN;
   if (Number.isFinite(publishedAt) && typeof md.ttlDays === "number") {
     const maxAgeMs = md.ttlDays * 24 * 60 * 60 * 1000;
     const expiry = publishedAt + maxAgeMs;
-    return expiry >= Date.now() ? 1 : 0.5;
+    return expiry >= Date.now() ? 1 : 0.85;
   }
   return 1;
 }

@@ -437,6 +437,24 @@ export function composeBenchmarkContext(b: BenchmarkInput): string {
   ]);
 }
 
+/**
+ * Compose a text chunk from real source content for embedding.
+ * Prefixed with benchmark metadata so the retriever has context.
+ */
+export function composeBenchmarkSourceChunk(
+  chunk: string,
+  benchmark: { title: string; kind: string; industry?: string | null; publisher: string },
+  chunkIndex: number,
+): string {
+  return lines([
+    `Benchmark source: ${benchmark.title} (${benchmark.kind})`,
+    benchmark.industry ? `Industry: ${benchmark.industry}` : null,
+    `Publisher: ${benchmark.publisher}`,
+    `Chunk ${chunkIndex + 1}:`,
+    chunk,
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

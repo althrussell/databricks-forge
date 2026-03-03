@@ -11,11 +11,16 @@ const ALLOWLIST = [
   "who.int",
   "cms.gov",
   "fda.gov",
+  "hhs.gov",
   "federalreserve.gov",
   "ecb.europa.eu",
   "bis.org",
   "nist.gov",
   "iso.org",
+  "iea.org",
+  "itu.int",
+  "era.europa.eu",
+  "deloitte.com",
 ];
 
 function isAllowed(sourceUrl) {
@@ -25,6 +30,14 @@ function isAllowed(sourceUrl) {
   } catch {
     return false;
   }
+}
+
+const STALE_THRESHOLD_MS = 365 * 86_400_000;
+
+function computeLifecycleStatus(publishedAt) {
+  if (!publishedAt) return "draft";
+  const age = Date.now() - new Date(publishedAt).getTime();
+  return age > STALE_THRESHOLD_MS ? "draft" : "published";
 }
 
 function buildGeneratedIndustryRecords(industry) {
@@ -180,6 +193,8 @@ async function main() {
   await client.connect();
   let inserted = 0;
   let updated = 0;
+  let draftCount = 0;
+  let publishedCount = 0;
 
   try {
     for (const rec of allRecords) {
@@ -187,6 +202,7 @@ async function main() {
         console.warn(`Skipping disallowed source URL: ${rec.source_url}`);
         continue;
       }
+      const status = computeLifecycleStatus(rec.published_at);
       const result = await client.query(
         `
         INSERT INTO forge_benchmark_records (
@@ -213,7 +229,7 @@ async function main() {
         ) VALUES (
           gen_random_uuid(),
           $1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9, $10, $11, $12, $13, $14,
-          'published',
+          $17,
           $15::jsonb,
           $16::jsonb,
           NOW(), NOW()
@@ -231,7 +247,7 @@ async function main() {
           license_class = EXCLUDED.license_class,
           confidence = EXCLUDED.confidence,
           ttl_days = EXCLUDED.ttl_days,
-          lifecycle_status = 'published',
+          lifecycle_status = $17,
           provenance_json = EXCLUDED.provenance_json,
           tags_json = EXCLUDED.tags_json,
           updated_at = NOW()
@@ -254,17 +270,20 @@ async function main() {
           rec.ttl_days,
           JSON.stringify(rec.provenance ?? {}),
           JSON.stringify(rec.tags ?? []),
+          status,
         ],
       );
       if (result.rows[0]?.inserted) inserted += 1;
       else updated += 1;
+      if (status === "draft") draftCount += 1;
+      else publishedCount += 1;
     }
   } finally {
     await client.end();
   }
 
   console.log(
-    `Benchmark seed complete. Records processed: ${allRecords.length}, Inserted: ${inserted}, Updated: ${updated}, allIndustries=${seedAllIndustries}, industryFilter=${selectedIndustries.size > 0 ? Array.from(selectedIndustries).join(",") : "none"}`,
+    `Benchmark seed complete. Records processed: ${allRecords.length}, Inserted: ${inserted}, Updated: ${updated}, Published: ${publishedCount}, Draft (stale): ${draftCount}, allIndustries=${seedAllIndustries}, industryFilter=${selectedIndustries.size > 0 ? Array.from(selectedIndustries).join(",") : "none"}`,
   );
 }
 

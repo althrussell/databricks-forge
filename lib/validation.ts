@@ -193,6 +193,14 @@ export const UpdateBenchmarkLifecycleSchema = z.object({
   lifecycle_status: z.enum(BENCHMARK_LIFECYCLE),
 });
 
+export const UpdateBenchmarkSchema = z.object({
+  lifecycle_status: z.enum(BENCHMARK_LIFECYCLE).optional(),
+  source_content: z.string().min(50).max(500_000).optional(),
+}).refine(
+  (d) => d.lifecycle_status !== undefined || d.source_content !== undefined,
+  { message: "Provide lifecycle_status or source_content" },
+);
+
 export const MetadataQuerySchema = z.object({
   type: z.enum(["catalogs", "schemas", "tables"]).default("catalogs"),
   catalog: z.string().max(255).optional(),

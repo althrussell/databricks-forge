@@ -333,7 +333,6 @@ async function backfillBenchmarks(
 
   const rows = await listBenchmarkRecords({
     lifecycleStatus: "published",
-    includeExpired: true,
     limit: 2000,
   });
   results.benchmarks.total = rows.length;
@@ -350,6 +349,7 @@ async function backfillBenchmarks(
       region: r.region,
       publishedAt: r.publishedAt,
       ttlDays: r.ttlDays,
+      sourceContent: r.sourceContent,
     })));
     results.benchmarks.embedded = rows.length;
   } catch (err) {
