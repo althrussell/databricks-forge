@@ -189,10 +189,6 @@ export const CreateBenchmarkSchema = z.object({
   }).passthrough().optional(),
 });
 
-export const UpdateBenchmarkLifecycleSchema = z.object({
-  lifecycle_status: z.enum(BENCHMARK_LIFECYCLE),
-});
-
 export const UpdateBenchmarkSchema = z.object({
   lifecycle_status: z.enum(BENCHMARK_LIFECYCLE).optional(),
   source_content: z.string().min(50).max(500_000).optional(),

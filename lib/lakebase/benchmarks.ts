@@ -211,6 +211,15 @@ export async function listBenchmarkRecords(
     });
 }
 
+export async function getBenchmarkById(benchmarkId: string): Promise<BenchmarkRecord | null> {
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeBenchmarkRecord.findUnique({
+      where: { benchmarkId },
+    });
+    return row ? toRecord(row) : null;
+  });
+}
+
 export async function updateBenchmarkLifecycle(
   benchmarkId: string,
   status: BenchmarkLifecycle,

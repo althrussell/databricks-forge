@@ -42,24 +42,71 @@ Run `./deploy.sh` again. It detects the existing app and updates it.
 
 ## Advanced options
 
+All flags are optional. Combine as needed.
+
+### Core
+
+| Flag | Description |
+|------|-------------|
+| `--warehouse "Name"` | Skip the interactive warehouse prompt |
+| `--profile "name"` | Use a specific Databricks CLI profile |
+| `--destroy` | Remove the app and clean up workspace files |
+
+### Model endpoints
+
+| Flag | Default |
+|------|---------|
+| `--endpoint "name"` | `databricks-claude-sonnet-4-6` (premium) |
+| `--fast-endpoint "name"` | `databricks-claude-sonnet-4-6` (fast/classification) |
+| `--embedding-endpoint "name"` | `databricks-qwen3-embedding-0-6b` (1024-dim) |
+
+### Lakebase (database)
+
+| Flag | Description |
+|------|-------------|
+| `--lakebase-auth-mode "oauth\|native_password"` | Runtime DB auth mode |
+| `--lakebase-native-user "user"` | Native DB user (requires `native_password` mode) |
+| `--lakebase-native-password "pw"` | Native DB password (requires `native_password` mode) |
+| `--rotate-lakebase-native-password` | Auto-generate and rotate a 48-char password |
+| `--print-generated-native-password` | Print the generated password (use with caution) |
+| `--lakebase-bootstrap-user "email"` | Bootstrap OAuth role/grants for this user at startup |
+| `--lakebase-runtime-mode "oauth_direct_only\|pooler_preferred"` | Connection routing strategy |
+| `--lakebase-enable-pooler-experiment` | Enable pooler for future testing |
+
+### Benchmark catalog
+
+| Flag | Description |
+|------|-------------|
+| `--seed-benchmarks` | Seed benchmark catalog from `data/benchmark/*.json` at startup |
+| `--seed-benchmarks-all-industries` | Also generate baseline records for all outcome-map industries |
+| `--seed-benchmark-industries "banking,hls,rcg"` | Seed only these industry IDs |
+| `--benchmark-admins "a@co.com,b@co.com"` | Restrict benchmark management to these emails. If unset, all authenticated users can manage benchmarks. |
+
+### Examples
+
 ```bash
-# Skip the warehouse prompt
+# Non-interactive deploy with a specific warehouse
 ./deploy.sh --warehouse "My SQL Warehouse"
 
-# Use different model endpoints
+# Custom model endpoints
 ./deploy.sh --endpoint "my-custom-model" --fast-endpoint "my-fast-model"
 
-# Seed benchmark catalog at startup
-./deploy.sh --seed-benchmarks
+# Seed benchmarks for banking and healthcare
+./deploy.sh --seed-benchmarks --seed-benchmark-industries "banking,hls"
 
-# Seed curated + generated baselines for all outcome-map industries
-./deploy.sh --seed-benchmarks-all-industries
+# Lock benchmark admin to specific users
+./deploy.sh --benchmark-admins "alice@company.com,bob@company.com"
 
-# Seed only selected industries
-./deploy.sh --seed-benchmark-industries "banking,hls,rcg"
+# Full production deploy with native password auth + benchmarks
+./deploy.sh \
+  --warehouse "Production Warehouse" \
+  --lakebase-auth-mode native_password \
+  --rotate-lakebase-native-password \
+  --seed-benchmarks-all-industries \
+  --benchmark-admins "data-team@company.com"
 ```
 
-### Manual benchmark seeding
+### Manual benchmark seeding (local dev)
 
 ```bash
 # Seed curated packs from data/benchmark/*.json

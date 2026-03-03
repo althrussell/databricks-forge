@@ -7,17 +7,8 @@ import {
   updateBenchmarkLifecycle,
   updateBenchmarkSourceContent,
 } from "@/lib/lakebase/benchmarks";
+import { isBenchmarkAdmin } from "@/lib/benchmarks/admin-guard";
 import { logger } from "@/lib/logger";
-
-function isBenchmarkAdmin(email: string | null): boolean {
-  if (!email) return false;
-  const allow = (process.env.FORGE_BENCHMARK_ADMINS ?? "")
-    .split(",")
-    .map((v) => v.trim().toLowerCase())
-    .filter(Boolean);
-  if (allow.length === 0) return true;
-  return allow.includes(email.toLowerCase());
-}
 
 export async function PATCH(
   request: NextRequest,
@@ -57,12 +48,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Benchmark not found" }, { status: 404 });
   }
 
+  let freshRecord = updated;
+
   try {
     if (parsed.data.lifecycle_status === "published") {
       let sourceContent = updated.sourceContent;
       let fetchStatus = updated.sourceFetchStatus;
 
-      // Auto-fetch source content if not already available
       if (!sourceContent) {
         const { fetchAndConvertSource } = await import("@/lib/benchmarks/source-fetcher");
         const markdown = await fetchAndConvertSource(updated.sourceUrl);
@@ -89,11 +81,12 @@ export async function PATCH(
         sourceContent,
       }]);
 
-      await updateBenchmarkSourceContent(benchmarkId, {
+      const saved = await updateBenchmarkSourceContent(benchmarkId, {
         sourceContent,
         sourceFetchStatus: fetchStatus as "pending" | "fetched" | "failed" | "manual",
         sourceChunkCount: chunkCount,
       });
+      if (saved) freshRecord = saved;
     } else {
       const { deleteEmbeddingsBySource } = await import("@/lib/embeddings/store");
       await deleteEmbeddingsBySource(benchmarkId);
@@ -106,7 +99,7 @@ export async function PATCH(
     });
   }
 
-  return NextResponse.json(updated);
+  return NextResponse.json(freshRecord);
 }
 
 export async function DELETE(

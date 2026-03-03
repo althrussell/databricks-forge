@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
-import { listBenchmarkRecords, updateBenchmarkSourceContent } from "@/lib/lakebase/benchmarks";
+import { getBenchmarkById, updateBenchmarkSourceContent } from "@/lib/lakebase/benchmarks";
 import { fetchAndConvertSource } from "@/lib/benchmarks/source-fetcher";
+import { isBenchmarkAdmin } from "@/lib/benchmarks/admin-guard";
 import { logger } from "@/lib/logger";
-
-function isBenchmarkAdmin(email: string | null): boolean {
-  if (!email) return false;
-  const allow = (process.env.FORGE_BENCHMARK_ADMINS ?? "")
-    .split(",")
-    .map((v) => v.trim().toLowerCase())
-    .filter(Boolean);
-  if (allow.length === 0) return true;
-  return allow.includes(email.toLowerCase());
-}
 
 export async function POST(
   _request: NextRequest,
@@ -27,8 +18,7 @@ export async function POST(
   const { benchmarkId } = await params;
   await ensureMigrated();
 
-  const records = await listBenchmarkRecords({ includeExpired: true, limit: 1000 });
-  const record = records.find((r) => r.benchmarkId === benchmarkId);
+  const record = await getBenchmarkById(benchmarkId);
   if (!record) {
     return NextResponse.json({ error: "Benchmark not found" }, { status: 404 });
   }

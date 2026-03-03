@@ -23,6 +23,8 @@
 # Optional benchmark seeding behavior:
 #   ./deploy.sh --seed-benchmarks --seed-benchmarks-all-industries
 #               --seed-benchmark-industries "banking,hls,rcg"
+# Optional benchmark admin restriction:
+#   ./deploy.sh --benchmark-admins "alice@company.com,bob@company.com"
 # =========================================================================
 
 set -euo pipefail
@@ -64,6 +66,7 @@ ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
 ARG_SEED_BENCHMARKS=false
 ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=false
 ARG_SEED_BENCHMARK_INDUSTRIES=""
+ARG_BENCHMARK_ADMINS=""
 ARG_DESTROY=false
 
 print_usage() {
@@ -108,6 +111,8 @@ Options:
   --seed-benchmark-industries CSV
                              Seed only these industry ids (e.g. banking,hls).
                              Applies to curated packs and generated baselines.
+  --benchmark-admins CSV     Comma-separated emails allowed to manage benchmarks.
+                             If unset, all authenticated users can manage them.
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -135,6 +140,7 @@ while [[ $# -gt 0 ]]; do
     --seed-benchmarks) ARG_SEED_BENCHMARKS=true; shift ;;
     --seed-benchmarks-all-industries) ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=true; shift ;;
     --seed-benchmark-industries) ARG_SEED_BENCHMARK_INDUSTRIES="$2"; shift 2 ;;
+    --benchmark-admins) ARG_BENCHMARK_ADMINS="$2"; shift 2 ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -160,6 +166,7 @@ LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
 SEED_BENCHMARKS="${ARG_SEED_BENCHMARKS}"
 SEED_BENCHMARKS_ALL_INDUSTRIES="${ARG_SEED_BENCHMARKS_ALL_INDUSTRIES}"
 SEED_BENCHMARK_INDUSTRIES="${ARG_SEED_BENCHMARK_INDUSTRIES:-}"
+BENCHMARK_ADMINS="${ARG_BENCHMARK_ADMINS:-}"
 
 if [[ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" && "$SEED_BENCHMARKS" != "true" ]]; then
   SEED_BENCHMARKS=true
@@ -247,7 +254,7 @@ wait_for_app_absent() {
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ]; then
+  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ]; then
     return
   fi
 
@@ -263,6 +270,7 @@ prepare_app_yaml() {
   export SEED_BENCHMARKS
   export SEED_BENCHMARKS_ALL_INDUSTRIES
   export SEED_BENCHMARK_INDUSTRIES
+  export BENCHMARK_ADMINS
   python3 - <<'PY'
 import os
 from pathlib import Path
@@ -276,6 +284,7 @@ pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").stri
 seed_benchmarks = os.environ.get("SEED_BENCHMARKS", "").strip().lower() == "true"
 seed_benchmarks_all = os.environ.get("SEED_BENCHMARKS_ALL_INDUSTRIES", "").strip().lower() == "true"
 seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").strip()
+benchmark_admins = os.environ.get("BENCHMARK_ADMINS", "").strip()
 
 path = Path("app.yaml")
 lines = path.read_text().splitlines()
@@ -296,6 +305,7 @@ def is_managed_name_line(s: str) -> bool:
         or "FORGE_SEED_BENCHMARKS" in t
         or "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES" in t
         or "FORGE_SEED_BENCHMARK_INDUSTRIES" in t
+        or "FORGE_BENCHMARK_ADMINS" in t
     )
 
 while i < len(lines):
@@ -335,6 +345,9 @@ out.append(f'    value: "{"true" if seed_benchmarks_all else "false"}"')
 if seed_benchmark_industries:
     out.append("  - name: FORGE_SEED_BENCHMARK_INDUSTRIES")
     out.append(f'    value: "{seed_benchmark_industries}"')
+if benchmark_admins:
+    out.append("  - name: FORGE_BENCHMARK_ADMINS")
+    out.append(f'    value: "{benchmark_admins}"')
 path.write_text("\n".join(out) + "\n")
 PY
 }
@@ -687,6 +700,7 @@ print_success() {
   printf "      Seed benchmarks:  %s\n" "$( [ "$SEED_BENCHMARKS" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Seed all industries: %s\n" "$( [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Seed industry filter: %s\n" "${SEED_BENCHMARK_INDUSTRIES:-none}"
+  printf "      Benchmark admins: %s\n" "${BENCHMARK_ADMINS:-all authenticated users}"
   if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
     printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"
   fi

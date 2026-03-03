@@ -49,6 +49,7 @@ export default function BenchmarksPage() {
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState("all");
   const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set());
+  const [transitionKey, setTransitionKey] = useState<string | null>(null);
   const [pasteId, setPasteId] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState("");
 
@@ -85,18 +86,24 @@ export default function BenchmarksPage() {
   }, [rows, q, kind, status]);
 
   async function transition(row: BenchmarkRow, lifecycleStatus: BenchmarkRow["lifecycleStatus"]) {
-    const res = await fetch(`/api/benchmarks/${row.benchmarkId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lifecycle_status: lifecycleStatus }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Update failed");
-    setRows((prev) => prev.map((r) =>
-      r.benchmarkId === row.benchmarkId
-        ? { ...r, ...data }
-        : r,
-    ));
+    const key = `${row.benchmarkId}:${lifecycleStatus}`;
+    setTransitionKey(key);
+    try {
+      const res = await fetch(`/api/benchmarks/${row.benchmarkId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lifecycle_status: lifecycleStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+      setRows((prev) => prev.map((r) =>
+        r.benchmarkId === row.benchmarkId
+          ? { ...r, ...data }
+          : r,
+      ));
+    } finally {
+      setTransitionKey(null);
+    }
   }
 
   async function fetchSource(row: BenchmarkRow) {
@@ -286,23 +293,29 @@ export default function BenchmarksPage() {
 
                 {/* Lifecycle controls */}
                 <div className="mt-2 flex justify-end gap-2">
-                  {LIFECYCLE_OPTIONS.map((s) => (
-                    <Button
-                      key={s}
-                      size="sm"
-                      variant={row.lifecycleStatus === s ? "default" : "outline"}
-                      onClick={async () => {
-                        try {
-                          await transition(row, s);
-                          toast.success(`Status updated to ${s}`);
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : "Status update failed");
-                        }
-                      }}
-                    >
-                      {s}
-                    </Button>
-                  ))}
+                  {LIFECYCLE_OPTIONS.map((s) => {
+                    const thisKey = `${row.benchmarkId}:${s}`;
+                    const isThisTransitioning = transitionKey === thisKey;
+                    const isAnyTransitioning = transitionKey !== null;
+                    return (
+                      <Button
+                        key={s}
+                        size="sm"
+                        variant={row.lifecycleStatus === s ? "default" : "outline"}
+                        disabled={isAnyTransitioning}
+                        onClick={async () => {
+                          try {
+                            await transition(row, s);
+                            toast.success(`Status updated to ${s}`);
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Status update failed");
+                          }
+                        }}
+                      >
+                        {isThisTransitioning ? "Saving..." : s}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             );
