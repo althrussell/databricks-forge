@@ -50,7 +50,7 @@ export async function generateExportSummaries(
       maxTokens: 8192,
     });
 
-    const parsed = parseLLMJson(result.rawResponse) as {
+    const parsed = parseLLMJson(result.rawResponse, "export:summaries") as {
       executiveSummary?: string;
       domainSummaries?: Record<string, string>;
     };

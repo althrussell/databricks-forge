@@ -127,7 +127,7 @@ async function assignDomains(
 
     let rawItems: unknown[];
     try {
-      rawItems = parseLLMJson(result.rawResponse) as unknown[];
+      rawItems = parseLLMJson(result.rawResponse, "domain-clustering") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse domain assignment JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -188,7 +188,7 @@ async function assignSubdomains(
 
     let rawItems: unknown[];
     try {
-      rawItems = parseLLMJson(result.rawResponse) as unknown[];
+      rawItems = parseLLMJson(result.rawResponse, "domain-clustering:subdomain") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse subdomain assignment JSON", {
         domain: domainName,
@@ -271,7 +271,7 @@ async function mergeSmallDomains(
 
     let mergeMap: Record<string, string>;
     try {
-      mergeMap = parseLLMJson(result.rawResponse) as Record<string, string>;
+      mergeMap = parseLLMJson(result.rawResponse, "domain-clustering:merge") as Record<string, string>;
     } catch (parseErr) {
       logger.warn("Failed to parse domain merge JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

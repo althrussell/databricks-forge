@@ -57,7 +57,7 @@ export async function parseOutcomeMapWithAI(
       step: "outcome-map-parse",
     });
 
-    const parsed = parseLLMJson(result.rawResponse) as Record<string, unknown>;
+    const parsed = parseLLMJson(result.rawResponse, "outcome-map-parser") as Record<string, unknown>;
 
     // Validate required fields
     if (!parsed.id || !parsed.name || !Array.isArray(parsed.objectives)) {

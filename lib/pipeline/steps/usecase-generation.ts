@@ -371,7 +371,7 @@ async function generateBatch(
 
   let items: UseCaseItem[];
   try {
-    const parsed = parseLLMJson(result.rawResponse) as
+    const parsed = parseLLMJson(result.rawResponse, "usecase-generation") as
       | UseCaseItem[]
       | { use_cases: UseCaseItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.use_cases ?? []);

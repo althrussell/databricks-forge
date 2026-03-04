@@ -117,7 +117,7 @@ export async function generateTableDescriptions(
         maxTokens: 65536,
       });
 
-      const parsed = parseLLMJson(result.rawResponse) as
+      const parsed = parseLLMJson(result.rawResponse, "metadata-genie:describe") as
         | { table_fqn: string; description: string }[]
         | { descriptions: { table_fqn: string; description: string }[] };
       const items: { table_fqn: string; description: string }[] =

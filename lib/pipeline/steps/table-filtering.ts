@@ -230,7 +230,7 @@ async function filterBatch(
 
   let items: TableClassificationItem[];
   try {
-    const parsed = parseLLMJson(result.rawResponse) as
+    const parsed = parseLLMJson(result.rawResponse, "table-filtering") as
       | TableClassificationItem[]
       | { classifications: TableClassificationItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.classifications ?? []);

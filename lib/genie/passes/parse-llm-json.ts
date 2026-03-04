@@ -12,7 +12,7 @@ import { logger } from "@/lib/logger";
  * 4. Repair common LLM JSON errors (missing commas, trailing commas)
  * 5. Throw descriptive error (with raw string logged for diagnostics)
  */
-export function parseLLMJson(raw: string): unknown {
+export function parseLLMJson(raw: string, caller?: string): unknown {
   const trimmed = raw.replace(/^\uFEFF/, "").trim();
 
   // Strategy 1: direct parse
@@ -35,7 +35,7 @@ export function parseLLMJson(raw: string): unknown {
           return JSON.parse(bracketed);
         } catch {
           // try repair on fenced bracket content
-          return tryRepairAndParse(bracketed);
+          return tryRepairAndParse(bracketed, caller);
         }
       }
     }
@@ -48,16 +48,17 @@ export function parseLLMJson(raw: string): unknown {
       return JSON.parse(bracketed);
     } catch {
       // Strategy 4: repair common LLM JSON errors then re-parse
-      return tryRepairAndParse(bracketed);
+      return tryRepairAndParse(bracketed, caller);
     }
   }
 
   logger.warn("parseLLMJson: no JSON structure found in LLM response", {
+    caller,
     rawLength: trimmed.length,
     raw: trimmed.slice(0, 4000),
   });
   throw new SyntaxError(
-    `parseLLMJson: unable to extract valid JSON from LLM response (${trimmed.length} chars, starts with: ${JSON.stringify(trimmed.slice(0, 60))})`
+    `parseLLMJson${caller ? ` [${caller}]` : ""}: unable to extract valid JSON from LLM response (${trimmed.length} chars, starts with: ${JSON.stringify(trimmed.slice(0, 60))})`
   );
 }
 
@@ -66,7 +67,7 @@ export function parseLLMJson(raw: string): unknown {
  * If standard repair fails, attempts truncation recovery to salvage
  * complete array elements from output that was cut off mid-generation.
  */
-function tryRepairAndParse(text: string): unknown {
+function tryRepairAndParse(text: string, caller?: string): unknown {
   const repaired = repairLlmJson(text);
   try {
     return JSON.parse(repaired);
@@ -80,6 +81,7 @@ function tryRepairAndParse(text: string): unknown {
     try {
       const result = JSON.parse(recovered);
       logger.warn("parseLLMJson: recovered truncated JSON output", {
+        caller,
         rawLength: text.length,
         recoveredLength: recovered.length,
       });
@@ -90,12 +92,13 @@ function tryRepairAndParse(text: string): unknown {
   }
 
   logger.warn("parseLLMJson: all strategies failed, dumping raw LLM output", {
+    caller,
     rawLength: text.length,
     raw: text.slice(0, 4000),
     repairedDiff: repaired !== text,
   });
   throw new SyntaxError(
-    `parseLLMJson: unable to extract valid JSON from LLM response (${text.length} chars)`
+    `parseLLMJson${caller ? ` [${caller}]` : ""}: unable to extract valid JSON from LLM response (${text.length} chars)`
   );
 }
 

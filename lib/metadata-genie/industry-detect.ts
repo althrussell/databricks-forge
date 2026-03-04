@@ -47,7 +47,7 @@ export async function detectIndustry(
       responseFormat: "json_object",
     });
 
-    const parsed = parseLLMJson(result.rawResponse) as Record<string, unknown>;
+    const parsed = parseLLMJson(result.rawResponse, "metadata-genie:industry-detect") as Record<string, unknown>;
     llmDetection = {
       industries: (parsed.industries as string) ?? "",
       domains: Array.isArray(parsed.domains) ? parsed.domains as string[] : [],

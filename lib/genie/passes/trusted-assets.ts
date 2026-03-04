@@ -205,7 +205,7 @@ Create parameterized queries from these examples.`;
   });
 
   const content = result.content ?? "";
-  const parsed = parseLLMJson(content) as Record<string, unknown>;
+  const parsed = parseLLMJson(content, "genie:trusted-assets") as Record<string, unknown>;
 
   const queries: TrustedAssetQuery[] = parseArray(parsed.queries)
     .map((q) => ({

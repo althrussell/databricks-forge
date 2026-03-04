@@ -123,7 +123,7 @@ async function generateWithEndpoint(
     signal: input.signal,
   });
 
-  const parsed = parseLLMJson(response.content ?? "") as Record<string, unknown>;
+  const parsed = parseLLMJson(response.content ?? "", "genie:title-generation") as Record<string, unknown>;
   const candidate = normalizeTitle(String(parsed.title ?? ""));
   return isValidTitle(candidate) ? candidate : null;
 }

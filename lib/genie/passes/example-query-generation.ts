@@ -196,7 +196,7 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
     responseFormat: "json_object",
     signal: input.signal,
   });
-  const parsed = parseLLMJson(response.content ?? "") as Record<string, unknown>;
+  const parsed = parseLLMJson(response.content ?? "", "genie:example-queries") as Record<string, unknown>;
   const rawQueries = Array.isArray(parsed.queries) ? parsed.queries : [];
   return (rawQueries as Record<string, unknown>[])
     .map((q) => ({

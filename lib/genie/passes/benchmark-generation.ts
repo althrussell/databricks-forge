@@ -184,7 +184,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
   });
 
   const content = result.content ?? "";
-  const parsed = parseLLMJson(content) as Record<string, unknown>;
+  const parsed = parseLLMJson(content, "genie:benchmark-generation") as Record<string, unknown>;
   const items: Record<string, unknown>[] = Array.isArray(parsed.benchmarks)
     ? parsed.benchmarks
     : Array.isArray(parsed) ? parsed : [];

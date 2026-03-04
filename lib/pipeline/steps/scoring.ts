@@ -242,7 +242,7 @@ async function scoreDomain(
 
     let rawItems: unknown[];
     try {
-      rawItems = parseLLMJson(result.rawResponse) as unknown[];
+      rawItems = parseLLMJson(result.rawResponse, "scoring:score") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse scoring response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -312,7 +312,7 @@ async function deduplicateDomain(
 
     let rawItems: unknown[];
     try {
-      rawItems = parseLLMJson(result.rawResponse) as unknown[];
+      rawItems = parseLLMJson(result.rawResponse, "scoring:dedup") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -395,7 +395,7 @@ async function calibrateScoresChunked(
 
       let rawItems: unknown[];
       try {
-        rawItems = parseLLMJson(result.rawResponse) as unknown[];
+        rawItems = parseLLMJson(result.rawResponse, "scoring:calibrate") as unknown[];
       } catch (parseErr) {
         logger.warn("Failed to parse calibration chunk JSON", {
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -476,7 +476,7 @@ async function deduplicateCrossDomain(
 
     let rawItems: unknown[];
     try {
-      rawItems = parseLLMJson(result.rawResponse) as unknown[];
+      rawItems = parseLLMJson(result.rawResponse, "scoring:cross-domain-dedup") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse cross-domain dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

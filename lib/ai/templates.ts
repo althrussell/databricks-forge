@@ -974,6 +974,10 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 
 {foreign_key_relationships}
 
+### SAMPLE DATA (for reference)
+
+{sample_data_section}
+
 ### ORIGINAL SQL QUERY (WITH ERROR)
 
 \`\`\`sql

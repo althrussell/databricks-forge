@@ -94,7 +94,7 @@ ${synonymHints}`;
   });
 
   const content = result.content ?? "";
-  const parsed = parseLLMJson(content) as Record<string, unknown>;
+  const parsed = parseLLMJson(content, "genie:join-inference") as Record<string, unknown>;
   const items = Array.isArray(parsed.joins) ? parsed.joins : [];
 
   const joins = (items as Record<string, unknown>[])

@@ -465,7 +465,7 @@ Fix the YAML and DDL to only reference tables and columns from the SCHEMA CONTEX
       signal,
     });
 
-    const parsed = parseLLMJson(result.content ?? "") as Record<string, unknown>;
+    const parsed = parseLLMJson(result.content ?? "", "genie:metric-views:repair") as Record<string, unknown>;
     const repairedYaml = String(parsed.yaml ?? "");
     const repairedDdl = String(parsed.ddl ?? "");
 
@@ -635,7 +635,7 @@ Create metric view proposals for this domain.`;
     });
 
     const content = result.content ?? "";
-    const parsed = parseLLMJson(content) as Record<string, unknown>;
+    const parsed = parseLLMJson(content, "genie:metric-views") as Record<string, unknown>;
     const items: Record<string, unknown>[] = Array.isArray(parsed.proposals)
       ? parsed.proposals
       : Array.isArray(parsed) ? parsed : [];

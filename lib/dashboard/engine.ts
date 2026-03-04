@@ -156,7 +156,7 @@ async function processDomain(
     responseFormat: "json_object",
   });
 
-  const parsed = parseLLMJson(result.content) as DashboardDesign;
+  const parsed = parseLLMJson(result.content, "dashboard:engine") as DashboardDesign;
 
   if (!parsed.datasets || !parsed.widgets || parsed.datasets.length === 0) {
     logger.warn("Dashboard Engine: LLM returned empty design", {

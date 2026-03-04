@@ -150,7 +150,7 @@ export async function runBusinessContext(
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = parseLLMJson(result.rawResponse) as Record<string, unknown>;
+      parsed = parseLLMJson(result.rawResponse, "business-context") as Record<string, unknown>;
     } catch (parseErr) {
       logger.warn("Failed to parse business context JSON, using defaults", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
