@@ -448,6 +448,86 @@ function detectFeatures(yaml: string): {
 }
 
 // ---------------------------------------------------------------------------
+// Auto-rename: deterministically fix measure names that shadow source columns
+// ---------------------------------------------------------------------------
+
+function inferAggregateSuffix(expr: string): string {
+  const upper = expr.toUpperCase();
+  if (/\bCOUNT\s*\(\s*DISTINCT\b/.test(upper)) return "Distinct Count";
+  if (/\bSUM\s*\(/.test(upper)) return "Total";
+  if (/\bCOUNT\s*\(/.test(upper)) return "Count";
+  if (/\bAVG\s*\(/.test(upper)) return "Average";
+  if (/\bMIN\s*\(/.test(upper)) return "Minimum";
+  if (/\bMAX\s*\(/.test(upper)) return "Maximum";
+  if (/\bPERCENTILE_APPROX\s*\(/.test(upper)) return "Percentile";
+  return "Metric";
+}
+
+/**
+ * Detect measure names that are identical to source column names and rename
+ * them by appending an aggregate-derived suffix (e.g. "Total", "Average").
+ * This prevents the NESTED_AGGREGATE_FUNCTION error at deploy time without
+ * requiring an extra LLM repair round-trip.
+ */
+export function autoRenameShadowedMeasures(
+  yaml: string,
+  ddl: string,
+  allowlist: SchemaAllowlist,
+): { yaml: string; ddl: string; renamed: number } {
+  const sourceMatch = yaml.match(
+    /^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m,
+  );
+  if (!sourceMatch) return { yaml, ddl, renamed: 0 };
+
+  const sourceCols = allowlist.columns.get(sourceMatch[1].toLowerCase());
+  if (!sourceCols || sourceCols.size === 0) return { yaml, ddl, renamed: 0 };
+
+  const measuresIdx = yaml.indexOf("measures:");
+  if (measuresIdx === -1) return { yaml, ddl, renamed: 0 };
+  const measuresBlock = yaml.slice(measuresIdx);
+
+  const renames = new Map<string, string>();
+  const entryPattern = /-\s*name:\s*(.+)\n\s*expr:\s*(.+)/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = entryPattern.exec(measuresBlock)) !== null) {
+    const rawName = m[1].trim().replace(/^["']|["']$/g, "");
+    if (sourceCols.has(rawName.toLowerCase()) && !renames.has(rawName)) {
+      renames.set(rawName, `${rawName} ${inferAggregateSuffix(m[2].trim())}`);
+    }
+  }
+
+  if (renames.size === 0) return { yaml, ddl, renamed: 0 };
+
+  let modYaml = yaml;
+  let modDdl = ddl;
+
+  for (const [oldName, newName] of renames) {
+    const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match "- name: <old>" with optional YAML quotes, only in the measures
+    // section (dimensions/joins come before measures: in the YAML).
+    const pattern = new RegExp(
+      `(-\\s*name:\\s*)(["']?)${escaped}\\2(\\s*(?:\\n|$))`,
+      "g",
+    );
+    modYaml = applyInMeasuresBlock(modYaml, pattern, `$1$2${newName}$2$3`);
+    modDdl = applyInMeasuresBlock(modDdl, pattern, `$1$2${newName}$2$3`);
+  }
+
+  return { yaml: modYaml, ddl: modDdl, renamed: renames.size };
+}
+
+function applyInMeasuresBlock(
+  text: string,
+  pattern: RegExp,
+  replacement: string,
+): string {
+  const idx = text.indexOf("measures:");
+  if (idx === -1) return text;
+  return text.slice(0, idx) + text.slice(idx).replace(pattern, replacement);
+}
+
+// ---------------------------------------------------------------------------
 // LLM repair: re-prompt once with validation errors + correct schema
 // ---------------------------------------------------------------------------
 
@@ -517,6 +597,7 @@ Fix the YAML and DDL to only reference tables and columns from the SCHEMA CONTEX
       endpoint,
       messages: repairMessages,
       temperature: 0.1,
+      maxTokens: 16384,
       responseFormat: "json_object",
       signal,
     });
@@ -686,6 +767,7 @@ Create metric view proposals for this domain.`;
       endpoint,
       messages,
       temperature: TEMPERATURE,
+      maxTokens: 32768,
       responseFormat: "json_object",
       signal,
     });
@@ -708,14 +790,21 @@ Create metric view proposals for this domain.`;
           (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
         );
 
-        const validation = validateMetricViewYaml(yamlStr, ddlStr, allowlist);
-        const features = detectFeatures(yamlStr);
+        const { yaml: fixedYaml, ddl: fixedDdl, renamed } = autoRenameShadowedMeasures(yamlStr, ddlStr, allowlist);
+        if (renamed > 0) {
+          logger.info("Auto-renamed shadowed measure names before validation", {
+            domain, name: String(p.name ?? ""), renamed,
+          });
+        }
+
+        const validation = validateMetricViewYaml(fixedYaml, fixedDdl, allowlist);
+        const features = detectFeatures(fixedYaml);
 
         return {
           name: String(p.name ?? ""),
           description: String(p.description ?? ""),
-          yaml: yamlStr,
-          ddl: ddlStr,
+          yaml: fixedYaml,
+          ddl: fixedDdl,
           sourceTables: Array.isArray(p.sourceTables) ? p.sourceTables.map(String) : [],
           hasJoins: features.hasJoins,
           hasFilteredMeasures: features.hasFilteredMeasures,
@@ -751,6 +840,10 @@ Create metric view proposals for this domain.`;
         /^(\s*(?:expr|on):\s*)(.+)$/gm,
         (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
       );
+
+      const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(repaired.yaml, repaired.ddl, allowlist);
+      repaired.yaml = reFixedYaml;
+      repaired.ddl = reFixedDdl;
 
       const revalidation = validateMetricViewYaml(repaired.yaml, repaired.ddl, allowlist);
       const reFeatures = detectFeatures(repaired.yaml);

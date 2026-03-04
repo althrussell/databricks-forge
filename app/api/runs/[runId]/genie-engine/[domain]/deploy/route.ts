@@ -53,12 +53,6 @@ export async function POST(
     const config = getConfig();
     const body = await request.json().catch(() => ({})) as Record<string, string>;
     const authMode = (body.authMode as GenieAuthMode) || undefined;
-    if (rec.quality?.gateDecision === "block") {
-      return NextResponse.json(
-        { error: "Quality gate blocked deployment. Resolve preview diagnostics and regenerate." },
-        { status: 400 },
-      );
-    }
     const validation = await revalidateSerializedSpace(rec.serializedSpace);
     if (!validation.ok) {
       return NextResponse.json(

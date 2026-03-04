@@ -182,6 +182,7 @@ Analyze ALL columns in the tables above and return the enrichment JSON array.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
+    maxTokens: 32768,
     responseFormat: "json_object",
     signal,
   });

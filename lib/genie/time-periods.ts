@@ -21,6 +21,8 @@ const MONTH_NAMES = [
 interface TimePeriodOptions {
   fiscalYearStartMonth: number;
   targetDateColumns?: string[];
+  /** Max date columns to generate time periods for (default: 6). */
+  maxDateColumns?: number;
 }
 
 interface TimePeriodResult {
@@ -47,7 +49,9 @@ export function generateTimePeriods(
     ? new Set(targetDateColumns.map((c) => c.toLowerCase()))
     : null;
 
-  const dateColumns = columns.filter((c) => {
+  const maxCols = options.maxDateColumns ?? 6;
+
+  const allDateColumns = columns.filter((c) => {
     if (!tableSet.has(c.tableFqn.toLowerCase())) return false;
     if (!DATE_TYPE_PATTERN.test(c.dataType)) return false;
     if (targetColSet) {
@@ -56,6 +60,10 @@ export function generateTimePeriods(
     }
     return true;
   });
+
+  const dateColumns = targetColSet
+    ? allDateColumns
+    : prioritizeDateColumns(allDateColumns).slice(0, maxCols);
 
   for (const col of dateColumns) {
     const tbl = col.tableFqn;
@@ -71,6 +79,34 @@ export function generateTimePeriods(
   }
 
   return { filters, dimensions };
+}
+
+const PRIMARY_DATE_PATTERNS = [
+  /^(created|updated|modified|inserted|loaded)[-_]?(at|on|date|time|ts)?$/i,
+  /^(order|transaction|invoice|event|start|end|ship|delivery|payment|effective)[-_]?date$/i,
+  /^date$/i,
+  /^timestamp$/i,
+];
+
+function dateColumnPriority(colName: string): number {
+  const lower = colName.toLowerCase();
+  for (let i = 0; i < PRIMARY_DATE_PATTERNS.length; i++) {
+    if (PRIMARY_DATE_PATTERNS[i].test(lower)) return i;
+  }
+  return PRIMARY_DATE_PATTERNS.length;
+}
+
+function prioritizeDateColumns(cols: ColumnInfo[]): ColumnInfo[] {
+  const seen = new Set<string>();
+  const unique: ColumnInfo[] = [];
+  for (const c of cols) {
+    const key = `${c.tableFqn.toLowerCase()}.${c.columnName.toLowerCase()}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(c);
+    }
+  }
+  return unique.sort((a, b) => dateColumnPriority(a.columnName) - dateColumnPriority(b.columnName));
 }
 
 function generateFiltersForColumn(

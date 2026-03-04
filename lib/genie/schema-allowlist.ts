@@ -7,7 +7,7 @@
  */
 
 import type { MetadataSnapshot, ColumnInfo } from "@/lib/domain/types";
-import { extractColumnReferences, extractSqlAliases, AI_FUNCTION_RETURN_FIELDS } from "@/lib/validation/sql-columns";
+import { extractColumnReferences, extractSqlAliases, stripSqlComments, AI_FUNCTION_RETURN_FIELDS } from "@/lib/validation/sql-columns";
 import { logger } from "@/lib/logger";
 
 export interface SchemaAllowlist {
@@ -133,12 +133,13 @@ export function findInvalidIdentifiers(
   strictColumnCheck = false,
 ): string[] {
   const invalid: string[] = [];
+  const cleanSql = stripSqlComments(sql);
 
   // Collect FQNs that are targets of CREATE statements (these are being defined, not referenced)
   const createTargets = new Set<string>();
   const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
   let createMatch: RegExpExecArray | null;
-  while ((createMatch = createRegex.exec(sql)) !== null) {
+  while ((createMatch = createRegex.exec(cleanSql)) !== null) {
     const fqnMatch = createMatch[0].match(/(?:`([^`]+)`|([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*))$/);
     if (fqnMatch) {
       const fqn = (fqnMatch[1] ?? fqnMatch[2]).replace(/`/g, "");
@@ -150,7 +151,7 @@ export function findInvalidIdentifiers(
   // Only flag when the table IS valid but the column is NOT.
   const colFqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
   let match: RegExpExecArray | null;
-  while ((match = colFqnRegex.exec(sql)) !== null) {
+  while ((match = colFqnRegex.exec(cleanSql)) !== null) {
     const tableFqn = match[1];
     const column = match[2];
     if (
@@ -164,7 +165,7 @@ export function findInvalidIdentifiers(
 
   // Backtick-quoted 4-part: catalog.schema.table.`column with spaces`
   const quotedColFqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\.`([^`]+)`/g;
-  while ((match = quotedColFqnRegex.exec(sql)) !== null) {
+  while ((match = quotedColFqnRegex.exec(cleanSql)) !== null) {
     const tableFqn = match[1];
     const column = match[2];
     if (
@@ -181,7 +182,7 @@ export function findInvalidIdentifiers(
 
   // Match three-part FQNs: catalog.schema.table
   const fqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\b/g;
-  while ((match = fqnRegex.exec(sql)) !== null) {
+  while ((match = fqnRegex.exec(cleanSql)) !== null) {
     const fqn = match[1];
     // Mark the dot-separated positions as covered
     const startPos = match.index;
@@ -205,8 +206,8 @@ export function findInvalidIdentifiers(
       for (const c of cols) allColumns.add(c);
     }
 
-    const aliases = extractSqlAliases(sql);
-    const refs = extractColumnReferences(sql);
+    const aliases = extractSqlAliases(cleanSql);
+    const refs = extractColumnReferences(cleanSql);
 
     for (const ref of refs) {
       if (coveredPositions.has(ref.position)) continue;

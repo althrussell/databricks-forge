@@ -40,6 +40,11 @@ import { evaluateJoinCandidates } from "./join-diagnostics";
 import { extractEntityCandidatesFromSchema } from "./entity-extraction";
 import { generateTimePeriods } from "./time-periods";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
+import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "./schema-allowlist";
+import { cachedChatCompletion } from "./llm-cache";
+import { parseLLMJson } from "./passes/parse-llm-json";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import type { ChatMessage } from "@/lib/dbx/model-serving";
 import { fetchTableInfoBatch, fetchColumnsBatch, fetchForeignKeysBatch } from "@/lib/queries/metadata";
 import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
@@ -240,7 +245,130 @@ function scoreQuality(degradedReasons: string[]): number {
 }
 
 // ---------------------------------------------------------------------------
-// Fast mode — mostly rule-based with lightweight LLM
+// Fast LLM expressions — replaces blind rule-based SUM/AVG per column
+// ---------------------------------------------------------------------------
+
+async function generateFastLLMExpressions(
+  tableFqns: string[],
+  metadata: MetadataSnapshot,
+  allowlist: SchemaAllowlist,
+  domain: string,
+  conversationSummary: string | undefined,
+  endpoint: string,
+): Promise<{
+  measures: EnrichedSqlSnippetMeasure[];
+  filters: EnrichedSqlSnippetFilter[];
+  dimensions: EnrichedSqlSnippetDimension[];
+}> {
+  const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
+
+  const systemMessage = `You are a SQL analytics expert building knowledge store expressions for a Databricks Genie space.
+
+You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
+
+Generate SQL expressions in three categories:
+1. **Measures** (up to 12): Simple aggregate KPIs (SUM, COUNT, AVG, MIN, MAX) that are the most business-relevant for this domain
+2. **Filters** (up to 12): Common WHERE conditions users would actually ask about (status values, date ranges, categorical splits)
+3. **Dimensions** (up to 12): Simple GROUP BY expressions for the most useful analytical breakdowns
+
+Focus on QUALITY over QUANTITY — pick the columns that matter most for business analysis. Do NOT generate an expression for every column; only the most meaningful ones.
+
+Genie SQL snippets must be SHORT, reusable expressions (single aggregates or simple CASE WHEN). They are building blocks Genie composes into queries.
+
+GOOD snippet examples:
+- Measure: SUM(catalog.schema.table.amount)
+- Measure: COUNT(DISTINCT catalog.schema.table.customer_id)
+- Filter: catalog.schema.table.status = 'active'
+- Dimension: DATE_TRUNC('month', catalog.schema.table.order_date)
+- Dimension: CASE WHEN catalog.schema.table.amount > 1000 THEN 'High' WHEN catalog.schema.table.amount > 100 THEN 'Medium' ELSE 'Low' END
+
+BAD snippet examples (too complex):
+- Anything with window functions (OVER(...))
+- Statistical functions (REGR_SLOPE, CORR, STDDEV)
+- Nested subqueries
+
+CRITICAL: Use fully qualified column references (catalog.schema.table.column) in all SQL expressions.
+
+For each expression provide:
+- name: Business-friendly display name
+- sql: Valid Databricks SQL expression using ONLY identifiers from the schema
+- synonyms: Array of 2-3 alternative terms users might say
+- instructions: One sentence on when to use this expression
+
+${DATABRICKS_SQL_RULES_COMPACT}
+
+Return JSON: { "measures": [...], "filters": [...], "dimensions": [...] }`;
+
+  const contextLine = conversationSummary
+    ? `Domain: ${domain}\nConversation context: ${conversationSummary}`
+    : `Domain: ${domain}`;
+
+  const userMessage = `${schemaBlock}
+
+### BUSINESS CONTEXT
+${contextLine}
+
+Generate the most useful measures, filters, and dimensions for a Genie space serving this domain. Pick only the expressions that would matter most to a business analyst.`;
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemMessage },
+    { role: "user", content: userMessage },
+  ];
+
+  const result = await cachedChatCompletion({
+    endpoint,
+    messages,
+    temperature: 0.2,
+    maxTokens: 8192,
+    responseFormat: "json_object",
+  });
+
+  const content = result.content ?? "";
+  const parsed = parseLLMJson(content, "genie:fast-expressions") as Record<string, unknown>;
+
+  const toArray = (val: unknown): Record<string, unknown>[] =>
+    Array.isArray(val) ? val.filter((v): v is Record<string, unknown> => typeof v === "object" && v !== null) : [];
+
+  const measures = toArray(parsed.measures)
+    .map((m) => ({
+      name: String(m.name ?? ""),
+      sql: String(m.sql ?? ""),
+      synonyms: Array.isArray(m.synonyms) ? m.synonyms.map(String) : [],
+      instructions: String(m.instructions ?? ""),
+    }))
+    .filter((m) => m.name && m.sql)
+    .filter((m) => m.sql.length <= 500)
+    .filter((m) => validateSqlExpression(allowlist, m.sql, `fast_measure:${m.name}`, true));
+
+  const filters = toArray(parsed.filters)
+    .map((f) => ({
+      name: String(f.name ?? ""),
+      sql: String(f.sql ?? ""),
+      synonyms: Array.isArray(f.synonyms) ? f.synonyms.map(String) : [],
+      instructions: String(f.instructions ?? ""),
+      isTimePeriod: false,
+    }))
+    .filter((f) => f.name && f.sql)
+    .filter((f) => f.sql.length <= 500)
+    .filter((f) => validateSqlExpression(allowlist, f.sql, `fast_filter:${f.name}`, true));
+
+  const dimensions = toArray(parsed.dimensions)
+    .map((d) => ({
+      name: String(d.name ?? ""),
+      sql: String(d.sql ?? ""),
+      synonyms: Array.isArray(d.synonyms) ? d.synonyms.map(String) : [],
+      instructions: String(d.instructions ?? ""),
+      isTimePeriod: false,
+    }))
+    .filter((d) => d.name && d.sql)
+    .filter((d) => d.sql.length <= 500)
+    .filter((d) => validateSqlExpression(allowlist, d.sql, `fast_dimension:${d.name}`, true));
+
+  return { measures, filters, dimensions };
+}
+
+// ---------------------------------------------------------------------------
+// Fast mode — LLM expressions with rule-based fallback
 // ---------------------------------------------------------------------------
 
 /**
@@ -404,10 +532,31 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     validTableFqns,
   );
 
-  // Step 4: Rule-based measures from numeric columns
-  const measures = generateNumericMeasures(metadata.columns, validTableFqns);
+  // Step 4: LLM-generated measures, filters, and dimensions (fast endpoint)
+  let llmMeasures: EnrichedSqlSnippetMeasure[] = [];
+  let llmFilters: EnrichedSqlSnippetFilter[] = [];
+  let llmDimensions: EnrichedSqlSnippetDimension[] = [];
 
-  // Step 5: Rule-based time periods from date columns
+  try {
+    const llmResult = await generateFastLLMExpressions(
+      validTableFqns, metadata, allowlist, domain,
+      adhocConfig?.conversationSummary, fastEndpoint,
+    );
+    llmMeasures = llmResult.measures;
+    llmFilters = llmResult.filters;
+    llmDimensions = llmResult.dimensions;
+    logger.info("Fast LLM expressions generated", {
+      measures: llmMeasures.length, filters: llmFilters.length, dimensions: llmDimensions.length,
+    });
+  } catch (err) {
+    logger.warn("Fast LLM expressions failed, falling back to rule-based", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    llmMeasures = generateNumericMeasures(metadata.columns, validTableFqns);
+    llmFilters = generateBasicFilters(metadata.columns, validTableFqns);
+  }
+
+  // Step 5: Rule-based time periods from date columns (deterministic, always useful)
   const autoTimePeriods = adhocConfig?.autoTimePeriods ?? true;
   let timePeriodFilters: EnrichedSqlSnippetFilter[] = [];
   let timePeriodDimensions: EnrichedSqlSnippetDimension[] = [];
@@ -421,9 +570,6 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     timePeriodFilters = tpResult.filters;
     timePeriodDimensions = tpResult.dimensions;
   }
-
-  // Step 6: Basic filters
-  const basicFilters = generateBasicFilters(metadata.columns, validTableFqns);
 
   // Step 7: Rule-based instructions from comments
   const engineConfig = buildEngineConfig(adhocConfig);
@@ -470,9 +616,9 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     metricViews: [],
     columnEnrichments: [],
     entityMatchingCandidates: entityCandidates,
-    measures,
-    filters: [...basicFilters, ...timePeriodFilters],
-    dimensions: timePeriodDimensions,
+    measures: llmMeasures,
+    filters: [...llmFilters, ...timePeriodFilters],
+    dimensions: [...llmDimensions, ...timePeriodDimensions],
     trustedQueries: exampleQueryResult.queries,
     trustedFunctions: [],
     textInstructions: instructions,
@@ -523,12 +669,17 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   logger.info("Fast Genie Engine complete", {
     domain,
     tables: validTableFqns.length,
-    measures: measures.length,
-    filters: basicFilters.length + timePeriodFilters.length,
+    llmMeasures: llmMeasures.length,
+    llmFilters: llmFilters.length,
+    llmDimensions: llmDimensions.length,
+    timePeriodFilters: timePeriodFilters.length,
+    timePeriodDimensions: timePeriodDimensions.length,
+    assembledMeasures: space.instructions.sql_snippets.measures.length,
+    assembledFilters: space.instructions.sql_snippets.filters.length,
+    assembledDimensions: space.instructions.sql_snippets.expressions.length,
     joins: allJoins.length,
     heuristicJoins: heuristicJoins.length,
     entities: entityCandidates.length,
-    timePeriodDimensions: timePeriodDimensions.length,
     sampleSqlQueries: exampleQueryResult.queries.length,
   });
 
