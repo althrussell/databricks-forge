@@ -11,6 +11,7 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { executeSQLMapped } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import { validateIdentifier } from "@/lib/validation";
@@ -113,9 +114,12 @@ export async function generateTableDescriptions(
         responseFormat: "json_object",
         temperature: 0.2,
         retries: 1,
+        maxTokens: 16384,
       });
 
-      const parsed = JSON.parse(result.rawResponse);
+      const parsed = parseLLMJson(result.rawResponse) as
+        | { table_fqn: string; description: string }[]
+        | { descriptions: { table_fqn: string; description: string }[] };
       const items: { table_fqn: string; description: string }[] =
         Array.isArray(parsed) ? parsed : parsed.descriptions ?? [];
 

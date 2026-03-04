@@ -95,6 +95,8 @@ export interface AIQueryResult {
   durationMs: number;
   /** Token usage statistics (prompt, completion, total). Null if unavailable. */
   tokenUsage: TokenUsage | null;
+  /** Model finish reason ("stop", "length", etc.). "length" indicates truncation. */
+  finishReason: string | null;
 }
 
 // Re-export TokenUsage for consumers
@@ -444,6 +446,7 @@ async function executeAIQueryOnce(
     promptVersion,
     durationMs,
     tokenUsage: response.usage,
+    finishReason: response.finishReason,
   };
 }
 
@@ -567,6 +570,7 @@ export async function executeAIQueryStream(
         promptVersion,
         durationMs,
         tokenUsage: response.usage,
+        finishReason: response.finishReason,
       };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));

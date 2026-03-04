@@ -5,8 +5,9 @@
  * organisation name and user-supplied configuration.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
@@ -149,7 +150,7 @@ export async function runBusinessContext(
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = parseJSONResponse<Record<string, unknown>>(result.rawResponse);
+      parsed = parseLLMJson(result.rawResponse) as Record<string, unknown>;
     } catch (parseErr) {
       logger.warn("Failed to parse business context JSON, using defaults", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

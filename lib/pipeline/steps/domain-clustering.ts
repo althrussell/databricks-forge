@@ -5,9 +5,10 @@
  * Serving (JSON mode). Optionally merges small domains.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import {
@@ -121,11 +122,12 @@ async function assignDomains(
       responseFormat: "json_object",
       runId,
       step: "domain-clustering",
+      maxTokens: 16384,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse) as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse domain assignment JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -181,11 +183,12 @@ async function assignSubdomains(
       responseFormat: "json_object",
       runId,
       step: "domain-clustering",
+      maxTokens: 16384,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse) as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse subdomain assignment JSON", {
         domain: domainName,
@@ -263,11 +266,12 @@ async function mergeSmallDomains(
       responseFormat: "json_object",
       runId,
       step: "domain-clustering",
+      maxTokens: 16384,
     });
 
     let mergeMap: Record<string, string>;
     try {
-      mergeMap = parseJSONResponse<Record<string, string>>(result.rawResponse);
+      mergeMap = parseLLMJson(result.rawResponse) as Record<string, string>;
     } catch (parseErr) {
       logger.warn("Failed to parse domain merge JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

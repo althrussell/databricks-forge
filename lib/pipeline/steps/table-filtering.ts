@@ -6,8 +6,9 @@
  * generation.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { updateRunMessage, updateRunFilteredTables } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { ColumnInfo, PipelineContext, TableInfo } from "@/lib/domain/types";
@@ -224,12 +225,14 @@ async function filterBatch(
     responseFormat: "json_object",
     runId,
     step: "table-filtering",
+    maxTokens: 16384,
   });
 
   let items: TableClassificationItem[];
   try {
-    const parsed = parseJSONResponse<TableClassificationItem[] | { classifications: TableClassificationItem[] }>(result.rawResponse);
-    // Handle both direct array and wrapped object responses
+    const parsed = parseLLMJson(result.rawResponse) as
+      | TableClassificationItem[]
+      | { classifications: TableClassificationItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.classifications ?? []);
   } catch (parseErr) {
     logger.warn("Failed to parse table filtering JSON", {

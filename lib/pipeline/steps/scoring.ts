@@ -5,9 +5,10 @@
  * then removes duplicates and low-value entries.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
@@ -236,11 +237,12 @@ async function scoreDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
+      maxTokens: 16384,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse) as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse scoring response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -305,11 +307,12 @@ async function deduplicateDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
+      maxTokens: 16384,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse) as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -387,11 +390,12 @@ async function calibrateScoresChunked(
         responseFormat: "json_object",
         runId,
         step: "scoring",
+        maxTokens: 16384,
       });
 
       let rawItems: unknown[];
       try {
-        rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+        rawItems = parseLLMJson(result.rawResponse) as unknown[];
       } catch (parseErr) {
         logger.warn("Failed to parse calibration chunk JSON", {
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -467,11 +471,12 @@ async function deduplicateCrossDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
+      maxTokens: 16384,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse) as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse cross-domain dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

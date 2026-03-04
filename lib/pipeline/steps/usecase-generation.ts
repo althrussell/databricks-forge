@@ -5,7 +5,8 @@
  * Serving (JSON mode). Each batch processes a subset of tables.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
@@ -358,12 +359,21 @@ async function generateBatch(
     runId: logRunId,
     step: "usecase-generation",
     retries: MAX_GENERATION_RETRIES,
+    maxTokens: 32768,
   });
+
+  if (result.finishReason === "length") {
+    logger.warn("Use case generation response truncated, attempting recovery", {
+      promptKey,
+      completionTokens: result.tokenUsage?.completionTokens,
+    });
+  }
 
   let items: UseCaseItem[];
   try {
-    const parsed = parseJSONResponse<UseCaseItem[] | { use_cases: UseCaseItem[] }>(result.rawResponse);
-    // Handle both direct array and wrapped object responses
+    const parsed = parseLLMJson(result.rawResponse) as
+      | UseCaseItem[]
+      | { use_cases: UseCaseItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.use_cases ?? []);
   } catch (parseErr) {
     logger.warn("Failed to parse use case generation JSON", {
