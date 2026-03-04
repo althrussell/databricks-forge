@@ -63,9 +63,11 @@ function rewriteJoinSql(
 
   for (const [fqn, alias] of replacements) {
     const escaped = fqn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match backtick-quoted columns first, then unquoted
     result = result.replace(
-      new RegExp(`${escaped}\\.([a-zA-Z_]\\w*)`, "g"),
-      `\`${alias}\`.\`$1\``
+      new RegExp(`${escaped}\\.(?:\`([^\`]+)\`|([a-zA-Z_]\\w*))`, "g"),
+      (_m, quoted: string | undefined, bare: string | undefined) =>
+        `\`${alias}\`.\`${quoted ?? bare}\``
     );
   }
 

@@ -53,6 +53,10 @@ Cleaned up `mergeSpaces` by removing unused `trackedBySpaceId` mapping. Switched
 
 ## Bug Fixes
 
+- **Backtick-quoting for column names with spaces** -- Column names containing spaces (e.g. `Origination Quarter`, `Loan Duration (Months)`) are now backtick-quoted throughout the Genie Engine pipeline. Previously, the time-period generator produced invalid SQL like `table.Origination Quarter` which the identifier validator flagged as unknown, silently dropping all auto-generated time filters and dimensions for affected columns. Now produces valid `table.\`Origination Quarter\`` references. The schema-allowlist validator, assembler join rewriter, and metric view FQN stripper all handle backtick-quoted identifiers. Schema context blocks (`buildCompactColumnsBlock`, `buildSchemaContextBlock`) now present space-containing columns as backtick-quoted to the LLM.
+- **Metric view: measure name shadowing detection** -- Added static validation detecting metric view measures whose names are identical to source column names. In Databricks metric views, measure names take priority over column names in the shared namespace, causing the column reference inside the expr to resolve to the measure itself -- producing a recursive `NESTED_AGGREGATE_FUNCTION` error. The validator now catches this before dry-run and the LLM prompt explicitly prohibits it.
+- **Metric view: backtick-quoted column validation** -- The `validateColumnReferences` function now parses backtick-quoted column references (e.g. `lending.\`Defaulted Loans\``). Previously, hallucinated columns in backtick-quoted form slipped past static validation and only failed during dry-run SQL execution. They now trigger the LLM repair loop correctly.
+- **Metric view: expanded repair loop triggers** -- Added `NESTED_AGGREGATE`, `FIELD_NOT_FOUND`, and measure shadowing patterns to the error patterns that trigger the LLM repair loop, so dry-run failures for these error types get a chance at automated repair.
 - **SQL column validation threshold lowered** -- Previously, unknown column warnings only fired when more than one hallucinated column was detected. Now triggers on any unknown column, catching single-column hallucinations that were previously silently passed through.
 - **Removed stale middleware.ts** -- Eliminated the unused authentication/rate-limiting middleware that was interfering with Next.js routing. The file has been renamed to `proxy.ts` to preserve any reusable logic.
 
@@ -81,4 +85,4 @@ Cleaned up `mergeSpaces` by removing unused `trackedBySpaceId` mapping. Switched
 | `8a51124` | Implement pipeline cancellation feature |
 | `d811362` | Update maxTokens parameters across components |
 
-**Uncommitted changes:** `lib/ai/templates.ts`, `lib/genie/passes/parse-llm-json.ts`, `lib/pipeline/steps/sql-generation.ts` (SQL hallucination fix cycle, sample data in fix prompts, parseLLMJson caller diagnostics).
+**Uncommitted changes:** `lib/ai/templates.ts`, `lib/genie/passes/parse-llm-json.ts`, `lib/pipeline/steps/sql-generation.ts` (SQL hallucination fix cycle, sample data in fix prompts, parseLLMJson caller diagnostics), `lib/genie/time-periods.ts`, `lib/genie/schema-allowlist.ts`, `lib/genie/assembler.ts`, `lib/genie/passes/metric-view-proposals.ts` (backtick-quoting for spaced column names, measure shadowing detection, expanded metric view validation and repair loop).

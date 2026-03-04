@@ -43,13 +43,20 @@ const TEMPERATURE = 0.2;
  * Strip fully-qualified table prefixes (catalog.schema.table.column) from
  * SQL expressions, leaving bare column names. Metric view YAML expects
  * bare column references or join-alias prefixes, not FQN table prefixes.
+ * Handles both unquoted and backtick-quoted column names.
  */
-function stripFqnPrefixes(sql: string): string {
-  // Match `catalog.schema.table.column` and replace with just `column`
-  return sql.replace(
+export function stripFqnPrefixes(sql: string): string {
+  // Backtick-quoted column: catalog.schema.table.`col name` -> `col name`
+  let result = sql.replace(
+    /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.(`[^`]+`)/g,
+    "$1"
+  );
+  // Unquoted column: catalog.schema.table.column -> column
+  result = result.replace(
     /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g,
     "$1"
   );
+  return result;
 }
 
 export interface JoinSpecInput {
@@ -129,6 +136,12 @@ Do NOT use window functions (OVER clause) in measure expressions -- metric views
 NEVER use MEDIAN() -- use PERCENTILE_APPROX(col, 0.5) instead.
 NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query, ai_similarity, ai_forecast, ai_summarize) anywhere in metric view definitions -- not in dimensions, measures, filters, or join conditions. They are non-deterministic and prohibitively expensive per-row. Metric views must use only deterministic SQL expressions over materialized columns.
 
+### CRITICAL: Measure name shadowing
+Measure \`name\` MUST NOT be identical to any source table column name. In metric views, measure names and column names share a namespace — the measure definition takes priority. If they match, the column reference inside the expr resolves to the measure itself, causing a recursive NESTED_AGGREGATE_FUNCTION error. Always differentiate: if the column is \`Total Complaints\`, name the measure \`Total Complaints Sum\` or \`Complaint Volume\`.
+
+### Column names with spaces
+When column names contain spaces or special characters (parentheses, hyphens), always backtick-quote them in \`expr:\`, \`on:\`, and \`filter:\` fields: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`. Unquoted multi-word names cause parsing errors.
+
 ### Materialization (experimental):
 \`\`\`yaml
 materialization:
@@ -194,7 +207,7 @@ interface ValidationResult {
  * validate every `alias.column` reference in expr/on fields against the
  * schema allowlist.
  */
-function validateColumnReferences(
+export function validateColumnReferences(
   yaml: string,
   allowlist: SchemaAllowlist,
 ): string[] {
@@ -242,6 +255,7 @@ function validateColumnReferences(
 
   // Validate alias.column references against the allowlist
   const colRefPattern = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
+  const quotedColRefPattern = /\b([a-zA-Z_]\w*)\.`([^`]+)`/g;
   const reported = new Set<string>();
 
   // SQL keywords and YAML fields that look like alias.column but aren't
@@ -249,42 +263,46 @@ function validateColumnReferences(
     "version", "catalog", "schema", "language", "yaml",
   ]);
 
+  function checkRef(alias: string, column: string, display: string): void {
+    if (SKIP_ALIASES.has(alias.toLowerCase())) return;
+
+    const tableFqn = aliasToTable.get(alias.toLowerCase());
+    if (!tableFqn) {
+      if (!reported.has(display)) {
+        reported.add(display);
+        issues.push(
+          `Unknown alias \`${alias}\` in \`${display}\` — only \`source\` and declared join names are valid`,
+        );
+      }
+      return;
+    }
+
+    if (!isValidColumn(allowlist, tableFqn, column)) {
+      if (!reported.has(display)) {
+        reported.add(display);
+        issues.push(
+          `Column \`${display}\` not found in table ${tableFqn}`,
+        );
+      }
+    }
+  }
+
   for (const expr of expressions) {
     let cm: RegExpExecArray | null;
+    // Backtick-quoted: alias.`column with spaces`
+    while ((cm = quotedColRefPattern.exec(expr)) !== null) {
+      checkRef(cm[1], cm[2], `${cm[1]}.\`${cm[2]}\``);
+    }
+    // Unquoted: alias.column
     while ((cm = colRefPattern.exec(expr)) !== null) {
-      const alias = cm[1].toLowerCase();
-      const column = cm[2].toLowerCase();
-
-      if (SKIP_ALIASES.has(alias)) continue;
-
-      const tableFqn = aliasToTable.get(alias);
-      if (!tableFqn) {
-        const key = `${alias}.${column}`;
-        if (!reported.has(key)) {
-          reported.add(key);
-          issues.push(
-            `Unknown alias \`${cm[1]}\` in \`${cm[1]}.${cm[2]}\` — only \`source\` and declared join names are valid`,
-          );
-        }
-        continue;
-      }
-
-      if (!isValidColumn(allowlist, tableFqn, column)) {
-        const key = `${alias}.${column}`;
-        if (!reported.has(key)) {
-          reported.add(key);
-          issues.push(
-            `Column \`${cm[1]}.${cm[2]}\` not found in table ${tableFqn}`,
-          );
-        }
-      }
+      checkRef(cm[1], cm[2], `${cm[1]}.${cm[2]}`);
     }
   }
 
   return issues;
 }
 
-function validateMetricViewYaml(
+export function validateMetricViewYaml(
   yaml: string,
   ddl: string,
   allowlist: SchemaAllowlist,
@@ -350,6 +368,36 @@ function validateMetricViewYaml(
     }
   }
 
+  // Detect measure names that shadow source column names — in metric views,
+  // measure names take priority over column names in the shared namespace.
+  // If they match, the column reference in the expr resolves to the measure
+  // itself, causing a recursive NESTED_AGGREGATE_FUNCTION error.
+  if (sourceMatch) {
+    const sourceFqn = sourceMatch[1];
+    const sourceCols = allowlist.columns.get(sourceFqn.toLowerCase());
+    if (sourceCols) {
+      const measureNamePattern = /^\s*-\s*name:\s*(.+)/gm;
+      let mn: RegExpExecArray | null;
+      while ((mn = measureNamePattern.exec(measureBlock)) !== null) {
+        const mName = mn[1].trim().replace(/^["']|["']$/g, "");
+        if (sourceCols.has(mName.toLowerCase())) {
+          issues.push(
+            `Measure name "${mName}" shadows source column "${mName}" — Databricks resolves the column reference as a recursive measure call, causing NESTED_AGGREGATE_FUNCTION. Rename the measure (e.g. "${mName} Sum", "${mName} Total").`,
+          );
+        }
+      }
+    }
+  }
+
+  // Safety-net: detect explicitly nested aggregate functions
+  const AGG_FNS = "SUM|COUNT|AVG|MIN|MAX|PERCENTILE_APPROX|COLLECT_LIST|COLLECT_SET";
+  const nestedAggPattern = new RegExp(`\\b(${AGG_FNS})\\s*\\([^)]*\\b(${AGG_FNS})\\s*\\(`, "i");
+  for (const exprLine of measureExprs) {
+    if (nestedAggPattern.test(exprLine)) {
+      issues.push(`Nested aggregate function in measure expr is not allowed: ${exprLine.trim()}`);
+    }
+  }
+
   // Validate alias.column references (e.g. source.amount, supplier.name)
   // against actual table schemas in the allowlist
   issues.push(...validateColumnReferences(yaml, allowlist));
@@ -370,7 +418,9 @@ function validateMetricViewYaml(
     i.includes("not found in table") ||
     i.includes("Unknown alias") ||
     i.includes("Window function") ||
-    i.includes("AI function")
+    i.includes("AI function") ||
+    i.includes("shadows source column") ||
+    i.includes("Nested aggregate")
   );
 
   return {
@@ -405,6 +455,10 @@ const COLUMN_ERROR_PATTERNS = [
   "not found in table",
   "Unknown alias",
   "UNRESOLVED_COLUMN",
+  "NESTED_AGGREGATE",
+  "FIELD_NOT_FOUND",
+  "shadows source column",
+  "Nested aggregate",
 ];
 
 function hasColumnErrors(issues: string[]): boolean {
@@ -429,6 +483,8 @@ Rules:
 - The primary fact table has the implicit alias \`source\`. Use \`source.columnName\` or bare \`columnName\` for its columns.
 - Join aliases must match a \`name:\` declared in the \`joins:\` block. Do NOT invent aliases.
 - If a join references a table not listed in the SCHEMA CONTEXT, REMOVE the entire join and all references to it.
+- Measure \`name\` MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`Total Complaints\`, name the measure \`Total Complaints Sum\` or \`Complaint Volume\`.
+- When column names contain spaces, backtick-quote them: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`.
 - Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
 
 ${schemaBlock}
