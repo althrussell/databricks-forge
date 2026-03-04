@@ -88,7 +88,7 @@ export function determineQualityGate(
   const gateReasons: string[] = [];
   let gateDecision: "allow" | "warn" | "block" = "allow";
   if (degradedReasons.includes("no_validated_joins")) {
-    gateDecision = "warn";
+    gateDecision = "block";
     gateReasons.push("No validated joins for multi-table space — cross-table queries may not work correctly.");
   } else if (qualityScore < 70 || degradedReasons.length > 0) {
     gateDecision = "warn";
