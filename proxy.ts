@@ -16,7 +16,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 const PUBLIC_ROUTES = new Set(["/api/health"]);
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (!pathname.startsWith("/api/") || PUBLIC_ROUTES.has(pathname)) {
