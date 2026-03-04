@@ -14,7 +14,7 @@
  *   - sqlBlocks            → synthetic use case SQL
  */
 
-import type { UseCase, BusinessContext, MetadataSnapshot, ColumnInfo } from "@/lib/domain/types";
+import type { UseCase, BusinessContext, ColumnInfo } from "@/lib/domain/types";
 import type { DashboardDesign, DashboardRecommendation } from "./types";
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
