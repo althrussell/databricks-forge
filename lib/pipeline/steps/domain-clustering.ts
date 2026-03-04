@@ -122,7 +122,7 @@ async function assignDomains(
       responseFormat: "json_object",
       runId,
       step: "domain-clustering",
-      maxTokens: 16384,
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
@@ -183,7 +183,7 @@ async function assignSubdomains(
       responseFormat: "json_object",
       runId,
       step: "domain-clustering",
-      maxTokens: 16384,
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
@@ -266,7 +266,7 @@ async function mergeSmallDomains(
       responseFormat: "json_object",
       runId,
       step: "domain-clustering",
-      maxTokens: 16384,
+      maxTokens: 128000,
     });
 
     let mergeMap: Record<string, string>;

@@ -157,7 +157,7 @@ async function tryRagDistill(
           { role: "user", content: contextText },
         ],
         temperature: 0.1,
-        maxTokens: 800,
+        maxTokens: 4096,
       });
 
       if (response.content.trim()) {

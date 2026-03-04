@@ -185,7 +185,7 @@ export async function runAssistantEngine(
         { role: "user", content: user },
       ],
       temperature: 0.3,
-      maxTokens: 4096,
+      maxTokens: 16384,
       signal,
     },
     onChunk,

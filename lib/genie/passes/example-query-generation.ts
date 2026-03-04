@@ -192,7 +192,7 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 1800,
+    maxTokens: 8192,
     responseFormat: "json_object",
     signal: input.signal,
   });

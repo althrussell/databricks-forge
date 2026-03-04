@@ -47,7 +47,7 @@ export async function generateExportSummaries(
       },
       modelEndpoint: getFastServingEndpoint(),
       temperature: 0.4,
-      maxTokens: 2000,
+      maxTokens: 8192,
     });
 
     const parsed = parseLLMJson(result.rawResponse) as {

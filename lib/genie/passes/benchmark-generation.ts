@@ -178,7 +178,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 8192,
+    maxTokens: 32768,
     responseFormat: "json_object",
     signal,
   });

@@ -114,7 +114,7 @@ export async function generateTableDescriptions(
         responseFormat: "json_object",
         temperature: 0.2,
         retries: 1,
-        maxTokens: 16384,
+        maxTokens: 65536,
       });
 
       const parsed = parseLLMJson(result.rawResponse) as

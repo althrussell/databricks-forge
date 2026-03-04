@@ -237,7 +237,7 @@ async function scoreDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
-      maxTokens: 16384,
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
@@ -307,7 +307,7 @@ async function deduplicateDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
-      maxTokens: 16384,
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
@@ -390,7 +390,7 @@ async function calibrateScoresChunked(
         responseFormat: "json_object",
         runId,
         step: "scoring",
-        maxTokens: 16384,
+        maxTokens: 128000,
       });
 
       let rawItems: unknown[];
@@ -471,7 +471,7 @@ async function deduplicateCrossDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
-      maxTokens: 16384,
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];

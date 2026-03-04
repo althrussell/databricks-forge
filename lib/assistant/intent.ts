@@ -54,7 +54,7 @@ export async function classifyIntent(
       endpoint: getFastServingEndpoint(),
       messages,
       temperature: 0.0,
-      maxTokens: 200,
+      maxTokens: 1024,
     });
 
     const parsed = JSON.parse(resp.content);

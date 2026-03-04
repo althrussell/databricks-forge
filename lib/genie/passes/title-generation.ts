@@ -118,7 +118,7 @@ async function generateWithEndpoint(
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 120,
+    maxTokens: 1024,
     responseFormat: "json_object",
     signal: input.signal,
   });

@@ -225,7 +225,7 @@ async function filterBatch(
     responseFormat: "json_object",
     runId,
     step: "table-filtering",
-    maxTokens: 16384,
+    maxTokens: 128000,
   });
 
   let items: TableClassificationItem[];

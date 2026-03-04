@@ -680,7 +680,7 @@ interface LLMResult { content: string; finishReason: string | null; }
 async function callLLM(
   prompt: string,
   endpoint: string,
-  maxTokens = 16384,
+  maxTokens = 65536,
 ): Promise<LLMResult> {
   const messages: ChatMessage[] = [
     { role: "user", content: prompt },

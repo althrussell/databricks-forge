@@ -347,7 +347,7 @@ Write 4-6 short bullet points as plain text paragraphs (no markdown bullets) tha
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 320,
+    maxTokens: 2048,
     signal,
   });
 

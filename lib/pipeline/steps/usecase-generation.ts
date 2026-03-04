@@ -359,7 +359,7 @@ async function generateBatch(
     runId: logRunId,
     step: "usecase-generation",
     retries: MAX_GENERATION_RETRIES,
-    maxTokens: 32768,
+    maxTokens: 128000,
   });
 
   if (result.finishReason === "length") {
