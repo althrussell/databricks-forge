@@ -65,7 +65,6 @@ function mergeSpaces(
   workspaceSpaces: GenieSpaceResponse[],
   tracked: TrackedGenieSpace[],
 ): SpaceCardData[] {
-  const trackedBySpaceId = new Map(tracked.map((t) => [t.spaceId, t]));
   const seen = new Set<string>();
   const result: SpaceCardData[] = [];
 
@@ -98,14 +97,6 @@ function mergeSpaces(
     if (a.status !== "trashed" && b.status === "trashed") return -1;
     return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
   });
-}
-
-function buildGenieUrl(spaceId: string): string {
-  const host = typeof window !== "undefined"
-    ? localStorage.getItem("forge-databricks-host") || ""
-    : "";
-  if (!host) return "";
-  return `${host.replace(/\/$/, "")}/genie/rooms/${spaceId}`;
 }
 
 export default function GenieSpacesPage() {

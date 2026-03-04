@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +62,6 @@ const STEPS: { id: WizardStep; label: string }[] = [
 ];
 
 export default function NewGenieSpacePage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   // Step state
@@ -86,7 +85,8 @@ export default function NewGenieSpacePage() {
 
   // Generation
   const [generationMode, setGenerationMode] = useState<GenerationMode>("fast");
-  const [jobId, setJobId] = useState<string | null>(null);
+  // jobId is stored only so React doesn't GC the generation state mid-poll
+  const jobIdRef = useRef<string | null>(null);
   const [genStatus, setGenStatus] = useState<"idle" | "generating" | "completed" | "failed">("idle");
   const [genMessage, setGenMessage] = useState("");
   const [genPercent, setGenPercent] = useState(0);
@@ -230,7 +230,7 @@ export default function NewGenieSpacePage() {
       }
 
       const { jobId: id } = await res.json();
-      setJobId(id);
+      jobIdRef.current = id;
 
       pollRef.current = setInterval(async () => {
         try {
@@ -287,7 +287,7 @@ export default function NewGenieSpacePage() {
       }
 
       const { jobId: id } = await res.json();
-      setJobId(id);
+      jobIdRef.current = id;
 
       pollRef.current = setInterval(async () => {
         try {
