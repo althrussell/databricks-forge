@@ -138,4 +138,46 @@ describe("generateTimePeriods", () => {
       expect(f.synonyms.length).toBeGreaterThan(0);
     }
   });
+
+  it("backtick-quotes column names with spaces", () => {
+    const spacedColumns: ColumnInfo[] = [
+      makeColumn("cat.schema.loans", "Origination Quarter", "date"),
+    ];
+    const result = generateTimePeriods(spacedColumns, ["cat.schema.loans"], {
+      fiscalYearStartMonth: 1,
+    });
+
+    expect(result.filters.length).toBeGreaterThan(0);
+    expect(result.dimensions.length).toBeGreaterThan(0);
+
+    for (const f of result.filters) {
+      expect(f.sql).toContain("`Origination Quarter`");
+      expect(f.sql).not.toMatch(/\.Origination Quarter[^`]/);
+    }
+    for (const d of result.dimensions) {
+      expect(d.sql).toContain("`Origination Quarter`");
+    }
+  });
+
+  it("does not backtick-quote simple column names", () => {
+    const result = generateTimePeriods(columns, tables, { fiscalYearStartMonth: 1 });
+
+    for (const f of result.filters) {
+      expect(f.sql).not.toContain("`order_date`");
+      expect(f.sql).toContain("order_date");
+    }
+  });
+
+  it("backtick-quotes columns with parentheses", () => {
+    const parenColumns: ColumnInfo[] = [
+      makeColumn("cat.schema.loans", "Duration (Months)", "date"),
+    ];
+    const result = generateTimePeriods(parenColumns, ["cat.schema.loans"], {
+      fiscalYearStartMonth: 1,
+    });
+
+    for (const f of result.filters) {
+      expect(f.sql).toContain("`Duration (Months)`");
+    }
+  });
 });

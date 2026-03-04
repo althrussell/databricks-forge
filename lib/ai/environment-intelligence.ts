@@ -401,7 +401,7 @@ async function passDomainCategorisation(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(content);
+    const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(content, "env-intelligence:domains");
     allAssignments.push(...parsed);
   }
 
@@ -454,7 +454,7 @@ async function passPIIDetection(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<SensitivityClassification>(content);
+    const parsed = safeParseArray<SensitivityClassification>(content, "env-intelligence:pii");
     for (const p of parsed) {
       const key = `${p.tableFqn}::${p.columnName}`;
       if (!ruleKeys.has(key)) {
@@ -493,7 +493,7 @@ async function passAutoDescriptions(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; description: string }>(content);
+    const parsed = safeParseArray<{ table_fqn: string; description: string }>(content, "env-intelligence:descriptions");
     for (const p of parsed) {
       descriptions.set(p.table_fqn, p.description);
     }
@@ -523,7 +523,7 @@ async function passRedundancyDetection(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<RedundancyPair>(content);
+    const parsed = safeParseArray<RedundancyPair>(content, "env-intelligence:redundancy");
     allPairs.push(...parsed);
   }
 
@@ -551,7 +551,7 @@ async function passImplicitRelationships(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<ImplicitRelationship>(content);
+    const parsed = safeParseArray<ImplicitRelationship>(content, "env-intelligence:relationships");
     allRels.push(...parsed);
   }
 
@@ -584,7 +584,7 @@ async function passMedallionTier(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(content);
+    const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(content, "env-intelligence:tiers");
     for (const p of parsed) {
       if (["bronze", "silver", "gold", "system"].includes(p.tier)) {
         assignments.set(p.table_fqn, { tier: p.tier, reasoning: p.reasoning });
@@ -627,7 +627,7 @@ async function passDataProducts(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    allProducts.push(...safeParseArray<DataProduct>(content));
+    allProducts.push(...safeParseArray<DataProduct>(content, "env-intelligence:data-products"));
   }
 
   return allProducts;
@@ -664,7 +664,7 @@ async function passGovernanceGaps(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<GovernanceGap>(content);
+    const parsed = safeParseArray<GovernanceGap>(content, "env-intelligence:governance");
     allGaps.push(...parsed);
   }
 
@@ -680,7 +680,7 @@ interface LLMResult { content: string; finishReason: string | null; }
 async function callLLM(
   prompt: string,
   endpoint: string,
-  maxTokens = 16384,
+  maxTokens = 65536,
 ): Promise<LLMResult> {
   const messages: ChatMessage[] = [
     { role: "user", content: prompt },
@@ -707,9 +707,9 @@ async function callLLM(
 // Parsing helpers
 // ---------------------------------------------------------------------------
 
-function safeParseArray<T>(raw: string): T[] {
+function safeParseArray<T>(raw: string, caller: string): T[] {
   try {
-    const parsed = parseLLMJson(raw);
+    const parsed = parseLLMJson(raw, caller);
     if (Array.isArray(parsed)) return parsed as T[];
     if (parsed && typeof parsed === "object") {
       for (const key of Object.keys(parsed as Record<string, unknown>)) {
@@ -720,6 +720,7 @@ function safeParseArray<T>(raw: string): T[] {
     return [];
   } catch (error) {
     logger.warn("[intelligence] Failed to parse LLM JSON response", {
+      caller,
       error: String(error),
       responseSnippet: raw.slice(0, 200),
     });
@@ -794,7 +795,7 @@ async function passAnalyticsMaturity(
 
   type MaturityLevel = "nascent" | "developing" | "established" | "advanced";
   const VALID_LEVELS = new Set<MaturityLevel>(["nascent", "developing", "established", "advanced"]);
-  const parsed = parseLLMJson(content) as {
+  const parsed = parseLLMJson(content, "env-intelligence:maturity") as {
     overallScore?: number;
     level?: string;
     dimensions?: Record<string, { score?: number; summary?: string }>;

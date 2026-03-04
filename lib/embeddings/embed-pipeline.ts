@@ -19,6 +19,8 @@ import {
   composeGenieRecommendation,
   composeGenieQuestion,
   composeOutcomeMap,
+  composeBenchmarkContext,
+  composeBenchmarkSourceChunk,
 } from "./compose";
 import type { EmbeddingInput } from "./types";
 import { isEmbeddingEnabled } from "./config";
@@ -303,4 +305,108 @@ export async function embedOutcomeMap(map: OutcomeMapLike): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark record embedding
+// ---------------------------------------------------------------------------
+
+interface BenchmarkLike {
+  benchmarkId: string;
+  kind: string;
+  title: string;
+  summary: string;
+  sourceUrl: string;
+  publisher: string;
+  industry?: string | null;
+  region?: string | null;
+  publishedAt?: string | null;
+  ttlDays: number;
+  sourceContent?: string | null;
+}
+
+/**
+ * Embed a benchmark record using real source content when available.
+ * Falls back to the hand-written summary if no source content exists.
+ * Returns the number of chunks embedded.
+ */
+export async function embedBenchmarkRecords(records: BenchmarkLike[]): Promise<number> {
+  if (!isEmbeddingEnabled() || records.length === 0) return 0;
+
+  const { chunkText } = await import("./chunker");
+  let totalChunks = 0;
+
+  try {
+    await Promise.all(records.map((r) => deleteEmbeddingsBySource(r.benchmarkId)));
+
+    const allInputs: EmbeddingInput[] = [];
+    const allTexts: string[] = [];
+
+    for (const r of records) {
+      const content = r.sourceContent || r.summary;
+      const chunks = chunkText(content);
+
+      if (chunks.length === 0) continue;
+
+      const useSourceContent = !!r.sourceContent;
+      const meta = {
+        kind: r.kind,
+        industry: r.industry ?? null,
+        region: r.region ?? null,
+        sourcePriority: "IndustryBenchmark",
+        publishedAt: r.publishedAt ?? null,
+        ttlDays: r.ttlDays,
+        hasSourceContent: useSourceContent,
+      };
+
+      for (const chunk of chunks) {
+        const text = useSourceContent
+          ? composeBenchmarkSourceChunk(
+              chunk.text,
+              { title: r.title, kind: r.kind, industry: r.industry, publisher: r.publisher },
+              chunk.index,
+            )
+          : composeBenchmarkContext({
+              kind: r.kind,
+              title: r.title,
+              summary: r.summary,
+              industry: r.industry ?? null,
+              region: r.region ?? null,
+              publisher: r.publisher,
+              sourceUrl: r.sourceUrl,
+            });
+
+        allTexts.push(text);
+        allInputs.push({
+          kind: "benchmark_context",
+          sourceId: r.benchmarkId,
+          contentText: text,
+          metadataJson: { ...meta, chunkIndex: chunk.index },
+          embedding: [],
+        });
+      }
+
+      totalChunks += chunks.length;
+    }
+
+    if (allTexts.length === 0) return 0;
+
+    const vectors = await generateEmbeddings(allTexts);
+    for (let i = 0; i < allInputs.length; i++) {
+      allInputs[i].embedding = vectors[i];
+    }
+
+    await insertEmbeddings(allInputs);
+
+    logger.info("[embed-pipeline] Benchmark embedding complete", {
+      records: records.length,
+      totalChunks,
+    });
+  } catch (err) {
+    logger.warn("[embed-pipeline] Benchmark embedding failed (non-fatal)", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return totalChunks;
 }

@@ -55,6 +55,7 @@ import {
   RotateCcw,
   ThumbsUp,
   ThumbsDown,
+  BookOpen,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/lazy";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
@@ -326,6 +327,13 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                         {uc.subdomain && (
                           <span className="text-xs text-muted-foreground">
                             / {uc.subdomain}
+                          </span>
+                        )}
+                        {uc.enrichmentTags && uc.enrichmentTags.length > 0 && (
+                          <span className="ml-1 flex gap-0.5" title={`Enriched via: ${uc.enrichmentTags.join(", ")}`}>
+                            {uc.enrichmentTags.includes("benchmark") && <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                            {uc.enrichmentTags.includes("outcome_map") && <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />}
+                            {uc.enrichmentTags.includes("document") && <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-500" />}
                           </span>
                         )}
                       </div>
@@ -716,6 +724,39 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                     value={selectedUseCase.sponsor}
                   />
                 </div>
+
+                {/* Enrichment Sources */}
+                {selectedUseCase.enrichmentTags && selectedUseCase.enrichmentTags.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-amber-500" />
+                        <p className="text-sm font-semibold">Enrichment Sources</p>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {selectedUseCase.enrichmentTags.includes("benchmark") && (
+                          <Badge variant="outline" className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400">
+                            <BarChart3 className="h-2.5 w-2.5" />
+                            Benchmark
+                          </Badge>
+                        )}
+                        {selectedUseCase.enrichmentTags.includes("outcome_map") && (
+                          <Badge variant="outline" className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400">
+                            <Target className="h-2.5 w-2.5" />
+                            Outcome Map
+                          </Badge>
+                        )}
+                        {selectedUseCase.enrichmentTags.includes("document") && (
+                          <Badge variant="outline" className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400">
+                            <FileText className="h-2.5 w-2.5" />
+                            Document
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Tables Involved */}
                 {(selectedUseCase.tablesInvolved.length > 0 || editing) && (

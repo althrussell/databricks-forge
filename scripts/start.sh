@@ -230,9 +230,9 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
             const safeRole = '\"' + user.replace(/\"/g, '\"\"') + '\"';
             await pool.query('GRANT CONNECT ON DATABASE databricks_postgres TO ' + safeRole);
             await pool.query('GRANT USAGE, CREATE ON SCHEMA public TO ' + safeRole);
-            await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
+            await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
             await pool.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' + safeRole);
-            await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ' + safeRole);
+            await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO ' + safeRole);
             await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ' + safeRole);
             console.log('[startup] Granted Lakebase privileges to user:', user);
           }
@@ -284,9 +284,9 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
           await pool.query('ALTER ROLE ' + safeRole + ' PASSWORD ' + safePasswordLiteral);
           await pool.query('GRANT CONNECT ON DATABASE databricks_postgres TO ' + safeRole);
           await pool.query('GRANT USAGE, CREATE ON SCHEMA public TO ' + safeRole);
-          await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
+          await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
           await pool.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' + safeRole);
-          await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ' + safeRole);
+          await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO ' + safeRole);
           await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ' + safeRole);
           console.log('[startup] Native runtime role grants ensured:', role);
         } finally {
@@ -368,6 +368,21 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
     fi
   else
     echo "[startup] No embedding endpoint configured (serving-endpoint-embedding not bound), skipping HNSW index."
+  fi
+
+  # -- Step G: Optional benchmark seed --------------------------------------
+  if [ "${FORGE_SEED_BENCHMARKS:-false}" = "true" ]; then
+    echo "[startup] Seeding benchmark catalog..."
+    if DATABASE_URL="$SCHEMA_URL" \
+      FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES="${FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES:-false}" \
+      FORGE_SEED_BENCHMARK_INDUSTRIES="${FORGE_SEED_BENCHMARK_INDUSTRIES:-}" \
+      node scripts/seed-benchmarks.mjs; then
+      echo "[startup] Benchmark seed complete."
+    else
+      echo "[startup] WARNING: Benchmark seed failed; continuing startup."
+    fi
+  else
+    echo "[startup] Benchmark seed disabled."
   fi
 
 else

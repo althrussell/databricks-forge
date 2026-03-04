@@ -37,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} h-screen overflow-hidden antialiased`}
       >
         <ThemeProvider>
           <TooltipProvider>
@@ -47,9 +47,9 @@ export default function RootLayout({
           >
             Skip to main content
           </a>
-          <div className="flex h-screen">
+          <div className="flex h-screen overflow-hidden">
             <SidebarNav />
-            <div className="flex flex-1 flex-col overflow-auto">
+            <div className="flex min-h-0 flex-1 flex-col">
               <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
                 <MobileNav />
                 <span className="text-sm font-semibold md:hidden">Forge AI</span>
@@ -60,7 +60,7 @@ export default function RootLayout({
                 <AskForgePanel />
                 <ThemeToggle />
               </header>
-              <main id="main-content" className="flex-1">
+              <main id="main-content" className="flex-1 overflow-y-auto">
                 <div className="w-full px-6 py-6">{children}</div>
               </main>
             </div>

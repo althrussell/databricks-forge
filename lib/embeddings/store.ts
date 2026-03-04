@@ -34,24 +34,29 @@ export async function insertEmbeddings(
   const BATCH_SIZE = 50;
   for (let i = 0; i < inputs.length; i += BATCH_SIZE) {
     const batch = inputs.slice(i, i + BATCH_SIZE);
+    const params: Array<string | null> = [];
+    const values: string[] = [];
 
-    const values = batch
-      .map((inp) => {
-        const meta = inp.metadataJson
-          ? `'${JSON.stringify(inp.metadataJson).replace(/'/g, "''")}'::jsonb`
-          : "NULL";
-        const runId = inp.runId ? `'${inp.runId}'` : "NULL";
-        const scanId = inp.scanId ? `'${inp.scanId}'` : "NULL";
-        const text = inp.contentText.replace(/'/g, "''");
-        const vec = `'[${inp.embedding.join(",")}]'::vector`;
-        return `(gen_random_uuid(), '${inp.kind}', '${inp.sourceId}', ${runId}, ${scanId}, '${text}', ${meta}, ${vec}, NOW())`;
-      })
-      .join(",\n");
+    for (const inp of batch) {
+      const base = params.length;
+      params.push(inp.kind);
+      params.push(inp.sourceId);
+      params.push(inp.runId ?? null);
+      params.push(inp.scanId ?? null);
+      params.push(inp.contentText);
+      params.push(inp.metadataJson ? JSON.stringify(inp.metadataJson) : null);
+      params.push(`[${inp.embedding.join(",")}]`);
 
-    await prisma.$executeRawUnsafe(`
+      values.push(
+        `(gen_random_uuid(), $${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}::jsonb, $${base + 7}::vector, NOW())`,
+      );
+    }
+
+    const sql = `
       INSERT INTO forge_embeddings (id, kind, source_id, run_id, scan_id, content_text, metadata_json, embedding, created_at)
-      VALUES ${values}
-    `);
+      VALUES ${values.join(",\n")}
+    `;
+    await prisma.$executeRawUnsafe(sql, ...params);
 
     inserted += batch.length;
   }
@@ -68,7 +73,8 @@ export async function insertEmbeddings(
 export async function deleteEmbeddingsByScan(scanId: string): Promise<number> {
   const prisma = await getPrisma();
   const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM forge_embeddings WHERE scan_id = '${scanId}'`,
+    "DELETE FROM forge_embeddings WHERE scan_id = $1",
+    scanId,
   );
   logger.debug("[embeddings] Deleted by scan", { scanId, count: result });
   return result;
@@ -78,7 +84,8 @@ export async function deleteEmbeddingsByScan(scanId: string): Promise<number> {
 export async function deleteEmbeddingsByRun(runId: string): Promise<number> {
   const prisma = await getPrisma();
   const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM forge_embeddings WHERE run_id = '${runId}'`,
+    "DELETE FROM forge_embeddings WHERE run_id = $1",
+    runId,
   );
   logger.debug("[embeddings] Deleted by run", { runId, count: result });
   return result;
@@ -90,7 +97,8 @@ export async function deleteEmbeddingsBySource(
 ): Promise<number> {
   const prisma = await getPrisma();
   const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM forge_embeddings WHERE source_id = '${sourceId}'`,
+    "DELETE FROM forge_embeddings WHERE source_id = $1",
+    sourceId,
   );
   return result;
 }
@@ -122,7 +130,9 @@ export async function deleteEmbeddingsByKindAndScan(
 ): Promise<number> {
   const prisma = await getPrisma();
   const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM forge_embeddings WHERE kind = '${kind}' AND scan_id = '${scanId}'`,
+    "DELETE FROM forge_embeddings WHERE kind = $1 AND scan_id = $2",
+    kind,
+    scanId,
   );
   return result;
 }
@@ -134,7 +144,9 @@ export async function deleteEmbeddingsByKindAndRun(
 ): Promise<number> {
   const prisma = await getPrisma();
   const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM forge_embeddings WHERE kind = '${kind}' AND run_id = '${runId}'`,
+    "DELETE FROM forge_embeddings WHERE kind = $1 AND run_id = $2",
+    kind,
+    runId,
   );
   return result;
 }
@@ -159,29 +171,34 @@ export async function searchByVector(
   } = {},
 ): Promise<SearchResult[]> {
   const prisma = await getPrisma();
-  const topK = options.topK ?? 20;
+  const topK = Math.min(Math.max(options.topK ?? 20, 1), 100);
   const minScore = options.minScore ?? 0.3;
-  const vecLiteral = `'[${queryVector.join(",")}]'::vector`;
-
+  const vecLiteral = `[${queryVector.join(",")}]`;
+  const params: Array<string | number> = [vecLiteral];
   const conditions: string[] = [];
 
   if (options.kinds && options.kinds.length > 0) {
-    const kindsList = options.kinds.map((k) => `'${k}'`).join(",");
-    conditions.push(`kind IN (${kindsList})`);
+    const placeholders = options.kinds.map((_, idx) => `$${params.length + idx + 1}`);
+    conditions.push(`kind IN (${placeholders.join(",")})`);
+    params.push(...options.kinds);
   }
 
   if (options.runId) {
-    conditions.push(`run_id = '${options.runId}'`);
+    params.push(options.runId);
+    conditions.push(`run_id = $${params.length}`);
   }
 
   if (options.scanId) {
-    conditions.push(`scan_id = '${options.scanId}'`);
+    params.push(options.scanId);
+    conditions.push(`scan_id = $${params.length}`);
   }
 
   if (options.metadataFilter && Object.keys(options.metadataFilter).length > 0) {
-    const filterJson = JSON.stringify(options.metadataFilter).replace(/'/g, "''");
-    conditions.push(`metadata_json @> '${filterJson}'::jsonb`);
+    params.push(JSON.stringify(options.metadataFilter));
+    conditions.push(`metadata_json @> $${params.length}::jsonb`);
   }
+
+  params.push(topK);
 
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -204,12 +221,12 @@ export async function searchByVector(
       scan_id,
       content_text,
       metadata_json,
-      1 - (embedding <=> ${vecLiteral}) AS score
+      1 - (embedding <=> $1::vector) AS score
     FROM forge_embeddings
     ${whereClause}
-    ORDER BY embedding <=> ${vecLiteral}
-    LIMIT ${topK}
-  `);
+    ORDER BY embedding <=> $1::vector
+    LIMIT $${params.length}
+  `, ...params);
 
   return rows
     .filter((r) => r.score >= minScore)
@@ -236,11 +253,19 @@ export async function countEmbeddings(
 ): Promise<number> {
   const prisma = await getPrisma();
   const conditions: string[] = [];
-  if (kind) conditions.push(`kind = '${kind}'`);
-  if (sourceId) conditions.push(`source_id = '${sourceId}'`);
+  const params: string[] = [];
+  if (kind) {
+    params.push(kind);
+    conditions.push(`kind = $${params.length}`);
+  }
+  if (sourceId) {
+    params.push(sourceId);
+    conditions.push(`source_id = $${params.length}`);
+  }
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows: Array<{ count: bigint }> = await prisma.$queryRawUnsafe(
     `SELECT COUNT(*) as count FROM forge_embeddings ${whereClause}`,
+    ...params,
   );
   return Number(rows[0]?.count ?? 0);
 }

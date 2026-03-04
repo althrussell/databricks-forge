@@ -35,6 +35,9 @@ import {
 } from "@/components/charts/lazy";
 import { SchemaCoverageCard } from "@/components/pipeline/run-detail/schema-coverage-card";
 import { IndustryCoverageCard } from "@/components/pipeline/run-detail/industry-coverage-card";
+import { SummaryCard } from "@/components/pipeline/run-detail/summary-card";
+import { CoverageGapCard } from "@/components/pipeline/run-detail/coverage-gap-card";
+import { ConfigField } from "@/components/pipeline/run-detail/config-field";
 import { computeIndustryCoverage } from "@/lib/domain/industry-coverage";
 import { BusinessContextCard } from "@/components/pipeline/run-detail/business-context-card";
 import { PromptVersionsCard } from "@/components/pipeline/run-detail/prompt-versions-card";
@@ -59,20 +62,21 @@ import {
   ChevronUp,
   BarChart3,
   Settings2,
-  Eye,
   RotateCcw,
   ArrowLeft,
   GitCompareArrows,
   Pencil,
   X,
   Loader2,
+  BookOpen,
+  FileText,
+  Square,
 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { InfoTip } from "@/components/ui/info-tip";
 import { RUN_DETAIL } from "@/lib/help-text";
 import { Separator } from "@/components/ui/separator";
 import type {
@@ -421,6 +425,7 @@ export default function RunDetailPage({
     running: "Running",
     completed: "Completed",
     failed: "Failed",
+    cancelled: "Cancelled",
   };
 
   const STATUS_STYLES: Record<string, string> = {
@@ -431,6 +436,8 @@ export default function RunDetailPage({
     completed:
       "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
     failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    cancelled:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
   };
 
   const isCompleted = run.status === "completed";
@@ -680,13 +687,34 @@ export default function RunDetailPage({
       {isActive && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Pipeline Progress</CardTitle>
-            <CardDescription>
-              {run.statusMessage ??
-                (run.currentStep
-                  ? `Currently: ${run.currentStep}`
-                  : "Waiting to start...")}
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Pipeline Progress</CardTitle>
+                <CardDescription>
+                  {run.statusMessage ??
+                    (run.currentStep
+                      ? `Currently: ${run.currentStep}`
+                      : "Waiting to start...")}
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/${runId}/cancel`, { method: "POST" });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Cancel failed"); }
+                    toast.success("Pipeline cancellation requested");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Failed to cancel pipeline");
+                  }
+                }}
+              >
+                <Square className="mr-1 h-3.5 w-3.5" />
+                Stop
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="mb-4">
@@ -739,6 +767,45 @@ export default function RunDetailPage({
               status={run.status}
               assetDiscoveryEnabled={run.config.assetDiscoveryEnabled}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cancelled */}
+      {run.status === "cancelled" && (
+        <Card className="border-amber-500/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg text-amber-600">
+                Pipeline Cancelled
+              </CardTitle>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/${runId}/execute?resume=true`, { method: "POST" });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Resume failed"); }
+                    toast.success("Pipeline resuming from last successful step");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Resume failed");
+                  }
+                }}
+              >
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Resume Pipeline
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">This pipeline was stopped by a user. You can resume it from the last successful step.</p>
+            <div className="mt-4">
+              <RunProgress
+                currentStep={run.currentStep as PipelineStep}
+                progressPct={run.progressPct}
+                status={run.status}
+                assetDiscoveryEnabled={run.config.assetDiscoveryEnabled}
+              />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -952,6 +1019,81 @@ export default function RunDetailPage({
                   {/* Business Context */}
                   {run.businessContext && (
                     <BusinessContextCard context={run.businessContext} />
+                  )}
+
+                  {/* Context Sources (Enrichment Provenance) */}
+                  {run.contextSources && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-amber-500" />
+                          <CardTitle className="text-sm font-medium">Enrichment Context Sources</CardTitle>
+                        </div>
+                        <CardDescription>
+                          External knowledge sources that informed this pipeline run
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          {/* Benchmarks */}
+                          <div className="rounded-md border p-3">
+                            <div className="flex items-center gap-1.5">
+                              <BarChart3 className="h-3.5 w-3.5 text-amber-500" />
+                              <p className="text-xs font-semibold">Benchmarks</p>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              {run.contextSources.benchmarks.strategy === "default"
+                                ? "Default pack (no custom benchmarks)"
+                                : `${run.contextSources.benchmarks.recordIds.length} records via ${run.contextSources.benchmarks.strategy.replace("_", " ")}`}
+                            </p>
+                            {run.contextSources.benchmarks.chunkCount > 0 && (
+                              <p className="text-xs text-muted-foreground">{run.contextSources.benchmarks.chunkCount} chunks</p>
+                            )}
+                          </div>
+
+                          {/* Outcome Map */}
+                          <div className="rounded-md border p-3">
+                            <div className="flex items-center gap-1.5">
+                              <Target className="h-3.5 w-3.5 text-blue-500" />
+                              <p className="text-xs font-semibold">Outcome Map</p>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              {run.contextSources.outcomeMap.sections.length > 0
+                                ? `${run.contextSources.outcomeMap.industryId ?? "cross-industry"}`
+                                : "Not used"}
+                            </p>
+                            {run.contextSources.outcomeMap.sections.length > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                Sections: {run.contextSources.outcomeMap.sections.join(", ")}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Documents */}
+                          <div className="rounded-md border p-3">
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5 text-purple-500" />
+                              <p className="text-xs font-semibold">RAG Documents</p>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              {run.contextSources.documents.sourceIds.length > 0
+                                ? `${run.contextSources.documents.sourceIds.length} sources`
+                                : "None retrieved"}
+                            </p>
+                            {run.contextSources.documents.chunkCount > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {run.contextSources.documents.chunkCount} chunks ({run.contextSources.documents.kinds.join(", ")})
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {run.contextSources.steps.length > 0 && (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Enriched in: {run.contextSources.steps.join(", ")}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
 
                   {/* Run Configuration */}
@@ -1199,120 +1341,6 @@ export default function RunDetailPage({
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function SummaryCard({
-  title,
-  value,
-  tip,
-  onClick,
-}: {
-  title: string;
-  value: string;
-  tip?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <Card
-      className={
-        onClick
-          ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-          : ""
-      }
-      onClick={onClick}
-    >
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-1.5">
-          <p className="text-sm text-muted-foreground">{title}</p>
-          {tip && <InfoTip tip={tip} />}
-        </div>
-        <p className="text-2xl font-bold">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CoverageGapCard({
-  coverageData,
-  onClick,
-}: {
-  coverageData: {
-    overallCoverage: number;
-    gapCount: number;
-  } | null;
-  onClick?: () => void;
-}) {
-  if (!coverageData) {
-    return (
-      <Card className="opacity-60">
-        <CardContent className="pt-6">
-          <p className="text-sm text-muted-foreground">Coverage</p>
-          <p className="text-2xl font-bold text-muted-foreground">N/A</p>
-          <p className="text-xs text-muted-foreground">No industry map</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const pct = Math.round(coverageData.overallCoverage * 100);
-  const colorClass =
-    pct >= 75
-      ? "text-green-600 dark:text-green-400"
-      : pct >= 25
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-red-600 dark:text-red-400";
-
-  return (
-    <Card
-      className={
-        onClick
-          ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-          : ""
-      }
-      onClick={onClick}
-    >
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-1.5">
-          <Eye className="h-3.5 w-3.5 text-violet-500" />
-          <p className="text-sm text-muted-foreground">Coverage</p>
-        </div>
-        <p className={`text-2xl font-bold ${colorClass}`}>{pct}%</p>
-        {coverageData.gapCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {coverageData.gapCount} gap{coverageData.gapCount !== 1 ? "s" : ""}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ConfigField({
-  label,
-  value,
-  badge,
-}: {
-  label: string;
-  value: string;
-  badge?: string;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm">
-        {value}
-        {badge && (
-          <span className="ml-1.5 inline-block rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-            {badge}
-          </span>
-        )}
-      </p>
     </div>
   );
 }

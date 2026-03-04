@@ -213,7 +213,7 @@ function parseLLMExpressions(content: string): {
   dimensions: EnrichedSqlSnippetDimension[];
 } {
   try {
-    const parsed = parseLLMJson(content) as Record<string, unknown>;
+    const parsed = parseLLMJson(content, "genie:semantic-expressions") as Record<string, unknown>;
     return {
       measures: parseArray(parsed.measures).map((m) => ({
         name: String(m.name ?? ""),

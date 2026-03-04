@@ -10,6 +10,7 @@ import type {
   PipelineRunConfig,
   PipelineStep,
   RunStatus,
+  RunContextSources,
   BusinessContext,
   BusinessPriority,
   GenerationOption,
@@ -26,7 +27,8 @@ function parseJSON<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (e) {
+    logger.debug("[runs] Failed to parse JSON, using fallback", { error: String(e) });
     return fallback;
   }
 }
@@ -50,6 +52,7 @@ function dbRowToRun(row: {
   businessContext: string | null;
   errorMessage: string | null;
   createdBy: string | null;
+  contextSourcesJson: string | null;
   createdAt: Date;
   completedAt: Date | null;
 }): PipelineRun {
@@ -63,6 +66,10 @@ function dbRowToRun(row: {
       businessDomains: row.businessDomains ?? "",
       businessPriorities: parseJSON<BusinessPriority[]>(row.businessPriorities, []),
       strategicGoals: row.strategicGoals ?? "",
+      additionalContext: genOpts.additionalContext ?? "",
+      customerMaturity: genOpts.customerMaturity ?? "developing",
+      riskPosture: genOpts.riskPosture ?? "balanced",
+      transformationHorizon: genOpts.transformationHorizon ?? "half-year",
       generationOptions: genOpts.generationOptions,
       sampleRowsPerTable: genOpts.sampleRowsPerTable,
       industry: genOpts.industry,
@@ -84,6 +91,7 @@ function dbRowToRun(row: {
     promptVersions: genOpts.promptVersions,
     stepLog: genOpts.stepLog,
     industryAutoDetected: genOpts.industryAutoDetected,
+    contextSources: parseJSON<RunContextSources | null>(row.contextSourcesJson, null),
     createdBy: row.createdBy ?? null,
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -102,6 +110,10 @@ function parseGenerationOptions(raw: string | null): {
   generationOptions: GenerationOption[];
   sampleRowsPerTable: number;
   industry: string;
+  additionalContext: string;
+  customerMaturity: PipelineRunConfig["customerMaturity"];
+  riskPosture: PipelineRunConfig["riskPosture"];
+  transformationHorizon: PipelineRunConfig["transformationHorizon"];
   discoveryDepth: string;
   depthConfig: PipelineRunConfig["depthConfig"];
   estateScanEnabled: boolean;
@@ -111,7 +123,23 @@ function parseGenerationOptions(raw: string | null): {
   promptVersions: Record<string, string> | null;
   stepLog: StepLogEntry[];
 } {
-  const defaults = { generationOptions: ["SQL Code"] as GenerationOption[], sampleRowsPerTable: 0, industry: "", discoveryDepth: "balanced", depthConfig: undefined as PipelineRunConfig["depthConfig"], estateScanEnabled: false, assetDiscoveryEnabled: false, industryAutoDetected: false, appVersion: null as string | null, promptVersions: null as Record<string, string> | null, stepLog: [] as StepLogEntry[] };
+  const defaults = {
+    generationOptions: ["SQL Code"] as GenerationOption[],
+    sampleRowsPerTable: 0,
+    industry: "",
+    additionalContext: "",
+    customerMaturity: "developing" as PipelineRunConfig["customerMaturity"],
+    riskPosture: "balanced" as PipelineRunConfig["riskPosture"],
+    transformationHorizon: "half-year" as PipelineRunConfig["transformationHorizon"],
+    discoveryDepth: "balanced",
+    depthConfig: undefined as PipelineRunConfig["depthConfig"],
+    estateScanEnabled: false,
+    assetDiscoveryEnabled: false,
+    industryAutoDetected: false,
+    appVersion: null as string | null,
+    promptVersions: null as Record<string, string> | null,
+    stepLog: [] as StepLogEntry[],
+  };
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw);
@@ -123,6 +151,10 @@ function parseGenerationOptions(raw: string | null): {
         generationOptions: parsed.options ?? ["SQL Code"],
         sampleRowsPerTable: parsed.sampleRowsPerTable ?? 0,
         industry: parsed.industry ?? "",
+        additionalContext: parsed.additionalContext ?? "",
+        customerMaturity: parsed.customerMaturity ?? "developing",
+        riskPosture: parsed.riskPosture ?? "balanced",
+        transformationHorizon: parsed.transformationHorizon ?? "half-year",
         discoveryDepth: parsed.discoveryDepth ?? "balanced",
         depthConfig: parsed.depthConfig ?? undefined,
         estateScanEnabled: parsed.estateScanEnabled === true,
@@ -133,7 +165,9 @@ function parseGenerationOptions(raw: string | null): {
         stepLog: Array.isArray(parsed.stepLog) ? parsed.stepLog : [],
       };
     }
-  } catch { /* fall through */ }
+  } catch (e) {
+    logger.debug("[runs] Failed to parse generation options", { error: String(e) });
+  }
   return defaults;
 }
 
@@ -142,6 +176,10 @@ function serializeGenerationOptions(config: PipelineRunConfig): string {
     options: config.generationOptions,
     sampleRowsPerTable: config.sampleRowsPerTable,
     industry: config.industry,
+    additionalContext: config.additionalContext,
+    customerMaturity: config.customerMaturity,
+    riskPosture: config.riskPosture,
+    transformationHorizon: config.transformationHorizon,
     discoveryDepth: config.discoveryDepth,
     depthConfig: config.depthConfig ?? null,
     estateScanEnabled: config.estateScanEnabled,
@@ -182,7 +220,7 @@ export async function createRun(
     });
   });
 
-  archiveCurrentPromptTemplates().catch(() => {});
+  archiveCurrentPromptTemplates().catch((e) => logger.warn("[runs] Failed to archive prompt templates", { error: String(e) }));
 }
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
@@ -234,6 +272,31 @@ export async function updateRunStatus(
 
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.update({ where: { runId }, data });
+  });
+}
+
+export async function failOrphanedRunningRun(
+  runId: string,
+  activeRunIds: string[]
+): Promise<boolean> {
+  return withPrisma(async (prisma) => {
+    if (activeRunIds.includes(runId)) return false;
+
+    const result = await prisma.forgeRun.updateMany({
+      where: {
+        runId,
+        status: "running",
+      },
+      data: {
+        status: "failed",
+        errorMessage:
+          "Run was interrupted by app restart or deployment. Please retry or resume this run.",
+        statusMessage:
+          "Run interrupted by app restart/deployment. Please retry or resume.",
+        completedAt: new Date(),
+      },
+    });
+    return result.count > 0;
   });
 }
 
@@ -343,7 +406,9 @@ export async function updateRunIndustry(
     try {
       genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
       if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
-    } catch { /* fall through */ }
+    } catch (e) {
+      logger.debug("[runs] Failed to parse generationOptions", { runId, error: String(e) });
+    }
 
     genOpts.industry = industry;
     genOpts.industryAutoDetected = autoDetected;
@@ -376,7 +441,8 @@ export async function getRunFilteredTables(
       return classifications
         .filter((c) => c.classification === "business")
         .map((c) => c.fqn);
-    } catch {
+    } catch (e) {
+      logger.debug("[runs] Failed to parse filteredTablesJson", { runId, error: String(e) });
       return null;
     }
   });
@@ -400,7 +466,9 @@ export async function updateRunStepLog(
     try {
       genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
       if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
-    } catch { /* fall through */ }
+    } catch (e) {
+      logger.debug("[runs] Failed to parse generationOptions", { runId, error: String(e) });
+    }
 
     const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog)
       ? genOpts.stepLog

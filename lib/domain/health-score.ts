@@ -24,15 +24,42 @@ interface HealthRule {
   recommendation: string;
 }
 
+interface HealthThresholds {
+  optimizeWindowDays: number;
+  vacuumWindowDays: number;
+  staleWriteDays: number;
+  staleAccessDays: number;
+  smallFileBytes: number;
+  highPartitionCount: number;
+  veryLargeRowCount: number;
+}
+
+function readIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export const HEALTH_THRESHOLDS: HealthThresholds = {
+  optimizeWindowDays: readIntEnv("FORGE_HEALTH_OPTIMIZE_WINDOW_DAYS", 30),
+  vacuumWindowDays: readIntEnv("FORGE_HEALTH_VACUUM_WINDOW_DAYS", 30),
+  staleWriteDays: readIntEnv("FORGE_HEALTH_STALE_WRITE_DAYS", 90),
+  staleAccessDays: readIntEnv("FORGE_HEALTH_STALE_ACCESS_DAYS", 90),
+  smallFileBytes: readIntEnv("FORGE_HEALTH_SMALL_FILE_BYTES", 33_554_432),
+  highPartitionCount: readIntEnv("FORGE_HEALTH_HIGH_PARTITION_COUNT", 100),
+  veryLargeRowCount: readIntEnv("FORGE_HEALTH_VERY_LARGE_ROW_COUNT", 1_000_000_000),
+};
+
 const HEALTH_RULES: HealthRule[] = [
   {
     id: "no_optimize_30d",
     deduction: 15,
     check: (_, h) => {
       if (!h || !h.lastOptimizeTimestamp) return true;
-      return daysSince(h.lastOptimizeTimestamp) > 30;
+      return daysSince(h.lastOptimizeTimestamp) > HEALTH_THRESHOLDS.optimizeWindowDays;
     },
-    issue: "No OPTIMIZE run in the last 30 days",
+    issue: `No OPTIMIZE run in the last ${HEALTH_THRESHOLDS.optimizeWindowDays} days`,
     recommendation: "Schedule regular OPTIMIZE to compact small files and improve query performance.",
   },
   {
@@ -40,9 +67,9 @@ const HEALTH_RULES: HealthRule[] = [
     deduction: 15,
     check: (_, h) => {
       if (!h || !h.lastVacuumTimestamp) return true;
-      return daysSince(h.lastVacuumTimestamp) > 30;
+      return daysSince(h.lastVacuumTimestamp) > HEALTH_THRESHOLDS.vacuumWindowDays;
     },
-    issue: "No VACUUM run in the last 30 days",
+    issue: `No VACUUM run in the last ${HEALTH_THRESHOLDS.vacuumWindowDays} days`,
     recommendation: "Schedule regular VACUUM to remove stale data files and reduce storage costs.",
   },
   {
@@ -51,9 +78,9 @@ const HEALTH_RULES: HealthRule[] = [
     check: (d) => {
       if (!d.sizeInBytes || !d.numFiles || d.numFiles === 0) return false;
       const avgFileSize = d.sizeInBytes / d.numFiles;
-      return avgFileSize < 33_554_432; // 32MB
+      return avgFileSize < HEALTH_THRESHOLDS.smallFileBytes;
     },
-    issue: "Small file problem detected (average file size < 32MB)",
+    issue: `Small file problem detected (average file size < ${Math.round(HEALTH_THRESHOLDS.smallFileBytes / (1024 * 1024))}MB)`,
     recommendation: "Run OPTIMIZE to compact small files. Consider enabling auto-optimize for streaming tables.",
   },
   {
@@ -66,8 +93,8 @@ const HEALTH_RULES: HealthRule[] = [
   {
     id: "high_partition_count",
     deduction: 10,
-    check: (d) => d.partitionColumns.length > 100,
-    issue: "Extremely high partition column count (> 100)",
+    check: (d) => d.partitionColumns.length > HEALTH_THRESHOLDS.highPartitionCount,
+    issue: `Extremely high partition column count (> ${HEALTH_THRESHOLDS.highPartitionCount})`,
     recommendation: "Review partitioning strategy. Consider liquid clustering for better performance.",
   },
   {
@@ -75,9 +102,9 @@ const HEALTH_RULES: HealthRule[] = [
     deduction: 15,
     check: (_, h) => {
       if (!h || !h.lastWriteTimestamp) return false; // Can't determine staleness without history
-      return daysSince(h.lastWriteTimestamp) > 90;
+      return daysSince(h.lastWriteTimestamp) > HEALTH_THRESHOLDS.staleWriteDays;
     },
-    issue: "Stale data: no writes in the last 90 days",
+    issue: `Stale data: no writes in the last ${HEALTH_THRESHOLDS.staleWriteDays} days`,
     recommendation: "Verify if this table is still actively used. Consider archiving or dropping if abandoned.",
   },
   {
@@ -85,9 +112,9 @@ const HEALTH_RULES: HealthRule[] = [
     deduction: 10,
     check: (d) => {
       if (!d.lastAccess || d.lastAccess === "UNKNOWN") return false;
-      return daysSince(d.lastAccess) > 90;
+      return daysSince(d.lastAccess) > HEALTH_THRESHOLDS.staleAccessDays;
     },
-    issue: "Table not accessed in the last 90 days",
+    issue: `Table not accessed in the last ${HEALTH_THRESHOLDS.staleAccessDays} days`,
     recommendation: "This table has not been read or queried recently. Verify it is still needed or consider archiving.",
   },
   {
@@ -125,9 +152,9 @@ const HEALTH_RULES: HealthRule[] = [
     deduction: 5,
     check: (d) => {
       if (d.numRows == null) return false;
-      return d.numRows > 1_000_000_000;
+      return d.numRows > HEALTH_THRESHOLDS.veryLargeRowCount;
     },
-    issue: "Very large table (> 1 billion rows)",
+    issue: `Very large table (> ${HEALTH_THRESHOLDS.veryLargeRowCount.toLocaleString()} rows)`,
     recommendation: "Tables of this scale require careful partitioning, clustering, and maintenance scheduling. Review OPTIMIZE/VACUUM cadence and consider archiving old data.",
   },
 ];

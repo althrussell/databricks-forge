@@ -77,9 +77,12 @@ export async function POST(request: NextRequest) {
     if (mode === "fast") {
       try {
         const result = await runFastGenieEngine({ tables, config });
+        const quality = result.recommendation.quality;
         return NextResponse.json({
           status: "completed",
           mode: "fast",
+          quality,
+          gateDecision: quality?.gateDecision ?? "allow",
           result: { recommendation: result.recommendation, mode: "fast" },
         });
       } catch (err) {
@@ -120,7 +123,13 @@ export async function POST(request: NextRequest) {
         const job = jobs.get(jobId);
         if (job) {
           job.status = "completed";
-          job.message = "Generation complete";
+          const gateDecision = result.recommendation.quality?.gateDecision ?? "allow";
+          const qualityWarnings = result.recommendation.quality?.degradedReasons.length ?? 0;
+          job.message = gateDecision === "block"
+            ? "Generation complete: deployment blocked by quality gate"
+            : qualityWarnings > 0
+              ? `Generation complete with ${qualityWarnings} warning${qualityWarnings === 1 ? "" : "s"}`
+              : "Generation complete";
           job.percent = 100;
           job.completedAt = Date.now();
           job.result = { recommendation: result.recommendation, mode: "full" };

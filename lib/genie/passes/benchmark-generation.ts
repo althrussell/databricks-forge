@@ -19,7 +19,7 @@ import { mapWithConcurrency } from "../concurrency";
 const TEMPERATURE = 0.1;
 const BENCHMARKS_PER_BATCH = 4;
 const BATCH_SIZE = 3;
-const BATCH_CONCURRENCY = 3;
+const BATCH_CONCURRENCY = 10;
 
 interface JoinSpecInput {
   leftTable: string;
@@ -178,13 +178,13 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 8192,
+    maxTokens: 32768,
     responseFormat: "json_object",
     signal,
   });
 
   const content = result.content ?? "";
-  const parsed = parseLLMJson(content) as Record<string, unknown>;
+  const parsed = parseLLMJson(content, "genie:benchmark-generation") as Record<string, unknown>;
   const items: Record<string, unknown>[] = Array.isArray(parsed.benchmarks)
     ? parsed.benchmarks
     : Array.isArray(parsed) ? parsed : [];

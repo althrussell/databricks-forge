@@ -1,22 +1,29 @@
 /**
- * Factory-reset helper — deletes all application data from Lakebase.
+ * Factory-reset helper — deletes ALL application data from Lakebase.
  *
- * Deleting all ForgeRun rows cascades to 10+ child tables (use cases,
+ * Deleting ForgeRun rows cascades to 10+ child tables (use cases,
  * exports, prompt logs, Genie data, dashboards, background jobs, etc.).
- * Environment scans are deleted explicitly first because standalone
- * scans (runId = null) are not linked to any run and would survive
- * the cascade. Scan children (details, histories, lineage, insights)
- * cascade from the scan. The remaining standalone tables are wiped last.
+ * Environment scans cascade to details, histories, lineage, and insights.
  *
- * The forge_embeddings table (pgvector, managed outside Prisma) and the
- * forge_documents table are also truncated so no stale vectors or
- * uploaded documents survive a factory reset.
+ * Standalone tables (no cascade parent) are deleted explicitly:
+ * metadata cache, prompt templates, activity logs, outcome maps,
+ * documents, conversations, assistant logs, benchmark records, and
+ * metadata genie spaces.
+ *
+ * The forge_embeddings table (pgvector, managed outside Prisma) is
+ * also truncated so no stale vectors survive a factory reset.
  */
 
 import { withPrisma } from "@/lib/prisma";
+import { cancelAllPipelines } from "@/lib/pipeline/engine";
 import { logger } from "@/lib/logger";
 
 export async function deleteAllData(): Promise<void> {
+  const cancelled = await cancelAllPipelines();
+  if (cancelled > 0) {
+    logger.info("[reset] Cancelled active pipelines before deleting data", { cancelled });
+  }
+
   await withPrisma(async (prisma) => {
     // Truncate the pgvector embeddings table (not managed by Prisma)
     try {
@@ -40,6 +47,8 @@ export async function deleteAllData(): Promise<void> {
       prisma.forgeDocument.deleteMany(),
       prisma.forgeConversation.deleteMany(),
       prisma.forgeAssistantLog.deleteMany(),
+      prisma.forgeBenchmarkRecord.deleteMany(),
+      prisma.forgeMetadataGenieSpace.deleteMany(),
     ]);
   });
 }

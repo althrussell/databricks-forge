@@ -5,11 +5,14 @@
  * then removes duplicates and low-value entries.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
+import { persistManifest } from "@/lib/pipeline/context-manifest";
 import { logger } from "@/lib/logger";
 import {
   ScoreItemSchema,
@@ -20,6 +23,7 @@ import {
 } from "@/lib/validation";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
+import { scoreUseCaseConsultingQuality } from "@/lib/pipeline/usecase-scorecard";
 
 export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, useCases } = ctx;
@@ -33,6 +37,25 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   const industryKpis = run.config.industry
     ? await buildIndustryKPIsPrompt(run.config.industry)
     : "";
+  const benchmarkResult = await buildBenchmarkContextPrompt(
+    run.config.industry || undefined,
+    run.config.customerMaturity,
+  );
+
+  // Persist scoring-step provenance
+  if (runId) {
+    const outcomeMapSections: string[] = [];
+    if (industryKpis) outcomeMapSections.push("kpis");
+    try {
+      await persistManifest(runId, {
+        benchmarks: benchmarkResult.sources,
+        outcomeMap: { industryId: run.config.industry || null, sections: outcomeMapSections },
+        steps: ["scoring"],
+      });
+    } catch (e) {
+      logger.warn("[scoring] persistManifest failed (non-fatal)", { error: e });
+    }
+  }
 
   // Build existing asset context for scoring (higher scores for gap-filling use cases)
   let assetContext = "";
@@ -44,14 +67,25 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   // Step 6a: Score per domain
   const domains = [...new Set(scored.map((uc) => uc.domain))];
   const bcRecord = bc as unknown as Record<string, string>;
+  let failedScoringDomains = 0;
   for (let di = 0; di < domains.length; di++) {
     const domain = domains[di];
     const domainCases = scored.filter((uc) => uc.domain === domain);
     if (runId) await updateRunMessage(runId, `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`);
     try {
-      await scoreDomain(domainCases, bcRecord, run.config.aiModel, industryKpis, runId, assetContext);
+      await scoreDomain(
+        domainCases,
+        bcRecord,
+        run.config.aiModel,
+        industryKpis,
+        runId,
+        assetContext,
+        benchmarkResult.text,
+        `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
+      );
     } catch (error) {
       logger.warn("Scoring failed for domain", { domain, error: error instanceof Error ? error.message : String(error) });
+      failedScoringDomains++;
       // Assign default scores
       domainCases.forEach((uc) => {
         uc.priorityScore = 0.5;
@@ -59,6 +93,12 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         uc.impactScore = 0.5;
         uc.overallScore = 0.5;
       });
+    }
+  }
+  if (failedScoringDomains > 0) {
+    const failureRate = failedScoringDomains / Math.max(domains.length, 1);
+    if (failureRate >= 0.4) {
+      throw new Error(`Scoring failed for ${failedScoringDomains}/${domains.length} domains (>=40%). Failing closed to prevent low-quality output.`);
     }
   }
 
@@ -110,6 +150,12 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   }
 
   // Step 6e: Sort by overall score and re-number with domain prefix
+  // Blend LLM scores with deterministic consulting scorecard signals.
+  for (const uc of scored) {
+    const scorecard = scoreUseCaseConsultingQuality(uc);
+    uc.overallScore = scorecard.blendedScore;
+  }
+
   scored.sort((a, b) => b.overallScore - a.overallScore);
 
   const domainCounters: Record<string, number> = {};
@@ -154,7 +200,9 @@ async function scoreDomain(
   aiModel: string,
   industryKpis: string = "",
   runId?: string,
-  assetContext: string = ""
+  assetContext: string = "",
+  benchmarkContext: string = "",
+  customerProfileContext: string = "",
 ): Promise<void> {
   const renderScoreRow = (uc: UseCase) =>
     `| ${uc.useCaseNo} | ${uc.name} | ${uc.type} | ${uc.analyticsTechnique} | ${uc.statement} |`;
@@ -181,17 +229,20 @@ async function scoreDomain(
         revenue_model: businessContext.revenueModel ?? "",
         industry_kpis: industryKpis,
         asset_context: assetContext,
+        benchmark_context: benchmarkContext,
+        customer_profile_context: customerProfileContext,
         use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
       },
       modelEndpoint: aiModel,
       responseFormat: "json_object",
       runId,
       step: "scoring",
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse, "scoring:score") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse scoring response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -256,11 +307,12 @@ async function deduplicateDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse, "scoring:dedup") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -338,11 +390,12 @@ async function calibrateScoresChunked(
         responseFormat: "json_object",
         runId,
         step: "scoring",
+        maxTokens: 128000,
       });
 
       let rawItems: unknown[];
       try {
-        rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+        rawItems = parseLLMJson(result.rawResponse, "scoring:calibrate") as unknown[];
       } catch (parseErr) {
         logger.warn("Failed to parse calibration chunk JSON", {
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -418,11 +471,12 @@ async function deduplicateCrossDomain(
       responseFormat: "json_object",
       runId,
       step: "scoring",
+      maxTokens: 128000,
     });
 
     let rawItems: unknown[];
     try {
-      rawItems = parseJSONResponse<unknown[]>(result.rawResponse);
+      rawItems = parseLLMJson(result.rawResponse, "scoring:cross-domain-dedup") as unknown[];
     } catch (parseErr) {
       logger.warn("Failed to parse cross-domain dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

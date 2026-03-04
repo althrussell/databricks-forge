@@ -19,6 +19,7 @@ import type {
   SqlSnippetFilter,
   SqlSnippetExpression,
   BenchmarkQuestion,
+  QuestionComplexity,
 } from "@/lib/genie/types";
 import type { IndustryDetectionResult, ViewTarget } from "./types";
 
@@ -60,18 +61,19 @@ export interface BuildMetadataGenieSpaceOpts {
   catalogScope?: string[];
   lineageAccessible?: boolean;
   title?: string;
+  questionComplexity?: QuestionComplexity;
 }
 
 export function buildMetadataGenieSpace(
   opts: BuildMetadataGenieSpaceOpts
 ): SerializedSpace {
-  const { viewTarget, outcomeMap, llmDetection, catalogScope, lineageAccessible } = opts;
+  const { viewTarget, outcomeMap, llmDetection, catalogScope, lineageAccessible, questionComplexity } = opts;
   const prefix = `${viewTarget.catalog}.${viewTarget.schema}`;
   const hasLineage = lineageAccessible === true;
 
   const tables = buildDataSourceTables(prefix, hasLineage);
   const joinSpecs = buildJoinSpecs(prefix);
-  const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection, hasLineage);
+  const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection, hasLineage, questionComplexity);
   const textInstructions = buildTextInstructions(
     outcomeMap,
     llmDetection,
@@ -185,8 +187,10 @@ function buildJoinSpecs(prefix: string): JoinSpec[] {
 export function buildPreviewQuestions(
   outcomeMap: IndustryOutcome | null | undefined,
   llmDetection: IndustryDetectionResult,
-  hasLineage?: boolean
+  hasLineage?: boolean,
+  questionComplexity?: QuestionComplexity,
 ): string[] {
+  const level = questionComplexity ?? "simple";
   const questions: string[] = [];
 
   if (outcomeMap) {
@@ -198,9 +202,18 @@ export function buildPreviewQuestions(
         priorities.add(p.name);
         for (const uc of p.useCases) {
           if (questions.length < 5) {
-            questions.push(
-              `Do we have data to support ${uc.name.toLowerCase()}?`
-            );
+            const name = uc.name.toLowerCase();
+            switch (level) {
+              case "simple":
+                questions.push(`What data do we have for ${name}?`);
+                break;
+              case "medium":
+                questions.push(`Do we have data to support ${name}?`);
+                break;
+              case "complex":
+                questions.push(`What data quality and coverage gaps exist for ${name}?`);
+                break;
+            }
           }
           for (const e of uc.typicalDataEntities ?? []) {
             entities.add(e);
@@ -210,17 +223,37 @@ export function buildPreviewQuestions(
     }
 
     for (const entity of [...entities].slice(0, 4)) {
-      questions.push(`Where is ${entity.toLowerCase()} data stored?`);
+      const e = entity.toLowerCase();
+      switch (level) {
+        case "simple":
+          questions.push(`Where is our ${e} data?`);
+          break;
+        case "medium":
+          questions.push(`Where is ${e} data stored?`);
+          break;
+        case "complex":
+          questions.push(`Which schemas and tables contain ${e} data, and how current is it?`);
+          break;
+      }
     }
 
     for (const priority of [...priorities].slice(0, 3)) {
-      questions.push(
-        `What data supports ${priority.toLowerCase()}?`
-      );
+      const p = priority.toLowerCase();
+      switch (level) {
+        case "simple":
+          questions.push(`What data relates to ${p}?`);
+          break;
+        case "medium":
+          questions.push(`What data supports ${p}?`);
+          break;
+        case "complex":
+          questions.push(`What data assets and lineage paths support ${p}?`);
+          break;
+      }
     }
 
     for (const sv of (outcomeMap.subVerticals ?? []).slice(0, 2)) {
-      questions.push(`What data is specific to ${sv}?`);
+      questions.push(level === "simple" ? `What ${sv} data do we have?` : `What data is specific to ${sv}?`);
     }
   } else if (llmDetection.domains.length > 0) {
     for (const domain of llmDetection.domains.slice(0, 5)) {
@@ -228,19 +261,48 @@ export function buildPreviewQuestions(
     }
   }
 
-  questions.push(
-    "What data do we have?",
-    "Do we have any tables without descriptions?",
-    "What tables might be duplicated across schemas?",
-    "What are the most recently created tables?",
-    "Which schemas have the most tables?"
-  );
+  switch (level) {
+    case "simple":
+      questions.push(
+        "What data do we have?",
+        "Which tables have no description?",
+        "Are any tables duplicated?",
+        "What tables were created recently?",
+        "Which schemas have the most tables?"
+      );
+      break;
+    case "medium":
+      questions.push(
+        "What data do we have?",
+        "Do we have any tables without descriptions?",
+        "What tables might be duplicated across schemas?",
+        "What are the most recently created tables?",
+        "Which schemas have the most tables?"
+      );
+      break;
+    case "complex":
+      questions.push(
+        "What data do we have?",
+        "What data quality issues exist across the estate?",
+        "Which tables have overlapping schemas or redundant structures?",
+        "What are the most recently created tables and who owns them?",
+        "Which schemas have the most tables and what is their lineage coverage?"
+      );
+      break;
+  }
 
   if (hasLineage) {
-    questions.push(
-      "Where does this table get its data from?",
-      "What downstream tables depend on our data?"
-    );
+    switch (level) {
+      case "simple":
+        questions.push("Where does this data come from?", "What depends on this data?");
+        break;
+      case "medium":
+        questions.push("Where does this table get its data from?", "What downstream tables depend on our data?");
+        break;
+      case "complex":
+        questions.push("What is the full upstream lineage for this table?", "What downstream dependencies and impact paths exist?");
+        break;
+    }
   }
 
   return [...new Set(questions)].slice(0, 15);
@@ -249,9 +311,10 @@ export function buildPreviewQuestions(
 function buildSampleQuestions(
   outcomeMap: IndustryOutcome | null | undefined,
   llmDetection: IndustryDetectionResult,
-  hasLineage: boolean
+  hasLineage: boolean,
+  questionComplexity?: QuestionComplexity,
 ): SampleQuestion[] {
-  const unique = buildPreviewQuestions(outcomeMap, llmDetection, hasLineage);
+  const unique = buildPreviewQuestions(outcomeMap, llmDetection, hasLineage, questionComplexity);
   return unique.map((q) => ({
     id: randomUUID(),
     question: [q],

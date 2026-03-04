@@ -311,33 +311,74 @@ async function generateSqlForUseCase(
     return null;
   }
 
-  // Lightweight structure validation
-  const validation = validateSqlOutput(sql, uc.tablesInvolved, involvedColumns);
+  // Strict column validation -- hallucinated columns trigger a fix cycle
+  let currentSql = sql;
+  const validation = validateSqlOutput(currentSql, uc.tablesInvolved, involvedColumns);
   if (!validation.valid) {
-    logger.warn("SQL validation warning", { useCaseId: uc.id, warnings: validation.warnings });
+    logger.warn("SQL validation failed", { useCaseId: uc.id, warnings: validation.warnings });
+  }
+
+  if (validation.unknownColumns.length > 0) {
+    logger.info("Hallucinated columns detected, attempting fix", {
+      useCaseId: uc.id,
+      unknownColumns: validation.unknownColumns,
+    });
+
+    const columnErrorMsg = buildColumnViolationMessage(
+      validation.unknownColumns,
+      involvedColumns,
+      uc.tablesInvolved,
+    );
+
+    const fixedSql = await attemptSqlFix(
+      uc,
+      currentSql,
+      columnErrorMsg,
+      schemaMarkdown,
+      fkMarkdown,
+      aiModel,
+      runId,
+      sampleDataSection
+    );
+
+    if (!fixedSql) {
+      logger.warn("Column fix failed, rejecting SQL", { useCaseId: uc.id });
+      return null;
+    }
+
+    const revalidation = validateSqlOutput(fixedSql, uc.tablesInvolved, involvedColumns);
+    if (revalidation.unknownColumns.length > 0) {
+      logger.warn("Fixed SQL still contains hallucinated columns, rejecting", {
+        useCaseId: uc.id,
+        unknownColumns: revalidation.unknownColumns,
+      });
+      return null;
+    }
+
+    currentSql = fixedSql;
   }
 
   // Attempt to execute the SQL to catch runtime errors; if it fails, try fix prompt
-  const executionError = await trySqlExecution(sql);
+  const executionError = await trySqlExecution(currentSql);
   if (executionError) {
     logger.info("SQL execution failed, attempting fix", { useCaseId: uc.id, error: executionError });
     const fixedSql = await attemptSqlFix(
       uc,
-      sql,
+      currentSql,
       executionError,
       schemaMarkdown,
       fkMarkdown,
       aiModel,
-      runId
+      runId,
+      sampleDataSection
     );
     if (fixedSql) {
       return fixedSql;
     }
-    // Return the original SQL even if fix failed -- it may still be useful
     logger.warn("SQL fix failed, returning original SQL", { useCaseId: uc.id });
   }
 
-  return sql;
+  return currentSql;
 }
 
 /**
@@ -369,7 +410,8 @@ async function attemptSqlFix(
   schemaMarkdown: string,
   fkMarkdown: string,
   aiModel: string,
-  runId?: string
+  runId?: string,
+  sampleDataSection?: string
 ): Promise<string | null> {
   try {
     const result = await executeAIQuery({
@@ -379,6 +421,7 @@ async function attemptSqlFix(
         use_case_name: uc.name,
         directly_involved_schema: schemaMarkdown,
         foreign_key_relationships: fkMarkdown,
+        sample_data_section: sampleDataSection ?? "",
         original_sql: originalSql,
         error_message: errorMessage,
       },
@@ -413,12 +456,48 @@ async function attemptSqlFix(
 }
 
 // ---------------------------------------------------------------------------
+// Column violation error message builder
+// ---------------------------------------------------------------------------
+
+function buildColumnViolationMessage(
+  unknownColumns: string[],
+  knownColumns: ColumnInfo[],
+  tablesInvolved: string[]
+): string {
+  const columnsByTable = new Map<string, string[]>();
+  for (const col of knownColumns) {
+    const existing = columnsByTable.get(col.tableFqn) ?? [];
+    existing.push(col.columnName);
+    columnsByTable.set(col.tableFqn, existing);
+  }
+
+  const validColLines = tablesInvolved.map((fqn) => {
+    const cleanFqn = fqn.replace(/`/g, "");
+    const cols = columnsByTable.get(fqn) ?? columnsByTable.get(cleanFqn) ?? [];
+    return `  ${cleanFqn}: ${cols.join(", ")}`;
+  }).join("\n");
+
+  return [
+    `SCHEMA VIOLATION: SQL references columns that do not exist in the schema: ${unknownColumns.join(", ")}.`,
+    `These columns are hallucinated -- they do NOT exist in any of the involved tables.`,
+    ``,
+    `The ONLY valid columns are:`,
+    validColLines,
+    ``,
+    `Remove ALL references to the non-existent columns listed above. Use ONLY columns`,
+    `from the valid list. Do NOT substitute or guess alternative names -- if no suitable`,
+    `column exists, simplify the query to remove that logic entirely.`,
+  ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // SQL output validation
 // ---------------------------------------------------------------------------
 
 interface SqlValidationResult {
   valid: boolean;
   warnings: string[];
+  unknownColumns: string[];
 }
 
 /**
@@ -506,16 +585,24 @@ function validateSqlOutput(
         unknownCols.push(match[1]);
       }
     }
-    if (unknownCols.length > 1) {
+    const dedupedUnknown = [...new Set(unknownCols)];
+    if (dedupedUnknown.length > 0) {
       warnings.push(
-        `SQL may reference unknown columns: ${[...new Set(unknownCols)].slice(0, 5).join(", ")}`
+        `SQL references unknown columns: ${dedupedUnknown.slice(0, 10).join(", ")}`
       );
     }
+
+    return {
+      valid: warnings.length === 0,
+      warnings,
+      unknownColumns: dedupedUnknown,
+    };
   }
 
   return {
     valid: warnings.length === 0,
     warnings,
+    unknownColumns: [],
   };
 }
 

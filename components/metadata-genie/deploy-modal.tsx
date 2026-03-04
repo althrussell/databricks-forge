@@ -26,6 +26,7 @@ import {
   Rocket,
   ExternalLink,
 } from "lucide-react";
+import { loadSettings } from "@/lib/settings";
 
 type Step = "schema" | "deploying" | "done";
 
@@ -78,6 +79,7 @@ export function MetadataGenieDeployModal({
         body: JSON.stringify({
           id: spaceId,
           viewTarget: { catalog: parts[0], schema: parts[1] },
+          authMode: loadSettings().genieDeployAuthMode,
         }),
       });
 

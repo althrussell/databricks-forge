@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { resilientFetch } from "@/lib/resilient-fetch";
+import { resilientFetchJson, fetchJson } from "@/lib/fetch-json";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  Square,
 } from "lucide-react";
 import { LabelWithTip } from "@/components/ui/info-tip";
 import { RUNS_LIST } from "@/lib/help-text";
@@ -55,6 +56,8 @@ const STATUS_STYLES: Record<string, string> = {
     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   failed:
     "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  cancelled:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
 const PAGE_SIZE = 15;
@@ -86,11 +89,9 @@ export function RunsContent({
     abortRef.current = controller;
 
     try {
-      const res = await resilientFetch("/api/runs?limit=200", {
+      const data = await resilientFetchJson<{ runs: typeof runs }>("/api/runs?limit=200", {
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error("Failed to fetch runs");
-      const data = await res.json();
       setRuns(data.runs);
       setError(null);
     } catch (err) {
@@ -118,15 +119,25 @@ export function RunsContent({
 
   async function handleDelete(runId: string, businessName: string) {
     try {
-      const res = await fetch(`/api/runs/${runId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed to delete run");
-      }
+      await fetchJson(`/api/runs/${runId}`, { method: "DELETE" });
       setRuns((prev) => prev.filter((r) => r.runId !== runId));
       toast.success(`Deleted run for "${businessName}"`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete run");
+    }
+  }
+
+  async function handleStopPipeline(runId: string) {
+    try {
+      const res = await fetch(`/api/runs/${runId}/cancel`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Cancel failed");
+      }
+      toast.success("Pipeline cancellation requested");
+      fetchRuns();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel pipeline");
     }
   }
 
@@ -217,6 +228,7 @@ export function RunsContent({
             <SelectItem value="running">Running</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
         <Select
@@ -299,9 +311,11 @@ export function RunsContent({
                               ? "bg-green-500"
                               : run.status === "failed"
                                 ? "bg-red-500"
-                                : run.status === "running"
-                                  ? "bg-blue-500"
-                                  : undefined
+                                : run.status === "cancelled"
+                                  ? "bg-amber-500"
+                                  : run.status === "running"
+                                    ? "bg-blue-500"
+                                    : undefined
                           }
                         />
                         <span className="text-xs text-muted-foreground">
@@ -322,6 +336,17 @@ export function RunsContent({
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
+                        {run.status === "running" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-amber-600"
+                            onClick={() => handleStopPipeline(run.runId)}
+                          >
+                            <Square className="h-4 w-4" />
+                            <span className="sr-only">Stop</span>
+                          </Button>
+                        )}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button

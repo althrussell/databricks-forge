@@ -29,7 +29,9 @@ import type {
   SqlSnippetMeasure,
   SqlSnippetFilter,
   SqlSnippetExpression,
+  QuestionComplexity,
 } from "./types";
+import { statementToQuestion } from "./engine";
 
 // ---------------------------------------------------------------------------
 // Deterministic ID generator (based on run + domain + index)
@@ -194,7 +196,8 @@ function isValidTableFqn(identifier: string): boolean {
 export function generateGenieRecommendations(
   run: PipelineRun,
   useCases: UseCase[],
-  metadata: MetadataSnapshot
+  metadata: MetadataSnapshot,
+  questionComplexity?: QuestionComplexity,
 ): GenieSpaceRecommendation[] {
   // Group use cases by domain
   const domainMap = new Map<string, UseCase[]>();
@@ -279,7 +282,7 @@ export function generateGenieRecommendations(
       .slice(0, 5)
       .map((uc, i) => ({
         id: makeId(run.runId, `${domain}_q`, i),
-        question: [statementToQuestion(uc.statement)],
+        question: [statementToQuestion(uc.statement, questionComplexity)],
       }));
 
     // 6. Example SQL queries (up to 10 with generated SQL)
@@ -382,19 +385,6 @@ export function generateGenieRecommendations(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert a use case problem statement into a natural language question. */
-function statementToQuestion(statement: string): string {
-  const s = statement.trim();
-  if (s.endsWith("?")) return s;
-  // Common patterns: "Identify X", "Detect Y", "Analyse Z"
-  if (/^(identify|detect|find|discover|determine)/i.test(s)) {
-    return `How can we ${s.charAt(0).toLowerCase() + s.slice(1)}?`;
-  }
-  if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) {
-    return `${s}?`;
-  }
-  return `What insights can we gain from: ${s}?`;
-}
 
 function buildDescription(
   run: PipelineRun,

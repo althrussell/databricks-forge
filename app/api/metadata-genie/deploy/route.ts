@@ -16,19 +16,25 @@ import {
   updateMetadataGenieOnDeploy,
 } from "@/lib/lakebase/metadata-genie";
 import { logger } from "@/lib/logger";
-import type { MetadataGenieDeployConfig } from "@/lib/metadata-genie/types";
+import { validateIdentifier } from "@/lib/validation";
+import { DeployBodySchema } from "@/lib/metadata-genie/schemas";
 import type { GenieAuthMode } from "@/lib/settings";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as MetadataGenieDeployConfig & {
-      authMode?: GenieAuthMode;
-    };
-    const { id, viewTarget, authMode } = body;
+    const raw = await request.json();
+    const parsed = DeployBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }, { status: 400 });
+    }
+    const { id, viewTarget, authMode } = parsed.data as typeof parsed.data & { authMode?: GenieAuthMode };
 
-    if (!id || !viewTarget?.catalog || !viewTarget?.schema) {
+    try {
+      validateIdentifier(viewTarget.catalog, "viewTarget.catalog");
+      validateIdentifier(viewTarget.schema, "viewTarget.schema");
+    } catch {
       return NextResponse.json(
-        { error: "id, viewTarget.catalog, and viewTarget.schema are required" },
+        { error: "viewTarget.catalog or viewTarget.schema contains invalid characters" },
         { status: 400 }
       );
     }
@@ -72,9 +78,11 @@ export async function POST(request: NextRequest) {
 
     const serializedSpaceJson = JSON.stringify(serializedSpace);
 
-    // 2. Deploy views
+    // 2. Deploy views (identifiers already validated above)
+    const safeCat = validateIdentifier(viewTarget.catalog, "viewTarget.catalog");
+    const safeSch = validateIdentifier(viewTarget.schema, "viewTarget.schema");
     await executeSQL(
-      `CREATE SCHEMA IF NOT EXISTS \`${viewTarget.catalog}\`.\`${viewTarget.schema}\``
+      `CREATE SCHEMA IF NOT EXISTS \`${safeCat}\`.\`${safeSch}\``
     );
 
     const ddlStatements = generateViewDDL({

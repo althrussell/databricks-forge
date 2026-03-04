@@ -412,6 +412,50 @@ export function composeDocumentChunk(
 }
 
 // ---------------------------------------------------------------------------
+// 13. benchmark_context
+// ---------------------------------------------------------------------------
+
+interface BenchmarkInput {
+  kind: string;
+  title: string;
+  summary: string;
+  industry?: string | null;
+  region?: string | null;
+  publisher: string;
+  sourceUrl: string;
+}
+
+export function composeBenchmarkContext(b: BenchmarkInput): string {
+  return lines([
+    `Benchmark: ${b.title}`,
+    `Kind: ${b.kind}`,
+    b.industry ? `Industry: ${b.industry}` : null,
+    b.region ? `Region: ${b.region}` : null,
+    `Summary: ${b.summary}`,
+    `Publisher: ${b.publisher}`,
+    `Source: ${b.sourceUrl}`,
+  ]);
+}
+
+/**
+ * Compose a text chunk from real source content for embedding.
+ * Prefixed with benchmark metadata so the retriever has context.
+ */
+export function composeBenchmarkSourceChunk(
+  chunk: string,
+  benchmark: { title: string; kind: string; industry?: string | null; publisher: string },
+  chunkIndex: number,
+): string {
+  return lines([
+    `Benchmark source: ${benchmark.title} (${benchmark.kind})`,
+    benchmark.industry ? `Industry: ${benchmark.industry}` : null,
+    `Publisher: ${benchmark.publisher}`,
+    `Chunk ${chunkIndex + 1}:`,
+    chunk,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from "next/server";
-import { executeSql } from "@/lib/assistant/sql-proposer";
+import { executeSql, validateSql } from "@/lib/assistant/sql-proposer";
 import { logger } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +21,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await executeSql(sql.trim());
+    const statement = sql.trim();
+    const validationError = await validateSql(statement);
+    if (validationError) {
+      return Response.json(
+        { success: false, error: `SQL validation failed: ${validationError}` },
+        { status: 400 },
+      );
+    }
+
+    const result = await executeSql(statement);
 
     return Response.json(result);
   } catch (err) {

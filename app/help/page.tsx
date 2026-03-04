@@ -238,7 +238,7 @@ const FAQ = [
   {
     question: "What embedding endpoint do I need?",
     answer:
-      "Forge AI uses the databricks-gte-large-en model (1024-dimensional vectors) via a Model Serving endpoint. Configure the endpoint name in Settings under Semantic Search & RAG. When enabled, it powers Ask Forge's RAG, Knowledge Base, semantic search in the Estate tab, and run comparison overlap analysis.",
+      "Forge AI uses the databricks-qwen3-embedding-0-6b model (1024-dimensional vectors) via a Model Serving endpoint. Configure the endpoint name in Settings under Semantic Search & RAG. When enabled, it powers Ask Forge's RAG, Knowledge Base, semantic search in the Estate tab, and run comparison overlap analysis.",
   },
   {
     question: "Is my data sent outside my workspace?",

@@ -13,6 +13,7 @@ import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type {
   TrustedAssetQuery,
   EntityMatchingCandidate,
+  QuestionComplexity,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
@@ -20,7 +21,7 @@ import { mapWithConcurrency } from "../concurrency";
 
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 3;
-const BATCH_CONCURRENCY = 3;
+const BATCH_CONCURRENCY = 10;
 
 export interface JoinSpecInput {
   leftTable: string;
@@ -37,6 +38,7 @@ export interface TrustedAssetsInput {
   entityCandidates: EntityMatchingCandidate[];
   joinSpecs: JoinSpecInput[];
   endpoint: string;
+  questionComplexity?: QuestionComplexity;
   signal?: AbortSignal;
 }
 
@@ -47,7 +49,7 @@ export interface TrustedAssetsOutput {
 export async function runTrustedAssetAuthoring(
   input: TrustedAssetsInput
 ): Promise<TrustedAssetsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, entityCandidates, joinSpecs, endpoint, signal } = input;
+  const { tableFqns, metadata, allowlist, useCases, entityCandidates, joinSpecs, endpoint, questionComplexity, signal } = input;
 
   const topUseCases = useCases
     .filter((uc) => uc.sqlCode && uc.sqlStatus === "generated")
@@ -76,7 +78,7 @@ export async function runTrustedAssetAuthoring(
     batches.map((batch) => async () => {
       try {
         return await processTrustedAssetBatch(
-          batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
+          batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, questionComplexity, signal
         );
       } catch (err) {
         logger.warn("Trusted asset batch failed, continuing with remaining batches", {
@@ -117,6 +119,17 @@ function buildJoinBlock(joinSpecs: JoinSpecInput[]): string {
   return `### TABLE RELATIONSHIPS (use these exact join conditions)\n${lines.join("\n")}`;
 }
 
+function getQuestionRules(complexity: QuestionComplexity): string {
+  switch (complexity) {
+    case "simple":
+      return "\nQUESTION RULES:\n- Write each question as a short, natural question a business user would ask (under 10 words).\n- Do NOT reference column names, table names, or SQL concepts in the question text.\n- The SQL can be complex; the question must be simple.\n";
+    case "medium":
+      return "\nQUESTION RULES:\n- Write each question as a clear business question (under 15 words).\n- Reference business concepts, not raw column or table names.\n";
+    case "complex":
+      return "";
+  }
+}
+
 async function processTrustedAssetBatch(
   batch: UseCase[],
   schemaBlock: string,
@@ -124,6 +137,7 @@ async function processTrustedAssetBatch(
   joinBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
+  questionComplexity?: QuestionComplexity,
   signal?: AbortSignal,
 ): Promise<TrustedAssetsOutput> {
   const MAX_SQL_CHARS = 3000;
@@ -160,7 +174,7 @@ QUANTITY RULES:
 - Do NOT create any SQL functions (UDFs). Only produce parameterized queries.
 
 ${DATABRICKS_SQL_RULES_COMPACT}
-
+${getQuestionRules(questionComplexity ?? "simple")}
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
 }`;
@@ -185,13 +199,13 @@ Create parameterized queries from these examples.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 8192,
+    maxTokens: 32768,
     responseFormat: "json_object",
     signal,
   });
 
   const content = result.content ?? "";
-  const parsed = parseLLMJson(content) as Record<string, unknown>;
+  const parsed = parseLLMJson(content, "genie:trusted-assets") as Record<string, unknown>;
 
   const queries: TrustedAssetQuery[] = parseArray(parsed.queries)
     .map((q) => ({

@@ -83,7 +83,7 @@ export function CatalogBrowser({
   const [catalogs, setCatalogs] = useState<CatalogNode[]>([]);
   const [phase, setPhase] = useState<BrowserPhase>("warming-up");
   const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null); // reads `code` from API responses
   const [search, setSearch] = useState("");
   const [warmupElapsed, setWarmupElapsed] = useState(0);
   const warmupStartRef = useRef<number>(Date.now());
@@ -139,7 +139,7 @@ export function CatalogBrowser({
 
       if (!res.ok) {
         setError(data.error ?? "Failed to fetch catalogs");
-        setErrorCode(data.errorCode ?? "WAREHOUSE_UNAVAILABLE");
+        setErrorCode(data.code ?? data.errorCode ?? "WAREHOUSE_UNAVAILABLE");
         setPhase("error");
         return;
       }

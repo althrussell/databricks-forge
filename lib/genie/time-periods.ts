@@ -59,7 +59,7 @@ export function generateTimePeriods(
 
   for (const col of dateColumns) {
     const tbl = col.tableFqn;
-    const colRef = `${tbl}.${col.columnName}`;
+    const colRef = `${tbl}.${quoteIdent(col.columnName)}`;
     const label = humanize(col.columnName);
 
     filters.push(
@@ -219,6 +219,11 @@ function buildFiscalYearDimension(colRef: string, fiscalStart: number): string {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Backtick-quote an identifier if it contains non-word characters (spaces, parens, etc.). */
+function quoteIdent(name: string): string {
+  return /^\w+$/.test(name) ? name : `\`${name}\``;
+}
 
 function humanize(columnName: string): string {
   return columnName

@@ -8,6 +8,7 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import {
   detectIndustryFromContext,
   getIndustryOutcomeAsync,
@@ -46,12 +47,12 @@ export async function detectIndustry(
       responseFormat: "json_object",
     });
 
-    const parsed = JSON.parse(result.rawResponse);
+    const parsed = parseLLMJson(result.rawResponse, "metadata-genie:industry-detect") as Record<string, unknown>;
     llmDetection = {
-      industries: parsed.industries ?? "",
-      domains: Array.isArray(parsed.domains) ? parsed.domains : [],
+      industries: (parsed.industries as string) ?? "",
+      domains: Array.isArray(parsed.domains) ? parsed.domains as string[] : [],
       duplication_notes: Array.isArray(parsed.duplication_notes)
-        ? parsed.duplication_notes
+        ? parsed.duplication_notes as string[]
         : [],
     };
   } catch (err) {

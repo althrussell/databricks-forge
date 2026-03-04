@@ -18,7 +18,7 @@ PowerPoint, or deployed as SQL notebooks.
 | Language       | TypeScript (strict)                                  |
 | SQL Execution  | Databricks SQL Statement Execution API via SQL Warehouse |
 | LLM Calls      | Databricks Model Serving REST API (chat completions) |
-| Embeddings     | Databricks Model Serving (databricks-gte-large-en, 1024-dim) |
+| Embeddings     | Databricks Model Serving (databricks-qwen3-embedding-0-6b, 1024-dim) |
 | Vector Search  | pgvector extension in Lakebase (HNSW index)          |
 | Persistence    | Lakebase (Unity Catalog managed tables)              |
 | Deployment     | Databricks Apps (auto-auth via env vars)             |
@@ -31,7 +31,7 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - `DATABRICKS_HOST` and token are injected by the platform.
 - `DATABRICKS_APP_PORT` controls the listen port (fallback: 3000).
 - SQL Warehouse is bound as an app resource (no hardcoded warehouse IDs).
-- Embedding endpoint (`serving-endpoint-embedding`) defaults to `databricks-gte-large-en`.
+- Embedding endpoint (`serving-endpoint-embedding`) defaults to `databricks-qwen3-embedding-0-6b`.
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
 
 ## Folder Contract
@@ -177,7 +177,7 @@ API routes:
 | Security headers   | Via `next.config.ts` `headers()` function                   |
 | Versioning         | `package.json` version in `/api/health`, sidebar, run metadata |
 | Model routing      | `getFastServingEndpoint()` routes classification/enrichment to fast model across all pipelines; falls back to premium if `serving-endpoint-fast` is not configured |
-| Embeddings         | `lib/embeddings/client.ts` -- `databricks-gte-large-en` (1024-dim) via `getEmbeddingEndpoint()`; batched (16/req) with 429/5xx retry |
+| Embeddings         | `lib/embeddings/client.ts` -- `databricks-qwen3-embedding-0-6b` (1024-dim) via `getEmbeddingEndpoint()`; batched (16/req) with 429/5xx retry |
 | Vector search      | `lib/embeddings/store.ts` -- pgvector in Lakebase; `forge_embeddings` table with HNSW index; 12 entity kinds covering all estate + pipeline data |
 | LLM cache + retry  | `lib/genie/llm-cache.ts` -- in-memory SHA-256-keyed cache (10min TTL) with 429/5xx retry |
 | Concurrency        | `lib/genie/concurrency.ts` -- bounded-concurrency utility for parallel domains and batches |

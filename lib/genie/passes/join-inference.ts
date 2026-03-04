@@ -14,6 +14,7 @@ import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import { buildSchemaContextBlock, isValidTable, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import { canonicalKeyGroups } from "../key-synonyms";
 
 const TEMPERATURE = 0.1;
 
@@ -65,11 +66,18 @@ Rules:
 
 Return JSON: { "joins": [{ "leftTable": "catalog.schema.table1", "rightTable": "catalog.schema.table2", "joinCondition": "table1.col = table2.col" }] }`;
 
+  const synonymHints = Object.entries(canonicalKeyGroups())
+    .map(([canonical, variants]) => `- ${canonical}: ${variants.join(", ")}`)
+    .join("\n");
+
   const userMessage = `${schemaBlock}
 
 ${existingList ? `### ALREADY KNOWN RELATIONSHIPS (do not duplicate)\n${existingList}\n` : ""}
 
-Identify additional table join relationships from column naming patterns.`;
+Identify additional table join relationships from column naming patterns.
+
+### KEY SYNONYM HINTS
+${synonymHints}`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemMessage },
@@ -80,13 +88,13 @@ Identify additional table join relationships from column naming patterns.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 2048,
+    maxTokens: 8192,
     responseFormat: "json_object",
     signal,
   });
 
   const content = result.content ?? "";
-  const parsed = parseLLMJson(content) as Record<string, unknown>;
+  const parsed = parseLLMJson(content, "genie:join-inference") as Record<string, unknown>;
   const items = Array.isArray(parsed.joins) ? parsed.joins : [];
 
   const joins = (items as Record<string, unknown>[])

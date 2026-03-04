@@ -5,7 +5,8 @@
  * Serving (JSON mode). Each batch processes a subset of tables.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
@@ -13,6 +14,8 @@ import {
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
+import { persistManifest, deriveTags, type EnrichmentTag } from "@/lib/pipeline/context-manifest";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
@@ -21,7 +24,8 @@ import type { PipelineContext, UseCase, UseCaseType, LineageGraph } from "@/lib/
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
-const MAX_CONCURRENT_BATCHES = 2;
+const MAX_CONCURRENT_BATCHES = 8;
+const MAX_GENERATION_RETRIES = 2;
 
 /** Shape of each use case object in the JSON array returned by the LLM. */
 interface UseCaseItem {
@@ -80,6 +84,10 @@ export async function runUsecaseGeneration(
   const industryReferenceUseCases = run.config.industry
     ? await buildReferenceUseCasesPrompt(run.config.industry, run.config.businessDomains)
     : "";
+  const benchmarkResult = await buildBenchmarkContextPrompt(
+    run.config.industry || undefined,
+    run.config.customerMaturity,
+  );
 
   // Load accepted use cases from prior runs as few-shot examples
   let feedbackExamplesSection = "";
@@ -96,6 +104,9 @@ export async function runUsecaseGeneration(
 
   // Retrieve relevant strategy/priority context from knowledge base (RAG)
   let documentContext = "";
+  let docSourceIds: string[] = [];
+  let docKinds: string[] = [];
+  let docChunkCount = 0;
   try {
     const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
     const chunks = await retrieveContext(
@@ -104,9 +115,33 @@ export async function runUsecaseGeneration(
     );
     if (chunks.length > 0) {
       documentContext = "\n\n" + formatRetrievedContext(chunks, 4000);
+      docSourceIds = [...new Set(chunks.map((c) => c.sourceId))];
+      docKinds = [...new Set(chunks.map((c) => c.kind))];
+      docChunkCount = chunks.length;
     }
   } catch {
     // RAG is best-effort
+  }
+
+  // Persist enrichment provenance and derive use-case-level tags
+  const outcomeMapSections: string[] = [];
+  if (industryReferenceUseCases) outcomeMapSections.push("reference_usecases");
+  const stepManifest = {
+    benchmarks: benchmarkResult.sources,
+    outcomeMap: { industryId: run.config.industry || null, sections: outcomeMapSections },
+    documents: { sourceIds: docSourceIds, kinds: docKinds, chunkCount: docChunkCount },
+    steps: ["usecase-generation"],
+  };
+  const enrichmentTags: EnrichmentTag[] = deriveTags({
+    ...stepManifest,
+    outcomeMap: { ...stepManifest.outcomeMap, sections: outcomeMapSections },
+  });
+  if (runId) {
+    try {
+      await persistManifest(runId, stepManifest);
+    } catch (e) {
+      logger.warn("[usecase-generation] persistManifest failed (non-fatal)", { error: e });
+    }
   }
 
   // Estimate base token cost (everything except schema_markdown which varies per batch)
@@ -143,6 +178,9 @@ export async function runUsecaseGeneration(
   });
 
   const allUseCases: UseCase[] = [];
+  let attemptedBatchCalls = 0;
+  let failedBatchCalls = 0;
+  let emptyBatchCalls = 0;
 
   // Process batches with controlled concurrency and cross-batch feedback
   let batchGroupIdx = 0;
@@ -208,6 +246,8 @@ export async function runUsecaseGeneration(
         lineage_context: lineageContext,
         asset_context: assetContext,
         document_context: documentContext,
+        benchmark_context: benchmarkResult.text,
+        customer_profile_context: `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
       };
 
       // Generate both AI and Stats use cases per batch
@@ -223,7 +263,8 @@ export async function runUsecaseGeneration(
           "AI",
           run.runId,
           run.config.aiModel,
-          runId
+          runId,
+          enrichmentTags,
         ),
         generateBatch(
           "STATS_USE_CASE_GEN_PROMPT",
@@ -236,16 +277,23 @@ export async function runUsecaseGeneration(
           "Statistical",
           run.runId,
           run.config.aiModel,
-          runId
+          runId,
+          enrichmentTags,
         ),
       ];
     });
+    attemptedBatchCalls += batchPromises.length;
 
     const results = await Promise.allSettled(batchPromises);
     for (const result of results) {
       if (result.status === "fulfilled") {
-        allUseCases.push(...result.value);
+        if (result.value.length > 0) {
+          allUseCases.push(...result.value);
+        } else {
+          emptyBatchCalls++;
+        }
       } else {
+        failedBatchCalls++;
         logger.warn("Use case generation batch failed", { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
       }
     }
@@ -257,6 +305,20 @@ export async function runUsecaseGeneration(
   });
 
   if (runId) await updateRunMessage(runId, `Generated ${allUseCases.length} raw use cases from ${tables.length} tables`);
+
+  if (allUseCases.length === 0 && tables.length > 0) {
+    const allRequestsFailed = attemptedBatchCalls > 0 && failedBatchCalls === attemptedBatchCalls;
+    const message = allRequestsFailed
+      ? "Use case generation failed for all model requests. Please retry this run."
+      : "No use cases were generated from model responses. Please retry this run.";
+    logger.error("Use case generation produced no output", {
+      tableCount: tables.length,
+      attemptedBatchCalls,
+      failedBatchCalls,
+      emptyBatchCalls,
+    });
+    throw new Error(message);
+  }
 
   logger.info("Use case generation complete", { useCaseCount: allUseCases.length });
 
@@ -286,7 +348,8 @@ async function generateBatch(
   type: UseCaseType,
   useCaseRunId: string,
   aiModel: string,
-  logRunId?: string
+  logRunId?: string,
+  tags?: EnrichmentTag[],
 ): Promise<UseCase[]> {
   const result = await executeAIQuery({
     promptKey,
@@ -295,12 +358,22 @@ async function generateBatch(
     responseFormat: "json_object",
     runId: logRunId,
     step: "usecase-generation",
+    retries: MAX_GENERATION_RETRIES,
+    maxTokens: 128000,
   });
+
+  if (result.finishReason === "length") {
+    logger.warn("Use case generation response truncated, attempting recovery", {
+      promptKey,
+      completionTokens: result.tokenUsage?.completionTokens,
+    });
+  }
 
   let items: UseCaseItem[];
   try {
-    const parsed = parseJSONResponse<UseCaseItem[] | { use_cases: UseCaseItem[] }>(result.rawResponse);
-    // Handle both direct array and wrapped object responses
+    const parsed = parseLLMJson(result.rawResponse, "usecase-generation") as
+      | UseCaseItem[]
+      | { use_cases: UseCaseItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.use_cases ?? []);
   } catch (parseErr) {
     logger.warn("Failed to parse use case generation JSON", {
@@ -311,7 +384,12 @@ async function generateBatch(
   }
 
   return items
-    .filter((item) => item.name)
+    .filter((item) =>
+      typeof item.name === "string" &&
+      typeof item.statement === "string" &&
+      typeof item.business_value === "string" &&
+      typeof item.analytics_technique === "string"
+    )
     .map((item) => {
       // tables_involved can be an array (expected) or comma-separated string (fallback)
       let tablesInvolved: string[];
@@ -327,14 +405,14 @@ async function generateBatch(
         id: uuidv4(),
         runId: useCaseRunId,
         useCaseNo: item.no ?? 0,
-        name: item.name ?? "",
+        name: item.name?.trim() ?? "",
         type: ((item.type?.trim() as UseCaseType) || type),
-        analyticsTechnique: item.analytics_technique ?? "",
-        statement: item.statement ?? "",
-        solution: item.solution ?? "",
-        businessValue: item.business_value ?? "",
-        beneficiary: item.beneficiary ?? "",
-        sponsor: item.sponsor ?? "",
+        analyticsTechnique: item.analytics_technique?.trim() ?? "",
+        statement: item.statement?.trim() ?? "",
+        solution: item.solution?.trim() ?? "",
+        businessValue: item.business_value?.trim() ?? "",
+        beneficiary: item.beneficiary?.trim() ?? "",
+        sponsor: item.sponsor?.trim() ?? "",
         domain: "", // assigned in Step 5
         subdomain: "", // assigned in Step 5
         tablesInvolved,
@@ -350,6 +428,7 @@ async function generateBatch(
         sqlStatus: null,
         feedback: null,
         feedbackAt: null,
+        enrichmentTags: tags && tags.length > 0 ? tags : null,
       };
     });
 }

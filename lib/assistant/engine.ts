@@ -8,6 +8,7 @@
 
 import { classifyIntent, type AssistantIntent, type IntentClassification } from "./intent";
 import { buildAssistantContext, buildSourceReferences, type AssistantContext, type TableEnrichment } from "./context-builder";
+import { extractTableFqnsFromText, mergeTableReferenceLists } from "./context-builder";
 import { buildAssistantMessages, type AssistantPersona } from "./prompts";
 import { extractSqlBlocks } from "./sql-proposer";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
@@ -16,6 +17,8 @@ import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { chatCompletionStream, type StreamCallback, type TokenUsage } from "@/lib/dbx/model-serving";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
+import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
+import { scoreAssistantResponse } from "@/lib/assistant/evaluation";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -75,6 +78,21 @@ export interface AssistantResponse {
   logId: string | null;
 }
 
+function enforceSourceCitations(answer: string, sources: SourceCard[]): string {
+  if (sources.length === 0) return answer;
+  if (/\[\d+\]/.test(answer)) return answer;
+
+  const sourceLines = sources
+    .slice(0, 3)
+    .map((s) => `[${s.index}] ${s.label} (${s.kind})`)
+    .join("\n");
+  return `${answer}\n\n### Sources\n${sourceLines}`;
+}
+
+export function inferTablesFromSqlBlocks(sqlBlocks: string[]): string[] {
+  return extractTableFqnsFromText(sqlBlocks.join("\n"));
+}
+
 // ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
@@ -92,6 +110,7 @@ export async function runAssistantEngine(
   sessionId?: string,
   userId?: string | null,
   persona: AssistantPersona = "business",
+  signal?: AbortSignal,
 ): Promise<AssistantResponse> {
   const start = Date.now();
 
@@ -166,13 +185,20 @@ export async function runAssistantEngine(
         { role: "user", content: user },
       ],
       temperature: 0.3,
-      maxTokens: 4096,
+      maxTokens: 16384,
+      signal,
     },
     onChunk,
   );
 
-  const answer = llmResponse.content;
+  let answer = llmResponse.content;
+  if (context.lowConfidenceRetrieval) {
+    answer = `${answer}\n\n### Confidence Note\nRetrieved context relevance is weak for this question. Validate critical decisions against source metadata before execution.`;
+  }
+  answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
+  const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);
+  const reconciledTables = mergeTableReferenceLists(context.tables, sqlTables);
   const dashboardProposal = extractDashboardIntent(answer);
 
   let existingDashboards: ExistingDashboard[] = [];
@@ -218,9 +244,10 @@ export async function runAssistantEngine(
     }
   }
 
+  const conversationSummary = buildConversationSummary(history, question);
   const actions = buildActions(
-    intentResult.intent, sqlBlocks, dashboardProposal, context.tables,
-    genieSpaceMatch, context.tableEnrichments, question,
+    intentResult.intent, sqlBlocks, dashboardProposal, reconciledTables,
+    genieSpaceMatch, context.tableEnrichments, conversationSummary,
   );
 
   const durationMs = Date.now() - start;
@@ -228,10 +255,17 @@ export async function runAssistantEngine(
   logger.info("[assistant/engine] Response complete", {
     intent: intentResult.intent,
     sourceCount: sources.length,
+    tableCount: reconciledTables.length,
     sqlBlockCount: sqlBlocks.length,
     actionCount: actions.length,
     durationMs,
   });
+  if (sources.length > 0 && reconciledTables.length === 0) {
+    logger.warn("[assistant/engine] Sources present but no referenced tables inferred", {
+      sourceCount: sources.length,
+      sqlBlockCount: sqlBlocks.length,
+    });
+  }
 
   let logId: string | null = null;
   try {
@@ -249,9 +283,38 @@ export async function runAssistantEngine(
       totalTokens: llmResponse.usage?.totalTokens,
       userId: userId ?? undefined,
       sources,
-      referencedTables: context.tables,
+      referencedTables: reconciledTables,
       persona,
     });
+    const evalResult = scoreAssistantResponse({
+      question,
+      answer,
+      sourceCount: sources.length,
+      retrievalTopScore: context.retrievalTopScore,
+      sqlBlocks,
+    });
+    await insertQualityMetrics([
+      {
+        metricType: "assistant",
+        metricName: "assistant_overall_score",
+        metricValue: evalResult.overallScore / 100,
+        floorValue: Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+        passed: evalResult.overallScore / 100 >= Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+        assistantLogId: logId,
+      },
+      {
+        metricType: "assistant",
+        metricName: "assistant_grounding_score",
+        metricValue: evalResult.groundingScore / 100,
+        assistantLogId: logId,
+      },
+      {
+        metricType: "assistant",
+        metricName: "assistant_citation_score",
+        metricValue: evalResult.citationScore / 100,
+        assistantLogId: logId,
+      },
+    ]);
   } catch (err) {
     logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) });
   }
@@ -261,7 +324,7 @@ export async function runAssistantEngine(
     intent: intentResult,
     sources,
     actions,
-    tables: context.tables,
+    tables: reconciledTables,
     tableEnrichments: context.tableEnrichments,
     sqlBlocks,
     dashboardProposal,
@@ -270,6 +333,21 @@ export async function runAssistantEngine(
     durationMs,
     logId,
   };
+}
+
+/**
+ * Build a concise conversation summary from history + current question.
+ * Captures the user's questions (most recent 5) to give the Genie engine
+ * richer context for title and instruction generation.
+ */
+function buildConversationSummary(history: ConversationTurn[], question: string): string {
+  const userQuestions = history
+    .filter((t) => t.role === "user")
+    .map((t) => t.content.trim())
+    .slice(-4);
+  userQuestions.push(question);
+  if (userQuestions.length === 1) return question;
+  return userQuestions.join(" → ");
 }
 
 function isSubstantiveSql(sql: string): boolean {

@@ -145,6 +145,15 @@ const INDUSTRY_ALIASES: Record<string, string> = {
   "aerospace": "manufacturing",
   "defense": "manufacturing",
   "semiconductors": "manufacturing",
+  "superannuation": "superannuation",
+  "super fund": "superannuation",
+  "pension fund": "superannuation",
+  "retirement fund": "superannuation",
+  "retirement": "superannuation",
+  "pension": "superannuation",
+  "annuity": "superannuation",
+  "defined benefit": "superannuation",
+  "defined contribution": "superannuation",
 };
 
 /** Words too generic to contribute meaningful signal on their own. */
@@ -268,8 +277,17 @@ export async function buildReferenceUseCasesPrompt(
 ): Promise<string> {
   const industry = await getIndustryOutcomeAsync(industryId);
   if (!industry) return "";
+  const domainTokens = (businessDomains ?? "")
+    .toLowerCase()
+    .split(/[,\n]+/)
+    .map((d) => d.trim())
+    .filter(Boolean);
 
-  void businessDomains;
+  const isRelevant = (text: string): boolean => {
+    if (domainTokens.length === 0) return true;
+    const lower = text.toLowerCase();
+    return domainTokens.some((tok) => lower.includes(tok));
+  };
 
   const lines: string[] = [
     `### INDUSTRY REFERENCE USE CASES (${industry.name})`,
@@ -285,15 +303,20 @@ export async function buildReferenceUseCasesPrompt(
   let count = 0;
   for (const objective of industry.objectives) {
     if (count >= maxUseCases) break;
+    if (!isRelevant(objective.name) && domainTokens.length > 0) continue;
     lines.push(`#### ${objective.name}`);
     lines.push("");
 
     for (const priority of objective.priorities) {
       if (count >= maxUseCases) break;
+      if (!isRelevant(priority.name) && domainTokens.length > 0) continue;
       lines.push(`**Strategic Priority: ${priority.name}**`);
 
       for (const uc of priority.useCases) {
         if (count >= maxUseCases) break;
+        if (!isRelevant(`${uc.name} ${uc.description}`) && domainTokens.length > 0) {
+          continue;
+        }
         lines.push(`- **${uc.name}**: ${uc.description}`);
         count++;
       }

@@ -5,10 +5,13 @@
  * organisation name and user-supplied configuration.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
+import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
+import { persistManifest } from "@/lib/pipeline/context-manifest";
 import { logger } from "@/lib/logger";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 
@@ -81,21 +84,50 @@ export async function runBusinessContext(
     const industryContext = config.industry
       ? await buildIndustryContextPrompt(config.industry)
       : "";
+    const benchmarkResult = await buildBenchmarkContextPrompt(
+      config.industry || undefined,
+      config.customerMaturity,
+    );
 
     // Retrieve relevant document context from the knowledge base (RAG)
     let documentContext = "";
+    let docSourceIds: string[] = [];
+    let docKinds: string[] = [];
+    let docChunkCount = 0;
     try {
       const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
       const chunks = await retrieveContext(
-        `Business context for ${config.businessName}: ${config.businessDomains || ""} ${config.businessPriorities?.join(", ") || ""}`,
+        `Business context for ${config.businessName}: ${config.businessDomains || ""} ${config.businessPriorities?.join(", ") || ""} ${config.strategicGoals || ""} ${config.additionalContext || ""}`,
         { kinds: ["document_chunk", "business_context"], topK: 5, minScore: 0.4 },
       );
       if (chunks.length > 0) {
         documentContext = formatRetrievedContext(chunks, 4000);
+        docSourceIds = [...new Set(chunks.map((c) => c.sourceId))];
+        docKinds = [...new Set(chunks.map((c) => c.kind))];
+        docChunkCount = chunks.length;
         logger.debug("[business-context] RAG context retrieved", { chunks: chunks.length });
       }
     } catch {
       // RAG is best-effort; proceed without it
+    }
+
+    // Persist enrichment provenance
+    if (runId) {
+      const outcomeMapSections: string[] = [];
+      if (industryContext) outcomeMapSections.push("context");
+      try {
+        await persistManifest(runId, {
+          benchmarks: benchmarkResult.sources,
+          outcomeMap: {
+            industryId: config.industry || null,
+            sections: outcomeMapSections,
+          },
+          documents: { sourceIds: docSourceIds, kinds: docKinds, chunkCount: docChunkCount },
+          steps: ["business-context"],
+        });
+      } catch (e) {
+        logger.warn("[business-context] persistManifest failed (non-fatal)", { error: e });
+      }
     }
 
     const result = await executeAIQuery({
@@ -106,6 +138,8 @@ export async function runBusinessContext(
         type_description: "Full business context research",
         type_label: "business organisation",
         industry_context: industryContext,
+        customer_profile_context: `Customer maturity: ${config.customerMaturity}\nRisk posture: ${config.riskPosture}\nTransformation horizon: ${config.transformationHorizon}\nUser strategic goals: ${config.strategicGoals || "Not provided"}\nAdditional context: ${config.additionalContext || "None provided"}`,
+        benchmark_context: benchmarkResult.text,
         document_context: documentContext,
       },
       modelEndpoint: getFastServingEndpoint(),
@@ -116,7 +150,7 @@ export async function runBusinessContext(
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = parseJSONResponse<Record<string, unknown>>(result.rawResponse);
+      parsed = parseLLMJson(result.rawResponse, "business-context") as Record<string, unknown>;
     } catch (parseErr) {
       logger.warn("Failed to parse business context JSON, using defaults", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),

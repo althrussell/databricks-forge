@@ -60,6 +60,11 @@ export function getColumnType(allowlist: SchemaAllowlist, tableFqn: string, colu
   return allowlist.columnTypes.get(`${tableFqn.toLowerCase()}.${columnName.toLowerCase()}`) ?? null;
 }
 
+/** Backtick-quote an identifier if it contains non-word characters (spaces, parens, etc.). */
+export function quoteIdent(name: string): string {
+  return /^\w+$/.test(name) ? name : `\`${name}\``;
+}
+
 // ---------------------------------------------------------------------------
 // Shared SQL keywords — used by both findInvalidIdentifiers (strict mode)
 // and pipeline SQL validation to avoid false-positiving on SQL syntax.
@@ -156,6 +161,20 @@ export function findInvalidIdentifiers(
     }
   }
 
+  // Backtick-quoted 4-part: catalog.schema.table.`column with spaces`
+  const quotedColFqnRegex = /\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)\.`([^`]+)`/g;
+  while ((match = quotedColFqnRegex.exec(sql)) !== null) {
+    const tableFqn = match[1];
+    const column = match[2];
+    if (
+      !createTargets.has(tableFqn.toLowerCase()) &&
+      isValidTable(allowlist, tableFqn) &&
+      !isValidColumn(allowlist, tableFqn, column)
+    ) {
+      invalid.push(`${tableFqn}.\`${column}\``);
+    }
+  }
+
   // Track positions already covered by 3/4-part FQNs to avoid double-flagging
   const coveredPositions = new Set<number>();
 
@@ -214,6 +233,22 @@ export function findInvalidIdentifiers(
       // Only flag if the column doesn't exist in any table
       if (!allColumns.has(col)) {
         invalid.push(`${match[1]}.${match[2]}`);
+      }
+    }
+
+    // Backtick-quoted 2-part: alias.`column with spaces`
+    const quotedAliasColRegex = /\b([a-zA-Z_]\w*)\.`([^`]+)`/g;
+    while ((match = quotedAliasColRegex.exec(sql)) !== null) {
+      if (coveredPositions.has(match.index)) continue;
+
+      const prefix = match[1].toLowerCase();
+      const col = match[2].toLowerCase();
+
+      if (SQL_KEYWORDS.has(prefix)) continue;
+      if (aliasSet.has(col)) continue;
+
+      if (!allColumns.has(col)) {
+        invalid.push(`${match[1]}.\`${match[2]}\``);
       }
     }
   }
@@ -275,7 +310,7 @@ export function buildCompactColumnsBlock(
     if (targetTables && !targetTables.has(key)) continue;
     const cols = columnsByTable.get(key) ?? [];
     if (cols.length > 0) {
-      lines.push(`${t.fqn}: ${cols.join(", ")}`);
+      lines.push(`${t.fqn}: ${cols.map(quoteIdent).join(", ")}`);
     }
   }
 
@@ -313,7 +348,7 @@ export function buildSchemaContextBlock(
     lines.push(`**${t.fqn}**${t.comment ? ` — ${t.comment}` : ""}`);
     for (const c of cols) {
       const desc = c.comment ? ` — ${c.comment}` : "";
-      lines.push(`  - ${c.columnName} (${c.dataType})${desc}`);
+      lines.push(`  - ${quoteIdent(c.columnName)} (${c.dataType})${desc}`);
     }
     lines.push("");
   }

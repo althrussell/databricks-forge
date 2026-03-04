@@ -20,6 +20,7 @@ import {
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
 import type { GenieAuthMode } from "@/lib/settings";
+import { revalidateSerializedSpace } from "@/lib/genie/deploy-validation";
 
 export async function POST(
   request: NextRequest,
@@ -52,6 +53,19 @@ export async function POST(
     const config = getConfig();
     const body = await request.json().catch(() => ({})) as Record<string, string>;
     const authMode = (body.authMode as GenieAuthMode) || undefined;
+    if (rec.quality?.gateDecision === "block") {
+      return NextResponse.json(
+        { error: "Quality gate blocked deployment. Resolve preview diagnostics and regenerate." },
+        { status: 400 },
+      );
+    }
+    const validation = await revalidateSerializedSpace(rec.serializedSpace);
+    if (!validation.ok) {
+      return NextResponse.json(
+        { error: validation.error, code: validation.code, diagnostics: validation.diagnostics ?? null },
+        { status: 409 },
+      );
+    }
 
     // Check if there's already a tracked space for this run+domain
     const tracked = await listTrackedGenieSpaces(runId);

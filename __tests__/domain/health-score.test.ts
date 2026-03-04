@@ -124,7 +124,7 @@ describe("computeTableHealth", () => {
   it("deducts 5 for very large table", () => {
     const detail = makeDetail({ numRows: 2_000_000_000 });
     const result = computeTableHealth(detail, makeHistory());
-    expect(result.issues).toContain("Very large table (> 1 billion rows)");
+    expect(result.issues).toContain("Very large table (> 1,000,000,000 rows)");
   });
 
   it("accumulates deductions from many rules firing", () => {

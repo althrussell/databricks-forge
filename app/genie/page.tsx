@@ -31,7 +31,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   ExternalLink,
-  Plus,
   Sparkles,
   Trash2,
   Database,
@@ -65,7 +64,6 @@ function mergeSpaces(
   workspaceSpaces: GenieSpaceResponse[],
   tracked: TrackedGenieSpace[],
 ): SpaceCardData[] {
-  const trackedBySpaceId = new Map(tracked.map((t) => [t.spaceId, t]));
   const seen = new Set<string>();
   const result: SpaceCardData[] = [];
 
@@ -98,14 +96,6 @@ function mergeSpaces(
     if (a.status !== "trashed" && b.status === "trashed") return -1;
     return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
   });
-}
-
-function buildGenieUrl(spaceId: string): string {
-  const host = typeof window !== "undefined"
-    ? localStorage.getItem("forge-databricks-host") || ""
-    : "";
-  if (!host) return "";
-  return `${host.replace(/\/$/, "")}/genie/rooms/${spaceId}`;
 }
 
 export default function GenieSpacesPage() {
@@ -179,12 +169,6 @@ export default function GenieSpacesPage() {
             Manage and deploy Databricks Genie Spaces for natural language SQL exploration.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/genie/new">
-            <Plus className="mr-2 size-4" />
-            New Genie Space
-          </Link>
-        </Button>
       </div>
 
       {loading ? (
@@ -199,15 +183,9 @@ export default function GenieSpacesPage() {
             <Sparkles className="mb-4 size-12 text-muted-foreground/50" />
             <h2 className="text-lg font-semibold">No Genie Spaces yet</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Create a Genie Space from your data tables or run a discovery pipeline.
+              Ask Forge about your data tables to create a Genie Space, or run a discovery pipeline.
             </p>
             <div className="mt-6 flex gap-3">
-              <Button asChild>
-                <Link href="/genie/new">
-                  <Plus className="mr-2 size-4" />
-                  New Genie Space
-                </Link>
-              </Button>
               <Button variant="outline" asChild>
                 <Link href="/metadata-genie">
                   <Database className="mr-2 size-4" />

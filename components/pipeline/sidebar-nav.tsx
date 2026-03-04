@@ -26,6 +26,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   requiresEmbedding?: boolean;
+  requiresBenchmarks?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { href: "/runs", label: "Runs", icon: ListIcon },
   { href: "/runs/compare", label: "Compare", icon: CompareIcon },
   { href: "/environment", label: "Estate", icon: EnvironmentIcon },
+  { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
   { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
   { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
   { href: "/knowledge-base", label: "Knowledge Base", icon: KnowledgeBaseIcon, requiresEmbedding: true },
@@ -55,13 +57,31 @@ function useEmbeddingEnabled(): boolean {
   return enabled;
 }
 
+function useBenchmarksEnabled(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    const settings = loadSettings();
+    if (!settings.benchmarksEnabled) return;
+    fetch("/api/benchmarks/status")
+      .then((r) => r.json())
+      .then((data) => setEnabled(data.enabled ?? false))
+      .catch(() => setEnabled(false));
+  }, []);
+  return enabled;
+}
+
 function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
   const embeddingEnabled = useEmbeddingEnabled();
+  const benchmarksEnabled = useBenchmarksEnabled();
 
   const visibleItems = useMemo(
-    () => navItems.filter((item) => !item.requiresEmbedding || embeddingEnabled),
-    [embeddingEnabled],
+    () => navItems.filter((item) => {
+      if (item.requiresEmbedding && !embeddingEnabled) return false;
+      if (item.requiresBenchmarks && !benchmarksEnabled) return false;
+      return true;
+    }),
+    [embeddingEnabled, benchmarksEnabled],
   );
 
   return (
@@ -317,6 +337,27 @@ function OutcomeMapIcon({ className }: { className?: string }) {
       <path d="M12 2 2 7l10 5 10-5-10-5Z" />
       <path d="m2 17 10 5 10-5" />
       <path d="m2 12 10 5 10-5" />
+    </svg>
+  );
+}
+
+function BenchmarkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3v4" />
+      <path d="M7 6l2 3" />
+      <path d="M17 6l-2 3" />
+      <circle cx="12" cy="14" r="7" />
+      <path d="m9 14 2 2 4-4" />
     </svg>
   );
 }

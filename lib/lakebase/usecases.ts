@@ -45,6 +45,7 @@ function dbRowToUseCase(row: {
   sqlStatus: string | null;
   feedback: string | null;
   feedbackAt: Date | null;
+  enrichmentTags: string | null;
 }): UseCase {
   return {
     id: row.id,
@@ -73,7 +74,17 @@ function dbRowToUseCase(row: {
     sqlStatus: row.sqlStatus ?? null,
     feedback: (row.feedback as UseCase["feedback"]) ?? null,
     feedbackAt: row.feedbackAt?.toISOString() ?? null,
+    enrichmentTags: parseJSON<string[] | null>(row.enrichmentTags, null),
   };
+}
+
+function parseJSON<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +120,7 @@ export async function insertUseCases(useCases: UseCase[]): Promise<void> {
         overallScore: uc.overallScore,
         sqlCode: uc.sqlCode,
         sqlStatus: uc.sqlStatus,
+        enrichmentTags: uc.enrichmentTags ? JSON.stringify(uc.enrichmentTags) : null,
       })),
       skipDuplicates: true,
     });

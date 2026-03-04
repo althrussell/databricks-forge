@@ -21,6 +21,7 @@ const CSV_HEADERS = [
   "Impact Score",
   "Overall Score",
   "Tables Involved",
+  "Enrichment",
   "SQL Status",
   "Feedback",
 ];
@@ -57,6 +58,7 @@ export function generateCsv(
         uc.impactScore.toFixed(3),
         uc.overallScore.toFixed(3),
         escapeCsvField(uc.tablesInvolved.join("; ")),
+        escapeCsvField((uc.enrichmentTags ?? []).join(", ")),
         uc.sqlStatus ?? "",
         uc.feedback ?? "",
       ].join(",")

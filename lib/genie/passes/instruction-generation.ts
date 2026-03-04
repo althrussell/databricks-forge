@@ -24,12 +24,14 @@
 import { type ChatMessage } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
-import type { BusinessContext } from "@/lib/domain/types";
+import type { BusinessContext, MetadataSnapshot } from "@/lib/domain/types";
 import type {
   GenieEngineConfig,
   EntityMatchingCandidate,
   ClarificationRule,
 } from "../types";
+import { buildCompactColumnsBlock } from "../schema-allowlist";
+import { sanitizeUserContext } from "./title-generation";
 
 const TEMPERATURE = 0.3;
 const MAX_INSTRUCTION_CHARS = 3000;
@@ -57,6 +59,11 @@ export interface InstructionGenerationInput {
   entityCandidates: EntityMatchingCandidate[];
   joinSpecs: JoinSpecInput[];
   endpoint: string;
+  fallbackEndpoint?: string;
+  metadata?: MetadataSnapshot;
+  tableFqns?: string[];
+  conversationSummary?: string;
+  sensitiveColumns?: Set<string>;
   signal?: AbortSignal;
 }
 
@@ -67,7 +74,21 @@ export interface InstructionGenerationOutput {
 export async function runInstructionGeneration(
   input: InstructionGenerationInput
 ): Promise<InstructionGenerationOutput> {
-  const { domain, subdomains, businessName, businessContext, config, entityCandidates, endpoint, signal } = input;
+  const {
+    domain,
+    subdomains,
+    businessName,
+    businessContext,
+    config,
+    entityCandidates,
+    endpoint,
+    fallbackEndpoint,
+    metadata,
+    tableFqns,
+    conversationSummary,
+    sensitiveColumns,
+    signal,
+  } = input;
 
   const instructions: string[] = [];
 
@@ -118,12 +139,22 @@ export async function runInstructionGeneration(
     instructions.push(config.globalInstructions);
   }
 
-  // 8. LLM-refined domain guidance (optional, dropped first if over budget)
+  // 8. LLM-refined domain guidance
   let llmRefined: string | null = null;
-  if (config.llmRefinement && businessContext) {
+  if (config.llmRefinement) {
     try {
       llmRefined = await generateLLMInstruction(
-        domain, subdomains, businessName, businessContext, endpoint, signal
+        domain,
+        subdomains,
+        businessName,
+        businessContext,
+        endpoint,
+        metadata,
+        tableFqns,
+        input.joinSpecs,
+        conversationSummary,
+        sensitiveColumns,
+        signal,
       );
     } catch (err) {
       logger.warn("LLM instruction generation failed", {
@@ -131,9 +162,35 @@ export async function runInstructionGeneration(
       });
     }
   }
+
+  if (!llmRefined && fallbackEndpoint && fallbackEndpoint !== endpoint) {
+    try {
+      llmRefined = await generateLLMInstruction(
+        domain,
+        subdomains,
+        businessName,
+        businessContext,
+        fallbackEndpoint,
+        metadata,
+        tableFqns,
+        input.joinSpecs,
+        conversationSummary,
+        sensitiveColumns,
+        signal,
+      );
+      if (llmRefined) {
+        instructions.push("Instruction generation degraded: fast endpoint unavailable; used fallback endpoint.");
+      }
+    } catch (err) {
+      logger.warn("Fallback LLM instruction generation failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   if (llmRefined) instructions.push(llmRefined);
 
-  return { instructions: applyCharBudget(instructions, llmRefined, config) };
+  const sanitized = instructions.map(sanitizeInstructionText).filter(Boolean);
+  return { instructions: applyInstructionCharBudget(sanitized, llmRefined, config) };
 }
 
 function totalChars(blocks: string[]): number {
@@ -147,19 +204,20 @@ function totalChars(blocks: string[]): number {
  *   2. Glossary reduced to 5 entries
  *   3. Clarification rules reduced to 3
  */
-function applyCharBudget(
+export function applyInstructionCharBudget(
   instructions: string[],
   llmRefined: string | null,
   config: GenieEngineConfig
 ): string[] {
   if (totalChars(instructions) <= MAX_INSTRUCTION_CHARS) return instructions;
 
-  let trimmed = [...instructions];
+  const alwaysKeep = instructions.slice(0, 4);
+  let optional = instructions.slice(4);
 
   if (llmRefined) {
-    trimmed = trimmed.filter((s) => s !== llmRefined);
+    optional = optional.filter((s) => s !== llmRefined);
     logger.debug("Instruction budget: dropped LLM-refined block");
-    if (totalChars(trimmed) <= MAX_INSTRUCTION_CHARS) return trimmed;
+    if (totalChars([...alwaysKeep, ...optional]) <= MAX_INSTRUCTION_CHARS) return [...alwaysKeep, ...optional];
   }
 
   if (config.glossary.length > 5) {
@@ -167,11 +225,11 @@ function applyCharBudget(
       (g) => `- "${g.term}": ${g.definition}${g.synonyms.length > 0 ? ` (aka ${g.synonyms.join(", ")})` : ""}`
     );
     const header = "Business terminology:";
-    trimmed = trimmed.map((s) =>
+    optional = optional.map((s) =>
       s.startsWith(header) ? `${header}\n${reducedGlossary.join("\n")}` : s
     );
     logger.debug("Instruction budget: reduced glossary to 5 entries");
-    if (totalChars(trimmed) <= MAX_INSTRUCTION_CHARS) return trimmed;
+    if (totalChars([...alwaysKeep, ...optional]) <= MAX_INSTRUCTION_CHARS) return [...alwaysKeep, ...optional];
   }
 
   if (config.clarificationRules.length > 3) {
@@ -180,13 +238,27 @@ function applyCharBudget(
       `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`
     );
     const header = "Clarification rules:";
-    trimmed = trimmed.map((s) =>
+    optional = optional.map((s) =>
       s.startsWith(header) ? `${header}\n${reducedRules.join("\n")}` : s
     );
     logger.debug("Instruction budget: reduced clarification rules to 3");
   }
 
-  return trimmed;
+  const merged = [...alwaysKeep, ...optional];
+  if (totalChars(merged) <= MAX_INSTRUCTION_CHARS) return merged;
+  let budget = MAX_INSTRUCTION_CHARS;
+  const finalBlocks: string[] = [];
+  for (const block of merged) {
+    if (budget <= 0) break;
+    if (block.length <= budget) {
+      finalBlocks.push(block);
+      budget -= block.length;
+    } else {
+      finalBlocks.push(block.slice(0, budget));
+      break;
+    }
+  }
+  return finalBlocks;
 }
 
 /**
@@ -225,21 +297,46 @@ async function generateLLMInstruction(
   domain: string,
   subdomains: string[],
   businessName: string,
-  bc: BusinessContext,
+  bc: BusinessContext | null,
   endpoint: string,
+  metadata: MetadataSnapshot | undefined,
+  tableFqns: string[] | undefined,
+  joins: JoinSpecInput[],
+  conversationSummary: string | undefined,
+  sensitiveColumns: Set<string> | undefined,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  const systemMessage = `You are writing a single concise text instruction for a Databricks Genie space. ` +
-    `Write 1-2 sentences of domain-specific guidance that helps users ask better questions. ` +
-    `Focus on what kinds of analysis this data supports and what key dimensions/metrics to explore. ` +
-    `Do NOT include SQL syntax rules, join instructions, or general advice. Be specific to this domain.`;
+  const systemMessage = [
+    "You are writing one concise instruction block for a Databricks Genie space.",
+    "Return plain text only.",
+    "Include: business focus, key entities to group by, recommended time windows, and ambiguity handling.",
+    "Do not include dataset marketing language, product pitch text, or generic platform instructions.",
+    "Do not include SQL syntax lessons; keep this analyst-facing and operational.",
+  ].join(" ");
+  const compactColumns = metadata ? buildCompactColumnsBlock(metadata, tableFqns).slice(0, 1600) : "";
+  const joinHints = joins
+    .slice(0, 6)
+    .map((j) => `${j.leftTable} <-> ${j.rightTable}`)
+    .join(", ");
+  const safeConversation = sanitizeUserContext(conversationSummary);
+  const context = [
+    `Business: ${businessName}`,
+    `Domain: ${domain}`,
+    `Subdomains: ${subdomains.join(", ") || "none"}`,
+    `Industry: ${bc?.industries || "unknown"}`,
+    safeConversation ? `User intent summary (quoted user text): ${safeConversation}` : "",
+    joinHints ? `Join hints: ${joinHints}` : "",
+    sensitiveColumns && sensitiveColumns.size > 0
+      ? `Sensitive columns to avoid in guidance: ${Array.from(sensitiveColumns).slice(0, 25).join(", ")}`
+      : "",
+    compactColumns ? compactColumns : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  const userMessage = `Business: ${businessName}
-Domain: ${domain}
-Subdomains: ${subdomains.join(", ")}
-Industry: ${bc.industries}
+  const userMessage = `${context}
 
-Write one brief domain-specific instruction for users of this Genie space.`;
+Write 4-6 short bullet points as plain text paragraphs (no markdown bullets) that guide users toward relevant analysis.`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemMessage },
@@ -250,10 +347,29 @@ Write one brief domain-specific instruction for users of this Genie space.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 150,
+    maxTokens: 2048,
     signal,
   });
 
-  const content = result.content?.trim();
+  const content = sanitizeInstructionText(result.content?.trim() ?? "");
   return content && content.length > 20 ? content : null;
+}
+
+export function sanitizeInstructionText(input: string): string {
+  if (!input) return "";
+  const bannedPatterns = [
+    /sample dataset/i,
+    /dataset simulates/i,
+    /simulates a .* business/i,
+    /synthetically curated/i,
+    /suitable for any databricks workload/i,
+    /building data pipelines with delta live tables/i,
+    /exploring ai and machine learning capabilities/i,
+  ];
+  const lines = input
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !bannedPatterns.some((p) => p.test(line)));
+  return lines.join("\n").slice(0, 1800);
 }

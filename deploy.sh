@@ -6,6 +6,7 @@
 #   ./deploy.sh                          Interactive (pick a warehouse)
 #   ./deploy.sh --warehouse "Name"       Non-interactive
 #   ./deploy.sh --profile "my-profile"   Use a specific CLI profile
+#   ./deploy.sh --app-name "forge-demo"  Deploy as a separate named instance
 #   ./deploy.sh --destroy                Remove the app
 #
 # Override model endpoints (advanced):
@@ -20,6 +21,11 @@
 # Optional Lakebase OAuth runtime behavior:
 #   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
 #               --lakebase-enable-pooler-experiment
+# Optional benchmark seeding behavior:
+#   ./deploy.sh --seed-benchmarks --seed-benchmarks-all-industries
+#               --seed-benchmark-industries "banking,hls,rcg"
+# Optional benchmark admin restriction:
+#   ./deploy.sh --benchmark-admins "alice@company.com,bob@company.com"
 # =========================================================================
 
 set -euo pipefail
@@ -31,7 +37,7 @@ APP_NAME="databricks-forge"
 APP_DESC="Discover AI-powered use cases from Unity Catalog metadata"
 DEFAULT_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
-DEFAULT_EMBEDDING_ENDPOINT="databricks-gte-large-en"
+DEFAULT_EMBEDDING_ENDPOINT="databricks-qwen3-embedding-0-6b"
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
@@ -45,6 +51,7 @@ WORKSPACE_PATH=""
 # -------------------------------------------------------------------------
 # Parse arguments
 # -------------------------------------------------------------------------
+ARG_APP_NAME=""
 ARG_WAREHOUSE=""
 ARG_PROFILE=""
 ARG_ENDPOINT=""
@@ -58,6 +65,10 @@ ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=false
 ARG_PRINT_GENERATED_NATIVE_PASSWORD=false
 ARG_LAKEBASE_RUNTIME_MODE=""
 ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
+ARG_SEED_BENCHMARKS=false
+ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=false
+ARG_SEED_BENCHMARK_INDUSTRIES=""
+ARG_BENCHMARK_ADMINS=""
 ARG_DESTROY=false
 
 print_usage() {
@@ -71,11 +82,14 @@ Usage:
   ./deploy.sh --destroy                        Remove the app
 
 Options:
+  --app-name NAME        Custom app name for multi-instance deployments.
+                         Isolates the Databricks App and Lakebase database.
+                         (default: databricks-forge)
   --warehouse NAME        SQL Warehouse name (skips interactive prompt)
   --profile NAME         Databricks CLI profile name
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
-  --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-gte-large-en)
+  --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-qwen3-embedding-0-6b)
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
@@ -95,6 +109,15 @@ Options:
                              oauth_direct_only (default), pooler_preferred
   --lakebase-enable-pooler-experiment
                              Enables pooler attempts for future testing
+  --seed-benchmarks          Seed benchmark catalog during app startup
+  --seed-benchmarks-all-industries
+                             Include generated baseline records for every
+                             industry in lib/domain/industry-outcomes/
+  --seed-benchmark-industries CSV
+                             Seed only these industry ids (e.g. banking,hls).
+                             Applies to curated packs and generated baselines.
+  --benchmark-admins CSV     Comma-separated emails allowed to manage benchmarks.
+                             If unset, all authenticated users can manage them.
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -106,6 +129,7 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app-name)       ARG_APP_NAME="$2"; shift 2 ;;
     --warehouse)      ARG_WAREHOUSE="$2"; shift 2 ;;
     --profile)        ARG_PROFILE="$2"; shift 2 ;;
     --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
@@ -119,11 +143,19 @@ while [[ $# -gt 0 ]]; do
     --print-generated-native-password) ARG_PRINT_GENERATED_NATIVE_PASSWORD=true; shift ;;
     --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
     --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
+    --seed-benchmarks) ARG_SEED_BENCHMARKS=true; shift ;;
+    --seed-benchmarks-all-industries) ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=true; shift ;;
+    --seed-benchmark-industries) ARG_SEED_BENCHMARK_INDUSTRIES="$2"; shift 2 ;;
+    --benchmark-admins) ARG_BENCHMARK_ADMINS="$2"; shift 2 ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
   esac
 done
+
+if [[ -n "$ARG_APP_NAME" ]]; then
+  APP_NAME="$ARG_APP_NAME"
+fi
 
 if [[ -n "$ARG_PROFILE" ]]; then
   export DATABRICKS_CONFIG_PROFILE="$ARG_PROFILE"
@@ -141,6 +173,17 @@ PRINT_GENERATED_NATIVE_PASSWORD="${ARG_PRINT_GENERATED_NATIVE_PASSWORD}"
 GENERATED_NATIVE_PASSWORD=false
 LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
 LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
+SEED_BENCHMARKS="${ARG_SEED_BENCHMARKS}"
+SEED_BENCHMARKS_ALL_INDUSTRIES="${ARG_SEED_BENCHMARKS_ALL_INDUSTRIES}"
+SEED_BENCHMARK_INDUSTRIES="${ARG_SEED_BENCHMARK_INDUSTRIES:-}"
+BENCHMARK_ADMINS="${ARG_BENCHMARK_ADMINS:-}"
+
+if [[ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" && "$SEED_BENCHMARKS" != "true" ]]; then
+  SEED_BENCHMARKS=true
+fi
+if [[ -n "$SEED_BENCHMARK_INDUSTRIES" && "$SEED_BENCHMARKS" != "true" ]]; then
+  SEED_BENCHMARKS=true
+fi
 
 if [[ -n "$LAKEBASE_AUTH_MODE" && "$LAKEBASE_AUTH_MODE" != "oauth" && "$LAKEBASE_AUTH_MODE" != "native_password" ]]; then
   die "Invalid --lakebase-auth-mode '$LAKEBASE_AUTH_MODE'. Expected oauth or native_password."
@@ -188,32 +231,72 @@ ok()   { if [ -n "${1:-}" ]; then printf "OK  (%s)\n" "$1"; else printf "OK\n"; 
 # Usage: echo '{"k":"v"}' | json_val "['k']"
 json_val() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 
+get_app_compute_state() {
+  local app_json
+  if ! app_json=$(databricks apps get "$APP_NAME" --output json 2>/dev/null); then
+    echo "MISSING"
+    return
+  fi
+  echo "$app_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN"
+}
+
+wait_for_app_absent() {
+  local attempts=0
+  local max_attempts=30
+  local sleep_secs=10
+  local state
+
+  info "Waiting for app deletion..."
+  while [ $attempts -lt $max_attempts ]; do
+    state="$(get_app_compute_state)"
+    if [ "$state" = "MISSING" ]; then
+      ok "deleted"
+      return 0
+    fi
+    sleep "$sleep_secs"
+    attempts=$((attempts + 1))
+  done
+
+  printf "TIMEOUT\n"
+  return 1
+}
+
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ]; then
+  if [ "$APP_NAME" = "databricks-forge" ] && [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ]; then
     return
   fi
 
   APP_YAML_BACKUP="$(mktemp)"
   cp "app.yaml" "$APP_YAML_BACKUP"
 
+  export APP_NAME
   export LAKEBASE_BOOTSTRAP_USER
   export LAKEBASE_AUTH_MODE
   export LAKEBASE_NATIVE_USER
   export LAKEBASE_NATIVE_PASSWORD
   export LAKEBASE_RUNTIME_MODE
   export LAKEBASE_ENABLE_POOLER_EXPERIMENT
+  export SEED_BENCHMARKS
+  export SEED_BENCHMARKS_ALL_INDUSTRIES
+  export SEED_BENCHMARK_INDUSTRIES
+  export BENCHMARK_ADMINS
   python3 - <<'PY'
 import os
 from pathlib import Path
 
+app_name = os.environ.get("APP_NAME", "databricks-forge").strip()
 bootstrap_user = os.environ.get("LAKEBASE_BOOTSTRAP_USER", "").strip()
 auth_mode = os.environ.get("LAKEBASE_AUTH_MODE", "").strip()
 native_user = os.environ.get("LAKEBASE_NATIVE_USER", "").strip()
 native_password = os.environ.get("LAKEBASE_NATIVE_PASSWORD", "")
 runtime_mode = os.environ.get("LAKEBASE_RUNTIME_MODE", "").strip()
 pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").strip().lower() == "true"
+seed_benchmarks = os.environ.get("SEED_BENCHMARKS", "").strip().lower() == "true"
+seed_benchmarks_all = os.environ.get("SEED_BENCHMARKS_ALL_INDUSTRIES", "").strip().lower() == "true"
+seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").strip()
+benchmark_admins = os.environ.get("BENCHMARK_ADMINS", "").strip()
 
 path = Path("app.yaml")
 lines = path.read_text().splitlines()
@@ -225,12 +308,17 @@ def is_managed_name_line(s: str) -> bool:
     if not t.startswith("- name:"):
         return False
     return (
-        "LAKEBASE_BOOTSTRAP_USER" in t
+        "FORGE_APP_NAME" in t
+        or "LAKEBASE_BOOTSTRAP_USER" in t
         or "LAKEBASE_AUTH_MODE" in t
         or "LAKEBASE_NATIVE_USER" in t
         or "LAKEBASE_NATIVE_PASSWORD" in t
         or "LAKEBASE_RUNTIME_MODE" in t
         or "LAKEBASE_ENABLE_POOLER_EXPERIMENT" in t
+        or "FORGE_SEED_BENCHMARKS" in t
+        or "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES" in t
+        or "FORGE_SEED_BENCHMARK_INDUSTRIES" in t
+        or "FORGE_BENCHMARK_ADMINS" in t
     )
 
 while i < len(lines):
@@ -246,6 +334,9 @@ while i < len(lines):
     out.append(line)
     i += 1
 
+if app_name != "databricks-forge":
+    out.append("  - name: FORGE_APP_NAME")
+    out.append(f'    value: "{app_name}"')
 if bootstrap_user:
     out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
     out.append(f'    value: "{bootstrap_user}"')
@@ -263,6 +354,16 @@ if runtime_mode:
     out.append(f'    value: "{runtime_mode}"')
 out.append("  - name: LAKEBASE_ENABLE_POOLER_EXPERIMENT")
 out.append(f'    value: "{"true" if pooler_experiment else "false"}"')
+out.append("  - name: FORGE_SEED_BENCHMARKS")
+out.append(f'    value: "{"true" if seed_benchmarks else "false"}"')
+out.append("  - name: FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES")
+out.append(f'    value: "{"true" if seed_benchmarks_all else "false"}"')
+if seed_benchmark_industries:
+    out.append("  - name: FORGE_SEED_BENCHMARK_INDUSTRIES")
+    out.append(f'    value: "{seed_benchmark_industries}"')
+if benchmark_admins:
+    out.append("  - name: FORGE_BENCHMARK_ADMINS")
+    out.append(f'    value: "{benchmark_admins}"')
 path.write_text("\n".join(out) + "\n")
 PY
 }
@@ -413,9 +514,18 @@ create_app() {
   printf "\n"
   info "App \"$APP_NAME\"..."
 
-  if databricks apps get "$APP_NAME" &>/dev/null; then
-    ok "already exists"
-  else
+  local existing_state
+  existing_state="$(get_app_compute_state)"
+
+  if [ "$existing_state" = "DELETING" ]; then
+    printf "WAIT  (currently deleting)\n"
+    if ! wait_for_app_absent; then
+      die "App is still deleting and could not be recreated yet. Wait a few minutes and retry."
+    fi
+    info "App \"$APP_NAME\"..."
+  fi
+
+  if [ "$existing_state" = "MISSING" ] || [ "$existing_state" = "DELETING" ]; then
     local create_json
     create_json=$(python3 -c "
 import json
@@ -431,6 +541,8 @@ print(json.dumps({
       die "Failed to create app.\n  $create_err"
     fi
     ok "created with scopes"
+  else
+    ok "already exists"
   fi
 }
 
@@ -584,6 +696,8 @@ print_success() {
   printf "    Databricks Forge AI is live!\n"
   printf "    URL: %s\n" "$app_url"
   printf "\n"
+  printf "    App name:     %s\n" "$APP_NAME"
+  printf "\n"
   printf "    Resources:\n"
   printf "      SQL Warehouse:    %s\n" "$WAREHOUSE_NAME"
   printf "      Premium model:    %s\n" "$ENDPOINT"
@@ -601,6 +715,10 @@ print_success() {
   fi
   printf "      Runtime mode:     %s\n" "${LAKEBASE_RUNTIME_MODE:-oauth_direct_only (default)}"
   printf "      Pooler experiment:%s\n" "$( [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" = "true" ] && echo " enabled" || echo " disabled" )"
+  printf "      Seed benchmarks:  %s\n" "$( [ "$SEED_BENCHMARKS" = "true" ] && echo "enabled" || echo "disabled" )"
+  printf "      Seed all industries: %s\n" "$( [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" ] && echo "enabled" || echo "disabled" )"
+  printf "      Seed industry filter: %s\n" "${SEED_BENCHMARK_INDUSTRIES:-none}"
+  printf "      Benchmark admins: %s\n" "${BENCHMARK_ADMINS:-all authenticated users}"
   if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
     printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"
   fi
@@ -619,13 +737,44 @@ destroy() {
   printf "\n  Removing Databricks Forge AI...\n"
 
   info "Stopping app..."
-  if databricks apps stop "$APP_NAME" --no-wait 2>/dev/null; then ok; else ok "already stopped"; fi
+  local stop_err
+  if ! stop_err=$(databricks apps stop "$APP_NAME" --no-wait 2>&1); then
+    case "$stop_err" in
+      *"does not exist"*|*"RESOURCE_DOES_NOT_EXIST"*|*"not found"*)
+        ok "already stopped"
+        ;;
+      *)
+        ok "stop skipped"
+        ;;
+    esac
+  else
+    ok
+  fi
 
   info "Deleting app..."
-  if ! databricks apps delete "$APP_NAME" 2>/dev/null; then
-    die "Failed to delete app. It may not exist or you lack permissions."
+  local delete_err
+  if ! delete_err=$(databricks apps delete "$APP_NAME" 2>&1); then
+    case "$delete_err" in
+      *"does not exist"*|*"RESOURCE_DOES_NOT_EXIST"*|*"not found"*)
+        ok "already deleted"
+        ;;
+      *"state DELETING"*|*"updated less than 20 minutes ago"*)
+        ok "already deleting"
+        ;;
+      *)
+        printf "FAILED\n"
+        die "Failed to delete app.\n  $delete_err"
+        ;;
+    esac
+  else
+    ok
   fi
-  ok
+
+  if [ "$(get_app_compute_state)" != "MISSING" ]; then
+    if ! wait_for_app_absent; then
+      die "Delete requested but app still exists after waiting. Retry destroy in a few minutes."
+    fi
+  fi
 
   WORKSPACE_PATH="/Workspace/Users/${USER_EMAIL}/${APP_NAME}"
   info "Cleaning workspace files..."

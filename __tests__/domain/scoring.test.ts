@@ -36,6 +36,7 @@ function makeUseCase(overrides: Partial<UseCase> = {}): UseCase {
     sqlStatus: null,
     feedback: null,
     feedbackAt: null,
+    enrichmentTags: null,
     ...overrides,
   };
 }

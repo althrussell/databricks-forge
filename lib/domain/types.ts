@@ -21,7 +21,7 @@ export enum PipelineStep {
   GenieRecommendations = "genie-recommendations",
 }
 
-export type RunStatus = "pending" | "running" | "completed" | "failed";
+export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 export type Operation = "Discover Usecases" | "Re-generate SQL" | "Generate Sample Result";
 
@@ -80,6 +80,10 @@ export interface PipelineRunConfig {
   businessDomains: string;
   businessPriorities: BusinessPriority[];
   strategicGoals: string;
+  additionalContext: string;
+  customerMaturity: "nascent" | "developing" | "advanced";
+  riskPosture: "conservative" | "balanced" | "aggressive";
+  transformationHorizon: "quarter" | "half-year" | "year-plus";
   generationOptions: GenerationOption[];
   generationPath: string;
   languages: string[];
@@ -116,9 +120,29 @@ export interface PipelineRun {
   promptVersions: Record<string, string> | null; // promptKey -> SHA-256 hash
   stepLog: StepLogEntry[];
   industryAutoDetected: boolean; // true when the industry was set by auto-detection, not user
+  contextSources: RunContextSources | null;
   createdBy: string | null; // email of the user who created this run
   createdAt: string; // ISO timestamp
   completedAt: string | null;
+}
+
+/** Enrichment provenance recorded across pipeline steps. */
+export interface RunContextSources {
+  benchmarks: {
+    strategy: string;
+    recordIds: string[];
+    chunkCount: number;
+  };
+  outcomeMap: {
+    industryId: string | null;
+    sections: string[];
+  };
+  documents: {
+    sourceIds: string[];
+    kinds: string[];
+    chunkCount: number;
+  };
+  steps: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +193,7 @@ export interface UseCase {
   sqlStatus: string | null;
   feedback: "accepted" | "rejected" | "dismissed" | null;
   feedbackAt: string | null;
+  enrichmentTags: string[] | null;
 }
 
 export type UseCaseFeedback = "accepted" | "rejected" | "dismissed";
@@ -255,6 +280,8 @@ export interface PipelineContext {
   sampleData: import("@/lib/genie/types").SampleDataCache | null;
   /** Existing analytics assets discovered in the workspace (null when asset discovery is disabled). */
   discoveryResult: import("@/lib/discovery/types").DiscoveryResult | null;
+  /** Abort signal for pipeline cancellation. Checked between steps and before LLM calls. */
+  signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +505,10 @@ export interface EnvironmentScan {
   redundancyPairsCount: number;
   dataProductCount: number;
   avgGovernanceScore: number;
+  genieSpaceCount: number;
+  dashboardCount: number;
+  metricViewCount: number;
+  analyticsCoveragePercent: number;
   scanDurationMs: number;
   passResults: Record<string, "success" | "failed" | "skipped">;
 }

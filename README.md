@@ -110,7 +110,7 @@ Pull the latest changes and re-run `./deploy.sh`. The script detects the existin
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | Set by `deploy.sh` in `app.yaml` |
 | `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
 | `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
-| `DATABRICKS_EMBEDDING_ENDPOINT` | Embedding Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-gte-large-en`) |
+| `DATABRICKS_EMBEDDING_ENDPOINT` | Embedding Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-qwen3-embedding-0-6b`) |
 | `LAKEBASE_ENDPOINT_NAME` | Lakebase endpoint resource name | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 | `LAKEBASE_POOLER_HOST` | Lakebase pooler hostname | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
 | `LAKEBASE_USERNAME` | Lakebase runtime username | Auto-generated at startup by `scripts/provision-lakebase.mjs` |

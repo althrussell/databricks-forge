@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { deleteAllData } from "@/lib/lakebase/reset";
+import { isRateLimitErrorMessage } from "@/lib/lakebase/auth-errors";
 
 const CONFIRMATION_VALUE = "delete-all-data";
 
@@ -35,6 +36,17 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/data] DELETE failed", { error: msg });
+
+    if (isRateLimitErrorMessage(msg)) {
+      return NextResponse.json(
+        {
+          error:
+            "Delete request was rate-limited by the database. Please wait 30-60 seconds and retry.",
+        },
+        { status: 429 },
+      );
+    }
+
     return NextResponse.json(
       { error: msg || "Failed to delete data" },
       { status: 500 },

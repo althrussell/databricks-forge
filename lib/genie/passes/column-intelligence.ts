@@ -25,7 +25,7 @@ import {
 import { mapWithConcurrency } from "../concurrency";
 
 const BATCH_SIZE = 15;
-const BATCH_CONCURRENCY = 3;
+const BATCH_CONCURRENCY = 10;
 const TEMPERATURE = 0.2;
 
 export interface ColumnIntelligenceInput {
@@ -192,7 +192,7 @@ Analyze ALL columns in the tables above and return the enrichment JSON array.`;
 
 function parseColumnEnrichments(content: string, tableFqns: string[]): ColumnEnrichment[] {
   try {
-    const parsed = parseLLMJson(content) as Record<string, unknown>;
+    const parsed = parseLLMJson(content, "genie:column-intelligence") as Record<string, unknown>;
     const items: unknown[] = Array.isArray(parsed)
       ? parsed as unknown[]
       : Array.isArray(parsed.columns) ? parsed.columns

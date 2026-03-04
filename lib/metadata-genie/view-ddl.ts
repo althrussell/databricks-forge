@@ -5,6 +5,7 @@
  * from system.information_schema, with optional catalog scope filtering.
  */
 
+import { validateIdentifier, validateFqn } from "@/lib/validation";
 import type { ViewTarget } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -276,7 +277,9 @@ export function generateViewDDL(opts: {
   lineageAccessible?: boolean;
 }): string[] {
   const { target, catalogScope, aiDescriptions, lineageAccessible } = opts;
-  const fqnPrefix = `\`${target.catalog}\`.\`${target.schema}\``;
+  const safeCatalog = validateIdentifier(target.catalog, "viewTarget.catalog");
+  const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
+  const fqnPrefix = `\`${safeCatalog}\`.\`${safeSchema}\``;
 
   const defs = lineageAccessible
     ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
@@ -287,7 +290,8 @@ export function generateViewDDL(opts: {
 
     if (def.filterColumn) {
       if (catalogScope && catalogScope.length > 0) {
-        const inList = catalogScope.map((c) => `'${c}'`).join(", ");
+        const safeCatalogs = catalogScope.map((c) => validateIdentifier(c, "catalogScope"));
+        const inList = safeCatalogs.map((c) => `'${c}'`).join(", ");
         conditions.push(`${def.filterColumn} IN (${inList})`);
       } else {
         const exList = EXCLUDED_CATALOGS.map((c) => `'${c}'`).join(", ");
@@ -308,7 +312,8 @@ export function generateViewDDL(opts: {
       conditions.push("source_table_full_name IS NOT NULL");
       conditions.push("target_table_full_name IS NOT NULL");
       if (catalogScope && catalogScope.length > 0) {
-        const orConditions = catalogScope
+        const safeCats = catalogScope.map((c) => validateIdentifier(c, "catalogScope"));
+        const orConditions = safeCats
           .map((c) => `source_table_full_name LIKE '${c}.%' OR target_table_full_name LIKE '${c}.%'`)
           .join(" OR ");
         conditions.push(`(${orConditions})`);
@@ -355,7 +360,12 @@ export function generateViewDDL(opts: {
  * Generate DROP VIEW IF EXISTS DDL for cleanup.
  */
 export function generateDropViewDDL(viewFqns: string[]): string[] {
-  return viewFqns.map((fqn) => `DROP VIEW IF EXISTS ${fqn}`);
+  return viewFqns.map((fqn) => {
+    const safe = validateFqn(fqn, "viewFqn");
+    const parts = safe.split(".");
+    const escaped = parts.map((p) => `\`${p}\``).join(".");
+    return `DROP VIEW IF EXISTS ${escaped}`;
+  });
 }
 
 /**
@@ -365,11 +375,13 @@ export function getViewFqns(
   target: ViewTarget,
   lineageAccessible?: boolean
 ): string[] {
+  const safeCatalog = validateIdentifier(target.catalog, "viewTarget.catalog");
+  const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
   const defs = lineageAccessible
     ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
     : VIEW_DEFS;
   return defs.map(
-    (def) => `\`${target.catalog}\`.\`${target.schema}\`.\`${def.name}\``
+    (def) => `\`${safeCatalog}\`.\`${safeSchema}\`.\`${def.name}\``
   );
 }
 

@@ -297,7 +297,7 @@ async function runEnrichmentPass(
     5,
     (completed, total) => {
       if (runId && completed % 10 === 0) {
-        updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch(() => {});
+        updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch((e) => logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }));
       }
     }
   );
@@ -352,7 +352,7 @@ async function runEnrichmentPass(
         businessName: undefined,
         onProgress: (pass, pct) => {
           if (runId && pct === 0) {
-            updateRunMessage(runId, `Intelligence: ${pass}...`).catch(() => {});
+            updateRunMessage(runId, `Intelligence: ${pass}...`).catch((e) => logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }));
           }
         },
       }
@@ -441,6 +441,10 @@ async function runEnrichmentPass(
     avgGovernanceScore: intelligenceResult?.governanceGaps.length
       ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) / intelligenceResult.governanceGaps.length
       : 0,
+    genieSpaceCount: 0,
+    dashboardCount: 0,
+    metricViewCount: snapshot.metricViews.length,
+    analyticsCoveragePercent: 0,
     scanDurationMs: Date.now() - startTime,
     passResults: intelligenceResult?.passResults ?? {},
   };
@@ -501,7 +505,9 @@ async function runEnrichmentPass(
     historiesWithHealth,
     lineageGraph.edges,
     insightRecords,
-    allColumns
+    allColumns,
+    allTableTags,
+    allColumnTags,
   );
 
   logger.info("[metadata-extraction] Environment scan saved", {

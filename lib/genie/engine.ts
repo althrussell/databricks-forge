@@ -18,6 +18,7 @@ import type {
   GenieSpaceRecommendation,
   GenieEnginePassOutputs,
   SampleDataCache,
+  QuestionComplexity,
 } from "./types";
 import { defaultGenieEngineConfig } from "./types";
 import { buildSchemaAllowlist } from "./schema-allowlist";
@@ -29,14 +30,19 @@ import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
 import { runJoinInference } from "./passes/join-inference";
+import { runTitleGeneration } from "./passes/title-generation";
+import { runExampleQueryGeneration } from "./passes/example-query-generation";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { isValidTable } from "./schema-allowlist";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "./concurrency";
 import { logger } from "@/lib/logger";
 import type { DiscoveredGenieSpace } from "@/lib/discovery/types";
+import { tableHasSynonymPair } from "./key-synonyms";
+import { normalizeDomainLabel } from "./domain-normalization";
+import { evaluateJoinCandidates } from "./join-diagnostics";
 
-const DOMAIN_CONCURRENCY = 3;
+const DOMAIN_CONCURRENCY = 10;
 
 export class EngineCancelledError extends Error {
   constructor() {
@@ -198,7 +204,31 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
           metadata,
         });
 
-        const rec = buildRecommendation(outputs, space, run.config.businessName);
+        const titleResult = await runTitleGeneration({
+          businessName: run.config.businessName,
+          domain: normalizeDomainLabel(outputs.domain),
+          subdomains: outputs.subdomains,
+          tableFqns: outputs.tables,
+          conversationSummary: run.businessContext?.strategicGoals || "",
+          endpoint: fastEndpoint,
+          fallbackEndpoint: premiumEndpoint,
+          signal,
+        });
+        const degradedReasons: string[] = [];
+        if (outputs.tables.length > 1 && space.instructions.join_specs.length === 0) degradedReasons.push("no_validated_joins");
+        if (space.instructions.join_specs.length > 0 && space.instructions.example_question_sqls.length < 2) {
+          degradedReasons.push("insufficient_sample_sql");
+        }
+        if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
+
+        const rec = buildRecommendation(outputs, space, run.config.businessName, {
+          titleOverride: titleResult.title,
+          titleSource: titleResult.source,
+          degradedReasons,
+          qualityScore: qualityScore(degradedReasons),
+          joinDiagnostics: outputs.joinDiagnostics ?? [],
+          promptVersion: "genie-v2-phase2",
+        });
         rec.useCaseCount = group.useCases.length;
 
         // Tag with recommendation type based on existing space mapping
@@ -284,6 +314,15 @@ async function processDomain(
   onProgress: (msg: string) => void
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
+  const normalizedDomain = normalizeDomainLabel(domain);
+  const sensitiveColumns = new Set(
+    (piiClassifications ?? [])
+      .filter((p) =>
+        tables.some((t) => t.toLowerCase() === p.tableFqn.toLowerCase()) &&
+        p.classification !== "Public"
+      )
+      .map((p) => p.columnName.toLowerCase())
+  );
 
   // Pass 1 (fast) + Pass 2 (premium) run in parallel -- no shared dependencies
   onProgress("Analyzing columns & generating SQL expressions...");
@@ -333,9 +372,9 @@ async function processDomain(
   );
 
   const fkAndOverrideJoins = [
-    ...fkJoins.filter((j) =>
-      !overrideKeys.has(`${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
-    ),
+    ...fkJoins
+      .filter((j) => !overrideKeys.has(`${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`))
+      .map((j) => ({ ...j, source: "fk" as const, confidence: "high" as const })),
     ...joinOverrides
       .filter((j) => j.enabled)
       .map((j) => ({
@@ -343,15 +382,25 @@ async function processDomain(
         rightTable: j.rightTable,
         sql: j.joinSql,
         relationshipType: j.relationshipType,
+        source: "override" as const,
+        confidence: "high" as const,
       })),
   ];
 
   const existingJoinKeys = new Set(
     fkAndOverrideJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
   );
-  const sqlInferredJoins = inferJoinsFromUseCaseSql(useCases, tableSet, existingJoinKeys, allowlist);
+  const sqlInferredJoins = inferJoinsFromUseCaseSql(useCases, tableSet, existingJoinKeys, allowlist)
+    .map((j) => ({ ...j, source: "sql_mined" as const, confidence: "medium" as const }));
 
-  let llmInferredJoins: typeof sqlInferredJoins = [];
+  let llmInferredJoins: Array<{
+    leftTable: string;
+    rightTable: string;
+    sql: string;
+    relationshipType: "many_to_one";
+    source: "llm";
+    confidence: "medium";
+  }> = [];
   if (config.llmRefinement && (fkAndOverrideJoins.length + sqlInferredJoins.length) < 3) {
     try {
       onProgress("Inferring table relationships...");
@@ -367,7 +416,8 @@ async function processDomain(
         endpoint: fastEndpoint,
         signal,
       });
-      llmInferredJoins = llmResult.joins;
+      llmInferredJoins = llmResult.joins
+        .map((j) => ({ ...j, source: "llm" as const, confidence: "medium" as const }));
     } catch (err) {
       logger.warn("LLM join inference failed, continuing with FK + SQL-inferred joins", {
         error: err instanceof Error ? err.message : String(err),
@@ -375,10 +425,25 @@ async function processDomain(
     }
   }
 
-  const allJoins = [...fkAndOverrideJoins, ...sqlInferredJoins, ...llmInferredJoins];
+  const existingHeuristicKeys = new Set(
+    [...fkAndOverrideJoins, ...sqlInferredJoins, ...llmInferredJoins].flatMap((j) => [
+      `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
+      `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`,
+    ])
+  );
+  const heuristicJoins =
+    tables.length > 1 && fkAndOverrideJoins.length + sqlInferredJoins.length + llmInferredJoins.length === 0
+      ? inferHeuristicJoins(metadata, tables, existingHeuristicKeys)
+        .map((j) => ({ ...j, source: "heuristic" as const, confidence: "low" as const }))
+      : [];
+  const { accepted: allJoins, diagnostics: joinDiagnostics } = evaluateJoinCandidates(
+    allowlist,
+    [...fkAndOverrideJoins, ...sqlInferredJoins, ...llmInferredJoins, ...heuristicJoins],
+    `engine_join:${normalizedDomain}`,
+  );
 
   logger.info("Join specs assembled", {
-    domain,
+    domain: normalizedDomain,
     fkJoins: fkAndOverrideJoins.length,
     sqlInferred: sqlInferredJoins.length,
     llmInferred: llmInferredJoins.length,
@@ -398,13 +463,14 @@ async function processDomain(
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
           endpoint: premiumEndpoint,
+          questionComplexity: config.questionComplexity,
           signal,
         })
       : Promise.resolve({ queries: [], functions: [] }),
 
     // Pass 4: Instruction Generation (fast -- short text output)
     runInstructionGeneration({
-      domain,
+      domain: normalizedDomain,
       subdomains,
       businessName: run.config.businessName,
       businessContext: run.businessContext,
@@ -412,6 +478,11 @@ async function processDomain(
       entityCandidates: columnResult.entityCandidates,
       joinSpecs: allJoins,
       endpoint: fastEndpoint,
+      fallbackEndpoint: premiumEndpoint,
+      metadata,
+      tableFqns: tables,
+      conversationSummary: run.businessContext?.strategicGoals || "",
+      sensitiveColumns,
       signal,
     }),
 
@@ -433,7 +504,7 @@ async function processDomain(
     // Pass 6: Metric View Proposals (premium -- YAML + DDL quality critical)
     config.generateMetricViews
       ? runMetricViewProposals({
-          domain,
+          domain: normalizedDomain,
           tableFqns: tables,
           metadata,
           allowlist,
@@ -448,14 +519,31 @@ async function processDomain(
       : Promise.resolve({ proposals: [] }),
   ]);
 
+  let trustedQueries = trustedResult.queries;
+  if (trustedQueries.length === 0) {
+    const exampleQueryResult = await runExampleQueryGeneration({
+      domain: normalizedDomain,
+      tableFqns: tables,
+      metadata,
+      allowlist,
+      joinSpecs: allJoins,
+      endpoint: fastEndpoint,
+      fallbackEndpoint: premiumEndpoint,
+      sensitiveColumns,
+      questionComplexity: config.questionComplexity,
+      signal,
+    });
+    trustedQueries = exampleQueryResult.queries;
+  }
+
   // Sample questions: prefer trusted query questions (column-grounded)
   // over abstract use case statements for better Genie vocabulary learning
-  const trustedQuestionTexts = trustedResult.queries
+  const trustedQuestionTexts = trustedQueries
     .filter((tq) => tq.question.trim().length > 0)
     .map((tq) => tq.question);
   const fallbackQuestions = useCases
     .slice(0, 5)
-    .map((uc) => statementToQuestion(uc.statement));
+    .map((uc) => statementToQuestion(uc.statement, config.questionComplexity));
   const sampleQuestions = [
     ...trustedQuestionTexts.slice(0, 5),
     ...fallbackQuestions,
@@ -464,7 +552,7 @@ async function processDomain(
     .slice(0, 5);
 
   return {
-    domain,
+    domain: normalizedDomain,
     subdomains,
     tables,
     metricViews: metricViews.map((mv) => mv.fqn),
@@ -473,13 +561,14 @@ async function processDomain(
     measures: exprResult.measures,
     filters: exprResult.filters,
     dimensions: exprResult.dimensions,
-    trustedQueries: trustedResult.queries,
+    trustedQueries,
     trustedFunctions: [],
     textInstructions: instructionResult.instructions,
     sampleQuestions,
     benchmarkQuestions: benchmarkResult.benchmarks,
     metricViewProposals: metricViewResult.proposals,
     joinSpecs: allJoins,
+    joinDiagnostics,
   };
 }
 
@@ -577,15 +666,29 @@ function inferJoinsFromUseCaseSql(
   return results;
 }
 
-function statementToQuestion(statement: string): string {
+export function statementToQuestion(statement: string, complexity?: QuestionComplexity): string {
+  const level = complexity ?? "simple";
   const s = statement.trim();
   if (s.endsWith("?")) return s;
-  if (/^(identify|detect|find|discover|determine)/i.test(s)) {
-    return `How can we ${s.charAt(0).toLowerCase() + s.slice(1)}?`;
-  }
-  if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) {
+  const lower = s.charAt(0).toLowerCase() + s.slice(1);
+
+  if (level === "simple") {
+    if (/^(identify|detect|find|discover|determine)/i.test(s)) return `How do we ${lower}?`;
+    if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) return `How do we ${lower}?`;
+    if (/^(build|create|develop|implement|design)/i.test(s)) return `How would we ${lower}?`;
     return `${s}?`;
   }
+
+  if (level === "medium") {
+    if (/^(identify|detect|find|discover|determine)/i.test(s)) return `How can we ${lower}?`;
+    if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) return `${s}?`;
+    if (/^(build|create|develop|implement|design)/i.test(s)) return `How would we ${lower}?`;
+    return `${s}?`;
+  }
+
+  // complex -- original verbose style
+  if (/^(identify|detect|find|discover|determine)/i.test(s)) return `How can we ${lower}?`;
+  if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) return `${s}?`;
   return `What insights can we gain from: ${s}?`;
 }
 
@@ -627,4 +730,45 @@ function buildChangeSummary(
   return changes.length > 0
     ? `Enhancement of "${existing.title}": ${changes.join("; ")}`
     : `Replacement of "${existing.title}" with updated configuration`;
+}
+
+function inferHeuristicJoins(
+  metadata: MetadataSnapshot,
+  tableFqns: string[],
+  existingJoinKeys: Set<string>,
+): Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> {
+  const byTable = new Map<string, Set<string>>();
+  for (const c of metadata.columns) {
+    const key = c.tableFqn.toLowerCase();
+    const cols = byTable.get(key) ?? new Set<string>();
+    cols.add(c.columnName.toLowerCase());
+    byTable.set(key, cols);
+  }
+  const joins: Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> = [];
+  for (let i = 0; i < tableFqns.length; i++) {
+    for (let j = i + 1; j < tableFqns.length; j++) {
+      const left = tableFqns[i];
+      const right = tableFqns[j];
+      const pair = `${left.toLowerCase()}|${right.toLowerCase()}`;
+      const reverse = `${right.toLowerCase()}|${left.toLowerCase()}`;
+      if (existingJoinKeys.has(pair) || existingJoinKeys.has(reverse)) continue;
+      const leftCols = byTable.get(left.toLowerCase()) ?? new Set<string>();
+      const rightCols = byTable.get(right.toLowerCase()) ?? new Set<string>();
+      const synonym = tableHasSynonymPair(leftCols, rightCols);
+      if (!synonym) continue;
+      joins.push({
+        leftTable: left,
+        rightTable: right,
+        sql: `${left}.${synonym.leftColumn} = ${right}.${synonym.rightColumn}`,
+        relationshipType: "many_to_one",
+      });
+      existingJoinKeys.add(pair);
+      existingJoinKeys.add(reverse);
+    }
+  }
+  return joins;
+}
+
+function qualityScore(degradedReasons: string[]): number {
+  return Math.max(40, 100 - degradedReasons.length * 12);
 }

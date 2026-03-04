@@ -17,6 +17,7 @@
 import { importNotebook, mkdirs } from "@/lib/dbx/workspace";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import { groupByDomain } from "@/lib/domain/scoring";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,7 +123,7 @@ export async function generateNotebooks(
       format: "JUPYTER",
     });
   } catch (error) {
-    console.warn("[notebooks] Failed to deploy index notebook:", error);
+    logger.warn("[notebooks] Failed to deploy index notebook", { error: String(error) });
   }
 
   // Deploy one notebook per domain
@@ -150,7 +151,7 @@ export async function generateNotebooks(
       });
       deployed.push({ name: notebookName, path: notebookPath });
     } catch (error) {
-      console.warn(`[notebooks] Failed to deploy ${notebookName}:`, error);
+      logger.warn("[notebooks] Failed to deploy notebook", { notebookName, error: String(error) });
       skipped++;
     }
   }

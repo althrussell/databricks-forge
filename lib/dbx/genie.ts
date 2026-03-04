@@ -14,9 +14,9 @@ import { logger } from "@/lib/logger";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
 import type { GenieAuthMode } from "@/lib/settings";
 
-/** Resolve auth headers based on the deploy auth mode. */
+/** Resolve auth headers based on the deploy auth mode (defaults to OBO). */
 async function resolveHeaders(authMode?: GenieAuthMode): Promise<Record<string, string>> {
-  return authMode === "obo" ? getHeaders() : getAppHeaders();
+  return authMode === "sp" ? getAppHeaders() : getHeaders();
 }
 
 export const DEFAULT_GENIE_PARENT_PATH = "/Shared/Forge Genie Spaces/";
@@ -267,8 +267,8 @@ export async function createGenieSpace(opts: {
   // Best-effort: pre-create the parent folder.
   try {
     await mkdirs(parentPath);
-  } catch {
-    // Will be caught by the retry below if the path doesn't exist
+  } catch (e) {
+    logger.debug("[genie] Pre-create parent folder failed (will retry)", { parentPath, error: String(e) });
   }
 
   // Debug: log join_specs from the final payload so we can diagnose API rejections
@@ -282,7 +282,9 @@ export async function createGenieSpace(opts: {
         last: JSON.stringify(debugJoins[debugJoins.length - 1]),
       });
     }
-  } catch { /* non-critical debug log */ }
+  } catch (e) {
+    logger.debug("[genie] Failed to log join_specs debug info", { error: String(e) });
+  }
 
   const body = {
     title: opts.title,

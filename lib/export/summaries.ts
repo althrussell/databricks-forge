@@ -5,8 +5,9 @@
  * to static summaries if the LLM call fails.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { logger } from "@/lib/logger";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 
@@ -46,13 +47,13 @@ export async function generateExportSummaries(
       },
       modelEndpoint: getFastServingEndpoint(),
       temperature: 0.4,
-      maxTokens: 2000,
+      maxTokens: 8192,
     });
 
-    const parsed = parseJSONResponse<{
+    const parsed = parseLLMJson(result.rawResponse, "export:summaries") as {
       executiveSummary?: string;
       domainSummaries?: Record<string, string>;
-    }>(result.rawResponse);
+    };
 
     if (!parsed?.executiveSummary) {
       logger.warn("LLM summary missing executiveSummary", { runId: run.runId });

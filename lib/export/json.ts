@@ -45,6 +45,7 @@ interface ExportJson {
       impact: number | null;
       overall: number | null;
     };
+    enrichmentTags: string[] | null;
     sqlStatus: string | null;
     feedback: string | null;
   }>;
@@ -97,6 +98,7 @@ export function generateJson(
         impact: uc.userImpactScore,
         overall: uc.userOverallScore,
       },
+      enrichmentTags: uc.enrichmentTags ?? null,
       sqlStatus: uc.sqlStatus,
       feedback: uc.feedback,
     })),

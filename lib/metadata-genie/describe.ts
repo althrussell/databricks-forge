@@ -11,8 +11,10 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { executeSQLMapped } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
+import { validateIdentifier } from "@/lib/validation";
 
 const MAX_TABLES = 500;
 const BATCH_SIZE = 50;
@@ -33,7 +35,7 @@ export async function fetchUndocumentedTables(
   catalogScope?: string[]
 ): Promise<UndocumentedTable[]> {
   const catFilter = catalogScope?.length
-    ? `table_catalog IN (${catalogScope.map((c) => `'${c}'`).join(", ")})`
+    ? `table_catalog IN (${catalogScope.map((c) => `'${validateIdentifier(c, "catalogScope")}'`).join(", ")})`
     : `table_catalog NOT IN (${EXCLUDED_CATALOGS.map((c) => `'${c}'`).join(", ")})`;
 
   const schemaFilter = `table_schema NOT IN (${EXCLUDED_SCHEMAS.map((s) => `'${s}'`).join(", ")})`;
@@ -54,7 +56,8 @@ export async function fetchUndocumentedTables(
   if (rows.length === 0) return [];
 
   const fqns = rows.map((r) => r.fqn);
-  const fqnPlaceholders = fqns.map((f) => `'${f}'`).join(", ");
+  const safeFqns = fqns.map((f) => f.replace(/'/g, "''"));
+  const fqnPlaceholders = safeFqns.map((f) => `'${f}'`).join(", ");
 
   const columnRows = await executeSQLMapped<{ fqn: string; col: string }>(
     `SELECT
@@ -111,9 +114,12 @@ export async function generateTableDescriptions(
         responseFormat: "json_object",
         temperature: 0.2,
         retries: 1,
+        maxTokens: 65536,
       });
 
-      const parsed = JSON.parse(result.rawResponse);
+      const parsed = parseLLMJson(result.rawResponse, "metadata-genie:describe") as
+        | { table_fqn: string; description: string }[]
+        | { descriptions: { table_fqn: string; description: string }[] };
       const items: { table_fqn: string; description: string }[] =
         Array.isArray(parsed) ? parsed : parsed.descriptions ?? [];
 

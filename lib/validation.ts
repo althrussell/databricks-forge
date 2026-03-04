@@ -3,6 +3,12 @@
  */
 
 import { z } from "zod/v4";
+import {
+  BENCHMARK_KINDS,
+  BENCHMARK_SOURCE_TYPES,
+  BENCHMARK_LICENSE_CLASSES,
+  BENCHMARK_LIFECYCLE,
+} from "@/lib/domain/benchmarks";
 
 // ---------------------------------------------------------------------------
 // SQL identifier validation
@@ -129,6 +135,10 @@ export const CreateRunSchema = z.object({
   businessDomains: z.string().max(2000).optional().default(""),
   businessPriorities: z.array(z.string()).optional().default(["Increase Revenue"]),
   strategicGoals: z.string().max(5000).optional().default(""),
+  additionalContext: z.string().max(6000).optional().default(""),
+  customerMaturity: z.enum(["nascent", "developing", "advanced"]).optional().default("developing"),
+  riskPosture: z.enum(["conservative", "balanced", "aggressive"]).optional().default("balanced"),
+  transformationHorizon: z.enum(["quarter", "half-year", "year-plus"]).optional().default("half-year"),
   generationOptions: z.array(z.string()).optional().default(["SQL Code"]),
   generationPath: z.string().max(500).optional().default("./forge_gen/"),
   languages: z.array(z.literal("English")).optional().default(["English"]),
@@ -154,6 +164,38 @@ export const CreateRunSchema = z.object({
 });
 
 export type CreateRunInput = z.infer<typeof CreateRunSchema>;
+
+export const CreateBenchmarkSchema = z.object({
+  kind: z.enum(BENCHMARK_KINDS),
+  title: z.string().min(8).max(240),
+  summary: z.string().min(20).max(4000),
+  source_type: z.enum(BENCHMARK_SOURCE_TYPES),
+  source_url: z.url(),
+  publisher: z.string().min(2).max(200),
+  published_at: z.string().datetime().optional(),
+  industry: z.string().min(2).max(80).optional(),
+  region: z.string().min(2).max(80).optional(),
+  metric_definition: z.string().max(2000).optional(),
+  methodology_note: z.string().max(2000).optional(),
+  license_class: z.enum(BENCHMARK_LICENSE_CLASSES),
+  confidence: z.number().min(0).max(1),
+  ttl_days: z.number().int().min(1).max(3650),
+  tags: z.array(z.string().min(1).max(80)).optional().default([]),
+  provenance: z.object({
+    source_class: z.string().min(2).max(80),
+    captured_at: z.string().datetime().optional(),
+    citation: z.string().min(8).max(500).optional(),
+    notes: z.string().max(1000).optional(),
+  }).passthrough().optional(),
+});
+
+export const UpdateBenchmarkSchema = z.object({
+  lifecycle_status: z.enum(BENCHMARK_LIFECYCLE).optional(),
+  source_content: z.string().min(50).max(500_000).optional(),
+}).refine(
+  (d) => d.lifecycle_status !== undefined || d.source_content !== undefined,
+  { message: "Provide lifecycle_status or source_content" },
+);
 
 export const MetadataQuerySchema = z.object({
   type: z.enum(["catalogs", "schemas", "tables"]).default("catalogs"),

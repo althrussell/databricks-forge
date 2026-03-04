@@ -28,7 +28,8 @@ interface GenieWorkbenchProps {
 
 function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
   if (typeof window === "undefined") return cfg;
-  const { genieEngineDefaults: g } = loadSettings();
+  const settings = loadSettings();
+  const g = settings.genieEngineDefaults;
   cfg.maxTablesPerSpace = g.maxTablesPerSpace;
   cfg.maxAutoSpaces = g.maxAutoSpaces;
   cfg.llmRefinement = g.llmRefinement;
@@ -38,6 +39,7 @@ function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
   cfg.generateTrustedAssets = g.generateTrustedAssets;
   cfg.fiscalYearStartMonth = g.fiscalYearStartMonth;
   cfg.entityMatchingMode = g.entityMatchingMode;
+  cfg.questionComplexity = settings.questionComplexity.genieEngine;
   return cfg;
 }
 

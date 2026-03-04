@@ -6,8 +6,9 @@
  * across different industry documents.
  */
 
-import { executeAIQuery, parseJSONResponse } from "@/lib/ai/agent";
+import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "./industry-outcomes";
 
@@ -56,9 +57,7 @@ export async function parseOutcomeMapWithAI(
       step: "outcome-map-parse",
     });
 
-    const parsed = parseJSONResponse<Record<string, unknown>>(
-      result.rawResponse
-    );
+    const parsed = parseLLMJson(result.rawResponse, "outcome-map-parser") as Record<string, unknown>;
 
     // Validate required fields
     if (!parsed.id || !parsed.name || !Array.isArray(parsed.objectives)) {

@@ -387,6 +387,10 @@ export async function runStandaloneEnrichment(
     avgGovernanceScore: intelligenceResult?.governanceGaps.length
       ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) / intelligenceResult.governanceGaps.length
       : 0,
+    genieSpaceCount,
+    dashboardCount,
+    metricViewCount,
+    analyticsCoveragePercent: assetCoveragePercent,
     scanDurationMs: Date.now() - startTime,
     passResults: intelligenceResult?.passResults ?? {},
   };
@@ -429,7 +433,16 @@ export async function runStandaloneEnrichment(
     }
   }
 
-  await saveEnvironmentScan(scan, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
+  await saveEnvironmentScan(
+    scan,
+    details,
+    historiesWithHealth,
+    lineageGraph.edges,
+    insightRecords,
+    allColumns,
+    allTableTags,
+    allColumnTags,
+  );
 
   // Generate vector embeddings for semantic search (best-effort, non-blocking)
   try {
