@@ -11,6 +11,7 @@ import { buildAssistantContext, buildSourceReferences, type AssistantContext, ty
 import { extractTableFqnsFromText, mergeTableReferenceLists } from "./context-builder";
 import { buildAssistantMessages, type AssistantPersona } from "./prompts";
 import { extractSqlBlocks, validateSql, isColumnResolutionError, buildSqlFixPrompt } from "./sql-proposer";
+import { validateColumnReferences } from "@/lib/validation/sql-columns";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
 import { retrieveContext } from "@/lib/embeddings/retriever";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
@@ -197,22 +198,32 @@ export async function runAssistantEngine(
   answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
 
-  // EXPLAIN validation + single fix attempt for column resolution errors
+  // Static column validation + EXPLAIN + single fix attempt for column errors
   if (sqlBlocks.length > 0 && context.tableEnrichments.some((e) => e.columns.length > 0)) {
     const knownCols = context.tableEnrichments.flatMap((t) =>
       t.columns.map((c) => ({ tableFqn: t.tableFqn, name: c.name, dataType: c.dataType }))
     );
+    const knownColumnNames = new Set(knownCols.map((c) => c.name.toLowerCase()));
 
     for (let i = 0; i < sqlBlocks.length; i++) {
       try {
-        const explainError = await validateSql(sqlBlocks[i]);
-        if (explainError && isColumnResolutionError(explainError)) {
+        // Static pre-check: catch hallucinated columns before EXPLAIN round-trip
+        const staticResult = validateColumnReferences(sqlBlocks[i], knownColumnNames, {
+          allowAiFunctionFields: true,
+        });
+
+        const errorToFix = staticResult.unknownColumns.length > 0
+          ? `SCHEMA VIOLATION: SQL references columns that do not exist: ${staticResult.unknownColumns.join(", ")}. Use ONLY columns from the provided schema.`
+          : await validateSql(sqlBlocks[i]);
+
+        if (errorToFix && (staticResult.unknownColumns.length > 0 || isColumnResolutionError(errorToFix))) {
           logger.info("[assistant/engine] SQL column error, attempting fix", {
             blockIndex: i,
-            error: explainError.slice(0, 200),
+            staticHallucinations: staticResult.unknownColumns.length,
+            error: errorToFix.slice(0, 200),
           });
 
-          const fixPrompt = buildSqlFixPrompt(sqlBlocks[i], explainError, knownCols);
+          const fixPrompt = buildSqlFixPrompt(sqlBlocks[i], errorToFix, knownCols);
           const fixResponse = await chatCompletion({
             endpoint: getServingEndpoint(),
             messages: [

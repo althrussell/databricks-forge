@@ -7,6 +7,7 @@
  */
 
 import type { MetadataSnapshot, ColumnInfo } from "@/lib/domain/types";
+import { extractColumnReferences, extractSqlAliases, AI_FUNCTION_RETURN_FIELDS } from "@/lib/validation/sql-columns";
 import { logger } from "@/lib/logger";
 
 export interface SchemaAllowlist {
@@ -196,59 +197,32 @@ export function findInvalidIdentifiers(
     }
   }
 
-  // Strict mode: validate 2-part alias.column references.
-  // Any column after a dot that doesn't exist in ANY table is flagged.
+  // Strict mode: validate 2-part alias.column references using the shared
+  // validation module (handles both plain and backtick-quoted columns).
   if (strictColumnCheck) {
     const allColumns = new Set<string>();
     for (const cols of allowlist.columns.values()) {
       for (const c of cols) allColumns.add(c);
     }
 
-    // Also collect table aliases from FROM/JOIN ... AS alias patterns
-    const aliasSet = new Set<string>();
-    const normalizedSql = sql.replace(/`/g, "");
-    const tableAliasPattern = /(?:FROM|JOIN)\s+[\w.]+\s+(?:AS\s+)?([a-z_]\w*)/gi;
-    let aliasMatch: RegExpExecArray | null;
-    while ((aliasMatch = tableAliasPattern.exec(normalizedSql)) !== null) {
-      aliasSet.add(aliasMatch[1].toLowerCase());
-    }
-    // Column aliases: "AS <alias>"
-    const colAliasPattern = /\bAS\s+([a-z_]\w*)/gi;
-    while ((aliasMatch = colAliasPattern.exec(normalizedSql)) !== null) {
-      aliasSet.add(aliasMatch[1].toLowerCase());
-    }
+    const aliases = extractSqlAliases(sql);
+    const refs = extractColumnReferences(sql);
 
-    const aliasColRegex = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
-    while ((match = aliasColRegex.exec(sql)) !== null) {
-      // Skip if this position is already covered by a 3/4-part FQN match
-      if (coveredPositions.has(match.index)) continue;
+    for (const ref of refs) {
+      if (coveredPositions.has(ref.position)) continue;
 
-      const prefix = match[1].toLowerCase();
-      const col = match[2].toLowerCase();
+      const prefixLower = ref.prefix.toLowerCase();
+      const colLower = ref.column.toLowerCase();
 
-      // Skip SQL keywords, known aliases, and FQN parts as prefix
-      if (SQL_KEYWORDS.has(prefix) || SQL_KEYWORDS.has(col)) continue;
-      if (aliasSet.has(col)) continue;
+      if (SQL_KEYWORDS.has(prefixLower) || SQL_KEYWORDS.has(colLower)) continue;
+      if (aliases.all.has(colLower)) continue;
+      if (AI_FUNCTION_RETURN_FIELDS.has(colLower)) continue;
 
-      // Only flag if the column doesn't exist in any table
-      if (!allColumns.has(col)) {
-        invalid.push(`${match[1]}.${match[2]}`);
-      }
-    }
-
-    // Backtick-quoted 2-part: alias.`column with spaces`
-    const quotedAliasColRegex = /\b([a-zA-Z_]\w*)\.`([^`]+)`/g;
-    while ((match = quotedAliasColRegex.exec(sql)) !== null) {
-      if (coveredPositions.has(match.index)) continue;
-
-      const prefix = match[1].toLowerCase();
-      const col = match[2].toLowerCase();
-
-      if (SQL_KEYWORDS.has(prefix)) continue;
-      if (aliasSet.has(col)) continue;
-
-      if (!allColumns.has(col)) {
-        invalid.push(`${match[1]}.\`${match[2]}\``);
+      if (!allColumns.has(colLower)) {
+        const display = ref.isQuoted
+          ? `${ref.prefix}.\`${ref.column}\``
+          : `${ref.prefix}.${ref.column}`;
+        invalid.push(display);
       }
     }
   }

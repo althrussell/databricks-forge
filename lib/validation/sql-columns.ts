@@ -1,0 +1,216 @@
+/**
+ * Shared SQL column-reference validation.
+ *
+ * Extracts `alias.column` references (both plain and backtick-quoted) from
+ * generated SQL and validates them against a known-columns set. Used by the
+ * pipeline SQL generation step, the Genie schema-allowlist, the dashboard
+ * engines, and the Ask Forge assistant to catch hallucinated column names
+ * before SQL reaches execution.
+ *
+ * Design: this module owns alias/CTE detection and column-reference
+ * extraction. Consumers keep their own structural checks (e.g. pipeline
+ * checks SQL start keyword; Genie checks 3/4-part FQNs).
+ */
+
+import { SQL_KEYWORDS } from "@/lib/genie/schema-allowlist";
+
+export { SQL_KEYWORDS };
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface ColumnReference {
+  prefix: string;
+  column: string;
+  position: number;
+  isQuoted: boolean;
+}
+
+export interface SqlAliases {
+  tableAliases: Set<string>;
+  columnAliases: Set<string>;
+  cteNames: Set<string>;
+  all: Set<string>;
+}
+
+export interface SqlColumnValidationResult {
+  valid: boolean;
+  unknownColumns: string[];
+  warnings: string[];
+}
+
+export interface ValidateColumnOptions {
+  tablesInvolved?: string[];
+  allowAiFunctionFields?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// AI function return fields
+// ---------------------------------------------------------------------------
+
+/**
+ * Known struct fields returned by `ai_query()` when `failOnError => false`.
+ * These are runtime struct fields, not table columns, so they must be
+ * allowlisted to avoid false-positive hallucination flags.
+ */
+export const AI_FUNCTION_RETURN_FIELDS = new Set([
+  "result",
+  "errormessage",
+]);
+
+// ---------------------------------------------------------------------------
+// Alias / CTE extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract all SQL aliases (table aliases, column aliases, CTE names) from
+ * a SQL string. Operates on backtick-stripped SQL for consistency.
+ */
+export function extractSqlAliases(sql: string): SqlAliases {
+  const normalizedSql = sql.replace(/`/g, "");
+  const tableAliases = new Set<string>();
+  const columnAliases = new Set<string>();
+  const cteNames = new Set<string>();
+
+  // Table aliases: FROM/JOIN <fqn> [AS] <alias>
+  const tableAliasPattern = /(?:FROM|JOIN)\s+[\w.]+\s+(?:AS\s+)?([a-z_]\w*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = tableAliasPattern.exec(normalizedSql)) !== null) {
+    tableAliases.add(m[1].toLowerCase());
+  }
+
+  // Column aliases: AS <alias>
+  const colAliasPattern = /\bAS\s+([a-z_]\w*)/gi;
+  while ((m = colAliasPattern.exec(normalizedSql)) !== null) {
+    columnAliases.add(m[1].toLowerCase());
+  }
+
+  // CTE names: WITH cte_name AS ( and chained , cte_name AS (
+  const ctePattern = /\bWITH\s+([a-z_]\w*)\s+AS\s*\(/gi;
+  while ((m = ctePattern.exec(normalizedSql)) !== null) {
+    cteNames.add(m[1].toLowerCase());
+  }
+  const chainedCtePattern = /,\s*([a-z_]\w*)\s+AS\s*\(/gi;
+  while ((m = chainedCtePattern.exec(normalizedSql)) !== null) {
+    cteNames.add(m[1].toLowerCase());
+  }
+
+  const all = new Set([...tableAliases, ...columnAliases, ...cteNames]);
+  return { tableAliases, columnAliases, cteNames, all };
+}
+
+// ---------------------------------------------------------------------------
+// Column reference extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract all `alias.column` references from SQL, both plain identifiers
+ * and backtick-quoted identifiers (e.g. `alias.\`Column Name\``).
+ *
+ * Runs against the original SQL (before backtick stripping) so that
+ * backtick-quoted column names with spaces are captured correctly.
+ */
+export function extractColumnReferences(sql: string): ColumnReference[] {
+  const refs: ColumnReference[] = [];
+
+  // Plain: alias.column_name
+  const plainRegex = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = plainRegex.exec(sql)) !== null) {
+    refs.push({
+      prefix: m[1],
+      column: m[2],
+      position: m.index,
+      isQuoted: false,
+    });
+  }
+
+  // Backtick-quoted: alias.`column with spaces`
+  const quotedRegex = /\b([a-zA-Z_]\w*)\.`([^`]+)`/g;
+  while ((m = quotedRegex.exec(sql)) !== null) {
+    refs.push({
+      prefix: m[1],
+      column: m[2],
+      position: m.index,
+      isQuoted: true,
+    });
+  }
+
+  return refs;
+}
+
+// ---------------------------------------------------------------------------
+// Core validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate column references in SQL against a set of known column names.
+ *
+ * Extracts all `alias.column` references, filters out SQL keywords, FQN
+ * parts, known aliases/CTEs, and optionally AI function return fields,
+ * then flags any column that does not appear in `knownColumns`.
+ *
+ * @param sql          The generated SQL string (original, with backticks)
+ * @param knownColumns Set of valid column names (lowercased)
+ * @param options      Additional filtering options
+ */
+export function validateColumnReferences(
+  sql: string,
+  knownColumns: Set<string>,
+  options: ValidateColumnOptions = {},
+): SqlColumnValidationResult {
+  const { tablesInvolved = [], allowAiFunctionFields = false } = options;
+  const warnings: string[] = [];
+
+  // Build exclusion sets
+  const fqnParts = new Set<string>();
+  for (const fqn of tablesInvolved) {
+    for (const part of fqn.replace(/`/g, "").split(".")) {
+      fqnParts.add(part.toLowerCase());
+    }
+  }
+
+  const aliases = extractSqlAliases(sql);
+  const refs = extractColumnReferences(sql);
+
+  const unknownCols: string[] = [];
+
+  for (const ref of refs) {
+    const colLower = ref.column.toLowerCase();
+    const prefixLower = ref.prefix.toLowerCase();
+
+    // Skip SQL keywords used as prefix or column
+    if (SQL_KEYWORDS.has(colLower) || SQL_KEYWORDS.has(prefixLower)) continue;
+
+    // Skip FQN parts (catalog, schema, table name fragments)
+    if (fqnParts.has(colLower)) continue;
+
+    // Skip known aliases and CTE names used as column references
+    if (aliases.all.has(colLower)) continue;
+
+    // Skip AI function return fields when enabled
+    if (allowAiFunctionFields && AI_FUNCTION_RETURN_FIELDS.has(colLower)) continue;
+
+    // Skip if column exists in the known set
+    if (knownColumns.has(colLower)) continue;
+
+    const display = ref.isQuoted
+      ? `${ref.prefix}.\`${ref.column}\``
+      : `${ref.prefix}.${ref.column}`;
+    unknownCols.push(display);
+  }
+
+  const dedupedUnknown = [...new Set(unknownCols)];
+  if (dedupedUnknown.length > 0) {
+    warnings.push(
+      `SQL references unknown columns: ${dedupedUnknown.slice(0, 10).join(", ")}`,
+    );
+  }
+
+  return {
+    valid: dedupedUnknown.length === 0,
+    unknownColumns: dedupedUnknown,
+    warnings,
+  };
+}

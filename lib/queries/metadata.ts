@@ -786,7 +786,6 @@ export async function fetchForeignKeysBatch(fqns: string[]): Promise<ForeignKey[
 export function buildSchemaMarkdown(
   tables: TableInfo[],
   columns: ColumnInfo[],
-  maxColumnsPerTable: number = 40,
   maxCommentLength: number = 80
 ): string {
   const columnsByTable: Record<string, ColumnInfo[]> = {};
@@ -797,10 +796,8 @@ export function buildSchemaMarkdown(
 
   const sections = tables.map((table) => {
     const allCols = columnsByTable[table.fqn] ?? [];
-    const displayCols = allCols.slice(0, maxColumnsPerTable);
-    const omitted = allCols.length - displayCols.length;
 
-    const colLines = displayCols
+    const colLines = allCols
       .map((c) => {
         let comment = c.comment ?? "";
         if (comment.length > maxCommentLength) {
@@ -810,9 +807,8 @@ export function buildSchemaMarkdown(
       })
       .join("\n");
 
-    const omittedLine = omitted > 0 ? `\n  ... and ${omitted} more columns` : "";
     const tableComment = table.comment ? ` -- ${table.comment}` : "";
-    return `### ${table.fqn}${tableComment}\n${colLines || "  (no columns)"}${omittedLine}`;
+    return `### ${table.fqn}${tableComment}\n${colLines || "  (no columns)"}`;
   });
 
   return sections.join("\n\n");

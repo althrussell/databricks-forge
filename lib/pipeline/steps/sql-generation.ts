@@ -30,7 +30,7 @@ import type {
   ForeignKey,
   TableInfo,
 } from "@/lib/domain/types";
-import { SQL_KEYWORDS } from "@/lib/genie/schema-allowlist";
+import { validateColumnReferences } from "@/lib/validation/sql-columns";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -561,74 +561,24 @@ function validateSqlOutput(
     }
   }
 
-  // Check 3: Look for obviously invented columns (column names in SQL
-  // that don't match any known column from the schema). Only check if
-  // we have schema info.
+  // Check 3: Validate column references against known schema using the
+  // shared validation module (handles both plain and backtick-quoted columns).
   if (columns.length > 0) {
     const knownColumns = new Set(
       columns.map((c) => c.columnName.toLowerCase())
     );
 
-    // Exclude catalog, schema, and table name parts from FQNs so
-    // `catalog.schema.table` references don't count as unknown columns.
-    const fqnParts = new Set<string>();
-    for (const fqn of tablesInvolved) {
-      for (const part of fqn.replace(/`/g, "").split(".")) {
-        fqnParts.add(part.toLowerCase());
-      }
-    }
+    const colResult = validateColumnReferences(sql, knownColumns, {
+      tablesInvolved,
+      allowAiFunctionFields: true,
+    });
 
-    // Detect table aliases: "FROM/JOIN <fqn> [AS] <alias>" patterns
-    const aliasSet = new Set<string>();
-    const tableAliasPattern = /(?:FROM|JOIN)\s+[`\w.]+\s+(?:AS\s+)?([a-z_]\w*)/gi;
-    let aliasMatch;
-    while ((aliasMatch = tableAliasPattern.exec(normalizedSql)) !== null) {
-      aliasSet.add(aliasMatch[1].toLowerCase());
-    }
-
-    // Detect column aliases: "AS <alias>" (computed columns, aggregations)
-    const colAliasPattern = /\bAS\s+([a-z_]\w*)/gi;
-    while ((aliasMatch = colAliasPattern.exec(normalizedSql)) !== null) {
-      aliasSet.add(aliasMatch[1].toLowerCase());
-    }
-
-    // Detect CTE names: "WITH cte_name AS (" and chained ", cte_name AS ("
-    const ctePattern = /\bWITH\s+([a-z_]\w*)\s+AS\s*\(/gi;
-    while ((aliasMatch = ctePattern.exec(normalizedSql)) !== null) {
-      aliasSet.add(aliasMatch[1].toLowerCase());
-    }
-    const chainedCtePattern = /,\s*([a-z_]\w*)\s+AS\s*\(/gi;
-    while ((aliasMatch = chainedCtePattern.exec(normalizedSql)) !== null) {
-      aliasSet.add(aliasMatch[1].toLowerCase());
-    }
-
-    // Extract prefix.column pairs (likely column references): alias.column
-    const dotColPattern = /([a-z_]\w*)\.([a-z_][a-z0-9_]*)/gi;
-    let match;
-    const unknownCols: string[] = [];
-    while ((match = dotColPattern.exec(normalizedSql)) !== null) {
-      const prefix = match[1];
-      const colName = match[2].toLowerCase();
-      if (
-        !knownColumns.has(colName) &&
-        !SQL_KEYWORDS.has(colName) &&
-        !fqnParts.has(colName) &&
-        !aliasSet.has(colName)
-      ) {
-        unknownCols.push(`${prefix}.${match[2]}`);
-      }
-    }
-    const dedupedUnknown = [...new Set(unknownCols)];
-    if (dedupedUnknown.length > 0) {
-      warnings.push(
-        `SQL references unknown columns: ${dedupedUnknown.slice(0, 10).join(", ")}`
-      );
-    }
+    warnings.push(...colResult.warnings);
 
     return {
       valid: warnings.length === 0,
       warnings,
-      unknownColumns: dedupedUnknown,
+      unknownColumns: colResult.unknownColumns,
     };
   }
 

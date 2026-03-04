@@ -14,13 +14,14 @@
  *   - sqlBlocks            → synthetic use case SQL
  */
 
-import type { UseCase, BusinessContext, ColumnInfo } from "@/lib/domain/types";
+import type { UseCase, BusinessContext, ColumnInfo, MetadataSnapshot } from "@/lib/domain/types";
 import type { DashboardDesign, DashboardRecommendation } from "./types";
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { fetchTableInfoBatch, fetchColumnsBatch } from "@/lib/queries/metadata";
+import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
 import { getServingEndpoint, getConfig } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
@@ -233,6 +234,31 @@ export async function runAdHocDashboardEngine(
 
   if (!design.datasets || !design.widgets || design.datasets.length === 0) {
     throw new Error("LLM returned an empty dashboard design");
+  }
+
+  // Validate dataset SQL against the actual schema to catch hallucinated columns
+  const metadata: Pick<MetadataSnapshot, "tables" | "columns" | "metricViews"> = {
+    tables: tableInfos,
+    columns,
+    metricViews: [],
+  };
+  const allowlist = buildSchemaAllowlist(metadata as MetadataSnapshot);
+  const validDatasets = design.datasets.filter((ds) => {
+    if (!ds.sql) return true;
+    return validateSqlExpression(allowlist, ds.sql, `adhoc-dashboard:${ds.name}`, true);
+  });
+
+  if (validDatasets.length < design.datasets.length) {
+    logger.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
+      domain: domainHint || "General",
+      dropped: design.datasets.length - validDatasets.length,
+      remaining: validDatasets.length,
+    });
+    design.datasets = validDatasets;
+  }
+
+  if (design.datasets.length === 0) {
+    throw new Error("All dashboard datasets were rejected due to invalid SQL references");
   }
 
   const lakeviewDashboard = assembleLakeviewDashboard(design);
