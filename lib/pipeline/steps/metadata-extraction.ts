@@ -282,7 +282,7 @@ async function runEnrichmentPass(
 
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;
-  const expandedTables = [
+  const expandedTables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType: string; dataSourceFormat: string | null }> = [
     ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
     ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
   ];
@@ -310,6 +310,17 @@ async function runEnrichmentPass(
       snapshot.tableCount = snapshot.tables.length;
       snapshot.columnCount = snapshot.columns.length;
       snapshot.schemaMarkdown = buildSchemaMarkdown(snapshot.tables, snapshot.columns);
+
+      // Backfill lineage-discovered entries in expandedTables with
+      // real tableType + dataSourceFormat from information_schema
+      const infoLookup = new Map(newTableInfos.map((t) => [t.fqn, t]));
+      for (const entry of expandedTables) {
+        const info = infoLookup.get(entry.fqn);
+        if (info) {
+          entry.tableType = info.tableType;
+          entry.dataSourceFormat = info.dataSourceFormat ?? null;
+        }
+      }
 
       logger.info("[metadata-extraction] Merged lineage-discovered tables into snapshot", {
         newTables: newTableInfos.length,

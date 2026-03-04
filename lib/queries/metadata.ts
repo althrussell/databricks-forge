@@ -654,7 +654,7 @@ export async function fetchTableInfoBatch(fqns: string[]): Promise<TableInfo[]> 
     try {
       const safeCatalog = validateIdentifier(catalog, "catalog");
       const sql = `
-        SELECT table_catalog, table_schema, table_name, table_type, comment
+        SELECT table_catalog, table_schema, table_name, table_type, comment, data_source_format
         FROM \`${safeCatalog}\`.information_schema.tables
         WHERE (${whereClause})
       `;
@@ -670,6 +670,7 @@ export async function fetchTableInfoBatch(fqns: string[]): Promise<TableInfo[]> 
           fqn: `${cat}.${sch}.${tbl}`,
           tableType: row[3] ?? "TABLE",
           comment: row[4] ?? null,
+          dataSourceFormat: row[5] ?? null,
         });
       }
     } catch (error) {

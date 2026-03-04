@@ -14,6 +14,7 @@ import {
   fetchTableTypes,
   mergeTableTypes,
   fetchColumnsBatch,
+  fetchTableInfoBatch,
   filterAccessibleScopes,
 } from "@/lib/queries/metadata";
 import {
@@ -168,18 +169,31 @@ export async function runStandaloneEnrichment(
   const seedFqns = allTables.map((t) => t.fqn);
   const lineageGraph = await walkLineage(seedFqns, { maxDepth: lineageDepth });
 
-  const expandedTables = [
+  const expandedTables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType: string; dataSourceFormat: string | null }> = [
     ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
     ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
   ];
 
-  // Fetch columns for lineage-discovered tables so they appear in the ERD
+  // Fetch metadata for lineage-discovered tables so they get correct
+  // tableType + dataSourceFormat (used to skip unnecessary DESCRIBE ops)
   if (lineageGraph.discoveredTables.length > 0) {
     try {
-      const lineageCols = await fetchColumnsBatch(lineageGraph.discoveredTables);
+      const [lineageInfos, lineageCols] = await Promise.all([
+        fetchTableInfoBatch(lineageGraph.discoveredTables),
+        fetchColumnsBatch(lineageGraph.discoveredTables),
+      ]);
       allColumns.push(...lineageCols);
+
+      const infoLookup = new Map(lineageInfos.map((t) => [t.fqn, t]));
+      for (const entry of expandedTables) {
+        const info = infoLookup.get(entry.fqn);
+        if (info) {
+          entry.tableType = info.tableType;
+          entry.dataSourceFormat = info.dataSourceFormat ?? null;
+        }
+      }
     } catch (error) {
-      logger.warn("[standalone-scan] Failed to fetch lineage-discovered columns (non-fatal)", {
+      logger.warn("[standalone-scan] Failed to fetch lineage-discovered metadata (non-fatal)", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
