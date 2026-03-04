@@ -145,6 +145,15 @@ const INDUSTRY_ALIASES: Record<string, string> = {
   "aerospace": "manufacturing",
   "defense": "manufacturing",
   "semiconductors": "manufacturing",
+  "superannuation": "superannuation",
+  "super fund": "superannuation",
+  "pension fund": "superannuation",
+  "retirement fund": "superannuation",
+  "retirement": "superannuation",
+  "pension": "superannuation",
+  "annuity": "superannuation",
+  "defined benefit": "superannuation",
+  "defined contribution": "superannuation",
 };
 
 /** Words too generic to contribute meaningful signal on their own. */

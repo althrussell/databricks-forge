@@ -9,6 +9,7 @@ import { z } from "zod/v4";
 export const GenerateBodySchema = z.object({
   title: z.string().optional(),
   catalogScope: z.array(z.string()).optional(),
+  questionComplexity: z.enum(["simple", "medium", "complex"]).optional(),
 });
 
 export const DeployBodySchema = z.object({

@@ -11,6 +11,15 @@ import { DISCOVERY_DEPTHS, DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 export type GenieAuthMode = "obo" | "sp";
 const VALID_AUTH_MODES = new Set<GenieAuthMode>(["obo", "sp"]);
 
+export type QuestionComplexity = "simple" | "medium" | "complex";
+const VALID_COMPLEXITIES = new Set<QuestionComplexity>(["simple", "medium", "complex"]);
+
+export interface QuestionComplexitySettings {
+  genieEngine: QuestionComplexity;
+  adhocGenie: QuestionComplexity;
+  metadataGenie: QuestionComplexity;
+}
+
 export interface GenieEngineDefaults {
   engineEnabled: boolean;
   maxTablesPerSpace: number;
@@ -48,6 +57,8 @@ export interface AppSettings {
   semanticSearchEnabled: boolean;
   /** Whether the benchmark catalog UI, embedding, and RAG retrieval are enabled (default: false). Requires FORGE_BENCHMARKS_ENABLED=true server-side. */
   benchmarksEnabled: boolean;
+  /** Per-surface question complexity (simple / medium / complex). Controls the language style of Genie sample questions. */
+  questionComplexity: QuestionComplexitySettings;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -65,6 +76,12 @@ const DEFAULT_GENIE_ENGINE: GenieEngineDefaults = {
   entityMatchingMode: "auto",
 };
 
+const DEFAULT_QUESTION_COMPLEXITY: QuestionComplexitySettings = {
+  genieEngine: "simple",
+  adhocGenie: "simple",
+  metadataGenie: "simple",
+};
+
 const DEFAULTS: AppSettings = {
   sampleRowsPerTable: 0,
   defaultExportFormat: "excel",
@@ -77,6 +94,7 @@ const DEFAULTS: AppSettings = {
   genieDeployAuthMode: "obo",
   semanticSearchEnabled: true,
   benchmarksEnabled: false,
+  questionComplexity: { ...DEFAULT_QUESTION_COMPLEXITY },
 };
 
 export function loadSettings(): AppSettings {
@@ -126,6 +144,7 @@ export function loadSettings(): AppSettings {
         typeof parsed.benchmarksEnabled === "boolean"
           ? parsed.benchmarksEnabled
           : DEFAULTS.benchmarksEnabled,
+      questionComplexity: parseQuestionComplexity(parsed.questionComplexity),
     };
   } catch {
     return { ...DEFAULTS };
@@ -174,6 +193,18 @@ function parseGenieEngineDefaults(raw: unknown): GenieEngineDefaults {
   if (typeof obj.fiscalYearStartMonth === "number") result.fiscalYearStartMonth = obj.fiscalYearStartMonth;
   if (typeof obj.entityMatchingMode === "string" && VALID_ENTITY_MODES.has(obj.entityMatchingMode))
     result.entityMatchingMode = obj.entityMatchingMode as GenieEngineDefaults["entityMatchingMode"];
+  return result;
+}
+
+function parseQuestionComplexity(raw: unknown): QuestionComplexitySettings {
+  const result = { ...DEFAULT_QUESTION_COMPLEXITY };
+  if (typeof raw !== "object" || raw === null) return result;
+  const obj = raw as Record<string, unknown>;
+  for (const key of ["genieEngine", "adhocGenie", "metadataGenie"] as const) {
+    if (typeof obj[key] === "string" && VALID_COMPLEXITIES.has(obj[key] as QuestionComplexity)) {
+      result[key] = obj[key] as QuestionComplexity;
+    }
+  }
   return result;
 }
 

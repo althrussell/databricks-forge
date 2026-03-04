@@ -55,6 +55,7 @@ import {
 import { MetadataGenieDeployModal } from "@/components/metadata-genie/deploy-modal";
 import type { MetadataGenieSpace } from "@/lib/metadata-genie/types";
 import type { SerializedSpace } from "@/lib/genie/types";
+import { loadSettings } from "@/lib/settings";
 
 type PageState = "list" | "generating" | "summary";
 
@@ -115,6 +116,7 @@ export default function MetadataGeniePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           catalogScope: selectedCatalogs.length > 0 ? selectedCatalogs : undefined,
+          questionComplexity: loadSettings().questionComplexity.metadataGenie,
         }),
       });
 

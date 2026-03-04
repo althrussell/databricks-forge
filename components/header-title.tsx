@@ -12,7 +12,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/outcomes": "Outcome Maps",
   "/outcomes/ingest": "Ingest Outcome Map",
   "/genie": "Genie Spaces",
-  "/genie/new": "New Genie Space",
   "/metadata-genie": "Meta Data Genie",
   "/settings": "Settings",
   "/help": "Help",

@@ -244,9 +244,10 @@ export async function runAssistantEngine(
     }
   }
 
+  const conversationSummary = buildConversationSummary(history, question);
   const actions = buildActions(
     intentResult.intent, sqlBlocks, dashboardProposal, reconciledTables,
-    genieSpaceMatch, context.tableEnrichments, question,
+    genieSpaceMatch, context.tableEnrichments, conversationSummary,
   );
 
   const durationMs = Date.now() - start;
@@ -332,6 +333,21 @@ export async function runAssistantEngine(
     durationMs,
     logId,
   };
+}
+
+/**
+ * Build a concise conversation summary from history + current question.
+ * Captures the user's questions (most recent 5) to give the Genie engine
+ * richer context for title and instruction generation.
+ */
+function buildConversationSummary(history: ConversationTurn[], question: string): string {
+  const userQuestions = history
+    .filter((t) => t.role === "user")
+    .map((t) => t.content.trim())
+    .slice(-4);
+  userQuestions.push(question);
+  if (userQuestions.length === 1) return question;
+  return userQuestions.join(" → ");
 }
 
 function isSubstantiveSql(sql: string): boolean {

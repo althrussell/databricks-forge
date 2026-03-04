@@ -10,7 +10,7 @@
  * generation, benchmarks, metric views). Takes 1–3 minutes but produces
  * production-grade output.
  *
- * Designed for the /genie/new construction flow and Ask Forge integration.
+ * Designed for the Ask Forge inline Genie builder flow.
  */
 
 import type { MetadataSnapshot, BusinessContext, ColumnInfo } from "@/lib/domain/types";
@@ -21,6 +21,7 @@ import type {
   EnrichedSqlSnippetMeasure,
   EnrichedSqlSnippetFilter,
   EnrichedSqlSnippetDimension,
+  QuestionComplexity,
 } from "./types";
 import { defaultGenieEngineConfig } from "./types";
 import { buildSchemaAllowlist } from "./schema-allowlist";
@@ -57,6 +58,7 @@ export interface AdHocGenieConfig {
   generateBenchmarks?: boolean;
   generateMetricViews?: boolean;
   generateTrustedAssets?: boolean;
+  questionComplexity?: QuestionComplexity;
   mode?: "fast" | "full";
 }
 
@@ -80,6 +82,18 @@ export interface AdHocEngineResult {
 
 const NUMERIC_TYPE_PATTERN = /^(int|bigint|smallint|tinyint|float|double|decimal|numeric|real)/i;
 
+function buildEntityFallbackQuestion(columnName: string, complexity: QuestionComplexity): string {
+  const col = columnName.replace(/_/g, " ");
+  switch (complexity) {
+    case "simple":
+      return `What are the most common ${col} values?`;
+    case "medium":
+      return `Which ${col} values appear most frequently?`;
+    case "complex":
+      return `What are the top ${col}s?`;
+  }
+}
+
 function buildEngineConfig(adhoc?: AdHocGenieConfig): GenieEngineConfig {
   const base = defaultGenieEngineConfig();
   if (!adhoc) return base;
@@ -91,6 +105,7 @@ function buildEngineConfig(adhoc?: AdHocGenieConfig): GenieEngineConfig {
   if (adhoc.generateBenchmarks !== undefined) base.generateBenchmarks = adhoc.generateBenchmarks;
   if (adhoc.generateMetricViews !== undefined) base.generateMetricViews = adhoc.generateMetricViews;
   if (adhoc.generateTrustedAssets !== undefined) base.generateTrustedAssets = adhoc.generateTrustedAssets;
+  if (adhoc.questionComplexity) base.questionComplexity = adhoc.questionComplexity;
   return base;
 }
 
@@ -411,12 +426,13 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   const basicFilters = generateBasicFilters(metadata.columns, validTableFqns);
 
   // Step 7: Rule-based instructions from comments
+  const engineConfig = buildEngineConfig(adhocConfig);
   const instructionResult = await runInstructionGeneration({
     domain,
     subdomains: [],
     businessName: adhocConfig?.title || domain,
     businessContext: resolveBusinessContext(adhocConfig),
-    config: buildEngineConfig(adhocConfig),
+    config: engineConfig,
     entityCandidates,
     joinSpecs: allJoins,
     endpoint: fastEndpoint,
@@ -429,6 +445,8 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     ? instructionResult.instructions
     : buildRuleBasedInstructions(metadata, validTableFqns, domain, adhocConfig?.conversationSummary);
 
+  const complexity = engineConfig.questionComplexity ?? "simple";
+
   const exampleQueryResult = await runExampleQueryGeneration({
     domain,
     tableFqns: validTableFqns,
@@ -437,12 +455,13 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     joinSpecs: allJoins,
     endpoint: fastEndpoint,
     fallbackEndpoint: premiumEndpoint,
+    questionComplexity: complexity,
   });
 
   // Step 8: Sample questions from entity candidates
   const sampleQuestions = entityCandidates
     .slice(0, 5)
-    .map((ec) => `What are the top ${ec.columnName.replace(/_/g, " ")}s?`);
+    .map((ec) => buildEntityFallbackQuestion(ec.columnName, complexity));
 
   const passOutputs: GenieEnginePassOutputs = {
     domain,
@@ -646,6 +665,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
           endpoint: premiumEndpoint,
+          questionComplexity: engineConfig.questionComplexity,
           signal,
         })
       : Promise.resolve({ queries: [], functions: [] }),
@@ -709,6 +729,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
       joinSpecs: allJoins,
       endpoint: fastEndpoint,
       fallbackEndpoint: premiumEndpoint,
+      questionComplexity: engineConfig.questionComplexity,
       signal,
     });
     trustedQueries = exampleResult.queries;
@@ -717,9 +738,10 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   const trustedQuestionTexts = trustedQueries
     .filter((tq) => tq.question.trim().length > 0)
     .map((tq) => tq.question);
+  const fullComplexity = engineConfig.questionComplexity ?? "simple";
   const entityFallbackQuestions = columnResult.entityCandidates
     .slice(0, 5)
-    .map((ec) => `What are the top ${ec.columnName.replace(/_/g, " ")}s?`);
+    .map((ec) => buildEntityFallbackQuestion(ec.columnName, fullComplexity));
   const sampleQuestions = [
     ...trustedQuestionTexts.slice(0, 5),
     ...entityFallbackQuestions,

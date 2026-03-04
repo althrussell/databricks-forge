@@ -3,7 +3,7 @@ import { cachedChatCompletion } from "../llm-cache";
 import { parseLLMJson } from "./parse-llm-json";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import type { MetadataSnapshot } from "@/lib/domain/types";
-import type { TrustedAssetQuery } from "../types";
+import type { TrustedAssetQuery, QuestionComplexity } from "../types";
 import { logger } from "@/lib/logger";
 import { sanitizeUserContext } from "./title-generation";
 
@@ -28,6 +28,7 @@ export interface ExampleQueryGenerationInput {
   endpoint: string;
   fallbackEndpoint?: string;
   sensitiveColumns?: Set<string>;
+  questionComplexity?: QuestionComplexity;
   signal?: AbortSignal;
 }
 
@@ -41,6 +42,33 @@ function isSafeColumnName(column: string, sensitiveColumns?: Set<string>): boole
   return !PII_COLUMN_PATTERN.test(column);
 }
 
+function humanize(columnName: string): string {
+  return columnName.replace(/_/g, " ");
+}
+
+function buildGroupQuestion(groupCol: string, domain: string, complexity: QuestionComplexity): string {
+  const col = humanize(groupCol);
+  switch (complexity) {
+    case "simple":
+      return `What are the top ${col}s?`;
+    case "medium":
+      return `Which ${col}s have the highest totals in ${domain}?`;
+    case "complex":
+      return `Top ${col} trends in ${domain}`;
+  }
+}
+
+function buildJoinQuestion(leftName: string, rightName: string, complexity: QuestionComplexity): string {
+  switch (complexity) {
+    case "simple":
+      return `How are ${humanize(leftName)} and ${humanize(rightName)} related?`;
+    case "medium":
+      return `How many ${humanize(leftName)} are linked to ${humanize(rightName)}?`;
+    case "complex":
+      return `How strongly are ${leftName} linked to ${rightName}?`;
+  }
+}
+
 export function buildDeterministicExampleQueries(
   domain: string,
   tableFqns: string[],
@@ -48,7 +76,9 @@ export function buildDeterministicExampleQueries(
   allowlist: SchemaAllowlist,
   joinSpecs: JoinSpecInput[],
   sensitiveColumns?: Set<string>,
+  questionComplexity?: QuestionComplexity,
 ): TrustedAssetQuery[] {
+  const complexity = questionComplexity ?? "simple";
   const queries: TrustedAssetQuery[] = [];
   const colsByTable = new Map<string, typeof metadata.columns>();
   for (const col of metadata.columns) {
@@ -91,7 +121,7 @@ export function buildDeterministicExampleQueries(
 
     if (validateSqlExpression(allowlist, sql, `example_query:${tableName}`, true)) {
       queries.push({
-        question: `Top ${groupCol.columnName.replace(/_/g, " ")} trends in ${domain}`,
+        question: buildGroupQuestion(groupCol.columnName, domain, complexity),
         sql,
         parameters: [],
       });
@@ -109,7 +139,7 @@ export function buildDeterministicExampleQueries(
     ].join("\n");
     if (validateSqlExpression(allowlist, joinSql, "example_query:join_coverage", true)) {
       queries.unshift({
-        question: `How strongly are ${leftName} linked to ${rightName}?`,
+        question: buildJoinQuestion(leftName, rightName, complexity),
         sql: joinSql,
         parameters: [],
       });
@@ -119,7 +149,19 @@ export function buildDeterministicExampleQueries(
   return queries.slice(0, MAX_QUERIES);
 }
 
+function getQuestionStyleDirective(complexity: QuestionComplexity): string {
+  switch (complexity) {
+    case "simple":
+      return "Write short, plain-English questions a business user would naturally ask. Keep each under 10 words. No column names, no SQL jargon, no analytical terms like 'trends' or 'anomaly detection'.";
+    case "medium":
+      return "Write clear business questions. Reference business concepts and time ranges where relevant. Keep each under 15 words. Avoid raw column names.";
+    case "complex":
+      return "Generate concise analytical example queries. Prioritize grouped trends, time windows, and one join-based query when joins exist.";
+  }
+}
+
 async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint: string): Promise<TrustedAssetQuery[]> {
+  const complexity = input.questionComplexity ?? "simple";
   const schemaBlock = buildSchemaContextBlock(input.metadata, input.tableFqns);
   const joinBlock = input.joinSpecs
     .slice(0, 8)
@@ -130,9 +172,10 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
     {
       role: "system",
       content:
-        "You generate practical Databricks SQL example questions for Genie.\n" +
+        "You generate Databricks SQL example questions for a Genie data space.\n" +
         "Output strict JSON: {\"queries\":[{\"question\":\"...\",\"sql\":\"...\"}]}\n" +
-        "Rules: only use schema identifiers provided, avoid sensitive columns (email/phone/ssn/address/dob and classified sensitive columns), max 6 queries.",
+        "Rules: only use schema identifiers provided, avoid sensitive columns (email/phone/ssn/address/dob and classified sensitive columns), max 6 queries.\n" +
+        `Question style: ${getQuestionStyleDirective(complexity)}`,
     },
     {
       role: "user",
@@ -140,7 +183,7 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
         `Domain: ${sanitizeUserContext(input.domain)}`,
         schemaBlock,
         joinBlock ? `Known joins:\n${joinBlock}` : "Known joins: none",
-        "Generate 3-6 concise analytical example queries. Prioritize grouped trends, time windows, and one join-based query when joins exist.",
+        `Generate 3-6 example queries. ${getQuestionStyleDirective(complexity)}`,
       ].join("\n\n"),
     },
   ];
@@ -201,6 +244,7 @@ export async function runExampleQueryGeneration(
       input.allowlist,
       input.joinSpecs,
       input.sensitiveColumns,
+      input.questionComplexity,
     ),
     source: "fallback",
   };

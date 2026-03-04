@@ -61,10 +61,12 @@ export async function runGenieRecommendations(
       error: err instanceof Error ? err.message : String(err),
     });
 
+    const { config: fallbackConfig } = await getGenieEngineConfig(runId);
     const recommendations = generateGenieRecommendations(
       ctx.run,
       ctx.useCases,
-      metadata
+      metadata,
+      fallbackConfig.questionComplexity,
     );
 
     await saveGenieRecommendations(runId, recommendations);

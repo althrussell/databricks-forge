@@ -66,6 +66,7 @@ import { GAMES } from "./games";
 import { RAIL_TRANSPORT } from "./rail-transport";
 import { AUTOMOTIVE_MOBILITY } from "./automotive-mobility";
 import { SPORTS_BETTING } from "./sports-betting";
+import { SUPERANNUATION } from "./superannuation";
 
 // ---------------------------------------------------------------------------
 // Registry -- Built-in (static) outcome maps
@@ -87,6 +88,7 @@ export const INDUSTRY_OUTCOMES: IndustryOutcome[] = [
   RAIL_TRANSPORT,
   AUTOMOTIVE_MOBILITY,
   SPORTS_BETTING,
+  SUPERANNUATION,
 ];
 
 /**

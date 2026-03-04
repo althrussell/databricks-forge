@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { loadSettings, saveSettings, type GenieEngineDefaults, type GenieAuthMode } from "@/lib/settings";
+import { loadSettings, saveSettings, type GenieEngineDefaults, type GenieAuthMode, type QuestionComplexity, type QuestionComplexitySettings } from "@/lib/settings";
 import {
   Shield,
   Database,
@@ -118,6 +118,12 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return false;
     return loadSettings().benchmarksEnabled;
   });
+
+  const [questionComplexity, setQuestionComplexity] = useState<QuestionComplexitySettings>(() => {
+    if (typeof window === "undefined") return { genieEngine: "simple", adhocGenie: "simple", metadataGenie: "simple" };
+    return loadSettings().questionComplexity;
+  });
+
   const [benchmarksServerEnabled, setBenchmarksServerEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -191,7 +197,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
-    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode, semanticSearchEnabled, benchmarksEnabled });
+    saveSettings({ sampleRowsPerTable, defaultExportFormat, notebookPath, defaultDiscoveryDepth, discoveryDepthConfigs: depthConfigs, genieEngineDefaults: genieDefaults, estateScanEnabled, assetDiscoveryEnabled, genieDeployAuthMode, semanticSearchEnabled, benchmarksEnabled, questionComplexity });
     toast.success("Settings saved");
   };
 
@@ -208,6 +214,7 @@ export default function SettingsPage() {
       setAssetDiscoveryEnabled(false);
       setGenieDeployAuthMode("obo");
       setSemanticSearchEnabled(true);
+      setQuestionComplexity({ genieEngine: "simple", adhocGenie: "simple", metadataGenie: "simple" });
       toast.success("Local settings cleared");
     }
   };
@@ -868,6 +875,51 @@ export default function SettingsPage() {
               </div>
               <p className="text-[10px] text-muted-foreground">
                 Auto uses sample data to detect value aliases (e.g. &quot;Florida&quot; &rarr; &quot;FL&quot;)
+              </p>
+            </div>
+
+            {/* Question Complexity */}
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Label>Question Complexity</Label>
+                <InfoTip tip="Controls the language style of sample questions generated for Genie Spaces. Simple: short plain-English questions. Medium: slightly more specific with business concepts. Complex: analytical language with trends, correlations, and technical terms." />
+              </div>
+              {([
+                { key: "genieEngine" as const, label: "Genie Engine" },
+                { key: "adhocGenie" as const, label: "Adhoc Genie" },
+                { key: "metadataGenie" as const, label: "Metadata Genie" },
+              ]).map((surface) => (
+                <div key={surface.key} className="flex items-center gap-3">
+                  <span className="w-32 text-xs text-muted-foreground">{surface.label}</span>
+                  <div className="flex gap-1.5">
+                    {([
+                      { value: "simple" as QuestionComplexity, label: "Simple" },
+                      { value: "medium" as QuestionComplexity, label: "Medium" },
+                      { value: "complex" as QuestionComplexity, label: "Complex" },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setQuestionComplexity((prev) => ({
+                            ...prev,
+                            [surface.key]: opt.value,
+                          }))
+                        }
+                        className={`rounded-md border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                          questionComplexity[surface.key] === opt.value
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-muted text-muted-foreground hover:border-muted-foreground/30"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground">
+                Simple produces short, everyday questions. Medium adds business context. Complex uses analytical language.
               </p>
             </div>
 

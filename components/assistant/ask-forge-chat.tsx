@@ -22,6 +22,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GenieBuilderModal } from "./genie-builder-modal";
 
 // ---------------------------------------------------------------------------
 // Types (exported for consumers)
@@ -141,6 +142,14 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
   const [loading, setLoading] = React.useState(false);
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
   const [deploySql, setDeploySql] = React.useState<string | null>(null);
+  const [genieModalOpen, setGenieModalOpen] = React.useState(false);
+  const [genieModalPayload, setGenieModalPayload] = React.useState<{
+    tables: string[];
+    domain?: string;
+    conversationSummary?: string;
+    tableEnrichments?: TableEnrichmentData[];
+    sqlBlocks?: string[];
+  } | null>(null);
   const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
   const sessionId = externalSessionId ?? fallbackSessionId;
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
@@ -335,12 +344,14 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     } else if (action.type === "create_dashboard") {
       router.push("/dashboards");
     } else if (action.type === "create_genie_space") {
-      const tables = (action.payload.tables as string[]) ?? [];
-      const params = new URLSearchParams();
-      if (tables.length > 0) params.set("tables", tables.join(","));
-      if (action.payload.domainHint) params.set("domain", action.payload.domainHint as string);
-      if (action.payload.conversationSummary) params.set("context", action.payload.conversationSummary as string);
-      router.push(`/genie/new?${params.toString()}`);
+      setGenieModalPayload({
+        tables: (action.payload.tables as string[]) ?? [],
+        domain: (action.payload.domainHint as string) || undefined,
+        conversationSummary: (action.payload.conversationSummary as string) || undefined,
+        tableEnrichments: (action.payload.tableEnrichments as TableEnrichmentData[]) || undefined,
+        sqlBlocks: (action.payload.sqlBlocks as string[]) || undefined,
+      });
+      setGenieModalOpen(true);
     } else if (action.type === "start_discovery") {
       router.push("/configure");
     } else if (action.type === "view_run" && action.payload.runId) {
@@ -575,6 +586,18 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           Press Enter to send, Shift+Enter for new line. ⌘J to toggle.
         </p>
       </div>
+
+      {genieModalPayload && (
+        <GenieBuilderModal
+          open={genieModalOpen}
+          onOpenChange={setGenieModalOpen}
+          tables={genieModalPayload.tables}
+          domain={genieModalPayload.domain}
+          conversationSummary={genieModalPayload.conversationSummary}
+          tableEnrichments={genieModalPayload.tableEnrichments}
+          sqlBlocks={genieModalPayload.sqlBlocks}
+        />
+      )}
     </div>
   );
   },

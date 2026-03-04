@@ -15,6 +15,7 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { listTrackedGenieSpaces } from "@/lib/lakebase/genie-spaces";
 import { getGenieRecommendationsByRunId } from "@/lib/lakebase/genie-recommendations";
 import { generateGenieRecommendations } from "@/lib/genie/recommend";
+import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { getConfig } from "@/lib/dbx/client";
 import type { GenieSpaceRecommendation } from "@/lib/genie/types";
 
@@ -65,7 +66,8 @@ export async function GET(
         );
       }
 
-      recommendations = generateGenieRecommendations(run, useCases, metadata);
+      const { config } = await getGenieEngineConfig(runId);
+      recommendations = generateGenieRecommendations(run, useCases, metadata, config.questionComplexity);
     }
 
     // Load tracking status for this run

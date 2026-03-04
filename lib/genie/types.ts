@@ -6,6 +6,9 @@
  * pass output types, and the local tracking model.
  */
 
+import type { QuestionComplexity } from "@/lib/settings";
+export type { QuestionComplexity } from "@/lib/settings";
+
 // ---------------------------------------------------------------------------
 // Genie Engine Configuration (customer-editable)
 // ---------------------------------------------------------------------------
@@ -93,6 +96,8 @@ export interface GenieEngineConfig {
   generateTrustedAssets: boolean;
   generateBenchmarks: boolean;
   llmRefinement: boolean;
+
+  questionComplexity: QuestionComplexity;
 }
 
 export function defaultGenieEngineConfig(): GenieEngineConfig {
@@ -119,6 +124,7 @@ export function defaultGenieEngineConfig(): GenieEngineConfig {
     generateTrustedAssets: true,
     generateBenchmarks: true,
     llmRefinement: true,
+    questionComplexity: "simple",
   };
 }
 

@@ -18,6 +18,7 @@ import type {
   GenieSpaceRecommendation,
   GenieEnginePassOutputs,
   SampleDataCache,
+  QuestionComplexity,
 } from "./types";
 import { defaultGenieEngineConfig } from "./types";
 import { buildSchemaAllowlist } from "./schema-allowlist";
@@ -462,6 +463,7 @@ async function processDomain(
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
           endpoint: premiumEndpoint,
+          questionComplexity: config.questionComplexity,
           signal,
         })
       : Promise.resolve({ queries: [], functions: [] }),
@@ -528,6 +530,7 @@ async function processDomain(
       endpoint: fastEndpoint,
       fallbackEndpoint: premiumEndpoint,
       sensitiveColumns,
+      questionComplexity: config.questionComplexity,
       signal,
     });
     trustedQueries = exampleQueryResult.queries;
@@ -540,7 +543,7 @@ async function processDomain(
     .map((tq) => tq.question);
   const fallbackQuestions = useCases
     .slice(0, 5)
-    .map((uc) => statementToQuestion(uc.statement));
+    .map((uc) => statementToQuestion(uc.statement, config.questionComplexity));
   const sampleQuestions = [
     ...trustedQuestionTexts.slice(0, 5),
     ...fallbackQuestions,
@@ -663,15 +666,29 @@ function inferJoinsFromUseCaseSql(
   return results;
 }
 
-function statementToQuestion(statement: string): string {
+export function statementToQuestion(statement: string, complexity?: QuestionComplexity): string {
+  const level = complexity ?? "simple";
   const s = statement.trim();
   if (s.endsWith("?")) return s;
-  if (/^(identify|detect|find|discover|determine)/i.test(s)) {
-    return `How can we ${s.charAt(0).toLowerCase() + s.slice(1)}?`;
-  }
-  if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) {
+  const lower = s.charAt(0).toLowerCase() + s.slice(1);
+
+  if (level === "simple") {
+    if (/^(identify|detect|find|discover|determine)/i.test(s)) return `How do we ${lower}?`;
+    if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) return `How do we ${lower}?`;
+    if (/^(build|create|develop|implement|design)/i.test(s)) return `How would we ${lower}?`;
     return `${s}?`;
   }
+
+  if (level === "medium") {
+    if (/^(identify|detect|find|discover|determine)/i.test(s)) return `How can we ${lower}?`;
+    if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) return `${s}?`;
+    if (/^(build|create|develop|implement|design)/i.test(s)) return `How would we ${lower}?`;
+    return `${s}?`;
+  }
+
+  // complex -- original verbose style
+  if (/^(identify|detect|find|discover|determine)/i.test(s)) return `How can we ${lower}?`;
+  if (/^(analyse|analyze|assess|evaluate|measure)/i.test(s)) return `${s}?`;
   return `What insights can we gain from: ${s}?`;
 }
 
