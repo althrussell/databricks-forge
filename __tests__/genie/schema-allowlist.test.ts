@@ -107,7 +107,7 @@ describe("buildCompactColumnsBlock", () => {
   const metadata: MetadataSnapshot = {
     cacheKey: "test",
     ucPath: "retail.demo",
-    tables: [{ fqn: "retail.demo.loans", catalog: "retail", schema: "demo", name: "loans", comment: null, tableType: "MANAGED", dataSourceFormat: "DELTA", createdAt: "", updatedAt: "" }],
+    tables: [{ fqn: "retail.demo.loans", catalog: "retail", schema: "demo", tableName: "loans", comment: null, tableType: "MANAGED", dataSourceFormat: "DELTA" }],
     columns: [
       { tableFqn: "retail.demo.loans", columnName: "amount", dataType: "double", ordinalPosition: 1, isNullable: true, comment: null },
       { tableFqn: "retail.demo.loans", columnName: "Origination Quarter", dataType: "date", ordinalPosition: 2, isNullable: true, comment: null },
@@ -133,7 +133,7 @@ describe("buildSchemaContextBlock", () => {
   const metadata: MetadataSnapshot = {
     cacheKey: "test",
     ucPath: "retail.demo",
-    tables: [{ fqn: "retail.demo.loans", catalog: "retail", schema: "demo", name: "loans", comment: null, tableType: "MANAGED", dataSourceFormat: "DELTA", createdAt: "", updatedAt: "" }],
+    tables: [{ fqn: "retail.demo.loans", catalog: "retail", schema: "demo", tableName: "loans", comment: null, tableType: "MANAGED", dataSourceFormat: "DELTA" }],
     columns: [
       { tableFqn: "retail.demo.loans", columnName: "amount", dataType: "double", ordinalPosition: 1, isNullable: true, comment: null },
       { tableFqn: "retail.demo.loans", columnName: "Loan Duration (Months)", dataType: "int", ordinalPosition: 2, isNullable: true, comment: null },
