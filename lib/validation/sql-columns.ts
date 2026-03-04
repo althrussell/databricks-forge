@@ -60,12 +60,27 @@ export const AI_FUNCTION_RETURN_FIELDS = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
+// Comment stripping
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip SQL comments to prevent false positives from prose text.
+ * Removes `-- line comments` and `/* block comments *​/`.
+ */
+export function stripSqlComments(sql: string): string {
+  return sql
+    .replace(/--[^\n]*/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+// ---------------------------------------------------------------------------
 // Alias / CTE extraction
 // ---------------------------------------------------------------------------
 
 /**
  * Extract all SQL aliases (table aliases, column aliases, CTE names) from
- * a SQL string. Operates on backtick-stripped SQL for consistency.
+ * a SQL string. Detects both plain identifiers and backtick-quoted aliases
+ * (e.g. `` AS `Age Group` ``).
  */
 export function extractSqlAliases(sql: string): SqlAliases {
   const normalizedSql = sql.replace(/`/g, "");
@@ -80,9 +95,16 @@ export function extractSqlAliases(sql: string): SqlAliases {
     tableAliases.add(m[1].toLowerCase());
   }
 
-  // Column aliases: AS <alias>
+  // Column aliases (plain): AS <alias>
   const colAliasPattern = /\bAS\s+([a-z_]\w*)/gi;
   while ((m = colAliasPattern.exec(normalizedSql)) !== null) {
+    columnAliases.add(m[1].toLowerCase());
+  }
+
+  // Column aliases (backtick-quoted): AS `Alias With Spaces`
+  // Must run on original SQL before backtick stripping.
+  const quotedAliasPattern = /\bAS\s+`([^`]+)`/gi;
+  while ((m = quotedAliasPattern.exec(sql)) !== null) {
     columnAliases.add(m[1].toLowerCase());
   }
 
@@ -108,16 +130,19 @@ export function extractSqlAliases(sql: string): SqlAliases {
  * Extract all `alias.column` references from SQL, both plain identifiers
  * and backtick-quoted identifiers (e.g. `alias.\`Column Name\``).
  *
+ * Strips SQL comments first to avoid false positives from prose text
+ * (e.g. `-- e.g. some example` would otherwise match as prefix=e, col=g).
  * Runs against the original SQL (before backtick stripping) so that
  * backtick-quoted column names with spaces are captured correctly.
  */
 export function extractColumnReferences(sql: string): ColumnReference[] {
+  const cleanSql = stripSqlComments(sql);
   const refs: ColumnReference[] = [];
 
   // Plain: alias.column_name
   const plainRegex = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
   let m: RegExpExecArray | null;
-  while ((m = plainRegex.exec(sql)) !== null) {
+  while ((m = plainRegex.exec(cleanSql)) !== null) {
     refs.push({
       prefix: m[1],
       column: m[2],
@@ -128,7 +153,7 @@ export function extractColumnReferences(sql: string): ColumnReference[] {
 
   // Backtick-quoted: alias.`column with spaces`
   const quotedRegex = /\b([a-zA-Z_]\w*)\.`([^`]+)`/g;
-  while ((m = quotedRegex.exec(sql)) !== null) {
+  while ((m = quotedRegex.exec(cleanSql)) !== null) {
     refs.push({
       prefix: m[1],
       column: m[2],
