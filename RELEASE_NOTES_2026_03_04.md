@@ -1,10 +1,20 @@
 # Release Notes -- 2026-03-04
 
-**Databricks Forge AI v0.5.0**
+**Databricks Forge AI v0.6.0**
 
 ---
 
 ## New Features
+
+### Ask Forge SQL Column Grounding
+Ask Forge no longer fabricates column names when generating SQL. A four-layer defense-in-depth approach ensures the LLM always sees exact column metadata:
+- **Layer 1 -- Schema snapshot**: A compact `schemaSnapshotJson` field is now persisted on `ForgeRun` at the end of metadata extraction, storing all table/column metadata with an `isBusinessTable` flag stamped after table filtering. This covers pipeline-only users who never ran an estate scan.
+- **Layer 2 -- Enrichment columns**: `fetchTableEnrichments()` now parses `ForgeTableDetail.columnsJson` and includes per-table column schemas with backtick-quoted names in the context injected into the LLM.
+- **Layer 3 -- Backtick quoting rules**: `DATABRICKS_SQL_RULES` now includes explicit identifier quoting rules. The assistant system prompt has been hardened with column name fidelity instructions that prohibit normalising, snake_casing, or transforming column names.
+- **Layer 4 -- EXPLAIN fix cycle**: After SQL extraction, each SQL block is validated via `EXPLAIN`. If a column resolution error is detected, a single LLM fix attempt is made with the exact error message and correct column schema. The fix is only accepted if the corrected SQL passes EXPLAIN.
+
+### Ad-hoc Dashboard Engine
+New dashboard deployment flow from Ask Forge conversations. Users can deploy dashboards directly from chat by clicking "Deploy as Dashboard" when the assistant proposes relevant SQL and tables.
 
 ### Pipeline Cancellation
 Users can now cancel in-progress pipeline runs directly from the UI. A new `cancelled` status has been added to the run lifecycle, and the pipeline engine gracefully halts step execution when cancellation is requested. Cancelled runs can be resumed later.
@@ -85,4 +95,4 @@ Cleaned up `mergeSpaces` by removing unused `trackedBySpaceId` mapping. Switched
 | `8a51124` | Implement pipeline cancellation feature |
 | `d811362` | Update maxTokens parameters across components |
 
-**Uncommitted changes:** `lib/ai/templates.ts`, `lib/genie/passes/parse-llm-json.ts`, `lib/pipeline/steps/sql-generation.ts` (SQL hallucination fix cycle, sample data in fix prompts, parseLLMJson caller diagnostics), `lib/genie/time-periods.ts`, `lib/genie/schema-allowlist.ts`, `lib/genie/assembler.ts`, `lib/genie/passes/metric-view-proposals.ts` (backtick-quoting for spaced column names, measure shadowing detection, expanded metric view validation and repair loop).
+**Uncommitted changes:** Ask Forge SQL column grounding (context-builder, engine, sql-proposer, prompts, sql-rules), schema snapshot persistence (metadata-extraction, table-filtering, runs, Prisma schema), ad-hoc dashboard engine, deploy-dashboard-dialog enhancements, and prior uncommitted work (SQL hallucination fix cycle, sample data in fix prompts, parseLLMJson caller diagnostics, backtick-quoting for spaced column names, measure shadowing detection, expanded metric view validation and repair loop).

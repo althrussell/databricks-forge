@@ -41,6 +41,7 @@ model ForgeRun {
   filteredTablesJson String?   @map("filtered_tables_json")
   metadataCacheKey   String?   @map("metadata_cache_key")
   contextSourcesJson String?  @map("context_sources_json")
+  schemaSnapshotJson String?  @map("schema_snapshot_json")
 
   useCases             ForgeUseCase[]
   exports              ForgeExport[]

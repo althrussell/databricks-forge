@@ -84,8 +84,8 @@ export interface AskForgeChatProps {
   onOpenSql?: (sql: string) => void;
   /** Called when a deploy-as-notebook action fires */
   onDeploySql?: (sql: string) => void;
-  /** Called when a deploy-dashboard action fires */
-  onDeployDashboard?: (sql: string, proposal: Record<string, unknown> | null) => void;
+  /** Called when a deploy-dashboard action fires (full payload from the action) */
+  onDeployDashboard?: (payload: Record<string, unknown>) => void;
   /** Called when table enrichments are received for the latest message */
   onTableEnrichments?: (enrichments: TableEnrichmentData[]) => void;
   /** Called when referenced table FQNs are available from the response */
@@ -322,14 +322,9 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         setDeploySql(action.payload.sql as string);
         setActiveSql(null);
       }
-    } else if (action.type === "deploy_dashboard" && action.payload.sql) {
+    } else if (action.type === "deploy_dashboard") {
       if (onDeployDashboard) {
-        onDeployDashboard(
-          action.payload.sql as string,
-          (action.payload.proposal as Record<string, unknown>) ?? null,
-        );
-      } else {
-        router.push("/dashboards");
+        onDeployDashboard(action.payload);
       }
     } else if (action.type === "view_tables") {
       if (action.payload.fqn) {
@@ -341,8 +336,6 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       }
     } else if (action.type === "view_erd") {
       router.push("/environment?tab=erd");
-    } else if (action.type === "create_dashboard") {
-      router.push("/dashboards");
     } else if (action.type === "create_genie_space") {
       setGenieModalPayload({
         tables: (action.payload.tables as string[]) ?? [],

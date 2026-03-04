@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -12,33 +11,103 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, Rocket, AlertCircle } from "lucide-react";
+import {
+  LayoutDashboard,
+  Rocket,
+  Loader2,
+  Check,
+  AlertCircle,
+  ExternalLink,
+} from "lucide-react";
+
+export interface DashboardDeployPayload {
+  proposal?: {
+    title?: string;
+    description?: string;
+    tables?: string[];
+    widgetDescriptions?: string[];
+  };
+  sqlBlocks?: string[];
+  conversationSummary?: string;
+  domainHint?: string;
+}
 
 interface DeployDashboardDialogProps {
   open: boolean;
-  sql: string;
-  proposal: Record<string, unknown> | null;
+  payload: DashboardDeployPayload | null;
   onOpenChange: (open: boolean) => void;
 }
 
+type Phase = "idle" | "generating" | "done" | "error";
+
 export function DeployDashboardDialog({
   open,
-  sql,
-  proposal,
+  payload,
   onOpenChange,
 }: DeployDashboardDialogProps) {
-  const router = useRouter();
-  const title = (proposal?.title as string) ?? "Forge AI Dashboard";
-  const description = (proposal?.description as string) ?? "";
-  const tables = (proposal?.tables as string[]) ?? [];
-  const widgets = (proposal?.widgetDescriptions as string[]) ?? [];
+  const [phase, setPhase] = React.useState<Phase>("idle");
+  const [result, setResult] = React.useState<{
+    dashboardUrl?: string;
+    title?: string;
+    datasetCount?: number;
+    widgetCount?: number;
+  } | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const handleDeploy = () => {
-    const params = new URLSearchParams();
-    if (sql) params.set("sql", sql);
-    if (title) params.set("title", title);
-    onOpenChange(false);
-    router.push(`/dashboards?${params.toString()}`);
+  React.useEffect(() => {
+    if (!open) {
+      setPhase("idle");
+      setResult(null);
+      setError(null);
+    }
+  }, [open]);
+
+  const proposal = payload?.proposal;
+  const title = proposal?.title ?? "Forge AI Dashboard";
+  const tables = proposal?.tables ?? [];
+  const widgets = proposal?.widgetDescriptions ?? [];
+  const sqlBlocks = payload?.sqlBlocks ?? [];
+
+  const handleDeploy = async () => {
+    setPhase("generating");
+    setError(null);
+    setResult(null);
+
+    try {
+      const resp = await fetch("/api/dashboard/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tables,
+          sqlBlocks,
+          conversationSummary: payload?.conversationSummary,
+          widgetDescriptions: widgets,
+          domainHint: payload?.domainHint,
+          title,
+          deploy: true,
+          publish: true,
+        }),
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok || !data.success) {
+        setPhase("error");
+        setError(data.error ?? "Dashboard generation failed");
+        return;
+      }
+
+      setResult({
+        dashboardUrl: data.dashboardUrl,
+        title: data.recommendation?.title,
+        datasetCount: data.recommendation?.datasetCount,
+        widgetCount: data.recommendation?.widgetCount,
+      });
+      setPhase("done");
+    } catch {
+      setPhase("error");
+      setError("Network error");
+    }
   };
 
   return (
@@ -50,66 +119,151 @@ export function DeployDashboardDialog({
             Deploy as Dashboard
           </DialogTitle>
           <DialogDescription>
-            This query can be visualized as a dashboard. Review the proposal and deploy.
+            Forge will design a Lakeview dashboard from the referenced tables
+            and deploy it to your Databricks workspace.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <p className="text-sm font-medium">{title}</p>
-            {description && (
-              <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-            )}
-          </div>
-
-          {tables.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Referenced Tables</p>
-              <div className="flex flex-wrap gap-1.5">
-                {tables.map((t) => (
-                  <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>
-                ))}
+          {phase === "idle" && (
+            <>
+              <div>
+                <p className="text-sm font-medium">{title}</p>
+                {proposal?.description && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {proposal.description}
+                  </p>
+                )}
               </div>
+
+              {tables.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                    Referenced Tables
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tables.map((t) => (
+                      <Badge key={t} variant="outline" className="text-[10px]">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {widgets.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                    Proposed Widgets
+                  </p>
+                  <ul className="space-y-1">
+                    {widgets.map((w, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2 text-xs text-muted-foreground"
+                      >
+                        <LayoutDashboard className="mt-0.5 size-3 shrink-0 text-primary" />
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {sqlBlocks.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                    SQL Context
+                  </p>
+                  <pre className="max-h-[120px] overflow-auto rounded-md bg-muted p-3 text-xs">
+                    <code>{sqlBlocks[0]}</code>
+                  </pre>
+                  {sqlBlocks.length > 1 && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      +{sqlBlocks.length - 1} more quer{sqlBlocks.length === 2 ? "y" : "ies"}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {phase === "generating" && (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <Loader2 className="size-6 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">
+                Designing and deploying dashboard...
+              </p>
+              <p className="text-xs text-muted-foreground">
+                This typically takes 10-20 seconds.
+              </p>
             </div>
           )}
 
-          {widgets.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Proposed Widgets</p>
-              <ul className="space-y-1">
-                {widgets.map((w, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <LayoutDashboard className="mt-0.5 size-3 shrink-0 text-primary" />
-                    {w}
-                  </li>
-                ))}
-              </ul>
+          {phase === "done" && result && (
+            <div className="space-y-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <Check className="size-4" />
+                Dashboard deployed successfully
+              </div>
+              {result.title && (
+                <p className="text-sm font-medium">{result.title}</p>
+              )}
+              {(result.datasetCount || result.widgetCount) && (
+                <p className="text-xs text-muted-foreground">
+                  {result.datasetCount} dataset{result.datasetCount !== 1 ? "s" : ""},{" "}
+                  {result.widgetCount} widget{result.widgetCount !== 1 ? "s" : ""}
+                </p>
+              )}
+              {result.dashboardUrl && (
+                <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                  <a
+                    href={result.dashboardUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Open in Databricks
+                  </a>
+                </Button>
+              )}
             </div>
           )}
 
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">SQL</p>
-            <pre className="max-h-[150px] overflow-auto rounded-md bg-muted p-3 text-xs">
-              <code>{sql}</code>
-            </pre>
-          </div>
-
-          {!sql && (
-            <div className="flex items-center gap-2 text-xs text-amber-600">
-              <AlertCircle className="size-3.5" />
-              No SQL query provided. The dashboard builder will need manual query input.
+          {phase === "error" && (
+            <div className="flex items-center gap-2 py-2 text-sm text-destructive">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleDeploy} className="gap-1.5">
-            <Rocket className="size-3.5" />
-            Deploy Dashboard
-          </Button>
+          {phase === "idle" && (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDeploy}
+                className="gap-1.5"
+                disabled={tables.length === 0}
+              >
+                <Rocket className="size-3.5" />
+                Deploy Dashboard
+              </Button>
+            </>
+          )}
+          {phase === "generating" && (
+            <Button variant="outline" disabled>
+              Generating...
+            </Button>
+          )}
+          {(phase === "done" || phase === "error") && (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

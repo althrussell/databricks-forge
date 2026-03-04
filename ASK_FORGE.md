@@ -425,10 +425,9 @@ the message with sources, actions, intent, and enrichments.
 |-------------|-----------|
 | `run_sql` | Opens SQL dialog (full mode) or inline runner (compact) |
 | `deploy_notebook` | Opens deploy options modal or inline form |
-| `deploy_dashboard` | Opens dashboard deploy dialog or navigates to `/dashboards` |
+| `deploy_dashboard` | Opens dashboard deploy dialog, generates + deploys via ad-hoc engine |
 | `view_tables` | Navigates to table detail or environment tables page |
 | `view_erd` | Navigates to environment ERD tab |
-| `create_dashboard` | Navigates to `/dashboards` |
 | `create_genie_space` | Navigates to `/metadata-genie` |
 | `start_discovery` | Navigates to `/configure` |
 | `view_run` | Navigates to `/runs/{runId}` |
@@ -505,7 +504,6 @@ Horizontally wrapped action buttons with type-specific icons and styling:
 |------|------|-------|
 | `run_sql` | Play | Primary (filled) |
 | `deploy_notebook` | BookOpen | Outline |
-| `create_dashboard` | LayoutDashboard | Outline |
 | `deploy_dashboard` | LayoutDashboard | Primary (filled) |
 | `create_genie_space` | Sparkles | Outline |
 | `view_tables` | Table2 | Secondary |
@@ -548,12 +546,17 @@ Notebook deployment form:
 
 ### DeployDashboardDialog (`components/assistant/deploy-dashboard-dialog.tsx`)
 
-Dashboard deployment preview and confirmation:
+Dashboard generation and deployment via the ad-hoc dashboard engine:
 
 - Displays the dashboard proposal: title, description, referenced tables, proposed widgets
-- Shows the SQL that will power the dashboard
-- Warning when no SQL is provided
-- "Deploy Dashboard" button navigates to `/dashboards?sql=...&title=...`
+- Shows SQL context when available (optional -- engine generates its own from column schemas)
+- "Deploy Dashboard" calls `POST /api/dashboard/generate` with full conversation context
+- The ad-hoc engine maps conversation intent into the dashboard design prompt:
+  - `conversationSummary` → `businessContext.strategicGoals` (steers LLM focus)
+  - `widgetDescriptions` → synthetic use case statements (tells LLM what to visualise)
+  - `domainHint` → domain (names the dashboard around user's topic)
+  - `sqlBlocks` → synthetic use case SQL (bonus context for the LLM)
+- Shows progress ("Designing and deploying dashboard...") then success with a link to the deployed Lakeview dashboard in Databricks
 
 ### EmbeddingStatus (`components/assistant/embedding-status.tsx`)
 

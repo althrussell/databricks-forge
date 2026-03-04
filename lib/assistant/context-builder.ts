@@ -33,6 +33,7 @@ export interface TableEnrichment {
   lastWriteOperation: string | null;
   upstreamTables: string[];
   downstreamTables: string[];
+  columns: Array<{ name: string; dataType: string }>;
 }
 
 export interface AssistantContext {
@@ -157,6 +158,35 @@ export async function buildAssistantContext(
     });
   }
   const tableEnrichments = await fetchTableEnrichments(tables);
+
+  // Backfill column data from schema snapshot for tables not covered by ForgeTableDetail
+  const tablesWithCols = new Set(tableEnrichments.filter((e) => e.columns.length > 0).map((e) => e.tableFqn));
+  const missingColFqns = tables.filter((fqn) => !tablesWithCols.has(fqn));
+  if (missingColFqns.length > 0) {
+    const snapshotCols = await loadSchemaSnapshotColumns(missingColFqns);
+    for (const enrichment of tableEnrichments) {
+      if (enrichment.columns.length === 0) {
+        const snapCols = snapshotCols.get(enrichment.tableFqn);
+        if (snapCols) {
+          enrichment.columns = snapCols.map((c) => ({ name: c.name, dataType: c.type }));
+        }
+      }
+    }
+    // Add enrichments for tables that exist in the snapshot but not in ForgeTableDetail
+    const enrichedFqns = new Set(tableEnrichments.map((e) => e.tableFqn));
+    for (const fqn of missingColFqns) {
+      if (!enrichedFqns.has(fqn) && snapshotCols.has(fqn)) {
+        tableEnrichments.push({
+          tableFqn: fqn,
+          owner: null, numRows: null, sizeInBytes: null, lastModified: null,
+          createdBy: null, dataDomain: null, dataTier: null, healthScore: null,
+          issues: [], recommendations: [], lastWriteTimestamp: null,
+          lastWriteOperation: null, upstreamTables: [], downstreamTables: [],
+          columns: snapshotCols.get(fqn)!.map((c) => ({ name: c.name, dataType: c.type })),
+        });
+      }
+    }
+  }
 
   if (tableEnrichments.length > 0) {
     fullContext += "\n\n## Estate Metadata for Referenced Tables\n\n" + formatTableEnrichments(tableEnrichments);
@@ -518,6 +548,23 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
         const issues = parseJsonArray(h?.issuesJson);
         const recommendations = parseJsonArray(h?.recommendationsJson);
 
+        let columns: Array<{ name: string; dataType: string }> = [];
+        if (d.columnsJson) {
+          try {
+            const rawCols = JSON.parse(d.columnsJson);
+            if (Array.isArray(rawCols)) {
+              columns = rawCols
+                .map((c: Record<string, unknown>) => ({
+                  name: String(c.name ?? ""),
+                  dataType: String(c.type ?? c.dataType ?? "STRING"),
+                }))
+                .filter((c) => c.name);
+            }
+          } catch {
+            // best-effort column parsing
+          }
+        }
+
         return {
           tableFqn: d.tableFqn,
           owner: d.owner,
@@ -534,12 +581,49 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
           lastWriteOperation: h?.lastWriteOperation ?? null,
           upstreamTables: upstreamByFqn.get(d.tableFqn) ?? [],
           downstreamTables: downstreamByFqn.get(d.tableFqn) ?? [],
+          columns,
         };
       });
     });
   } catch (err) {
     logger.warn("[assistant/context] Failed to fetch table enrichments", { error: String(err) });
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Schema snapshot fallback (covers pipeline-only runs without estate scan)
+// ---------------------------------------------------------------------------
+
+async function loadSchemaSnapshotColumns(
+  fqns: string[],
+): Promise<Map<string, Array<{ name: string; type: string }>>> {
+  if (fqns.length === 0) return new Map();
+  try {
+    return await withPrisma(async (prisma) => {
+      const latestRun = await prisma.forgeRun.findFirst({
+        where: { schemaSnapshotJson: { not: null } },
+        orderBy: { createdAt: "desc" },
+        select: { schemaSnapshotJson: true },
+      });
+      if (!latestRun?.schemaSnapshotJson) return new Map();
+
+      const snapshot = JSON.parse(latestRun.schemaSnapshotJson) as Record<
+        string,
+        { columns?: Array<{ name: string; type: string }> }
+      >;
+      const result = new Map<string, Array<{ name: string; type: string }>>();
+      for (const fqn of fqns) {
+        const entry = snapshot[fqn];
+        if (entry?.columns && entry.columns.length > 0) {
+          result.set(fqn, entry.columns);
+        }
+      }
+      return result;
+    });
+  } catch (err) {
+    logger.warn("[assistant/context] Failed to load schema snapshot", { error: String(err) });
+    return new Map();
   }
 }
 
@@ -562,6 +646,10 @@ function formatConversationHistory(history: ConversationTurn[]): string {
     .join("\n\n");
 }
 
+function quoteIdent(name: string): string {
+  return /^\w+$/.test(name) ? name : `\`${name}\``;
+}
+
 function formatTableEnrichments(enrichments: TableEnrichment[]): string {
   return enrichments
     .map((t) => {
@@ -577,6 +665,12 @@ function formatTableEnrichments(enrichments: TableEnrichment[]): string {
       if (t.issues.length > 0) parts.push(`- Issues: ${t.issues.join("; ")}`);
       if (t.upstreamTables.length > 0) parts.push(`- Upstream: ${t.upstreamTables.join(", ")}`);
       if (t.downstreamTables.length > 0) parts.push(`- Downstream: ${t.downstreamTables.join(", ")}`);
+      if (t.columns.length > 0) {
+        parts.push(`- **Columns (USE ONLY THESE -- do NOT invent others):**`);
+        for (const col of t.columns) {
+          parts.push(`  - ${quoteIdent(col.name)} (${col.dataType})`);
+        }
+      }
       return parts.join("\n");
     })
     .join("\n\n");

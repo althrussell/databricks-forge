@@ -10,11 +10,11 @@ import { classifyIntent, type AssistantIntent, type IntentClassification } from 
 import { buildAssistantContext, buildSourceReferences, type AssistantContext, type TableEnrichment } from "./context-builder";
 import { extractTableFqnsFromText, mergeTableReferenceLists } from "./context-builder";
 import { buildAssistantMessages, type AssistantPersona } from "./prompts";
-import { extractSqlBlocks } from "./sql-proposer";
+import { extractSqlBlocks, validateSql, isColumnResolutionError, buildSqlFixPrompt } from "./sql-proposer";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
 import { retrieveContext } from "@/lib/embeddings/retriever";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
-import { chatCompletionStream, type StreamCallback, type TokenUsage } from "@/lib/dbx/model-serving";
+import { chatCompletion, chatCompletionStream, type StreamCallback, type TokenUsage } from "@/lib/dbx/model-serving";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
 import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
@@ -34,7 +34,6 @@ export interface ActionCard {
   type:
     | "run_sql"
     | "deploy_notebook"
-    | "create_dashboard"
     | "deploy_dashboard"
     | "create_genie_space"
     | "view_tables"
@@ -197,6 +196,57 @@ export async function runAssistantEngine(
   }
   answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
+
+  // EXPLAIN validation + single fix attempt for column resolution errors
+  if (sqlBlocks.length > 0 && context.tableEnrichments.some((e) => e.columns.length > 0)) {
+    const knownCols = context.tableEnrichments.flatMap((t) =>
+      t.columns.map((c) => ({ tableFqn: t.tableFqn, name: c.name, dataType: c.dataType }))
+    );
+
+    for (let i = 0; i < sqlBlocks.length; i++) {
+      try {
+        const explainError = await validateSql(sqlBlocks[i]);
+        if (explainError && isColumnResolutionError(explainError)) {
+          logger.info("[assistant/engine] SQL column error, attempting fix", {
+            blockIndex: i,
+            error: explainError.slice(0, 200),
+          });
+
+          const fixPrompt = buildSqlFixPrompt(sqlBlocks[i], explainError, knownCols);
+          const fixResponse = await chatCompletion({
+            endpoint: getServingEndpoint(),
+            messages: [
+              { role: "system", content: "You are a SQL fixer. Return ONLY corrected SQL in a ```sql block." },
+              { role: "user", content: fixPrompt },
+            ],
+            temperature: 0.1,
+            maxTokens: 4096,
+          });
+
+          const fixedBlocks = extractSqlBlocks(fixResponse.content);
+          if (fixedBlocks.length > 0) {
+            const recheck = await validateSql(fixedBlocks[0]);
+            if (!recheck) {
+              answer = answer.replace(sqlBlocks[i], fixedBlocks[0]);
+              sqlBlocks[i] = fixedBlocks[0];
+              logger.info("[assistant/engine] SQL fix successful", { blockIndex: i });
+            } else {
+              logger.warn("[assistant/engine] SQL fix still fails EXPLAIN", {
+                blockIndex: i,
+                error: recheck.slice(0, 200),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn("[assistant/engine] SQL validation/fix failed (non-fatal)", {
+          blockIndex: i,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
   const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);
   const reconciledTables = mergeTableReferenceLists(context.tables, sqlTables);
   const dashboardProposal = extractDashboardIntent(answer);
@@ -387,17 +437,30 @@ function buildActions(
     }
   }
 
-  if (sqlBlocks.length > 0 && intent === "dashboard" && dashboardProposal) {
+  const enrichmentMap = new Map(tableEnrichments.map((e) => [e.tableFqn, e]));
+
+  if (dashboardProposal && dashboardProposal.tables.length > 0) {
+    const dSchemas = dashboardProposal.tables.map((t) => t.split(".")[1]).filter(Boolean);
+    const dSchemaCounts = new Map<string, number>();
+    for (const s of dSchemas) dSchemaCounts.set(s, (dSchemaCounts.get(s) || 0) + 1);
+    let dashDomainHint = "";
+    let dashBestCount = 0;
+    for (const [schema, count] of dSchemaCounts) {
+      if (count > dashBestCount) { dashBestCount = count; dashDomainHint = schema; }
+    }
+
     actions.push({
       type: "deploy_dashboard",
       label: "Deploy as Dashboard",
-      payload: { sql: sqlBlocks[0], proposal: dashboardProposal },
-    });
-  } else if (intent === "dashboard" || dashboardProposal) {
-    actions.push({
-      type: "create_dashboard",
-      label: "Create Dashboard",
-      payload: { proposal: dashboardProposal },
+      payload: {
+        proposal: dashboardProposal,
+        sqlBlocks: sqlBlocks.slice(0, 3),
+        conversationSummary: conversationSummary || undefined,
+        domainHint: dashDomainHint || undefined,
+        tableEnrichments: dashboardProposal.tables
+          .map((t) => enrichmentMap.get(t))
+          .filter(Boolean),
+      },
     });
   }
 
@@ -426,7 +489,6 @@ function buildActions(
         if (count > bestCount) { bestCount = count; domainHint = schema; }
       }
 
-      const enrichmentMap = new Map(tableEnrichments.map((e) => [e.tableFqn, e]));
       actions.push({
         type: "create_genie_space",
         label: "Create Genie Space",

@@ -489,3 +489,45 @@ export async function updateRunStepLog(
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Schema snapshot helpers
+// ---------------------------------------------------------------------------
+
+export type SchemaSnapshotEntry = {
+  columns: Array<{ name: string; type: string }>;
+  tableType: string;
+  comment: string | null;
+  isBusinessTable: boolean | null;
+};
+
+export type SchemaSnapshot = Record<string, SchemaSnapshotEntry>;
+
+export async function updateSchemaSnapshot(
+  runId: string,
+  snapshot: SchemaSnapshot,
+): Promise<void> {
+  await withPrisma(async (prisma) => {
+    await prisma.forgeRun.update({
+      where: { runId },
+      data: { schemaSnapshotJson: JSON.stringify(snapshot) },
+    });
+  });
+}
+
+export async function getSchemaSnapshot(
+  runId: string,
+): Promise<SchemaSnapshot | null> {
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeRun.findUnique({
+      where: { runId },
+      select: { schemaSnapshotJson: true },
+    });
+    if (!row?.schemaSnapshotJson) return null;
+    try {
+      return JSON.parse(row.schemaSnapshotJson) as SchemaSnapshot;
+    } catch {
+      return null;
+    }
+  });
+}

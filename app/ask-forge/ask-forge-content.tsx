@@ -12,7 +12,7 @@ import { AskForgeContextPanel, type TableDetailData } from "@/components/assista
 import { ConversationHistory } from "@/components/assistant/conversation-history";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
-import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
+import { DeployDashboardDialog, type DashboardDeployPayload } from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -22,8 +22,7 @@ import { PanelRightClose, PanelRight, Briefcase, Wrench } from "lucide-react";
 export default function AskForgeContent() {
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
   const [deploySql, setDeploySql] = React.useState<string | null>(null);
-  const [dashboardSql, setDashboardSql] = React.useState<string | null>(null);
-  const [dashboardProposal, setDashboardProposal] = React.useState<Record<string, unknown> | null>(null);
+  const [dashboardPayload, setDashboardPayload] = React.useState<DashboardDeployPayload | null>(null);
   const [tableEnrichments, setTableEnrichments] = React.useState<TableEnrichmentData[]>([]);
   const [tableDetails, setTableDetails] = React.useState<Map<string, TableDetailData>>(new Map());
   const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
@@ -273,9 +272,8 @@ export default function AskForgeContent() {
               setDeploySql(sql);
               setActiveSql(null);
             }}
-            onDeployDashboard={(sql, proposal) => {
-              setDashboardSql(sql);
-              setDashboardProposal(proposal);
+            onDeployDashboard={(payload) => {
+              setDashboardPayload(payload as DashboardDeployPayload);
             }}
             onTableEnrichments={setTableEnrichments}
             onReferencedTables={handleReferencedTables}
@@ -339,10 +337,9 @@ export default function AskForgeContent() {
       )}
 
       <DeployDashboardDialog
-        open={!!dashboardSql}
-        sql={dashboardSql ?? ""}
-        proposal={dashboardProposal}
-        onOpenChange={(open) => { if (!open) { setDashboardSql(null); setDashboardProposal(null); } }}
+        open={!!dashboardPayload}
+        payload={dashboardPayload}
+        onOpenChange={(open) => { if (!open) setDashboardPayload(null); }}
       />
     </div>
   );

@@ -217,6 +217,9 @@ async function generateSqlForUseCase(
   const involvedTables: TableInfo[] = [];
   const involvedColumns: ColumnInfo[] = [];
 
+  const resolvedFqns: string[] = [];
+  const unresolvedFqns: string[] = [];
+
   for (const fqn of uc.tablesInvolved) {
     // Try exact match, then try with backtick-stripped version
     const cleanFqn = fqn.replace(/`/g, "");
@@ -225,10 +228,22 @@ async function generateSqlForUseCase(
 
     const cols = columnsByTable.get(fqn) ?? columnsByTable.get(cleanFqn) ?? [];
     involvedColumns.push(...cols);
+
+    if (cols.length > 0) {
+      resolvedFqns.push(`${cleanFqn}(${cols.length} cols)`);
+    } else {
+      unresolvedFqns.push(cleanFqn);
+    }
   }
 
-  // If we have no schema info at all, we can still try (the LLM may use table
-  // names alone), but log a warning
+  if (unresolvedFqns.length > 0) {
+    logger.warn("Some tables in use case have no column metadata", {
+      useCaseId: uc.id,
+      unresolvedTables: unresolvedFqns,
+      resolvedTables: resolvedFqns,
+    });
+  }
+
   if (involvedColumns.length === 0) {
     logger.warn("No column metadata for use case", { useCaseId: uc.id, tables: uc.tablesInvolved });
   }
@@ -322,6 +337,9 @@ async function generateSqlForUseCase(
     logger.info("Hallucinated columns detected, attempting fix", {
       useCaseId: uc.id,
       unknownColumns: validation.unknownColumns,
+      knownColumnCount: involvedColumns.length,
+      tablesResolved: involvedTables.length,
+      tablesRequested: uc.tablesInvolved.length,
     });
 
     const columnErrorMsg = buildColumnViolationMessage(
@@ -351,6 +369,9 @@ async function generateSqlForUseCase(
       logger.warn("Fixed SQL still contains hallucinated columns, rejecting", {
         useCaseId: uc.id,
         unknownColumns: revalidation.unknownColumns,
+        knownColumnCount: involvedColumns.length,
+        tablesResolved: involvedTables.length,
+        tablesRequested: uc.tablesInvolved.length,
       });
       return null;
     }
@@ -477,8 +498,9 @@ function buildColumnViolationMessage(
     return `  ${cleanFqn}: ${cols.join(", ")}`;
   }).join("\n");
 
+  const bareNames = unknownColumns.map((c) => c.includes(".") ? c.split(".").pop()! : c);
   return [
-    `SCHEMA VIOLATION: SQL references columns that do not exist in the schema: ${unknownColumns.join(", ")}.`,
+    `SCHEMA VIOLATION: SQL references columns that do not exist in the schema: ${bareNames.join(", ")}.`,
     `These columns are hallucinated -- they do NOT exist in any of the involved tables.`,
     ``,
     `The ONLY valid columns are:`,
@@ -570,19 +592,30 @@ function validateSqlOutput(
       aliasSet.add(aliasMatch[1].toLowerCase());
     }
 
-    // Extract identifiers after dots (likely column references): table.column
-    const dotColPattern = /\.([a-z_][a-z0-9_]*)/gi;
+    // Detect CTE names: "WITH cte_name AS (" and chained ", cte_name AS ("
+    const ctePattern = /\bWITH\s+([a-z_]\w*)\s+AS\s*\(/gi;
+    while ((aliasMatch = ctePattern.exec(normalizedSql)) !== null) {
+      aliasSet.add(aliasMatch[1].toLowerCase());
+    }
+    const chainedCtePattern = /,\s*([a-z_]\w*)\s+AS\s*\(/gi;
+    while ((aliasMatch = chainedCtePattern.exec(normalizedSql)) !== null) {
+      aliasSet.add(aliasMatch[1].toLowerCase());
+    }
+
+    // Extract prefix.column pairs (likely column references): alias.column
+    const dotColPattern = /([a-z_]\w*)\.([a-z_][a-z0-9_]*)/gi;
     let match;
     const unknownCols: string[] = [];
     while ((match = dotColPattern.exec(normalizedSql)) !== null) {
-      const colName = match[1].toLowerCase();
+      const prefix = match[1];
+      const colName = match[2].toLowerCase();
       if (
         !knownColumns.has(colName) &&
         !SQL_KEYWORDS.has(colName) &&
         !fqnParts.has(colName) &&
         !aliasSet.has(colName)
       ) {
-        unknownCols.push(match[1]);
+        unknownCols.push(`${prefix}.${match[2]}`);
       }
     }
     const dedupedUnknown = [...new Set(unknownCols)];
