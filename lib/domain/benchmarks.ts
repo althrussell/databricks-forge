@@ -86,6 +86,7 @@ const PUBLIC_HOST_ALLOWLIST = [
   "itu.int",
   "era.europa.eu",
   "deloitte.com",
+  "iaisweb.org",
 ];
 
 export function isPublicSourceUrl(sourceUrl: string): boolean {
