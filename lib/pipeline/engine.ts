@@ -7,6 +7,7 @@
 
 import { PipelineStep } from "@/lib/domain/types";
 import type { PipelineContext } from "@/lib/domain/types";
+import { PipelineCancelledError, markRunCancelled, clearRunCancelled } from "@/lib/ai/agent";
 import { logger } from "@/lib/logger";
 import {
   updateRunStatus,
@@ -57,7 +58,17 @@ interface StepDef {
   label: string;
 }
 
-const activePipelineRuns = new Set<string>();
+const activePipelineRuns = new Map<string, AbortController>();
+
+/**
+ * Throw PipelineCancelledError if the signal has been aborted.
+ * Called between pipeline steps for fast cancellation.
+ */
+function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new PipelineCancelledError("unknown");
+  }
+}
 
 const STEPS: StepDef[] = [
   { step: PipelineStep.BusinessContext, progressPct: 10, label: "Generating business context" },
@@ -82,7 +93,8 @@ const STEPS: StepDef[] = [
  * Progress is tracked in Lakebase so the frontend can poll.
  */
 export async function startPipeline(runId: string): Promise<void> {
-  activePipelineRuns.add(runId);
+  const controller = new AbortController();
+  activePipelineRuns.set(runId, controller);
   try {
   const run = await getRunById(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
@@ -95,6 +107,7 @@ export async function startPipeline(runId: string): Promise<void> {
     lineageGraph: null,
     sampleData: null,
     discoveryResult: null,
+    signal: controller.signal,
   };
 
   /** Helper: record step start/end timing in the run's stepLog. */
@@ -123,6 +136,7 @@ export async function startPipeline(runId: string): Promise<void> {
     ctx.run = { ...ctx.run, status: "running" };
 
     // Step 1: Business Context
+    checkCancelled(ctx.signal);
     await logStep(PipelineStep.BusinessContext, async () => {
       await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 5, undefined, `Generating business context for ${ctx.run.config.businessName}...`);
       logger.info(`Step 1: ${STEPS[0].label}`, { runId, step: "business-context" });
@@ -155,6 +169,7 @@ export async function startPipeline(runId: string): Promise<void> {
     }
 
     // Step 2: Metadata Extraction
+    checkCancelled(ctx.signal);
     await logStep(PipelineStep.MetadataExtraction, async () => {
       await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
       logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
@@ -170,6 +185,7 @@ export async function startPipeline(runId: string): Promise<void> {
     });
 
     // Step 2b: Asset Discovery (conditional -- skipped when assetDiscoveryEnabled is false)
+    checkCancelled(ctx.signal);
     if (ctx.run.config.assetDiscoveryEnabled) {
       await logStep(PipelineStep.AssetDiscovery, async () => {
         await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 19, undefined, "Discovering existing Genie spaces, dashboards, and metric views...");
@@ -183,6 +199,7 @@ export async function startPipeline(runId: string): Promise<void> {
     }
 
     // Step 3: Table Filtering
+    checkCancelled(ctx.signal);
     await logStep(PipelineStep.TableFiltering, async () => {
       await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 24, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
       logger.info(`Step 3: Table Filtering`, { runId, step: "table-filtering" });
@@ -191,6 +208,7 @@ export async function startPipeline(runId: string): Promise<void> {
     });
 
     // Step 4: Use Case Generation
+    checkCancelled(ctx.signal);
     await logStep(PipelineStep.UsecaseGeneration, async () => {
       await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
       logger.info(`Step 4: ${STEPS[3].label}`, { runId, step: "usecase-generation" });
@@ -242,6 +260,7 @@ export async function startPipeline(runId: string): Promise<void> {
     });
 
     // Step 5: Domain Clustering
+    checkCancelled(ctx.signal);
     await logStep(PipelineStep.DomainClustering, async () => {
       await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
       logger.info(`Step 5: ${STEPS[4].label}`, { runId, step: "domain-clustering" });
@@ -251,6 +270,7 @@ export async function startPipeline(runId: string): Promise<void> {
     });
 
     // Step 6: Scoring & Deduplication
+    checkCancelled(ctx.signal);
     await logStep(PipelineStep.Scoring, async () => {
       const preScoringCount = ctx.useCases.length;
       await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${preScoringCount} use cases...`);
@@ -309,6 +329,7 @@ export async function startPipeline(runId: string): Promise<void> {
     });
 
     // Step 7: SQL Generation
+    checkCancelled(ctx.signal);
     let sqlOk = 0;
     await logStep(PipelineStep.SqlGeneration, async () => {
       await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
@@ -373,27 +394,40 @@ export async function startPipeline(runId: string): Promise<void> {
     // Fire Genie Engine and Dashboard Engine concurrently in the background.
     startBackgroundEngines(ctx, runId);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown pipeline error";
-    logger.error(`Pipeline failed`, { runId, error: message });
-    try {
-      await updateRunStatus(
-        runId,
-        "failed",
-        ctx.run.currentStep,
-        ctx.run.progressPct,
-        message,
-        `Pipeline failed: ${message}`
-      );
-    } catch (statusError) {
-      logger.error("Failed to update run status after pipeline failure", {
-        runId,
-        originalError: message,
-        statusError: statusError instanceof Error ? statusError.message : String(statusError),
-      });
+    if (error instanceof PipelineCancelledError) {
+      logger.info("Pipeline cancelled by user", { runId });
+      try {
+        await updateRunStatus(runId, "cancelled", ctx.run.currentStep, ctx.run.progressPct, "Cancelled by user", "Pipeline cancelled");
+      } catch (statusError) {
+        logger.error("Failed to update run status after cancellation", {
+          runId,
+          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        });
+      }
+    } else {
+      const message =
+        error instanceof Error ? error.message : "Unknown pipeline error";
+      logger.error(`Pipeline failed`, { runId, error: message });
+      try {
+        await updateRunStatus(
+          runId,
+          "failed",
+          ctx.run.currentStep,
+          ctx.run.progressPct,
+          message,
+          `Pipeline failed: ${message}`
+        );
+      } catch (statusError) {
+        logger.error("Failed to update run status after pipeline failure", {
+          runId,
+          originalError: message,
+          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        });
+      }
     }
   }
   } finally {
+    clearRunCancelled(runId);
     activePipelineRuns.delete(runId);
   }
 }
@@ -408,11 +442,12 @@ export async function startPipeline(runId: string): Promise<void> {
  * so that expensive early steps are not re-run.
  */
 export async function resumePipeline(runId: string): Promise<void> {
-  activePipelineRuns.add(runId);
+  const controller = new AbortController();
+  activePipelineRuns.set(runId, controller);
   try {
   const run = await getRunById(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
-  if (run.status !== "failed") {
+  if (run.status !== "failed" && run.status !== "cancelled") {
     throw new Error(`Cannot resume run with status "${run.status}"`);
   }
 
@@ -435,6 +470,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     lineageGraph: null,
     sampleData: null,
     discoveryResult: null,
+    signal: controller.signal,
   };
 
   // Restore business context (persisted after step 1)
@@ -510,6 +546,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 1: Business Context
     if (resumeIndex <= 0) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.BusinessContext, async () => {
         await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 5, undefined, `Generating business context for ${ctx.run.config.businessName}...`);
         logger.info("Step 1: Generating business context", { runId, step: "business-context" });
@@ -532,6 +569,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 2: Metadata Extraction
     if (resumeIndex <= 1) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.MetadataExtraction, async () => {
         await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
         logger.info("Step 2: Extracting metadata", { runId, step: "metadata-extraction" });
@@ -548,6 +586,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     }
 
     // Step 2b: Asset Discovery (conditional)
+    checkCancelled(ctx.signal);
     if (resumeIndex <= 2 && ctx.run.config.assetDiscoveryEnabled) {
       await logStep(PipelineStep.AssetDiscovery, async () => {
         await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 19, undefined, "Discovering existing Genie spaces, dashboards, and metric views...");
@@ -562,6 +601,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 3: Table Filtering
     if (resumeIndex <= 3) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.TableFiltering, async () => {
         await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 24, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
         logger.info("Step 3: Filtering tables", { runId, step: "table-filtering" });
@@ -572,6 +612,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 4: Use Case Generation
     if (resumeIndex <= 4) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.UsecaseGeneration, async () => {
         await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
         logger.info("Step 4: Generating use cases", { runId, step: "usecase-generation" });
@@ -604,6 +645,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 5: Domain Clustering
     if (resumeIndex <= 5) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.DomainClustering, async () => {
         await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
         logger.info("Step 5: Clustering domains", { runId, step: "domain-clustering" });
@@ -615,6 +657,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     // Step 6: Scoring
     if (resumeIndex <= 6) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.Scoring, async () => {
         await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${ctx.useCases.length} use cases...`);
         logger.info("Step 6: Scoring", { runId, step: "scoring" });
@@ -626,6 +669,7 @@ export async function resumePipeline(runId: string): Promise<void> {
     // Step 7: SQL Generation
     let sqlOk = 0;
     if (resumeIndex <= 7) {
+      checkCancelled(ctx.signal);
       await logStep(PipelineStep.SqlGeneration, async () => {
         await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
         logger.info("Step 7: Generating SQL", { runId, step: "sql-generation" });
@@ -681,19 +725,32 @@ export async function resumePipeline(runId: string): Promise<void> {
 
     startBackgroundEngines(ctx, runId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown pipeline error";
-    logger.error("Resumed pipeline failed", { runId, error: message });
-    try {
-      await updateRunStatus(runId, "failed", ctx.run.currentStep, ctx.run.progressPct, message, `Pipeline failed: ${message}`);
-    } catch (statusError) {
-      logger.error("Failed to update run status after resume failure", {
-        runId,
-        originalError: message,
-        statusError: statusError instanceof Error ? statusError.message : String(statusError),
-      });
+    if (error instanceof PipelineCancelledError) {
+      logger.info("Resumed pipeline cancelled by user", { runId });
+      try {
+        await updateRunStatus(runId, "cancelled", ctx.run.currentStep, ctx.run.progressPct, "Cancelled by user", "Pipeline cancelled");
+      } catch (statusError) {
+        logger.error("Failed to update run status after cancellation", {
+          runId,
+          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        });
+      }
+    } else {
+      const message = error instanceof Error ? error.message : "Unknown pipeline error";
+      logger.error("Resumed pipeline failed", { runId, error: message });
+      try {
+        await updateRunStatus(runId, "failed", ctx.run.currentStep, ctx.run.progressPct, message, `Pipeline failed: ${message}`);
+      } catch (statusError) {
+        logger.error("Failed to update run status after resume failure", {
+          runId,
+          originalError: message,
+          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        });
+      }
     }
   }
   } finally {
+    clearRunCancelled(runId);
     activePipelineRuns.delete(runId);
   }
 }
@@ -761,9 +818,37 @@ export function getPipelineSteps(): StepDef[] {
 }
 
 export function getActivePipelineRunIds(): string[] {
-  return [...activePipelineRuns];
+  return [...activePipelineRuns.keys()];
 }
 
 export function isPipelineActive(runId: string): boolean {
   return activePipelineRuns.has(runId);
+}
+
+/**
+ * Cancel a single pipeline run. Returns true if the run was active and
+ * cancellation was triggered, false if the run was not active.
+ */
+export async function cancelPipeline(runId: string): Promise<boolean> {
+  const controller = activePipelineRuns.get(runId);
+  if (!controller) return false;
+  markRunCancelled(runId);
+  controller.abort();
+  logger.info("Pipeline cancellation requested", { runId });
+  return true;
+}
+
+/**
+ * Cancel all active pipeline runs. Returns the number of runs cancelled.
+ * Called by deleteAllData() before truncating tables.
+ */
+export async function cancelAllPipelines(): Promise<number> {
+  const runIds = [...activePipelineRuns.keys()];
+  for (const runId of runIds) {
+    await cancelPipeline(runId);
+  }
+  if (runIds.length > 0) {
+    logger.info("Cancelled all active pipelines", { count: runIds.length, runIds });
+  }
+  return runIds.length;
 }

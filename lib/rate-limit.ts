@@ -71,8 +71,8 @@ const EXPENSIVE_ROUTES = [
   "/api/environment-scan",
 ];
 
-const llmLimiter = createRateLimiter("llm", { limit: 30, windowMs: 60_000 });
-const generalLimiter = createRateLimiter("general", { limit: 120, windowMs: 60_000 });
+const llmLimiter = createRateLimiter("llm", { limit: 3000, windowMs: 60_000 });
+const generalLimiter = createRateLimiter("general", { limit: 12000, windowMs: 60_000 });
 
 setInterval(() => {
   llmLimiter.prune();

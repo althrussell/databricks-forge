@@ -103,12 +103,39 @@ export interface AIQueryResult {
 export type { TokenUsage } from "@/lib/dbx/model-serving";
 
 // ---------------------------------------------------------------------------
+// Pipeline cancellation registry
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when a pipeline run has been cancelled by the user or by delete-all.
+ * Caught by the pipeline engine to set status to "cancelled" (not "failed").
+ */
+export class PipelineCancelledError extends Error {
+  readonly runId: string;
+  constructor(runId: string) {
+    super(`Pipeline run ${runId} was cancelled`);
+    this.name = "PipelineCancelledError";
+    this.runId = runId;
+  }
+}
+
+const cancelledRunIds = new Set<string>();
+
+export function markRunCancelled(runId: string): void {
+  cancelledRunIds.add(runId);
+}
+
+export function clearRunCancelled(runId: string): void {
+  cancelledRunIds.delete(runId);
+}
+
+// ---------------------------------------------------------------------------
 // Global concurrency semaphore
 // ---------------------------------------------------------------------------
 
 const MAX_CONCURRENT_LLM_CALLS = Math.max(
   1,
-  parseInt(process.env.LLM_MAX_CONCURRENT ?? "4", 10) || 4,
+  parseInt(process.env.LLM_MAX_CONCURRENT ?? "64", 10) || 64,
 );
 
 /**
@@ -221,11 +248,21 @@ export async function executeAIQuery(
   const preflightPrompt = renderedPrompt || formatPrompt(options.promptKey, options.variables);
   assertWithinBudget(options.promptKey, preflightPrompt, MAX_PROMPT_TOKENS);
 
+  // Check cancellation before acquiring the semaphore (avoids queueing doomed calls)
+  if (options.runId && cancelledRunIds.has(options.runId)) {
+    throw new PipelineCancelledError(options.runId);
+  }
+
   let lastError: Error | null = null;
 
   await llmSemaphore.acquire();
   try {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // Check cancellation before each attempt
+      if (options.runId && cancelledRunIds.has(options.runId)) {
+        throw new PipelineCancelledError(options.runId);
+      }
+
       try {
         if (attempt > 0) {
           const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);

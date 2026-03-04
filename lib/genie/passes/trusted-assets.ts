@@ -21,7 +21,7 @@ import { mapWithConcurrency } from "../concurrency";
 
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 3;
-const BATCH_CONCURRENCY = 3;
+const BATCH_CONCURRENCY = 10;
 
 export interface JoinSpecInput {
   leftTable: string;

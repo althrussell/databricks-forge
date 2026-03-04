@@ -51,7 +51,8 @@ export function RunProgress({
           (idx === currentIdx && progressPct >= step.pct);
         const isActive = idx === currentIdx && status === "running" && progressPct < step.pct;
         const isFailed = status === "failed" && idx === currentIdx;
-        const isPending = !isCompleted && !isActive && !isFailed;
+        const isCancelled = status === "cancelled" && idx === currentIdx;
+        const isPending = !isCompleted && !isActive && !isFailed && !isCancelled;
 
         return (
           <div key={step.key} role="listitem" aria-current={isActive ? "step" : undefined} className="flex items-center gap-3">
@@ -64,6 +65,8 @@ export function RunProgress({
                   "border-blue-500 bg-blue-50 text-blue-600 animate-pulse",
                 isFailed &&
                   "border-red-500 bg-red-50 text-red-600",
+                isCancelled &&
+                  "border-amber-500 bg-amber-50 text-amber-600",
                 isPending &&
                   "border-muted-foreground/30 text-muted-foreground/50"
               )}
@@ -72,6 +75,8 @@ export function RunProgress({
                 <CheckIcon />
               ) : isFailed ? (
                 <XIcon />
+              ) : isCancelled ? (
+                <StopIcon />
               ) : (
                 idx + 1
               )}
@@ -84,7 +89,8 @@ export function RunProgress({
                       "text-sm font-medium cursor-help",
                       isPending && "text-muted-foreground/50",
                       isActive && "text-blue-600",
-                      isFailed && "text-red-600"
+                      isFailed && "text-red-600",
+                      isCancelled && "text-amber-600"
                     )}
                   >
                     {step.label}
@@ -140,6 +146,21 @@ function XIcon() {
     >
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="none"
+    >
+      <rect x="4" y="4" width="16" height="16" rx="2" />
     </svg>
   );
 }

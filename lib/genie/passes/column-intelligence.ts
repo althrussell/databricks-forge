@@ -25,7 +25,7 @@ import {
 import { mapWithConcurrency } from "../concurrency";
 
 const BATCH_SIZE = 15;
-const BATCH_CONCURRENCY = 3;
+const BATCH_CONCURRENCY = 10;
 const TEMPERATURE = 0.2;
 
 export interface ColumnIntelligenceInput {

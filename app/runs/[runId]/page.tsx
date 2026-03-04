@@ -70,6 +70,7 @@ import {
   Loader2,
   BookOpen,
   FileText,
+  Square,
 } from "lucide-react";
 import {
   Tooltip,
@@ -424,6 +425,7 @@ export default function RunDetailPage({
     running: "Running",
     completed: "Completed",
     failed: "Failed",
+    cancelled: "Cancelled",
   };
 
   const STATUS_STYLES: Record<string, string> = {
@@ -434,6 +436,8 @@ export default function RunDetailPage({
     completed:
       "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
     failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    cancelled:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
   };
 
   const isCompleted = run.status === "completed";
@@ -683,13 +687,34 @@ export default function RunDetailPage({
       {isActive && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Pipeline Progress</CardTitle>
-            <CardDescription>
-              {run.statusMessage ??
-                (run.currentStep
-                  ? `Currently: ${run.currentStep}`
-                  : "Waiting to start...")}
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Pipeline Progress</CardTitle>
+                <CardDescription>
+                  {run.statusMessage ??
+                    (run.currentStep
+                      ? `Currently: ${run.currentStep}`
+                      : "Waiting to start...")}
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/${runId}/cancel`, { method: "POST" });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Cancel failed"); }
+                    toast.success("Pipeline cancellation requested");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Failed to cancel pipeline");
+                  }
+                }}
+              >
+                <Square className="mr-1 h-3.5 w-3.5" />
+                Stop
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="mb-4">
@@ -742,6 +767,45 @@ export default function RunDetailPage({
               status={run.status}
               assetDiscoveryEnabled={run.config.assetDiscoveryEnabled}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cancelled */}
+      {run.status === "cancelled" && (
+        <Card className="border-amber-500/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg text-amber-600">
+                Pipeline Cancelled
+              </CardTitle>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/${runId}/execute?resume=true`, { method: "POST" });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || "Resume failed"); }
+                    toast.success("Pipeline resuming from last successful step");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Resume failed");
+                  }
+                }}
+              >
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Resume Pipeline
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">This pipeline was stopped by a user. You can resume it from the last successful step.</p>
+            <div className="mt-4">
+              <RunProgress
+                currentStep={run.currentStep as PipelineStep}
+                progressPct={run.progressPct}
+                status={run.status}
+                assetDiscoveryEnabled={run.config.assetDiscoveryEnabled}
+              />
+            </div>
           </CardContent>
         </Card>
       )}

@@ -24,7 +24,7 @@ import type { PipelineContext, UseCase, UseCaseType, LineageGraph } from "@/lib/
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
 
-const MAX_CONCURRENT_BATCHES = 2;
+const MAX_CONCURRENT_BATCHES = 8;
 const MAX_GENERATION_RETRIES = 2;
 
 /** Shape of each use case object in the JSON array returned by the LLM. */

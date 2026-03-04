@@ -15,9 +15,15 @@
  */
 
 import { withPrisma } from "@/lib/prisma";
+import { cancelAllPipelines } from "@/lib/pipeline/engine";
 import { logger } from "@/lib/logger";
 
 export async function deleteAllData(): Promise<void> {
+  const cancelled = await cancelAllPipelines();
+  if (cancelled > 0) {
+    logger.info("[reset] Cancelled active pipelines before deleting data", { cancelled });
+  }
+
   await withPrisma(async (prisma) => {
     // Truncate the pgvector embeddings table (not managed by Prisma)
     try {

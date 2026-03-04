@@ -42,7 +42,7 @@ import { tableHasSynonymPair } from "./key-synonyms";
 import { normalizeDomainLabel } from "./domain-normalization";
 import { evaluateJoinCandidates } from "./join-diagnostics";
 
-const DOMAIN_CONCURRENCY = 3;
+const DOMAIN_CONCURRENCY = 10;
 
 export class EngineCancelledError extends Error {
   constructor() {

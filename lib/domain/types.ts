@@ -21,7 +21,7 @@ export enum PipelineStep {
   GenieRecommendations = "genie-recommendations",
 }
 
-export type RunStatus = "pending" | "running" | "completed" | "failed";
+export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 export type Operation = "Discover Usecases" | "Re-generate SQL" | "Generate Sample Result";
 
@@ -280,6 +280,8 @@ export interface PipelineContext {
   sampleData: import("@/lib/genie/types").SampleDataCache | null;
   /** Existing analytics assets discovered in the workspace (null when asset discovery is disabled). */
   discoveryResult: import("@/lib/discovery/types").DiscoveryResult | null;
+  /** Abort signal for pipeline cancellation. Checked between steps and before LLM calls. */
+  signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
