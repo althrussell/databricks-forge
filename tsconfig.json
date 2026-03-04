@@ -5,6 +5,9 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    // "noUncheckedIndexedAccess": true, // TODO: enable after fixing ~600 index-access sites
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

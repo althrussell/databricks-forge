@@ -11,6 +11,7 @@ import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import { isValidUUID } from "@/lib/validation";
+import { SpaceEditBodySchema } from "@/lib/metadata-genie/schemas";
 
 export async function PATCH(
   request: NextRequest,
@@ -28,10 +29,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
-    const body = (await request.json()) as { type: string; id: string; [key: string]: unknown };
-    if (!body.type || !body.id) {
-      return NextResponse.json({ error: "Missing type or id" }, { status: 400 });
+    const raw = await request.json();
+    const parsed = SpaceEditBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Missing type or id" }, { status: 400 });
     }
+    const body = parsed.data;
 
     const result = await withPrisma(async (prisma) => {
       const rec = await prisma.forgeGenieRecommendation.findFirst({

@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const abortController = new AbortController();
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
             sessionId,
             userEmail,
             persona,
+            abortController.signal,
           );
 
           const doneEvent = `data: ${JSON.stringify({
@@ -92,6 +94,11 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(doneEvent));
           controller.close();
         } catch (err) {
+          if (abortController.signal.aborted) {
+            logger.info("[api/assistant] Client disconnected, aborting engine");
+            controller.close();
+            return;
+          }
           logger.error("[api/assistant] Engine error", { error: String(err) });
           const errorEvent = `data: ${JSON.stringify({
             type: "error",
@@ -100,6 +107,9 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(errorEvent));
           controller.close();
         }
+      },
+      cancel() {
+        abortController.abort();
       },
     });
 

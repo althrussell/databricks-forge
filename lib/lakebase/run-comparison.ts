@@ -12,6 +12,7 @@ import {
   type PromptLogEntry,
 } from "./prompt-logs";
 import { getPromptTemplatesBatch } from "./prompt-templates";
+import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,10 +95,10 @@ export async function compareRuns(
     await Promise.all([
       getUseCasesByRunId(runAId),
       getUseCasesByRunId(runBId),
-      getPromptLogStats(runAId).catch(() => null),
-      getPromptLogStats(runBId).catch(() => null),
-      getPromptLogsByRunId(runAId).catch(() => []),
-      getPromptLogsByRunId(runBId).catch(() => []),
+      getPromptLogStats(runAId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt log stats", { runId: runAId, error: String(e) }); return null; }),
+      getPromptLogStats(runBId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt log stats", { runId: runBId, error: String(e) }); return null; }),
+      getPromptLogsByRunId(runAId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt logs", { runId: runAId, error: String(e) }); return []; }),
+      getPromptLogsByRunId(runBId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt logs", { runId: runBId, error: String(e) }); return []; }),
     ]);
 
   const metricsA = buildMetrics(useCasesA, statsA);

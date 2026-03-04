@@ -35,6 +35,9 @@ import {
 } from "@/components/charts/lazy";
 import { SchemaCoverageCard } from "@/components/pipeline/run-detail/schema-coverage-card";
 import { IndustryCoverageCard } from "@/components/pipeline/run-detail/industry-coverage-card";
+import { SummaryCard } from "@/components/pipeline/run-detail/summary-card";
+import { CoverageGapCard } from "@/components/pipeline/run-detail/coverage-gap-card";
+import { ConfigField } from "@/components/pipeline/run-detail/config-field";
 import { computeIndustryCoverage } from "@/lib/domain/industry-coverage";
 import { BusinessContextCard } from "@/components/pipeline/run-detail/business-context-card";
 import { PromptVersionsCard } from "@/components/pipeline/run-detail/prompt-versions-card";
@@ -59,7 +62,6 @@ import {
   ChevronUp,
   BarChart3,
   Settings2,
-  Eye,
   RotateCcw,
   ArrowLeft,
   GitCompareArrows,
@@ -74,7 +76,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { InfoTip } from "@/components/ui/info-tip";
 import { RUN_DETAIL } from "@/lib/help-text";
 import { Separator } from "@/components/ui/separator";
 import type {
@@ -1276,120 +1277,6 @@ export default function RunDetailPage({
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function SummaryCard({
-  title,
-  value,
-  tip,
-  onClick,
-}: {
-  title: string;
-  value: string;
-  tip?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <Card
-      className={
-        onClick
-          ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-          : ""
-      }
-      onClick={onClick}
-    >
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-1.5">
-          <p className="text-sm text-muted-foreground">{title}</p>
-          {tip && <InfoTip tip={tip} />}
-        </div>
-        <p className="text-2xl font-bold">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CoverageGapCard({
-  coverageData,
-  onClick,
-}: {
-  coverageData: {
-    overallCoverage: number;
-    gapCount: number;
-  } | null;
-  onClick?: () => void;
-}) {
-  if (!coverageData) {
-    return (
-      <Card className="opacity-60">
-        <CardContent className="pt-6">
-          <p className="text-sm text-muted-foreground">Coverage</p>
-          <p className="text-2xl font-bold text-muted-foreground">N/A</p>
-          <p className="text-xs text-muted-foreground">No industry map</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const pct = Math.round(coverageData.overallCoverage * 100);
-  const colorClass =
-    pct >= 75
-      ? "text-green-600 dark:text-green-400"
-      : pct >= 25
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-red-600 dark:text-red-400";
-
-  return (
-    <Card
-      className={
-        onClick
-          ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-          : ""
-      }
-      onClick={onClick}
-    >
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-1.5">
-          <Eye className="h-3.5 w-3.5 text-violet-500" />
-          <p className="text-sm text-muted-foreground">Coverage</p>
-        </div>
-        <p className={`text-2xl font-bold ${colorClass}`}>{pct}%</p>
-        {coverageData.gapCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {coverageData.gapCount} gap{coverageData.gapCount !== 1 ? "s" : ""}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ConfigField({
-  label,
-  value,
-  badge,
-}: {
-  label: string;
-  value: string;
-  badge?: string;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm">
-        {value}
-        {badge && (
-          <span className="ml-1.5 inline-block rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-            {badge}
-          </span>
-        )}
-      </p>
     </div>
   );
 }

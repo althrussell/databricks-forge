@@ -48,6 +48,7 @@ All flags are optional. Combine as needed.
 
 | Flag | Description |
 |------|-------------|
+| `--app-name "name"` | Custom app name for multi-instance deployments. Isolates the Databricks App and Lakebase database. Default: `databricks-forge` |
 | `--warehouse "Name"` | Skip the interactive warehouse prompt |
 | `--profile "name"` | Use a specific Databricks CLI profile |
 | `--destroy` | Remove the app and clean up workspace files |
@@ -104,6 +105,16 @@ All flags are optional. Combine as needed.
   --rotate-lakebase-native-password \
   --seed-benchmarks-all-industries \
   --benchmark-admins "data-team@company.com"
+
+# Deploy a separate demo instance (isolated app + database)
+./deploy.sh --app-name "forge-demo" --warehouse "Demo Warehouse"
+
+# Deploy multiple instances side by side
+./deploy.sh --app-name "forge-banking-demo" --seed-benchmark-industries "banking"
+./deploy.sh --app-name "forge-hls-demo" --seed-benchmark-industries "hls"
+
+# Remove a named instance
+./deploy.sh --app-name "forge-demo" --destroy
 ```
 
 ### Manual benchmark seeding (local dev)

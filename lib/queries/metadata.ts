@@ -551,7 +551,7 @@ export async function listForeignKeys(
     }));
   } catch {
     // FK information_schema views may not be available
-    console.warn("Foreign key query failed, returning empty array");
+    logger.warn("[metadata] Foreign key query failed, returning empty array");
     return [];
   }
 }

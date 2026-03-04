@@ -297,7 +297,7 @@ async function runEnrichmentPass(
     5,
     (completed, total) => {
       if (runId && completed % 10 === 0) {
-        updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch(() => {});
+        updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch((e) => logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }));
       }
     }
   );
@@ -352,7 +352,7 @@ async function runEnrichmentPass(
         businessName: undefined,
         onProgress: (pass, pct) => {
           if (runId && pct === 0) {
-            updateRunMessage(runId, `Intelligence: ${pass}...`).catch(() => {});
+            updateRunMessage(runId, `Intelligence: ${pass}...`).catch((e) => logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }));
           }
         },
       }

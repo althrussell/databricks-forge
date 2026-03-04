@@ -352,6 +352,7 @@ export default function NewGenieSpacePage() {
           serializedSpace: recommendation.serializedSpace,
           domain: recommendation.domain,
           quality: recommendation.quality,
+          authMode: loadSettings().genieDeployAuthMode,
         }),
       });
 

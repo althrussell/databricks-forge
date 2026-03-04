@@ -20,12 +20,16 @@ import {
 } from "@/lib/metadata-genie/space-builder";
 import { saveMetadataGenieSpace } from "@/lib/lakebase/metadata-genie";
 import { logger } from "@/lib/logger";
-import type { MetadataGenieGenerateConfig } from "@/lib/metadata-genie/types";
+import { GenerateBodySchema } from "@/lib/metadata-genie/schemas";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as MetadataGenieGenerateConfig;
-    const { title, catalogScope } = body;
+    const raw = await request.json();
+    const parsed = GenerateBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }, { status: 400 });
+    }
+    const { title, catalogScope } = parsed.data;
 
     const probe = await probeSystemInformationSchema();
     if (!probe.accessible) {

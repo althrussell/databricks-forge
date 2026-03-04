@@ -5,9 +5,10 @@
  * table detail, columns, history, health, lineage, and related use cases.
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { validateFqn, IdentifierValidationError } from "@/lib/validation";
 
 export async function GET(
   _req: NextRequest,
@@ -16,6 +17,15 @@ export async function GET(
   try {
     const { fqn: encodedFqn } = await params;
     const fqn = decodeURIComponent(encodedFqn);
+
+    try {
+      validateFqn(fqn, "table FQN");
+    } catch (e) {
+      if (e instanceof IdentifierValidationError) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
+      }
+      throw e;
+    }
 
     const data = await withPrisma(async (prisma) => {
       const detail = await prisma.forgeTableDetail.findFirst({

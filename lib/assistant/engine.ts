@@ -110,6 +110,7 @@ export async function runAssistantEngine(
   sessionId?: string,
   userId?: string | null,
   persona: AssistantPersona = "business",
+  signal?: AbortSignal,
 ): Promise<AssistantResponse> {
   const start = Date.now();
 
@@ -185,6 +186,7 @@ export async function runAssistantEngine(
       ],
       temperature: 0.3,
       maxTokens: 4096,
+      signal,
     },
     onChunk,
   );

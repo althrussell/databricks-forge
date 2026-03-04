@@ -14,20 +14,21 @@ export async function POST(
   if (!isBenchmarksEnabled()) {
     return NextResponse.json({ error: "Benchmark catalog is disabled" }, { status: 404 });
   }
-  const userEmail = await getCurrentUserEmail();
-  if (!isBenchmarkAdmin(userEmail)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
-  const { benchmarkId } = await params;
-  await ensureMigrated();
-
-  const record = await getBenchmarkById(benchmarkId);
-  if (!record) {
-    return NextResponse.json({ error: "Benchmark not found" }, { status: 404 });
-  }
-
+  let benchmarkId: string | undefined;
   try {
+    const userEmail = await getCurrentUserEmail();
+    if (!isBenchmarkAdmin(userEmail)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    ({ benchmarkId } = await params);
+    await ensureMigrated();
+
+    const record = await getBenchmarkById(benchmarkId);
+    if (!record) {
+      return NextResponse.json({ error: "Benchmark not found" }, { status: 404 });
+    }
     const markdown = await fetchAndConvertSource(record.sourceUrl);
 
     if (markdown) {
@@ -58,9 +59,11 @@ export async function POST(
       error: err instanceof Error ? err.message : String(err),
     });
 
-    await updateBenchmarkSourceContent(benchmarkId, {
-      sourceFetchStatus: "failed",
-    }).catch(() => {});
+    if (benchmarkId) {
+      await updateBenchmarkSourceContent(benchmarkId, {
+        sourceFetchStatus: "failed",
+      }).catch((e) => logger.warn("[fetch-source] Failed to mark source as failed", { benchmarkId, error: String(e) }));
+    }
 
     return NextResponse.json(
       { error: "Source fetch failed unexpectedly" },

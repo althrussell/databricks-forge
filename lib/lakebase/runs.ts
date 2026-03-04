@@ -27,7 +27,8 @@ function parseJSON<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (e) {
+    logger.debug("[runs] Failed to parse JSON, using fallback", { error: String(e) });
     return fallback;
   }
 }
@@ -164,7 +165,9 @@ function parseGenerationOptions(raw: string | null): {
         stepLog: Array.isArray(parsed.stepLog) ? parsed.stepLog : [],
       };
     }
-  } catch { /* fall through */ }
+  } catch (e) {
+    logger.debug("[runs] Failed to parse generation options", { error: String(e) });
+  }
   return defaults;
 }
 
@@ -217,7 +220,7 @@ export async function createRun(
     });
   });
 
-  archiveCurrentPromptTemplates().catch(() => {});
+  archiveCurrentPromptTemplates().catch((e) => logger.warn("[runs] Failed to archive prompt templates", { error: String(e) }));
 }
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
@@ -403,7 +406,9 @@ export async function updateRunIndustry(
     try {
       genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
       if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
-    } catch { /* fall through */ }
+    } catch (e) {
+      logger.debug("[runs] Failed to parse generationOptions", { runId, error: String(e) });
+    }
 
     genOpts.industry = industry;
     genOpts.industryAutoDetected = autoDetected;
@@ -436,7 +441,8 @@ export async function getRunFilteredTables(
       return classifications
         .filter((c) => c.classification === "business")
         .map((c) => c.fqn);
-    } catch {
+    } catch (e) {
+      logger.debug("[runs] Failed to parse filteredTablesJson", { runId, error: String(e) });
       return null;
     }
   });
@@ -460,7 +466,9 @@ export async function updateRunStepLog(
     try {
       genOpts = row?.generationOptions ? JSON.parse(row.generationOptions) : {};
       if (typeof genOpts !== "object" || genOpts === null) genOpts = {};
-    } catch { /* fall through */ }
+    } catch (e) {
+      logger.debug("[runs] Failed to parse generationOptions", { runId, error: String(e) });
+    }
 
     const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog)
       ? genOpts.stepLog

@@ -9,12 +9,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { executeSQL } from "@/lib/dbx/sql";
 import { trashGenieSpace } from "@/lib/dbx/genie";
 import { generateDropViewDDL } from "@/lib/metadata-genie/view-ddl";
+import { DeleteBodySchema } from "@/lib/metadata-genie/schemas";
 import {
   listMetadataGenieSpaces,
   getMetadataGenieSpace,
   updateMetadataGenieStatus,
 } from "@/lib/lakebase/metadata-genie";
 import { logger } from "@/lib/logger";
+import type { GenieAuthMode } from "@/lib/settings";
 
 export async function GET() {
   try {
@@ -28,17 +30,12 @@ export async function GET() {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { id, dropViews } = (await request.json()) as {
-      id: string;
-      dropViews?: boolean;
-    };
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "id is required" },
-        { status: 400 }
-      );
+    const raw = await request.json();
+    const parsed = DeleteBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }, { status: 400 });
     }
+    const { id, dropViews } = parsed.data;
 
     const space = await getMetadataGenieSpace(id);
     if (!space) {
@@ -51,7 +48,7 @@ export async function DELETE(request: NextRequest) {
     // Trash the Genie Space if deployed
     if (space.spaceId) {
       try {
-        await trashGenieSpace(space.spaceId);
+        await trashGenieSpace(space.spaceId, space.authMode as GenieAuthMode);
       } catch (err) {
         logger.warn("Failed to trash Genie Space", {
           spaceId: space.spaceId,

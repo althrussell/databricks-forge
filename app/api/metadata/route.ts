@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
             queryParams: { type, catalog: catalogRaw, schema: schemaRaw },
           });
           return NextResponse.json(
-            { error: "catalog query param is required", errorCode: "INVALID_REQUEST" },
+            { error: "catalog query param is required", code: "INVALID_REQUEST" },
             { status: 400 }
           );
         }
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
             queryParams: { type, catalog: catalogRaw, schema: schemaRaw },
           });
           return NextResponse.json(
-            { error: "catalog query param is required", errorCode: "INVALID_REQUEST" },
+            { error: "catalog query param is required", code: "INVALID_REQUEST" },
             { status: 400 }
           );
         }
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
           allowedTypes: ["warmup", "catalogs", "schemas", "tables"],
         });
         return NextResponse.json(
-          { error: `Unknown type: ${type}. Use warmup, catalogs, schemas, or tables.`, errorCode: "INVALID_REQUEST" },
+          { error: `Unknown type: ${type}. Use warmup, catalogs, schemas, or tables.`, code: "INVALID_REQUEST" },
           { status: 400 }
         );
     }
@@ -96,14 +96,14 @@ export async function GET(request: NextRequest) {
         errorCode: "INVALID_REQUEST",
       });
       return NextResponse.json(
-        { error: error.message, errorCode: "INVALID_REQUEST" },
+        { error: error.message, code: "INVALID_REQUEST" },
         { status: 400 }
       );
     }
     if (error instanceof MetadataError) {
       const status = error.code === "INSUFFICIENT_PERMISSIONS" ? 403 : 502;
       return NextResponse.json(
-        { error: error.message, errorCode: error.code },
+        { error: error.message, code: error.code },
         { status }
       );
     }
@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch metadata";
     return NextResponse.json(
-      { error: message, errorCode: "WAREHOUSE_UNAVAILABLE" },
+      { error: message, code: "WAREHOUSE_UNAVAILABLE" },
       { status: 502 }
     );
   }

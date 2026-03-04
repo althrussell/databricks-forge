@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { resilientFetch } from "@/lib/resilient-fetch";
+import { resilientFetchJson, fetchJson } from "@/lib/fetch-json";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -86,11 +86,9 @@ export function RunsContent({
     abortRef.current = controller;
 
     try {
-      const res = await resilientFetch("/api/runs?limit=200", {
+      const data = await resilientFetchJson<{ runs: typeof runs }>("/api/runs?limit=200", {
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error("Failed to fetch runs");
-      const data = await res.json();
       setRuns(data.runs);
       setError(null);
     } catch (err) {
@@ -118,11 +116,7 @@ export function RunsContent({
 
   async function handleDelete(runId: string, businessName: string) {
     try {
-      const res = await fetch(`/api/runs/${runId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed to delete run");
-      }
+      await fetchJson(`/api/runs/${runId}`, { method: "DELETE" });
       setRuns((prev) => prev.filter((r) => r.runId !== runId));
       toast.success(`Deleted run for "${businessName}"`);
     } catch (err) {

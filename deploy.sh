@@ -6,6 +6,7 @@
 #   ./deploy.sh                          Interactive (pick a warehouse)
 #   ./deploy.sh --warehouse "Name"       Non-interactive
 #   ./deploy.sh --profile "my-profile"   Use a specific CLI profile
+#   ./deploy.sh --app-name "forge-demo"  Deploy as a separate named instance
 #   ./deploy.sh --destroy                Remove the app
 #
 # Override model endpoints (advanced):
@@ -50,6 +51,7 @@ WORKSPACE_PATH=""
 # -------------------------------------------------------------------------
 # Parse arguments
 # -------------------------------------------------------------------------
+ARG_APP_NAME=""
 ARG_WAREHOUSE=""
 ARG_PROFILE=""
 ARG_ENDPOINT=""
@@ -80,6 +82,9 @@ Usage:
   ./deploy.sh --destroy                        Remove the app
 
 Options:
+  --app-name NAME        Custom app name for multi-instance deployments.
+                         Isolates the Databricks App and Lakebase database.
+                         (default: databricks-forge)
   --warehouse NAME        SQL Warehouse name (skips interactive prompt)
   --profile NAME         Databricks CLI profile name
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
@@ -124,6 +129,7 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app-name)       ARG_APP_NAME="$2"; shift 2 ;;
     --warehouse)      ARG_WAREHOUSE="$2"; shift 2 ;;
     --profile)        ARG_PROFILE="$2"; shift 2 ;;
     --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
@@ -146,6 +152,10 @@ while [[ $# -gt 0 ]]; do
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
   esac
 done
+
+if [[ -n "$ARG_APP_NAME" ]]; then
+  APP_NAME="$ARG_APP_NAME"
+fi
 
 if [[ -n "$ARG_PROFILE" ]]; then
   export DATABRICKS_CONFIG_PROFILE="$ARG_PROFILE"
@@ -254,13 +264,14 @@ wait_for_app_absent() {
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ]; then
+  if [ "$APP_NAME" = "databricks-forge" ] && [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ]; then
     return
   fi
 
   APP_YAML_BACKUP="$(mktemp)"
   cp "app.yaml" "$APP_YAML_BACKUP"
 
+  export APP_NAME
   export LAKEBASE_BOOTSTRAP_USER
   export LAKEBASE_AUTH_MODE
   export LAKEBASE_NATIVE_USER
@@ -275,6 +286,7 @@ prepare_app_yaml() {
 import os
 from pathlib import Path
 
+app_name = os.environ.get("APP_NAME", "databricks-forge").strip()
 bootstrap_user = os.environ.get("LAKEBASE_BOOTSTRAP_USER", "").strip()
 auth_mode = os.environ.get("LAKEBASE_AUTH_MODE", "").strip()
 native_user = os.environ.get("LAKEBASE_NATIVE_USER", "").strip()
@@ -296,7 +308,8 @@ def is_managed_name_line(s: str) -> bool:
     if not t.startswith("- name:"):
         return False
     return (
-        "LAKEBASE_BOOTSTRAP_USER" in t
+        "FORGE_APP_NAME" in t
+        or "LAKEBASE_BOOTSTRAP_USER" in t
         or "LAKEBASE_AUTH_MODE" in t
         or "LAKEBASE_NATIVE_USER" in t
         or "LAKEBASE_NATIVE_PASSWORD" in t
@@ -321,6 +334,9 @@ while i < len(lines):
     out.append(line)
     i += 1
 
+if app_name != "databricks-forge":
+    out.append("  - name: FORGE_APP_NAME")
+    out.append(f'    value: "{app_name}"')
 if bootstrap_user:
     out.append("  - name: LAKEBASE_BOOTSTRAP_USER")
     out.append(f'    value: "{bootstrap_user}"')
@@ -679,6 +695,8 @@ print_success() {
   printf "  ==========================================================\n"
   printf "    Databricks Forge AI is live!\n"
   printf "    URL: %s\n" "$app_url"
+  printf "\n"
+  printf "    App name:     %s\n" "$APP_NAME"
   printf "\n"
   printf "    Resources:\n"
   printf "      SQL Warehouse:    %s\n" "$WAREHOUSE_NAME"
