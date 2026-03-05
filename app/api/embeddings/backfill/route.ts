@@ -30,6 +30,7 @@ export async function POST() {
     outcomeMaps: { total: 0, embedded: 0, failed: 0 },
     documents: { total: 0, embedded: 0, failed: 0 },
     benchmarks: { total: 0, embedded: 0, failed: 0 },
+    fabricScans: { total: 0, embedded: 0, failed: 0 },
   };
 
   try {
@@ -53,6 +54,9 @@ export async function POST() {
 
     // 6. Embed benchmark context records
     await backfillBenchmarks(results);
+
+    // 7. Embed Fabric/Power BI scans
+    await backfillFabricScans(results);
 
     logger.info("[backfill] Embedding backfill complete", results);
     return NextResponse.json({ success: true, results });
@@ -360,5 +364,88 @@ async function backfillBenchmarks(
     logger.warn("[backfill] Benchmark embedding failed", {
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backfill: Fabric/Power BI Scans
+// ---------------------------------------------------------------------------
+
+async function backfillFabricScans(
+  results: { fabricScans: { total: number; embedded: number; failed: number } },
+): Promise<void> {
+  let scans: Array<{ id: string; status: string }>;
+  try {
+    const { listFabricScans } = await import("@/lib/lakebase/fabric-scans");
+    scans = await listFabricScans();
+  } catch {
+    return;
+  }
+
+  const completedScans = scans.filter((s) => s.status === "completed");
+  results.fabricScans.total = completedScans.length;
+
+  const { getFabricScanDetail } = await import("@/lib/lakebase/fabric-scans");
+  const { deleteEmbeddingsByScan } = await import("@/lib/embeddings/store");
+  const { embedFabricScan } = await import("@/lib/embeddings/embed-pipeline");
+
+  for (const scan of completedScans) {
+    try {
+      const detail = await getFabricScanDetail(scan.id);
+      if (!detail) continue;
+
+      await deleteEmbeddingsByScan(scan.id);
+
+      const wsNameMap = new Map(detail.workspaces.map((ws) => [ws.workspaceId, ws.name]));
+
+      await embedFabricScan(scan.id, {
+        datasets: detail.datasets.map((ds) => ({
+          datasetId: ds.datasetId,
+          name: ds.name,
+          workspaceName: wsNameMap.get(ds.workspaceId),
+          tables: ds.tables.map((t) => ({
+            name: t.name,
+            columns: t.columns.map((c) => ({ name: c.name, dataType: c.dataType })),
+            measures: (t.measures ?? []).map((m) => ({
+              name: m.name,
+              expression: m.expression,
+              description: m.description,
+            })),
+          })),
+          relationships: ds.relationships.map((r) => ({
+            fromTable: r.fromTable,
+            fromColumn: r.fromColumn,
+            toTable: r.toTable,
+            toColumn: r.toColumn,
+          })),
+          sensitivityLabel: ds.sensitivityLabel,
+        })),
+        reports: detail.reports.map((r) => ({
+          reportId: r.reportId,
+          name: r.name,
+          reportType: r.reportType,
+          datasetName: detail.datasets.find((ds) => ds.datasetId === r.datasetId)?.name,
+          workspaceName: wsNameMap.get(r.workspaceId),
+          tiles: r.tiles.map((t) => ({ title: t.title })),
+          sensitivityLabel: r.sensitivityLabel,
+        })),
+        artifacts: detail.artifacts.map((a) => ({
+          artifactId: a.artifactId,
+          name: a.name,
+          artifactType: a.artifactType,
+          workspaceName: wsNameMap.get(a.workspaceId),
+          metadata: a.metadata,
+        })),
+      });
+
+      results.fabricScans.embedded++;
+      logger.debug("[backfill] Fabric scan embedded", { scanId: scan.id });
+    } catch (err) {
+      results.fabricScans.failed++;
+      logger.warn("[backfill] Fabric scan embedding failed", {
+        scanId: scan.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }

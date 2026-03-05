@@ -29,19 +29,46 @@ interface NavItem {
   requiresBenchmarks?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: HomeIcon },
-  { href: "/ask-forge", label: "Ask Forge", icon: AskForgeIcon, requiresEmbedding: true },
-  { href: "/configure", label: "New Discovery", icon: PlusIcon },
-  { href: "/runs", label: "Runs", icon: ListIcon },
-  { href: "/runs/compare", label: "Compare", icon: CompareIcon },
-  { href: "/environment", label: "Estate", icon: EnvironmentIcon },
-  { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
-  { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
-  { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
-  { href: "/knowledge-base", label: "Knowledge Base", icon: KnowledgeBaseIcon, requiresEmbedding: true },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
-  { href: "/help", label: "Help", icon: HelpIcon },
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    label: "Explore",
+    items: [
+      { href: "/", label: "Dashboard", icon: HomeIcon },
+      { href: "/ask-forge", label: "Ask Forge", icon: AskForgeIcon, requiresEmbedding: true },
+      { href: "/configure", label: "New Discovery", icon: PlusIcon },
+      { href: "/runs", label: "Runs", icon: ListIcon },
+      { href: "/runs/compare", label: "Compare", icon: CompareIcon },
+      { href: "/environment", label: "Estate", icon: EnvironmentIcon },
+    ],
+  },
+  {
+    label: "Deploy",
+    items: [
+      { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
+      { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
+      { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
+    ],
+  },
+  {
+    label: "Migrate",
+    items: [
+      { href: "/fabric", label: "Fabric / PBI", icon: FabricIcon },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { href: "/connections", label: "Connections", icon: ConnectionsIcon },
+      { href: "/knowledge-base", label: "Knowledge Base", icon: KnowledgeBaseIcon, requiresEmbedding: true },
+      { href: "/settings", label: "Settings", icon: SettingsIcon },
+      { href: "/help", label: "Help", icon: HelpIcon },
+    ],
+  },
 ];
 
 function useEmbeddingEnabled(): boolean {
@@ -75,54 +102,76 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
   const embeddingEnabled = useEmbeddingEnabled();
   const benchmarksEnabled = useBenchmarksEnabled();
 
-  const visibleItems = useMemo(
-    () => navItems.filter((item) => {
-      if (item.requiresEmbedding && !embeddingEnabled) return false;
-      if (item.requiresBenchmarks && !benchmarksEnabled) return false;
-      return true;
-    }),
+  const visibleSections = useMemo(
+    () =>
+      navSections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => {
+            if (item.requiresEmbedding && !embeddingEnabled) return false;
+            if (item.requiresBenchmarks && !benchmarksEnabled) return false;
+            return true;
+          }),
+        }))
+        .filter((section) => section.items.length > 0),
     [embeddingEnabled, benchmarksEnabled],
   );
 
   return (
-    <nav className={cn("space-y-1", collapsed ? "px-2 py-4" : "p-4")}>
-      {visibleItems.map((item) => {
-        const isActive =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href);
+    <nav className={cn(collapsed ? "px-2 py-4" : "p-4")}>
+      {visibleSections.map((section, sectionIdx) => (
+        <div key={section.label}>
+          {sectionIdx > 0 && (
+            <div className={cn("my-2", collapsed ? "px-1" : "px-3")}>
+              <div className="border-t border-border/60" />
+            </div>
+          )}
+          {!collapsed && (
+            <p className="mb-1 mt-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {section.label}
+            </p>
+          )}
+          <div className="space-y-0.5">
+            {section.items.map((item) => {
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
 
-        const link = (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center rounded-md text-sm font-medium transition-colors",
-              collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
-              isActive
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            {!collapsed && item.label}
-          </Link>
-        );
+              const link = (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center rounded-md text-sm font-medium transition-colors",
+                    collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && item.label}
+                </Link>
+              );
 
-        if (collapsed) {
-          return (
-            <Tooltip key={item.href} delayDuration={0}>
-              <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {item.label}
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.href} delayDuration={0}>
+                    <TooltipTrigger asChild>{link}</TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {item.label}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
 
-        return link;
-      })}
+              return link;
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -434,6 +483,44 @@ function KnowledgeBaseIcon({ className }: { className?: string }) {
     >
       <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
       <path d="m9 10 2 2 4-4" />
+    </svg>
+  );
+}
+
+function FabricIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </svg>
+  );
+}
+
+function ConnectionsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+      <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+      <line x1="8" x2="16" y1="12" y2="12" />
     </svg>
   );
 }

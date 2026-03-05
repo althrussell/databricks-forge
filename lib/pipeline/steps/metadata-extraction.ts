@@ -58,6 +58,7 @@ import type {
   LineageGraph,
   DiscoveryDepthConfig,
 } from "@/lib/domain/types";
+import { updateSchemaSnapshot, type SchemaSnapshot } from "@/lib/lakebase/runs";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -208,7 +209,46 @@ export async function runMetadataExtraction(
     logger.info("[metadata-extraction] Estate scan disabled -- skipping enrichment pass");
   }
 
+  // --- Persist schema snapshot on the run for Ask Forge column grounding ---
+  if (runId) {
+    try {
+      const schemaSnap = buildRunSchemaSnapshot(snapshot.tables, snapshot.columns);
+      await updateSchemaSnapshot(runId, schemaSnap);
+      logger.info("[metadata-extraction] Schema snapshot persisted", {
+        runId,
+        tableCount: Object.keys(schemaSnap).length,
+      });
+    } catch (err) {
+      logger.warn("[metadata-extraction] Failed to persist schema snapshot (non-fatal)", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return { snapshot, lineageGraph };
+}
+
+function buildRunSchemaSnapshot(
+  tables: TableInfo[],
+  columns: ColumnInfo[],
+): SchemaSnapshot {
+  const colsByTable = new Map<string, Array<{ name: string; type: string }>>();
+  for (const c of columns) {
+    const list = colsByTable.get(c.tableFqn) ?? [];
+    list.push({ name: c.columnName, type: c.dataType });
+    colsByTable.set(c.tableFqn, list);
+  }
+
+  const snap: SchemaSnapshot = {};
+  for (const t of tables) {
+    snap[t.fqn] = {
+      columns: colsByTable.get(t.fqn) ?? [],
+      tableType: t.tableType,
+      comment: t.comment ?? null,
+      isBusinessTable: null,
+    };
+  }
+  return snap;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +282,7 @@ async function runEnrichmentPass(
 
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;
-  const expandedTables = [
+  const expandedTables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType: string; dataSourceFormat: string | null }> = [
     ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
     ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
   ];
@@ -270,6 +310,17 @@ async function runEnrichmentPass(
       snapshot.tableCount = snapshot.tables.length;
       snapshot.columnCount = snapshot.columns.length;
       snapshot.schemaMarkdown = buildSchemaMarkdown(snapshot.tables, snapshot.columns);
+
+      // Backfill lineage-discovered entries in expandedTables with
+      // real tableType + dataSourceFormat from information_schema
+      const infoLookup = new Map(newTableInfos.map((t) => [t.fqn, t]));
+      for (const entry of expandedTables) {
+        const info = infoLookup.get(entry.fqn);
+        if (info) {
+          entry.tableType = info.tableType;
+          entry.dataSourceFormat = info.dataSourceFormat ?? null;
+        }
+      }
 
       logger.info("[metadata-extraction] Merged lineage-discovered tables into snapshot", {
         newTables: newTableInfos.length,
@@ -516,6 +567,17 @@ async function runEnrichmentPass(
     lineageEdges: lineageGraph.edges.length,
     insights: insightRecords.length,
   });
+
+  // Generate vector embeddings for estate data (best-effort, non-blocking)
+  try {
+    const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
+    await embedScanResults(scanId, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
+  } catch (embedErr) {
+    logger.warn("[metadata-extraction] Estate embedding failed (non-fatal)", {
+      scanId,
+      error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+    });
+  }
 
   return lineageGraph;
 }

@@ -199,6 +199,7 @@ Generate measures, filters, and dimensions for a Genie space serving this domain
     endpoint,
     messages,
     temperature: TEMPERATURE,
+    maxTokens: 16384,
     responseFormat: "json_object",
     signal,
   });

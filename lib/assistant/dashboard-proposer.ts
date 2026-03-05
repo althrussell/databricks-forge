@@ -1,15 +1,11 @@
 /**
  * Dashboard proposer for the Ask Forge assistant.
  *
- * CRITICAL CONSTRAINT: This is a thin wrapper that delegates to the existing
- * dashboard engine. It does NOT define new dashboard prompts. All dashboard
- * generation uses:
- *   - runDashboardEngine (lib/dashboard/engine.ts)
- *   - assembleLakeviewDashboard (lib/dashboard/assembler.ts)
- *   - createDashboard + publishDashboard (lib/dbx/dashboards.ts)
- *
- * The proposer builds the required DashboardEngineInput from the assistant's
- * context and delegates entirely to the proven engine.
+ * Extracts dashboard design intent (tables, widget descriptions) from the
+ * assistant's markdown response. The extracted DashboardProposal is passed
+ * through the action payload to the DeployDashboardDialog, which calls
+ * the ad-hoc dashboard engine (lib/dashboard/adhoc-engine.ts) to generate
+ * and deploy a Lakeview dashboard via the proven engine pipeline.
  */
 
 import { logger } from "@/lib/logger";

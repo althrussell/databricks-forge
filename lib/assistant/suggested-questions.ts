@@ -145,8 +145,42 @@ export async function buildSuggestedQuestions(
           candidates.push(`What is the technical health of tables in ${domain}?`);
         }
       }
+    } else if (persona === "business") {
+      // --- Business outcome-focused questions ---
+      candidates.push(`What business outcomes can we drive from our data?`);
+      candidates.push(`What quick wins can we deploy today?`);
+
+      if (run?.industry) {
+        const outcome = await getIndustryOutcomeAsync(run.industry);
+        if (outcome) {
+          const kpis = collectKpis(outcome, 2);
+          for (const kpi of kpis) {
+            candidates.push(`Build me a dashboard to track ${kpi.toLowerCase()}`);
+          }
+
+          const ucNames = collectUseCaseNames(outcome, 2);
+          for (const name of ucNames) {
+            candidates.push(`What's the revenue impact of ${name}?`);
+          }
+        }
+      }
+
+      if (useCases.length > 0) {
+        const topUc = pickRandom(useCases, 1);
+        for (const uc of topUc) {
+          candidates.push(`Deploy a Genie Space for the ${uc.name} use case`);
+        }
+      }
+
+      if (run?.goals) {
+        candidates.push(`How does our data support our strategic goals?`);
+      }
+
+      if (scan) {
+        candidates.push(`Show me the top opportunities in our data estate`);
+      }
     } else {
-      // --- Business persona questions ---
+      // --- Analyst persona questions ---
       if (run?.industry) {
         const outcome = await getIndustryOutcomeAsync(run.industry);
         if (outcome) {

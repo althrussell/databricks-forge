@@ -456,6 +456,102 @@ export function composeBenchmarkSourceChunk(
 }
 
 // ---------------------------------------------------------------------------
+// 14. fabric_dataset
+// ---------------------------------------------------------------------------
+
+interface FabricDatasetInput {
+  datasetId: string;
+  name: string;
+  workspaceName?: string;
+  tables: Array<{ name: string; columns: Array<{ name: string; dataType: string }>; measures: Array<{ name: string; expression: string }> }>;
+  relationships: Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }>;
+  sensitivityLabel?: string | null;
+}
+
+export function composeFabricDataset(ds: FabricDatasetInput): string {
+  const tableNames = ds.tables.map((t) => t.name);
+  const allCols = ds.tables.flatMap((t) => t.columns.map((c) => `${t.name}.${c.name}`));
+  const allMeasures = ds.tables.flatMap((t) => t.measures.map((m) => m.name));
+  return lines([
+    `[Power BI Dataset] ${ds.name}`,
+    ds.workspaceName ? `Workspace: ${ds.workspaceName}` : null,
+    `Tables: ${tableNames.join(", ")}`,
+    allCols.length > 0 ? `Columns: ${allCols.slice(0, 30).join(", ")}${allCols.length > 30 ? "..." : ""}` : null,
+    allMeasures.length > 0 ? `Measures: ${allMeasures.join(", ")}` : null,
+    ds.relationships.length > 0
+      ? `Relationships: ${ds.relationships.map((r) => `${r.fromTable}.${r.fromColumn} → ${r.toTable}.${r.toColumn}`).join("; ")}`
+      : null,
+    ds.sensitivityLabel ? `Sensitivity: ${ds.sensitivityLabel}` : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// 15. fabric_measure
+// ---------------------------------------------------------------------------
+
+interface FabricMeasureInput {
+  name: string;
+  expression: string;
+  tableName: string;
+  datasetName: string;
+  description?: string;
+}
+
+export function composeFabricMeasure(m: FabricMeasureInput): string {
+  return lines([
+    `[Power BI Measure] ${m.name}`,
+    `Dataset: ${m.datasetName} | Table: ${m.tableName}`,
+    m.description ? `Description: ${m.description}` : null,
+    `DAX: ${m.expression}`,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// 16. fabric_report
+// ---------------------------------------------------------------------------
+
+interface FabricReportInput {
+  name: string;
+  reportType?: string | null;
+  datasetName?: string;
+  workspaceName?: string;
+  tiles?: Array<{ title: string }>;
+  sensitivityLabel?: string | null;
+}
+
+export function composeFabricReport(r: FabricReportInput): string {
+  const tileNames = (r.tiles ?? []).map((t) => t.title).filter(Boolean);
+  return lines([
+    `[Power BI Report] ${r.name}`,
+    r.reportType ? `Type: ${r.reportType}` : null,
+    r.workspaceName ? `Workspace: ${r.workspaceName}` : null,
+    r.datasetName ? `Dataset: ${r.datasetName}` : null,
+    tileNames.length > 0 ? `Tiles/Visuals: ${tileNames.join(", ")}` : null,
+    r.sensitivityLabel ? `Sensitivity: ${r.sensitivityLabel}` : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// 17. fabric_artifact
+// ---------------------------------------------------------------------------
+
+interface FabricArtifactInput {
+  name: string;
+  artifactType: string;
+  workspaceName?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export function composeFabricArtifact(a: FabricArtifactInput): string {
+  return lines([
+    `[Fabric Artifact] ${a.name}`,
+    `Type: ${a.artifactType}`,
+    a.workspaceName ? `Workspace: ${a.workspaceName}` : null,
+    a.metadata?.description ? `Description: ${String(a.metadata.description)}` : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

@@ -278,7 +278,10 @@ export function GenieBuilderModal({
 
   const handleDeploy = async () => {
     if (!recommendation) return;
-    if (recommendation.quality?.gateDecision === "block") return;
+    if (
+      recommendation.quality?.gateDecision === "warn" &&
+      !window.confirm("This space has quality warnings. Deploy anyway?")
+    ) return;
     setPhase("deploying");
 
     try {
@@ -433,9 +436,7 @@ export function GenieBuilderModal({
                 <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
                   <div className="flex items-center gap-2 text-xs font-medium">
                     <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
-                    {recommendation.quality.gateDecision === "block"
-                      ? "Quality blocker"
-                      : "Quality warnings"}
+                    Quality warnings
                   </div>
                   <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
                     {recommendation.quality.degradedReasons.map((reason) => (
@@ -623,12 +624,12 @@ export function GenieBuilderModal({
             )}
             <Button
               onClick={handleDeploy}
-              disabled={recommendation.quality?.gateDecision === "block"}
-              className="gap-1.5"
+              variant={recommendation.quality?.gateDecision === "warn" ? "outline" : "default"}
+              className={`gap-1.5 ${recommendation.quality?.gateDecision === "warn" ? "border-amber-500 text-amber-600 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/30" : ""}`}
             >
               <Rocket className="size-3.5" />
-              {recommendation.quality?.gateDecision === "block"
-                ? "Deployment Blocked"
+              {recommendation.quality?.gateDecision === "warn"
+                ? "Deploy with Warnings"
                 : "Deploy to Databricks"}
             </Button>
           </DialogFooter>

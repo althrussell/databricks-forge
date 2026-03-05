@@ -82,7 +82,8 @@ interface QueryHistoryEntry {
 
 interface SqlDialogProps {
   open: boolean;
-  sql: string;
+  sqlBlocks: string[];
+  initialIndex?: number;
   onOpenChange: (open: boolean) => void;
   onRequestFix?: (sql: string, error: string) => void;
   onDeployNotebook?: (sql: string) => void;
@@ -130,8 +131,10 @@ function compareValues(a: string | null, b: string | null, asc: boolean): number
 // Component
 // ---------------------------------------------------------------------------
 
-export function SqlDialog({ open, sql, onOpenChange, onRequestFix, onDeployNotebook }: SqlDialogProps) {
-  const [currentSql, setCurrentSql] = React.useState(sql);
+export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onRequestFix, onDeployNotebook }: SqlDialogProps) {
+  const [blockIndex, setBlockIndex] = React.useState(initialIndex);
+  const activeSqlBlock = sqlBlocks[blockIndex] ?? sqlBlocks[0] ?? "";
+  const [currentSql, setCurrentSql] = React.useState(activeSqlBlock);
   const [editing, setEditing] = React.useState(false);
   const [running, setRunning] = React.useState(false);
   const [explaining, setExplaining] = React.useState(false);
@@ -155,14 +158,27 @@ export function SqlDialog({ open, sql, onOpenChange, onRequestFix, onDeployNoteb
 
   React.useEffect(() => {
     if (open) {
-      setCurrentSql(sql);
+      const idx = Math.min(initialIndex, sqlBlocks.length - 1);
+      setBlockIndex(Math.max(0, idx));
+      setCurrentSql(sqlBlocks[Math.max(0, idx)] ?? "");
       setEditing(false);
       setResult(null);
       setExplainResult(null);
       setPage(0);
       setSortCol(null);
     }
-  }, [sql, open]);
+  }, [sqlBlocks, initialIndex, open]);
+
+  const navigateBlock = (newIndex: number) => {
+    if (newIndex < 0 || newIndex >= sqlBlocks.length) return;
+    setBlockIndex(newIndex);
+    setCurrentSql(sqlBlocks[newIndex]);
+    setEditing(false);
+    setResult(null);
+    setExplainResult(null);
+    setPage(0);
+    setSortCol(null);
+  };
 
   // Keyboard shortcut: Cmd/Ctrl+Enter to run (handled by SqlEditor for the editor itself)
   React.useEffect(() => {
@@ -292,11 +308,40 @@ export function SqlDialog({ open, sql, onOpenChange, onRequestFix, onDeployNoteb
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] w-full max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
+      <DialogContent
+        className="flex h-[85vh] w-full max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader className="px-5 pt-5 pb-3">
           <DialogTitle className="flex items-center gap-2">
             SQL Query
             <Badge variant="secondary" className="text-[10px]">Executable</Badge>
+            {sqlBlocks.length > 1 && (
+              <div className="ml-2 flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  disabled={blockIndex === 0}
+                  onClick={() => navigateBlock(blockIndex - 1)}
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {blockIndex + 1} / {sqlBlocks.length}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  disabled={blockIndex >= sqlBlocks.length - 1}
+                  onClick={() => navigateBlock(blockIndex + 1)}
+                >
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
+            )}
           </DialogTitle>
           <DialogDescription>
             Review, edit, and execute this SQL against your warehouse.

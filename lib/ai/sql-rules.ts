@@ -17,6 +17,13 @@ Syntax and type safety:
 - Use DECIMAL(18,2) instead of FLOAT/DOUBLE for financial and monetary calculations.
 - All string literals must use single quotes. COALESCE text defaults must be quoted: COALESCE(col, 'Unknown') not COALESCE(col, Unknown).
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query) in metric view definitions. They are non-deterministic and prohibitively expensive. Use only deterministic expressions over materialized columns.
+- NEVER use TO_DATE() or TO_TIMESTAMP() to parse string columns -- they throw on format mismatches. Use COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy'), try_to_date(col, 'dd/MM/yyyy')) to handle mixed date formats gracefully. If the column is already DATE or TIMESTAMP type, use it directly without parsing.
+- ai_query() only accepts these named parameters: modelParameters, responseFormat, failOnError. NEVER use systemPrompt, system_prompt, or any other invented parameter names. Embed persona/system instructions in the request text via CONCAT.
+
+Identifier quoting:
+- ALWAYS backtick-quote column names that contain spaces, special characters, or mixed case (e.g. \`Net Cash Flow\`, \`Account ID\`).
+- Use column names EXACTLY as they appear in the schema. NEVER transform them (do NOT convert \`Net Cash Flow\` to net_cash_flow).
+- Table names should use fully-qualified three-part names: catalog.schema.table
 
 Query structure:
 - For top-N queries, ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() for top-N because ties can return more than N rows.
@@ -43,4 +50,7 @@ DATABRICKS SQL RULES:
 - Filter early, aggregate late.
 - Prefer native SQL functions over UDFs.
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, etc.) in metric views.
+- NEVER use TO_DATE()/TO_TIMESTAMP(). Use COALESCE(try_to_date(col, fmt1), try_to_date(col, fmt2)) for safe string-to-date parsing.
+- ai_query() named parameters: ONLY modelParameters, responseFormat, failOnError. NEVER use systemPrompt or other invented names.
+- ALWAYS backtick-quote column names with spaces or special characters. Use names EXACTLY as in the schema.
 `.trim();

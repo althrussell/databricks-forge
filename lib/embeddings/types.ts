@@ -24,6 +24,10 @@ export const EMBEDDING_KINDS = [
   "lineage_context",
   "document_chunk",
   "benchmark_context",
+  "fabric_dataset",
+  "fabric_measure",
+  "fabric_report",
+  "fabric_artifact",
 ] as const;
 
 export type EmbeddingKind = (typeof EMBEDDING_KINDS)[number];
@@ -43,6 +47,7 @@ export const SEARCH_SCOPES: Record<string, readonly EmbeddingKind[]> = {
   insights: ["environment_insight", "table_health", "data_product"],
   documents: ["document_chunk"],
   benchmarks: ["benchmark_context", "outcome_map"],
+  fabric: ["fabric_dataset", "fabric_measure", "fabric_report", "fabric_artifact"],
   all: EMBEDDING_KINDS,
 };
 

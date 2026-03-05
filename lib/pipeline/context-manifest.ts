@@ -24,10 +24,16 @@ export interface RunContextManifest {
     kinds: string[];
     chunkCount: number;
   };
+  fabric: {
+    scanId: string | null;
+    datasetCount: number;
+    measureCount: number;
+    reportCount: number;
+  };
   steps: string[];
 }
 
-export type EnrichmentTag = "benchmark" | "outcome_map" | "document";
+export type EnrichmentTag = "benchmark" | "outcome_map" | "document" | "fabric";
 
 // ---------------------------------------------------------------------------
 // Factory + merge
@@ -38,6 +44,7 @@ export function emptyManifest(): RunContextManifest {
     benchmarks: { strategy: "default", recordIds: [], chunkCount: 0 },
     outcomeMap: { industryId: null, sections: [] },
     documents: { sourceIds: [], kinds: [], chunkCount: 0 },
+    fabric: { scanId: null, datasetCount: 0, measureCount: 0, reportCount: 0 },
     steps: [],
   };
 }
@@ -80,6 +87,16 @@ export function mergeManifest(
     };
   }
 
+  if (partial.fabric) {
+    const f = partial.fabric;
+    merged.fabric = {
+      scanId: f.scanId ?? base.fabric.scanId,
+      datasetCount: f.datasetCount || base.fabric.datasetCount,
+      measureCount: f.measureCount || base.fabric.measureCount,
+      reportCount: f.reportCount || base.fabric.reportCount,
+    };
+  }
+
   if (partial.steps) {
     merged.steps = dedupe([...base.steps, ...partial.steps]);
   }
@@ -90,7 +107,7 @@ export function mergeManifest(
 /**
  * Derive the lightweight enrichment tags from a manifest.
  */
-export function deriveTags(manifest: RunContextManifest): EnrichmentTag[] {
+export function deriveTags(manifest: Partial<RunContextManifest> & Pick<RunContextManifest, "benchmarks" | "outcomeMap" | "documents">): EnrichmentTag[] {
   const tags: EnrichmentTag[] = [];
   if (manifest.benchmarks.strategy !== "default" && manifest.benchmarks.recordIds.length > 0) {
     tags.push("benchmark");
@@ -100,6 +117,9 @@ export function deriveTags(manifest: RunContextManifest): EnrichmentTag[] {
   }
   if (manifest.documents.sourceIds.length > 0) {
     tags.push("document");
+  }
+  if (manifest.fabric?.scanId) {
+    tags.push("fabric");
   }
   return tags;
 }

@@ -94,6 +94,7 @@ export interface PipelineRunConfig {
   depthConfig?: DiscoveryDepthConfig; // resolved parameters for the selected depth (from settings or defaults)
   estateScanEnabled: boolean; // run estate scan (environment intelligence enrichment) during metadata extraction
   assetDiscoveryEnabled: boolean; // discover existing analytics assets (Genie spaces, dashboards, metric views)
+  fabricScanId?: string | null; // linked Fabric/Power BI scan for PBI-aware generation
 }
 
 /** Per-step timing and metadata logged during pipeline execution. */
@@ -141,6 +142,12 @@ export interface RunContextSources {
     sourceIds: string[];
     kinds: string[];
     chunkCount: number;
+  };
+  fabric?: {
+    scanId: string | null;
+    datasetCount: number;
+    measureCount: number;
+    reportCount: number;
   };
   steps: string[];
 }

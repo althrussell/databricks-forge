@@ -89,7 +89,7 @@ export function determineQualityGate(
   let gateDecision: "allow" | "warn" | "block" = "allow";
   if (degradedReasons.includes("no_validated_joins")) {
     gateDecision = "block";
-    gateReasons.push("Missing validated joins for multi-table space.");
+    gateReasons.push("No validated joins for multi-table space — cross-table queries may not work correctly.");
   } else if (qualityScore < 70 || degradedReasons.length > 0) {
     gateDecision = "warn";
     gateReasons.push("Space quality is degraded; review preview diagnostics before deploy.");

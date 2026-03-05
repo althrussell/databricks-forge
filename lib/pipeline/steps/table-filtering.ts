@@ -9,7 +9,7 @@
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { updateRunMessage, updateRunFilteredTables } from "@/lib/lakebase/runs";
+import { updateRunMessage, updateRunFilteredTables, getSchemaSnapshot, updateSchemaSnapshot } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { ColumnInfo, PipelineContext, TableInfo } from "@/lib/domain/types";
 
@@ -116,6 +116,22 @@ export async function runTableFiltering(
       await updateRunFilteredTables(runId, allClassifications);
     } catch (error) {
       logger.warn("Failed to persist table classifications", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Stamp isBusinessTable flag on the schema snapshot
+    try {
+      const snapshot = await getSchemaSnapshot(runId);
+      if (snapshot) {
+        const businessFqnSet = new Set(businessTables);
+        for (const fqn of Object.keys(snapshot)) {
+          snapshot[fqn].isBusinessTable = businessFqnSet.has(fqn);
+        }
+        await updateSchemaSnapshot(runId, snapshot);
+      }
+    } catch (error) {
+      logger.warn("Failed to update schema snapshot with business flags", {
         error: error instanceof Error ? error.message : String(error),
       });
     }

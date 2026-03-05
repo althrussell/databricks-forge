@@ -39,6 +39,8 @@ import {
   Save,
   Eye,
   Pencil,
+  Download,
+  Info,
 } from "lucide-react";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -49,6 +51,127 @@ import { OUTCOMES } from "@/lib/help-text";
 // ---------------------------------------------------------------------------
 
 type Step = "upload" | "parsing" | "review" | "saving" | "done";
+
+// ---------------------------------------------------------------------------
+// Template
+// ---------------------------------------------------------------------------
+
+const OUTCOME_MAP_TEMPLATE = `# Outcome Map -- [Your Industry Name]
+
+> Sub-verticals: [Sub-vertical 1], [Sub-vertical 2], [Sub-vertical 3]
+
+---
+
+## Objective: Drive Growth
+
+**Why Change:** Describe the macro trends, competitive pressures, or market shifts
+that make this objective urgent for organisations in this industry. Two to three
+sentences is ideal.
+
+### Strategic Priority: Customer Intelligence & Personalisation
+
+#### Use Cases
+
+- **Next-Best-Offer Engine**
+  Leverage transaction history and behavioural signals to recommend the most
+  relevant product or service to each customer in real time.
+  _Business Value:_ Increased cross-sell conversion and customer lifetime value.
+
+- **Customer Churn Prediction**
+  Build propensity models that identify customers at risk of leaving, enabling
+  proactive retention campaigns before attrition occurs.
+  _Business Value:_ Reduced churn rate and lower cost-to-retain.
+
+#### Key Personas
+- Chief Marketing Officer
+- Head of Customer Analytics
+
+#### KPIs
+- Cross-sell / upsell conversion rate
+- Customer lifetime value (CLV)
+- Net Promoter Score (NPS)
+
+---
+
+### Strategic Priority: Revenue Forecasting & Planning
+
+#### Use Cases
+
+- **Demand Sensing & Forecasting**
+  Combine internal sales data with external signals (weather, events, economic
+  indicators) to produce short-horizon demand forecasts.
+  _Business Value:_ Improved inventory planning and reduced stockouts.
+
+- **Dynamic Pricing Optimisation**
+  Use elasticity models and competitor benchmarking to adjust pricing in
+  near-real-time across channels.
+  _Business Value:_ Maximised margin while remaining competitive.
+
+#### Key Personas
+- Chief Revenue Officer
+- Head of Pricing Strategy
+
+#### KPIs
+- Forecast accuracy (MAPE)
+- Revenue per unit
+- Price realisation rate
+
+---
+
+## Objective: Manage Risk & Compliance
+
+**Why Change:** Describe regulatory pressures, fraud trends, or operational risks
+that are driving this objective. Two to three sentences.
+
+### Strategic Priority: Fraud Detection & Prevention
+
+#### Use Cases
+
+- **Real-Time Transaction Monitoring**
+  Apply ML anomaly detection to payment streams, flagging suspicious
+  transactions for review within milliseconds.
+  _Business Value:_ Reduced fraud losses and faster investigation cycles.
+
+- **Identity Verification & KYC Automation**
+  Automate document verification and entity resolution to streamline
+  onboarding while meeting regulatory requirements.
+  _Business Value:_ Faster onboarding with lower compliance cost.
+
+#### Key Personas
+- Chief Risk Officer
+- Head of Financial Crime
+
+#### KPIs
+- Fraud detection rate
+- False-positive ratio
+- Mean time to investigate
+
+---
+
+### Strategic Priority: Regulatory Reporting & Governance
+
+#### Use Cases
+
+- **Automated Regulatory Report Generation**
+  Extract, validate, and assemble data from multiple source systems to
+  produce regulatory submissions with full audit trails.
+  _Business Value:_ Reduced manual effort and fewer restatements.
+
+- **Data Quality Monitoring Dashboard**
+  Continuously profile key data assets, surfacing anomalies, schema drift,
+  and completeness issues before they impact downstream consumers.
+  _Business Value:_ Higher trust in data and fewer production incidents.
+
+#### Key Personas
+- Chief Compliance Officer
+- Head of Data Governance
+
+#### KPIs
+- Report accuracy rate
+- Data quality score
+- Regulatory findings per audit cycle
+`;
+
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -94,6 +217,20 @@ export default function IngestOutcomeMapPage() {
     ).size;
     return { objectives, priorities, useCases, personas, kpis };
   }, [parsedOutcome]);
+
+  // -------------------------------------------------------------------------
+  // Template download
+  // -------------------------------------------------------------------------
+
+  function handleDownloadTemplate() {
+    const blob = new Blob([OUTCOME_MAP_TEMPLATE], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "outcome-map-template.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // -------------------------------------------------------------------------
   // File handling
@@ -349,12 +486,22 @@ export default function IngestOutcomeMapPage() {
           {/* Drop zone */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Upload className="h-4 w-4 text-primary" />
-                Upload Markdown File
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Upload className="h-4 w-4 text-primary" />
+                  Upload Markdown File
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadTemplate}
+                >
+                  <Download className="mr-2 h-3 w-3" />
+                  Download Template
+                </Button>
+              </div>
               <CardDescription>
-                Drop your industry outcome map document (.md) here
+                Drop your industry outcome map document (.md) here, or download the template to get started
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -448,6 +595,41 @@ export default function IngestOutcomeMapPage() {
               </p>
             </CardContent>
           </Card>
+
+          {/* Format guidance */}
+          <div className="lg:col-span-2 rounded-lg border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+            <div className="flex gap-3">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div className="space-y-2 text-sm">
+                <p className="font-medium text-blue-900 dark:text-blue-300">
+                  Expected markdown structure
+                </p>
+                <div className="grid gap-x-8 gap-y-1 text-blue-800 dark:text-blue-400 sm:grid-cols-2">
+                  <div>
+                    <p className="font-medium text-xs uppercase tracking-wide text-blue-600 dark:text-blue-500 mb-1">Required</p>
+                    <ul className="space-y-0.5 text-xs">
+                      <li><span className="font-mono"># Industry Name</span> -- top-level heading</li>
+                      <li><span className="font-mono">## Objective:</span> -- strategic objectives (e.g. Drive Growth)</li>
+                      <li><span className="font-mono">### Strategic Priority:</span> -- priorities per objective</li>
+                      <li><span className="font-mono">- **Use Case Name**</span> -- use cases with descriptions</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="font-medium text-xs uppercase tracking-wide text-blue-600 dark:text-blue-500 mb-1">Recommended</p>
+                    <ul className="space-y-0.5 text-xs">
+                      <li><span className="font-mono">**Why Change:**</span> -- narrative per objective</li>
+                      <li><span className="font-mono">#### Key Personas</span> -- job titles per priority</li>
+                      <li><span className="font-mono">#### KPIs</span> -- measurable metrics per priority</li>
+                      <li><span className="font-mono">_Business Value:_</span> -- per use case</li>
+                    </ul>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-700 dark:text-blue-500">
+                  Accepts <span className="font-mono">.md</span> or <span className="font-mono">.markdown</span> files. Minimum 100 characters. The AI parser is flexible with heading styles and layout variations.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Actions */}
           <div className="lg:col-span-2 flex justify-end">

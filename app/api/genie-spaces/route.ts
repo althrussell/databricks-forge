@@ -190,13 +190,6 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    if (quality?.gateDecision === "block") {
-      return NextResponse.json(
-        { error: "Quality gate blocked deployment. Resolve preview diagnostics and regenerate." },
-        { status: 400 },
-      );
-    }
-
     // Deploy metric views if provided
     let finalSerializedSpace = serializedSpace;
     const deployedMvFqns: string[] = [];

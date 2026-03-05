@@ -479,14 +479,14 @@ export async function getTableTags(
   const safeCat = validateIdentifier(catalog, "catalog");
   try {
     let sql = `
-      SELECT table_catalog || '.' || table_schema || '.' || table_name AS table_fqn,
+      SELECT catalog_name || '.' || schema_name || '.' || table_name AS table_fqn,
              tag_name, tag_value
       FROM \`${safeCat}\`.information_schema.table_tags
-      WHERE table_schema NOT IN ('information_schema', 'default')
+      WHERE schema_name NOT IN ('information_schema', 'default')
     `;
     if (schema) {
       const safeSch = validateIdentifier(schema, "schema");
-      sql += ` AND table_schema = '${safeSch}'`;
+      sql += ` AND schema_name = '${safeSch}'`;
     }
 
     const result = await executeSQL(sql);
@@ -511,14 +511,14 @@ export async function getColumnTags(
   const safeCat = validateIdentifier(catalog, "catalog");
   try {
     let sql = `
-      SELECT table_catalog || '.' || table_schema || '.' || table_name AS table_fqn,
+      SELECT catalog_name || '.' || schema_name || '.' || table_name AS table_fqn,
              column_name, tag_name, tag_value
       FROM \`${safeCat}\`.information_schema.column_tags
-      WHERE table_schema NOT IN ('information_schema', 'default')
+      WHERE schema_name NOT IN ('information_schema', 'default')
     `;
     if (schema) {
       const safeSch = validateIdentifier(schema, "schema");
-      sql += ` AND table_schema = '${safeSch}'`;
+      sql += ` AND schema_name = '${safeSch}'`;
     }
 
     const result = await executeSQL(sql);
@@ -544,20 +544,44 @@ export interface EnrichmentResult {
 }
 
 /**
+ * Table types that are backed by Delta and support DESCRIBE DETAIL,
+ * DESCRIBE TABLE EXTENDED, and DESCRIBE HISTORY.
+ * Non-physical types (VIEW, FOREIGN, MATERIALIZED_VIEW) are skipped.
+ *
+ * @see https://docs.databricks.com/en/sql/language-manual/information-schema/tables.html
+ */
+const DELTA_TABLE_TYPES = new Set([
+  "MANAGED",
+  "EXTERNAL",
+  "STREAMING_TABLE",
+  "MANAGED_SHALLOW_CLONE",
+  "EXTERNAL_SHALLOW_CLONE",
+]);
+
+/**
  * Enrich tables in parallel batches. Runs DESCRIBE DETAIL, DESCRIBE TABLE
- * EXTENDED, and DESCRIBE HISTORY (Delta tables only) for each table.
+ * EXTENDED, and DESCRIBE HISTORY for each eligible table.
  *
  * DESCRIBE DETAIL provides numFiles, partitionColumns, clusteringColumns,
  * and lastModified. DESCRIBE TABLE EXTENDED replaces SHOW TBLPROPERTIES
  * and adds numRows (from Statistics), createdBy, lastAccess, and
  * isManagedLocation.
  *
- * When DESCRIBE DETAIL returns null (views, permission denied), a fallback
- * TableDetail is created so the table still appears in the estate.
+ * **Eligibility checks** (uses `tableType` and `dataSourceFormat` from
+ * `information_schema.tables` to skip unnecessary operations):
  *
- * DESCRIBE HISTORY is a Delta-only operation. Tables are skipped when:
- * - `dataSourceFormat` is provided and is not DELTA, OR
- * - DESCRIBE DETAIL returns a non-DELTA format
+ * - DESCRIBE DETAIL and DESCRIBE TABLE EXTENDED are only run for
+ *   Delta-backed physical table types (MANAGED, EXTERNAL, STREAMING_TABLE,
+ *   MANAGED_SHALLOW_CLONE, EXTERNAL_SHALLOW_CLONE). Views, FOREIGN tables,
+ *   and other non-physical types go straight to the fallback path.
+ * - DESCRIBE HISTORY is additionally restricted to tables whose
+ *   `dataSourceFormat` is DELTA (or unknown). Non-Delta physical tables
+ *   (e.g. Parquet, CSV external tables) skip history.
+ * - When `tableType` is unknown (e.g. lineage-discovered tables), all
+ *   three operations are attempted as a safe default.
+ *
+ * When DESCRIBE DETAIL returns null (permission denied, etc.), a fallback
+ * TableDetail is created so the table still appears in the estate.
  *
  * @param tables - array of { fqn, discoveredVia, tableType?, dataSourceFormat? }
  * @param concurrency - how many tables to process in parallel (default 5)
@@ -571,13 +595,37 @@ export async function enrichTablesInBatches(
   const results = new Map<string, EnrichmentResult>();
   let completed = 0;
   let historySkipped = 0;
+  let enrichmentSkipped = 0;
 
   for (let i = 0; i < tables.length; i += concurrency) {
     const batch = tables.slice(i, i + concurrency);
 
     const batchResults = await Promise.allSettled(
       batch.map(async (t) => {
+        const knownType = t.tableType?.toUpperCase() ?? null;
         const knownFormat = t.dataSourceFormat?.toUpperCase() ?? null;
+
+        // A table is eligible for DESCRIBE DETAIL / EXTENDED / HISTORY when
+        // its type is a known Delta-backed physical type, or when the type
+        // is unknown (lineage-discovered tables that haven't been resolved).
+        const isPhysicalTable =
+          knownType === null || DELTA_TABLE_TYPES.has(knownType);
+
+        if (!isPhysicalTable) {
+          enrichmentSkipped++;
+          logger.debug("[metadata-detail] Skipping DESCRIBE ops for non-physical table", {
+            tableFqn: t.fqn,
+            tableType: knownType,
+          });
+
+          const fallback = createFallbackDetail(
+            t.fqn,
+            t.discoveredVia,
+            t.tableType ?? "VIEW"
+          );
+          return { fqn: t.fqn, detail: fallback, history: null as TableHistorySummary | null, properties: {} as Record<string, string> };
+        }
+
         const skipHistoryUpfront = knownFormat !== null && knownFormat !== "DELTA";
 
         const [detail, extended] = await Promise.all([
@@ -586,7 +634,6 @@ export async function enrichTablesInBatches(
         ]);
         const properties = extended.properties;
 
-        // Determine whether to run DESCRIBE HISTORY based on known format or DESCRIBE DETAIL result
         const detailFormat = detail?.format?.toUpperCase() ?? null;
         const isDelta = skipHistoryUpfront
           ? false
@@ -603,7 +650,7 @@ export async function enrichTablesInBatches(
           });
         }
 
-        // If DESCRIBE DETAIL returned null (view or inaccessible), create a fallback
+        // If DESCRIBE DETAIL returned null (inaccessible), create a fallback
         const effectiveDetail = detail ?? createFallbackDetail(
           t.fqn,
           t.discoveredVia,
@@ -625,7 +672,7 @@ export async function enrichTablesInBatches(
           }
         }
 
-        // New EXTENDED-only fields
+        // EXTENDED-only fields
         effectiveDetail.createdBy = extended.createdBy;
         effectiveDetail.lastAccess = extended.lastAccess;
         effectiveDetail.isManagedLocation = extended.isManagedLocation;
@@ -659,6 +706,13 @@ export async function enrichTablesInBatches(
 
     logger.info("[metadata-detail] Enrichment progress", {
       completed,
+      total: tables.length,
+    });
+  }
+
+  if (enrichmentSkipped > 0) {
+    logger.info("[metadata-detail] Skipped DESCRIBE ops for non-physical tables", {
+      skipped: enrichmentSkipped,
       total: tables.length,
     });
   }

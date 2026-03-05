@@ -276,6 +276,8 @@ Tables connected via lineage represent actual data pipelines. When multiple tabl
 
 {asset_context}
 
+{pbi_context}
+
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
 {previous_use_cases_feedback}
@@ -394,6 +396,8 @@ Generate **{target_use_case_count}** unique, actionable statistics-focused busin
 Tables connected via lineage represent actual data pipelines. When multiple tables at different refinement levels (raw -> clean -> aggregated) appear, focus use cases on the highest-quality version unless the lower-level table provides unique columns or granularity not available in the refined version.
 
 {asset_context}
+
+{pbi_context}
 
 ### 5. PREVIOUSLY GENERATED USE CASES (DO NOT DUPLICATE)
 
@@ -897,6 +901,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - For simple text generation without a custom endpoint, prefer \`ai_gen(prompt)\` over \`ai_query()\`
 - **ROW LIMIT (CRITICAL)**: ALWAYS \`LIMIT\` the input to \`ai_query()\` or \`ai_gen()\` to at most **1000 rows**. AI function calls are expensive per row -- unbounded queries can cost thousands of dollars. Filter or aggregate data BEFORE passing to AI functions
 - When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`
+- **VALID NAMED PARAMETERS ONLY**: ai_query() accepts ONLY these named parameters: \`modelParameters\`, \`responseFormat\`, \`failOnError\`. NEVER use \`systemPrompt\`, \`system_prompt\`, or any other parameter name -- they will cause UNRECOGNIZED_PARAMETER_NAME errors. Embed persona/system instructions inside the request string via CONCAT.
 - **STRUCTURED OUTPUT**: When the AI output must conform to a schema, use \`responseFormat => 'STRUCT<result: STRUCT<field1: TYPE, field2: TYPE>>'\` instead of parsing free text. The top-level STRUCT must have exactly one field
 - **ERROR HANDLING FOR BATCH**: When processing many rows, use \`failOnError => false\` so one bad row does not abort the entire query. Access results via \`result.result\` and errors via \`result.errorMessage\`
 - **PERSONA ENRICHMENT (MANDATORY)**: Every \`ai_query()\` persona MUST include business context. Do NOT use generic personas. Pattern:
@@ -952,8 +957,8 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 
 ### CRITICAL RULES
 
-1. **FIX ERRORS ONLY** -- Do NOT change the business logic or query structure
-2. **PRESERVE ALL LOGIC** -- Keep all CTEs, joins, AI functions, and business logic exactly as intended
+1. **FIX ERRORS ONLY** -- Do NOT change the business logic or query structure UNLESS the error is a hallucinated column. Removing references to non-existent columns is a valid fix -- do NOT substitute with guessed alternatives
+2. **PRESERVE LOGIC WHERE POSSIBLE** -- Keep CTEs, joins, AI functions, and business logic intact. If a column does not exist in the schema, remove the entire expression that uses it rather than guessing a replacement
 3. **DO NOT OPTIMIZE** -- Do not restructure or optimize the query
 4. **DO NOT ADD FEATURES** -- Do not add new columns, CTEs, or logic
 5. **ONLY FIX** what the validation/execution error indicates is broken
@@ -1004,10 +1009,12 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 - **Type mismatch**: Cast columns to the correct type (e.g., \`CAST(col AS STRING)\`). Use \`DECIMAL(18,2)\` for financial data, not FLOAT/DOUBLE
 - **Window function errors**: Check PARTITION BY and ORDER BY clauses; ensure the window is valid. Prefer QUALIFY over wrapping in a subquery
 - **Ambiguous column**: Qualify with table alias (e.g., \`t1.col\` not just \`col\`)
-- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct. If using \`responseFormat\`, the top-level STRUCT must have exactly one field
+- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct. If using \`responseFormat\`, the top-level STRUCT must have exactly one field. If you see UNRECOGNIZED_PARAMETER_NAME, remove invalid named parameters (like \`systemPrompt\`) -- only \`modelParameters\`, \`responseFormat\`, and \`failOnError\` are valid. Embed persona/system instructions in the request text via CONCAT
 - **AI_FORECAST errors**: Ensure \`time_col\`, \`value_col\`, \`group_col\` are string literals (quoted), not column references
 - **Geospatial errors**: H3 functions require BIGINT cell IDs; ST functions require GEOMETRY/GEOGRAPHY types. Use \`ST_Point(lon, lat)\` to create point geometries from coordinates
 - **Truncated SQL / syntax error at end of input**: The original query was too long and got cut off. SIMPLIFY the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total
+
+${DATABRICKS_SQL_RULES}
 
 ### OUTPUT FORMAT
 

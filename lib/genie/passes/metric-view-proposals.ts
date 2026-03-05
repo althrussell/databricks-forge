@@ -59,6 +59,14 @@ export function stripFqnPrefixes(sql: string): string {
   return result;
 }
 
+function toSnakeCase(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 export interface JoinSpecInput {
   leftTable: string;
   rightTable: string;
@@ -111,13 +119,17 @@ $$
 - source: catalog.schema.table (required, the primary fact table)
 - filter: SQL boolean expression (optional, global WHERE)
 - dimensions: list (required, at least one)
-  - name: Display Name (backtick-quoted in queries)
+  - name: SQL-friendly snake_case identifier, no spaces (e.g. order_month, customer_segment)
   - expr: SQL expression (column ref or transformation)
+  - display_name: Human-readable label for dashboards/Genie (optional, e.g. "Order Month")
+  - comment: Description of this dimension (optional)
+  - synonyms: Alternative names for Genie discovery (optional, up to 10)
 - measures: list (required, at least one)
-  - name: Display Name (queried via MEASURE(\`name\`))
+  - name: SQL-friendly snake_case identifier, no spaces (e.g. total_revenue, order_count). Queried via MEASURE(\`name\`).
   - expr: aggregate expression (SUM, COUNT, AVG, MIN, MAX)
-
-IMPORTANT: Dimension and measure entries only support "name" and "expr". Do NOT add "comment", "window", or any other fields -- the YAML parser will reject them.
+  - display_name: Human-readable label for dashboards/Genie (optional, e.g. "Total Revenue")
+  - comment: Description of this measure (optional)
+  - synonyms: Alternative names for Genie discovery (optional, up to 10)
 - joins: list (optional, star/snowflake schema)
   - name: alias for the joined table
   - source: catalog.schema.dim_table
@@ -137,7 +149,7 @@ NEVER use MEDIAN() -- use PERCENTILE_APPROX(col, 0.5) instead.
 NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query, ai_similarity, ai_forecast, ai_summarize) anywhere in metric view definitions -- not in dimensions, measures, filters, or join conditions. They are non-deterministic and prohibitively expensive per-row. Metric views must use only deterministic SQL expressions over materialized columns.
 
 ### CRITICAL: Measure name shadowing
-Measure \`name\` MUST NOT be identical to any source table column name. In metric views, measure names and column names share a namespace — the measure definition takes priority. If they match, the column reference inside the expr resolves to the measure itself, causing a recursive NESTED_AGGREGATE_FUNCTION error. Always differentiate: if the column is \`Total Complaints\`, name the measure \`Total Complaints Sum\` or \`Complaint Volume\`.
+Measure \`name\` MUST NOT be identical to any source table column name. In metric views, measure names and column names share a namespace — the measure definition takes priority. If they match, the column reference inside the expr resolves to the measure itself, causing a recursive NESTED_AGGREGATE_FUNCTION error. Always differentiate: if the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`.
 
 ### Column names with spaces
 When column names contain spaces or special characters (parentheses, hyphens), always backtick-quote them in \`expr:\`, \`on:\`, and \`filter:\` fields: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`. Unquoted multi-word names cause parsing errors.
@@ -176,11 +188,13 @@ function buildSeedYaml(
   if (topMeasures.length === 0 || allDims.length === 0) return "";
 
   const dimLines = allDims.map((d) => {
-    return `    - name: ${d.name}\n      expr: ${stripFqnPrefixes(d.sql)}`;
+    const snakeName = toSnakeCase(d.name);
+    return `    - name: ${snakeName}\n      expr: ${stripFqnPrefixes(d.sql)}\n      display_name: "${d.name}"`;
   });
 
   const measureLines = topMeasures.map((m) => {
-    return `    - name: ${m.name}\n      expr: ${stripFqnPrefixes(m.sql)}`;
+    const snakeName = toSnakeCase(m.name);
+    return `    - name: ${snakeName}\n      expr: ${stripFqnPrefixes(m.sql)}\n      display_name: "${m.name}"`;
   });
 
   return [
@@ -381,8 +395,9 @@ export function validateMetricViewYaml(
       while ((mn = measureNamePattern.exec(measureBlock)) !== null) {
         const mName = mn[1].trim().replace(/^["']|["']$/g, "");
         if (sourceCols.has(mName.toLowerCase())) {
+          const snakeSuggestion = toSnakeCase(mName);
           issues.push(
-            `Measure name "${mName}" shadows source column "${mName}" — Databricks resolves the column reference as a recursive measure call, causing NESTED_AGGREGATE_FUNCTION. Rename the measure (e.g. "${mName} Sum", "${mName} Total").`,
+            `Measure name "${mName}" shadows source column "${mName}" — Databricks resolves the column reference as a recursive measure call, causing NESTED_AGGREGATE_FUNCTION. Rename the measure (e.g. "${snakeSuggestion}_total", "${snakeSuggestion}_count").`,
           );
         }
       }
@@ -448,6 +463,84 @@ function detectFeatures(yaml: string): {
 }
 
 // ---------------------------------------------------------------------------
+// Auto-rename: deterministically fix measure names that shadow source columns
+// ---------------------------------------------------------------------------
+
+function inferAggregateSuffix(expr: string): string {
+  const upper = expr.toUpperCase();
+  if (/\bCOUNT\s*\(\s*DISTINCT\b/.test(upper)) return "_distinct_count";
+  if (/\bSUM\s*\(/.test(upper)) return "_total";
+  if (/\bCOUNT\s*\(/.test(upper)) return "_count";
+  if (/\bAVG\s*\(/.test(upper)) return "_avg";
+  if (/\bMIN\s*\(/.test(upper)) return "_min";
+  if (/\bMAX\s*\(/.test(upper)) return "_max";
+  if (/\bPERCENTILE_APPROX\s*\(/.test(upper)) return "_percentile";
+  return "_metric";
+}
+
+/**
+ * Detect measure names that are identical to source column names and rename
+ * them by appending an aggregate-derived suffix (e.g. "_total", "_avg").
+ * This prevents the NESTED_AGGREGATE_FUNCTION error at deploy time without
+ * requiring an extra LLM repair round-trip.
+ */
+export function autoRenameShadowedMeasures(
+  yaml: string,
+  ddl: string,
+  allowlist: SchemaAllowlist,
+): { yaml: string; ddl: string; renamed: number } {
+  const sourceMatch = yaml.match(
+    /^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m,
+  );
+  if (!sourceMatch) return { yaml, ddl, renamed: 0 };
+
+  const sourceCols = allowlist.columns.get(sourceMatch[1].toLowerCase());
+  if (!sourceCols || sourceCols.size === 0) return { yaml, ddl, renamed: 0 };
+
+  const measuresIdx = yaml.indexOf("measures:");
+  if (measuresIdx === -1) return { yaml, ddl, renamed: 0 };
+  const measuresBlock = yaml.slice(measuresIdx);
+
+  const renames = new Map<string, string>();
+  const entryPattern = /-\s*name:\s*(.+)\n\s*expr:\s*(.+)/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = entryPattern.exec(measuresBlock)) !== null) {
+    const rawName = m[1].trim().replace(/^["']|["']$/g, "");
+    if (sourceCols.has(rawName.toLowerCase()) && !renames.has(rawName)) {
+      renames.set(rawName, `${toSnakeCase(rawName)}${inferAggregateSuffix(m[2].trim())}`);
+    }
+  }
+
+  if (renames.size === 0) return { yaml, ddl, renamed: 0 };
+
+  let modYaml = yaml;
+  let modDdl = ddl;
+
+  for (const [oldName, newName] of renames) {
+    const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(
+      `(-\\s*name:\\s*)(["']?)${escaped}\\2(\\s*(?:\\n|$))`,
+      "g",
+    );
+    modYaml = applyInMeasuresBlock(modYaml, pattern, `$1${newName}$3`);
+    modDdl = applyInMeasuresBlock(modDdl, pattern, `$1${newName}$3`);
+  }
+
+  return { yaml: modYaml, ddl: modDdl, renamed: renames.size };
+}
+
+function applyInMeasuresBlock(
+  text: string,
+  pattern: RegExp,
+  replacement: string,
+): string {
+  const idx = text.indexOf("measures:");
+  if (idx === -1) return text;
+  return text.slice(0, idx) + text.slice(idx).replace(pattern, replacement);
+}
+
+// ---------------------------------------------------------------------------
 // LLM repair: re-prompt once with validation errors + correct schema
 // ---------------------------------------------------------------------------
 
@@ -483,7 +576,7 @@ Rules:
 - The primary fact table has the implicit alias \`source\`. Use \`source.columnName\` or bare \`columnName\` for its columns.
 - Join aliases must match a \`name:\` declared in the \`joins:\` block. Do NOT invent aliases.
 - If a join references a table not listed in the SCHEMA CONTEXT, REMOVE the entire join and all references to it.
-- Measure \`name\` MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`Total Complaints\`, name the measure \`Total Complaints Sum\` or \`Complaint Volume\`.
+- Measure \`name\` MUST be snake_case (no spaces) and MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`. Add a \`display_name\` for the human-readable label.
 - When column names contain spaces, backtick-quote them: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`.
 - Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
 
@@ -517,6 +610,7 @@ Fix the YAML and DDL to only reference tables and columns from the SCHEMA CONTEX
       endpoint,
       messages: repairMessages,
       temperature: 0.1,
+      maxTokens: 16384,
       responseFormat: "json_object",
       signal,
     });
@@ -630,7 +724,7 @@ ${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric
    - FILTER clause measures for status/category breakdowns using DETERMINISTIC column values only, e.g. \`SUM(amount) FILTER (WHERE status = 'OPEN')\`. NEVER use AI functions in ANY metric view expression -- they are non-deterministic and expensive.
    - Ratio measures that safely re-aggregate, e.g. \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
    - COUNT DISTINCT measures for cardinality metrics
-6. Use descriptive dimension/measure \`name\` values informed by the column descriptions provided
+6. Use SQL-friendly snake_case identifiers for dimension/measure \`name\` values (e.g. \`total_revenue\`, \`order_count\`, \`order_month\`). Add a \`display_name\` field with a human-readable label (e.g. "Total Revenue"). Add \`synonyms\` for Genie discovery where useful.
 ${suggestMaterialization ? `7. For the most complex proposal, include a materialization: block (schedule: every 6 hours, mode: relaxed) with at least one aggregated materialized view` : ""}
 
 ## STRICT COLUMN GROUNDING RULES
@@ -686,6 +780,7 @@ Create metric view proposals for this domain.`;
       endpoint,
       messages,
       temperature: TEMPERATURE,
+      maxTokens: 32768,
       responseFormat: "json_object",
       signal,
     });
@@ -708,14 +803,21 @@ Create metric view proposals for this domain.`;
           (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
         );
 
-        const validation = validateMetricViewYaml(yamlStr, ddlStr, allowlist);
-        const features = detectFeatures(yamlStr);
+        const { yaml: fixedYaml, ddl: fixedDdl, renamed } = autoRenameShadowedMeasures(yamlStr, ddlStr, allowlist);
+        if (renamed > 0) {
+          logger.info("Auto-renamed shadowed measure names before validation", {
+            domain, name: String(p.name ?? ""), renamed,
+          });
+        }
+
+        const validation = validateMetricViewYaml(fixedYaml, fixedDdl, allowlist);
+        const features = detectFeatures(fixedYaml);
 
         return {
           name: String(p.name ?? ""),
           description: String(p.description ?? ""),
-          yaml: yamlStr,
-          ddl: ddlStr,
+          yaml: fixedYaml,
+          ddl: fixedDdl,
           sourceTables: Array.isArray(p.sourceTables) ? p.sourceTables.map(String) : [],
           hasJoins: features.hasJoins,
           hasFilteredMeasures: features.hasFilteredMeasures,
@@ -751,6 +853,10 @@ Create metric view proposals for this domain.`;
         /^(\s*(?:expr|on):\s*)(.+)$/gm,
         (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
       );
+
+      const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(repaired.yaml, repaired.ddl, allowlist);
+      repaired.yaml = reFixedYaml;
+      repaired.ddl = reFixedDdl;
 
       const revalidation = validateMetricViewYaml(repaired.yaml, repaired.ddl, allowlist);
       const reFeatures = detectFeatures(repaired.yaml);

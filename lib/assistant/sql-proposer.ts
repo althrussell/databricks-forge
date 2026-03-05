@@ -120,3 +120,60 @@ export function extractSqlBlocks(markdown: string): string[] {
   }
   return blocks;
 }
+
+// ---------------------------------------------------------------------------
+// Column resolution error detection
+// ---------------------------------------------------------------------------
+
+const COLUMN_ERROR_PATTERNS = [
+  /UNRESOLVED_COLUMN/i,
+  /cannot be resolved/i,
+  /Column .+ not found/i,
+  /AnalysisException.*column/i,
+];
+
+export function isColumnResolutionError(error: string): boolean {
+  return COLUMN_ERROR_PATTERNS.some((p) => p.test(error));
+}
+
+/**
+ * Build a fix prompt for SQL that failed with a column resolution error.
+ * Includes the exact error message and the correct column schema so the
+ * LLM can self-correct.
+ */
+export function buildSqlFixPrompt(
+  sql: string,
+  error: string,
+  knownColumns: Array<{ tableFqn: string; name: string; dataType: string }>,
+): string {
+  const colsByTable = new Map<string, string[]>();
+  for (const col of knownColumns) {
+    const list = colsByTable.get(col.tableFqn) ?? [];
+    const quoted = /^\w+$/.test(col.name) ? col.name : `\`${col.name}\``;
+    list.push(`${quoted} (${col.dataType})`);
+    colsByTable.set(col.tableFqn, list);
+  }
+
+  const schemaLines = Array.from(colsByTable.entries())
+    .map(([fqn, cols]) => `### ${fqn}\n${cols.map((c) => `  - ${c}`).join("\n")}`)
+    .join("\n\n");
+
+  return `The following SQL failed execution. Fix it using ONLY the columns listed below.
+
+## Error
+${error}
+
+## Failing SQL
+\`\`\`sql
+${sql}
+\`\`\`
+
+## AVAILABLE COLUMNS (USE ONLY THESE -- NO OTHER COLUMNS EXIST)
+${schemaLines}
+
+## Rules
+- Use column names EXACTLY as shown above, including spaces and casing.
+- Backtick-quote column names with spaces: \`Net Cash Flow\`, \`Account ID\`.
+- NEVER invent, guess, or transform column names.
+- Return ONLY the corrected SQL in a \`\`\`sql code block. No explanation.`;
+}

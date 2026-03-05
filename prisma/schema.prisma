@@ -41,6 +41,7 @@ model ForgeRun {
   filteredTablesJson String?   @map("filtered_tables_json")
   metadataCacheKey   String?   @map("metadata_cache_key")
   contextSourcesJson String?  @map("context_sources_json")
+  schemaSnapshotJson String?  @map("schema_snapshot_json")
 
   useCases             ForgeUseCase[]
   exports              ForgeExport[]
@@ -785,4 +786,197 @@ model ForgeDocument {
 
   @@index([status])
   @@map("forge_documents")
+}
+
+// ---------------------------------------------------------------------------
+// External Connections (Fabric / Power BI, extensible to Tableau, Looker)
+// ---------------------------------------------------------------------------
+
+model ForgeConnection {
+  id            String   @id @default(uuid()) @map("connection_id")
+  name          String
+  connectorType String   @map("connector_type")
+  accessLevel   String   @default("admin") @map("access_level")
+  tenantId      String?  @map("tenant_id")
+  clientId      String?  @map("client_id")
+  clientSecret  String?  @map("client_secret")
+  configJson    String?  @map("config_json")
+  status        String   @default("active")
+  createdBy     String?  @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+  lastTestedAt         DateTime? @map("last_tested_at")
+  lastScanCompletedAt  DateTime? @map("last_scan_completed_at")
+
+  fabricScans   ForgeFabricScan[]
+
+  @@index([connectorType])
+  @@map("forge_connections")
+}
+
+// ---------------------------------------------------------------------------
+// Fabric / Power BI Scan Results
+// ---------------------------------------------------------------------------
+
+model ForgeFabricScan {
+  id              String    @id @default(uuid()) @map("scan_id")
+  connectionId    String    @map("connection_id")
+  accessLevel     String    @default("admin") @map("access_level")
+  status          String    @default("pending")
+  workspaceCount  Int       @default(0) @map("workspace_count")
+  datasetCount    Int       @default(0) @map("dataset_count")
+  reportCount     Int       @default(0) @map("report_count")
+  measureCount    Int       @default(0) @map("measure_count")
+  artifactCount   Int       @default(0) @map("artifact_count")
+  scanMode        String    @default("full") @map("scan_mode")
+  errorMessage    String?   @map("error_message")
+  rawResultJson   String?   @map("raw_result_json")
+  createdBy       String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  connection  ForgeConnection       @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspaces  ForgeFabricWorkspace[]
+  datasets    ForgeFabricDataset[]
+  reports     ForgeFabricReport[]
+  artifacts   ForgeFabricArtifact[]
+
+  @@index([connectionId])
+  @@map("forge_fabric_scans")
+}
+
+model ForgeFabricWorkspace {
+  id          String @id @default(uuid())
+  scanId      String @map("scan_id")
+  workspaceId String @map("workspace_id")
+  name        String
+  state       String?
+  type        String?
+
+  scan ForgeFabricScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@map("forge_fabric_workspaces")
+}
+
+model ForgeFabricDataset {
+  id                String  @id @default(uuid())
+  scanId            String  @map("scan_id")
+  workspaceId       String  @map("workspace_id")
+  datasetId         String  @map("dataset_id")
+  name              String
+  configuredBy      String? @map("configured_by")
+  tablesJson        String? @map("tables_json")
+  measuresJson      String? @map("measures_json")
+  relationshipsJson String? @map("relationships_json")
+  expressionsJson   String? @map("expressions_json")
+  rolesJson         String? @map("roles_json")
+  datasourcesJson   String? @map("datasources_json")
+  sensitivityLabel  String? @map("sensitivity_label")
+
+  scan ForgeFabricScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@map("forge_fabric_datasets")
+}
+
+model ForgeFabricReport {
+  id               String  @id @default(uuid())
+  scanId           String  @map("scan_id")
+  workspaceId      String  @map("workspace_id")
+  reportId         String  @map("report_id")
+  name             String
+  datasetId        String? @map("dataset_id")
+  reportType       String? @map("report_type")
+  tilesJson        String? @map("tiles_json")
+  sensitivityLabel String? @map("sensitivity_label")
+
+  scan ForgeFabricScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@map("forge_fabric_reports")
+}
+
+model ForgeFabricArtifact {
+  id           String  @id @default(uuid())
+  scanId       String  @map("scan_id")
+  workspaceId  String  @map("workspace_id")
+  artifactId   String  @map("artifact_id")
+  artifactType String  @map("artifact_type")
+  name         String
+  metadataJson String? @map("metadata_json")
+
+  scan ForgeFabricScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@map("forge_fabric_artifacts")
+}
+
+// ---------------------------------------------------------------------------
+// Fabric / Power BI Migration Tracking
+// ---------------------------------------------------------------------------
+
+model ForgeFabricMigration {
+  id              String    @id @default(uuid()) @map("migration_id")
+  scanId          String    @map("scan_id")
+  targetCatalog   String    @map("target_catalog")
+  targetSchema    String    @map("target_schema")
+  status          String    @default("pending")
+  currentStep     String?   @map("current_step")
+  goldTablesJson  String?   @map("gold_tables_json")
+  metricViewsJson String?   @map("metric_views_json")
+  dashboardsJson  String?   @map("dashboards_json")
+  genieSpacesJson String?   @map("genie_spaces_json")
+  nameMappingJson String?   @map("name_mapping_json")
+  rlsWarningsJson String?   @map("rls_warnings_json")
+  createdBy       String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  @@index([scanId])
+  @@map("forge_fabric_migrations")
+}
+
+// ---------------------------------------------------------------------------
+// Genie Space Health Check & Benchmark Persistence
+// ---------------------------------------------------------------------------
+
+model ForgeSpaceBenchmarkRun {
+  id                  String   @id @default(uuid())
+  spaceId             String   @map("space_id")
+  runAt               DateTime @default(now()) @map("run_at")
+  totalQuestions      Int      @map("total_questions")
+  passedCount         Int      @map("passed_count")
+  failedCount         Int      @map("failed_count")
+  errorCount          Int      @default(0) @map("error_count")
+  resultsJson         String   @map("results_json")
+  feedbackJson        String?  @map("feedback_json")
+  improvementsApplied Boolean  @default(false) @map("improvements_applied")
+  improvementSummary  String?  @map("improvement_summary")
+
+  @@index([spaceId])
+  @@map("forge_space_benchmark_runs")
+}
+
+model ForgeSpaceHealthScore {
+  id          String   @id @default(uuid())
+  spaceId     String   @map("space_id")
+  score       Int
+  grade       String
+  checksJson  String   @map("checks_json")
+  triggeredBy String?  @map("triggered_by")
+  measuredAt  DateTime @default(now()) @map("measured_at")
+
+  @@index([spaceId])
+  @@map("forge_space_health_scores")
+}
+
+model ForgeHealthCheckConfig {
+  id                  String   @id @default("singleton")
+  overridesJson       String?  @map("overrides_json")
+  customChecksJson    String?  @map("custom_checks_json")
+  categoryWeightsJson String?  @map("category_weights_json")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("forge_health_check_config")
 }

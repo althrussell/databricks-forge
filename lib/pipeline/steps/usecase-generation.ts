@@ -123,18 +123,41 @@ export async function runUsecaseGeneration(
     // RAG is best-effort
   }
 
+  // Load PBI/Fabric context when a scan is linked to this run
+  let pbiContext = "";
+  if (run.config.fabricScanId) {
+    try {
+      const { buildPbiContextForGeneration } = await import("@/lib/fabric/prompt-context");
+      pbiContext = await buildPbiContextForGeneration(run.config.fabricScanId);
+    } catch {
+      // PBI context is best-effort
+    }
+  }
+
   // Persist enrichment provenance and derive use-case-level tags
   const outcomeMapSections: string[] = [];
   if (industryReferenceUseCases) outcomeMapSections.push("reference_usecases");
-  const stepManifest = {
+  const stepManifest: Parameters<typeof persistManifest>[1] = {
     benchmarks: benchmarkResult.sources,
     outcomeMap: { industryId: run.config.industry || null, sections: outcomeMapSections },
     documents: { sourceIds: docSourceIds, kinds: docKinds, chunkCount: docChunkCount },
     steps: ["usecase-generation"],
   };
+  if (run.config.fabricScanId && pbiContext) {
+    const { getFabricScanDetail } = await import("@/lib/lakebase/fabric-scans");
+    const fbDetail = await getFabricScanDetail(run.config.fabricScanId).catch(() => null);
+    stepManifest.fabric = {
+      scanId: run.config.fabricScanId,
+      datasetCount: fbDetail?.datasetCount ?? 0,
+      measureCount: fbDetail?.measureCount ?? 0,
+      reportCount: fbDetail?.reportCount ?? 0,
+    };
+  }
   const enrichmentTags: EnrichmentTag[] = deriveTags({
-    ...stepManifest,
-    outcomeMap: { ...stepManifest.outcomeMap, sections: outcomeMapSections },
+    benchmarks: stepManifest.benchmarks!,
+    outcomeMap: { industryId: run.config.industry || null, sections: outcomeMapSections },
+    documents: stepManifest.documents!,
+    fabric: stepManifest.fabric,
   });
   if (runId) {
     try {
@@ -247,6 +270,7 @@ export async function runUsecaseGeneration(
         asset_context: assetContext,
         document_context: documentContext,
         benchmark_context: benchmarkResult.text,
+        pbi_context: pbiContext,
         customer_profile_context: `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
       };
 

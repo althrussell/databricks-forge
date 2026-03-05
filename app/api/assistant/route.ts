@@ -12,7 +12,7 @@
 
 import { NextRequest } from "next/server";
 import { runAssistantEngine, type ConversationTurn } from "@/lib/assistant/engine";
-import type { AssistantPersona } from "@/lib/assistant/prompts";
+import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import {
   createConversation,
@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
     const question = body.question as string;
     const history = (body.history ?? []) as ConversationTurn[];
     const sessionId = (body.sessionId as string) ?? crypto.randomUUID();
-    const persona = (body.persona === "tech" ? "tech" : "business") as AssistantPersona;
+    const raw = body.persona as string;
+    const persona: AssistantPersona = VALID_PERSONAS.has(raw as AssistantPersona) ? (raw as AssistantPersona) : "business";
 
     if (!question || typeof question !== "string" || question.trim().length < 2) {
       return Response.json(

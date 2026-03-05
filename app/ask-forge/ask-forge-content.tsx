@@ -12,18 +12,17 @@ import { AskForgeContextPanel, type TableDetailData } from "@/components/assista
 import { ConversationHistory } from "@/components/assistant/conversation-history";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
-import { DeployDashboardDialog } from "@/components/assistant/deploy-dashboard-dialog";
+import { DeployDashboardDialog, type DashboardDeployPayload } from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import type { AssistantPersona } from "@/lib/assistant/prompts";
-import { PanelRightClose, PanelRight, Briefcase, Wrench } from "lucide-react";
+import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
+import { PanelRightClose, PanelRight, Target, Briefcase, Wrench } from "lucide-react";
 
 export default function AskForgeContent() {
-  const [activeSql, setActiveSql] = React.useState<string | null>(null);
+  const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(null);
   const [deploySql, setDeploySql] = React.useState<string | null>(null);
-  const [dashboardSql, setDashboardSql] = React.useState<string | null>(null);
-  const [dashboardProposal, setDashboardProposal] = React.useState<Record<string, unknown> | null>(null);
+  const [dashboardPayload, setDashboardPayload] = React.useState<DashboardDeployPayload | null>(null);
   const [tableEnrichments, setTableEnrichments] = React.useState<TableEnrichmentData[]>([]);
   const [tableDetails, setTableDetails] = React.useState<Map<string, TableDetailData>>(new Map());
   const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
@@ -42,7 +41,7 @@ export default function AskForgeContent() {
   const [persona, setPersona] = React.useState<AssistantPersona>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("askforge-persona");
-      if (stored === "tech") return "tech";
+      if (stored && VALID_PERSONAS.has(stored as AssistantPersona)) return stored as AssistantPersona;
     }
     return "business";
   });
@@ -162,8 +161,8 @@ export default function AskForgeContent() {
       );
       const restoredTables: string[] = lastAssistantWithTables?.referencedTables ?? [];
 
-      if (data.persona === "tech" || data.persona === "business") {
-        setPersona(data.persona);
+      if (VALID_PERSONAS.has(data.persona as AssistantPersona)) {
+        setPersona(data.persona as AssistantPersona);
       }
 
       setActiveConversationId(conversationId);
@@ -191,7 +190,7 @@ export default function AskForgeContent() {
     setReferencedTables([]);
     setSources([]);
     const stored = localStorage.getItem("askforge-persona");
-    setPersona(stored === "tech" ? "tech" : "business");
+    setPersona(stored && VALID_PERSONAS.has(stored as AssistantPersona) ? (stored as AssistantPersona) : "business");
   }, []);
 
   const handleClearOrDelete = React.useCallback(async () => {
@@ -212,8 +211,8 @@ export default function AskForgeContent() {
   }, []);
 
   const handlePersonaChange = React.useCallback((value: string) => {
-    if (value !== "business" && value !== "tech") return;
-    setPersona(value);
+    if (!VALID_PERSONAS.has(value as AssistantPersona)) return;
+    setPersona(value as AssistantPersona);
     localStorage.setItem("askforge-persona", value);
   }, []);
 
@@ -232,8 +231,12 @@ export default function AskForgeContent() {
           onValueChange={handlePersonaChange}
         >
           <ToggleGroupItem value="business" className="gap-1 px-2.5 text-xs">
-            <Briefcase className="size-3.5" />
+            <Target className="size-3.5" />
             Business
+          </ToggleGroupItem>
+          <ToggleGroupItem value="analyst" className="gap-1 px-2.5 text-xs">
+            <Briefcase className="size-3.5" />
+            Analyst
           </ToggleGroupItem>
           <ToggleGroupItem value="tech" className="gap-1 px-2.5 text-xs">
             <Wrench className="size-3.5" />
@@ -265,17 +268,18 @@ export default function AskForgeContent() {
             sessionId={chatSessionId}
             initialMessages={initialMessages}
             suggestedQuestions={suggestedQuestions}
-            onOpenSql={(sql) => {
-              setActiveSql(sql);
+            onOpenSql={(sql, allBlocks) => {
+              const blocks = allBlocks && allBlocks.length > 0 ? allBlocks : [sql];
+              const index = blocks.indexOf(sql);
+              setActiveSql({ blocks, index: index >= 0 ? index : 0 });
               setDeploySql(null);
             }}
             onDeploySql={(sql) => {
               setDeploySql(sql);
               setActiveSql(null);
             }}
-            onDeployDashboard={(sql, proposal) => {
-              setDashboardSql(sql);
-              setDashboardProposal(proposal);
+            onDeployDashboard={(payload) => {
+              setDashboardPayload(payload as DashboardDeployPayload);
             }}
             onTableEnrichments={setTableEnrichments}
             onReferencedTables={handleReferencedTables}
@@ -315,7 +319,8 @@ export default function AskForgeContent() {
 
       <SqlDialog
         open={!!activeSql}
-        sql={activeSql ?? ""}
+        sqlBlocks={activeSql?.blocks ?? []}
+        initialIndex={activeSql?.index ?? 0}
         onOpenChange={(open) => { if (!open) setActiveSql(null); }}
         onRequestFix={() => {
           setActiveSql(null);
@@ -339,10 +344,9 @@ export default function AskForgeContent() {
       )}
 
       <DeployDashboardDialog
-        open={!!dashboardSql}
-        sql={dashboardSql ?? ""}
-        proposal={dashboardProposal}
-        onOpenChange={(open) => { if (!open) { setDashboardSql(null); setDashboardProposal(null); } }}
+        open={!!dashboardPayload}
+        payload={dashboardPayload}
+        onOpenChange={(open) => { if (!open) setDashboardPayload(null); }}
       />
     </div>
   );
