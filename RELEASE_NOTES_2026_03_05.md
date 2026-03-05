@@ -1,55 +1,51 @@
 # Release Notes -- 2026-03-05
 
-**Databricks Forge AI v0.6.1**
+**Databricks Forge AI v0.6.2**
 
 ---
 
 ## Improvements
 
-### Shared SQL Column Validation Module
-Extracted a new shared validation module (`lib/validation/sql-columns.ts`) that centralises all SQL column-reference checking across the application. Previously, each consumer (pipeline SQL generation, Genie schema-allowlist, dashboard engine, Ask Forge assistant) implemented its own alias detection and column validation regex -- leading to inconsistent coverage and missed edge cases. The shared module provides:
-- **`extractSqlAliases`** -- detects table aliases, column aliases (including backtick-quoted aliases like `` AS `Age Group` ``), and CTE names.
-- **`extractColumnReferences`** -- extracts all `alias.column` patterns, both plain identifiers and backtick-quoted (e.g. `` s.`Total Count` ``).
-- **`validateColumnReferences`** -- validates extracted references against a known-columns set, filtering out SQL keywords, FQN parts, CTE/alias names, and AI function return fields.
-- **`stripSqlComments`** -- removes `--` line comments and `/* */` block comments before extraction to prevent false positives from prose text.
+### Metric View Snake_case Naming and Display Names
+Metric view dimension and measure `name` fields are now generated as SQL-friendly snake_case identifiers (e.g. `total_revenue`, `order_month`) instead of display-style names with spaces. A new `display_name` field provides the human-readable label, and optional `comment` and `synonyms` fields improve Genie discoverability. The LLM prompt, seed YAML builder, repair prompt, and shadowed-measure validator have all been updated to enforce this convention. A new `autoRenameShadowedMeasures` function deterministically renames measures that shadow source column names by appending an aggregate-derived suffix (e.g. `_total`, `_avg`), eliminating the `NESTED_AGGREGATE_FUNCTION` error without an extra LLM round-trip.
 
-### Dashboard Adhoc Engine SQL Validation
-The adhoc dashboard engine (`lib/dashboard/adhoc-engine.ts`) now validates LLM-generated dataset SQL against the schema allowlist before assembling dashboards. Datasets with hallucinated column references are dropped with a warning rather than producing broken dashboards.
+### Fast Genie Engine: LLM-Generated Expressions
+The fast (ad-hoc) Genie engine now generates measures, filters, and dimensions via a lightweight LLM call (`generateFastLLMExpressions`) instead of purely rule-based `SUM`/`AVG`-per-numeric-column heuristics. The LLM receives full schema context and domain hints, producing more business-relevant expressions. Each expression is validated against the schema allowlist before inclusion. Falls back to the original rule-based path if the LLM call fails.
 
-### Ask Forge Static Column Pre-Check
-The Ask Forge assistant engine (`lib/assistant/engine.ts`) now performs a static column-reference check before the `EXPLAIN` dry-run round-trip. Hallucinated columns are caught immediately and sent to the LLM fix cycle with an explicit schema violation message, reducing latency compared to waiting for SQL execution errors.
+### Expanded Key Synonym Dictionary
+The canonical join-key synonym dictionary (`lib/genie/key-synonyms.ts`) has been expanded from 5 key groups to 25, covering `account_id`, `employee_id`, `transaction_id`, `invoice_id`, `payment_id`, `region_id`, `category_id`, `project_id`, `policy_id`, `claim_id`, and more. A generic fallback now also matches any shared column ending in `_id` or `_key` across tables, improving automatic join discovery for schemas not covered by the explicit dictionary.
 
-### SQL Fix Prompt Hardened
-The `USE_CASE_SQL_FIX_PROMPT` in `lib/ai/templates.ts` now includes `DATABRICKS_SQL_RULES` and clarifies that removing references to non-existent columns is a valid fix -- preventing the LLM from substituting guessed alternatives during repair cycles.
+### Time Period Date Column Prioritization
+`generateTimePeriods` now prioritizes date columns by business relevance (e.g. `created_at`, `order_date`, `timestamp` rank highest) and caps the number of date columns processed per space (default 6). This prevents time-period explosion on tables with many date columns while ensuring the most useful time dimensions are always included.
 
-### Schema Markdown Column Cap Removed
-`buildSchemaMarkdown` in `lib/queries/metadata.ts` no longer caps columns at 40 per table. All columns are now injected into LLM prompts, eliminating a source of hallucinated column names when tables had more than 40 columns.
+### Schema Allowlist: SQL Comment Stripping
+`findInvalidIdentifiers` now strips `--` line comments and `/* */` block comments from SQL before scanning for identifier references. Previously, prose in comments (e.g. `-- e.g. some example`) could produce false-positive column validation errors.
 
-### SQL Engine Documentation
-Added comprehensive `docs/SQL_ENGINE.md` covering metadata sourcing, schema injection, the validation pipeline, fix cycles, prompt architecture, and how to wire new consumers into the SQL engine.
+### Lineage Table Metadata Enrichment
+New `fetchTableInfoBatch` function retrieves `tableType` and `dataSourceFormat` from `information_schema.tables` for lineage-discovered tables. Both the standalone scan and the pipeline enrichment pass now backfill this metadata, allowing the enrichment engine to skip unnecessary DESCRIBE operations on views and foreign tables.
+
+### Smart Enrichment Skipping for Non-Physical Tables
+`enrichTablesInBatches` now uses `tableType` from `information_schema.tables` to skip DESCRIBE DETAIL, DESCRIBE TABLE EXTENDED, and DESCRIBE HISTORY for non-physical table types (VIEW, FOREIGN, MATERIALIZED_VIEW). Only Delta-backed physical types (MANAGED, EXTERNAL, STREAMING_TABLE, and shallow clones) undergo full enrichment. Tables with unknown type (e.g. unresolved lineage entries) still attempt all operations as a safe default.
+
+### Quality Gate: Deployment Warning UX
+The Genie deployment API routes no longer hard-block requests based on quality gate decisions. Instead, the `GenieBuilderModal` presents a confirmation prompt when deploying a space with quality warnings, giving users the choice to proceed or review diagnostics first.
 
 ---
 
 ## Bug Fixes
 
-- **Backtick-quoted CTE aliases invisible to validator** -- `extractSqlAliases` now detects `` AS `Age Group` `` style aliases by running a dedicated regex on the original SQL before backtick stripping. Previously, CTE-computed columns with spaces (e.g. `s.`Age Group``, `s.`Avg Complaints Per Client``) were incorrectly flagged as hallucinated columns, causing valid dashboard datasets to be dropped.
-- **SQL comments cause false-positive column flags** -- `extractColumnReferences` now strips `--` line comments and `/* */` block comments before scanning for `alias.column` patterns. Previously, prose in comments like `-- e.g. some example` was matched as prefix=`e`, column=`g`, producing spurious unknown-column warnings.
-- **AI function return fields flagged as hallucinations** -- `ai_query()` struct fields (`result`, `errorMessage`) are now allowlisted via `AI_FUNCTION_RETURN_FIELDS` across all validation surfaces, not just the pipeline SQL step.
-- **Genie schema-allowlist duplicated validation logic** -- `findInvalidIdentifiers` now delegates 2-part `alias.column` checking to the shared validation module, eliminating divergent regex patterns.
+- **Quality gate: missing joins now block deployment** -- `determineQualityGate` returns `"block"` instead of `"warn"` when `no_validated_joins` is present, correctly flagging multi-table spaces without validated joins as undeployable until joins are resolved.
+- **column_tags / table_tags incorrect column names** -- `getTableTags` and `getColumnTags` in `lib/queries/metadata-detail.ts` now use the correct `catalog_name` and `schema_name` columns instead of `table_catalog` and `table_schema`, which do not exist on the `information_schema.column_tags` and `information_schema.table_tags` views.
 
 ---
 
-## Other Changes
-
-- Added 29 unit tests for the shared SQL column validation module (`__tests__/validation/sql-columns.test.ts`) covering alias extraction, comment stripping, backtick-quoted references, AI function fields, and the exact dashboard scenario from production logs.
-- Refactored pipeline `validateSqlOutput` to delegate column checking to the shared module, removing ~70 lines of inline validation logic.
-
----
-
-## Commits (1)
+## Commits (4)
 
 | Hash | Summary |
 |------|---------|
-| `4121414` | Enhance SQL validation and error handling across components |
+| `9984815` | Enhance metadata fetching and processing for lineage-discovered tables |
+| `fe2ae22` | Refactor quality gate handling and enhance deployment logic |
+| `1c1017c` | Update quality gate logic and enhance metric view definitions |
+| `e7c315d` | Update timestamps for app.yaml and assembler.ts in sync-snapshots |
 
-**Uncommitted changes:** Backtick-quoted alias detection and SQL comment stripping in `lib/validation/sql-columns.ts`; new test file `__tests__/validation/sql-columns.test.ts` (29 tests); version bump to 0.6.1 in `package.json`.
+**Uncommitted changes:** None.

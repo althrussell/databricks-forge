@@ -97,7 +97,7 @@ export const SQL_KEYWORDS = new Set([
   "recursive", "depth", "filter", "measure", "percentile_approx",
   "date_trunc", "year", "month", "day", "hour", "minute", "second",
   "current_date", "current_timestamp", "datediff", "dateadd",
-  "to_date", "to_timestamp", "format_number", "round", "abs", "ceil",
+  "to_date", "to_timestamp", "try_to_date", "try_to_timestamp", "format_number", "round", "abs", "ceil",
   "floor", "power", "sqrt", "log", "exp", "mod", "greatest", "least",
   "nullif", "ifnull", "nvl", "nvl2", "try_cast", "typeof",
   "collect_list", "collect_set", "explode", "flatten", "size",

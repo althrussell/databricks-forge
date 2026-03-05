@@ -157,6 +157,7 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push("- Use ONLY fully-qualified table names (catalog.schema.table)");
   sections.push("- Use ONLY tables listed in Available Tables above");
   sections.push("- Use Spark SQL syntax (date_sub, DATE_TRUNC, not INTERVAL)");
+  sections.push("- When a date/time column is STRING type, parse it safely with COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy')) -- NEVER use TO_DATE() which throws on format mismatches.");
   sections.push("- Each dataset is a SINGLE SELECT query (no semicolons, no CTEs with multiple statements)");
   sections.push("- KPI dataset must return exactly 1 row");
   sections.push("- Trend dataset must include a date column");
