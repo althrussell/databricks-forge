@@ -26,7 +26,7 @@ export async function saveHealthScore(
         triggeredBy,
       },
     });
-    logger.info({ spaceId, score: report.overallScore, grade: report.grade }, "Health score saved");
+    logger.info("Health score saved", { spaceId, score: report.overallScore, grade: report.grade });
     return row.id;
   });
 }
@@ -75,10 +75,11 @@ export async function saveBenchmarkRun(input: BenchmarkRunInput): Promise<string
         resultsJson: input.resultsJson,
       },
     });
-    logger.info(
-      { spaceId: input.spaceId, passed: input.passedCount, total: input.totalQuestions },
-      "Benchmark run saved",
-    );
+    logger.info("Benchmark run saved", {
+      spaceId: input.spaceId,
+      passed: input.passedCount,
+      total: input.totalQuestions,
+    });
     return row.id;
   });
 }

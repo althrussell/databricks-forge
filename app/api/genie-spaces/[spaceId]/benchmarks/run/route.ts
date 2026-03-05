@@ -154,7 +154,7 @@ export async function POST(
           errorCount,
         });
       } catch (err) {
-        logger.warn({ error: String(err) }, "Failed to persist benchmark run");
+        logger.warn("Failed to persist benchmark run", { error: String(err) });
         send({
           type: "complete",
           total: results.length,

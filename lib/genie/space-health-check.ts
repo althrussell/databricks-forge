@@ -14,6 +14,7 @@ import type {
   CategoryScore,
   CheckResult,
   Grade,
+  Severity,
   SpaceHealthReport,
   UserCheckOverride,
   UserCustomCheck,
@@ -90,7 +91,7 @@ export function runHealthCheck(
       if (!checkDef?.quick_win) return null;
       return { text: checkDef.quick_win, severity: r.severity };
     })
-    .filter((qw): qw is { text: string; severity: string } => qw != null)
+    .filter((qw): qw is { text: string; severity: Severity } => qw != null)
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
     .slice(0, MAX_QUICK_WINS)
     .map((qw) => qw.text);

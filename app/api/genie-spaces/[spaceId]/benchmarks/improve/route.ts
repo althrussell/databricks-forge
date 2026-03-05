@@ -55,10 +55,11 @@ export async function POST(
 
     const result = await runFixes({ checkIds: checkIdsToFix, serializedSpace });
 
-    logger.info(
-      { spaceId, strategies: result.strategiesRun, changes: result.changes.length },
-      "Benchmark improvement generated",
-    );
+    logger.info("Benchmark improvement generated", {
+      spaceId,
+      strategies: result.strategiesRun,
+      changes: result.changes.length,
+    });
 
     return NextResponse.json({
       updatedSerializedSpace: JSON.stringify(result.updatedSpace),
@@ -69,7 +70,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error({ error: message }, "Benchmark improvement failed");
+    logger.error("Benchmark improvement failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

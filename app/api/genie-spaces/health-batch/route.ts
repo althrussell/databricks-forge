@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         );
         return [spaceId, report];
       } catch (err) {
-        logger.warn({ spaceId, error: String(err) }, "Batch health check failed for space");
+        logger.warn("Batch health check failed for space", { spaceId, error: String(err) });
         return [spaceId, null];
       }
     });

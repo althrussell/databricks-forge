@@ -50,13 +50,13 @@ export async function GET(
 
     // Best-effort persist the score for trending
     saveHealthScore(spaceId, report, "manual").catch((err) => {
-      logger.warn({ spaceId, error: String(err) }, "Failed to persist health score");
+      logger.warn("Failed to persist health score", { spaceId, error: String(err) });
     });
 
     return NextResponse.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error({ error: message }, "Health check failed");
+    logger.error("Health check failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

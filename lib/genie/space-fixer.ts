@@ -109,7 +109,7 @@ export async function buildMetadataForSpace(tableFqns: string[]): Promise<Metada
         }
       }
     } catch (err) {
-      logger.warn({ fqn, error: String(err) }, "Failed to query columns for off-platform space table");
+      logger.warn("Failed to query columns for off-platform space table", { fqn, error: String(err) });
     }
   }
 
@@ -214,24 +214,24 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
 
           const snippets = space.instructions?.sql_snippets ?? {};
           const existingMeasureIds = new Set((snippets.measures ?? []).map((m: SpaceJson) => m.alias));
-          const newMeasures = output.measures.filter((m) => !existingMeasureIds.has(m.alias));
+          const newMeasures = output.measures.filter((m) => !existingMeasureIds.has(m.name));
           if (newMeasures.length > 0) {
             snippets.measures = [...(snippets.measures ?? []), ...newMeasures.map((m) => ({
               id: crypto.randomUUID().replace(/-/g, ""),
-              alias: m.alias,
+              alias: m.name,
               sql: [m.sql],
-              display_name: m.displayName ?? m.alias,
+              display_name: m.name,
               synonyms: m.synonyms ?? [],
             }))];
           }
 
           const existingFilterIds = new Set((snippets.filters ?? []).map((f: SpaceJson) => f.display_name));
-          const newFilters = output.filters.filter((f) => !existingFilterIds.has(f.displayName));
+          const newFilters = output.filters.filter((f) => !existingFilterIds.has(f.name));
           if (newFilters.length > 0) {
             snippets.filters = [...(snippets.filters ?? []), ...newFilters.map((f) => ({
               id: crypto.randomUUID().replace(/-/g, ""),
               sql: [f.sql],
-              display_name: f.displayName ?? "",
+              display_name: f.name,
               synonyms: f.synonyms ?? [],
             }))];
           }
@@ -482,10 +482,10 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
         }
 
         default:
-          logger.warn({ strategy, checkIds }, "Unknown fix strategy");
+          logger.warn("Unknown fix strategy", { strategy, checkIds });
       }
     } catch (err) {
-      logger.error({ strategy, error: String(err) }, "Fix strategy execution failed");
+      logger.error("Fix strategy execution failed", { strategy, error: String(err) });
       changes.push({
         section: strategy,
         description: `Failed: ${err instanceof Error ? err.message : String(err)}`,

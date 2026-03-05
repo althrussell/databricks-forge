@@ -41,7 +41,7 @@ export async function POST(
       warehouseId: config.warehouseId,
     });
 
-    logger.info({ originalSpaceId: spaceId, clonedSpaceId: result.space_id }, "Space cloned for fix workflow");
+    logger.info("Space cloned for fix workflow", { originalSpaceId: spaceId, clonedSpaceId: result.space_id });
 
     return NextResponse.json({
       clonedSpaceId: result.space_id,
@@ -49,7 +49,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error({ error: message }, "Clone failed");
+    logger.error("Clone failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

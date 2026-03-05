@@ -52,10 +52,10 @@ export async function POST(
 
     // Persist health score for trending
     saveHealthScore(spaceId, report, "post_fix").catch((err) => {
-      logger.warn({ spaceId, error: String(err) }, "Failed to persist post-fix health score");
+      logger.warn("Failed to persist post-fix health score", { spaceId, error: String(err) });
     });
 
-    logger.info({ spaceId, score: report.overallScore, grade: report.grade }, "Fix applied and re-scored");
+    logger.info("Fix applied and re-scored", { spaceId, score: report.overallScore, grade: report.grade });
 
     return NextResponse.json({
       success: true,
@@ -63,7 +63,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error({ error: message }, "Apply fix failed");
+    logger.error("Apply fix failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

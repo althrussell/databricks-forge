@@ -45,7 +45,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error({ error: message }, "Fix workflow failed");
+    logger.error("Fix workflow failed", { error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
