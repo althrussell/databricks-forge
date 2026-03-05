@@ -112,6 +112,27 @@ Key modules:
 Data model: `GenieEngineConfig`, `GenieEnginePassOutputs`, `SerializedSpace`,
 `GenieSpaceRecommendation`, `GenieEngineRecommendation` (see `lib/genie/types.ts`).
 
+## Genie Health Check Engine
+
+The Health Check Engine (`lib/genie/space-health-check.ts`) provides a deterministic
+scoring system for any Genie Space, an automated Fix Workflow, and an iterative
+Benchmark Feedback Loop. See `docs/GENIE_HEALTHCHECK_ENGINE.md` for full documentation.
+
+Key modules:
+- `lib/genie/health-checks/default-checks.yaml` -- 20 built-in check definitions (YAML DSL)
+- `lib/genie/health-checks/evaluators.ts` -- 11 deterministic evaluator functions
+- `lib/genie/health-checks/registry.ts` -- YAML parser, merge defaults + user overrides
+- `lib/genie/health-checks/types.ts` -- TypeScript types for the health check system
+- `lib/genie/space-health-check.ts` -- scorer (pure function, no LLM calls)
+- `lib/genie/space-fixer.ts` -- fix strategy router, metadata builder for off-platform spaces
+- `lib/genie/space-cache.ts` -- in-memory serialized_space cache (5min TTL)
+- `lib/genie/benchmark-feedback.ts` -- feedback-to-fix analysis
+- `lib/lakebase/space-health.ts` -- CRUD for health scores, benchmark runs, config
+- `components/genie/health-detail-sheet.tsx` -- health report slide-out panel
+
+Data model: `ForgeSpaceBenchmarkRun`, `ForgeSpaceHealthScore`, `ForgeHealthCheckConfig`
+(see Prisma schema).
+
 ## Estate Scan Pipeline (Environment Intelligence)
 
 The estate pipeline (`lib/pipeline/standalone-scan.ts`) scans Unity Catalog

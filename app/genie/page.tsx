@@ -39,11 +39,15 @@ import {
   BarChart3,
   MessageSquare,
   Link2,
+  FlaskConical,
+  Shield,
 } from "lucide-react";
 import type {
   GenieSpaceResponse,
   TrackedGenieSpace,
 } from "@/lib/genie/types";
+import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
+import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
 
 interface SpaceCardData {
   spaceId: string;
@@ -104,6 +108,30 @@ export default function GenieSpacesPage() {
   const [trashTarget, setTrashTarget] = useState<SpaceCardData | null>(null);
   const [trashing, setTrashing] = useState(false);
   const [databricksHost, setDatabricksHost] = useState("");
+  const [healthScores, setHealthScores] = useState<Record<string, SpaceHealthReport | null>>({});
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthSheetOpen, setHealthSheetOpen] = useState(false);
+  const [healthSheetTarget, setHealthSheetTarget] = useState<SpaceCardData | null>(null);
+
+  const fetchHealthScores = useCallback(async (spaceIds: string[]) => {
+    if (spaceIds.length === 0) return;
+    setHealthLoading(true);
+    try {
+      const res = await fetch("/api/genie-spaces/health-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spaceIds }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHealthScores((prev) => ({ ...prev, ...data }));
+      }
+    } catch {
+      // Health scores are non-critical
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
 
   const fetchSpaces = useCallback(async () => {
     try {
@@ -113,15 +141,14 @@ export default function GenieSpacesPage() {
       const merged = mergeSpaces(data.spaces ?? [], data.tracked ?? []);
       setSpaces(merged);
 
-      if (data.spaces?.[0]?.warehouse_id) {
-        // noop
-      }
+      const activeIds = merged.filter((s) => s.status !== "trashed").map((s) => s.spaceId);
+      fetchHealthScores(activeIds);
     } catch {
       toast.error("Failed to load Genie Spaces");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchHealthScores]);
 
   useEffect(() => {
     fetchSpaces();
@@ -221,6 +248,12 @@ export default function GenieSpacesPage() {
                     space={space}
                     databricksHost={databricksHost}
                     onTrash={() => setTrashTarget(space)}
+                    healthReport={healthScores[space.spaceId] ?? undefined}
+                    healthLoading={healthLoading}
+                    onHealthClick={() => {
+                      setHealthSheetTarget(space);
+                      setHealthSheetOpen(true);
+                    }}
                   />
                 ))}
               </div>
@@ -282,7 +315,47 @@ export default function GenieSpacesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Health detail sheet */}
+      <HealthDetailSheet
+        open={healthSheetOpen}
+        onOpenChange={setHealthSheetOpen}
+        spaceId={healthSheetTarget?.spaceId ?? ""}
+        spaceTitle={healthSheetTarget?.title ?? ""}
+        report={healthSheetTarget ? healthScores[healthSheetTarget.spaceId] ?? null : null}
+        loading={healthLoading}
+      />
     </div>
+  );
+}
+
+function HealthGradeBadge({
+  report,
+  loading,
+  onClick,
+}: {
+  report?: SpaceHealthReport;
+  loading?: boolean;
+  onClick?: () => void;
+}) {
+  if (loading) return <Skeleton className="size-7 rounded-full" />;
+  if (!report) return null;
+
+  const colorClass =
+    report.grade === "A" || report.grade === "B"
+      ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-400"
+      : report.grade === "C"
+        ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400"
+        : "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-400";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex size-7 items-center justify-center rounded-full border text-xs font-bold transition-transform hover:scale-110 ${colorClass}`}
+      title={`Health: ${report.grade} (${report.overallScore}/100)`}
+    >
+      {report.grade}
+    </button>
   );
 }
 
@@ -290,10 +363,16 @@ function SpaceCard({
   space,
   databricksHost,
   onTrash,
+  healthReport,
+  healthLoading,
+  onHealthClick,
 }: {
   space: SpaceCardData;
   databricksHost: string;
   onTrash?: () => void;
+  healthReport?: SpaceHealthReport;
+  healthLoading?: boolean;
+  onHealthClick?: () => void;
 }) {
   const isTrashed = space.status === "trashed";
   const genieUrl = databricksHost
@@ -301,7 +380,7 @@ function SpaceCard({
     : "";
 
   return (
-    <Card className={isTrashed ? "opacity-60" : undefined}>
+    <Card className={isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -312,7 +391,14 @@ function SpaceCard({
               </CardDescription>
             )}
           </div>
-          <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 flex-wrap items-center gap-1">
+            {!isTrashed && (
+              <HealthGradeBadge
+                report={healthReport}
+                loading={healthLoading}
+                onClick={onHealthClick}
+              />
+            )}
             <SourceBadge source={space.source} />
             {isTrashed && <Badge variant="outline" className="text-xs">Trashed</Badge>}
           </div>
@@ -353,6 +439,12 @@ function SpaceCard({
           )}
         </div>
 
+        {healthReport && !isTrashed && healthReport.fixableCount > 0 && (
+          <div className="text-xs text-amber-600">
+            {healthReport.fixableCount} fixable issue{healthReport.fixableCount !== 1 ? "s" : ""}
+          </div>
+        )}
+
         {space.updatedAt && (
           <p className="text-xs text-muted-foreground">
             {new Date(space.updatedAt).toLocaleDateString()}
@@ -366,6 +458,14 @@ function SpaceCard({
                 <ExternalLink className="mr-1.5 size-3" />
                 Open in Databricks
               </a>
+            </Button>
+          )}
+          {!isTrashed && (
+            <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+              <Link href={`/genie/${space.spaceId}/benchmarks`}>
+                <FlaskConical className="mr-1.5 size-3" />
+                Test
+              </Link>
             </Button>
           )}
           {space.runId && (

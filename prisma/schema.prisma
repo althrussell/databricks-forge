@@ -936,3 +936,47 @@ model ForgeFabricMigration {
   @@index([scanId])
   @@map("forge_fabric_migrations")
 }
+
+// ---------------------------------------------------------------------------
+// Genie Space Health Check & Benchmark Persistence
+// ---------------------------------------------------------------------------
+
+model ForgeSpaceBenchmarkRun {
+  id                  String   @id @default(uuid())
+  spaceId             String   @map("space_id")
+  runAt               DateTime @default(now()) @map("run_at")
+  totalQuestions      Int      @map("total_questions")
+  passedCount         Int      @map("passed_count")
+  failedCount         Int      @map("failed_count")
+  errorCount          Int      @default(0) @map("error_count")
+  resultsJson         String   @map("results_json")
+  feedbackJson        String?  @map("feedback_json")
+  improvementsApplied Boolean  @default(false) @map("improvements_applied")
+  improvementSummary  String?  @map("improvement_summary")
+
+  @@index([spaceId])
+  @@map("forge_space_benchmark_runs")
+}
+
+model ForgeSpaceHealthScore {
+  id          String   @id @default(uuid())
+  spaceId     String   @map("space_id")
+  score       Int
+  grade       String
+  checksJson  String   @map("checks_json")
+  triggeredBy String?  @map("triggered_by")
+  measuredAt  DateTime @default(now()) @map("measured_at")
+
+  @@index([spaceId])
+  @@map("forge_space_health_scores")
+}
+
+model ForgeHealthCheckConfig {
+  id                  String   @id @default("singleton")
+  overridesJson       String?  @map("overrides_json")
+  customChecksJson    String?  @map("custom_checks_json")
+  categoryWeightsJson String?  @map("category_weights_json")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("forge_health_check_config")
+}
