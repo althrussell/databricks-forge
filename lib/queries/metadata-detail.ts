@@ -479,14 +479,14 @@ export async function getTableTags(
   const safeCat = validateIdentifier(catalog, "catalog");
   try {
     let sql = `
-      SELECT table_catalog || '.' || table_schema || '.' || table_name AS table_fqn,
+      SELECT catalog_name || '.' || schema_name || '.' || table_name AS table_fqn,
              tag_name, tag_value
       FROM \`${safeCat}\`.information_schema.table_tags
-      WHERE table_schema NOT IN ('information_schema', 'default')
+      WHERE schema_name NOT IN ('information_schema', 'default')
     `;
     if (schema) {
       const safeSch = validateIdentifier(schema, "schema");
-      sql += ` AND table_schema = '${safeSch}'`;
+      sql += ` AND schema_name = '${safeSch}'`;
     }
 
     const result = await executeSQL(sql);
@@ -511,14 +511,14 @@ export async function getColumnTags(
   const safeCat = validateIdentifier(catalog, "catalog");
   try {
     let sql = `
-      SELECT table_catalog || '.' || table_schema || '.' || table_name AS table_fqn,
+      SELECT catalog_name || '.' || schema_name || '.' || table_name AS table_fqn,
              column_name, tag_name, tag_value
       FROM \`${safeCat}\`.information_schema.column_tags
-      WHERE table_schema NOT IN ('information_schema', 'default')
+      WHERE schema_name NOT IN ('information_schema', 'default')
     `;
     if (schema) {
       const safeSch = validateIdentifier(schema, "schema");
-      sql += ` AND table_schema = '${safeSch}'`;
+      sql += ` AND schema_name = '${safeSch}'`;
     }
 
     const result = await executeSQL(sql);
