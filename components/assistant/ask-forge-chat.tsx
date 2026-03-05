@@ -81,7 +81,7 @@ export interface AskForgeChatProps {
   /** Dynamic suggested questions shown on the empty state (falls back to defaults) */
   suggestedQuestions?: string[];
   /** Called when a SQL block should be opened in a dialog */
-  onOpenSql?: (sql: string) => void;
+  onOpenSql?: (sql: string, allBlocks?: string[]) => void;
   /** Called when a deploy-as-notebook action fires */
   onDeploySql?: (sql: string) => void;
   /** Called when a deploy-dashboard action fires (full payload from the action) */
@@ -307,10 +307,11 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     },
   }));
 
-  const handleAction = (action: ActionCardData) => {
+  const handleAction = (action: ActionCardData, msgSqlBlocks?: string[]) => {
     if (action.type === "run_sql" && action.payload.sql) {
+      const allBlocks = msgSqlBlocks && msgSqlBlocks.length > 0 ? msgSqlBlocks : [action.payload.sql as string];
       if (onOpenSql) {
-        onOpenSql(action.payload.sql as string);
+        onOpenSql(action.payload.sql as string, allBlocks);
       } else {
         setActiveSql(action.payload.sql as string);
         setDeploySql(null);
@@ -482,7 +483,14 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                           {msg.intent.intent} · {(msg.intent.confidence * 100).toFixed(0)}%
                         </Badge>
                       )}
-                      <AnswerStream content={msg.content} isStreaming={msg.isStreaming ?? false} />
+                      <AnswerStream
+                        content={msg.content}
+                        isStreaming={msg.isStreaming ?? false}
+                        onRunSql={onOpenSql ? (sql) => {
+                          const allBlocks = msg.sqlBlocks && msg.sqlBlocks.length > 0 ? msg.sqlBlocks : [sql];
+                          onOpenSql(sql, allBlocks);
+                        } : undefined}
+                      />
                     </>
                   )}
                 </div>
@@ -490,7 +498,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
               {msg.role === "assistant" && !msg.isStreaming && msg.actions && msg.actions.length > 0 && (
                 <div className="ml-8">
-                  <ActionCardList actions={msg.actions} onAction={handleAction} />
+                  <ActionCardList actions={msg.actions} onAction={(a) => handleAction(a, msg.sqlBlocks)} />
                 </div>
               )}
 

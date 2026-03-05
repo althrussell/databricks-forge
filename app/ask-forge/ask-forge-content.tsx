@@ -20,7 +20,7 @@ import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
 import { PanelRightClose, PanelRight, Target, Briefcase, Wrench } from "lucide-react";
 
 export default function AskForgeContent() {
-  const [activeSql, setActiveSql] = React.useState<string | null>(null);
+  const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(null);
   const [deploySql, setDeploySql] = React.useState<string | null>(null);
   const [dashboardPayload, setDashboardPayload] = React.useState<DashboardDeployPayload | null>(null);
   const [tableEnrichments, setTableEnrichments] = React.useState<TableEnrichmentData[]>([]);
@@ -268,8 +268,10 @@ export default function AskForgeContent() {
             sessionId={chatSessionId}
             initialMessages={initialMessages}
             suggestedQuestions={suggestedQuestions}
-            onOpenSql={(sql) => {
-              setActiveSql(sql);
+            onOpenSql={(sql, allBlocks) => {
+              const blocks = allBlocks && allBlocks.length > 0 ? allBlocks : [sql];
+              const index = blocks.indexOf(sql);
+              setActiveSql({ blocks, index: index >= 0 ? index : 0 });
               setDeploySql(null);
             }}
             onDeploySql={(sql) => {
@@ -317,7 +319,8 @@ export default function AskForgeContent() {
 
       <SqlDialog
         open={!!activeSql}
-        sql={activeSql ?? ""}
+        sqlBlocks={activeSql?.blocks ?? []}
+        initialIndex={activeSql?.index ?? 0}
         onOpenChange={(open) => { if (!open) setActiveSql(null); }}
         onRequestFix={() => {
           setActiveSql(null);

@@ -5,6 +5,11 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import type { TableEnrichmentData, SourceData } from "./ask-forge-chat";
 import {
   Database,
@@ -31,6 +36,7 @@ import {
   BarChart3,
   MessageSquare,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -127,6 +133,11 @@ export function AskForgeContextPanel({
 }: AskForgeContextPanelProps) {
   const [expandedTables, setExpandedTables] = React.useState<Set<string>>(new Set());
   const [showErdModal, setShowErdModal] = React.useState(false);
+  const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({
+    tables: true,
+    lineage: true,
+    sources: true,
+  });
 
   const hasContent = referencedTables.length > 0 || sources.length > 0 || enrichments.length > 0;
 
@@ -162,16 +173,14 @@ export function AskForgeContextPanel({
       <div className="min-w-0 space-y-5 p-4">
         {/* Referenced Tables */}
         {(tableFqns.length > 0 || loadingTables) && (
-          <section>
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Database className="size-4 text-primary" />
-              Referenced Tables
-              {tableFqns.length > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{tableFqns.length}</Badge>
-              )}
-              {loadingTables && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
-            </h3>
-
+          <CollapsibleSection
+            icon={<Database className="size-4 text-primary" />}
+            title="Referenced Tables"
+            count={tableFqns.length}
+            open={openSections.tables}
+            onToggle={() => setOpenSections((s) => ({ ...s, tables: !s.tables }))}
+            loading={loadingTables}
+          >
             <div className="mt-2 space-y-3">
               {loadingTables && tableFqns.length === 0 && (
                 <>
@@ -210,58 +219,74 @@ export function AskForgeContextPanel({
                 View ERD ({tableFqns.length} tables)
               </Button>
             )}
-          </section>
+          </CollapsibleSection>
         )}
 
         {/* Lineage Overview */}
-        {tableFqns.length > 0 && (
-          <section>
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <GitBranch className="size-4 text-primary" />
-              Lineage
-            </h3>
-            <div className="mt-2 space-y-1.5">
-              {tableFqns.map((fqn) => {
-                const detail = tableDetails.get(fqn);
-                const enrichment = enrichments.find((e) => e.tableFqn === fqn);
-                if (!detail && !enrichment) return null;
+        {tableFqns.length > 0 && (() => {
+          const lineageCount = tableFqns.filter((fqn) => {
+            const d = tableDetails.get(fqn);
+            const e = enrichments.find((en) => en.tableFqn === fqn);
+            if (!d && !e) return false;
+            const up = d ? d.lineage.upstream.length : (e?.upstreamTables?.length ?? 0);
+            const down = d ? d.lineage.downstream.length : (e?.downstreamTables?.length ?? 0);
+            return up > 0 || down > 0;
+          }).length;
 
-                const upstream = detail
-                  ? detail.lineage.upstream.map((l) => l.sourceTableFqn)
-                  : enrichment?.upstreamTables ?? [];
-                const downstream = detail
-                  ? detail.lineage.downstream.map((l) => l.targetTableFqn)
-                  : enrichment?.downstreamTables ?? [];
+          if (lineageCount === 0) return null;
 
-                if (upstream.length === 0 && downstream.length === 0) return null;
+          return (
+            <CollapsibleSection
+              icon={<GitBranch className="size-4 text-primary" />}
+              title="Lineage"
+              count={lineageCount}
+              open={openSections.lineage}
+              onToggle={() => setOpenSections((s) => ({ ...s, lineage: !s.lineage }))}
+            >
+              <div className="mt-2 space-y-1.5">
+                {tableFqns.map((fqn) => {
+                  const detail = tableDetails.get(fqn);
+                  const enrichment = enrichments.find((e) => e.tableFqn === fqn);
+                  if (!detail && !enrichment) return null;
 
-                return (
-                  <LineageSummary
-                    key={fqn}
-                    fqn={fqn}
-                    upstream={upstream}
-                    downstream={downstream}
-                  />
-                );
-              })}
-            </div>
-          </section>
-        )}
+                  const upstream = detail
+                    ? detail.lineage.upstream.map((l) => l.sourceTableFqn)
+                    : enrichment?.upstreamTables ?? [];
+                  const downstream = detail
+                    ? detail.lineage.downstream.map((l) => l.targetTableFqn)
+                    : enrichment?.downstreamTables ?? [];
+
+                  if (upstream.length === 0 && downstream.length === 0) return null;
+
+                  return (
+                    <LineageSummary
+                      key={fqn}
+                      fqn={fqn}
+                      upstream={upstream}
+                      downstream={downstream}
+                    />
+                  );
+                })}
+              </div>
+            </CollapsibleSection>
+          );
+        })()}
 
         {/* Sources */}
         {sources.length > 0 && (
-          <section>
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <FileSearch className="size-4 text-primary" />
-              Sources
-              <Badge variant="secondary" className="text-[10px]">{sources.length}</Badge>
-            </h3>
+          <CollapsibleSection
+            icon={<FileSearch className="size-4 text-primary" />}
+            title="Sources"
+            count={sources.length}
+            open={openSections.sources}
+            onToggle={() => setOpenSections((s) => ({ ...s, sources: !s.sources }))}
+          >
             <div className="mt-2 space-y-1.5">
               {sources.map((src) => (
                 <SourceRow key={`${src.kind}-${src.sourceId}-${src.index}`} source={src} />
               ))}
             </div>
-          </section>
+          </CollapsibleSection>
         )}
       </div>
 
@@ -511,6 +536,47 @@ function RichTableCard({
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function CollapsibleSection({
+  icon,
+  title,
+  count,
+  open,
+  onToggle,
+  children,
+  loading,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  loading?: boolean;
+}) {
+  return (
+    <Collapsible open={open} onOpenChange={onToggle}>
+      <CollapsibleTrigger asChild>
+        <button className="flex w-full items-center gap-2 text-sm font-semibold transition-colors hover:text-primary">
+          <ChevronRight
+            className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          />
+          {icon}
+          {title}
+          {count > 0 && (
+            <Badge variant="secondary" className="text-[10px]">
+              {count}
+            </Badge>
+          )}
+          {loading && (
+            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+          )}
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 function InsightRow({ insight }: { insight: { insightType: string; payloadJson: string; severity: string } }) {
   let summary = insight.insightType;
