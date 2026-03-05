@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -40,12 +41,14 @@ import {
   MessageSquare,
   Link2,
   FlaskConical,
+  RefreshCw,
 } from "lucide-react";
 import type {
   GenieSpaceResponse,
   TrackedGenieSpace,
 } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
+import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
 
 interface SpaceCardData {
@@ -102,33 +105,53 @@ function mergeSpaces(
 }
 
 export default function GenieSpacesPage() {
+  const router = useRouter();
   const [spaces, setSpaces] = useState<SpaceCardData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [discovering, setDiscovering] = useState(false);
   const [trashTarget, setTrashTarget] = useState<SpaceCardData | null>(null);
   const [trashing, setTrashing] = useState(false);
   const [databricksHost, setDatabricksHost] = useState("");
   const [healthScores, setHealthScores] = useState<Record<string, SpaceHealthReport | null>>({});
-  const [healthLoading, setHealthLoading] = useState(false);
   const [healthSheetOpen, setHealthSheetOpen] = useState(false);
   const [healthSheetTarget, setHealthSheetTarget] = useState<SpaceCardData | null>(null);
 
-  const fetchHealthScores = useCallback(async (spaceIds: string[]) => {
+  const runDiscovery = useCallback(async (spaceIds: string[]) => {
     if (spaceIds.length === 0) return;
-    setHealthLoading(true);
+    setDiscovering(true);
     try {
-      const res = await fetch("/api/genie-spaces/health-batch", {
+      const res = await fetch("/api/genie-spaces/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ spaceIds }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setHealthScores((prev) => ({ ...prev, ...data }));
+        const data: Record<string, { metadata: SpaceMetadata | null; healthReport: SpaceHealthReport | null }> = await res.json();
+
+        setSpaces((prev) =>
+          prev.map((s) => {
+            const disc = data[s.spaceId];
+            if (!disc?.metadata) return s;
+            return {
+              ...s,
+              tableCount: disc.metadata.tableCount,
+              measureCount: disc.metadata.measureCount,
+              sampleQuestionCount: disc.metadata.sampleQuestionCount,
+              filterCount: disc.metadata.filterCount,
+            };
+          }),
+        );
+
+        const reports: Record<string, SpaceHealthReport | null> = {};
+        for (const [id, result] of Object.entries(data)) {
+          reports[id] = result.healthReport;
+        }
+        setHealthScores((prev) => ({ ...prev, ...reports }));
       }
     } catch {
-      // Health scores are non-critical
+      // Discovery is non-critical
     } finally {
-      setHealthLoading(false);
+      setDiscovering(false);
     }
   }, []);
 
@@ -140,14 +163,18 @@ export default function GenieSpacesPage() {
       const merged = mergeSpaces(data.spaces ?? [], data.tracked ?? []);
       setSpaces(merged);
 
+      if ((data.staleCount ?? 0) > 0) {
+        toast.info(`${data.staleCount} space${data.staleCount !== 1 ? "s" : ""} no longer found in workspace`);
+      }
+
       const activeIds = merged.filter((s) => s.status !== "trashed").map((s) => s.spaceId);
-      fetchHealthScores(activeIds);
+      runDiscovery(activeIds);
     } catch {
       toast.error("Failed to load Genie Spaces");
     } finally {
       setLoading(false);
     }
-  }, [fetchHealthScores]);
+  }, [runDiscovery]);
 
   useEffect(() => {
     fetchSpaces();
@@ -161,6 +188,12 @@ export default function GenieSpacesPage() {
       })
       .catch(() => {});
   }, [fetchSpaces]);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setHealthScores({});
+    fetchSpaces();
+  };
 
   const handleTrash = async () => {
     if (!trashTarget) return;
@@ -195,6 +228,19 @@ export default function GenieSpacesPage() {
             Manage and deploy Databricks Genie Spaces for natural language SQL exploration.
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={loading || discovering}
+        >
+          {(loading || discovering) ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-2 size-4" />
+          )}
+          Refresh
+        </Button>
       </div>
 
       {loading ? (
@@ -247,8 +293,9 @@ export default function GenieSpacesPage() {
                     space={space}
                     databricksHost={databricksHost}
                     onTrash={() => setTrashTarget(space)}
+                    onCardClick={() => router.push(`/genie/${space.spaceId}`)}
                     healthReport={healthScores[space.spaceId] ?? undefined}
-                    healthLoading={healthLoading}
+                    healthLoading={discovering}
                     onHealthClick={() => {
                       setHealthSheetTarget(space);
                       setHealthSheetOpen(true);
@@ -315,14 +362,20 @@ export default function GenieSpacesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Health detail sheet */}
+      {/* Health detail sheet -- onFix navigates to detail page health tab */}
       <HealthDetailSheet
         open={healthSheetOpen}
         onOpenChange={setHealthSheetOpen}
         spaceId={healthSheetTarget?.spaceId ?? ""}
         spaceTitle={healthSheetTarget?.title ?? ""}
         report={healthSheetTarget ? healthScores[healthSheetTarget.spaceId] ?? null : null}
-        loading={healthLoading}
+        loading={discovering}
+        onFix={() => {
+          if (healthSheetTarget) {
+            setHealthSheetOpen(false);
+            router.push(`/genie/${healthSheetTarget.spaceId}?tab=health`);
+          }
+        }}
       />
     </div>
   );
@@ -349,7 +402,10 @@ function HealthGradeBadge({
 
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
       className={`flex size-7 items-center justify-center rounded-full border text-xs font-bold transition-transform hover:scale-110 ${colorClass}`}
       title={`Health: ${report.grade} (${report.overallScore}/100)`}
     >
@@ -362,6 +418,7 @@ function SpaceCard({
   space,
   databricksHost,
   onTrash,
+  onCardClick,
   healthReport,
   healthLoading,
   onHealthClick,
@@ -369,6 +426,7 @@ function SpaceCard({
   space: SpaceCardData;
   databricksHost: string;
   onTrash?: () => void;
+  onCardClick?: () => void;
   healthReport?: SpaceHealthReport;
   healthLoading?: boolean;
   onHealthClick?: () => void;
@@ -379,11 +437,14 @@ function SpaceCard({
     : "";
 
   return (
-    <Card className={isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"}>
+    <Card
+      className={`${isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"} ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
+      onClick={onCardClick}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <CardTitle className="truncate text-base">{space.title}</CardTitle>
+            <CardTitle className="line-clamp-2 text-base">{space.title}</CardTitle>
             {space.description && (
               <CardDescription className="mt-1 line-clamp-2 text-xs">
                 {space.description}
@@ -450,7 +511,7 @@ function SpaceCard({
           </p>
         )}
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
           {genieUrl && !isTrashed && (
             <Button size="sm" variant="outline" asChild className="h-7 text-xs">
               <a href={genieUrl} target="_blank" rel="noopener noreferrer">
@@ -477,7 +538,10 @@ function SpaceCard({
               size="sm"
               variant="ghost"
               className="ml-auto h-7 text-xs text-destructive hover:text-destructive"
-              onClick={onTrash}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTrash();
+              }}
             >
               <Trash2 className="size-3" />
             </Button>

@@ -2,7 +2,7 @@
  * Databricks Genie Spaces REST API client.
  *
  * Follows the same pattern as workspace.ts: uses getConfig() for host,
- * getAppHeaders() for auth, fetchWithTimeout with TIMEOUTS.WORKSPACE.
+ * getHeaders() (OBO) for read operations, fetchWithTimeout with TIMEOUTS.WORKSPACE.
  *
  * API docs: https://docs.databricks.com/api/workspace/genie
  */
@@ -35,7 +35,7 @@ export async function listGenieSpaces(
   if (pageToken) params.set("page_token", pageToken);
 
   const url = `${config.host}/api/2.0/genie/spaces?${params}`;
-  const headers = await getAppHeaders();
+  const headers = await getHeaders();
 
   const response = await fetchWithTimeout(
     url,
@@ -60,7 +60,7 @@ export async function getGenieSpace(
 ): Promise<GenieSpaceResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}?include_serialized_space=true`;
-  const headers = await getAppHeaders();
+  const headers = await getHeaders();
 
   const response = await fetchWithTimeout(
     url,

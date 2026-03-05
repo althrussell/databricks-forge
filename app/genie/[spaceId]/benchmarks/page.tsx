@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,7 @@ import {
   XCircle,
   Clock,
 } from "lucide-react";
+import { OptimizationReview } from "@/components/genie/optimization-review";
 import type { BenchmarkResult } from "@/lib/genie/benchmark-runner";
 
 interface BenchmarkQuestion {
@@ -58,8 +59,21 @@ interface HistoryEntry {
   hasFeedback: boolean;
 }
 
+interface ImproveResult {
+  updatedSerializedSpace: string;
+  changes: Array<{
+    section: string;
+    description: string;
+    added: number;
+    modified: number;
+  }>;
+  strategiesRun: string[];
+  originalSerializedSpace?: string;
+}
+
 export default function BenchmarkPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
+  const router = useRouter();
 
   const [questions, setQuestions] = useState<BenchmarkQuestion[]>([]);
   const [results, setResults] = useState<LabeledResult[]>([]);
@@ -71,6 +85,9 @@ export default function BenchmarkPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [improving, setImproving] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [improveResult, setImproveResult] = useState<ImproveResult | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -209,15 +226,7 @@ export default function BenchmarkPage() {
       const data = await res.json();
 
       if (data.updatedSerializedSpace) {
-        const applyRes = await fetch(`/api/genie-spaces/${spaceId}/apply`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ serializedSpace: data.updatedSerializedSpace }),
-        });
-
-        if (!applyRes.ok) throw new Error("Failed to apply improvements");
-        toast.success("Improvements applied! Re-run benchmarks to verify.");
-        fetchHistory();
+        setImproveResult(data as ImproveResult);
       } else {
         toast.info(data.message ?? "No improvements identified");
       }
@@ -228,15 +237,86 @@ export default function BenchmarkPage() {
     }
   };
 
+  const handleApply = async (serializedSpace: string) => {
+    setApplying(true);
+    try {
+      const res = await fetch(`/api/genie-spaces/${spaceId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serializedSpace }),
+      });
+      if (!res.ok) throw new Error("Failed to apply improvements");
+      toast.success("Improvements applied! Re-run benchmarks to verify.");
+      setImproveResult(null);
+      fetchHistory();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Apply failed");
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleCloneAndApply = async (serializedSpace: string) => {
+    setCloning(true);
+    try {
+      const cloneRes = await fetch(`/api/genie-spaces/${spaceId}/clone`, {
+        method: "POST",
+      });
+      if (!cloneRes.ok) throw new Error("Clone failed");
+      const { clonedSpaceId } = await cloneRes.json();
+
+      const applyRes = await fetch(`/api/genie-spaces/${clonedSpaceId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serializedSpace }),
+      });
+      if (!applyRes.ok) throw new Error("Apply to clone failed");
+
+      toast.success("Cloned and applied improvements");
+      setImproveResult(null);
+      router.push(`/genie/${clonedSpaceId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Clone and apply failed");
+    } finally {
+      setCloning(false);
+    }
+  };
+
   const passedCount = results.filter((r) => r.passed).length;
   const labeledIncorrect = results.filter((r) => r.isCorrect === false).length;
   const previousRun = history.length > 0 ? history[0] : null;
+
+  // Show optimization review when improve results are ready
+  if (improveResult) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setImproveResult(null)}>
+            <ArrowLeft className="mr-1 size-4" />
+            Back to Results
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">Review Improvements</h1>
+        </div>
+        <OptimizationReview
+          changes={improveResult.changes ?? []}
+          strategiesRun={improveResult.strategiesRun ?? []}
+          currentSerializedSpace={improveResult.originalSerializedSpace ?? "{}"}
+          updatedSerializedSpace={improveResult.updatedSerializedSpace}
+          onApply={handleApply}
+          onCloneAndApply={handleCloneAndApply}
+          onCancel={() => setImproveResult(null)}
+          applying={applying}
+          cloning={cloning}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/genie">
+          <Link href={`/genie/${spaceId}`}>
             <ArrowLeft className="mr-1 size-4" />
             Back
           </Link>
