@@ -46,7 +46,7 @@ export function normalizeTableName(
   name: string,
   existingNames: Set<string>
 ): string {
-  let base = normalizeIdentifier(name);
+  const base = normalizeIdentifier(name);
   let result = base;
   let suffix = 2;
   while (existingNames.has(result)) {

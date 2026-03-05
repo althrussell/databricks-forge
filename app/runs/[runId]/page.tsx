@@ -398,6 +398,49 @@ export default function RunDetailPage({
     return () => abortRef.current?.abort();
   }, [fetchRun]);
 
+  const [pbiDialogOpen, setPbiDialogOpen] = useState(false);
+  const [pbiScans, setPbiScans] = useState<Array<{ id: string; label: string }>>([]);
+  const [pbiSelectedScan, setPbiSelectedScan] = useState<string | null>(null);
+  const [pbiEnriching, setPbiEnriching] = useState(false);
+  const [pbiResult, setPbiResult] = useState<{ overlapCount: number; total: number } | null>(null);
+
+  const openPbiDialog = useCallback(async () => {
+    setPbiDialogOpen(true);
+    try {
+      const res = await fetch("/api/fabric/scan");
+      if (res.ok) {
+        const data = await res.json();
+        const completed = (data.scans ?? [])
+          .filter((s: { status: string }) => s.status === "completed")
+          .slice(0, 20)
+          .map((s: { id: string; datasetCount?: number; reportCount?: number; createdAt?: string }) => ({
+            id: s.id,
+            label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
+          }));
+        setPbiScans(completed);
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
+  const enrichWithPbi = useCallback(async () => {
+    if (!pbiSelectedScan) return;
+    setPbiEnriching(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/enrich-pbi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fabricScanId: pbiSelectedScan }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPbiResult({ overlapCount: data.overlapCount, total: data.totalUseCases });
+        setPbiDialogOpen(false);
+        fetchRun();
+      }
+    } catch { /* best-effort */ }
+    setPbiEnriching(false);
+  }, [pbiSelectedScan, runId, fetchRun]);
+
   useEffect(() => {
     const isActive = run?.status === "running" || run?.status === "pending";
     if (!isActive) return;
@@ -452,49 +495,7 @@ export default function RunDetailPage({
   const isActive = run.status === "running" || run.status === "pending";
   const domainStats = isCompleted ? computeDomainStats(useCases) : [];
 
-  const [pbiDialogOpen, setPbiDialogOpen] = useState(false);
-  const [pbiScans, setPbiScans] = useState<Array<{ id: string; label: string }>>([]);
-  const [pbiSelectedScan, setPbiSelectedScan] = useState<string | null>(null);
-  const [pbiEnriching, setPbiEnriching] = useState(false);
-  const [pbiResult, setPbiResult] = useState<{ overlapCount: number; total: number } | null>(null);
   const hasFabricTag = run.contextSources?.fabric?.scanId != null || run.config.fabricScanId != null;
-
-  const openPbiDialog = useCallback(async () => {
-    setPbiDialogOpen(true);
-    try {
-      const res = await fetch("/api/fabric/scan");
-      if (res.ok) {
-        const data = await res.json();
-        const completed = (data.scans ?? [])
-          .filter((s: { status: string }) => s.status === "completed")
-          .slice(0, 20)
-          .map((s: { id: string; datasetCount?: number; reportCount?: number; createdAt?: string }) => ({
-            id: s.id,
-            label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
-          }));
-        setPbiScans(completed);
-      }
-    } catch { /* best-effort */ }
-  }, []);
-
-  const enrichWithPbi = useCallback(async () => {
-    if (!pbiSelectedScan) return;
-    setPbiEnriching(true);
-    try {
-      const res = await fetch(`/api/runs/${runId}/enrich-pbi`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fabricScanId: pbiSelectedScan }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPbiResult({ overlapCount: data.overlapCount, total: data.totalUseCases });
-        setPbiDialogOpen(false);
-        fetchRun();
-      }
-    } catch { /* best-effort */ }
-    setPbiEnriching(false);
-  }, [pbiSelectedScan, runId, fetchRun]);
 
   // Compute coverage data for the summary card (only when industry is set)
   const industryOutcome = run.config.industry

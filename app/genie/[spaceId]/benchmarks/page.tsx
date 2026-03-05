@@ -229,7 +229,6 @@ export default function BenchmarkPage() {
   };
 
   const passedCount = results.filter((r) => r.passed).length;
-  const failedCount = results.filter((r) => !r.passed).length;
   const labeledIncorrect = results.filter((r) => r.isCorrect === false).length;
   const previousRun = history.length > 0 ? history[0] : null;
 

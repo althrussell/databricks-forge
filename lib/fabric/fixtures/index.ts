@@ -8,6 +8,6 @@
 
 export { MOCK_ADMIN_SCAN_RESULT, MOCK_WORKSPACES } from "./admin-scan-result";
 
-export function useFixtures(): boolean {
+export function shouldUseFixtures(): boolean {
   return process.env.FABRIC_USE_FIXTURES === "true";
 }

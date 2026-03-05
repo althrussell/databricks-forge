@@ -40,7 +40,6 @@ import {
   MessageSquare,
   Link2,
   FlaskConical,
-  Shield,
 } from "lucide-react";
 import type {
   GenieSpaceResponse,

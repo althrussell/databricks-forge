@@ -128,7 +128,7 @@ export async function runUsecaseGeneration(
   if (run.config.fabricScanId) {
     try {
       const { buildPbiContextForGeneration } = await import("@/lib/fabric/prompt-context");
-      pbiContext = await buildPbiContextForGeneration(run.config.fabricScanId, filteredTables);
+      pbiContext = await buildPbiContextForGeneration(run.config.fabricScanId);
     } catch {
       // PBI context is best-effort
     }

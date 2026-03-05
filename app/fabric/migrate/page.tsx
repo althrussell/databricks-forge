@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  XCircle,
   Loader2,
   Database,
   BarChart3,
@@ -35,7 +33,6 @@ import {
   Sparkles,
   Table2,
   AlertTriangle,
-  SkipForward,
   Code2,
   ShieldCheck,
   ShieldAlert,
@@ -287,7 +284,6 @@ export default function MigrationWizardPage() {
       {step === "genie" && migration && (
         <GenieStep
           spaces={migration.genieSpaces}
-          loading={loading}
           completed={migration.status === "completed"}
         />
       )}
@@ -582,11 +578,9 @@ function DashboardStep({
 
 function GenieStep({
   spaces,
-  loading,
   completed,
 }: {
   spaces: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
-  loading: boolean;
   completed: boolean;
 }) {
   return (

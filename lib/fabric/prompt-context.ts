@@ -18,7 +18,6 @@ const MAX_CONTEXT_CHARS = 8000;
  */
 export async function buildPbiContextForGeneration(
   scanId: string,
-  filteredTables: string[],
 ): Promise<string> {
   try {
     const detail = await getFabricScanDetail(scanId);
@@ -27,7 +26,7 @@ export async function buildPbiContextForGeneration(
       return "";
     }
 
-    return buildContextFromDetail(detail, filteredTables);
+    return buildContextFromDetail(detail);
   } catch (err) {
     logger.warn("[fabric/prompt-context] Failed to build PBI context", {
       scanId,
@@ -39,7 +38,6 @@ export async function buildPbiContextForGeneration(
 
 function buildContextFromDetail(
   detail: FabricScanDetail,
-  _filteredTables: string[],
 ): string {
   const sections: string[] = [];
 

@@ -42,7 +42,7 @@ import {
   parseWorkspaceDashboards,
 } from "./parser";
 import { setScanProgress } from "./scan-progress";
-import { useFixtures, MOCK_ADMIN_SCAN_RESULT, MOCK_WORKSPACES } from "./fixtures";
+import { shouldUseFixtures, MOCK_ADMIN_SCAN_RESULT, MOCK_WORKSPACES } from "./fixtures";
 import type { FabricWorkspace, FabricDataset, FabricReport, FabricArtifact, FabricScanDetail } from "./types";
 import { markConnectionScanned } from "@/lib/lakebase/connections";
 import type { ConnectionConfig } from "@/lib/connections/types";
@@ -87,7 +87,7 @@ async function runScanAsync(
   scanStartTime?: Date,
 ): Promise<void> {
   try {
-    if (useFixtures()) {
+    if (shouldUseFixtures()) {
       await runWithFixtures(scanId);
       return;
     }

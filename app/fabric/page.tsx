@@ -28,7 +28,6 @@ import {
   Layers,
   ChevronRight,
   Loader2,
-  Cable,
   AlertTriangle,
   CheckCircle2,
   Clock,

@@ -12,12 +12,12 @@
  */
 
 import { logger } from "@/lib/logger";
-import { proposeGoldSchema, type GoldSchemaProposal, type GoldTableProposal } from "./gold-proposer";
+import { proposeGoldSchema, type GoldTableProposal } from "./gold-proposer";
 import { translateDaxMeasures, type DaxTranslation } from "./dax-to-sql";
 import { getFabricScanDetail } from "@/lib/lakebase/fabric-scans";
 import { executeSQL } from "@/lib/dbx/sql";
 import { withPrisma } from "@/lib/prisma";
-import type { FabricScanDetail, FabricDataset } from "./types";
+import type { FabricDataset } from "./types";
 import type { NameMapping } from "./name-normalizer";
 
 // ---------------------------------------------------------------------------

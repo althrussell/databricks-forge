@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { runGoldSchemaStep } from "@/lib/fabric/migration-orchestrator";
-import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { withPrisma } from "@/lib/prisma";
 
 export async function GET() {
