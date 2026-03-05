@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Zap,
 } from "lucide-react";
 import type { ConnectionSummary } from "@/lib/connections/types";
 import type { FabricScanSummary, FabricScanProgress } from "@/lib/fabric/types";
@@ -90,7 +91,7 @@ export default function FabricHubPage() {
     return () => clearInterval(interval);
   }, [activeScanProgress, fetchData]);
 
-  const handleScan = async () => {
+  const handleScan = async (incremental?: boolean) => {
     if (!selectedConnectionId) {
       toast.error("Select a connection first");
       return;
@@ -100,7 +101,7 @@ export default function FabricHubPage() {
       const res = await fetch("/api/fabric/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId: selectedConnectionId }),
+        body: JSON.stringify({ connectionId: selectedConnectionId, incremental }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -108,7 +109,7 @@ export default function FabricHubPage() {
       }
       const { scanId } = await res.json();
       setActiveScanProgress({ scanId, status: "scanning", message: "Starting...", percent: 5, phase: "init" });
-      toast.success("Scan started");
+      toast.success(incremental ? "Incremental scan started" : "Full scan started");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start scan");
     } finally {
@@ -163,10 +164,23 @@ export default function FabricHubPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleScan} disabled={!selectedConnectionId || scanning}>
+              <Button onClick={() => handleScan(false)} disabled={!selectedConnectionId || scanning}>
                 {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scan className="h-4 w-4 mr-2" />}
-                Start Scan
+                Full Scan
               </Button>
+              {(() => {
+                const conn = connections.find((c) => c.id === selectedConnectionId);
+                return conn?.accessLevel === "admin" && conn.lastScanCompletedAt ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => handleScan(true)}
+                    disabled={!selectedConnectionId || scanning}
+                  >
+                    {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+                    Quick Scan (changes only)
+                  </Button>
+                ) : null;
+              })()}
             </div>
           )}
         </CardContent>
@@ -206,6 +220,9 @@ export default function FabricHubPage() {
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
                           <Icon className={`h-4 w-4 ${cfg.color} ${scan.status === "scanning" ? "animate-spin" : ""}`} />
                           {cfg.label}
+                          {scan.scanMode === "incremental" && (
+                            <Badge variant="secondary" className="text-[10px]">Incremental</Badge>
+                          )}
                         </CardTitle>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>

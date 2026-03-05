@@ -54,16 +54,18 @@ interface ConversationTurn {
 }
 
 const INTENT_SCOPES: Record<AssistantIntent, Array<{
-  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | undefined;
+  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | "fabric" | undefined;
   topK: number;
   minScore: number;
   useLatestRun?: boolean;
   useLatestScan?: boolean;
+  useLatestFabricScan?: boolean;
 }>> = {
   business: [
     { scope: "usecases", topK: 10, minScore: 0.4, useLatestRun: true },
     { scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true },
     { scope: "benchmarks", topK: 6, minScore: 0.35 },
+    { scope: "fabric", topK: 8, minScore: 0.35, useLatestFabricScan: true },
   ],
   technical: [
     { scope: "estate", topK: 15, minScore: 0.4, useLatestScan: true },
@@ -72,16 +74,19 @@ const INTENT_SCOPES: Record<AssistantIntent, Array<{
   dashboard: [
     { scope: "insights", topK: 10, minScore: 0.4, useLatestScan: true },
     { scope: "usecases", topK: 8, minScore: 0.4, useLatestRun: true },
+    { scope: "fabric", topK: 8, minScore: 0.35, useLatestFabricScan: true },
   ],
   navigation: [
     { scope: "estate", topK: 10, minScore: 0.35, useLatestScan: true },
     { scope: "usecases", topK: 8, minScore: 0.35, useLatestRun: true },
     { scope: "documents", topK: 5, minScore: 0.35 },
+    { scope: "fabric", topK: 6, minScore: 0.35, useLatestFabricScan: true },
   ],
   exploration: [
     { scope: "estate", topK: 10, minScore: 0.35, useLatestScan: true },
     { scope: "usecases", topK: 8, minScore: 0.35, useLatestRun: true },
     { scope: "documents", topK: 5, minScore: 0.35 },
+    { scope: "fabric", topK: 6, minScore: 0.35, useLatestFabricScan: true },
   ],
 };
 
@@ -89,14 +94,16 @@ interface DirectContextResult {
   text: string | null;
   latestRunId: string | null;
   latestScanId: string | null;
+  latestFabricScanId: string | null;
 }
 
 interface RetrievalPlan {
-  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | undefined;
+  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | "fabric" | undefined;
   topK: number;
   minScore: number;
   useLatestRun?: boolean;
   useLatestScan?: boolean;
+  useLatestFabricScan?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +132,7 @@ export async function buildAssistantContext(
     const plans = isBenchmarksEnabled()
       ? allPlans
       : allPlans.filter((p) => p.scope !== "benchmarks");
-    chunks = await retrieveWithFallback(question, plans, directContext.latestRunId, directContext.latestScanId);
+    chunks = await retrieveWithFallback(question, plans, directContext.latestRunId, directContext.latestScanId, directContext.latestFabricScanId);
 
     ragContext = formatRetrievedContext(chunks, 12000);
 
@@ -341,15 +348,31 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         sections.push(parts.join("\n"));
       }
 
+      // 4. Latest Fabric scan for PBI context retrieval
+      let latestFabricScanId: string | null = null;
+      try {
+        const latestFabricScan = await prisma.forgeFabricScan.findFirst({
+          where: { status: "completed" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+        if (latestFabricScan) {
+          latestFabricScanId = latestFabricScan.id;
+        }
+      } catch {
+        // Fabric tables may not exist yet
+      }
+
       return {
         text: sections.length === 0 ? null : sections.join("\n\n---\n\n"),
         latestRunId,
         latestScanId,
+        latestFabricScanId,
       };
     });
   } catch (err) {
     logger.warn("[assistant/context] Failed to fetch direct Lakebase context", { error: String(err) });
-    return { text: null, latestRunId: null, latestScanId: null };
+    return { text: null, latestRunId: null, latestScanId: null, latestFabricScanId: null };
   }
 }
 
@@ -437,19 +460,20 @@ async function retrieveWithFallback(
   plans: RetrievalPlan[],
   latestRunId: string | null,
   latestScanId: string | null,
+  latestFabricScanId: string | null,
 ): Promise<RetrievedChunk[]> {
-  const strict = await retrieveForPlans(question, plans, latestRunId, latestScanId, false);
+  const strict = await retrieveForPlans(question, plans, latestRunId, latestScanId, latestFabricScanId, false);
   if (strict.length > 0) {
     return strict;
   }
 
-  const hasStrictFilters = plans.some((plan) => plan.useLatestRun || plan.useLatestScan);
+  const hasStrictFilters = plans.some((plan) => plan.useLatestRun || plan.useLatestScan || plan.useLatestFabricScan);
   if (!hasStrictFilters) {
     return strict;
   }
 
   logger.info("[assistant/context] Strict retrieval returned no chunks, retrying relaxed filters");
-  return retrieveForPlans(question, plans, latestRunId, latestScanId, true);
+  return retrieveForPlans(question, plans, latestRunId, latestScanId, latestFabricScanId, true);
 }
 
 async function retrieveForPlans(
@@ -457,19 +481,28 @@ async function retrieveForPlans(
   plans: RetrievalPlan[],
   latestRunId: string | null,
   latestScanId: string | null,
+  latestFabricScanId: string | null,
   relaxed: boolean,
 ): Promise<RetrievedChunk[]> {
   const retrievals = await Promise.all(
-    plans.map((plan) =>
-      retrieveContext(question, {
+    plans.map((plan) => {
+      let scanId: string | undefined;
+      if (!relaxed) {
+        if (plan.useLatestFabricScan && latestFabricScanId) {
+          scanId = latestFabricScanId;
+        } else if (plan.useLatestScan && latestScanId) {
+          scanId = latestScanId;
+        }
+      }
+      return retrieveContext(question, {
         scope: plan.scope,
         topK: plan.topK,
         minScore: relaxed ? Math.max(0.25, plan.minScore - 0.1) : plan.minScore,
         enforceSourcePriority: true,
         runId: !relaxed && plan.useLatestRun ? latestRunId ?? undefined : undefined,
-        scanId: !relaxed && plan.useLatestScan ? latestScanId ?? undefined : undefined,
-      }),
-    ),
+        scanId,
+      });
+    }),
   );
 
   const deduped = new Map<string, RetrievedChunk>();

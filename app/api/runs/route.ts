@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       depthConfig: body.depthConfig ?? DEFAULT_DEPTH_CONFIGS[(body.discoveryDepth ?? "balanced") as DiscoveryDepth],
       estateScanEnabled: body.estateScanEnabled ?? false,
       assetDiscoveryEnabled: body.assetDiscoveryEnabled ?? false,
+      fabricScanId: body.fabricScanId ?? null,
     };
 
     const userEmail = await getCurrentUserEmail();

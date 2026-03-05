@@ -18,6 +18,7 @@ export interface ConnectionConfig {
   createdAt: string;
   updatedAt: string;
   lastTestedAt: string | null;
+  lastScanCompletedAt: string | null;
   workspaceFilter?: string[];
 }
 
@@ -31,6 +32,7 @@ export interface ConnectionSummary {
   createdBy: string | null;
   createdAt: string;
   lastTestedAt: string | null;
+  lastScanCompletedAt: string | null;
 }
 
 export interface CreateConnectionInput {

@@ -15,6 +15,7 @@ export interface FabricScanSummary {
   reportCount: number;
   measureCount: number;
   artifactCount: number;
+  scanMode: "full" | "incremental";
   errorMessage: string | null;
   createdBy: string | null;
   createdAt: string;

@@ -11,7 +11,7 @@ import {
   getConnectionSecret,
   markConnectionTested,
 } from "@/lib/lakebase/connections";
-import { acquireToken, listWorkspaces } from "@/lib/fabric/client";
+import { acquireToken, listWorkspacesWithToken } from "@/lib/fabric/client";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -36,10 +36,10 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     }
 
     const token = await acquireToken(secret.tenantId, secret.clientId, secret.clientSecret);
-    const workspaces = await listWorkspaces(
+    const workspaces = await listWorkspacesWithToken(
       token,
       conn.accessLevel as "admin" | "workspace",
-      conn.workspaceFilter
+      conn.workspaceFilter,
     );
 
     await markConnectionTested(id);

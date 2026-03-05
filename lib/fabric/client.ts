@@ -5,25 +5,36 @@
  *   - Admin Scanner: full tenant scan via /admin/workspaces/* APIs
  *   - Per-Workspace: standard /v1.0/myorg/groups/* APIs (no admin needed)
  *
- * All functions are stateless and accept a bearer token obtained via
- * acquireToken(). The calling code is responsible for token lifecycle.
+ * Token lifecycle is managed by token-manager.ts. Every request function
+ * accepts a `connectionId` and resolves a valid token transparently.
+ *
+ * HTTP helpers include:
+ *   - Single-retry on 401 (invalidate + re-acquire token)
+ *   - Exponential backoff on 429 with Retry-After support
+ *   - OData pagination via pbiGetPaginated()
  */
 
 import { logger } from "@/lib/logger";
+import { getToken, invalidateToken } from "./token-manager";
 
 const PBI_API_BASE = "https://api.powerbi.com/v1.0/myorg";
+
+const MAX_429_RETRIES = 3;
+const BASE_BACKOFF_MS = 2_000;
+
+// ---------------------------------------------------------------------------
+// Legacy token acquisition (kept for connection-test route which has no
+// connectionId context yet — it uses raw credentials directly)
+// ---------------------------------------------------------------------------
+
 const ENTRA_TOKEN_URL = (tenantId: string) =>
   `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 const PBI_SCOPE = "https://analysis.windows.net/powerbi/api/.default";
 
-// ---------------------------------------------------------------------------
-// Token acquisition
-// ---------------------------------------------------------------------------
-
 export async function acquireToken(
   tenantId: string,
   clientId: string,
-  clientSecret: string
+  clientSecret: string,
 ): Promise<string> {
   const body = new URLSearchParams({
     grant_type: "client_credentials",
@@ -44,11 +55,122 @@ export async function acquireToken(
       status: res.status,
       body: text.slice(0, 500),
     });
-    throw new Error(`Entra ID token acquisition failed (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `Entra ID token acquisition failed (${res.status}): ${text.slice(0, 200)}`,
+    );
   }
 
   const data = (await res.json()) as { access_token: string };
   return data.access_token;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helpers with retry (401 + 429)
+// ---------------------------------------------------------------------------
+
+async function pbiGet(
+  url: string,
+  connectionId: string,
+): Promise<unknown> {
+  return pbiRequest(url, connectionId, "GET");
+}
+
+async function pbiPost(
+  url: string,
+  connectionId: string,
+  body: unknown,
+): Promise<unknown> {
+  return pbiRequest(url, connectionId, "POST", body);
+}
+
+async function pbiRequest(
+  url: string,
+  connectionId: string,
+  method: "GET" | "POST",
+  body?: unknown,
+): Promise<unknown> {
+  let token = await getToken(connectionId);
+
+  for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (method === "POST") headers["Content-Type"] = "application/json";
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    if (res.ok) return res.json();
+
+    if (res.status === 401 && attempt === 0) {
+      logger.warn("[fabric] 401 received — refreshing token", { url });
+      invalidateToken(connectionId);
+      token = await getToken(connectionId);
+      continue;
+    }
+
+    if (res.status === 429) {
+      const retryAfter = parseRetryAfter(res.headers.get("Retry-After"));
+      const delay = retryAfter ?? BASE_BACKOFF_MS * Math.pow(2, attempt);
+      logger.warn("[fabric] 429 rate-limited — backing off", {
+        url,
+        attempt,
+        delayMs: delay,
+      });
+      await sleep(delay);
+      continue;
+    }
+
+    const text = await res.text();
+    logger.error("[fabric] API request failed", {
+      url,
+      status: res.status,
+      body: text.slice(0, 500),
+    });
+    throw new Error(
+      `Power BI API error (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+
+  throw new Error(`Power BI API: max retries exceeded for ${url}`);
+}
+
+/**
+ * Follows OData `@odata.nextLink` pagination, collecting all `value` arrays.
+ */
+async function pbiGetPaginated<T>(
+  url: string,
+  connectionId: string,
+): Promise<T[]> {
+  const all: T[] = [];
+  let next: string | null = url;
+
+  while (next) {
+    const data = (await pbiGet(next, connectionId)) as {
+      value: T[];
+      "@odata.nextLink"?: string;
+    };
+    all.push(...(data.value ?? []));
+    next = data["@odata.nextLink"] ?? null;
+  }
+
+  return all;
+}
+
+function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 // ---------------------------------------------------------------------------
@@ -63,38 +185,42 @@ export interface FabricWorkspaceSummary {
 }
 
 export async function listWorkspaces(
-  token: string,
+  connectionId: string,
   accessLevel: "admin" | "workspace",
-  workspaceFilter?: string[]
+  workspaceFilter?: string[],
 ): Promise<FabricWorkspaceSummary[]> {
   if (accessLevel === "admin") {
-    return listWorkspacesAdmin(token);
+    return listWorkspacesAdmin(connectionId);
   }
-  return listWorkspacesStandard(token, workspaceFilter);
+  return listWorkspacesStandard(connectionId, workspaceFilter);
 }
 
-async function listWorkspacesAdmin(token: string): Promise<FabricWorkspaceSummary[]> {
-  const all: FabricWorkspaceSummary[] = [];
-  let url: string | null = `${PBI_API_BASE}/admin/groups?$top=5000`;
-
-  while (url) {
-    const res = await pbiGet(url, token);
-    const data = res as { value: Array<{ id: string; name: string; state: string; type: string }>; "@odata.nextLink"?: string };
-    for (const g of data.value ?? []) {
-      all.push({ id: g.id, name: g.name, state: g.state, type: g.type });
-    }
-    url = data["@odata.nextLink"] ?? null;
-  }
-  return all;
+async function listWorkspacesAdmin(
+  connectionId: string,
+): Promise<FabricWorkspaceSummary[]> {
+  type WsRow = { id: string; name: string; state: string; type: string };
+  const rows = await pbiGetPaginated<WsRow>(
+    `${PBI_API_BASE}/admin/groups?$top=5000`,
+    connectionId,
+  );
+  return rows.map((g) => ({
+    id: g.id,
+    name: g.name,
+    state: g.state,
+    type: g.type,
+  }));
 }
 
 async function listWorkspacesStandard(
-  token: string,
-  filter?: string[]
+  connectionId: string,
+  filter?: string[],
 ): Promise<FabricWorkspaceSummary[]> {
-  const res = await pbiGet(`${PBI_API_BASE}/groups`, token);
-  const data = res as { value: Array<{ id: string; name: string; state: string; type: string }> };
-  let workspaces = (data.value ?? []).map((g) => ({
+  type WsRow = { id: string; name: string; state: string; type: string };
+  const rows = await pbiGetPaginated<WsRow>(
+    `${PBI_API_BASE}/groups`,
+    connectionId,
+  );
+  let workspaces = rows.map((g) => ({
     id: g.id,
     name: g.name,
     state: g.state,
@@ -105,6 +231,27 @@ async function listWorkspacesStandard(
     workspaces = workspaces.filter((w) => filterSet.has(w.id));
   }
   return workspaces;
+}
+
+// ---------------------------------------------------------------------------
+// Modified workspaces (incremental scan)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns workspace IDs modified since the given timestamp.
+ * Only available on the admin path; per-workspace connections
+ * skip this and always do full scans.
+ */
+export async function getModifiedWorkspaces(
+  connectionId: string,
+  modifiedSince: Date,
+): Promise<string[]> {
+  const iso = modifiedSince.toISOString();
+  const data = (await pbiGet(
+    `${PBI_API_BASE}/admin/workspaces/modified?modifiedSince=${encodeURIComponent(iso)}`,
+    connectionId,
+  )) as Array<{ id: string }>;
+  return (data ?? []).map((w) => w.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -128,9 +275,9 @@ const DEFAULT_SCAN_OPTIONS: ScanOptions = {
 };
 
 export async function startAdminScan(
-  token: string,
+  connectionId: string,
   workspaceIds: string[],
-  options: ScanOptions = DEFAULT_SCAN_OPTIONS
+  options: ScanOptions = DEFAULT_SCAN_OPTIONS,
 ): Promise<{ scanId: string }> {
   const params = new URLSearchParams();
   if (options.datasetSchema) params.set("datasetSchema", "true");
@@ -140,45 +287,34 @@ export async function startAdminScan(
   if (options.getArtifactUsers) params.set("getArtifactUsers", "true");
 
   const url = `${PBI_API_BASE}/admin/workspaces/getInfo?${params.toString()}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ workspaces: workspaceIds.map((id) => ({ id })) }),
-  });
+  const data = (await pbiPost(url, connectionId, {
+    workspaces: workspaceIds.map((id) => ({ id })),
+  })) as { id: string };
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`PostWorkspaceInfo failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = (await res.json()) as { id: string };
   return { scanId: data.id };
 }
 
 export type ScanStatus = "NotStarted" | "Running" | "Succeeded" | "Failed";
 
 export async function getScanStatus(
-  token: string,
-  scanId: string
+  connectionId: string,
+  scanId: string,
 ): Promise<{ status: ScanStatus; error?: string }> {
   const data = (await pbiGet(
     `${PBI_API_BASE}/admin/workspaces/scanStatus/${scanId}`,
-    token
+    connectionId,
   )) as { status: ScanStatus; error?: string };
   return { status: data.status, error: data.error };
 }
 
 export async function getScanResult(
-  token: string,
-  scanId: string
+  connectionId: string,
+  scanId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<Record<string, any>> {
   return pbiGet(
     `${PBI_API_BASE}/admin/workspaces/scanResult/${scanId}`,
-    token
+    connectionId,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ) as Promise<Record<string, any>>;
 }
@@ -188,60 +324,86 @@ export async function getScanResult(
 // ---------------------------------------------------------------------------
 
 export async function getWorkspaceDatasets(
-  token: string,
-  groupId: string
+  connectionId: string,
+  groupId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  const data = (await pbiGet(
+  return pbiGetPaginated(
     `${PBI_API_BASE}/groups/${groupId}/datasets`,
-    token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  )) as { value: any[] };
-  return data.value ?? [];
+    connectionId,
+  );
 }
 
 export async function getWorkspaceReports(
-  token: string,
-  groupId: string
+  connectionId: string,
+  groupId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  const data = (await pbiGet(
+  return pbiGetPaginated(
     `${PBI_API_BASE}/groups/${groupId}/reports`,
-    token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  )) as { value: any[] };
-  return data.value ?? [];
+    connectionId,
+  );
 }
 
 export async function getWorkspaceDashboards(
-  token: string,
-  groupId: string
+  connectionId: string,
+  groupId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  const data = (await pbiGet(
+  return pbiGetPaginated(
     `${PBI_API_BASE}/groups/${groupId}/dashboards`,
-    token
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  )) as { value: any[] };
-  return data.value ?? [];
+    connectionId,
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Token-free overloads for connection test (raw credentials, no connectionId)
 // ---------------------------------------------------------------------------
 
-async function pbiGet(url: string, token: string): Promise<unknown> {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    logger.error("[fabric] API request failed", {
-      url,
-      status: res.status,
-      body: text.slice(0, 500),
+/**
+ * List workspaces using a raw bearer token (for the connection-test route
+ * which doesn't yet have a persisted connectionId context).
+ */
+export async function listWorkspacesWithToken(
+  token: string,
+  accessLevel: "admin" | "workspace",
+  workspaceFilter?: string[],
+): Promise<FabricWorkspaceSummary[]> {
+  type WsRow = { id: string; name: string; state: string; type: string };
+  const url =
+    accessLevel === "admin"
+      ? `${PBI_API_BASE}/admin/groups?$top=5000`
+      : `${PBI_API_BASE}/groups`;
+
+  const all: WsRow[] = [];
+  let next: string | null = url;
+  while (next) {
+    const res = await fetch(next, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    throw new Error(`Power BI API error (${res.status}): ${text.slice(0, 200)}`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(
+        `Power BI API error (${res.status}): ${text.slice(0, 200)}`,
+      );
+    }
+    const data = (await res.json()) as {
+      value: WsRow[];
+      "@odata.nextLink"?: string;
+    };
+    all.push(...(data.value ?? []));
+    next = data["@odata.nextLink"] ?? null;
   }
-  return res.json();
+
+  let workspaces = all.map((g) => ({
+    id: g.id,
+    name: g.name,
+    state: g.state,
+    type: g.type,
+  }));
+  if (workspaceFilter?.length) {
+    const filterSet = new Set(workspaceFilter);
+    workspaces = workspaces.filter((w) => filterSet.has(w.id));
+  }
+  return workspaces;
 }

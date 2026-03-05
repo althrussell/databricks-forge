@@ -71,7 +71,15 @@ import {
   BookOpen,
   FileText,
   Square,
+  Zap,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -444,6 +452,50 @@ export default function RunDetailPage({
   const isActive = run.status === "running" || run.status === "pending";
   const domainStats = isCompleted ? computeDomainStats(useCases) : [];
 
+  const [pbiDialogOpen, setPbiDialogOpen] = useState(false);
+  const [pbiScans, setPbiScans] = useState<Array<{ id: string; label: string }>>([]);
+  const [pbiSelectedScan, setPbiSelectedScan] = useState<string | null>(null);
+  const [pbiEnriching, setPbiEnriching] = useState(false);
+  const [pbiResult, setPbiResult] = useState<{ overlapCount: number; total: number } | null>(null);
+  const hasFabricTag = run.contextSources?.fabric?.scanId != null || run.config.fabricScanId != null;
+
+  const openPbiDialog = useCallback(async () => {
+    setPbiDialogOpen(true);
+    try {
+      const res = await fetch("/api/fabric/scan");
+      if (res.ok) {
+        const data = await res.json();
+        const completed = (data.scans ?? [])
+          .filter((s: { status: string }) => s.status === "completed")
+          .slice(0, 20)
+          .map((s: { id: string; datasetCount?: number; reportCount?: number; createdAt?: string }) => ({
+            id: s.id,
+            label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
+          }));
+        setPbiScans(completed);
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
+  const enrichWithPbi = useCallback(async () => {
+    if (!pbiSelectedScan) return;
+    setPbiEnriching(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/enrich-pbi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fabricScanId: pbiSelectedScan }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPbiResult({ overlapCount: data.overlapCount, total: data.totalUseCases });
+        setPbiDialogOpen(false);
+        fetchRun();
+      }
+    } catch { /* best-effort */ }
+    setPbiEnriching(false);
+  }, [pbiSelectedScan, runId, fetchRun]);
+
   // Compute coverage data for the summary card (only when industry is set)
   const industryOutcome = run.config.industry
     ? getIndustryOutcome(run.config.industry)
@@ -522,6 +574,12 @@ export default function RunDetailPage({
                   Compare
                 </Link>
               </Button>
+              {!hasFabricTag && (
+                <Button variant="outline" size="sm" onClick={openPbiDialog}>
+                  <Zap className="mr-1.5 h-3.5 w-3.5 text-violet-500" />
+                  Enrich with PBI
+                </Button>
+              )}
             </>
           )}
           <Button variant="ghost" size="sm" asChild>
@@ -1086,6 +1144,22 @@ export default function RunDetailPage({
                               </p>
                             )}
                           </div>
+
+                          {/* Fabric / Power BI */}
+                          {run.contextSources.fabric?.scanId && (
+                            <div className="rounded-md border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-800 dark:bg-violet-950/20">
+                              <div className="flex items-center gap-1.5">
+                                <Zap className="h-3.5 w-3.5 text-violet-500" />
+                                <p className="text-xs font-semibold">Power BI / Fabric</p>
+                              </div>
+                              <p className="mt-1 text-sm">
+                                {run.contextSources.fabric.datasetCount} datasets, {run.contextSources.fabric.measureCount} measures, {run.contextSources.fabric.reportCount} reports
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Scan: {run.contextSources.fabric.scanId.slice(0, 8)}...
+                              </p>
+                            </div>
+                          )}
                         </div>
                         {run.contextSources.steps.length > 0 && (
                           <p className="mt-2 text-xs text-muted-foreground">
@@ -1341,6 +1415,78 @@ export default function RunDetailPage({
           </CardContent>
         </Card>
       )}
+
+      {/* PBI Enrichment Result Banner */}
+      {pbiResult && (
+        <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
+          <CardContent className="flex items-center gap-3 py-3">
+            <Zap className="h-5 w-5 text-violet-500" />
+            <div>
+              <p className="text-sm font-medium">Power BI enrichment complete</p>
+              <p className="text-xs text-muted-foreground">
+                {pbiResult.overlapCount} of {pbiResult.total} use cases overlap with PBI assets
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setPbiResult(null)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PBI Scan Selector Dialog */}
+      <Dialog open={pbiDialogOpen} onOpenChange={setPbiDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-violet-500" />
+              Enrich with Power BI Scan
+            </DialogTitle>
+            <DialogDescription>
+              Select a completed Fabric scan to analyse PBI overlap with this run&apos;s use cases.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {pbiScans.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No completed Fabric scans found. Run a scan from the Fabric Hub first.</p>
+            ) : (
+              <Select
+                value={pbiSelectedScan ?? "__none__"}
+                onValueChange={(v) => setPbiSelectedScan(v === "__none__" ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a scan..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__" disabled>Select a scan...</SelectItem>
+                  {pbiScans.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPbiDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={!pbiSelectedScan || pbiEnriching}
+                onClick={enrichWithPbi}
+              >
+                {pbiEnriching ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Enriching...
+                  </>
+                ) : (
+                  "Enrich"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

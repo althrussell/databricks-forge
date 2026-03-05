@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await ensureMigrated();
-    const body = (await request.json()) as { connectionId: string };
+    const body = (await request.json()) as { connectionId: string; incremental?: boolean };
 
     if (!body.connectionId) {
       return NextResponse.json(
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userEmail = await getCurrentUserEmail();
-    const scanId = await runFabricScan(conn, userEmail);
+    const scanId = await runFabricScan(conn, userEmail, body.incremental);
     return NextResponse.json({ scanId }, { status: 201 });
   } catch (err) {
     return NextResponse.json(

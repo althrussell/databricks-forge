@@ -30,7 +30,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine, ChevronDown, Search } from "lucide-react";
+import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine, ChevronDown, Search, Zap } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
@@ -145,6 +145,25 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
   const ucMetadata = manualMode
     ? manualInput.trim()
     : selectedSources.join(", ");
+  const [fabricScanId, setFabricScanId] = useState<string | null>(null);
+  const [fabricScans, setFabricScans] = useState<Array<{ id: string; label: string }>>([]);
+
+  useEffect(() => {
+    fetch("/api/fabric/scan")
+      .then((res) => (res.ok ? res.json() : { scans: [] }))
+      .then((data) => {
+        const completed = (data.scans ?? [])
+          .filter((s: { status: string }) => s.status === "completed")
+          .slice(0, 20)
+          .map((s: { id: string; datasetCount?: number; reportCount?: number; createdAt?: string }) => ({
+            id: s.id,
+            label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
+          }));
+        setFabricScans(completed);
+      })
+      .catch(() => {});
+  }, []);
+
   const [selectedPriorities, setSelectedPriorities] = useState<
     BusinessPriority[]
   >(["Increase Revenue"]);
@@ -239,6 +258,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
           depthConfig: appSettings.discoveryDepthConfigs[discoveryDepth],
           estateScanEnabled,
           assetDiscoveryEnabled,
+          ...(fabricScanId ? { fabricScanId } : {}),
         }),
       });
 
@@ -731,6 +751,42 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
               />
             </button>
           </div>
+
+          {fabricScans.length > 0 && (
+          <div
+            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+              fabricScanId
+                ? "border-violet-500/50 bg-violet-500/5"
+                : "border-muted"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <Zap className={`mt-0.5 h-4 w-4 shrink-0 ${fabricScanId ? "text-violet-500" : "text-muted-foreground"}`} />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Link Power BI Scan</p>
+                <p className="text-xs text-muted-foreground">
+                  Use case generation will be aware of your PBI estate and propose replacements
+                </p>
+                <Select
+                  value={fabricScanId ?? "__none__"}
+                  onValueChange={(v) => setFabricScanId(v === "__none__" ? null : v)}
+                >
+                  <SelectTrigger className="w-full max-w-sm">
+                    <SelectValue placeholder="No scan linked" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No scan linked</SelectItem>
+                    {fabricScans.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          )}
         </CardContent>
           </CollapsibleContent>
         </Card>

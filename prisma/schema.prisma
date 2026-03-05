@@ -804,8 +804,9 @@ model ForgeConnection {
   status        String   @default("active")
   createdBy     String?  @map("created_by")
   createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
-  lastTestedAt  DateTime? @map("last_tested_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+  lastTestedAt         DateTime? @map("last_tested_at")
+  lastScanCompletedAt  DateTime? @map("last_scan_completed_at")
 
   fabricScans   ForgeFabricScan[]
 
@@ -827,6 +828,7 @@ model ForgeFabricScan {
   reportCount     Int       @default(0) @map("report_count")
   measureCount    Int       @default(0) @map("measure_count")
   artifactCount   Int       @default(0) @map("artifact_count")
+  scanMode        String    @default("full") @map("scan_mode")
   errorMessage    String?   @map("error_message")
   rawResultJson   String?   @map("raw_result_json")
   createdBy       String?   @map("created_by")
@@ -926,6 +928,7 @@ model ForgeFabricMigration {
   dashboardsJson  String?   @map("dashboards_json")
   genieSpacesJson String?   @map("genie_spaces_json")
   nameMappingJson String?   @map("name_mapping_json")
+  rlsWarningsJson String?   @map("rls_warnings_json")
   createdBy       String?   @map("created_by")
   createdAt       DateTime  @default(now()) @map("created_at")
   completedAt     DateTime? @map("completed_at")

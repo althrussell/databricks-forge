@@ -200,4 +200,29 @@ export function parseWorkspaceReports(
 ): FabricReport[] {
   return raw.map((rep) => parseReport(rep, workspaceId));
 }
+
+/**
+ * Parse per-workspace dashboards API response into FabricReport entries
+ * with reportType "Dashboard", matching the admin scanner parser output.
+ */
+export function parseWorkspaceDashboards(
+  raw: any[],
+  workspaceId: string,
+): FabricReport[] {
+  return raw.map((dash) => ({
+    id: "",
+    workspaceId,
+    reportId: dash.id ?? "",
+    name: dash.displayName ?? dash.name ?? "",
+    datasetId: null,
+    reportType: "Dashboard",
+    tiles: (dash.tiles ?? []).map((t: any) => ({
+      id: t.id ?? "",
+      title: t.title ?? "",
+      datasetId: t.datasetId,
+      reportId: t.reportId,
+    })),
+    sensitivityLabel: dash.sensitivityLabel?.labelId ?? null,
+  }));
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */

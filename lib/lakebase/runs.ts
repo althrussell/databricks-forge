@@ -80,6 +80,7 @@ function dbRowToRun(row: {
       aiModel: row.aiModel ?? "databricks-claude-opus-4-6",
       estateScanEnabled: genOpts.estateScanEnabled,
       assetDiscoveryEnabled: genOpts.assetDiscoveryEnabled,
+      fabricScanId: genOpts.fabricScanId,
     },
     status: row.status as RunStatus,
     currentStep: (row.currentStep as PipelineStep) ?? null,
@@ -118,6 +119,7 @@ function parseGenerationOptions(raw: string | null): {
   depthConfig: PipelineRunConfig["depthConfig"];
   estateScanEnabled: boolean;
   assetDiscoveryEnabled: boolean;
+  fabricScanId: string | null;
   industryAutoDetected: boolean;
   appVersion: string | null;
   promptVersions: Record<string, string> | null;
@@ -135,6 +137,7 @@ function parseGenerationOptions(raw: string | null): {
     depthConfig: undefined as PipelineRunConfig["depthConfig"],
     estateScanEnabled: false,
     assetDiscoveryEnabled: false,
+    fabricScanId: null as string | null,
     industryAutoDetected: false,
     appVersion: null as string | null,
     promptVersions: null as Record<string, string> | null,
@@ -159,6 +162,7 @@ function parseGenerationOptions(raw: string | null): {
         depthConfig: parsed.depthConfig ?? undefined,
         estateScanEnabled: parsed.estateScanEnabled === true,
         assetDiscoveryEnabled: parsed.assetDiscoveryEnabled === true,
+        fabricScanId: parsed.fabricScanId ?? null,
         industryAutoDetected: parsed.industryAutoDetected === true,
         appVersion: parsed.appVersion ?? null,
         promptVersions: parsed.promptVersions ?? null,
@@ -184,6 +188,7 @@ function serializeGenerationOptions(config: PipelineRunConfig): string {
     depthConfig: config.depthConfig ?? null,
     estateScanEnabled: config.estateScanEnabled,
     assetDiscoveryEnabled: config.assetDiscoveryEnabled,
+    fabricScanId: config.fabricScanId ?? null,
     appVersion: packageJson.version,
     promptVersions: PROMPT_VERSIONS,
     stepLog: [],

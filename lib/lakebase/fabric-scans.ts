@@ -34,6 +34,7 @@ function parseJSON<T>(raw: string | null | undefined, fallback: T): T {
 export async function createFabricScan(opts: {
   connectionId: string;
   accessLevel: "admin" | "workspace";
+  scanMode?: "full" | "incremental";
   createdBy?: string | null;
 }): Promise<string> {
   return withPrisma(async (prisma) => {
@@ -43,6 +44,7 @@ export async function createFabricScan(opts: {
         id,
         connectionId: opts.connectionId,
         accessLevel: opts.accessLevel,
+        scanMode: opts.scanMode ?? "full",
         status: "pending",
         createdBy: opts.createdBy ?? null,
       },
@@ -187,6 +189,7 @@ export async function listFabricScans(
       reportCount: r.reportCount,
       measureCount: r.measureCount,
       artifactCount: r.artifactCount,
+      scanMode: (r.scanMode ?? "full") as "full" | "incremental",
       errorMessage: r.errorMessage,
       createdBy: r.createdBy,
       createdAt: r.createdAt.toISOString(),
@@ -224,6 +227,7 @@ export async function getFabricScanDetail(
       reportCount: row.reportCount,
       measureCount: row.measureCount,
       artifactCount: row.artifactCount,
+      scanMode: (row.scanMode ?? "full") as "full" | "incremental",
       errorMessage: row.errorMessage,
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),

@@ -27,6 +27,15 @@ import type { NameMapping } from "./name-normalizer";
 export type MigrationStep = "gold_schema" | "metric_views" | "dashboards" | "genie_spaces";
 export type ArtifactStatus = "pending" | "proposed" | "deployed" | "failed" | "skipped";
 
+export interface RlsWarning {
+  roleName: string;
+  pbiTableName: string;
+  ucTableName: string;
+  filterExpression: string;
+  members: string[];
+  suggestedAction: string;
+}
+
 export interface MigrationState {
   id: string;
   scanId: string;
@@ -40,6 +49,7 @@ export interface MigrationState {
   genieSpaces: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
   daxTranslations: DaxTranslation[];
   nameMapping: NameMapping[];
+  rlsWarnings: RlsWarning[];
   warnings: string[];
 }
 
@@ -79,6 +89,7 @@ export async function runGoldSchemaStep(
     genieSpaces: [],
     daxTranslations: [],
     nameMapping: [],
+    rlsWarnings: [],
     warnings: [],
   };
   migrationStates.set(migrationId, state);
@@ -88,6 +99,7 @@ export async function runGoldSchemaStep(
     state.goldTables = proposal.tables.map((t) => ({ ...t, deployStatus: "proposed" as ArtifactStatus }));
     state.nameMapping = proposal.nameMapping;
     state.warnings = proposal.warnings;
+    state.rlsWarnings = extractRlsWarnings(scan.datasets, proposal.nameMapping);
 
     await persistMigrationState(state);
     return state;
@@ -108,6 +120,20 @@ export async function deployGoldTables(migrationId: string): Promise<MigrationSt
     try {
       await executeSQL(table.ddl, state.targetCatalog, state.targetSchema);
       table.deployStatus = "deployed";
+
+      if (table.tagDdl) {
+        try {
+          await executeSQL(table.tagDdl, state.targetCatalog, state.targetSchema);
+        } catch (tagErr) {
+          state.warnings.push(
+            `Sensitivity tag failed for ${table.ucTableName}: ${tagErr instanceof Error ? tagErr.message : String(tagErr)}`
+          );
+          logger.warn("[migration] Sensitivity tag DDL failed (non-fatal)", {
+            table: table.ucTableName,
+            error: tagErr instanceof Error ? tagErr.message : String(tagErr),
+          });
+        }
+      }
     } catch (err) {
       table.deployStatus = "failed";
       table.error = err instanceof Error ? err.message : String(err);
@@ -324,6 +350,36 @@ function extractMeasures(
   return measures;
 }
 
+function extractRlsWarnings(
+  datasets: FabricDataset[],
+  nameMapping: NameMapping[],
+): RlsWarning[] {
+  const warnings: RlsWarning[] = [];
+  const tableMap = new Map(
+    nameMapping.filter((m) => m.source === "table").map((m) => [m.original, m.normalized]),
+  );
+
+  for (const ds of datasets) {
+    for (const role of ds.roles) {
+      if (!role.tablePermissions?.length) continue;
+      for (const perm of role.tablePermissions) {
+        if (!perm.filterExpression) continue;
+        const ucTableName = tableMap.get(perm.name) ?? perm.name;
+        warnings.push({
+          roleName: role.name,
+          pbiTableName: perm.name,
+          ucTableName,
+          filterExpression: perm.filterExpression,
+          members: role.members ?? [],
+          suggestedAction: `Create a UC row filter on \`${ucTableName}\` equivalent to: \`${perm.filterExpression}\``,
+        });
+      }
+    }
+  }
+
+  return warnings;
+}
+
 async function persistMigrationState(state: MigrationState): Promise<void> {
   try {
     await withPrisma(async (prisma) => {
@@ -341,6 +397,7 @@ async function persistMigrationState(state: MigrationState): Promise<void> {
           dashboardsJson: JSON.stringify(state.dashboards),
           genieSpacesJson: JSON.stringify(state.genieSpaces),
           nameMappingJson: JSON.stringify(state.nameMapping),
+          rlsWarningsJson: state.rlsWarnings.length > 0 ? JSON.stringify(state.rlsWarnings) : null,
         },
         update: {
           status: state.status,
@@ -350,6 +407,7 @@ async function persistMigrationState(state: MigrationState): Promise<void> {
           dashboardsJson: JSON.stringify(state.dashboards),
           genieSpacesJson: JSON.stringify(state.genieSpaces),
           nameMappingJson: JSON.stringify(state.nameMapping),
+          rlsWarningsJson: state.rlsWarnings.length > 0 ? JSON.stringify(state.rlsWarnings) : null,
           completedAt: state.status === "completed" ? new Date() : undefined,
         },
       });

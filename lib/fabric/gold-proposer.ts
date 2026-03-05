@@ -14,6 +14,7 @@ import { getServingEndpoint } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 import { mapPbiTypeToSpark } from "./type-mapping";
 import { normalizeIdentifier, normalizeTableName, type NameMapping } from "./name-normalizer";
+import { resolveLabelTag, buildTagDdl, type SensitivityLabelMapping } from "./sensitivity-mapping";
 import { logger } from "@/lib/logger";
 import type { FabricDataset, FabricTable, FabricRelationship } from "./types";
 
@@ -37,6 +38,8 @@ export interface GoldTableProposal {
     toColumn: string;
   }>;
   dataSource?: string;
+  sensitivityLabel?: string | null;
+  tagDdl?: string;
 }
 
 export interface GoldSchemaProposal {
@@ -55,17 +58,19 @@ export async function proposeGoldSchema(
   datasets: FabricDataset[],
   targetCatalog: string,
   targetSchema: string,
-  options?: { useLLM?: boolean }
+  options?: { useLLM?: boolean; sensitivityMappings?: SensitivityLabelMapping[] }
 ): Promise<GoldSchemaProposal> {
   const allTables: FabricTable[] = [];
   const allRelationships: FabricRelationship[] = [];
   const expressions: Array<{ tableName: string; source: string }> = [];
+  const tableSensitivity = new Map<string, string | null>();
   const warnings: string[] = [];
 
   for (const ds of datasets) {
     for (const t of ds.tables) {
       if (t.isHidden) continue;
       allTables.push(t);
+      if (ds.sensitivityLabel) tableSensitivity.set(t.name, ds.sensitivityLabel);
     }
     allRelationships.push(...ds.relationships);
     for (const expr of ds.expressions) {
@@ -124,13 +129,19 @@ export async function proposeGoldSchema(
       (e) => e.tableName.toLowerCase() === table.name.toLowerCase()
     )?.source;
 
+    const label = tableSensitivity.get(table.name) ?? null;
+    const fqn = `${targetCatalog}.${targetSchema}.${ucTableName}`;
+    const tag = resolveLabelTag(label, options?.sensitivityMappings);
+
     proposals.push({
       pbiTableName: table.name,
       ucTableName,
-      ddl: "", // populated below
+      ddl: "",
       columns,
       relationships: rels,
       dataSource,
+      sensitivityLabel: label,
+      tagDdl: tag ? buildTagDdl(fqn, tag) : undefined,
     });
   }
 

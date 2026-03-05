@@ -37,6 +37,8 @@ import {
   AlertTriangle,
   SkipForward,
   Code2,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -51,6 +53,8 @@ interface GoldTableProposal {
   ddl: string;
   columns: Array<{ pbiName: string; ucName: string; pbiType: string; sparkType: string }>;
   relationships: Array<{ fromColumn: string; toTable: string; toColumn: string }>;
+  sensitivityLabel?: string | null;
+  tagDdl?: string;
   deployStatus: ArtifactStatus;
   error?: string;
 }
@@ -62,6 +66,15 @@ interface DaxTranslation {
   confidence: "high" | "medium" | "low";
   warnings: string[];
   method?: "template" | "llm";
+}
+
+interface RlsWarning {
+  roleName: string;
+  pbiTableName: string;
+  ucTableName: string;
+  filterExpression: string;
+  members: string[];
+  suggestedAction: string;
 }
 
 interface MigrationState {
@@ -77,6 +90,7 @@ interface MigrationState {
   genieSpaces: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
   daxTranslations: DaxTranslation[];
   nameMapping: Array<{ original: string; normalized: string; source: string }>;
+  rlsWarnings: RlsWarning[];
   warnings: string[];
 }
 
@@ -246,6 +260,7 @@ export default function MigrationWizardPage() {
       {step === "gold" && migration && (
         <GoldSchemaStep
           tables={migration.goldTables}
+          rlsWarnings={migration.rlsWarnings ?? []}
           loading={loading}
           onDeploy={handleDeployGold}
           onNext={handleMetricViews}
@@ -298,16 +313,19 @@ function StatusBadge({ status }: { status: ArtifactStatus }) {
 
 function GoldSchemaStep({
   tables,
+  rlsWarnings,
   loading,
   onDeploy,
   onNext,
 }: {
   tables: GoldTableProposal[];
+  rlsWarnings: RlsWarning[];
   loading: boolean;
   onDeploy: () => void;
   onNext: () => void;
 }) {
   const allDeployed = tables.every((t) => t.deployStatus === "deployed" || t.deployStatus === "skipped");
+  const hasSensitivityLabels = tables.some((t) => t.sensitivityLabel);
 
   return (
     <Card>
@@ -319,6 +337,18 @@ function GoldSchemaStep({
         <CardDescription>Review proposed CREATE TABLE DDL, then deploy to Unity Catalog.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {hasSensitivityLabels && (
+          <Card className="border-blue-200 dark:border-blue-800">
+            <CardContent className="pt-4">
+              <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                Sensitivity labels detected. Tables with mapped labels will have UC tags applied on deployment.
+                Tables with unmapped labels are shown below.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <Accordion type="multiple" className="w-full">
           {tables.map((t) => (
             <AccordionItem key={t.ucTableName} value={t.ucTableName}>
@@ -327,6 +357,11 @@ function GoldSchemaStep({
                   <span className="font-medium">{t.ucTableName}</span>
                   <span className="text-xs text-muted-foreground">(was: {t.pbiTableName})</span>
                   <StatusBadge status={t.deployStatus} />
+                  {t.sensitivityLabel && (
+                    <Badge variant={t.tagDdl ? "secondary" : "outline"} className="text-[10px]">
+                      {t.tagDdl ? "Sensitivity: mapped" : "Sensitivity: unmapped"}
+                    </Badge>
+                  )}
                   {t.error && <span className="text-xs text-destructive truncate max-w-[200px]">{t.error}</span>}
                 </div>
               </AccordionTrigger>
@@ -346,6 +381,15 @@ function GoldSchemaStep({
                       </div>
                     ))}
                   </div>
+                  {t.tagDdl && (
+                    <>
+                      <Separator />
+                      <div className="text-xs">
+                        <span className="font-semibold text-muted-foreground">UC Tag DDL:</span>
+                        <pre className="mt-1 bg-muted p-2 rounded-md font-mono">{t.tagDdl}</pre>
+                      </div>
+                    </>
+                  )}
                   <Separator />
                   <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-60 font-mono">
                     {t.ddl}
@@ -355,6 +399,44 @@ function GoldSchemaStep({
             </AccordionItem>
           ))}
         </Accordion>
+
+        {rlsWarnings.length > 0 && (
+          <Card className="border-amber-300 dark:border-amber-700">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-600" />
+                RLS Security Roles ({rlsWarnings.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                The following Power BI row-level security roles were detected. These must be manually recreated as Unity Catalog row filters.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {rlsWarnings.map((rls, i) => (
+                <div key={i} className="border rounded p-3 text-xs space-y-1.5 bg-amber-50/50 dark:bg-amber-950/20">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{rls.roleName}</span>
+                    <Badge variant="outline" className="text-[10px]">{rls.ucTableName}</Badge>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-muted-foreground">
+                      PBI table: <span className="font-mono">{rls.pbiTableName}</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      DAX filter: <code className="bg-muted px-1 py-0.5 rounded">{rls.filterExpression}</code>
+                    </p>
+                    {rls.members.length > 0 && (
+                      <p className="text-muted-foreground">
+                        Members: {rls.members.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-amber-700 dark:text-amber-300">{rls.suggestedAction}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex items-center gap-3 pt-2">
           {!allDeployed && (

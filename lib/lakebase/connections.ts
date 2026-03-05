@@ -40,6 +40,7 @@ function dbRowToConfig(row: {
   createdAt: Date;
   updatedAt: Date;
   lastTestedAt: Date | null;
+  lastScanCompletedAt: Date | null;
 }): ConnectionConfig {
   const config = parseJSON<{ workspaceFilter?: string[] }>(row.configJson, {});
   return {
@@ -54,6 +55,7 @@ function dbRowToConfig(row: {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastTestedAt: row.lastTestedAt?.toISOString() ?? null,
+    lastScanCompletedAt: row.lastScanCompletedAt?.toISOString() ?? null,
     workspaceFilter: config.workspaceFilter,
   };
 }
@@ -68,6 +70,7 @@ function dbRowToSummary(row: {
   createdBy: string | null;
   createdAt: Date;
   lastTestedAt: Date | null;
+  lastScanCompletedAt: Date | null;
 }): ConnectionSummary {
   return {
     id: row.id,
@@ -79,6 +82,7 @@ function dbRowToSummary(row: {
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     lastTestedAt: row.lastTestedAt?.toISOString() ?? null,
+    lastScanCompletedAt: row.lastScanCompletedAt?.toISOString() ?? null,
   };
 }
 
@@ -140,6 +144,7 @@ export async function listConnections(): Promise<ConnectionSummary[]> {
         createdBy: true,
         createdAt: true,
         lastTestedAt: true,
+        lastScanCompletedAt: true,
       },
     });
     return rows.map(dbRowToSummary);
@@ -202,6 +207,15 @@ export async function markConnectionTested(id: string): Promise<void> {
     await prisma.forgeConnection.update({
       where: { id },
       data: { lastTestedAt: new Date() },
+    });
+  });
+}
+
+export async function markConnectionScanned(id: string, at: Date): Promise<void> {
+  await withPrisma(async (prisma) => {
+    await prisma.forgeConnection.update({
+      where: { id },
+      data: { lastScanCompletedAt: at },
     });
   });
 }

@@ -96,5 +96,10 @@ function heuristicClassify(question: string): IntentClassification {
     return { intent: "business", confidence: 0.6, reasoning: "Heuristic: business pattern" };
   }
 
+  const fabricPatterns = /\b(power\s*bi|fabric|dax|pbi|powerbi|measure|pbix|dataset|report\s+tile)\b/;
+  if (fabricPatterns.test(q)) {
+    return { intent: "business", confidence: 0.6, reasoning: "Heuristic: Fabric/Power BI pattern" };
+  }
+
   return { intent: "exploration", confidence: 0.5, reasoning: "Heuristic: default exploration" };
 }
