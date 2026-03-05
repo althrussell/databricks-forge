@@ -16,8 +16,8 @@ import { DeployDashboardDialog, type DashboardDeployPayload } from "@/components
 import { DeployOptions } from "@/components/assistant/deploy-options";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import type { AssistantPersona } from "@/lib/assistant/prompts";
-import { PanelRightClose, PanelRight, Briefcase, Wrench } from "lucide-react";
+import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
+import { PanelRightClose, PanelRight, Target, Briefcase, Wrench } from "lucide-react";
 
 export default function AskForgeContent() {
   const [activeSql, setActiveSql] = React.useState<string | null>(null);
@@ -41,7 +41,7 @@ export default function AskForgeContent() {
   const [persona, setPersona] = React.useState<AssistantPersona>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("askforge-persona");
-      if (stored === "tech") return "tech";
+      if (stored && VALID_PERSONAS.has(stored as AssistantPersona)) return stored as AssistantPersona;
     }
     return "business";
   });
@@ -161,8 +161,8 @@ export default function AskForgeContent() {
       );
       const restoredTables: string[] = lastAssistantWithTables?.referencedTables ?? [];
 
-      if (data.persona === "tech" || data.persona === "business") {
-        setPersona(data.persona);
+      if (VALID_PERSONAS.has(data.persona as AssistantPersona)) {
+        setPersona(data.persona as AssistantPersona);
       }
 
       setActiveConversationId(conversationId);
@@ -190,7 +190,7 @@ export default function AskForgeContent() {
     setReferencedTables([]);
     setSources([]);
     const stored = localStorage.getItem("askforge-persona");
-    setPersona(stored === "tech" ? "tech" : "business");
+    setPersona(stored && VALID_PERSONAS.has(stored as AssistantPersona) ? (stored as AssistantPersona) : "business");
   }, []);
 
   const handleClearOrDelete = React.useCallback(async () => {
@@ -211,8 +211,8 @@ export default function AskForgeContent() {
   }, []);
 
   const handlePersonaChange = React.useCallback((value: string) => {
-    if (value !== "business" && value !== "tech") return;
-    setPersona(value);
+    if (!VALID_PERSONAS.has(value as AssistantPersona)) return;
+    setPersona(value as AssistantPersona);
     localStorage.setItem("askforge-persona", value);
   }, []);
 
@@ -231,8 +231,12 @@ export default function AskForgeContent() {
           onValueChange={handlePersonaChange}
         >
           <ToggleGroupItem value="business" className="gap-1 px-2.5 text-xs">
-            <Briefcase className="size-3.5" />
+            <Target className="size-3.5" />
             Business
+          </ToggleGroupItem>
+          <ToggleGroupItem value="analyst" className="gap-1 px-2.5 text-xs">
+            <Briefcase className="size-3.5" />
+            Analyst
           </ToggleGroupItem>
           <ToggleGroupItem value="tech" className="gap-1 px-2.5 text-xs">
             <Wrench className="size-3.5" />
