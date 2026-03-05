@@ -38,7 +38,6 @@ import {
   XCircle,
   AlertTriangle,
   FlaskConical,
-  Trash2,
   Settings,
   Activity,
 } from "lucide-react";
