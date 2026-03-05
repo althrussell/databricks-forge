@@ -645,7 +645,15 @@ const SOURCE_KIND_ICONS: Record<string, React.ReactNode> = {
   outcome_map: <FileText className="size-3 text-cyan-500" />,
   lineage_context: <GitBranch className="size-3 text-gray-500" />,
   document_chunk: <FileText className="size-3 text-gray-400" />,
+  fabric_dataset: <ExternalLink className="size-3 text-yellow-600" />,
+  fabric_measure: <ExternalLink className="size-3 text-yellow-600" />,
+  fabric_report: <ExternalLink className="size-3 text-yellow-600" />,
+  fabric_artifact: <ExternalLink className="size-3 text-yellow-600" />,
 };
+
+function isFabricKind(kind: string): boolean {
+  return kind.startsWith("fabric_");
+}
 
 function SourceRow({ source }: { source: SourceData }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -653,15 +661,19 @@ function SourceRow({ source }: { source: SourceData }) {
   const icon = SOURCE_KIND_ICONS[source.kind] ?? <FileSearch className="size-3" />;
   const scorePercent = (source.score * 100).toFixed(0);
   const metadata = source.metadata;
+  const offPlatform = isFabricKind(source.kind);
 
   return (
     <button
       onClick={() => setExpanded(!expanded)}
-      className="flex w-full min-w-0 flex-col rounded border bg-muted/30 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-muted/60"
+      className={`flex w-full min-w-0 flex-col rounded border px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-muted/60 ${offPlatform ? "bg-yellow-50/50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800" : "bg-muted/30"}`}
     >
       <div className="flex w-full min-w-0 items-center gap-1.5">
         {icon}
-        <Badge variant="outline" className="shrink-0 text-[9px]">{kindLabel}</Badge>
+        <Badge variant="outline" className={`shrink-0 text-[9px] ${offPlatform ? "border-yellow-400 text-yellow-700 dark:text-yellow-400" : ""}`}>{kindLabel}</Badge>
+        {offPlatform && (
+          <span className="shrink-0 text-[9px] text-yellow-600 dark:text-yellow-400" title="Off-platform resource (Power BI)">⚡ PBI</span>
+        )}
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.sourceId}</span>
         <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
         <ChevronDown className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -767,6 +779,10 @@ const SOURCE_KIND_LABELS: Record<string, string> = {
   genie_question: "Question",
   outcome_map: "Outcome",
   document_chunk: "Document",
+  fabric_dataset: "PBI Dataset",
+  fabric_measure: "PBI Measure",
+  fabric_report: "PBI Report",
+  fabric_artifact: "Fabric",
 };
 
 function shortFqn(fqn: string): string {

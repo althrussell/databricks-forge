@@ -198,72 +198,80 @@ export async function runAssistantEngine(
   answer = enforceSourceCitations(answer, sources);
   const sqlBlocks = extractSqlBlocks(answer);
 
-  // Static column validation + EXPLAIN + single fix attempt for column errors
-  if (sqlBlocks.length > 0 && context.tableEnrichments.some((e) => e.columns.length > 0)) {
+  // --- Parallel post-stream: SQL validation, dashboard lookup, Genie RAG ---
+
+  type SqlFix = { index: number; original: string; fixed: string };
+
+  const validateSqlBlocksParallel = async (): Promise<SqlFix[]> => {
+    if (sqlBlocks.length === 0 || !context.tableEnrichments.some((e) => e.columns.length > 0)) {
+      return [];
+    }
     const knownCols = context.tableEnrichments.flatMap((t) =>
       t.columns.map((c) => ({ tableFqn: t.tableFqn, name: c.name, dataType: c.dataType }))
     );
     const knownColumnNames = new Set(knownCols.map((c) => c.name.toLowerCase()));
 
-    for (let i = 0; i < sqlBlocks.length; i++) {
-      try {
-        // Static pre-check: catch hallucinated columns before EXPLAIN round-trip
-        const staticResult = validateColumnReferences(sqlBlocks[i], knownColumnNames, {
-          allowAiFunctionFields: true,
-        });
-
-        const errorToFix = staticResult.unknownColumns.length > 0
-          ? `SCHEMA VIOLATION: SQL references columns that do not exist: ${staticResult.unknownColumns.join(", ")}. Use ONLY columns from the provided schema.`
-          : await validateSql(sqlBlocks[i]);
-
-        if (errorToFix && (staticResult.unknownColumns.length > 0 || isColumnResolutionError(errorToFix))) {
-          logger.info("[assistant/engine] SQL column error, attempting fix", {
-            blockIndex: i,
-            staticHallucinations: staticResult.unknownColumns.length,
-            error: errorToFix.slice(0, 200),
+    const results = await Promise.allSettled(
+      sqlBlocks.map(async (sql, i): Promise<SqlFix | null> => {
+        try {
+          const staticResult = validateColumnReferences(sql, knownColumnNames, {
+            allowAiFunctionFields: true,
           });
 
-          const fixPrompt = buildSqlFixPrompt(sqlBlocks[i], errorToFix, knownCols);
-          const fixResponse = await chatCompletion({
-            endpoint: getServingEndpoint(),
-            messages: [
-              { role: "system", content: "You are a SQL fixer. Return ONLY corrected SQL in a ```sql block." },
-              { role: "user", content: fixPrompt },
-            ],
-            temperature: 0.1,
-            maxTokens: 4096,
-          });
+          const errorToFix = staticResult.unknownColumns.length > 0
+            ? `SCHEMA VIOLATION: SQL references columns that do not exist: ${staticResult.unknownColumns.join(", ")}. Use ONLY columns from the provided schema.`
+            : await validateSql(sql);
 
-          const fixedBlocks = extractSqlBlocks(fixResponse.content);
-          if (fixedBlocks.length > 0) {
-            const recheck = await validateSql(fixedBlocks[0]);
-            if (!recheck) {
-              answer = answer.replace(sqlBlocks[i], fixedBlocks[0]);
-              sqlBlocks[i] = fixedBlocks[0];
-              logger.info("[assistant/engine] SQL fix successful", { blockIndex: i });
-            } else {
+          if (errorToFix && (staticResult.unknownColumns.length > 0 || isColumnResolutionError(errorToFix))) {
+            logger.info("[assistant/engine] SQL column error, attempting fix", {
+              blockIndex: i,
+              staticHallucinations: staticResult.unknownColumns.length,
+              error: errorToFix.slice(0, 200),
+            });
+
+            const fixPrompt = buildSqlFixPrompt(sql, errorToFix, knownCols);
+            const fixResponse = await chatCompletion({
+              endpoint: getServingEndpoint(),
+              messages: [
+                { role: "system", content: "You are a SQL fixer. Return ONLY corrected SQL in a ```sql block." },
+                { role: "user", content: fixPrompt },
+              ],
+              temperature: 0.1,
+              maxTokens: 4096,
+            });
+
+            const fixedBlocks = extractSqlBlocks(fixResponse.content);
+            if (fixedBlocks.length > 0) {
+              const recheck = await validateSql(fixedBlocks[0]);
+              if (!recheck) {
+                logger.info("[assistant/engine] SQL fix successful", { blockIndex: i });
+                return { index: i, original: sql, fixed: fixedBlocks[0] };
+              }
               logger.warn("[assistant/engine] SQL fix still fails EXPLAIN", {
                 blockIndex: i,
                 error: recheck.slice(0, 200),
               });
             }
           }
+          return null;
+        } catch (err) {
+          logger.warn("[assistant/engine] SQL validation/fix failed (non-fatal)", {
+            blockIndex: i,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
         }
-      } catch (err) {
-        logger.warn("[assistant/engine] SQL validation/fix failed (non-fatal)", {
-          blockIndex: i,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  }
+      })
+    );
 
-  const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);
-  const reconciledTables = mergeTableReferenceLists(context.tables, sqlTables);
-  const dashboardProposal = extractDashboardIntent(answer);
+    return results
+      .filter((r): r is PromiseFulfilledResult<SqlFix | null> => r.status === "fulfilled")
+      .map((r) => r.value)
+      .filter((v): v is SqlFix => v !== null);
+  };
 
-  let existingDashboards: ExistingDashboard[] = [];
-  if (intentResult.intent === "dashboard") {
+  const lookupDashboardsAsync = async (): Promise<ExistingDashboard[]> => {
+    if (intentResult.intent !== "dashboard") return [];
     try {
       const { withPrisma } = await import("@/lib/prisma");
       const dbDashboards = await withPrisma(async (prisma) =>
@@ -273,19 +281,23 @@ export async function runAssistantEngine(
           orderBy: { createdAt: "desc" },
         }),
       );
-      existingDashboards = dbDashboards.map((d) => ({
+      return dbDashboards.map((d) => ({
         sourceId: d.id,
         title: d.title,
         score: 1.0,
         metadata: { domain: d.domain, description: d.description },
       }));
     } catch {
-      // best-effort dashboard lookup
+      return [];
     }
-  }
+  };
 
-  let genieSpaceMatch: { spaceTitle: string; spaceId: string; score: number } | null = null;
-  if (isEmbeddingEnabled()) {
+  const lookupGenieAsync = async (): Promise<{
+    spaceTitle: string;
+    spaceId: string;
+    score: number;
+  } | null> => {
+    if (!isEmbeddingEnabled()) return null;
     try {
       const genieChunks = await retrieveContext(question, {
         kinds: ["genie_recommendation", "genie_question"],
@@ -294,7 +306,7 @@ export async function runAssistantEngine(
       });
       if (genieChunks.length > 0) {
         const m = genieChunks[0].metadata ?? {};
-        genieSpaceMatch = {
+        return {
           spaceTitle: (m.spaceTitle as string) ?? (m.title as string) ?? "Genie Space",
           spaceId: (m.spaceId as string) ?? genieChunks[0].sourceId,
           score: genieChunks[0].score,
@@ -303,7 +315,23 @@ export async function runAssistantEngine(
     } catch {
       // best-effort Genie routing
     }
+    return null;
+  };
+
+  const [sqlFixes, existingDashboards, genieSpaceMatch] = await Promise.all([
+    validateSqlBlocksParallel(),
+    lookupDashboardsAsync(),
+    lookupGenieAsync(),
+  ]);
+
+  for (const fix of sqlFixes) {
+    answer = answer.replace(fix.original, fix.fixed);
+    sqlBlocks[fix.index] = fix.fixed;
   }
+
+  const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);
+  const reconciledTables = mergeTableReferenceLists(context.tables, sqlTables);
+  const dashboardProposal = extractDashboardIntent(answer);
 
   const conversationSummary = buildConversationSummary(history, question);
   const actions = buildActions(
@@ -328,57 +356,56 @@ export async function runAssistantEngine(
     });
   }
 
-  let logId: string | null = null;
-  try {
-    logId = await createAssistantLog({
-      sessionId: sessionId ?? "anonymous",
-      question,
-      intent: intentResult.intent,
-      intentConfidence: intentResult.confidence,
-      ragChunkIds: context.chunks.map((c) => c.sourceId),
-      response: answer,
-      sqlGenerated: sqlBlocks.length > 0 ? sqlBlocks[0] : undefined,
-      durationMs,
-      promptTokens: llmResponse.usage?.promptTokens,
-      completionTokens: llmResponse.usage?.completionTokens,
-      totalTokens: llmResponse.usage?.totalTokens,
-      userId: userId ?? undefined,
-      sources,
-      referencedTables: reconciledTables,
-      persona,
-    });
-    const evalResult = scoreAssistantResponse({
-      question,
-      answer,
-      sourceCount: sources.length,
-      retrievalTopScore: context.retrievalTopScore,
-      sqlBlocks,
-    });
-    await insertQualityMetrics([
-      {
-        metricType: "assistant",
-        metricName: "assistant_overall_score",
-        metricValue: evalResult.overallScore / 100,
-        floorValue: Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
-        passed: evalResult.overallScore / 100 >= Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
-        assistantLogId: logId,
-      },
-      {
-        metricType: "assistant",
-        metricName: "assistant_grounding_score",
-        metricValue: evalResult.groundingScore / 100,
-        assistantLogId: logId,
-      },
-      {
-        metricType: "assistant",
-        metricName: "assistant_citation_score",
-        metricValue: evalResult.citationScore / 100,
-        assistantLogId: logId,
-      },
-    ]);
-  } catch (err) {
-    logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) });
-  }
+  // Fire-and-forget: logging + quality metrics don't block the response
+  createAssistantLog({
+    sessionId: sessionId ?? "anonymous",
+    question,
+    intent: intentResult.intent,
+    intentConfidence: intentResult.confidence,
+    ragChunkIds: context.chunks.map((c) => c.sourceId),
+    response: answer,
+    sqlGenerated: sqlBlocks.length > 0 ? sqlBlocks[0] : undefined,
+    durationMs,
+    promptTokens: llmResponse.usage?.promptTokens,
+    completionTokens: llmResponse.usage?.completionTokens,
+    totalTokens: llmResponse.usage?.totalTokens,
+    userId: userId ?? undefined,
+    sources,
+    referencedTables: reconciledTables,
+    persona,
+  })
+    .then((logId) => {
+      const evalResult = scoreAssistantResponse({
+        question,
+        answer,
+        sourceCount: sources.length,
+        retrievalTopScore: context.retrievalTopScore,
+        sqlBlocks,
+      });
+      return insertQualityMetrics([
+        {
+          metricType: "assistant",
+          metricName: "assistant_overall_score",
+          metricValue: evalResult.overallScore / 100,
+          floorValue: Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+          passed: evalResult.overallScore / 100 >= Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+          assistantLogId: logId,
+        },
+        {
+          metricType: "assistant",
+          metricName: "assistant_grounding_score",
+          metricValue: evalResult.groundingScore / 100,
+          assistantLogId: logId,
+        },
+        {
+          metricType: "assistant",
+          metricName: "assistant_citation_score",
+          metricValue: evalResult.citationScore / 100,
+          assistantLogId: logId,
+        },
+      ]);
+    })
+    .catch((err) => logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) }));
 
   return {
     answer,
@@ -392,7 +419,7 @@ export async function runAssistantEngine(
     existingDashboards,
     tokenUsage: llmResponse.usage,
     durationMs,
-    logId,
+    logId: null,
   };
 }
 

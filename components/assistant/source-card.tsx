@@ -13,6 +13,7 @@ import {
   BarChart3,
   MessageSquare,
   ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import * as React from "react";
 
@@ -38,6 +39,10 @@ const KIND_ICON: Record<string, React.ReactNode> = {
   outcome_map: <FileText className="size-3.5 text-cyan-500" />,
   lineage_context: <GitBranch className="size-3.5 text-gray-500" />,
   document_chunk: <FileText className="size-3.5 text-gray-400" />,
+  fabric_dataset: <ExternalLink className="size-3.5 text-yellow-600" />,
+  fabric_measure: <ExternalLink className="size-3.5 text-yellow-600" />,
+  fabric_report: <ExternalLink className="size-3.5 text-yellow-600" />,
+  fabric_artifact: <ExternalLink className="size-3.5 text-yellow-600" />,
 };
 
 const PROVENANCE_STYLE: Record<string, string> = {
@@ -46,6 +51,7 @@ const PROVENANCE_STYLE: Record<string, string> = {
   generated: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   uploaded: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
   template: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
+  off_platform: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
 };
 
 function getProvenance(kind: string): string {
@@ -67,6 +73,11 @@ function getProvenance(kind: string): string {
       return "uploaded";
     case "outcome_map":
       return "template";
+    case "fabric_dataset":
+    case "fabric_measure":
+    case "fabric_report":
+    case "fabric_artifact":
+      return "off_platform";
     default:
       return "generated";
   }
@@ -79,6 +90,7 @@ function getProvenanceLabel(prov: string): string {
     generated: "Generated",
     uploaded: "Uploaded",
     template: "Template",
+    off_platform: "Power BI",
   };
   return labels[prov] ?? "Source";
 }

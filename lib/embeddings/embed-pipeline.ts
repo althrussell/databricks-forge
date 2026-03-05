@@ -21,6 +21,10 @@ import {
   composeOutcomeMap,
   composeBenchmarkContext,
   composeBenchmarkSourceChunk,
+  composeFabricDataset,
+  composeFabricMeasure,
+  composeFabricReport,
+  composeFabricArtifact,
 } from "./compose";
 import type { EmbeddingInput } from "./types";
 import { isEmbeddingEnabled } from "./config";
@@ -409,4 +413,127 @@ export async function embedBenchmarkRecords(records: BenchmarkLike[]): Promise<n
   }
 
   return totalChunks;
+}
+
+// ---------------------------------------------------------------------------
+// Fabric scan embedding
+// ---------------------------------------------------------------------------
+
+export async function embedFabricScan(
+  scanId: string,
+  data: {
+    datasets: Array<{
+      datasetId: string;
+      name: string;
+      workspaceName?: string;
+      tables: Array<{ name: string; columns: Array<{ name: string; dataType: string }>; measures: Array<{ name: string; expression: string; description?: string }> }>;
+      relationships: Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }>;
+      sensitivityLabel?: string | null;
+    }>;
+    reports: Array<{
+      reportId: string;
+      name: string;
+      reportType?: string | null;
+      datasetName?: string;
+      workspaceName?: string;
+      tiles?: Array<{ title: string }>;
+      sensitivityLabel?: string | null;
+    }>;
+    artifacts: Array<{
+      artifactId: string;
+      name: string;
+      artifactType: string;
+      workspaceName?: string;
+      metadata?: Record<string, unknown>;
+    }>;
+  }
+): Promise<void> {
+  if (!isEmbeddingEnabled()) return;
+
+  try {
+    const allTexts: string[] = [];
+    const allInputs: EmbeddingInput[] = [];
+
+    for (const ds of data.datasets) {
+      allTexts.push(composeFabricDataset(ds));
+      allInputs.push({
+        kind: "fabric_dataset",
+        sourceId: ds.datasetId,
+        scanId,
+        contentText: allTexts[allTexts.length - 1],
+        metadataJson: { name: ds.name, workspace: ds.workspaceName, sensitivity: ds.sensitivityLabel },
+        embedding: [],
+      });
+
+      for (const table of ds.tables) {
+        for (const measure of table.measures) {
+          allTexts.push(composeFabricMeasure({
+            name: measure.name,
+            expression: measure.expression,
+            tableName: table.name,
+            datasetName: ds.name,
+            description: measure.description,
+          }));
+          allInputs.push({
+            kind: "fabric_measure",
+            sourceId: `${ds.datasetId}:${table.name}:${measure.name}`,
+            scanId,
+            contentText: allTexts[allTexts.length - 1],
+            metadataJson: { dataset: ds.name, table: table.name, measure: measure.name },
+            embedding: [],
+          });
+        }
+      }
+    }
+
+    for (const r of data.reports) {
+      allTexts.push(composeFabricReport(r));
+      allInputs.push({
+        kind: "fabric_report",
+        sourceId: r.reportId,
+        scanId,
+        contentText: allTexts[allTexts.length - 1],
+        metadataJson: { name: r.name, type: r.reportType, workspace: r.workspaceName },
+        embedding: [],
+      });
+    }
+
+    for (const a of data.artifacts) {
+      allTexts.push(composeFabricArtifact(a));
+      allInputs.push({
+        kind: "fabric_artifact",
+        sourceId: a.artifactId,
+        scanId,
+        contentText: allTexts[allTexts.length - 1],
+        metadataJson: { name: a.name, type: a.artifactType, workspace: a.workspaceName },
+        embedding: [],
+      });
+    }
+
+    if (allTexts.length === 0) return;
+
+    const BATCH = 16;
+    for (let i = 0; i < allTexts.length; i += BATCH) {
+      const batch = allTexts.slice(i, i + BATCH);
+      const vectors = await generateEmbeddings(batch);
+      for (let j = 0; j < vectors.length; j++) {
+        allInputs[i + j].embedding = vectors[j];
+      }
+    }
+
+    await insertEmbeddings(allInputs);
+
+    logger.info("[embed-pipeline] Fabric scan embedding complete", {
+      scanId,
+      datasets: data.datasets.length,
+      reports: data.reports.length,
+      artifacts: data.artifacts.length,
+      totalEmbeddings: allInputs.length,
+    });
+  } catch (err) {
+    logger.warn("[embed-pipeline] Fabric scan embedding failed (non-fatal)", {
+      scanId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
