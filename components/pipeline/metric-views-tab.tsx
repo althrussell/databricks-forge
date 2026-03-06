@@ -136,7 +136,7 @@ function MetricViewRow({
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <div className="min-w-0 overflow-hidden border rounded-lg p-3">
         <CollapsibleTrigger asChild>
-          <div className="flex items-center justify-between cursor-pointer">
+          <div className="flex items-center justify-between cursor-pointer min-w-0 overflow-hidden">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="text-muted-foreground">
                 {expanded ? (

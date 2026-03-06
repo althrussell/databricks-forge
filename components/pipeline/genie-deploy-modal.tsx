@@ -28,12 +28,16 @@ import {
 } from "lucide-react";
 import type { GenieEngineRecommendation, MetricViewProposal } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
+import {
+  MetricViewDependencyModal,
+  type MissingMetricView,
+} from "@/components/pipeline/metric-view-dependency-modal";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Step = "select" | "schema" | "deploying" | "done";
+type Step = "select" | "schema" | "mv-deps" | "deploying" | "done";
 
 interface DeployableAsset {
   id: string;
@@ -120,6 +124,10 @@ export function GenieDeployModal({
   const [deployLog, setDeployLog] = useState<string[]>([]);
   const [isRetry, setIsRetry] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Metric view dependency gate
+  const [missingMvs, setMissingMvs] = useState<MissingMetricView[]>([]);
+  const [checkingDeps, setCheckingDeps] = useState(false);
 
   // Build all deployable assets from the selected domains
   const allAssets = useMemo<DeployableAsset[]>(() => {
@@ -272,6 +280,77 @@ export function GenieDeployModal({
     }
   }
 
+  async function checkDepsAndDeploy() {
+    const schema = targetSchema[0] ?? defaultSchema;
+    setCheckingDeps(true);
+
+    try {
+      // Extract metric view FQNs from all serialized spaces
+      const allFqns: string[] = [];
+      for (const rec of domains) {
+        try {
+          const space = JSON.parse(rec.serializedSpace);
+          const mvs = space?.data_sources?.metric_views;
+          if (Array.isArray(mvs)) {
+            for (const mv of mvs) {
+              if (typeof mv.identifier === "string" && mv.identifier.split(".").length >= 3) {
+                allFqns.push(mv.identifier);
+              }
+            }
+          }
+        } catch {
+          // skip unparseable spaces
+        }
+      }
+
+      // Subtract FQNs the user is already deploying (those will be created by the backend)
+      const deployingNames = new Set<string>();
+      for (const rec of domains) {
+        const mvs = parseMvProposals(rec);
+        for (const mv of mvs) {
+          if (selectedAssets.has(`mv:${rec.domain}:${mv.name}`)) {
+            deployingNames.add(mv.name.toLowerCase());
+          }
+        }
+      }
+
+      const fqnsToCheck = allFqns.filter((fqn) => {
+        const name = fqn.split(".").pop()?.toLowerCase() ?? "";
+        return !deployingNames.has(name);
+      });
+
+      if (fqnsToCheck.length === 0) {
+        executeDeploy();
+        return;
+      }
+
+      const res = await fetch("/api/metric-views/check-dependencies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fqns: fqnsToCheck }),
+      });
+
+      if (!res.ok) {
+        executeDeploy();
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.allDeployed || !data.missing || data.missing.length === 0) {
+        executeDeploy();
+        return;
+      }
+
+      setMissingMvs(data.missing);
+      setStep("mv-deps");
+    } catch {
+      executeDeploy();
+    } finally {
+      setCheckingDeps(false);
+    }
+  }
+
   async function executeDeploy() {
     setStep("deploying");
     setDeployLog([]);
@@ -413,7 +492,7 @@ export function GenieDeployModal({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (step === "deploying") return;
+        if (step === "deploying" || step === "mv-deps") return;
         if (!o && step === "done") onComplete();
         onOpenChange(o);
       }}
@@ -439,12 +518,12 @@ export function GenieDeployModal({
           <StepIndicator
             label="2. Schema"
             active={step === "schema"}
-            done={step === "deploying" || step === "done"}
+            done={step === "mv-deps" || step === "deploying" || step === "done"}
           />
           <ChevronRight className="h-3 w-3" />
           <StepIndicator
             label="3. Deploy"
-            active={step === "deploying" || step === "done"}
+            active={step === "mv-deps" || step === "deploying" || step === "done"}
             done={step === "done"}
           />
         </div>
@@ -477,6 +556,22 @@ export function GenieDeployModal({
           )}
         </div>
 
+        {/* Metric view dependency modal (overlay) */}
+        <MetricViewDependencyModal
+          open={step === "mv-deps"}
+          onOpenChange={(o) => {
+            if (!o) setStep("schema");
+          }}
+          missing={missingMvs}
+          defaultSchema={targetSchema[0] ?? defaultSchema}
+          onDeployed={() => {
+            executeDeploy();
+          }}
+          onCancel={() => {
+            setStep("schema");
+          }}
+        />
+
         <Separator />
 
         <DialogFooter>
@@ -492,7 +587,7 @@ export function GenieDeployModal({
                 </Button>
               ) : (
                 <Button
-                  disabled={!defaultSchema}
+                  disabled={!defaultSchema || checkingDeps}
                   title={
                     !defaultSchema
                       ? "No target schema could be inferred — select assets first"
@@ -500,10 +595,10 @@ export function GenieDeployModal({
                   }
                   onClick={() => {
                     setTargetSchema([defaultSchema]);
-                    executeDeploy();
+                    checkDepsAndDeploy();
                   }}
                 >
-                  Deploy Spaces Only
+                  {checkingDeps ? "Checking..." : "Deploy Spaces Only"}
                   <Rocket className="ml-1 h-4 w-4" />
                 </Button>
               )}
@@ -523,12 +618,16 @@ export function GenieDeployModal({
                 {domains.length} space{domains.length !== 1 ? "s" : ""}
               </div>
               <Button
-                onClick={executeDeploy}
-                disabled={targetSchema.length === 0}
+                onClick={checkDepsAndDeploy}
+                disabled={targetSchema.length === 0 || checkingDeps}
                 className="bg-green-600 hover:bg-green-700"
               >
-                <Rocket className="mr-1 h-4 w-4" />
-                Deploy All
+                {checkingDeps ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <Rocket className="mr-1 h-4 w-4" />
+                )}
+                {checkingDeps ? "Checking..." : "Deploy All"}
               </Button>
             </>
           )}
