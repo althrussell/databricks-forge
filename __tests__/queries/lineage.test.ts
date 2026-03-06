@@ -52,8 +52,24 @@ describe("walkLineage", () => {
       columns: [],
       totalRowCount: 2,
       rows: [
-        ["catalog.schema.source", "catalog.schema.table1", "TABLE", "TABLE", "TABLE", "2024-01-01", "5"],
-        ["catalog.schema.table1", "catalog.schema.target", "TABLE", "TABLE", "TABLE", "2024-01-02", "3"],
+        [
+          "catalog.schema.source",
+          "catalog.schema.table1",
+          "TABLE",
+          "TABLE",
+          "TABLE",
+          "2024-01-01",
+          "5",
+        ],
+        [
+          "catalog.schema.table1",
+          "catalog.schema.target",
+          "TABLE",
+          "TABLE",
+          "TABLE",
+          "2024-01-02",
+          "3",
+        ],
       ],
     });
 
@@ -167,7 +183,17 @@ describe("walkLineage", () => {
     mockExecuteSQL.mockResolvedValueOnce({
       columns: [],
       totalRowCount: 1,
-      rows: [["catalog.schema.table_a", "catalog.schema.table_b", "TABLE", "TABLE", "TABLE", "2024-01-01", "1"]],
+      rows: [
+        [
+          "catalog.schema.table_a",
+          "catalog.schema.table_b",
+          "TABLE",
+          "TABLE",
+          "TABLE",
+          "2024-01-01",
+          "1",
+        ],
+      ],
     });
 
     const result = await walkLineage(["catalog.schema.table_a"], { maxDepth: 1 });

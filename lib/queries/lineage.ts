@@ -41,7 +41,7 @@ export interface LineageWalkOptions {
  */
 export async function walkLineage(
   seedTables: string[],
-  options: LineageWalkOptions = {}
+  options: LineageWalkOptions = {},
 ): Promise<LineageGraph> {
   const maxDepth = Math.min(options.maxDepth ?? 3, 10);
   const direction = options.direction ?? "both";
@@ -153,9 +153,7 @@ export async function walkLineage(
  */
 async function isLineageAccessible(): Promise<boolean> {
   try {
-    await executeSQL(
-      "SELECT 1 FROM system.access.table_lineage LIMIT 1"
-    );
+    await executeSQL("SELECT 1 FROM system.access.table_lineage LIMIT 1");
     return true;
   } catch {
     return false;
@@ -170,7 +168,7 @@ async function isLineageAccessible(): Promise<boolean> {
  */
 async function queryLineageForTables(
   tableFqns: string[],
-  direction: "both" | "upstream" | "downstream"
+  direction: "both" | "upstream" | "downstream",
 ): Promise<LineageEdge[]> {
   if (tableFqns.length === 0) return [];
 
