@@ -55,8 +55,17 @@ export interface ValidateColumnOptions {
  * Known struct fields returned by `ai_query()` when `failOnError => false`.
  * These are runtime struct fields, not table columns, so they must be
  * allowlisted to avoid false-positive hallucination flags.
+ *
+ * Includes:
+ * - `result` / `errormessage`: direct fields from the ai_query return struct
+ * - `parsed_result`: common alias for `from_json(ai_result.result, ...)` output
  */
-export const AI_FUNCTION_RETURN_FIELDS = new Set(["result", "errormessage"]);
+export const AI_FUNCTION_RETURN_FIELDS = new Set([
+  "result",
+  "errormessage",
+  "parsed_result",
+  "ai_result",
+]);
 
 // ---------------------------------------------------------------------------
 // Comment stripping

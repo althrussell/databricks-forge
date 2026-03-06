@@ -201,10 +201,13 @@ Returns `{ valid: boolean, unknownColumns: string[], warnings: string[] }`.
 
 #### `AI_FUNCTION_RETURN_FIELDS`
 
-`Set<string>` containing `"result"` and `"errormessage"` (lowercased). These
-are runtime struct fields returned by `ai_query()` when `failOnError => false`.
-They are not table columns and must be allowlisted to avoid false-positive
-hallucination flags.
+`Set<string>` containing `"result"`, `"errormessage"`, `"parsed_result"`, and
+`"ai_result"` (lowercased). These are runtime struct fields and common aliases
+used with `ai_query()` when `failOnError => false`. They are not table columns
+and must be allowlisted to avoid false-positive hallucination flags.
+
+The `parsed_result` and `ai_result` entries support the recommended
+`from_json()` pattern for structured AI output (see section 9).
 
 #### `SQL_KEYWORDS`
 
@@ -417,12 +420,28 @@ if (result.unknownColumns.length > 0) {
 
 ## 9. Known Limitations and Edge Cases
 
-### AI function return fields
+### AI function return fields and structured output
 
-`ai_query()` with `failOnError => false` returns a struct with `result` and
-`errorMessage` fields. These are runtime struct fields, not table columns.
-The shared module allowlists them via `AI_FUNCTION_RETURN_FIELDS`. If new AI
-functions with different return schemas are added, update this set.
+`ai_query()` with `failOnError => false` returns
+`STRUCT<result: STRING, errorMessage: STRING>`. The `result` field is **always
+STRING** regardless of the `responseFormat` parameter. Attempting to access
+nested struct fields directly (e.g. `ai_result.result.field`) causes
+`INVALID_EXTRACT_BASE_FIELD_TYPE` errors.
+
+**Correct pattern for structured output:**
+
+1. Include JSON format instructions in the prompt text via CONCAT
+2. Call `ai_query(endpoint, prompt, modelParameters => ..., failOnError => false) AS ai_result`
+3. Parse: `from_json(ai_result.result, 'STRUCT<field1: TYPE, ...>') AS parsed_result`
+4. Access: `parsed_result.field1`, `parsed_result.field2`; errors: `ai_result.errorMessage`
+
+**Do NOT** use `responseFormat` with `failOnError => false` -- it does not
+change the result field from STRING to a nested struct.
+
+The shared validation module allowlists `result`, `errormessage`,
+`parsed_result`, and `ai_result` via `AI_FUNCTION_RETURN_FIELDS` to avoid
+false-positive hallucination flags on these runtime aliases. If new AI
+functions or parsing patterns introduce additional aliases, update this set.
 
 ### Backtick-quoted column names with spaces
 
