@@ -6,6 +6,7 @@ import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
 import { DashboardsTab } from "@/components/pipeline/dashboards-tab";
 import { MetricViewsTab } from "@/components/pipeline/metric-views-tab";
 import { OverviewTabContent } from "./overview-tab-content";
+import { OutcomeMapTabContent } from "./outcome-map-tab-content";
 import { UseCasesTabContent } from "./use-cases-tab-content";
 import { AIObservabilityTab } from "./ai-observability-tab";
 import { PromptVersionsCard } from "./prompt-versions-card";
@@ -81,6 +82,14 @@ export function RunCompletedTabs({
           </TooltipTrigger>
           <TooltipContent>{RUN_DETAIL.tabUseCases}</TooltipContent>
         </Tooltip>
+        {run.config.industry && useCases.length > 0 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger value="outcome-map">Outcome Map</TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{RUN_DETAIL.tabOutcomeMap}</TooltipContent>
+          </Tooltip>
+        )}
         {useCases.length > 0 && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -151,8 +160,18 @@ export function RunCompletedTabs({
         />
       </TabsContent>
 
+      {run.config.industry && useCases.length > 0 && (
+        <TabsContent value="outcome-map" className="pt-4">
+          <OutcomeMapTabContent
+            industryId={run.config.industry}
+            useCases={useCases}
+            runId={runId}
+          />
+        </TabsContent>
+      )}
+
       {useCases.length > 0 && (
-        <TabsContent value="metric-views" className="pt-4">
+        <TabsContent value="metric-views" className="min-w-0 pt-4">
           <MetricViewsTab runId={run.runId} />
         </TabsContent>
       )}

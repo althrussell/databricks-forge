@@ -178,6 +178,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
             onUseCasesClick={() => setActiveTab("usecases")}
             onOverviewClick={() => setActiveTab("overview")}
             onInsightsOpen={() => setInsightsOpen(true)}
+            onOutcomeMapClick={run.config.industry ? () => setActiveTab("outcome-map") : undefined}
           />
           {useCases.length > 1 && (
             <div>

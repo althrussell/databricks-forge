@@ -9,6 +9,7 @@ export { CoverageGapCard } from "./coverage-gap-card";
 export { EnvironmentScanCard } from "./environment-scan-card";
 export { IndustryBanner } from "./industry-banner";
 export { IndustryCoverageCard } from "./industry-coverage-card";
+export { OutcomeMapTabContent } from "./outcome-map-tab-content";
 export { OverviewTabContent } from "./overview-tab-content";
 export { PbiResultBanner } from "./pbi-result-banner";
 export { PbiScanDialog } from "./pbi-scan-dialog";

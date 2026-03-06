@@ -58,6 +58,7 @@ export const RUN_DETAIL = {
   tabUseCases: "Browse, filter, and edit the generated use cases.",
   tabGenie: "AI-generated Databricks Genie Spaces for natural language SQL exploration.",
   tabDashboards: "AI-generated dashboard recommendations for BI visualisation.",
+  tabOutcomeMap: "Industry outcome map alignment: coverage, gaps, and data onboarding priorities.",
   tabObservability: "Prompt logs, token usage, and LLM performance metrics for this run.",
 } as const;
 

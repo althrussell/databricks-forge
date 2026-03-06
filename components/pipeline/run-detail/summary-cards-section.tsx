@@ -13,12 +13,14 @@ export function SummaryCardsSection({
   onUseCasesClick,
   onOverviewClick,
   onInsightsOpen,
+  onOutcomeMapClick,
 }: {
   useCases: UseCase[];
   coverageData: CoverageResult | null;
   onUseCasesClick: () => void;
   onOverviewClick: () => void;
   onInsightsOpen: () => void;
+  onOutcomeMapClick?: () => void;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-5">
@@ -58,10 +60,13 @@ export function SummaryCardsSection({
       />
       <CoverageGapCard
         coverageData={coverageData}
-        onClick={() => {
-          onOverviewClick();
-          onInsightsOpen();
-        }}
+        onClick={
+          onOutcomeMapClick ??
+          (() => {
+            onOverviewClick();
+            onInsightsOpen();
+          })
+        }
       />
     </div>
   );
