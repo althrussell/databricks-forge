@@ -15,7 +15,9 @@ export type EvaluatorType =
   | "unique"
   | "no_empty_field"
   | "conditional_count"
-  | "jsonpath";
+  | "jsonpath"
+  | "llm_qualitative"
+  | "sql_quality";
 
 export type FixStrategy =
   | "column_intelligence"
@@ -50,6 +52,8 @@ export interface CheckDefinition {
   condition_min?: number;
   /** Whether the check is enabled (default true) */
   enabled?: boolean;
+  /** For llm_qualitative evaluator: the criterion to evaluate */
+  quality_prompt?: string;
 }
 
 export interface CheckResult {
@@ -73,6 +77,32 @@ export interface CategoryScore {
 
 export type Grade = "A" | "B" | "C" | "D" | "F";
 
+export type FindingCategory = "best_practice" | "warning" | "suggestion";
+
+export interface Finding {
+  category: FindingCategory;
+  severity: Severity;
+  description: string;
+  recommendation: string;
+  reference?: string;
+}
+
+export type AssessmentCategory = "good_to_go" | "quick_wins" | "foundation_needed";
+
+export interface CompensatingStrength {
+  coveringSection: string;
+  coveredSection: string;
+  explanation: string;
+}
+
+export interface SynthesisResult {
+  assessment: AssessmentCategory;
+  assessmentRationale: string;
+  compensatingStrengths: CompensatingStrength[];
+  celebrationPoints: string[];
+  topQuickWins: string[];
+}
+
 export interface SpaceHealthReport {
   overallScore: number;
   grade: Grade;
@@ -80,6 +110,8 @@ export interface SpaceHealthReport {
   checks: CheckResult[];
   quickWins: string[];
   fixableCount: number;
+  findings: Finding[];
+  synthesis?: SynthesisResult;
 }
 
 export interface UserCheckOverride {

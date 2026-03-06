@@ -6,11 +6,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getGenieSpace } from "@/lib/dbx/genie";
-import { runHealthCheck } from "@/lib/genie/space-health-check";
+import { runHealthCheck, enrichReportWithSqlQuality } from "@/lib/genie/space-health-check";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { getHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 
 const MAX_BATCH_SIZE = 50;
@@ -69,12 +71,15 @@ export async function POST(request: NextRequest) {
         }
 
         const space = JSON.parse(serializedSpace);
-        const report = runHealthCheck(
+        let report = runHealthCheck(
           space,
           config.overrides.length > 0 ? config.overrides : undefined,
           config.customChecks.length > 0 ? config.customChecks : undefined,
           config.categoryWeights ?? undefined,
         );
+        if (isReviewEnabled("health-check-sql-quality")) {
+          report = await enrichReportWithSqlQuality(space, report);
+        }
         return [spaceId, report];
       } catch (err) {
         logger.warn("Batch health check failed for space", { spaceId, error: String(err) });
@@ -90,7 +95,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(reports);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

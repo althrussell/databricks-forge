@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isValidUUID } from "@/lib/validation";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { cancelPipeline } from "@/lib/pipeline/engine";
 import { logger } from "@/lib/logger";
 
@@ -31,7 +32,6 @@ export async function POST(
 
     return NextResponse.json({ runId, status: "cancelled" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

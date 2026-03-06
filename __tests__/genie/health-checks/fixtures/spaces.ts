@@ -22,7 +22,7 @@ export const perfectSpace = {
         identifier: "catalog.schema.orders",
         description: ["Order transactions"],
         column_configs: [
-          { id: hexId(10), name: "order_id", description: ["Unique order ID"], synonyms: ["id"], enable_entity_matching: true },
+          { id: hexId(10), name: "order_id", description: ["Unique order ID"], synonyms: ["id"], enable_entity_matching: true, enable_format_assistance: true },
           { id: hexId(11), name: "customer_id", description: ["Customer FK"], synonyms: ["cust"], enable_entity_matching: false },
           { id: hexId(12), name: "total", description: ["Order total"], synonyms: ["amount"], enable_entity_matching: false },
         ],
@@ -42,10 +42,11 @@ export const perfectSpace = {
     text_instructions: [
       { id: hexId(30), content: ["This space is about order analytics."] },
     ],
-    example_question_sqls: Array.from({ length: 6 }, (_, i) => ({
+    example_question_sqls: Array.from({ length: 10 }, (_, i) => ({
       id: hexId(40 + i),
       question: [`Question ${i + 1}`],
-      sql: [`SELECT * FROM table_${i}`],
+      sql: [`SELECT col_${i} FROM table_${i}`],
+      usage_guidance: `Guidance for question ${i + 1}`,
     })),
     join_specs: [
       {
@@ -53,24 +54,27 @@ export const perfectSpace = {
         left: { identifier: "catalog.schema.orders", alias: "o" },
         right: { identifier: "catalog.schema.customers", alias: "c" },
         sql: ["o.customer_id = c.customer_id"],
+        comment: "Orders to customers FK relationship",
       },
     ],
     sql_snippets: {
       measures: [
-        { id: hexId(60), alias: "total_revenue", sql: ["SUM(o.total)"], display_name: "Total Revenue", synonyms: ["revenue"] },
+        { id: hexId(60), alias: "total_revenue", sql: ["SUM(o.total)"], display_name: "Total Revenue", synonyms: ["revenue"], comment: "Sum of order totals" },
+        { id: hexId(61), alias: "order_count", sql: ["COUNT(o.order_id)"], display_name: "Order Count", synonyms: ["num orders"], comment: "Number of orders" },
       ],
       filters: [
-        { id: hexId(70), sql: ["o.order_date >= DATEADD(month, -1, CURRENT_DATE())"], display_name: "Last 30 days", synonyms: ["recent"] },
+        { id: hexId(70), sql: ["o.order_date >= DATEADD(month, -1, CURRENT_DATE())"], display_name: "Last 30 days", synonyms: ["recent"], comment: "Filter to last 30 days" },
       ],
       expressions: [
-        { id: hexId(80), alias: "is_high_value", sql: ["o.total > 1000"], synonyms: ["premium"] },
+        { id: hexId(80), alias: "is_high_value", sql: ["o.total > 1000"], synonyms: ["premium"], display_name: "High Value Order", instruction: "Use to identify high value orders" },
       ],
     },
   },
   benchmarks: {
-    questions: Array.from({ length: 6 }, (_, i) => ({
+    questions: Array.from({ length: 10 }, (_, i) => ({
       id: hexId(90 + i),
       question: [`Benchmark question ${i + 1}`],
+      answer: `SELECT answer_${i} FROM table`,
     })),
   },
 };

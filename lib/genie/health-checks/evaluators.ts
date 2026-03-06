@@ -6,6 +6,8 @@
  */
 
 import type { CheckDefinition, CheckResult } from "./types";
+import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpaceJson = Record<string, any>;
@@ -304,8 +306,103 @@ function evaluateConditionalCount(space: SpaceJson, check: CheckDefinition): Che
   return evaluateCount(space, check);
 }
 
-function evaluateJsonpath(_space: SpaceJson, check: CheckDefinition): CheckResult {
-  return buildResult(check, true, "JSONPath evaluator: not yet implemented");
+/**
+ * LLM qualitative evaluator -- returns a placeholder result.
+ * Actual LLM evaluation is handled by runLlmQualitativeChecks() in synthesis.ts.
+ * This is registered so the evaluator name is valid and registry validation passes.
+ * When deep analysis is not requested, qualitative checks are skipped.
+ */
+function evaluateLlmQualitative(_space: SpaceJson, check: CheckDefinition): CheckResult {
+  return buildResult(check, true, "Qualitative check (requires deep analysis mode)");
+}
+
+function evaluateJsonpath(space: SpaceJson, check: CheckDefinition): CheckResult {
+  const path = check.path;
+  if (!path) return buildResult(check, false, "No path specified for jsonpath evaluator");
+
+  const values = resolvePath(space, path);
+  const minCount = (check.params.min as number | undefined) ?? 1;
+
+  if (values.length >= minCount) {
+    return buildResult(check, true, `JSONPath resolved ${values.length} value(s)`);
+  }
+  return buildResult(check, false, `JSONPath resolved ${values.length} value(s), need at least ${minCount}`);
+}
+
+/**
+ * SQL quality evaluator -- reviews SQL snippets at the specified paths
+ * via the dedicated review endpoint. Returns pass when the average quality
+ * score meets the configured min_score threshold.
+ *
+ * Since this requires an async LLM call, it stores a pending promise.
+ * The health check runner resolves async evaluator results separately.
+ * As a synchronous fallback (when the review endpoint is not configured),
+ * it returns a pass-through result.
+ */
+let _pendingSqlQualityChecks: Array<{
+  check: CheckDefinition;
+  items: BatchReviewItem[];
+}> = [];
+
+export function getPendingSqlQualityChecks() {
+  return _pendingSqlQualityChecks;
+}
+
+export function clearPendingSqlQualityChecks() {
+  _pendingSqlQualityChecks = [];
+}
+
+export async function resolveSqlQualityChecks(
+  space: SpaceJson,
+): Promise<CheckResult[]> {
+  const pending = [..._pendingSqlQualityChecks];
+  _pendingSqlQualityChecks = [];
+  if (pending.length === 0) return [];
+
+  const results: CheckResult[] = [];
+  for (const { check, items } of pending) {
+    if (items.length === 0) {
+      results.push(buildResult(check, true, "No SQL snippets to review"));
+      continue;
+    }
+
+    const batchResults = await reviewBatch(items, "health-check-sql-quality");
+    const scores = batchResults.map((r) => r.result.qualityScore);
+    const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const failCount = batchResults.filter((r) => r.result.verdict === "fail").length;
+    const minScore = (check.params.min_score as number) ?? 60;
+    const passed = avgScore >= minScore && failCount === 0;
+
+    results.push(
+      buildResult(
+        check,
+        passed,
+        `Avg quality: ${Math.round(avgScore)}/100 across ${items.length} snippets (${failCount} failures, threshold: ${minScore})`,
+      ),
+    );
+  }
+  return results;
+}
+
+function evaluateSqlQuality(space: SpaceJson, check: CheckDefinition): CheckResult {
+  if (!isReviewEnabled("health-check-sql-quality")) {
+    return buildResult(check, true, "SQL quality review not enabled (no review endpoint)");
+  }
+
+  const paths = check.paths ?? (check.path ? [check.path] : []);
+  const items: BatchReviewItem[] = [];
+  let idx = 0;
+  for (const p of paths) {
+    const values = resolvePath(space, p);
+    for (const v of values) {
+      if (typeof v === "string" && v.trim().length > 5) {
+        items.push({ id: `sql-${idx++}`, sql: v });
+      }
+    }
+  }
+
+  _pendingSqlQualityChecks.push({ check, items });
+  return buildResult(check, true, `Queued ${items.length} SQL snippets for review (async)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +421,8 @@ const EVALUATORS: Record<string, (space: SpaceJson, check: CheckDefinition) => C
   no_empty_field: evaluateNoEmptyField,
   conditional_count: evaluateConditionalCount,
   jsonpath: evaluateJsonpath,
+  llm_qualitative: evaluateLlmQualitative,
+  sql_quality: evaluateSqlQuality,
 };
 
 /**

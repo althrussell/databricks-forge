@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { createDocument, updateDocumentStatus } from "@/lib/lakebase/documents";
 import { chunkText } from "@/lib/embeddings/chunker";
 import { composeDocumentChunk } from "@/lib/embeddings/compose";
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Upload failed" },
+      { error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

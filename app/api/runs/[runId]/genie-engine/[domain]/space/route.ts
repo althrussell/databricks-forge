@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
@@ -135,8 +136,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, domain: decodedDomain });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 

@@ -4,8 +4,9 @@
  * Sourced from the "gold standard" pipeline SQL gen prompt (templates.ts)
  * and the databricks-dbsql skill best practices.
  *
- * DATABRICKS_SQL_RULES       -- full rule set for prompts generating complete SQL queries
- * DATABRICKS_SQL_RULES_COMPACT -- shorter set for prompts generating SQL expressions/snippets
+ * DATABRICKS_SQL_RULES            -- full rule set for prompts generating complete SQL queries
+ * DATABRICKS_SQL_RULES_COMPACT    -- shorter set for prompts generating SQL expressions/snippets
+ * DATABRICKS_SQL_REVIEW_CHECKLIST -- structured checklist for the LLM reviewer endpoint
  */
 
 export const DATABRICKS_SQL_RULES = `
@@ -38,6 +39,28 @@ Databricks SQL features:
 - Use PERCENTILE_APPROX for percentile calculations (P20, P50, P75, etc.).
 - Prefer native SQL functions over UDFs -- UDFs require serialization and are dramatically slower.
 - Use pipe syntax (|>) for complex multi-step transformations where it improves readability.
+- Databricks has NO STRING_AGG(). Use array_join(collect_list(col), ',') instead.
+
+MERGE and DML best practices:
+- Prefer MERGE INTO over separate DELETE + INSERT for upsert patterns.
+- Always use WHEN MATCHED AND / WHEN NOT MATCHED for conditional merge logic.
+- After MERGE, do NOT manually OPTIMIZE -- Delta auto-optimizes on write.
+
+Complex types:
+- Access STRUCT fields with dot notation: col.field (no need for brackets).
+- Use EXPLODE(array_col) or INLINE(array_of_structs_col) to flatten arrays.
+- Avoid filtering on complex-type columns (STRUCT/ARRAY/MAP) in WHERE clauses -- it defeats data skipping and partition pruning.
+- Use map_keys(), map_values(), or element_at(map_col, key) for MAP operations.
+
+Timestamps and intervals:
+- Prefer TIMESTAMP_NTZ over TIMESTAMP for timezone-independent values (audit dates, created_at).
+- Use standard interval syntax: INTERVAL '30' DAY, INTERVAL '1' MONTH, INTERVAL '2' HOUR.
+- Use DATE_ADD / DATE_SUB for simple date arithmetic; use INTERVAL for timestamp arithmetic.
+
+DDL patterns:
+- Prefer CREATE OR REPLACE TABLE/VIEW over DROP IF EXISTS + CREATE.
+- Use CLUSTER BY (col1, col2) for liquid clustering (replaces Z-ORDER in modern tables).
+- Include TBLPROPERTIES for table metadata (tier, owner, quality tags).
 `.trim();
 
 export const DATABRICKS_SQL_RULES_COMPACT = `
@@ -53,4 +76,57 @@ DATABRICKS SQL RULES:
 - NEVER use TO_DATE()/TO_TIMESTAMP(). Use COALESCE(try_to_date(col, fmt1), try_to_date(col, fmt2)) for safe string-to-date parsing.
 - ai_query() named parameters: ONLY modelParameters, responseFormat, failOnError. NEVER use systemPrompt or other invented names.
 - ALWAYS backtick-quote column names with spaces or special characters. Use names EXACTLY as in the schema.
+- No STRING_AGG() -- use array_join(collect_list(col), ',') instead.
+- Prefer MERGE INTO over DELETE + INSERT for upserts.
+- Access STRUCT fields with dot notation; use EXPLODE for arrays.
+- Prefer TIMESTAMP_NTZ for timezone-independent timestamps.
+- Use INTERVAL '30' DAY syntax for interval literals.
+- Prefer CREATE OR REPLACE over DROP + CREATE.
+`.trim();
+
+export const DATABRICKS_SQL_REVIEW_CHECKLIST = `
+REVIEW CHECKLIST (evaluate each dimension independently):
+
+1. CORRECTNESS
+   - All table/column references exist in the provided schema
+   - JOIN conditions use correct keys (match FK relationships)
+   - Aggregations are grouped correctly (no missing GROUP BY columns)
+   - WHERE/HAVING filters are logically sound
+   - Data types are handled correctly (no implicit lossy casts)
+
+2. PERFORMANCE
+   - Filters are pushed early (WHERE before aggregation, not HAVING for non-aggregate conditions)
+   - No unnecessary self-joins (use window functions instead)
+   - No SELECT * in production queries
+   - LIMIT is present for top-N queries (not RANK/DENSE_RANK)
+   - CTEs are used to avoid repeated subquery evaluation
+
+3. READABILITY
+   - Meaningful aliases for tables and columns
+   - Consistent formatting and indentation
+   - Complex logic broken into CTEs rather than deeply nested subqueries
+   - Column order makes business sense (identifiers first, measures second)
+
+4. SECURITY
+   - No SQL injection vectors (dynamic string concatenation in expressions)
+   - No exposure of sensitive columns without business justification
+   - Read-only patterns only (no DDL/DML in analytical queries)
+
+5. DATABRICKS IDIOM ADHERENCE
+   - PERCENTILE_APPROX instead of MEDIAN()
+   - COLLATE UTF8_LCASE for case-insensitive comparisons
+   - try_to_date/try_to_timestamp instead of TO_DATE/TO_TIMESTAMP
+   - QUALIFY for per-group deduplication
+   - Pipe syntax (|>) for complex multi-step transformations
+   - DECIMAL(18,2) for financial calculations
+   - No nested window functions inside aggregates
+   - Backtick-quoted identifiers with spaces/special chars
+   - Three-part fully-qualified table names (catalog.schema.table)
+   - array_join(collect_list(col), ',') instead of STRING_AGG()
+   - MERGE INTO for upserts (not DELETE + INSERT)
+   - STRUCT dot notation, EXPLODE for arrays, map_keys()/element_at() for MAPs
+   - TIMESTAMP_NTZ for timezone-independent timestamps
+   - INTERVAL '30' DAY syntax (not DATEADD with integer)
+   - CREATE OR REPLACE over DROP IF EXISTS + CREATE
+   - CLUSTER BY for liquid clustering (replaces Z-ORDER)
 `.trim();

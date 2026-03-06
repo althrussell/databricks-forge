@@ -7,7 +7,17 @@ import {
   startConversation,
   type GenieConversationMessage,
 } from "@/lib/dbx/genie";
+import { reviewBatch, type BatchReviewItem, type BatchReviewResult } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
+
+export interface SqlResultPreview {
+  columns: Array<{ name: string; type: string }>;
+  rows: string[][];
+  rowCount: number;
+  truncated: boolean;
+  error?: string;
+}
 
 export interface BenchmarkResult {
   question: string;
@@ -16,6 +26,8 @@ export interface BenchmarkResult {
   status: GenieConversationMessage["status"];
   passed: boolean;
   error?: string;
+  actualSqlResult?: SqlResultPreview;
+  expectedSqlResult?: SqlResultPreview;
 }
 
 export interface BenchmarkRunSummary {
@@ -25,6 +37,41 @@ export interface BenchmarkRunSummary {
   failed: number;
   errorCount: number;
   results: BenchmarkResult[];
+  expectedSqlReview?: BatchReviewResult[];
+}
+
+/**
+ * Pre-run review of benchmark expectedSql to ensure the benchmark suite
+ * itself is high quality. Returns review results per benchmark.
+ * Only runs when the review endpoint is configured.
+ */
+export async function reviewBenchmarkExpectedSql(
+  benchmarks: Array<{ question: string; expectedSql?: string }>,
+): Promise<BatchReviewResult[]> {
+  if (!isReviewEnabled("benchmark-review")) return [];
+
+  const items: BatchReviewItem[] = benchmarks
+    .filter((b) => b.expectedSql && b.expectedSql.trim().length > 10)
+    .map((b, i) => ({
+      id: `bench-${i}`,
+      sql: b.expectedSql!,
+      context: `Expected answer for: ${b.question}`,
+    }));
+
+  if (items.length === 0) return [];
+
+  const results = await reviewBatch(items, "benchmark-review");
+  const failCount = results.filter((r) => r.result.verdict === "fail").length;
+
+  logger.info("Benchmark expectedSql review complete", {
+    reviewed: items.length,
+    failCount,
+    avgScore: Math.round(
+      results.reduce((s, r) => s + r.result.qualityScore, 0) / results.length,
+    ),
+  });
+
+  return results;
 }
 
 function normalizeSql(sql: string): string {

@@ -22,8 +22,9 @@ import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { fetchTableInfoBatch, fetchColumnsBatch } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
-import { getServingEndpoint, getConfig } from "@/lib/dbx/client";
+import { getServingEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
 const TEMPERATURE = 0.3;
@@ -259,6 +260,47 @@ export async function runAdHocDashboardEngine(
 
   if (design.datasets.length === 0) {
     throw new Error("All dashboard datasets were rejected due to invalid SQL references");
+  }
+
+  // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
+  if (isReviewEnabled("adhoc-dashboard")) {
+    const schemaCtx = columnSchemas.join("\n");
+    const reviewed = await Promise.all(
+      design.datasets.map(async (ds) => {
+        if (!ds.sql) return ds;
+        const review = await reviewAndFixSql(ds.sql, {
+          schemaContext: schemaCtx,
+          surface: "adhoc-dashboard",
+        });
+        if (review.fixedSql) {
+          if (validateSqlExpression(allowlist, review.fixedSql, `adhoc_dashboard_fix:${ds.name}`, true)) {
+            logger.info("Ad-hoc Dashboard: review applied fix", {
+              dataset: ds.name,
+              qualityScore: review.qualityScore,
+            });
+            return { ...ds, sql: review.fixedSql };
+          }
+          logger.warn("Ad-hoc Dashboard: review fix failed schema validation, keeping original", {
+            dataset: ds.name,
+          });
+          return ds;
+        }
+        if (review.verdict === "fail") {
+          logger.warn("Ad-hoc Dashboard: review rejected dataset", {
+            dataset: ds.name,
+            issues: review.issues.map((i) => i.message),
+          });
+          return null;
+        }
+        return ds;
+      }),
+    );
+    design.datasets = reviewed.filter(
+      (ds): ds is NonNullable<typeof ds> => ds !== null,
+    );
+    if (design.datasets.length === 0) {
+      throw new Error("All dashboard datasets were rejected by SQL review");
+    }
   }
 
   const lakeviewDashboard = assembleLakeviewDashboard(design);

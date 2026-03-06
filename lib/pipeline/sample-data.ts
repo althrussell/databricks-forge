@@ -27,6 +27,12 @@ export interface SampleDataResult {
   totalRows: number;
 }
 
+export interface SampleAuditContext {
+  runId?: string;
+  userEmail?: string | null;
+  step?: string;
+}
+
 /**
  * Fetch sample rows from each table and format as markdown tables for
  * prompt injection. Returns both the formatted markdown and stats about
@@ -34,7 +40,8 @@ export interface SampleDataResult {
  */
 export async function fetchSampleData(
   tableFqns: string[],
-  rowLimit: number
+  rowLimit: number,
+  auditContext?: SampleAuditContext,
 ): Promise<SampleDataResult> {
   const sections: string[] = [
     "### SAMPLE DATA (real rows from the tables -- use this to understand data formats, values, and join keys)\n",
@@ -112,6 +119,19 @@ export async function fetchSampleData(
     logger.info(
       `Data sampling: ${tablesSampled}/${tableFqns.length} tables sampled, ${tablesSkipped} skipped (falling back to metadata only for those)`
     );
+  }
+
+  if (tablesSampled > 0) {
+    const sampledFqns = [...structured.keys()];
+    logger.info("Audit: tables sampled", {
+      runId: auditContext?.runId ?? "unknown",
+      userEmail: auditContext?.userEmail ?? "unknown",
+      step: auditContext?.step ?? "unknown",
+      tablesSampled,
+      tablesSkipped,
+      totalRows,
+      tables: sampledFqns,
+    });
   }
 
   return {

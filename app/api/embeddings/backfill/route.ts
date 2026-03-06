@@ -12,6 +12,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { logger } from "@/lib/logger";
 
@@ -66,7 +67,7 @@ export async function POST() {
       results,
     });
     return NextResponse.json(
-      { error: "Backfill failed", partialResults: results },
+      { error: safeErrorMessage(error), partialResults: results },
       { status: 500 },
     );
   }

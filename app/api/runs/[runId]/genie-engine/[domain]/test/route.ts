@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import {
   startConversation,
@@ -98,6 +99,6 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Genie Space test failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

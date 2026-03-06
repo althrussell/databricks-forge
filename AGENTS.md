@@ -32,6 +32,7 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - `DATABRICKS_APP_PORT` controls the listen port (fallback: 3000).
 - SQL Warehouse is bound as an app resource (no hardcoded warehouse IDs).
 - Embedding endpoint (`serving-endpoint-embedding`) defaults to `databricks-qwen3-embedding-0-6b`.
+- Review endpoint (`serving-endpoint-review`) defaults to `databricks-gpt-5-4` for LLM-as-reviewer SQL quality checks.
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
 
 ## Folder Contract
@@ -103,7 +104,8 @@ Key modules:
 - `lib/genie/engine-status.ts` -- in-memory progress tracker
 - `lib/genie/llm-cache.ts` -- in-memory LLM response cache with retry logic
 - `lib/genie/concurrency.ts` -- bounded-concurrency execution utility
-- `lib/ai/sql-rules.ts` -- shared Databricks SQL quality rules (`DATABRICKS_SQL_RULES`, `DATABRICKS_SQL_RULES_COMPACT`)
+- `lib/ai/sql-rules.ts` -- shared Databricks SQL quality rules (`DATABRICKS_SQL_RULES`, `DATABRICKS_SQL_RULES_COMPACT`, `DATABRICKS_SQL_REVIEW_CHECKLIST`)
+- `lib/ai/sql-reviewer.ts` -- LLM-as-reviewer SQL quality module (`reviewSql`, `reviewAndFixSql`, `reviewBatch`) using `serving-endpoint-review`
 - `lib/dbx/genie.ts` -- Databricks Genie REST API client (create/update/trash spaces, payload sanitization)
 - `lib/lakebase/genie-recommendations.ts` -- persistence for generated recommendations
 - `lib/lakebase/genie-engine-config.ts` -- versioned engine config per run
@@ -198,6 +200,7 @@ API routes:
 | Security headers   | Via `next.config.ts` `headers()` function                   |
 | Versioning         | `package.json` version in `/api/health`, sidebar, run metadata |
 | Model routing      | `getFastServingEndpoint()` routes classification/enrichment to fast model across all pipelines; falls back to premium if `serving-endpoint-fast` is not configured |
+| SQL review         | `getReviewEndpoint()` routes SQL quality review to dedicated review model (`databricks-gpt-5-4` via `serving-endpoint-review`); `lib/ai/sql-reviewer.ts` provides `reviewSql()`, `reviewAndFixSql()`, `reviewBatch()`; opt-in per surface via `isReviewEnabled()` |
 | Embeddings         | `lib/embeddings/client.ts` -- `databricks-qwen3-embedding-0-6b` (1024-dim) via `getEmbeddingEndpoint()`; batched (16/req) with 429/5xx retry |
 | Vector search      | `lib/embeddings/store.ts` -- pgvector in Lakebase; `forge_embeddings` table with HNSW index; 12 entity kinds covering all estate + pipeline data |
 | LLM cache + retry  | `lib/genie/llm-cache.ts` -- in-memory SHA-256-keyed cache (10min TTL) with 429/5xx retry |

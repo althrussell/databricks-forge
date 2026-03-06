@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getHealthCheckConfig, saveHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { resolveRegistry } from "@/lib/genie/health-checks/registry";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function GET() {
   try {
@@ -26,8 +27,7 @@ export async function GET() {
       validationErrors: registry.validationErrors,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -53,7 +53,6 @@ export async function PUT(request: NextRequest) {
     logger.info("Health check config updated");
     return NextResponse.json({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
@@ -160,7 +161,6 @@ export async function POST(
         : "Genie Engine generation started. Poll /generate/status for progress.",
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

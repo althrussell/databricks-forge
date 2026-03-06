@@ -14,6 +14,8 @@ import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "../concurrency";
 
 const TEMPERATURE = 0.1;
@@ -191,7 +193,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
 
   const MAX_BENCHMARK_SQL_CHARS = 3000;
 
-  return items
+  let benchmarks = items
     .map((b) => ({
       question: String(b.question ?? ""),
       expectedSql: String(b.expectedSql ?? b.expected_sql ?? ""),
@@ -211,6 +213,32 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
       return true;
     })
     .filter((b) => validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`, true));
+
+  // LLM review gate: review + fix each benchmark's expected SQL
+  if (isReviewEnabled("genie-benchmarks") && benchmarks.length > 0) {
+    const reviewed = await Promise.all(
+      benchmarks.map(async (b) => {
+        const review = await reviewAndFixSql(b.expectedSql, {
+          schemaContext: schemaBlock,
+          surface: "genie-benchmarks",
+        });
+        if (review.fixedSql) {
+          if (validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)) {
+            return { ...b, expectedSql: review.fixedSql };
+          }
+          logger.warn("Benchmark review fix failed schema validation, keeping original", {
+            question: b.question,
+          });
+          return b;
+        }
+        if (review.verdict === "fail") return null;
+        return b;
+      }),
+    );
+    benchmarks = reviewed.filter((b): b is NonNullable<typeof b> => b !== null);
+  }
+
+  return benchmarks;
 }
 
 function dedup(items: BenchmarkInput[], keyFn: (item: BenchmarkInput) => string): BenchmarkInput[] {

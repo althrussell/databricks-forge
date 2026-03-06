@@ -8,6 +8,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { embeddingsTableExists } from "@/lib/embeddings/store";
 import { getEmbeddingStats } from "@/lib/embeddings/re-embed";
@@ -58,7 +59,7 @@ export async function GET() {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { enabled: false, error: "Failed to check embedding status" },
+      { enabled: false, error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

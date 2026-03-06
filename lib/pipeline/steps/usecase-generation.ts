@@ -223,7 +223,9 @@ export async function runUsecaseGeneration(
       .map((t) => t.fqn);
     let sampleDataSection = "";
     if (sampleRows > 0 && concurrentTableFqns.length > 0) {
-      const sampleResult = await fetchSampleData(concurrentTableFqns, sampleRows);
+      const sampleResult = await fetchSampleData(concurrentTableFqns, sampleRows, {
+        runId, userEmail: run.createdBy, step: "usecase-generation",
+      });
       sampleDataSection = sampleResult.markdown;
       // Accumulate structured sample data for downstream Genie Engine use
       if (sampleResult.structured.size > 0) {

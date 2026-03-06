@@ -7,12 +7,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { updateGenieSpace } from "@/lib/dbx/genie";
-import { runHealthCheck } from "@/lib/genie/space-health-check";
+import { runHealthCheck, enrichReportWithSqlQuality } from "@/lib/genie/space-health-check";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { getHealthCheckConfig, saveHealthScore } from "@/lib/lakebase/space-health";
 import { getSpaceAuthMode } from "@/lib/lakebase/genie-spaces";
 import { invalidateSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function POST(
   request: NextRequest,
@@ -43,12 +45,16 @@ export async function POST(
       categoryWeights: null,
     }));
 
-    const report = runHealthCheck(
+    let report = runHealthCheck(
       space,
       config.overrides.length > 0 ? config.overrides : undefined,
       config.customChecks.length > 0 ? config.customChecks : undefined,
       config.categoryWeights ?? undefined,
     );
+
+    if (isReviewEnabled("health-check-sql-quality")) {
+      report = await enrichReportWithSqlQuality(space, report);
+    }
 
     // Persist health score for trending
     saveHealthScore(spaceId, report, "post_fix").catch((err) => {
@@ -64,6 +70,6 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Apply fix failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

@@ -4,6 +4,8 @@ import { parseLLMJson } from "./parse-llm-json";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import type { TrustedAssetQuery, QuestionComplexity } from "../types";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { sanitizeUserContext } from "./title-generation";
 
@@ -198,7 +200,7 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
   });
   const parsed = parseLLMJson(response.content ?? "", "genie:example-queries") as Record<string, unknown>;
   const rawQueries = Array.isArray(parsed.queries) ? parsed.queries : [];
-  return (rawQueries as Record<string, unknown>[])
+  let queries = (rawQueries as Record<string, unknown>[])
     .map((q) => ({
       question: String(q.question ?? "").trim(),
       sql: String(q.sql ?? "").trim(),
@@ -207,6 +209,28 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
     .filter((q) => q.question.length > 0 && q.sql.length > 0)
     .filter((q) => validateSqlExpression(input.allowlist, q.sql, `example_query:${q.question}`, true))
     .slice(0, MAX_QUERIES);
+
+  if (isReviewEnabled("genie-example-queries") && queries.length > 0) {
+    const schemaBlock = buildSchemaContextBlock(input.metadata, input.tableFqns);
+    const reviewed = await Promise.all(
+      queries.map(async (q) => {
+        const review = await reviewAndFixSql(q.sql, {
+          schemaContext: schemaBlock,
+          surface: "genie-example-queries",
+        });
+        if (review.fixedSql) {
+          if (validateSqlExpression(input.allowlist, review.fixedSql, `example_query_fix:${q.question}`, true)) {
+            return { ...q, sql: review.fixedSql };
+          }
+        }
+        if (review.verdict === "fail") return null;
+        return q;
+      }),
+    );
+    queries = reviewed.filter((q): q is NonNullable<typeof q> => q !== null);
+  }
+
+  return queries;
 }
 
 export async function runExampleQueryGeneration(

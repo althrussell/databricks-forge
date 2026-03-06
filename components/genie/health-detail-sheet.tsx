@@ -15,11 +15,14 @@ import {
   CheckCircle2,
   Info,
   Loader2,
+  PartyPopper,
   Shield,
+  Sparkles,
   Wrench,
   XCircle,
   FlaskConical,
   Lightbulb,
+  Zap,
 } from "lucide-react";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import Link from "next/link";
@@ -138,6 +141,97 @@ export function HealthDetailSheet({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Synthesis results */}
+            {report.synthesis && (
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-4 text-purple-500" />
+                  <h3 className="text-sm font-medium">AI Assessment</h3>
+                  <Badge
+                    variant={report.synthesis.assessment === "good_to_go" ? "default" : "secondary"}
+                    className="text-[10px]"
+                  >
+                    {report.synthesis.assessment === "good_to_go"
+                      ? "Good to Go"
+                      : report.synthesis.assessment === "quick_wins"
+                        ? "Quick Wins Available"
+                        : "Foundation Needed"}
+                  </Badge>
+                </div>
+                {report.synthesis.assessmentRationale && (
+                  <p className="text-xs text-muted-foreground">{report.synthesis.assessmentRationale}</p>
+                )}
+
+                {report.synthesis.celebrationPoints.length > 0 && (
+                  <div className="space-y-1">
+                    <h4 className="flex items-center gap-1 text-xs font-medium">
+                      <PartyPopper className="size-3 text-green-500" />
+                      What&apos;s Working Well
+                    </h4>
+                    <ul className="space-y-1">
+                      {report.synthesis.celebrationPoints.map((point, i) => (
+                        <li key={i} className="text-xs text-muted-foreground">
+                          {point}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {report.synthesis.topQuickWins.length > 0 && (
+                  <div className="space-y-1">
+                    <h4 className="flex items-center gap-1 text-xs font-medium">
+                      <Zap className="size-3 text-amber-500" />
+                      Top Quick Wins
+                    </h4>
+                    <ul className="space-y-1">
+                      {report.synthesis.topQuickWins.map((win, i) => (
+                        <li key={i} className="text-xs text-muted-foreground">
+                          {win}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {report.synthesis.compensatingStrengths.length > 0 && (
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-medium">Compensating Strengths</h4>
+                    {report.synthesis.compensatingStrengths.map((cs, i) => (
+                      <p key={i} className="text-xs text-muted-foreground">
+                        <span className="font-medium">{cs.coveringSection}</span> compensates for{" "}
+                        <span className="font-medium">{cs.coveredSection}</span>: {cs.explanation}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Findings */}
+            {report.findings && report.findings.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="flex items-center gap-1.5 text-sm font-medium">
+                  <AlertTriangle className="size-4 text-amber-500" />
+                  Findings ({report.findings.length})
+                </h3>
+                {report.findings.map((finding, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded border px-3 py-2">
+                    {severityIcon(finding.severity)}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm">{finding.description}</div>
+                      {finding.recommendation && (
+                        <div className="mt-0.5 text-xs text-muted-foreground">{finding.recommendation}</div>
+                      )}
+                    </div>
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      {finding.category.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                ))}
               </div>
             )}
 

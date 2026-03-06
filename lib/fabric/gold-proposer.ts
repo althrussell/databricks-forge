@@ -11,7 +11,9 @@
 
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { getServingEndpoint } from "@/lib/dbx/client";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { mapPbiTypeToSpark } from "./type-mapping";
 import { normalizeIdentifier, normalizeTableName, type NameMapping } from "./name-normalizer";
 import { resolveLabelTag, buildTagDdl, type SensitivityLabelMapping } from "./sensitivity-mapping";
@@ -163,6 +165,35 @@ export async function proposeGoldSchema(
   } else {
     for (const proposal of proposals) {
       proposal.ddl = buildBasicDDL(proposal, targetCatalog, targetSchema);
+    }
+  }
+
+  if (isReviewEnabled("gold-proposer")) {
+    for (const proposal of proposals) {
+      if (!proposal.ddl) continue;
+      try {
+        const review = await reviewAndFixSql(proposal.ddl, {
+          surface: "gold-proposer",
+        });
+        if (review.fixedSql) {
+          logger.info("Gold proposer: review applied DDL fix", {
+            table: proposal.ucTableName,
+            qualityScore: review.qualityScore,
+          });
+          proposal.ddl = review.fixedSql;
+        } else if (review.verdict === "fail") {
+          logger.warn("Gold proposer: DDL failed review, falling back to basic DDL", {
+            table: proposal.ucTableName,
+            issues: review.issues.map((i) => i.message),
+          });
+          proposal.ddl = buildBasicDDL(proposal, targetCatalog, targetSchema);
+        }
+      } catch (err) {
+        logger.warn("Gold proposer: review failed, keeping original DDL", {
+          table: proposal.ucTableName,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

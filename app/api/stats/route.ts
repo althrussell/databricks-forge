@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { isDatabaseReady, withPrisma } from "@/lib/prisma";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { logger } from "@/lib/logger";
@@ -189,7 +190,7 @@ export async function GET() {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/stats] GET failed", { error: msg });
     return NextResponse.json(
-      { error: msg },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

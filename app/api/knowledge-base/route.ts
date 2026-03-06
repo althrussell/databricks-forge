@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { listDocuments, deleteDocument } from "@/lib/lakebase/documents";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { logger } from "@/lib/logger";
@@ -54,7 +55,7 @@ export async function DELETE(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to delete document" },
+      { error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

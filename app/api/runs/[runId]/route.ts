@@ -22,6 +22,7 @@ import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getActivePipelineRunIds } from "@/lib/pipeline/engine";
 
 export async function GET(
@@ -81,7 +82,7 @@ export async function GET(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { runId: "unknown", error: msg });
     return NextResponse.json(
-      { error: msg || "Failed to get run" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -153,7 +154,7 @@ export async function PATCH(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] PATCH failed", { error: msg });
     return NextResponse.json(
-      { error: msg || "Failed to update run" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -202,7 +203,7 @@ export async function DELETE(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] DELETE failed", { error: msg });
     return NextResponse.json(
-      { error: msg || "Failed to delete run" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

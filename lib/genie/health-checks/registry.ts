@@ -1,10 +1,12 @@
 /**
  * Health Check Registry -- loads default YAML checks, merges with user
  * overrides and custom checks, and returns resolved check/category definitions.
+ *
+ * The default checks YAML is embedded as a string constant so the registry
+ * works in bundled environments (Next.js production, Databricks Apps) where
+ * __dirname does not resolve to the source tree.
  */
 
-import { readFileSync } from "fs";
-import { join } from "path";
 import { parse as parseYaml } from "yaml";
 import { getRegisteredEvaluators } from "./evaluators";
 import type {
@@ -18,14 +20,14 @@ import type {
   UserCustomCheck,
 } from "./types";
 
+import { DEFAULT_CHECKS_YAML } from "./default-checks-embedded";
+
 let cachedDefaults: { categories: Record<string, CategoryDefinition>; checks: CheckDefinition[] } | null = null;
 
 function loadDefaultChecks(): { categories: Record<string, CategoryDefinition>; checks: CheckDefinition[] } {
   if (cachedDefaults) return cachedDefaults;
 
-  const yamlPath = join(__dirname, "default-checks.yaml");
-  const raw = readFileSync(yamlPath, "utf-8");
-  const parsed = parseYaml(raw) as DefaultChecksYaml;
+  const parsed = parseYaml(DEFAULT_CHECKS_YAML) as DefaultChecksYaml;
 
   const categories: Record<string, CategoryDefinition> = {};
   for (const [key, val] of Object.entries(parsed.categories)) {
@@ -47,6 +49,7 @@ function loadDefaultChecks(): { categories: Record<string, CategoryDefinition>; 
     quick_win: raw.quick_win as string | undefined,
     condition_path: raw.condition_path as string | undefined,
     condition_min: raw.condition_min as number | undefined,
+    quality_prompt: raw.quality_prompt as string | undefined,
     enabled: true,
   }));
 

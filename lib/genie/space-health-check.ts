@@ -8,11 +8,16 @@
  * No LLM calls, no side effects, no network IO.
  */
 
-import { runEvaluator } from "./health-checks/evaluators";
+import {
+  runEvaluator,
+  clearPendingSqlQualityChecks,
+  resolveSqlQualityChecks,
+} from "./health-checks/evaluators";
 import { resolveRegistry } from "./health-checks/registry";
 import type {
   CategoryScore,
   CheckResult,
+  Finding,
   Grade,
   Severity,
   SpaceHealthReport,
@@ -52,6 +57,8 @@ export function runHealthCheck(
   categoryWeights?: Record<string, number>,
 ): SpaceHealthReport {
   const registry = resolveRegistry(overrides, customChecks, categoryWeights);
+
+  clearPendingSqlQualityChecks();
 
   const results: CheckResult[] = [];
   for (const check of registry.checks) {
@@ -96,6 +103,22 @@ export function runHealthCheck(
     .slice(0, MAX_QUICK_WINS)
     .map((qw) => qw.text);
 
+  const findings: Finding[] = failedChecks
+    .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
+    .map((check) => {
+      const checkDef = registry.checks.find((c) => c.id === check.id);
+      const fixHint = check.fixable && check.fixStrategy
+        ? ` (auto-fixable via ${check.fixStrategy.replace(/_/g, " ")})`
+        : "";
+      return {
+        category: check.severity === "critical" ? "warning" as const : "suggestion" as const,
+        severity: check.severity,
+        description: check.description + (check.detail ? `: ${check.detail}` : ""),
+        recommendation: (checkDef?.quick_win ?? `Address the "${check.description}" check`) + fixHint,
+        reference: check.id,
+      };
+    });
+
   return {
     overallScore,
     grade: computeGrade(overallScore),
@@ -103,5 +126,51 @@ export function runHealthCheck(
     checks: results,
     quickWins,
     fixableCount,
+    findings,
   };
+}
+
+/**
+ * Resolve async SQL quality checks and merge results into an existing report.
+ * Call after runHealthCheck() when the review endpoint is configured.
+ * This mutates the report in place, updating check results and recalculating scores.
+ */
+export async function enrichReportWithSqlQuality(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  space: Record<string, any>,
+  report: SpaceHealthReport,
+): Promise<SpaceHealthReport> {
+  const asyncResults = await resolveSqlQualityChecks(space);
+  if (asyncResults.length === 0) return report;
+
+  for (const asyncResult of asyncResults) {
+    const idx = report.checks.findIndex((c) => c.id === asyncResult.id);
+    if (idx >= 0) {
+      report.checks[idx] = asyncResult;
+    } else {
+      report.checks.push(asyncResult);
+    }
+  }
+
+  // Recalculate category scores
+  for (const [catId, catScore] of Object.entries(report.categories)) {
+    const catChecks = report.checks.filter((r) => r.category === catId);
+    const passed = catChecks.filter((r) => r.passed).length;
+    const total = catChecks.length;
+    catScore.passed = passed;
+    catScore.total = total;
+    catScore.score = total > 0 ? Math.round((passed / total) * 100) : 100;
+  }
+
+  // Recalculate overall score
+  const totalWeight = Object.values(report.categories).reduce((sum, c) => sum + c.weight, 0);
+  report.overallScore =
+    totalWeight > 0
+      ? Math.round(
+          Object.values(report.categories).reduce((sum, c) => sum + c.score * c.weight, 0) / totalWeight,
+        )
+      : 0;
+  report.grade = computeGrade(report.overallScore);
+
+  return report;
 }

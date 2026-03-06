@@ -24,6 +24,8 @@ import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { DiscoveredDashboard } from "@/lib/discovery/types";
 
@@ -183,6 +185,50 @@ async function processDomain(
       domain: group.domain,
     });
     return null;
+  }
+
+  // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
+  if (isReviewEnabled("dashboard")) {
+    const schemaCtx = columnSchemas.join("\n");
+    const reviewed = await Promise.all(
+      parsed.datasets.map(async (ds) => {
+        if (!ds.sql) return ds;
+        const review = await reviewAndFixSql(ds.sql, {
+          schemaContext: schemaCtx,
+          surface: "dashboard",
+        });
+        if (review.fixedSql) {
+          if (validateSqlExpression(dashAllowlist, review.fixedSql, `dashboard_fix:${ds.name}`, true)) {
+            logger.info("Dashboard Engine: review applied fix", {
+              dataset: ds.name,
+              qualityScore: review.qualityScore,
+            });
+            return { ...ds, sql: review.fixedSql };
+          }
+          logger.warn("Dashboard Engine: review fix failed schema validation, keeping original", {
+            dataset: ds.name,
+          });
+          return ds;
+        }
+        if (review.verdict === "fail") {
+          logger.warn("Dashboard Engine: review rejected dataset", {
+            dataset: ds.name,
+            issues: review.issues.map((i) => i.message),
+          });
+          return null;
+        }
+        return ds;
+      }),
+    );
+    parsed.datasets = reviewed.filter(
+      (ds): ds is NonNullable<typeof ds> => ds !== null,
+    );
+    if (parsed.datasets.length === 0) {
+      logger.warn("Dashboard Engine: all datasets rejected by review", {
+        domain: group.domain,
+      });
+      return null;
+    }
   }
 
   const lakeviewDashboard = assembleLakeviewDashboard(parsed);

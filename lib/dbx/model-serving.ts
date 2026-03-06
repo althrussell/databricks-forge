@@ -114,9 +114,9 @@ export async function chatCompletion(
     body.max_tokens = options.maxTokens;
   }
 
-  // Note: response_format is NOT sent. Claude models on Databricks FMAPI do
-  // not support { type: "json_object" }. Instead, all prompts include explicit
-  // JSON output instructions which Claude follows reliably.
+  if (options.responseFormat === "json_object") {
+    body.response_format = { type: "json_object" };
+  }
 
   const resp = await fetchWithTimeout(
     url,
@@ -170,7 +170,9 @@ export async function chatCompletionStream(
     body.max_tokens = options.maxTokens;
   }
 
-  // response_format omitted — see note in chatCompletion()
+  if (options.responseFormat === "json_object") {
+    body.response_format = { type: "json_object" };
+  }
 
   const resp = await fetchWithTimeout(
     url,

@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { probeSystemInformationSchema } from "@/lib/metadata-genie/probe";
 import { detectIndustry } from "@/lib/metadata-genie/industry-detect";
 import {
@@ -106,6 +107,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Metadata Genie generation failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

@@ -15,21 +15,41 @@ import {
   trackGenieSpaceCreated,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import type { GenieAuthMode } from "@/lib/settings";
 import { revalidateSerializedSpace } from "@/lib/genie/deploy-validation";
 import { validateFqn } from "@/lib/validation";
 
 export async function GET() {
   try {
-    // Fetch workspace Genie spaces from Databricks API
     const [apiResult, tracked] = await Promise.all([
       listGenieSpaces().catch(() => ({ spaces: [], next_page_token: undefined })),
       listTrackedGenieSpaces().catch(() => []),
     ]);
 
+    // Filter out tracked spaces that no longer exist in the workspace.
+    // Lakebase rows are left intact so the runs page can still offer redeployment.
+    const workspaceIds = new Set(
+      (apiResult.spaces ?? []).map((s) => s.space_id),
+    );
+    const liveTracked = tracked.filter(
+      (t) => t.status === "trashed" || workspaceIds.has(t.spaceId),
+    );
+    const staleCount = tracked.length - liveTracked.length;
+
+    if (staleCount > 0) {
+      logger.info("[genie-spaces] Filtered stale tracked spaces", {
+        staleCount,
+        staleIds: tracked
+          .filter((t) => t.status !== "trashed" && !workspaceIds.has(t.spaceId))
+          .map((t) => t.spaceId),
+      });
+    }
+
     return NextResponse.json({
       spaces: apiResult.spaces,
-      tracked,
+      tracked: liveTracked,
+      staleCount,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -266,6 +286,6 @@ export async function POST(request: NextRequest) {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

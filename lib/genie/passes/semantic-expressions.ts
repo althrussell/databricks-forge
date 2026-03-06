@@ -22,6 +22,8 @@ import type {
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { generateTimePeriods } from "../time-periods";
 
 const TEMPERATURE = 0.2;
@@ -86,6 +88,31 @@ export async function runSemanticExpressions(
       logger.warn("LLM expression generation failed, using time periods only", {
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  }
+
+  // LLM batch review: review all generated expressions in a single call
+  if (isReviewEnabled("genie-semantic-expressions")) {
+    const batchItems: BatchReviewItem[] = [
+      ...llmMeasures.map((m) => ({ id: `m:${m.name}`, sql: m.sql, context: "measure" })),
+      ...llmFilters.map((f) => ({ id: `f:${f.name}`, sql: f.sql, context: "filter" })),
+      ...llmDimensions.map((d) => ({ id: `d:${d.name}`, sql: d.sql, context: "dimension" })),
+    ];
+    if (batchItems.length > 0) {
+      const batchSchemaCtx = buildSchemaContextBlock(input.metadata, input.tableFqns);
+      const batchResults = await reviewBatch(batchItems, "genie-semantic-expressions", batchSchemaCtx);
+      const failedIds = new Set(
+        batchResults.filter((r) => r.result.verdict === "fail").map((r) => r.id),
+      );
+      if (failedIds.size > 0) {
+        logger.info("Semantic expressions: batch review rejected items", {
+          rejectedCount: failedIds.size,
+          totalItems: batchItems.length,
+        });
+        llmMeasures = llmMeasures.filter((m) => !failedIds.has(`m:${m.name}`));
+        llmFilters = llmFilters.filter((f) => !failedIds.has(`f:${f.name}`));
+        llmDimensions = llmDimensions.filter((d) => !failedIds.has(`d:${d.name}`));
+      }
     }
   }
 

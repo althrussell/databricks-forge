@@ -124,7 +124,15 @@ The following information was retrieved from the user's data estate and knowledg
 
 ## User Question
 
-{question}`;
+---BEGIN USER QUESTION---
+{question}
+---END USER QUESTION---`;
+
+const DELIMITER_PATTERN = /---\s*(?:BEGIN|END)\s+USER\s+QUESTION\s*---/gi;
+
+function sanitiseQuestion(raw: string): string {
+  return raw.replace(DELIMITER_PATTERN, "").trim();
+}
 
 export function buildAssistantMessages(
   ragContext: string,
@@ -141,7 +149,7 @@ export function buildAssistantMessages(
   const user = CONTEXT_INJECTION_TEMPLATE
     .replace("{ragContext}", ragContext || "No relevant context was retrieved.")
     .replace("{conversationHistory}", conversationHistory || "No previous conversation.")
-    .replace("{question}", question);
+    .replace("{question}", sanitiseQuestion(question));
 
   return { system, user };
 }

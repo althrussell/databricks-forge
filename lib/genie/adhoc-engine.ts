@@ -46,7 +46,8 @@ import { parseLLMJson } from "./passes/parse-llm-json";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import { fetchTableInfoBatch, fetchColumnsBatch, fetchForeignKeysBatch } from "@/lib/queries/metadata";
-import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
+import { getServingEndpoint, getFastServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { logger } from "@/lib/logger";
 
 export interface AdHocGenieConfig {
@@ -329,7 +330,7 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
   const toArray = (val: unknown): Record<string, unknown>[] =>
     Array.isArray(val) ? val.filter((v): v is Record<string, unknown> => typeof v === "object" && v !== null) : [];
 
-  const measures = toArray(parsed.measures)
+  let measures = toArray(parsed.measures)
     .map((m) => ({
       name: String(m.name ?? ""),
       sql: String(m.sql ?? ""),
@@ -340,7 +341,7 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
     .filter((m) => m.sql.length <= 500)
     .filter((m) => validateSqlExpression(allowlist, m.sql, `fast_measure:${m.name}`, true));
 
-  const filters = toArray(parsed.filters)
+  let filters = toArray(parsed.filters)
     .map((f) => ({
       name: String(f.name ?? ""),
       sql: String(f.sql ?? ""),
@@ -352,7 +353,7 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
     .filter((f) => f.sql.length <= 500)
     .filter((f) => validateSqlExpression(allowlist, f.sql, `fast_filter:${f.name}`, true));
 
-  const dimensions = toArray(parsed.dimensions)
+  let dimensions = toArray(parsed.dimensions)
     .map((d) => ({
       name: String(d.name ?? ""),
       sql: String(d.sql ?? ""),
@@ -363,6 +364,25 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
     .filter((d) => d.name && d.sql)
     .filter((d) => d.sql.length <= 500)
     .filter((d) => validateSqlExpression(allowlist, d.sql, `fast_dimension:${d.name}`, true));
+
+  if (isReviewEnabled("adhoc-engine-expressions")) {
+    const batchItems: BatchReviewItem[] = [
+      ...measures.map((m) => ({ id: `m:${m.name}`, sql: m.sql, context: "measure" })),
+      ...filters.map((f) => ({ id: `f:${f.name}`, sql: f.sql, context: "filter" })),
+      ...dimensions.map((d) => ({ id: `d:${d.name}`, sql: d.sql, context: "dimension" })),
+    ];
+    if (batchItems.length > 0) {
+      const batchResults = await reviewBatch(batchItems, "adhoc-engine-expressions", schemaBlock);
+      const failedIds = new Set(
+        batchResults.filter((r) => r.result.verdict === "fail").map((r) => r.id),
+      );
+      if (failedIds.size > 0) {
+        measures = measures.filter((m) => !failedIds.has(`m:${m.name}`));
+        filters = filters.filter((f) => !failedIds.has(`f:${f.name}`));
+        dimensions = dimensions.filter((d) => !failedIds.has(`d:${d.name}`));
+      }
+    }
+  }
 
   return { measures, filters, dimensions };
 }

@@ -10,7 +10,7 @@
 #   ./deploy.sh --destroy                Remove the app
 #
 # Override model endpoints (advanced):
-#   ./deploy.sh --endpoint "model" --fast-endpoint "fast-model"
+#   ./deploy.sh --endpoint "model" --fast-endpoint "fast-model" --review-endpoint "review-model"
 # Optional Lakebase bootstrap grants:
 #   ./deploy.sh --lakebase-bootstrap-user "user@company.com"
 # Optional Lakebase runtime auth mode:
@@ -38,6 +38,7 @@ APP_DESC="Discover AI-powered use cases from Unity Catalog metadata"
 DEFAULT_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_EMBEDDING_ENDPOINT="databricks-qwen3-embedding-0-6b"
+DEFAULT_REVIEW_ENDPOINT="databricks-gpt-5-4"
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
@@ -57,6 +58,7 @@ ARG_PROFILE=""
 ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
+ARG_REVIEW_ENDPOINT=""
 ARG_LAKEBASE_BOOTSTRAP_USER=""
 ARG_LAKEBASE_AUTH_MODE=""
 ARG_LAKEBASE_NATIVE_USER=""
@@ -90,6 +92,7 @@ Options:
   --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
   --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-qwen3-embedding-0-6b)
+  --review-endpoint NAME      Review model endpoint     (default: databricks-gpt-5-4)
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
@@ -135,6 +138,7 @@ while [[ $# -gt 0 ]]; do
     --endpoint)            ARG_ENDPOINT="$2"; shift 2 ;;
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
+    --review-endpoint)     ARG_REVIEW_ENDPOINT="$2"; shift 2 ;;
     --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
     --lakebase-auth-mode) ARG_LAKEBASE_AUTH_MODE="$2"; shift 2 ;;
     --lakebase-native-user) ARG_LAKEBASE_NATIVE_USER="$2"; shift 2 ;;
@@ -164,6 +168,7 @@ fi
 ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
 EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
+REVIEW_ENDPOINT="${ARG_REVIEW_ENDPOINT:-$DEFAULT_REVIEW_ENDPOINT}"
 LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
 LAKEBASE_AUTH_MODE="${ARG_LAKEBASE_AUTH_MODE:-}"
 LAKEBASE_NATIVE_USER="${ARG_LAKEBASE_NATIVE_USER:-}"
@@ -605,6 +610,13 @@ print(json.dumps({
                 'name': '$EMBEDDING_ENDPOINT',
                 'permission': 'CAN_QUERY'
             }
+        },
+        {
+            'name': 'serving-endpoint-review',
+            'serving_endpoint': {
+                'name': '$REVIEW_ENDPOINT',
+                'permission': 'CAN_QUERY'
+            }
         }
     ],
     'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']
@@ -703,6 +715,7 @@ print_success() {
   printf "      Premium model:    %s\n" "$ENDPOINT"
   printf "      Fast model:       %s\n" "$FAST_ENDPOINT"
   printf "      Embedding model:  %s\n" "$EMBEDDING_ENDPOINT"
+  printf "      Review model:     %s\n" "$REVIEW_ENDPOINT"
   if [ -n "$LAKEBASE_BOOTSTRAP_USER" ]; then
     printf "      Bootstrap user:   %s\n" "$LAKEBASE_BOOTSTRAP_USER"
   fi

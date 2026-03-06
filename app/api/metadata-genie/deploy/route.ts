@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getConfig } from "@/lib/dbx/client";
 import { executeSQL } from "@/lib/dbx/sql";
 import { createGenieSpace, updateGenieSpace } from "@/lib/dbx/genie";
@@ -173,6 +174,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Metadata Genie deployment failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

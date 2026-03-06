@@ -17,6 +17,8 @@ import type {
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "../concurrency";
 
 const TEMPERATURE = 0.2;
@@ -207,7 +209,7 @@ Create parameterized queries from these examples.`;
   const content = result.content ?? "";
   const parsed = parseLLMJson(content, "genie:trusted-assets") as Record<string, unknown>;
 
-  const queries: TrustedAssetQuery[] = parseArray(parsed.queries)
+  let queries: TrustedAssetQuery[] = parseArray(parsed.queries)
     .map((q) => ({
       question: String(q.question ?? ""),
       sql: String(q.sql ?? ""),
@@ -219,6 +221,30 @@ Create parameterized queries from these examples.`;
       })),
     }))
     .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_query:${q.question}`, true));
+
+  // LLM review gate: review + fix each trusted asset SQL
+  if (isReviewEnabled("genie-trusted-assets") && queries.length > 0) {
+    const reviewed = await Promise.all(
+      queries.map(async (q) => {
+        const review = await reviewAndFixSql(q.sql, {
+          schemaContext: schemaBlock,
+          surface: "genie-trusted-assets",
+        });
+        if (review.fixedSql) {
+          if (validateSqlExpression(allowlist, review.fixedSql, `trusted_query_fix:${q.question}`, true)) {
+            return { ...q, sql: review.fixedSql };
+          }
+          logger.warn("Trusted asset review fix failed schema validation, keeping original", {
+            question: q.question,
+          });
+          return q;
+        }
+        if (review.verdict === "fail") return null;
+        return q;
+      }),
+    );
+    queries = reviewed.filter((q): q is NonNullable<typeof q> => q !== null);
+  }
 
   return { queries };
 }

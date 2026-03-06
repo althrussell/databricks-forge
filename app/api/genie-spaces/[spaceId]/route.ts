@@ -14,6 +14,7 @@ import {
   getSpaceAuthMode,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isSafeId, validateFqn } from "@/lib/validation";
 
 export async function PATCH(
@@ -47,8 +48,7 @@ export async function PATCH(
       title: result.title,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -101,7 +101,6 @@ export async function DELETE(
       ...(dropResults.length > 0 ? { dropResults } : {}),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

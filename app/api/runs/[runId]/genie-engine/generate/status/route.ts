@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getJobStatus } from "@/lib/genie/engine-status";
 import { isValidUUID } from "@/lib/validation";
 
@@ -44,7 +45,6 @@ export async function GET(
         : Date.now() - job.startedAt,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

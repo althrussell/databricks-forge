@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import { getRunById } from "@/lib/lakebase/runs";
 import {
@@ -33,8 +34,7 @@ export async function GET(
 
     return NextResponse.json({ runId, config, version });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -64,7 +64,6 @@ export async function PUT(
 
     return NextResponse.json({ runId, version });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
