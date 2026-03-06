@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Check, Copy, Eye, Loader2, Plus, Wrench, X } from "lucide-react";
+import { Check, Copy, Eye, Info, Loader2, Plus, Wrench, X } from "lucide-react";
 import { SpaceDiffViewer } from "./space-diff-viewer";
 
 interface FixChange {
@@ -115,6 +115,7 @@ export function OptimizationReview({
   const highCount = changes.filter((c) => priorityFromChange(c) === "high").length;
   const medCount = changes.filter((c) => priorityFromChange(c) === "medium").length;
   const lowCount = changes.filter((c) => priorityFromChange(c) === "low").length;
+  const hasActualChanges = changes.length > 0 && changes.some((c) => c.added > 0 || c.modified > 0);
 
   if (showDiff) {
     return (
@@ -170,6 +171,41 @@ export function OptimizationReview({
             Cancel
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (changes.length === 0 || !hasActualChanges) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Info className="size-5 text-muted-foreground" />
+              No Changes Generated
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              The fix strategies ran but could not produce any improvements.
+              {strategiesRun.length > 0 && (
+                <>
+                  {" "}
+                  Strategies attempted: {strategiesRun.map((s) => s.replace(/_/g, " ")).join(", ")}.
+                </>
+              )}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This can happen when the existing configuration already has the required content, or
+              when the space&apos;s tables lack sufficient metadata for enrichment. Try running
+              benchmarks to identify specific gaps, or manually add descriptions and instructions.
+            </p>
+          </CardContent>
+        </Card>
+        <Button variant="ghost" onClick={onCancel}>
+          <X className="mr-2 size-4" />
+          Back
+        </Button>
       </div>
     );
   }

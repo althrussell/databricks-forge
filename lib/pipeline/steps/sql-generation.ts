@@ -425,7 +425,11 @@ async function generateSqlForUseCase(
     if (review.fixedSql) {
       const fixError = await trySqlExecution(review.fixedSql);
       if (!fixError) {
-        const reviewColCheck = validateSqlOutput(review.fixedSql, uc.tablesInvolved, involvedColumns);
+        const reviewColCheck = validateSqlOutput(
+          review.fixedSql,
+          uc.tablesInvolved,
+          involvedColumns,
+        );
         if (reviewColCheck.unknownColumns.length > 0) {
           logger.warn("Review fix introduced hallucinated columns, keeping original", {
             useCaseId: uc.id,
@@ -540,18 +544,15 @@ const WINDOW_RELEVANT_TYPES = new Set([
   "Comparative",
 ]);
 
-const WINDOW_RELEVANT_TECHNIQUES = /\b(time.?series|trend|ranking|segmentat|cohort|cumulative|running|moving.?average|period.?over|month.?over|year.?over|churn|retention|growth|lag|lead|percentile|distribution)/i;
+const WINDOW_RELEVANT_TECHNIQUES =
+  /\b(time.?series|trend|ranking|segmentat|cohort|cumulative|running|moving.?average|period.?over|month.?over|year.?over|churn|retention|growth|lag|lead|percentile|distribution)/i;
 
 function isWindowRelevant(ucType: string, technique: string): boolean {
   if (WINDOW_RELEVANT_TYPES.has(ucType)) return true;
   return WINDOW_RELEVANT_TECHNIQUES.test(technique);
 }
 
-function isLambdaRelevant(
-  ucType: string,
-  technique: string,
-  columns: ColumnInfo[],
-): boolean {
+function isLambdaRelevant(ucType: string, technique: string, columns: ColumnInfo[]): boolean {
   const hasArrayOrMapCol = columns.some(
     (c) =>
       /^(ARRAY|MAP|STRUCT)/i.test(c.dataType) ||
