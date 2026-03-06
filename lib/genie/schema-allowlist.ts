@@ -407,6 +407,7 @@ export function findInvalidIdentifiers(
       const colLower = ref.column.toLowerCase();
 
       if (SQL_KEYWORDS.has(prefixLower) || SQL_KEYWORDS.has(colLower)) continue;
+      if (aliases.cteNames.has(prefixLower) || aliases.cteAliases.has(prefixLower)) continue;
       if (aliases.all.has(colLower)) continue;
       if (AI_FUNCTION_RETURN_FIELDS.has(colLower)) continue;
 
