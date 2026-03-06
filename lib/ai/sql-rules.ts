@@ -73,6 +73,16 @@ DDL patterns:
 - Prefer CREATE OR REPLACE TABLE/VIEW over DROP IF EXISTS + CREATE.
 - Use CLUSTER BY (col1, col2) for liquid clustering (replaces Z-ORDER in modern tables).
 - Include TBLPROPERTIES for table metadata (tier, owner, quality tags).
+
+Querying metric views (WITH METRICS views):
+- When querying a metric view, ALL measure columns MUST be wrapped in MEASURE(): e.g. MEASURE(total_revenue) AS total_revenue. Bare column references on measures cause runtime errors.
+- Every MEASURE() call MUST have an explicit AS alias: MEASURE(total_txn_count) AS total_txn_count. Without the alias, downstream CTEs, widget expressions, and filter references cannot resolve the column.
+- NEVER prefix measure columns with a table alias. Use MEASURE(col), NOT alias.col or mv.col.
+- Dimension columns are referenced by bare name (no MEASURE() wrapper).
+- Always include GROUP BY ALL (or explicit GROUP BY on dimension columns) when selecting MEASURE() aggregates from a metric view.
+- NEVER use SELECT * on a metric view -- it is not supported.
+- CORRECT: SELECT month, MEASURE(total_revenue) AS total_revenue FROM catalog.schema.mv GROUP BY ALL
+- WRONG:  SELECT tam.total_revenue FROM catalog.schema.mv AS tam
 `.trim();
 
 export const DATABRICKS_SQL_RULES_COMPACT = `
@@ -96,6 +106,7 @@ DATABRICKS SQL RULES:
 - Prefer CREATE OR REPLACE over DROP + CREATE.
 - Specify explicit window frames (ROWS BETWEEN ...) for cumulative calculations.
 - Prefer transform()/filter()/aggregate() for array ops over EXPLODE + re-aggregate.
+- When querying metric views: wrap ALL measure columns in MEASURE(col) AS col. Use GROUP BY ALL. NEVER use SELECT * or alias-prefixed measure references.
 `.trim();
 
 export const DATABRICKS_SQL_REVIEW_CHECKLIST = `
@@ -147,4 +158,11 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - Named windows when multiple columns share partitioning
    - transform()/filter()/aggregate() for array operations instead of EXPLODE + re-aggregate
    - array_sort() with lambda for custom sort orders
+
+6. METRIC VIEW COMPLIANCE (if query references a metric view)
+   - All measure columns wrapped in MEASURE(): MEASURE(col) AS col
+   - Every MEASURE() call has an explicit AS alias
+   - No bare column references or alias-prefixed references for measure columns
+   - GROUP BY ALL or explicit GROUP BY on dimension columns is present
+   - No SELECT * on metric views
 `.trim();

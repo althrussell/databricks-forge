@@ -149,12 +149,39 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
     sections.push("## Metric Views (Governed KPIs)");
     sections.push("");
     sections.push("When metric views are available, PREFER them for KPI and trend datasets.");
+    sections.push("");
+    sections.push("### MANDATORY metric view query rules (violations cause runtime errors)");
     sections.push(
-      "Query syntax: SELECT dimension, MEASURE(`measure_name`) AS alias FROM fqn GROUP BY dimension",
+      "1. Every measure column MUST be wrapped in MEASURE() with an AS alias: MEASURE(col) AS col",
     );
-    sections.push("- All measures MUST be wrapped in MEASURE()");
-    sections.push("- SELECT * is NOT supported on metric views");
-    sections.push("- Only the listed dimensions and measures are valid");
+    sections.push(
+      "2. Without the AS alias, downstream CTEs, widget expressions, and filters CANNOT reference the column.",
+    );
+    sections.push(
+      "3. NEVER use a table alias prefix on measure columns (WRONG: mv.revenue, RIGHT: MEASURE(revenue) AS revenue).",
+    );
+    sections.push(
+      "4. Dimension columns are referenced by bare name -- no MEASURE() wrapper needed.",
+    );
+    sections.push("5. ALWAYS include GROUP BY ALL when selecting MEASURE() aggregates.");
+    sections.push("6. SELECT * is NOT supported on metric views.");
+    sections.push("7. Only the listed dimensions and measures below are valid column references.");
+    sections.push("");
+    sections.push("CORRECT example:");
+    sections.push("```");
+    sections.push(
+      "SELECT month, MEASURE(total_revenue) AS total_revenue, MEASURE(order_count) AS order_count",
+    );
+    sections.push("FROM catalog.schema.sales_metrics");
+    sections.push("WHERE month >= '2025-01-01'");
+    sections.push("GROUP BY ALL");
+    sections.push("```");
+    sections.push("");
+    sections.push("WRONG example (will fail at runtime):");
+    sections.push("```");
+    sections.push("SELECT sm.month, sm.total_revenue, sm.order_count");
+    sections.push("FROM catalog.schema.sales_metrics AS sm");
+    sections.push("```");
     sections.push("");
     for (const mv of metricViews.slice(0, 5)) {
       sections.push(`### ${mv.fqn}`);
@@ -207,13 +234,17 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push(DATABRICKS_SQL_RULES);
   sections.push("");
   if (metricViews && metricViews.length > 0) {
-    sections.push("Metric view rules:");
+    sections.push("### CRITICAL Metric View SQL Rules (MUST follow -- runtime errors otherwise)");
     sections.push(
-      "- If metric views are listed above, PREFER them for KPI and trend datasets instead of raw SQL.",
+      "- PREFER metric views for KPI and trend datasets instead of raw SQL on the same tables.",
     );
     sections.push(
-      "- Use MEASURE(`measure_name`) for all aggregations from metric views. This ensures consistent KPI definitions.",
+      "- Every measure MUST use: MEASURE(measure_name) AS measure_name. Both the MEASURE() wrapper AND the AS alias are mandatory.",
     );
+    sections.push(
+      "- NEVER reference measure columns with a table alias prefix (e.g. tam.revenue). Use MEASURE(revenue) AS revenue.",
+    );
+    sections.push("- ALWAYS add GROUP BY ALL when querying metric views with MEASURE().");
     sections.push("- Never use SELECT * on a metric view.");
     sections.push("");
   }
