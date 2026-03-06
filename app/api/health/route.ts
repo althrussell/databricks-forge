@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     !!hdrs.get("x-forwarded-preferred-username");
 
   const base = {
-    status: overallStatus,
+    status: overallStatus as HealthCheck["status"],
     version: packageJson.version,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     timestamp: new Date().toISOString(),

@@ -151,7 +151,8 @@ export async function runSqlGeneration(
             metadata.foreignKeys,
             run.config.aiModel,
             sampleRows,
-            runId
+            runId,
+            run.createdBy,
           )
         )
       );
@@ -213,7 +214,8 @@ async function generateSqlForUseCase(
   allForeignKeys: ForeignKey[],
   aiModel: string,
   sampleRowsPerTable: number,
-  runId?: string
+  runId?: string,
+  userEmail?: string | null,
 ): Promise<string | null> {
   // Resolve table schemas for this use case's involved tables
   const involvedTables: TableInfo[] = [];
@@ -271,7 +273,7 @@ async function generateSqlForUseCase(
   let sampleDataSection = "";
   if (sampleRowsPerTable > 0 && uc.tablesInvolved.length > 0) {
     const sampleResult = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable, {
-      runId, userEmail: run.createdBy, step: "sql-generation",
+      runId, userEmail, step: "sql-generation",
     });
     sampleDataSection = sampleResult.markdown;
   }
