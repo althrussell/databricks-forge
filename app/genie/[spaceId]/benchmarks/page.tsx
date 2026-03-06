@@ -29,12 +29,13 @@ import {
   Play,
   ThumbsDown,
   ThumbsUp,
+  Sparkles,
   Wrench,
   XCircle,
   Clock,
 } from "lucide-react";
 import { OptimizationReview } from "@/components/genie/optimization-review";
-import type { BenchmarkResult } from "@/lib/genie/benchmark-runner";
+import type { BenchmarkResult, SqlResultPreview } from "@/lib/genie/benchmark-runner";
 
 interface BenchmarkQuestion {
   question: string;
@@ -71,6 +72,49 @@ interface ImproveResult {
   originalSerializedSpace?: string;
 }
 
+function SqlPreviewTable({ preview, label }: { preview: SqlResultPreview; label: string }) {
+  if (preview.error) {
+    return (
+      <div className="mt-1 text-xs text-red-500">
+        {label}: {preview.error}
+      </div>
+    );
+  }
+  if (preview.columns.length === 0 || preview.rows.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="font-medium">{label}</span>
+        <span>{preview.rowCount} row{preview.rowCount !== 1 ? "s" : ""}{preview.truncated ? " (truncated)" : ""}</span>
+      </div>
+      <div className="max-h-40 overflow-auto rounded border">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-muted">
+            <tr>
+              {preview.columns.map((col) => (
+                <th key={col.name} className="px-2 py-1 text-left font-medium">
+                  {col.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {preview.rows.slice(0, 10).map((row, ri) => (
+              <tr key={ri} className="border-t">
+                {row.map((cell, ci) => (
+                  <td key={ci} className="max-w-[200px] truncate px-2 py-1">
+                    {cell ?? "NULL"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function BenchmarkPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
   const router = useRouter();
@@ -84,6 +128,7 @@ export default function BenchmarkPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [improving, setImproving] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [improveResult, setImproveResult] = useState<ImproveResult | null>(null);
   const [applying, setApplying] = useState(false);
@@ -234,6 +279,58 @@ export default function BenchmarkPage() {
       toast.error(err instanceof Error ? err.message : "Improvement failed");
     } finally {
       setImproving(false);
+    }
+  };
+
+  const runOptimize = async () => {
+    if (!currentRunId) return;
+    setOptimizing(true);
+    try {
+      const res = await fetch(`/api/genie-spaces/${spaceId}/benchmarks/optimize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ benchmarkRunId: currentRunId }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Optimization failed");
+      }
+      const data = await res.json();
+
+      if (!data.suggestions || data.suggestions.length === 0) {
+        toast.info("No optimization suggestions generated");
+        return;
+      }
+
+      // Merge all suggestions to produce a preview, then show in OptimizationReview
+      const mergeRes = await fetch(`/api/genie-spaces/${spaceId}/benchmarks/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serializedSpace: data.originalSerializedSpace,
+          suggestions: data.suggestions,
+        }),
+      });
+
+      if (!mergeRes.ok) throw new Error("Failed to merge suggestions");
+      const mergeData = await mergeRes.json();
+
+      setImproveResult({
+        updatedSerializedSpace: mergeData.mergedSerializedSpace,
+        changes: data.suggestions.map((s: { category: string; rationale: string; priority: string }) => ({
+          section: s.category,
+          description: s.rationale,
+          added: 0,
+          modified: 1,
+        })),
+        strategiesRun: ["llm_field_optimization"],
+        originalSerializedSpace: data.originalSerializedSpace,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Optimization failed");
+    } finally {
+      setOptimizing(false);
     }
   };
 
@@ -407,6 +504,12 @@ export default function BenchmarkPage() {
                               {result.error && (
                                 <div className="mt-1 text-xs text-red-500">{result.error}</div>
                               )}
+                              {result.actualSqlResult && (
+                                <SqlPreviewTable preview={result.actualSqlResult} label="Genie Result" />
+                              )}
+                              {result.expectedSqlResult && (
+                                <SqlPreviewTable preview={result.expectedSqlResult} label="Expected Result" />
+                              )}
                             </div>
                           </div>
 
@@ -455,14 +558,24 @@ export default function BenchmarkPage() {
                       Save Feedback
                     </Button>
                     {labeledIncorrect > 0 && currentRunId && (
-                      <Button onClick={runImprove} disabled={improving}>
-                        {improving ? (
-                          <Loader2 className="mr-2 size-4 animate-spin" />
-                        ) : (
-                          <Wrench className="mr-2 size-4" />
-                        )}
-                        Improve ({labeledIncorrect} issues)
-                      </Button>
+                      <>
+                        <Button onClick={runImprove} disabled={improving || optimizing}>
+                          {improving ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                          ) : (
+                            <Wrench className="mr-2 size-4" />
+                          )}
+                          Improve ({labeledIncorrect} issues)
+                        </Button>
+                        <Button variant="outline" onClick={runOptimize} disabled={improving || optimizing}>
+                          {optimizing ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="mr-2 size-4" />
+                          )}
+                          Optimize (LLM)
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

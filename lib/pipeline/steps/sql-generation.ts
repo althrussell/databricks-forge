@@ -31,6 +31,8 @@ import type {
   TableInfo,
 } from "@/lib/domain/types";
 import { validateColumnReferences } from "@/lib/validation/sql-columns";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -394,9 +396,39 @@ async function generateSqlForUseCase(
       sampleDataSection
     );
     if (fixedSql) {
-      return fixedSql;
+      currentSql = fixedSql;
+    } else {
+      logger.warn("SQL fix failed, returning original SQL", { useCaseId: uc.id });
     }
-    logger.warn("SQL fix failed, returning original SQL", { useCaseId: uc.id });
+  }
+
+  // LLM review gate: if the review endpoint is configured, run a quality
+  // review that catches issues EXPLAIN cannot (suboptimal joins, missing
+  // filters, non-idiomatic Databricks SQL, readability).
+  if (isReviewEnabled("pipeline-sql")) {
+    const review = await reviewAndFixSql(currentSql, {
+      schemaContext: schemaMarkdown,
+      surface: "pipeline-sql",
+    });
+    if (review.fixedSql) {
+      const fixError = await trySqlExecution(review.fixedSql);
+      if (!fixError) {
+        logger.info("SQL review applied fix", {
+          useCaseId: uc.id,
+          qualityScore: review.qualityScore,
+          issueCount: review.issues.length,
+        });
+        currentSql = review.fixedSql;
+      } else {
+        logger.warn("Review fix failed EXPLAIN, keeping original", { useCaseId: uc.id });
+      }
+    } else if (review.verdict === "fail") {
+      logger.warn("SQL review verdict: fail (no fix available)", {
+        useCaseId: uc.id,
+        qualityScore: review.qualityScore,
+        issues: review.issues.map((i) => i.message),
+      });
+    }
   }
 
   return currentSql;

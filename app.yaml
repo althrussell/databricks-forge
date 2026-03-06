@@ -6,6 +6,7 @@
 #   serving-endpoint          → DATABRICKS_SERVING_ENDPOINT
 #   serving-endpoint-fast     → DATABRICKS_SERVING_ENDPOINT_FAST
 #   serving-endpoint-embedding → DATABRICKS_EMBEDDING_ENDPOINT
+#   serving-endpoint-review   → DATABRICKS_REVIEW_ENDPOINT
 #
 # User authorization scopes (set by deploy.sh via Apps API):
 #   sql, catalog.tables:read, catalog.schemas:read,
@@ -39,3 +40,5 @@ env:
     valueFrom: serving-endpoint-fast
   - name: DATABRICKS_EMBEDDING_ENDPOINT
     valueFrom: serving-endpoint-embedding
+  - name: DATABRICKS_REVIEW_ENDPOINT
+    valueFrom: serving-endpoint-review

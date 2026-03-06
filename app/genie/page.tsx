@@ -50,6 +50,8 @@ import type {
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
+import { ImportSpaceDialog } from "@/components/genie/import-space-dialog";
+import { HealthCheckSettingsDialog } from "@/components/genie/health-check-settings";
 
 interface SpaceCardData {
   spaceId: string;
@@ -228,19 +230,42 @@ export default function GenieSpacesPage() {
             Manage and deploy Databricks Genie Spaces for natural language SQL exploration.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={loading || discovering}
-        >
-          {(loading || discovering) ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 size-4" />
-          )}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <HealthCheckSettingsDialog />
+          <ImportSpaceDialog
+            onImported={(result) => {
+              const importedId = `imported-${Date.now()}`;
+              setSpaces((prev) => [
+                {
+                  spaceId: importedId,
+                  title: result.title,
+                  description: "Imported via JSON paste",
+                  source: "workspace" as const,
+                  status: "active" as const,
+                  tableCount: result.metadata?.tableCount,
+                  measureCount: result.metadata?.measureCount,
+                  sampleQuestionCount: result.metadata?.sampleQuestionCount,
+                  filterCount: result.metadata?.filterCount,
+                },
+                ...prev,
+              ]);
+              setHealthScores((prev) => ({ ...prev, [importedId]: result.healthReport }));
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={loading || discovering}
+          >
+            {(loading || discovering) ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 size-4" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {loading ? (

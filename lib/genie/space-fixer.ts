@@ -172,20 +172,18 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             );
             if (!table) continue;
             const colConfigs = (table.column_configs ?? []) as SpaceJson[];
-            for (const col of colConfigs) {
-              const matching = output.enrichments.find(
-                (e) => e.tableFqn?.toLowerCase() === (table.identifier as string)?.toLowerCase(),
-              );
-              if (!matching) continue;
-              if (!col.description || (Array.isArray(col.description) && col.description.length === 0)) {
-                col.description = [enrichment.description ?? ""];
-                descriptionsAdded++;
-              }
-              if (!col.synonyms || (Array.isArray(col.synonyms) && col.synonyms.length === 0)) {
-                if (enrichment.synonyms && enrichment.synonyms.length > 0) {
-                  col.synonyms = enrichment.synonyms;
-                  synonymsAdded++;
-                }
+            const col = colConfigs.find(
+              (c: SpaceJson) => (c.column_name as string)?.toLowerCase() === enrichment.columnName?.toLowerCase(),
+            );
+            if (!col) continue;
+            if (!col.description || (Array.isArray(col.description) && col.description.length === 0)) {
+              col.description = [enrichment.description ?? ""];
+              descriptionsAdded++;
+            }
+            if (!col.synonyms || (Array.isArray(col.synonyms) && col.synonyms.length === 0)) {
+              if (enrichment.synonyms && enrichment.synonyms.length > 0) {
+                col.synonyms = enrichment.synonyms;
+                synonymsAdded++;
               }
             }
           }

@@ -15,6 +15,7 @@ import {
   Copy,
   Eye,
   Loader2,
+  Plus,
   Wrench,
   X,
 } from "lucide-react";
@@ -35,8 +36,15 @@ interface OptimizationReviewProps {
   onApply: (serializedSpace: string) => void;
   onCloneAndApply: (serializedSpace: string) => void;
   onCancel: () => void;
+  /** Create a brand new space from the optimized config */
+  onCreateNew?: (serializedSpace: string) => void;
   applying: boolean;
   cloning: boolean;
+  creating?: boolean;
+  /** When true, individual changes can be toggled on/off. Default false (batch apply). */
+  enableSelection?: boolean;
+  /** Callback to build a merged space from selected indices. Required when enableSelection is true. */
+  onBuildSelectedSpace?: (selectedIndices: number[]) => Promise<string> | string;
 }
 
 function priorityFromChange(change: FixChange): "high" | "medium" | "low" {
@@ -64,13 +72,41 @@ export function OptimizationReview({
   onApply,
   onCloneAndApply,
   onCancel,
+  onCreateNew,
   applying,
   cloning,
+  creating = false,
+  enableSelection = false,
+  onBuildSelectedSpace,
 }: OptimizationReviewProps) {
   const [selected, setSelected] = useState<Set<number>>(
     new Set(changes.map((_, i) => i)),
   );
   const [showDiff, setShowDiff] = useState(false);
+
+  const isSelectable = enableSelection && !!onBuildSelectedSpace;
+  const allSelected = selected.size === changes.length;
+
+  const getEffectiveSpace = async (): Promise<string> => {
+    if (!isSelectable || allSelected) return updatedSerializedSpace;
+    return onBuildSelectedSpace!([...selected]);
+  };
+
+  const handleApply = async () => {
+    const space = await getEffectiveSpace();
+    onApply(space);
+  };
+
+  const handleCloneAndApply = async () => {
+    const space = await getEffectiveSpace();
+    onCloneAndApply(space);
+  };
+
+  const handleCreateNew = async () => {
+    if (!onCreateNew) return;
+    const space = await getEffectiveSpace();
+    onCreateNew(space);
+  };
 
   const toggleItem = (idx: number) => {
     setSelected((prev) => {
@@ -88,6 +124,8 @@ export function OptimizationReview({
       setSelected(new Set(changes.map((_, i) => i)));
     }
   };
+
+  const hasSelection = isSelectable ? selected.size > 0 : true;
 
   const highCount = changes.filter((c) => priorityFromChange(c) === "high").length;
   const medCount = changes.filter((c) => priorityFromChange(c) === "medium").length;
@@ -108,18 +146,28 @@ export function OptimizationReview({
           changes={changes}
         />
         <div className="flex gap-2">
-          <Button onClick={() => onApply(updatedSerializedSpace)} disabled={applying || cloning}>
+          <Button onClick={handleApply} disabled={applying || cloning || creating}>
             {applying ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Check className="mr-2 size-4" />}
             Apply to Space
           </Button>
           <Button
             variant="outline"
-            onClick={() => onCloneAndApply(updatedSerializedSpace)}
-            disabled={applying || cloning}
+            onClick={handleCloneAndApply}
+            disabled={applying || cloning || creating}
           >
             {cloning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Copy className="mr-2 size-4" />}
             Clone and Apply
           </Button>
+          {onCreateNew && (
+            <Button
+              variant="outline"
+              onClick={handleCreateNew}
+              disabled={applying || cloning || creating}
+            >
+              {creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
+              Create New Space
+            </Button>
+          )}
           <Button variant="ghost" onClick={onCancel}>
             <X className="mr-2 size-4" />
             Cancel
@@ -170,29 +218,34 @@ export function OptimizationReview({
 
       {/* Suggestions list */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">
-            {selected.size} of {changes.length} selected
-          </p>
-          <Button variant="ghost" size="sm" onClick={toggleAll}>
-            {selected.size === changes.length ? "Deselect All" : "Select All"}
-          </Button>
-        </div>
+        {isSelectable && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {selected.size} of {changes.length} selected
+            </p>
+            <Button variant="ghost" size="sm" onClick={toggleAll}>
+              {allSelected ? "Deselect All" : "Select All"}
+            </Button>
+          </div>
+        )}
 
         {changes.map((change, idx) => {
           const priority = priorityFromChange(change);
+          const isSelected = !isSelectable || selected.has(idx);
           return (
             <Card
               key={idx}
-              className={`cursor-pointer transition-opacity ${selected.has(idx) ? "" : "opacity-50"}`}
-              onClick={() => toggleItem(idx)}
+              className={`transition-opacity ${isSelectable ? "cursor-pointer" : ""} ${isSelected ? "" : "opacity-50"}`}
+              onClick={isSelectable ? () => toggleItem(idx) : undefined}
             >
               <CardContent className="flex items-start gap-3 p-4">
-                <Checkbox
-                  checked={selected.has(idx)}
-                  onCheckedChange={() => toggleItem(idx)}
-                  onClick={(e) => e.stopPropagation()}
-                />
+                {isSelectable && (
+                  <Checkbox
+                    checked={selected.has(idx)}
+                    onCheckedChange={() => toggleItem(idx)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{change.section}</span>
@@ -213,27 +266,37 @@ export function OptimizationReview({
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-2">
-        <Button onClick={() => setShowDiff(true)} disabled={selected.size === 0}>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => setShowDiff(true)} disabled={!hasSelection}>
           <Eye className="mr-2 size-4" />
           Preview Changes
         </Button>
         <Button
           variant="outline"
-          onClick={() => onApply(updatedSerializedSpace)}
-          disabled={applying || cloning || selected.size === 0}
+          onClick={handleApply}
+          disabled={applying || cloning || creating || !hasSelection}
         >
           {applying ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Check className="mr-2 size-4" />}
           Apply to Space
         </Button>
         <Button
           variant="outline"
-          onClick={() => onCloneAndApply(updatedSerializedSpace)}
-          disabled={applying || cloning || selected.size === 0}
+          onClick={handleCloneAndApply}
+          disabled={applying || cloning || creating || !hasSelection}
         >
           {cloning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Copy className="mr-2 size-4" />}
           Clone and Apply
         </Button>
+        {onCreateNew && (
+          <Button
+            variant="outline"
+            onClick={handleCreateNew}
+            disabled={applying || cloning || creating || !hasSelection}
+          >
+            {creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
+            Create New Space
+          </Button>
+        )}
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

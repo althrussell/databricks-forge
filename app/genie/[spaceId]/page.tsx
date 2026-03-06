@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,12 +75,17 @@ interface FixResult {
 export default function SpaceDetailPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") ?? "overview";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [detail, setDetail] = useState<SpaceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [databricksHost, setDatabricksHost] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [cloning, setCloning] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -125,6 +130,7 @@ export default function SpaceDetailPage() {
   };
 
   const handleApply = async (serializedSpace: string) => {
+    setApplying(true);
     try {
       const res = await fetch(`/api/genie-spaces/${spaceId}/apply`, {
         method: "POST",
@@ -137,6 +143,8 @@ export default function SpaceDetailPage() {
       fetchDetail();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Apply failed");
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -163,6 +171,34 @@ export default function SpaceDetailPage() {
       toast.error(err instanceof Error ? err.message : "Clone and apply failed");
     } finally {
       setCloning(false);
+    }
+  };
+
+  const handleCreateNewSpace = async (serializedSpace: string) => {
+    setCreating(true);
+    try {
+      const res = await fetch("/api/genie-spaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${detail?.title ?? "Space"} (Optimized)`,
+          description: detail?.description ?? "",
+          serializedSpace,
+          domain: detail?.domain ?? "general",
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Create failed");
+      }
+      const { spaceId: newSpaceId } = await res.json();
+      toast.success("New space created from optimized config");
+      setFixResult(null);
+      router.push(`/genie/${newSpaceId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Create new space failed");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -236,9 +272,11 @@ export default function SpaceDetailPage() {
           updatedSerializedSpace={fixResult.updatedSerializedSpace}
           onApply={handleApply}
           onCloneAndApply={handleCloneAndApply}
+          onCreateNew={handleCreateNewSpace}
           onCancel={() => setFixResult(null)}
-          applying={false}
+          applying={applying}
           cloning={cloning}
+          creating={creating}
         />
       </div>
     );
@@ -271,7 +309,7 @@ export default function SpaceDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">
             <Activity className="mr-1.5 size-4" />

@@ -16,7 +16,8 @@ import { extractDashboardIntent, type DashboardProposal } from "./dashboard-prop
 import { retrieveContext } from "@/lib/embeddings/retriever";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { chatCompletion, chatCompletionStream, type StreamCallback, type TokenUsage } from "@/lib/dbx/model-serving";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
 import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { scoreAssistantResponse } from "@/lib/assistant/evaluation";
@@ -327,6 +328,45 @@ export async function runAssistantEngine(
   for (const fix of sqlFixes) {
     answer = answer.replace(fix.original, fix.fixed);
     sqlBlocks[fix.index] = fix.fixed;
+  }
+
+  // LLM review gate: review + fix SQL blocks, apply fixes and append quality notes
+  if (isReviewEnabled("assistant") && sqlBlocks.length > 0) {
+    const knownCols = context.tableEnrichments.flatMap((t) =>
+      t.columns.map((c) => `${t.tableFqn}: ${c.name} (${c.dataType})`),
+    );
+    const schemaCtx = knownCols.join("\n");
+    const reviews = await Promise.allSettled(
+      sqlBlocks.map((sql) =>
+        reviewAndFixSql(sql, { schemaContext: schemaCtx, surface: "assistant" }),
+      ),
+    );
+    const warnings: string[] = [];
+    for (let i = 0; i < reviews.length; i++) {
+      const r = reviews[i];
+      if (r.status !== "fulfilled") continue;
+      const review = r.value;
+      if (review.fixedSql && review.verdict !== "pass") {
+        const oldSql = sqlBlocks[i];
+        sqlBlocks[i] = review.fixedSql;
+        answer = answer.replace(oldSql, review.fixedSql);
+        logger.info("Assistant: review applied SQL fix", {
+          blockIndex: i,
+          qualityScore: review.qualityScore,
+        });
+      }
+      if (review.verdict !== "pass") {
+        const warnMsgs = review.issues
+          .filter((issue) => issue.severity !== "info")
+          .map((issue) => issue.message);
+        if (warnMsgs.length > 0) {
+          warnings.push(`SQL block ${i + 1}: ${warnMsgs.join("; ")}`);
+        }
+      }
+    }
+    if (warnings.length > 0) {
+      answer = `${answer}\n\n> **SQL Quality Notes:** ${warnings.join(" | ")}`;
+    }
   }
 
   const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);

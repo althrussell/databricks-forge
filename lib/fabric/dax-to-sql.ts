@@ -15,8 +15,9 @@
  */
 
 import { chatCompletion } from "@/lib/dbx/model-serving";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { normalizeIdentifier } from "./name-normalizer";
 import { logger } from "@/lib/logger";
 import type { NameMapping } from "./name-normalizer";
@@ -150,6 +151,39 @@ export async function translateDaxMeasures(
       const llmResults = await translateBatchWithLLM(batch, nameMapping);
       for (let j = 0; j < batch.length; j++) {
         results[batch[j].index] = llmResults[j];
+      }
+    }
+  }
+
+  // LLM review: batch-review all LLM-translated expressions
+  if (isReviewEnabled("dax-to-sql")) {
+    const reviewItems: BatchReviewItem[] = results
+      .filter((r) => r.method === "llm" && r.confidence !== "low")
+      .map((r) => ({
+        id: r.measureName,
+        sql: r.sqlExpression,
+        context: `DAX translation of: ${r.daxExpression}`,
+      }));
+    if (reviewItems.length > 0) {
+      const reviewResults = await reviewBatch(reviewItems, "dax-to-sql");
+      const reviewMap = new Map(reviewResults.map((r) => [r.id, r.result]));
+      for (const r of results) {
+        const review = reviewMap.get(r.measureName);
+        if (review) {
+          if (review.verdict === "fail") {
+            r.confidence = "low";
+            r.warnings.push(
+              ...review.issues.map((i) => `Review: ${i.message}`),
+            );
+          } else if (review.verdict === "warn" && r.confidence === "high") {
+            r.confidence = "medium";
+            r.warnings.push(
+              ...review.issues
+                .filter((i) => i.severity !== "info")
+                .map((i) => `Review: ${i.message}`),
+            );
+          }
+        }
       }
     }
   }

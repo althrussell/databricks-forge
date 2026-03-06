@@ -15,6 +15,8 @@ import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import { buildSchemaContextBlock, isValidTable, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { canonicalKeyGroups } from "../key-synonyms";
+import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled } from "@/lib/dbx/client";
 
 const TEMPERATURE = 0.1;
 
@@ -118,6 +120,28 @@ ${synonymHints}`;
       ...j,
       relationshipType: "many_to_one" as const,
     }));
+
+  if (isReviewEnabled("genie-join-inference") && joins.length > 0) {
+    const batchItems: BatchReviewItem[] = joins.map((j, i) => ({
+      id: `join-${i}`,
+      sql: j.sql,
+      context: `Join condition: ${j.leftTable} -> ${j.rightTable}`,
+    }));
+    const batchResults = await reviewBatch(batchItems, "genie-join-inference", schemaBlock);
+    const failedIds = new Set(
+      batchResults.filter((r) => r.result.verdict === "fail").map((r) => r.id),
+    );
+    if (failedIds.size > 0) {
+      const before = joins.length;
+      const filtered = joins.filter((_, i) => !failedIds.has(`join-${i}`));
+      logger.info("Join inference: review filtered joins", {
+        before,
+        after: filtered.length,
+        removed: before - filtered.length,
+      });
+      return { joins: filtered };
+    }
+  }
 
   if (joins.length > 0) {
     logger.info("LLM join inference discovered relationships", {

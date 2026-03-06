@@ -49,6 +49,7 @@ function loadDefaultChecks(): { categories: Record<string, CategoryDefinition>; 
     quick_win: raw.quick_win as string | undefined,
     condition_path: raw.condition_path as string | undefined,
     condition_min: raw.condition_min as number | undefined,
+    quality_prompt: raw.quality_prompt as string | undefined,
     enabled: true,
   }));
 

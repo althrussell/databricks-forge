@@ -203,6 +203,60 @@ export function sanitizeSerializedSpace(raw: string): string {
       delete parsed.instructions.sql_functions;
     }
 
+    // Remove sql_snippets with empty SQL (API rejects them)
+    if (snippets) {
+      for (const key of ["measures", "filters", "expressions"] as const) {
+        const items = snippets[key];
+        if (Array.isArray(items)) {
+          snippets[key] = items.filter((item: Record<string, unknown>) => {
+            const sql = item.sql;
+            if (!sql) return false;
+            if (Array.isArray(sql)) return sql.some((s: unknown) => typeof s === "string" && s.trim().length > 0);
+            if (typeof sql === "string") return sql.trim().length > 0;
+            return true;
+          });
+        }
+      }
+    }
+
+    // Coerce string fields to string arrays where the API expects arrays
+    const STRING_ARRAY_FIELDS = new Set([
+      "description", "content", "question", "sql", "instruction",
+      "synonyms", "usage_guidance", "comment",
+    ]);
+    function coerceStringArrays(obj: unknown): unknown {
+      if (obj == null) return obj;
+      if (Array.isArray(obj)) return obj.filter((v) => v != null).map(coerceStringArrays);
+      if (typeof obj === "object") {
+        const result: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+          if (STRING_ARRAY_FIELDS.has(k) && typeof v === "string") {
+            result[k] = [v];
+          } else {
+            result[k] = coerceStringArrays(v);
+          }
+        }
+        return result;
+      }
+      return obj;
+    }
+    const coerced = coerceStringArrays(parsed) as typeof parsed;
+    Object.assign(parsed, coerced);
+
+    // Sort column_configs by column_name within each table/metric_view
+    for (const collection of [parsed?.data_sources?.tables, parsed?.data_sources?.metric_views]) {
+      if (Array.isArray(collection)) {
+        for (const item of collection) {
+          if (Array.isArray(item.column_configs)) {
+            item.column_configs.sort(
+              (a: { column_name?: string }, b: { column_name?: string }) =>
+                (a.column_name ?? "").localeCompare(b.column_name ?? ""),
+            );
+          }
+        }
+      }
+    }
+
     // Normalize + sort all id-keyed arrays (Genie API requires lowercase 32-hex UUIDs without hyphens, sorted)
     for (const arr of [
       parsed?.config?.sample_questions,

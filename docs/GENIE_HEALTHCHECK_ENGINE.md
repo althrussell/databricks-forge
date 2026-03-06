@@ -201,7 +201,7 @@ Each check is a declarative YAML block in `lib/genie/health-checks/default-check
 | `severity` | `critical` \| `warning` \| `info` | Yes | Determines ordering and UI treatment |
 | `fixable` | boolean | Yes | Whether the fix workflow can address this |
 | `fix_strategy` | string | If fixable | Maps to a fix strategy in `space-fixer.ts` |
-| `evaluator` | string | Yes | One of the 11 registered evaluator types |
+| `evaluator` | string | Yes | One of the 13 registered evaluator types |
 | `path` | string | Depends | JSONPath-like dot notation into `serialized_space` |
 | `paths` | string[] | For `no_empty_field` | Multiple paths to check |
 | `field` | string | For `ratio`/`nested_ratio` | Field to check on each item |
@@ -288,6 +288,17 @@ Only evaluate if a condition is met (e.g., only check join specs if >= 2 tables)
 
 ### `jsonpath`
 Reserved for advanced user-defined checks using arbitrary JSONPath expressions.
+
+### `sql_quality`
+LLM-powered SQL quality review using the dedicated review endpoint
+(`serving-endpoint-review`). Collects SQL snippets from the specified `paths`,
+batch-reviews them via `reviewBatch()`, and passes if the average quality
+score meets the threshold and no individual snippet fails.
+- **Params:** `min_score` (default 60, scale 0-100)
+- **Uses `paths`** (array of paths to SQL string values)
+- **Async:** queued during synchronous health check run, resolved via
+  `enrichReportWithSqlQuality()` after the initial report
+- **Feature-gated:** only runs when `serving-endpoint-review` is configured
 
 ---
 

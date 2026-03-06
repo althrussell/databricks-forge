@@ -7,10 +7,12 @@
 
 import { NextRequest } from "next/server";
 import { startConversation } from "@/lib/dbx/genie";
+import { executeSQL } from "@/lib/dbx/sql";
 import { saveBenchmarkRun } from "@/lib/lakebase/space-health";
+import { reviewBenchmarkExpectedSql } from "@/lib/genie/benchmark-runner";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
-import type { BenchmarkResult } from "@/lib/genie/benchmark-runner";
+import type { BenchmarkResult, SqlResultPreview } from "@/lib/genie/benchmark-runner";
 
 const DELAY_BETWEEN_QUESTIONS_MS = 2000;
 
@@ -48,6 +50,34 @@ function sqlSimilarity(a: string, b: string): number {
 }
 
 const SIMILARITY_THRESHOLD = 0.6;
+const MAX_PREVIEW_ROWS = 50;
+
+const READ_ONLY_PATTERN = /^\s*(SELECT|WITH)\b/i;
+const BLOCKED_PATTERN = /\b(DROP|DELETE|TRUNCATE|UPDATE|INSERT|ALTER|CREATE|GRANT|REVOKE|EXEC|EXECUTE|CALL)\b/i;
+
+async function executeSqlPreview(sql: string): Promise<SqlResultPreview> {
+  if (!READ_ONLY_PATTERN.test(sql) || BLOCKED_PATTERN.test(sql)) {
+    return { columns: [], rows: [], rowCount: 0, truncated: false, error: "Only read-only SELECT queries are allowed" };
+  }
+  try {
+    const result = await executeSQL(sql, undefined, undefined, { waitTimeout: "30s" });
+    const totalRows = result.rows.length;
+    return {
+      columns: result.columns.map((c) => ({ name: c.name, type: c.typeName })),
+      rows: result.rows.slice(0, MAX_PREVIEW_ROWS),
+      rowCount: totalRows,
+      truncated: totalRows > MAX_PREVIEW_ROWS,
+    };
+  } catch (err) {
+    return {
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      truncated: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
 
 export async function POST(
   request: NextRequest,
@@ -84,7 +114,23 @@ export async function POST(
       const results: BenchmarkResult[] = [];
 
       function send(data: Record<string, unknown>) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          // Client disconnected
+        }
+      }
+
+      try {
+      // Pre-run review: flag low-quality expectedSql before benchmarking
+      const sqlReviews = await reviewBenchmarkExpectedSql(questions);
+      if (sqlReviews.length > 0) {
+        const warnings = sqlReviews
+          .filter((r) => r.result.verdict === "fail" || r.result.verdict === "warn")
+          .map((r) => ({ id: r.id, verdict: r.result.verdict, score: r.result.qualityScore }));
+        if (warnings.length > 0) {
+          send({ type: "sql_review", warnings });
+        }
       }
 
       send({ type: "start", total: questions.length });
@@ -103,6 +149,16 @@ export async function POST(
             passed = sim >= SIMILARITY_THRESHOLD;
           }
 
+          let actualSqlResult: SqlResultPreview | undefined;
+          let expectedSqlResult: SqlResultPreview | undefined;
+
+          if (completed && msg.sql) {
+            actualSqlResult = await executeSqlPreview(msg.sql);
+          }
+          if (bench.expectedSql) {
+            expectedSqlResult = await executeSqlPreview(bench.expectedSql);
+          }
+
           const result: BenchmarkResult = {
             question: bench.question,
             expectedSql: bench.expectedSql ?? null,
@@ -110,6 +166,8 @@ export async function POST(
             status: msg.status,
             passed,
             error: msg.error,
+            actualSqlResult,
+            expectedSqlResult,
           };
           results.push(result);
           send({ type: "result", index: i, result });
@@ -164,7 +222,9 @@ export async function POST(
         });
       }
 
-      releaseLock(spaceId);
+      } finally {
+        releaseLock(spaceId);
+      }
       controller.close();
     },
   });

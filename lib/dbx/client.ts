@@ -111,6 +111,41 @@ export function getFastServingEndpoint(): string {
 }
 
 /**
+ * Returns the review Model Serving endpoint name.
+ *
+ * Used by the SQL reviewer (lib/ai/sql-reviewer.ts) for LLM-as-reviewer
+ * quality checks across all SQL-generating surfaces.
+ *
+ * Resolution order:
+ *   1. `DATABRICKS_REVIEW_ENDPOINT` env var (set via app resource
+ *      binding `serving-endpoint-review`, or .env.local for local dev).
+ *   2. Falls back to `getServingEndpoint()` (premium model) -- so if the
+ *      review resource is not configured, review uses the primary model.
+ */
+export function getReviewEndpoint(): string {
+  return process.env.DATABRICKS_REVIEW_ENDPOINT || getServingEndpoint();
+}
+
+/**
+ * Whether a dedicated review endpoint is configured.
+ * Callers can use this to gate optional review passes.
+ */
+export function isReviewEndpointEnabled(): boolean {
+  return !!process.env.DATABRICKS_REVIEW_ENDPOINT;
+}
+
+/**
+ * Whether review is enabled for a given surface.
+ * Surfaces can be disabled via DATABRICKS_REVIEW_DISABLED_SURFACES (comma-separated).
+ */
+export function isReviewEnabled(surface?: string): boolean {
+  if (!isReviewEndpointEnabled()) return false;
+  const disabled = process.env.DATABRICKS_REVIEW_DISABLED_SURFACES ?? "";
+  if (surface && disabled.split(",").includes(surface)) return false;
+  return true;
+}
+
+/**
  * Returns the embedding Model Serving endpoint name.
  *
  * Used by the embedding client (lib/embeddings/client.ts) to generate

@@ -8,7 +8,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getGenieSpace } from "@/lib/dbx/genie";
-import { runHealthCheck } from "@/lib/genie/space-health-check";
+import { runHealthCheck, enrichReportWithSqlQuality } from "@/lib/genie/space-health-check";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { getHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { getTrackedBySpaceId } from "@/lib/lakebase/genie-spaces";
@@ -68,6 +69,9 @@ export async function GET(
         healthConfig.customChecks.length > 0 ? healthConfig.customChecks : undefined,
         healthConfig.categoryWeights ?? undefined,
       );
+      if (isReviewEnabled("health-check-sql-quality")) {
+        healthReport = await enrichReportWithSqlQuality(parsed, healthReport);
+      }
     }
 
     return NextResponse.json({

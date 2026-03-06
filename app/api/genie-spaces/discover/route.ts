@@ -8,7 +8,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getGenieSpace } from "@/lib/dbx/genie";
-import { runHealthCheck } from "@/lib/genie/space-health-check";
+import { runHealthCheck, enrichReportWithSqlQuality } from "@/lib/genie/space-health-check";
+import { isReviewEnabled } from "@/lib/dbx/client";
 import { getHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { extractSpaceMetadata } from "@/lib/genie/space-metadata";
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
             const metadata = extractSpaceMetadata(serializedSpace);
 
             const space = JSON.parse(serializedSpace);
-            const healthReport = runHealthCheck(
+            let healthReport = runHealthCheck(
               space,
               config.overrides.length > 0 ? config.overrides : undefined,
               config.customChecks.length > 0
@@ -103,6 +104,9 @@ export async function POST(request: NextRequest) {
                 : undefined,
               config.categoryWeights ?? undefined,
             );
+            if (isReviewEnabled("health-check-sql-quality")) {
+              healthReport = await enrichReportWithSqlQuality(space, healthReport);
+            }
 
             return [spaceId, { metadata, healthReport }];
           } catch (err) {

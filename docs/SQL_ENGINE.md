@@ -23,10 +23,18 @@ The defence-in-depth strategy is:
    catch runtime errors (type mismatches, ambiguous columns, missing tables)
 4. **Fix cycle** -- if validation fails, send the SQL + error back to the LLM
    with the correct schema for a single repair attempt
-5. **Rejection** -- if the fix fails, reject the SQL (return null, drop the
-   dataset, or filter the expression)
+5. **LLM review** -- a dedicated review endpoint (`serving-endpoint-review`,
+   default `databricks-gpt-5-4`) performs multi-dimensional quality assessment
+   (correctness, performance, readability, security, Databricks idiom adherence)
+   via `lib/ai/sql-reviewer.ts`. This separates generation (creative) from
+   review (critical). When the review endpoint is configured, surfaces that
+   opt in get a post-validation review pass that can auto-fix quality issues
+   EXPLAIN cannot catch (suboptimal joins, non-idiomatic patterns, readability).
+   Feature-gated per surface via `isReviewEnabled()`.
+6. **Rejection** -- if the fix and review both fail, reject the SQL (return null,
+   drop the dataset, or filter the expression)
 
-Not every surface implements all five tiers. The minimum bar is prompt
+Not every surface implements all six tiers. The minimum bar is prompt
 grounding + static validation. See section 6 for the per-surface matrix.
 
 ---
@@ -210,18 +218,20 @@ SQL keyword, not a column name).
 
 ### Tier matrix
 
-| # | Surface | Prompt grounding | Static column check | EXPLAIN | Fix cycle | Rejection |
-|---|---------|:---:|:---:|:---:|:---:|:---:|
-| 1 | Pipeline SQL gen | Yes | Yes | Yes | Yes (LLM) | Return null |
-| 2 | Ask Forge assistant | Yes | Yes | Yes | Yes (LLM) | Keep original |
-| 3 | Dashboard engine | Yes | Yes | No | No | Drop dataset |
-| 4 | Ad-hoc dashboard | Yes | Yes | No | No | Drop dataset |
-| 5 | Genie: semantic expressions | Yes | Yes | No | No | Filter out |
-| 6 | Genie: benchmarks | Yes | Yes | No | No | Filter out |
-| 7 | Genie: trusted assets | Yes | Yes | No | No | Filter out |
-| 8 | Genie: example queries | Yes | Yes | No | No | Filter out |
-| 9 | Genie: join inference | Yes | Yes | No | No | Filter out |
-| 10 | Genie: metric views | Yes | Yes (YAML) | Yes (DDL) | Yes (LLM) | Drop proposal |
+| # | Surface | Prompt grounding | Static column check | EXPLAIN | Fix cycle | LLM Review | Rejection |
+|---|---------|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | Pipeline SQL gen | Yes | Yes | Yes | Yes (LLM) | Yes (opt-in) | Return null |
+| 2 | Ask Forge assistant | Yes | Yes | Yes | Yes (LLM) | Yes (opt-in) | Keep original |
+| 3 | Dashboard engine | Yes | Yes | No | No | Yes (review+fix) | Drop dataset |
+| 4 | Ad-hoc dashboard | Yes | Yes | No | No | Yes (review+fix) | Drop dataset |
+| 5 | Genie: semantic expressions | Yes | Yes | No | No | Yes (batch) | Filter out |
+| 6 | Genie: benchmarks | Yes | Yes | No | No | Yes (review+fix) | Filter out |
+| 7 | Genie: trusted assets | Yes | Yes | No | No | Yes (review+fix) | Filter out |
+| 8 | Genie: example queries | Yes | Yes | No | No | No | Filter out |
+| 9 | Genie: join inference | Yes | Yes | No | No | No | Filter out |
+| 10 | Genie: metric views | Yes | Yes (YAML) | Yes (DDL) | Yes (LLM) | No | Drop proposal |
+| 11 | Fabric: DAX-to-SQL | No | No | No | No | Yes (batch) | Confidence downgrade |
+| 12 | Genie: optimize | No | No | No | No | Yes (review) | Reject suggestion |
 
 ### Tier 1: Structural checks (pipeline only)
 

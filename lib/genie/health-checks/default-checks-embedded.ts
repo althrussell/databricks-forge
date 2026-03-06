@@ -90,6 +90,63 @@ checks:
     params:
       min_ratio: 0.2
 
+  - id: table-count-optimal
+    category: data_sources
+    description: "Table count is within optimal range (<=5 recommended)"
+    severity: info
+    fixable: false
+    evaluator: range
+    path: "data_sources.tables"
+    params:
+      min: 1
+      max: 30
+      warn_above: 5
+
+  - id: format-assistance-configured
+    category: data_sources
+    description: "Some columns have format assistance enabled"
+    severity: info
+    fixable: false
+    evaluator: nested_ratio
+    path: "data_sources.tables[*].column_configs"
+    field: "enable_format_assistance"
+    params:
+      min_ratio: 0.1
+
+  - id: tables-have-column-configs
+    category: data_sources
+    description: "Tables have column configurations defined"
+    severity: warning
+    fixable: false
+    evaluator: ratio
+    path: "data_sources.tables"
+    field: "column_configs"
+    params:
+      min_ratio: 0.8
+    quick_win: "Add column configs to your tables to control descriptions, synonyms, and entity matching."
+
+  - id: metric-views-have-descriptions
+    category: data_sources
+    description: "Metric views have descriptions defined"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "data_sources.metric_views"
+    field: "description"
+    params:
+      min_ratio: 0.8
+
+  - id: metric-views-have-column-configs
+    category: data_sources
+    description: "Metric views have column configurations"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "data_sources.metric_views"
+    field: "column_configs"
+    params:
+      min_ratio: 0.5
+
   # ---------------------------------------------------------------------------
   # Instructions
   # ---------------------------------------------------------------------------
@@ -153,6 +210,50 @@ checks:
     params:
       min: 1
 
+  - id: join-specs-have-comments
+    category: instructions
+    description: "Join specs have comments explaining relationships"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.join_specs"
+    field: "comment"
+    params:
+      min_ratio: 0.5
+
+  - id: example-sqls-have-usage-guidance
+    category: instructions
+    description: "Complex example SQLs have usage guidance"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.example_question_sqls"
+    field: "usage_guidance"
+    params:
+      min_ratio: 0.2
+
+  - id: example-sqls-strong
+    category: instructions
+    description: "10+ example SQL pairs for strong coverage"
+    severity: info
+    fixable: true
+    fix_strategy: trusted_assets
+    evaluator: count
+    path: "instructions.example_question_sqls"
+    params:
+      min: 10
+
+  - id: expressions-have-instructions
+    category: instructions
+    description: "Expressions have usage instructions"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.expressions"
+    field: "instruction"
+    params:
+      min_ratio: 0.3
+
   # ---------------------------------------------------------------------------
   # Semantic Richness
   # ---------------------------------------------------------------------------
@@ -200,6 +301,83 @@ checks:
     path: "instructions.sql_snippets.expressions"
     params:
       min: 1
+
+  - id: expressions-have-synonyms
+    category: semantic_richness
+    description: "Expressions have synonyms for user terminology"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.expressions"
+    field: "synonyms"
+    params:
+      min_ratio: 0.5
+
+  - id: expressions-have-display-names
+    category: semantic_richness
+    description: "Expressions have display names"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.expressions"
+    field: "display_name"
+    params:
+      min_ratio: 0.8
+
+  - id: measures-have-synonyms
+    category: semantic_richness
+    description: "Measures have synonyms for user terminology"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.measures"
+    field: "synonyms"
+    params:
+      min_ratio: 0.5
+
+  - id: measures-count-minimum
+    category: semantic_richness
+    description: "At least 2 measures defined for adequate coverage"
+    severity: info
+    fixable: true
+    fix_strategy: semantic_expressions
+    evaluator: count
+    path: "instructions.sql_snippets.measures"
+    params:
+      min: 2
+
+  - id: filters-have-display-names
+    category: semantic_richness
+    description: "Filters have display names"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.filters"
+    field: "display_name"
+    params:
+      min_ratio: 0.8
+
+  - id: measures-have-comments
+    category: semantic_richness
+    description: "Measures have comments explaining their purpose"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.measures"
+    field: "comment"
+    params:
+      min_ratio: 0.3
+
+  - id: filters-have-comments
+    category: semantic_richness
+    description: "Filters have comments explaining when to use them"
+    severity: info
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_snippets.filters"
+    field: "comment"
+    params:
+      min_ratio: 0.3
 
   # ---------------------------------------------------------------------------
   # Quality Assurance
@@ -255,4 +433,73 @@ checks:
     fixable: false
     evaluator: unique
     path: "__all_ids__"
+
+  - id: benchmarks-minimum-strong
+    category: quality_assurance
+    description: "10+ benchmark questions for strong coverage"
+    severity: info
+    fixable: true
+    fix_strategy: benchmark_generation
+    evaluator: count
+    path: "benchmarks.questions"
+    params:
+      min: 10
+
+  - id: benchmarks-have-answers
+    category: quality_assurance
+    description: "Benchmark questions have SQL answers defined"
+    severity: warning
+    fixable: false
+    evaluator: ratio
+    path: "benchmarks.questions"
+    field: "answer"
+    params:
+      min_ratio: 0.8
+
+  - id: example-sqls-no-empty-sql
+    category: quality_assurance
+    description: "Example SQL pairs have non-empty SQL"
+    severity: critical
+    fixable: false
+    evaluator: no_empty_field
+    paths:
+      - "instructions.example_question_sqls[*].sql"
+
+  - id: example-sqls-no-empty-questions
+    category: quality_assurance
+    description: "Example SQL pairs have non-empty question text"
+    severity: critical
+    fixable: false
+    evaluator: no_empty_field
+    paths:
+      - "instructions.example_question_sqls[*].question"
+
+  - id: join-specs-no-empty-sql
+    category: quality_assurance
+    description: "Join specs have non-empty SQL"
+    severity: critical
+    fixable: false
+    evaluator: no_empty_field
+    paths:
+      - "instructions.join_specs[*].sql"
+
+  - id: benchmarks-no-empty-questions
+    category: quality_assurance
+    description: "Benchmark questions have non-empty question text"
+    severity: critical
+    fixable: false
+    evaluator: no_empty_field
+    paths:
+      - "benchmarks.questions[*].question"
+
+  - id: sql-functions-have-identifiers
+    category: quality_assurance
+    description: "SQL functions have fully-qualified identifiers"
+    severity: warning
+    fixable: false
+    evaluator: ratio
+    path: "instructions.sql_functions"
+    field: "identifier"
+    params:
+      min_ratio: 1.0
 `;
