@@ -8,9 +8,7 @@
 import type { CheckDefinition, CheckResult } from "./types";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SpaceJson = Record<string, any>;
+import type { SpaceJson } from "@/lib/genie/types";
 
 /**
  * Resolve a dot-notation path (with optional `[*]` array wildcards) against
@@ -343,10 +341,6 @@ let _pendingSqlQualityChecks: Array<{
   check: CheckDefinition;
   items: BatchReviewItem[];
 }> = [];
-
-export function getPendingSqlQualityChecks() {
-  return _pendingSqlQualityChecks;
-}
 
 export function clearPendingSqlQualityChecks() {
   _pendingSqlQualityChecks = [];

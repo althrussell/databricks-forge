@@ -29,6 +29,7 @@ import type {
   GenieEngineConfig,
   EntityMatchingCandidate,
   ClarificationRule,
+  JoinSpecInput,
 } from "../types";
 import { buildCompactColumnsBlock } from "../schema-allowlist";
 import { sanitizeUserContext } from "./title-generation";
@@ -42,13 +43,6 @@ const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-
-interface JoinSpecInput {
-  leftTable: string;
-  rightTable: string;
-  sql: string;
-  relationshipType: string;
-}
 
 export interface InstructionGenerationInput {
   domain: string;

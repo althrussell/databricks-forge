@@ -16,9 +16,7 @@ import type {
   SynthesisResult,
 } from "./types";
 import { resolvePath } from "./evaluators";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SpaceJson = Record<string, any>;
+import type { SpaceJson } from "@/lib/genie/types";
 
 interface LlmCheckEvaluation {
   id: string;

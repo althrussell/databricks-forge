@@ -30,6 +30,7 @@ import type {
   EnrichedSqlSnippetMeasure,
   EnrichedSqlSnippetDimension,
   ColumnEnrichment,
+  JoinSpecInput,
 } from "../types";
 import {
   buildSchemaContextBlock,
@@ -67,13 +68,6 @@ function toSnakeCase(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
-}
-
-export interface JoinSpecInput {
-  leftTable: string;
-  rightTable: string;
-  sql: string;
-  relationshipType: "many_to_one" | "one_to_many" | "one_to_one";
 }
 
 export interface MetricViewProposalsInput {

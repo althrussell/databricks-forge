@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isValidUUID, isSafeId } from "@/lib/validation";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { computeOverallScore } from "@/lib/domain/scoring";
@@ -150,7 +151,7 @@ export async function PATCH(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs/usecases] PATCH failed", { error: msg });
     return NextResponse.json(
-      { error: `Failed to update use case: ${msg}` },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

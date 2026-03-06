@@ -220,6 +220,14 @@ export interface JoinDiagnostic {
   reason: string;
 }
 
+/** Input join spec for engine passes (leftTable, rightTable, sql; relationshipType optional). */
+export interface JoinSpecInput {
+  leftTable: string;
+  rightTable: string;
+  sql: string;
+  relationshipType?: string;
+}
+
 /** Aggregated output from all engine passes for a single domain. */
 export interface GenieEnginePassOutputs {
   domain: string;
@@ -269,6 +277,10 @@ export interface GenieListResponse {
 // ---------------------------------------------------------------------------
 // Serialized Space (v2 format)
 // ---------------------------------------------------------------------------
+
+/** Parsed serialized_space JSON (v2 format). Use Record<string, any> for flexible traversal. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type SpaceJson = Record<string, any>;
 
 export interface SerializedSpace {
   version: 2;

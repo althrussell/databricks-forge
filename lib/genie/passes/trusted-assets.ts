@@ -14,6 +14,7 @@ import type {
   TrustedAssetQuery,
   EntityMatchingCandidate,
   QuestionComplexity,
+  JoinSpecInput,
 } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
@@ -24,13 +25,6 @@ import { mapWithConcurrency } from "../concurrency";
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 3;
 const BATCH_CONCURRENCY = 10;
-
-export interface JoinSpecInput {
-  leftTable: string;
-  rightTable: string;
-  sql: string;
-  relationshipType: string;
-}
 
 export interface TrustedAssetsInput {
   tableFqns: string[];

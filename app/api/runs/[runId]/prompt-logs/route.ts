@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import {
   getPromptLogsByRunId,
   getPromptLogStats,
@@ -57,12 +58,7 @@ export async function GET(
       runId,
     });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch prompt logs",
-      },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

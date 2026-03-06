@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { runMigrations } from "@/lib/lakebase/schema";
 
 export async function POST() {
@@ -16,10 +17,7 @@ export async function POST() {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[migrate] Migration failed", { error: msg });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Migration failed",
-      },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

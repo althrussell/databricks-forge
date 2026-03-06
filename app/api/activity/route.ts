@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { logger } from "@/lib/logger";
 import { getRecentActivity } from "@/lib/lakebase/activity-log";
 import { ensureMigrated } from "@/lib/lakebase/schema";
@@ -25,12 +26,7 @@ export async function GET(request: NextRequest) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[activity] Failed to fetch activity", { error: msg });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch activity",
-      },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }
