@@ -29,7 +29,7 @@ import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assem
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
-import { validateDatasetSql } from "./validation";
+import { validateDatasetSql, validateMetricViewSql } from "./validation";
 import { logger } from "@/lib/logger";
 import type { DiscoveredDashboard } from "@/lib/discovery/types";
 
@@ -233,6 +233,34 @@ function getMetricViewDataForDomain(
   }
 }
 
+function buildMetricViewLookups(metricViews: MetricViewForDashboard[]): {
+  fqns: Set<string>;
+  measures: Map<string, string[]>;
+} {
+  const fqns = new Set<string>();
+  const measures = new Map<string, string[]>();
+  for (const mv of metricViews) {
+    const fqnLower = mv.fqn.toLowerCase();
+    fqns.add(fqnLower);
+    measures.set(
+      fqnLower,
+      mv.measures.map((m) => m.name),
+    );
+  }
+  return { fqns, measures };
+}
+
+function buildMetricViewSchemaContext(metricViews: MetricViewForDashboard[]): string {
+  if (metricViews.length === 0) return "";
+  const lines = ["\n## Metric Views (these are WITH METRICS views -- use MEASURE() syntax)"];
+  for (const mv of metricViews) {
+    lines.push(`${mv.fqn} [METRIC VIEW]`);
+    lines.push(`  Dimensions: ${mv.dimensions.map((d) => d.name).join(", ")}`);
+    lines.push(`  Measures (MUST use MEASURE(col) AS col): ${mv.measures.map((m) => m.name).join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
 async function processDomain(
   group: DomainGroup,
   metadata: MetadataSnapshot,
@@ -245,6 +273,7 @@ async function processDomain(
   const genieOutputs = getGenieOutputsForDomain(group.domain, genieRecommendations);
   const filterCandidates = getFilterCandidatesForDomain(metadata, group.tables, genieOutputs);
   const metricViews = getMetricViewDataForDomain(group.domain, genieRecommendations);
+  const mvLookups = buildMetricViewLookups(metricViews);
 
   const prompt = buildDashboardDesignPrompt({
     businessName,
@@ -308,9 +337,24 @@ async function processDomain(
     return null;
   }
 
+  // Metric view SQL validation: check MEASURE() usage, aliases, GROUP BY
+  if (mvLookups.fqns.size > 0) {
+    for (const ds of parsed.datasets) {
+      const mvResult = validateMetricViewSql(ds.sql, mvLookups.fqns, mvLookups.measures);
+      if (!mvResult.valid) {
+        logger.warn("Dashboard Engine: metric view SQL issues detected", {
+          dataset: ds.name,
+          domain: group.domain,
+          issues: mvResult.issues,
+        });
+      }
+    }
+  }
+
   // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
   if (isReviewEnabled("dashboard")) {
-    const schemaCtx = columnSchemas.join("\n");
+    const mvSchemaCtx = buildMetricViewSchemaContext(metricViews);
+    const schemaCtx = columnSchemas.join("\n") + mvSchemaCtx;
     const reviewed = await Promise.all(
       parsed.datasets.map(async (ds) => {
         if (!ds.sql) return ds;

@@ -117,6 +117,34 @@ describe("buildDashboardDesignPrompt", () => {
     expect(prompt).toContain("Order Month");
   });
 
+  it("includes mandatory MEASURE() AS alias rule and GROUP BY ALL in metric view section", () => {
+    const prompt = buildDashboardDesignPrompt({
+      businessName: "Test Corp",
+      businessContext: null,
+      domain: "Sales",
+      subdomains: [],
+      useCases: [makeUseCase()],
+      tables: ["catalog.schema.orders"],
+      columnSchemas: [],
+      metricViews: [
+        {
+          fqn: "catalog.schema.orders_metrics",
+          name: "orders_metrics",
+          description: "Order KPIs",
+          dimensions: [{ name: "month", expr: "DATE_TRUNC('MONTH', order_date)" }],
+          measures: [{ name: "total_revenue", expr: "SUM(total_price)" }],
+        },
+      ],
+    });
+
+    expect(prompt).toContain("MEASURE(col) AS col");
+    expect(prompt).toContain("AS alias");
+    expect(prompt).toContain("GROUP BY ALL");
+    expect(prompt).toContain("CORRECT example");
+    expect(prompt).toContain("WRONG example");
+    expect(prompt).toContain("MEASURE(total_revenue) AS total_revenue");
+  });
+
   it("does not include metric view section when none provided", () => {
     const prompt = buildDashboardDesignPrompt({
       businessName: "Test Corp",
