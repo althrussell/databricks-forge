@@ -12,6 +12,8 @@ export const WATER_UTILITIES: IndustryOutcome = {
     "Bulk Water & Dam Operations",
     "Irrigation & Scheme Water",
     "Recycled Water & Resource Recovery",
+    "Water Grid Operations",
+    "Capital Program Delivery",
   ],
   suggestedDomains: [
     "Network Operations",
@@ -23,6 +25,10 @@ export const WATER_UTILITIES: IndustryOutcome = {
     "Water Security & Climate Resilience",
     "Bulk Water Operations",
     "Circular Economy",
+    "Capital Delivery & Program Management",
+    "Procurement & Supply Chain",
+    "Cybersecurity & OT Resilience",
+    "Digital Transformation & BI",
   ],
   suggestedPriorities: [
     "Optimize Operations",
@@ -33,6 +39,10 @@ export const WATER_UTILITIES: IndustryOutcome = {
     "Ensure Water Security",
     "Enable Digital & Smart Networks",
     "Support Community Liveability",
+    "Transform Capital Delivery",
+    "Improve Financial Sustainability",
+    "Strengthen OT Cybersecurity",
+    "Automate Business Processes",
   ],
   objectives: [
     // ------------------------------------------------------------------
@@ -185,6 +195,77 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Major asset condition score",
           ],
           personas: ["Head of Dam Safety", "Chief Risk Officer", "VP Engineering"],
+        },
+        {
+          name: "Treatment Plant Optimisation & Process Control",
+          useCases: [
+            {
+              name: "Advanced Process Control for Chemical Dosing",
+              description:
+                "Deploy APC algorithms across treatment plants to optimise coagulant, disinfectant, and pH dosing in real-time based on continuous source water quality, turbidity, and flow telemetry, reducing chemical costs while maintaining compliance.",
+              businessValue:
+                "5-8% chemical cost reduction yielding $2-3M annually across a multi-plant portfolio.",
+              typicalDataEntities: [
+                "Source Water Quality Telemetry",
+                "Chemical Dosage Rates",
+                "Flow & Turbidity Data",
+                "Compliance Thresholds",
+              ],
+              typicalSourceSystems: ["SCADA", "Treatment Plant DCS", "Laboratory Information System"],
+            },
+            {
+              name: "Treatment Plant Energy Optimisation",
+              description:
+                "Optimise blower staging, variable frequency drive control, pump scheduling, and backwash cycle timing to reduce electricity consumption by 8-15% across water treatment plant operations.",
+              businessValue:
+                "10% reduction on $40-50M annual energy spend generates $4-5M recurring savings.",
+              typicalDataEntities: [
+                "Energy Consumption by Asset",
+                "Pump & Blower Run Hours",
+                "VFD Operating Parameters",
+                "Backwash Schedules",
+              ],
+              typicalSourceSystems: ["SCADA", "Energy Management System", "Treatment Plant DCS"],
+            },
+            {
+              name: "IoT Condition-Based Maintenance",
+              description:
+                "Deploy vibration, temperature, flow, and power consumption sensors on critical rotating assets (pumps, blowers, motors) to transition from time-based preventive maintenance to condition-based and predictive maintenance.",
+              businessValue:
+                "30-40% reduction in reactive maintenance incidents; 20-30% decrease in preventive maintenance frequency; 15-20% total maintenance cost reduction.",
+              typicalDataEntities: [
+                "Vibration Sensor Data",
+                "Temperature Readings",
+                "Power Consumption Patterns",
+                "Maintenance History",
+              ],
+              typicalSourceSystems: ["IoT Platform", "SCADA", "CMMS", "Asset Management System"],
+            },
+            {
+              name: "Outsourced Maintenance Performance Analytics",
+              description:
+                "Monitor contracted maintenance partner KPIs, SLA adherence, reactive-vs-preventive ratio, cost-per-asset trends, and work order completion rates to ensure outsourced service delivery meets performance expectations.",
+              typicalDataEntities: [
+                "Work Order Records",
+                "SLA Metrics",
+                "Reactive vs Preventive Ratio",
+                "Cost per Asset",
+              ],
+              typicalSourceSystems: ["CMMS", "Contract Management System", "Asset Management System"],
+            },
+          ],
+          kpis: [
+            "Treatment plant energy intensity (kWh/Ml)",
+            "Chemical cost per Ml treated",
+            "Reactive maintenance ratio (%)",
+            "Outsourced maintenance SLA compliance (%)",
+          ],
+          personas: [
+            "Head of Treatment Operations",
+            "Chief Operating Officer",
+            "Asset Performance Manager",
+            "Maintenance Contract Manager",
+          ],
         },
       ],
     },
@@ -460,6 +541,87 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Chief Commercial Officer",
           ],
         },
+        {
+          name: "Stakeholder & Community Digital Engagement",
+          useCases: [
+            {
+              name: "Community Engagement for Infrastructure Projects",
+              description:
+                "Operate a digital consultation platform for dam improvement and major infrastructure projects, managing community feedback, project communications, impact notifications, and sentiment analysis at scale across multiple concurrent programmes.",
+              businessValue:
+                "Avoiding a single 3-month infrastructure delay from community opposition saves $15-25M in extended mobilisation costs.",
+              typicalDataEntities: [
+                "Community Feedback Records",
+                "Project Communications",
+                "Stakeholder Contact Registry",
+                "Sentiment Analysis Data",
+              ],
+              typicalSourceSystems: [
+                "Consultation Manager Platform",
+                "PPM Platform (Planisware)",
+                "CRM",
+              ],
+            },
+            {
+              name: "Recreational Facility Booking & Management",
+              description:
+                "Manage dam-adjacent recreational areas with analytics covering bookings, visitor numbers, safety incidents, capacity utilisation, and maintenance scheduling to optimise visitor experience and compliance.",
+              typicalDataEntities: [
+                "Booking Records",
+                "Visitor Counts",
+                "Safety Incident Logs",
+                "Facility Maintenance Schedules",
+              ],
+              typicalSourceSystems: [
+                "Booking Platform",
+                "Facility Management System",
+                "Safety Reporting System",
+              ],
+            },
+            {
+              name: "Developer & Commercial Connection Portal",
+              description:
+                "Provide self-service portal for connection applications, agreement tracking, technical submissions, and project milestone visibility for developer and commercial customers.",
+              businessValue:
+                "30-40% reduction in manual application processing time; improved customer satisfaction through 24/7 self-service access.",
+              typicalDataEntities: [
+                "Connection Applications",
+                "Agreement Status",
+                "Technical Submissions",
+                "Project Milestones",
+              ],
+              typicalSourceSystems: ["CRM", "Asset Management System", "GIS Platform"],
+            },
+            {
+              name: "Retailer B2B Operational Coordination",
+              description:
+                "Enable data exchange with wholesale retailer utilities covering operational coordination, planned maintenance windows, incident management, joint demand planning, and shared performance reporting.",
+              typicalDataEntities: [
+                "Operational Coordination Events",
+                "Maintenance Window Schedules",
+                "Incident Records",
+                "Shared Demand Forecasts",
+              ],
+              typicalSourceSystems: [
+                "B2B Integration Platform",
+                "SCADA",
+                "Incident Management System",
+              ],
+            },
+          ],
+          kpis: [
+            "Community engagement satisfaction score",
+            "Digital self-service adoption rate (%)",
+            "Application processing time (days)",
+            "Retailer coordination response time (hours)",
+          ],
+          personas: [
+            "Head of Stakeholder Engagement",
+            "Community Relations Manager",
+            "Chief Customer Officer",
+            "Wholesale Partnerships Manager",
+          ],
+        },
       ],
     },
     // ------------------------------------------------------------------
@@ -522,6 +684,40 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Climate Outlook",
               ],
               typicalSourceSystems: ["SCADA", "Bulk Water Planning", "Climate Modelling"],
+            },
+            {
+              name: "Supply Augmentation Sequencing & Investment Deferral",
+              description:
+                "Model optimal timing and sequencing for new supply sources (desalination expansion, dam-to-grid connections, advanced recycled water) to defer capital investment by 5-10 years through grid optimisation and demand management.",
+              businessValue:
+                "Optimal sequencing can defer $200-300M in capital expenditure compared to conservative static planning approaches.",
+              typicalDataEntities: [
+                "Supply Source Options",
+                "Capital Cost Estimates",
+                "Grid Capacity Models",
+                "Demand Management Scenarios",
+              ],
+              typicalSourceSystems: [
+                "Bulk Water Planning",
+                "PPM Platform (Planisware)",
+                "Financial Modelling",
+              ],
+            },
+            {
+              name: "Population Growth & Demand Corridor Modelling",
+              description:
+                "Project water demand by growth corridor integrating land-use planning, development approvals, and population forecasts to inform augmentation trigger points and infrastructure staging.",
+              typicalDataEntities: [
+                "Development Approvals",
+                "Population Forecasts by Corridor",
+                "Land Use Plans",
+                "Connection Growth Rates",
+              ],
+              typicalSourceSystems: [
+                "Planning & Development Data",
+                "GIS Platform",
+                "Bulk Water Planning",
+              ],
             },
           ],
           kpis: [
@@ -646,6 +842,149 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "VP Network Operations",
           ],
         },
+        {
+          name: "OT Cybersecurity & Operational Resilience",
+          useCases: [
+            {
+              name: "OT Asset Inventory & Vulnerability Assessment",
+              description:
+                "Maintain a comprehensive inventory of SCADA and OT assets with vulnerability scoring, firmware/patch status, external connectivity mapping, and default credential detection across treatment plants, pump stations, and dam infrastructure.",
+              businessValue:
+                "Foundation for cyber risk management; 83% of water utilities have undocumented external OT connections that represent unmanaged attack vectors.",
+              typicalDataEntities: [
+                "OT Asset Register",
+                "Firmware & Patch Levels",
+                "Vulnerability Scan Results",
+                "Network Connectivity Maps",
+              ],
+              typicalSourceSystems: [
+                "OT Asset Discovery Tool",
+                "SCADA",
+                "Vulnerability Scanner",
+                "Network Management System",
+              ],
+            },
+            {
+              name: "OT/IT Network Segmentation Monitoring",
+              description:
+                "Continuously monitor segmentation boundaries between IT and OT networks, detecting policy violations, unauthorised access attempts, and configuration drift that could expose operational technology to cyber threats.",
+              typicalDataEntities: [
+                "Network Traffic Logs",
+                "Segmentation Policy Rules",
+                "Access Attempt Records",
+                "Configuration Baselines",
+              ],
+              typicalSourceSystems: [
+                "Firewall & Network Appliances",
+                "SIEM",
+                "Network Management System",
+              ],
+            },
+            {
+              name: "SCADA Threat Detection & Incident Response",
+              description:
+                "Deploy anomaly detection on OT network traffic and SCADA command sequences, identifying suspicious activity patterns and triggering automated incident response workflows to protect critical water infrastructure.",
+              businessValue:
+                "Prevented cyber incidents avoid $10-50M in estimated costs from service disruption, remediation, and regulatory penalties.",
+              typicalDataEntities: [
+                "SCADA Command Logs",
+                "OT Network Traffic",
+                "Anomaly Detection Alerts",
+                "Incident Response Playbooks",
+              ],
+              typicalSourceSystems: [
+                "OT Security Platform",
+                "SCADA",
+                "SIEM",
+                "Incident Management System",
+              ],
+            },
+          ],
+          kpis: [
+            "OT asset inventory completeness (%)",
+            "Vulnerability remediation rate (%)",
+            "Network segmentation policy compliance (%)",
+            "Mean time to detect OT security incidents (hours)",
+          ],
+          personas: [
+            "Chief Information Security Officer",
+            "OT Security Manager",
+            "Head of Digital",
+            "Chief Risk Officer",
+          ],
+        },
+        {
+          name: "Enterprise Data & Analytics Platform",
+          useCases: [
+            {
+              name: "Cross-System Data Integration & Warehousing",
+              description:
+                "Unify data from operational (SCADA, treatment plant DCS), commercial (billing, contracts), project management (PPM), procurement (source-to-pay), and financial systems into a governed enterprise data platform enabling cross-domain analytics.",
+              businessValue:
+                "Breaks data silos that limit enterprise visibility; foundation for all advanced analytics and AI use cases.",
+              typicalDataEntities: [
+                "Operational Telemetry",
+                "Financial Data",
+                "Project & Portfolio Data",
+                "Procurement & Contract Data",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "ERP",
+                "PPM Platform (Planisware)",
+                "Source-to-Pay Platform (Zycus)",
+                "Asset Management System",
+              ],
+            },
+            {
+              name: "Operational Benchmarking & KPI Framework",
+              description:
+                "Deliver pre-built water utility KPI dashboards enabling cross-domain performance monitoring, peer benchmarking against comparable utilities, and automated regulatory reporting with drill-down capability.",
+              typicalDataEntities: [
+                "Operational KPIs",
+                "Financial Performance Metrics",
+                "Peer Utility Benchmarks",
+                "Regulatory Submission Data",
+              ],
+              typicalSourceSystems: [
+                "Enterprise Data Platform",
+                "Regulatory Reporting",
+                "Industry Benchmarking Database",
+              ],
+            },
+            {
+              name: "AI-Driven Operational Scenario Modelling",
+              description:
+                "Combine demand, climate, asset condition, financial, and workforce data for AI-powered what-if scenario planning, enabling optimised capital programme timing, operational strategy selection, and long-term infrastructure planning.",
+              businessValue:
+                "Portfolio-level optimisation yields 3-5% efficiency gain ($20-30M annually) plus improved demand forecasting ($40-50M value from optimised capital timing).",
+              typicalDataEntities: [
+                "Demand Forecasts",
+                "Climate Projections",
+                "Asset Condition Data",
+                "Financial Scenarios",
+              ],
+              typicalSourceSystems: [
+                "Enterprise Data Platform",
+                "Climate Modelling",
+                "Asset Management System",
+                "Financial Modelling",
+              ],
+            },
+          ],
+          kpis: [
+            "Data platform coverage (% of source systems integrated)",
+            "KPI dashboard adoption rate (%)",
+            "Scenario model accuracy vs actuals (%)",
+            "Time to generate regulatory reports (hours)",
+          ],
+          personas: [
+            "Chief Data Officer",
+            "Chief Information Officer",
+            "VP Strategy & Performance",
+            "Head of Digital",
+          ],
+        },
       ],
     },
     // ------------------------------------------------------------------
@@ -731,6 +1070,239 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Head of Community & Social Impact",
             "Chief Customer Officer",
             "Head of Strategy",
+          ],
+        },
+      ],
+    },
+    // ------------------------------------------------------------------
+    // Objective 7 -- Capital Delivery & Financial Sustainability
+    // ------------------------------------------------------------------
+    {
+      name: "Transform Capital Delivery & Financial Sustainability",
+      whyChange:
+        "Water utilities face escalating capital programmes -- dam safety upgrades, grid expansion, supply augmentation -- while operating under regulatory price-path constraints and rising input costs. Portfolio-level capital management, procurement excellence, and financial resilience analytics are essential to deliver multi-billion-dollar infrastructure programmes on time and within budget, maintain investment-grade credit, and fund growth without unsustainable debt.",
+      priorities: [
+        {
+          name: "Capital Program Portfolio Management",
+          useCases: [
+            {
+              name: "Capital Program Performance Analytics",
+              description:
+                "Track budget-vs-actual, schedule variance, and delivery capacity across the full capital portfolio, detecting underspend patterns and resource bottlenecks to enable proactive reallocation across 250+ stakeholder programmes.",
+              businessValue:
+                "3-5% capital efficiency gain through portfolio-level optimisation, equating to $20-30M annually on a $500M+ programme.",
+              typicalDataEntities: [
+                "Project Budget & Actuals",
+                "Schedule Milestones",
+                "Resource Allocation",
+                "Delivery Capacity Metrics",
+              ],
+              typicalSourceSystems: [
+                "PPM Platform (Planisware)",
+                "ERP",
+                "Project Controls",
+              ],
+            },
+            {
+              name: "Dam Improvement Program Scheduling & Compliance",
+              description:
+                "Model schedule, cost, and regulatory compliance across multi-year dam safety investment portfolios, tracking intervention sequencing against regulatory deadlines and risk ratings.",
+              businessValue:
+                "On-time delivery of dam safety programmes avoids regulatory penalties and protects social licence for annual revenue streams.",
+              typicalDataEntities: [
+                "Dam Safety Risk Ratings",
+                "Regulatory Deadlines",
+                "Intervention Schedules",
+                "Capital Allocation",
+              ],
+              typicalSourceSystems: [
+                "PPM Platform (Planisware)",
+                "Dam Safety Database",
+                "Regulatory Compliance System",
+              ],
+            },
+            {
+              name: "Capital Packaging & Strategic Sourcing",
+              description:
+                "Evaluate strategic project packaging options, early contractor involvement models, alliance structures, and risk-sharing mechanisms to capture procurement efficiencies across like-for-like capital works.",
+              typicalDataEntities: [
+                "Project Scope & Requirements",
+                "Supplier Capability Register",
+                "Historical Tender Outcomes",
+                "Market Capacity Data",
+              ],
+              typicalSourceSystems: [
+                "PPM Platform (Planisware)",
+                "Source-to-Pay Platform (Zycus)",
+                "Supplier Management System",
+              ],
+            },
+            {
+              name: "Portfolio Resource & Contractor Capacity Planning",
+              description:
+                "Model cross-project resource demand, contractor pipeline availability, and capability gaps to inform workforce planning and supplier engagement strategies across the capital programme.",
+              typicalDataEntities: [
+                "Resource Demand Profiles",
+                "Contractor Capacity",
+                "Skills & Capability Register",
+                "Project Timeline Overlaps",
+              ],
+              typicalSourceSystems: [
+                "PPM Platform (Planisware)",
+                "HR System",
+                "Supplier Management System",
+              ],
+            },
+          ],
+          kpis: [
+            "Capital programme delivery rate (% of budget deployed)",
+            "Schedule variance by project tier",
+            "Dam improvement compliance (%)",
+            "Capital efficiency ratio (risk reduction per $ invested)",
+          ],
+          personas: [
+            "Head of Capital Delivery",
+            "VP Infrastructure",
+            "Chief Financial Officer",
+            "Program Director",
+          ],
+        },
+        {
+          name: "Finance, Procurement & Business Process Automation",
+          useCases: [
+            {
+              name: "RPA for Finance & Procurement Operations",
+              description:
+                "Deploy robotic process automation for invoice data extraction and validation, purchase order creation and routing, vendor master data updates, and monthly financial close activities, targeting 80% straight-through processing rates.",
+              businessValue:
+                "20-30% productivity improvement in targeted processes with 6-12 month payback; $1.5-2M annual labour redeployment value.",
+              typicalDataEntities: [
+                "Invoices",
+                "Purchase Orders",
+                "Vendor Master Data",
+                "General Ledger Entries",
+              ],
+              typicalSourceSystems: [
+                "ERP",
+                "Source-to-Pay Platform (Zycus)",
+                "Document Management System",
+              ],
+            },
+            {
+              name: "Procurement Category Management & Spend Analytics",
+              description:
+                "Establish 8-10 strategic procurement categories with AI-driven spend analysis, supplier performance benchmarking, demand aggregation, and total cost of ownership modelling to capture savings across $500M+ annual procurement.",
+              businessValue:
+                "5-8% addressable spend savings over 2-3 years; $18-20M annually on $500M procurement base.",
+              typicalDataEntities: [
+                "Spend Data by Category",
+                "Supplier Performance Metrics",
+                "Contract Terms",
+                "Market Benchmarks",
+              ],
+              typicalSourceSystems: [
+                "Source-to-Pay Platform (Zycus)",
+                "ERP",
+                "Contract Management System",
+              ],
+            },
+            {
+              name: "Source-to-Pay Process Optimisation",
+              description:
+                "Monitor end-to-end procurement workflow performance from requisition to payment, identifying bottlenecks, exception rates, and cross-system integration failures to continuously improve cycle times and compliance.",
+              typicalDataEntities: [
+                "Requisition-to-PO Cycle Times",
+                "Approval Workflows",
+                "Exception Rates",
+                "Integration Error Logs",
+              ],
+              typicalSourceSystems: [
+                "Source-to-Pay Platform (Zycus)",
+                "ERP",
+                "Workflow Management System",
+              ],
+            },
+          ],
+          kpis: [
+            "Straight-through processing rate (%)",
+            "Procurement cycle time (days)",
+            "Addressable spend under management (%)",
+            "Category savings vs baseline ($)",
+          ],
+          personas: [
+            "Chief Procurement Officer",
+            "Head of Finance",
+            "VP Shared Services",
+            "Automation Program Lead",
+          ],
+        },
+        {
+          name: "Financial Sustainability & Revenue Assurance",
+          useCases: [
+            {
+              name: "Financial Sustainability Metrics & Scenario Modelling",
+              description:
+                "Model EBITDA interest coverage, gearing ratio, and return on equity trajectories under alternative capital expenditure, demand, and pricing scenarios to inform long-term financial strategy and debt management.",
+              businessValue:
+                "Maintaining financial sustainability provides capacity to self-fund $100-150M of capital through operating cashflows, reducing debt market reliance.",
+              typicalDataEntities: [
+                "Financial Statements",
+                "Capital Program Forecasts",
+                "Demand Scenarios",
+                "Regulatory Price Path",
+              ],
+              typicalSourceSystems: ["ERP", "Treasury System", "PPM Platform (Planisware)"],
+            },
+            {
+              name: "Demand-Driven Revenue Forecasting",
+              description:
+                "Reduce demand forecast error from +/-10% to +/-5% using real-time consumption telemetry, weather data, population growth models, and seasonal patterns to improve revenue certainty and operational planning.",
+              businessValue:
+                "Reducing forecast error prevents both over-investment in unused capacity and under-capacity emergencies, each carrying $50M+ consequences.",
+              typicalDataEntities: [
+                "Real-Time Consumption Data",
+                "Weather Forecasts",
+                "Population Growth Projections",
+                "Historical Demand Patterns",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "Billing System",
+                "Weather Services",
+                "Planning & Development Data",
+              ],
+            },
+            {
+              name: "Productivity Improvement Tracking & Peer Benchmarking",
+              description:
+                "Track cost-to-serve ratio, annual productivity growth, and operating expenditure trends, benchmarking against peer utilities to identify efficiency opportunities and validate transformation ROI.",
+              businessValue:
+                "Matching peer productivity growth of 1.5% annually equates to $6-8M in avoided cost growth on a $400M+ operating base.",
+              typicalDataEntities: [
+                "Operating Cost Breakdown",
+                "Productivity Metrics",
+                "Peer Utility Benchmarks",
+                "Regulatory Reporting Data",
+              ],
+              typicalSourceSystems: [
+                "ERP",
+                "Regulatory Reporting",
+                "Industry Benchmarking Database",
+              ],
+            },
+          ],
+          kpis: [
+            "EBITDA interest coverage ratio",
+            "Gearing ratio (%)",
+            "Return on equity (%)",
+            "Demand forecast accuracy (+/- %)",
+            "Annual productivity growth (%)",
+          ],
+          personas: [
+            "Chief Financial Officer",
+            "Head of Treasury",
+            "VP Strategy & Performance",
+            "Regulatory Affairs Director",
           ],
         },
       ],
