@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   FileCode,
   Table2,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface MetricViewProposal {
@@ -92,6 +94,33 @@ function ValidationBadge({ status }: { status: string }) {
   }
 }
 
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="absolute right-1 top-1 h-7 gap-1 text-[10px] opacity-0 transition-opacity group-hover/code:opacity-100"
+      onClick={handleCopy}
+    >
+      {copied ? (
+        <>
+          <Check className="h-3 w-3 text-green-500" /> Copied
+        </>
+      ) : (
+        <>
+          <Copy className="h-3 w-3" /> {label}
+        </>
+      )}
+    </Button>
+  );
+}
+
 function MetricViewRow({
   proposal,
   onDeploy,
@@ -105,7 +134,7 @@ function MetricViewRow({
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
-      <div className="border rounded-lg p-3">
+      <div className="min-w-0 overflow-hidden border rounded-lg p-3">
         <CollapsibleTrigger asChild>
           <div className="flex items-center justify-between cursor-pointer">
             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -159,13 +188,13 @@ function MetricViewRow({
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-3 space-y-3 border-t pt-3">
+          <div className="mt-3 min-w-0 space-y-3 border-t pt-3">
             {proposal.sourceTables.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Source Tables</p>
                 <div className="flex flex-wrap gap-1">
                   {proposal.sourceTables.map((t) => (
-                    <Badge key={t} variant="secondary" className="text-xs font-mono">
+                    <Badge key={t} variant="secondary" className="text-xs font-mono break-all">
                       {t}
                     </Badge>
                   ))}
@@ -185,17 +214,31 @@ function MetricViewRow({
             {proposal.deployedFqn && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Deployed FQN</p>
-                <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">
+                <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded break-all">
                   {proposal.deployedFqn}
                 </code>
               </div>
             )}
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground mb-1">YAML Preview</p>
-              <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-64 whitespace-pre-wrap font-mono">
-                {proposal.yaml}
-              </pre>
+              <div className="group/code relative">
+                <CopyButton text={proposal.yaml} label="Copy YAML" />
+                <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-words font-mono">
+                  {proposal.yaml}
+                </pre>
+              </div>
             </div>
+            {proposal.ddl && (
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground mb-1">DDL</p>
+                <div className="group/code relative">
+                  <CopyButton text={proposal.ddl} label="Copy DDL" />
+                  <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-words font-mono">
+                    {proposal.ddl}
+                  </pre>
+                </div>
+              </div>
+            )}
           </div>
         </CollapsibleContent>
       </div>
@@ -313,9 +356,9 @@ export function MetricViewsTab({ runId }: { runId: string }) {
   }
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <CardTitle className="text-base">Metric Views ({proposals.length})</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">

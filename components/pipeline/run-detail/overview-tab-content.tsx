@@ -9,7 +9,6 @@ import {
   StepDurationChart,
 } from "@/components/charts/lazy";
 import { SchemaCoverageCard } from "./schema-coverage-card";
-import { IndustryCoverageCard } from "./industry-coverage-card";
 import { BusinessContextCard } from "./business-context-card";
 import { ConfigField } from "./config-field";
 import { EnvironmentScanCard } from "./environment-scan-card";
@@ -103,17 +102,6 @@ export function OverviewTabContent({
           {/* Schema Coverage */}
           {useCases.length > 0 && (
             <SchemaCoverageCard useCases={useCases} lineageDiscoveredFqns={lineageDiscoveredFqns} />
-          )}
-
-          {/* Industry Coverage + Gap Analysis */}
-          {run.config.industry && useCases.length > 0 && (
-            <div>
-              <IndustryCoverageCard
-                industryId={run.config.industry}
-                useCases={useCases}
-                runId={run.runId}
-              />
-            </div>
           )}
         </CollapsibleContent>
       </Collapsible>
