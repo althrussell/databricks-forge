@@ -374,6 +374,61 @@ dimensions:
 `;
     expect(nestSnowflakeJoins(yaml)).toBe(yaml);
   });
+
+  it("preserves already-nested joins without producing duplicate joins: keys", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact_accounts
+joins:
+  - name: account_type
+    source: catalog.schema.dim_account_type
+    on: source.type_id = account_type.type_id
+    joins:
+      - name: fee_schedule
+        source: catalog.schema.dim_fee_schedule
+        on: account_type.schedule_id = fee_schedule.schedule_id
+dimensions:
+  - name: type_name
+    expr: account_type.name
+`;
+    const result = nestSnowflakeJoins(yaml);
+
+    // Should not contain duplicate joins: keys (the bug produced two adjacent joins: lines)
+    expect(result).not.toMatch(/joins:\s*\n\s*joins:/);
+    // fee_schedule should still be nested under account_type
+    expect(result).toContain("- name: fee_schedule");
+    expect(result).toContain("- name: account_type");
+  });
+
+  it("completes partially-nested joins without duplicating existing joins: key", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact_orders
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+    joins:
+      - name: location
+        source: catalog.schema.dim_location
+        on: member.location_id = location.location_id
+  - name: segment
+    source: catalog.schema.dim_segment
+    on: member.segment_id = segment.segment_id
+dimensions:
+  - name: state
+    expr: location.state
+`;
+    const result = nestSnowflakeJoins(yaml);
+
+    // segment should be nested under member alongside location
+    expect(result).not.toMatch(/joins:\s*\n\s*joins:/);
+    expect(result).toContain("- name: member");
+    expect(result).toContain("- name: location");
+    expect(result).toContain("- name: segment");
+    // Only member should be a top-level join
+    const joinsSection = result.split("joins:")[1].split("dimensions:")[0];
+    const topJoinNames = [...joinsSection.matchAll(/^  - name: (\w+)/gm)].map((m) => m[1]);
+    expect(topJoinNames).toEqual(["member"]);
+  });
 });
 
 // ---------------------------------------------------------------------------

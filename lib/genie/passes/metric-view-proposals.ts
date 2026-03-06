@@ -107,6 +107,8 @@ function parseJoinsBlock(joinsText: string): ParsedJoin[] {
       continue;
     }
 
+    if (/^\s*joins:\s*(?:#.*)?$/.test(line)) continue;
+
     if (line.trim()) {
       current.extraLines = current.extraLines ?? [];
       current.extraLines.push(line);
