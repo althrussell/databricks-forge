@@ -74,6 +74,20 @@ export interface ChatCompletionResponse {
 export type StreamCallback = (chunk: string) => void;
 
 // ---------------------------------------------------------------------------
+// Model capability detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Claude/Anthropic models on Databricks FMAPI do not support
+ * response_format: { type: "json_object" } (only json_schema is supported).
+ * GPT, Llama, and other models do support it.
+ */
+function supportsJsonResponseFormat(endpoint: string): boolean {
+  const lower = endpoint.toLowerCase();
+  return !lower.includes("claude") && !lower.includes("anthropic");
+}
+
+// ---------------------------------------------------------------------------
 // Timeouts
 // ---------------------------------------------------------------------------
 
@@ -114,7 +128,7 @@ export async function chatCompletion(
     body.max_tokens = options.maxTokens;
   }
 
-  if (options.responseFormat === "json_object") {
+  if (options.responseFormat === "json_object" && supportsJsonResponseFormat(options.endpoint)) {
     body.response_format = { type: "json_object" };
   }
 
@@ -170,7 +184,7 @@ export async function chatCompletionStream(
     body.max_tokens = options.maxTokens;
   }
 
-  if (options.responseFormat === "json_object") {
+  if (options.responseFormat === "json_object" && supportsJsonResponseFormat(options.endpoint)) {
     body.response_format = { type: "json_object" };
   }
 

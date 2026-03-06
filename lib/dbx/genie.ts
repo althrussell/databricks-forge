@@ -418,6 +418,47 @@ export async function updateGenieSpace(
 }
 
 // ---------------------------------------------------------------------------
+// 429 Rate-limit retry for Genie Conversation API
+// ---------------------------------------------------------------------------
+
+const GENIE_429_MAX_RETRIES = 3;
+const GENIE_429_BASE_BACKOFF_MS = 30_000;
+
+function extractRetryAfterMs(response: Response): number | null {
+  const header = response.headers.get("Retry-After");
+  if (!header) return null;
+  const seconds = parseInt(header, 10);
+  return !isNaN(seconds) ? seconds * 1000 : null;
+}
+
+/**
+ * Wrapper around fetchWithTimeout that retries on 429 with exponential backoff.
+ * Uses Retry-After header when available, otherwise backs off from 30s.
+ */
+async function fetchWithGenie429Retry(
+  url: string,
+  init: RequestInit,
+  timeout: number,
+  context: string,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetchWithTimeout(url, init, timeout);
+
+    if (response.status !== 429) return response;
+    if (attempt >= GENIE_429_MAX_RETRIES) return response;
+
+    const retryMs =
+      extractRetryAfterMs(response) ??
+      GENIE_429_BASE_BACKOFF_MS * Math.pow(2, attempt);
+    logger.warn(
+      `${context}: 429 rate limited, retrying in ${Math.round(retryMs / 1000)}s (attempt ${attempt + 1}/${GENIE_429_MAX_RETRIES})`,
+      { attempt, retryMs },
+    );
+    await new Promise((resolve) => setTimeout(resolve, retryMs));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Conversation API -- ask questions to a deployed Genie Space
 // ---------------------------------------------------------------------------
 
@@ -444,7 +485,12 @@ async function pollMessageCompletion(
 
   while (Date.now() < deadline) {
     const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages/${messageId}`;
-    const response = await fetchWithTimeout(url, { method: "GET", headers }, TIMEOUTS.WORKSPACE);
+    const response = await fetchWithGenie429Retry(
+      url,
+      { method: "GET", headers },
+      TIMEOUTS.WORKSPACE,
+      "Genie poll message",
+    );
 
     if (!response.ok) {
       const text = await response.text();
@@ -498,14 +544,15 @@ export async function startConversation(
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/start-conversation`;
   const headers = await getAppHeaders();
 
-  const response = await fetchWithTimeout(
+  const response = await fetchWithGenie429Retry(
     url,
     {
       method: "POST",
       headers,
       body: JSON.stringify({ content: question }),
     },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
+    "Genie start conversation",
   );
 
   if (!response.ok) {
@@ -551,14 +598,15 @@ export async function sendFollowUp(
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages`;
   const headers = await getAppHeaders();
 
-  const response = await fetchWithTimeout(
+  const response = await fetchWithGenie429Retry(
     url,
     {
       method: "POST",
       headers,
       body: JSON.stringify({ content: question }),
     },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
+    "Genie follow-up",
   );
 
   if (!response.ok) {

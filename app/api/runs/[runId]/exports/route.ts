@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getExportsByRunId } from "@/lib/lakebase/exports";
 import { getRunById } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
@@ -51,12 +52,7 @@ export async function GET(
       runId,
     });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch exports",
-      },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

@@ -242,7 +242,6 @@ function parseReviewResponse(raw: string, requestedFix: boolean): ReviewResult {
   return { verdict, qualityScore, issues, fixedSql, suggestions };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseBatchReviewResponse(raw: string, items: BatchReviewItem[]): BatchReviewResult[] {
   const cleaned = raw
     .replace(/^```(?:json)?\s*/m, "")

@@ -78,38 +78,8 @@ export async function POST() {
 // ---------------------------------------------------------------------------
 
 async function ensurePgvectorSchema(): Promise<void> {
-  const { getPrisma } = await import("@/lib/prisma");
-  const prisma = await getPrisma();
-
-  try {
-    await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS vector");
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS forge_embeddings (
-        id            TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-        kind          TEXT NOT NULL,
-        source_id     TEXT NOT NULL,
-        run_id        TEXT,
-        scan_id       TEXT,
-        content_text  TEXT NOT NULL,
-        metadata_json JSONB,
-        embedding     vector(1024) NOT NULL,
-        created_at    TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)");
-    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)");
-    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)");
-    await prisma.$executeRawUnsafe("CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)");
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw ON forge_embeddings
-        USING hnsw (embedding vector_cosine_ops)
-        WITH (m = 16, ef_construction = 64)
-    `);
-  } catch (err) {
-    logger.warn("[backfill] pgvector schema setup warning", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
+  const { ensureEmbeddingSchema } = await import("@/lib/embeddings/schema");
+  await ensureEmbeddingSchema();
 }
 
 // ---------------------------------------------------------------------------

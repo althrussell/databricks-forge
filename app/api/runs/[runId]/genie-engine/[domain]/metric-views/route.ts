@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { executeSQL } from "@/lib/dbx/sql";
 import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
@@ -134,6 +135,6 @@ export async function POST(
     logger.error("Metric view deployment failed", {
       error: message,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

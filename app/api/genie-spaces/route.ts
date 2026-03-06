@@ -8,7 +8,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
-import { executeSQL } from "@/lib/dbx/sql";
 import { listGenieSpaces, createGenieSpace } from "@/lib/dbx/genie";
 import {
   listTrackedGenieSpaces,
@@ -19,6 +18,11 @@ import { safeErrorMessage } from "@/lib/error-utils";
 import type { GenieAuthMode } from "@/lib/settings";
 import { revalidateSerializedSpace } from "@/lib/genie/deploy-validation";
 import { validateFqn } from "@/lib/validation";
+import {
+  deployMetricViews,
+  patchSpaceWithMetricViews,
+  type MetricViewDeployResult,
+} from "@/lib/genie/deploy";
 
 export async function GET() {
   try {
@@ -54,111 +58,6 @@ export async function GET() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Metric view DDL helpers (mirrors logic from genie-deploy route)
-// ---------------------------------------------------------------------------
-
-function rewriteDdlTarget(ddl: string, targetSchema: string): string {
-  return ddl.replace(
-    /(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
-    (_match, prefix: string, fqn: string) => {
-      const parts = fqn.replace(/`/g, "").split(".");
-      const objectName = parts[parts.length - 1];
-      return `${prefix}${targetSchema}.${objectName}`;
-    },
-  );
-}
-
-function sanitizeMetricViewDdl(ddl: string): string {
-  return ddl
-    .replace(
-      /^(\s*(?:expr|on):\s*)(.+)$/gm,
-      (_match, prefix: string, rest: string) =>
-        prefix +
-        rest.replace(
-          /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g,
-          "$1",
-        ),
-    )
-    .replace(/^\s*comment:\s*"[^"]*"\s*$/gm, "")
-    .replace(/^\s*comment:\s*'[^']*'\s*$/gm, "")
-    .replace(/^\s*comment:\s*[^\n]+$/gm, "");
-}
-
-function extractObjectName(ddl: string): string | null {
-  const match = ddl.match(
-    /(?:CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
-  );
-  if (!match) return null;
-  const parts = match[1].replace(/`/g, "").split(".");
-  return parts[parts.length - 1];
-}
-
-interface MetricViewDeployResult {
-  name: string;
-  success: boolean;
-  fqn?: string;
-  error?: string;
-}
-
-async function deployMetricViews(
-  views: Array<{ name: string; ddl: string; description?: string }>,
-  targetSchema: string,
-): Promise<{ results: MetricViewDeployResult[]; deployedFqns: string[] }> {
-  const results: MetricViewDeployResult[] = [];
-  const deployedFqns: string[] = [];
-
-  for (const mv of views) {
-    const rewritten = sanitizeMetricViewDdl(rewriteDdlTarget(mv.ddl, targetSchema));
-    const objectName = extractObjectName(rewritten) ?? mv.name;
-    const fqn = `${targetSchema}.${objectName}`;
-
-    try {
-      await executeSQL(rewritten);
-      // Best-effort grant
-      try {
-        await executeSQL(`GRANT SELECT ON TABLE ${fqn} TO \`account users\``);
-      } catch {
-        /* grant is best-effort */
-      }
-      results.push({ name: mv.name, success: true, fqn });
-      deployedFqns.push(fqn);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toUpperCase().includes("ALREADY_EXISTS") || msg.toUpperCase().includes("ALREADY EXISTS")) {
-        results.push({ name: mv.name, success: true, fqn });
-        deployedFqns.push(fqn);
-      } else {
-        logger.warn("Metric view deployment failed (ad-hoc)", { name: mv.name, fqn, error: msg });
-        results.push({ name: mv.name, success: false, fqn, error: msg });
-      }
-    }
-  }
-
-  return { results, deployedFqns };
-}
-
-function patchSpaceWithMetricViews(
-  serializedSpace: string,
-  deployedFqns: string[],
-): string {
-  if (deployedFqns.length === 0) return serializedSpace;
-  try {
-    const space = JSON.parse(serializedSpace) as Record<string, unknown>;
-    const dataSources = (space.data_sources ?? {}) as Record<string, unknown>;
-    const existing = (dataSources.metric_views ?? []) as Array<{ identifier: string }>;
-    const existingSet = new Set(existing.map((e) => e.identifier.toLowerCase()));
-    const newEntries = deployedFqns
-      .filter((fqn) => !existingSet.has(fqn.toLowerCase()))
-      .map((fqn) => ({ identifier: fqn }));
-    dataSources.metric_views = [...existing, ...newEntries];
-    space.data_sources = dataSources;
-    return JSON.stringify(space);
-  } catch {
-    return serializedSpace;
   }
 }
 

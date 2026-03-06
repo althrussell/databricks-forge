@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { compareRuns } from "@/lib/lakebase/run-comparison";
 import { generateComparisonExcel } from "@/lib/export/comparison-excel";
 import { ensureMigrated } from "@/lib/lakebase/schema";
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Export failed" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

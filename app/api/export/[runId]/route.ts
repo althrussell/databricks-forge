@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 import { getRunById } from "@/lib/lakebase/runs";
@@ -173,7 +174,7 @@ export async function GET(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/export/runId] GET failed", { error: msg });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Export failed" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

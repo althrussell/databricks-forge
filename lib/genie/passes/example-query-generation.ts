@@ -3,7 +3,7 @@ import { cachedChatCompletion } from "../llm-cache";
 import { parseLLMJson } from "./parse-llm-json";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import type { MetadataSnapshot } from "@/lib/domain/types";
-import type { TrustedAssetQuery, QuestionComplexity } from "../types";
+import type { TrustedAssetQuery, QuestionComplexity, JoinSpecInput } from "../types";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
@@ -14,12 +14,6 @@ const MAX_QUERIES = 6;
 const PII_COLUMN_PATTERN = /(email|phone|ssn|social_security|tax_id|dob|birth|address)/i;
 const NUMERIC_TYPE_PATTERN = /^(int|bigint|smallint|tinyint|float|double|decimal|numeric|real)/i;
 const DATE_TYPE_PATTERN = /(date|timestamp|time)/i;
-
-interface JoinSpecInput {
-  leftTable: string;
-  rightTable: string;
-  sql: string;
-}
 
 export interface ExampleQueryGenerationInput {
   domain: string;

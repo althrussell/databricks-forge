@@ -7,14 +7,11 @@ import { executeSQL } from "@/lib/dbx/sql";
 import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
 import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
 import { extractEntityCandidatesFromSchema } from "@/lib/genie/entity-extraction";
-import { defaultGenieEngineConfig } from "@/lib/genie/types";
+import { defaultGenieEngineConfig, type SpaceJson } from "@/lib/genie/types";
 import { resolveRegistry } from "@/lib/genie/health-checks/registry";
 import { logger } from "@/lib/logger";
 import type { MetadataSnapshot, TableInfo, ColumnInfo } from "@/lib/domain/types";
 import type { FixStrategy } from "@/lib/genie/health-checks/types";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SpaceJson = Record<string, any>;
 
 interface FixRequest {
   checkIds: string[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -27,6 +28,7 @@ import {
   FlaskConical,
   Loader2,
   Play,
+  RotateCcw,
   ThumbsDown,
   ThumbsUp,
   Sparkles,
@@ -133,13 +135,37 @@ export default function BenchmarkPage() {
   const [improveResult, setImproveResult] = useState<ImproveResult | null>(null);
   const [applying, setApplying] = useState(false);
   const [cloning, setCloning] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [rateLimitWarning, setRateLimitWarning] = useState(false);
+
+  const selectedCount = useMemo(() => selectedIndices.size, [selectedIndices]);
+  const allSelected = selectedCount === questions.length && questions.length > 0;
+
+  const toggleSelection = (index: number) => {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIndices(new Set());
+    } else {
+      setSelectedIndices(new Set(questions.map((_, i) => i)));
+    }
+  };
 
   const fetchQuestions = useCallback(async () => {
     try {
       const res = await fetch(`/api/genie-spaces/${spaceId}/benchmarks`);
       if (!res.ok) throw new Error("Failed to load benchmarks");
       const data = await res.json();
-      setQuestions(data.questions ?? []);
+      const qs: BenchmarkQuestion[] = data.questions ?? [];
+      setQuestions(qs);
+      setSelectedIndices(new Set(qs.map((_, i) => i)));
     } catch {
       toast.error("Failed to load benchmark questions");
     } finally {
@@ -167,18 +193,20 @@ export default function BenchmarkPage() {
     fetchHistory();
   }, [fetchQuestions, fetchHistory]);
 
-  const runBenchmarks = async () => {
-    if (questions.length === 0) return;
+  const runBenchmarks = async (overrideQuestions?: BenchmarkQuestion[]) => {
+    const toRun = overrideQuestions ?? questions.filter((_, i) => selectedIndices.has(i));
+    if (toRun.length === 0) return;
     setRunning(true);
     setResults([]);
     setRunProgress(0);
     setCurrentRunId(null);
+    setRateLimitWarning(false);
 
     try {
       const res = await fetch(`/api/genie-spaces/${spaceId}/benchmarks/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questions }),
+        body: JSON.stringify({ questions: toRun }),
       });
 
       const reader = res.body?.getReader();
@@ -201,6 +229,8 @@ export default function BenchmarkPage() {
             if (event.type === "result") {
               setResults((prev) => [...prev, event.result]);
               setRunProgress(event.index + 1);
+            } else if (event.type === "rate_limited") {
+              setRateLimitWarning(true);
             } else if (event.type === "complete") {
               setCurrentRunId(event.runId ?? null);
               fetchHistory();
@@ -215,6 +245,17 @@ export default function BenchmarkPage() {
     } finally {
       setRunning(false);
     }
+  };
+
+  const rerunFailed = () => {
+    const failedQuestions = results
+      .filter((r) => !r.passed)
+      .map((r) => ({
+        question: r.question,
+        expectedSql: r.expectedSql,
+      }));
+    if (failedQuestions.length === 0) return;
+    runBenchmarks(failedQuestions);
   };
 
   const setLabel = (index: number, isCorrect: boolean) => {
@@ -380,6 +421,7 @@ export default function BenchmarkPage() {
   };
 
   const passedCount = results.filter((r) => r.passed).length;
+  const failedCount = results.filter((r) => !r.passed).length;
   const labeledIncorrect = results.filter((r) => r.isCorrect === false).length;
   const previousRun = history.length > 0 ? history[0] : null;
 
@@ -454,14 +496,24 @@ export default function BenchmarkPage() {
             <>
               {/* Controls */}
               <div className="flex items-center gap-3">
-                <Button onClick={runBenchmarks} disabled={running}>
+                <Button onClick={() => runBenchmarks()} disabled={running || selectedCount === 0}>
                   {running ? (
                     <Loader2 className="mr-2 size-4 animate-spin" />
                   ) : (
                     <Play className="mr-2 size-4" />
                   )}
-                  {running ? `Running ${runProgress}/${questions.length}...` : `Run All (${questions.length})`}
+                  {running
+                    ? `Running ${runProgress}/${selectedCount}...`
+                    : selectedCount === questions.length
+                      ? `Run All (${questions.length})`
+                      : `Run Selected (${selectedCount}/${questions.length})`}
                 </Button>
+                {results.length > 0 && !running && failedCount > 0 && (
+                  <Button variant="outline" onClick={rerunFailed} disabled={running}>
+                    <RotateCcw className="mr-2 size-4" />
+                    Re-run Failed ({failedCount})
+                  </Button>
+                )}
                 {results.length > 0 && !running && (
                   <>
                     <Badge variant={passedCount === results.length ? "default" : "secondary"}>
@@ -480,6 +532,51 @@ export default function BenchmarkPage() {
                   </>
                 )}
               </div>
+
+              {rateLimitWarning && !running && (
+                <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
+                  Some questions hit Databricks API rate limits. Consider running fewer questions at a time or waiting between runs.
+                </div>
+              )}
+
+              {/* Question selection list */}
+              {results.length === 0 && !running && (
+                <Card>
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm">Questions</CardTitle>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={toggleAll}>
+                        {allSelected ? "Deselect All" : "Select All"}
+                      </Button>
+                    </div>
+                    <CardDescription>
+                      {selectedCount} of {questions.length} selected
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-1 p-4 pt-0">
+                    {questions.map((q, idx) => (
+                      <label
+                        key={idx}
+                        className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={selectedIndices.has(idx)}
+                          onCheckedChange={() => toggleSelection(idx)}
+                          className="mt-0.5"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm">{q.question}</div>
+                          {q.expectedSql && (
+                            <Badge variant="outline" className="mt-1 text-[10px]">
+                              Has expected SQL
+                            </Badge>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Results table */}
               {results.length > 0 && (

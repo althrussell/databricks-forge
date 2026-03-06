@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getDatabaseAuthRuntimeState, getPrisma } from "@/lib/prisma";
 import { executeSQL } from "@/lib/dbx/sql";
 import { getCurrentUserEmail, getConfig } from "@/lib/dbx/client";
@@ -119,7 +120,7 @@ async function checkDatabase(): Promise<CheckResult> {
     return {
       status: "error",
       latencyMs: Date.now() - start,
-      error: error instanceof Error ? error.message : "Database unreachable",
+      error: safeErrorMessage(error),
     };
   }
 }
@@ -133,7 +134,7 @@ async function checkWarehouse(): Promise<CheckResult> {
     return {
       status: "error",
       latencyMs: Date.now() - start,
-      error: error instanceof Error ? error.message : "Warehouse unreachable",
+      error: safeErrorMessage(error),
     };
   }
 }

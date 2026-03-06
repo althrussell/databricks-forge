@@ -10,9 +10,7 @@ import { chatCompletion } from "@/lib/dbx/model-serving";
 import { reviewSql } from "@/lib/ai/sql-reviewer";
 import { logger } from "@/lib/logger";
 import type { FeedbackEntry } from "./benchmark-feedback";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SpaceJson = Record<string, any>;
+import type { SpaceJson } from "./types";
 
 export interface OptimizationSuggestion {
   fieldPath: string;

@@ -24,6 +24,7 @@ import type {
   UserCheckOverride,
   UserCustomCheck,
 } from "./health-checks/types";
+import type { SpaceJson } from "@/lib/genie/types";
 
 const MAX_QUICK_WINS = 5;
 
@@ -50,8 +51,7 @@ function computeGrade(score: number): Grade {
  * @param categoryWeights - Optional category weight overrides (must sum to 100)
  */
 export function runHealthCheck(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  space: Record<string, any>,
+  space: SpaceJson,
   overrides?: UserCheckOverride[],
   customChecks?: UserCustomCheck[],
   categoryWeights?: Record<string, number>,
@@ -136,8 +136,7 @@ export function runHealthCheck(
  * This mutates the report in place, updating check results and recalculating scores.
  */
 export async function enrichReportWithSqlQuality(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  space: Record<string, any>,
+  space: SpaceJson,
   report: SpaceHealthReport,
 ): Promise<SpaceHealthReport> {
   const asyncResults = await resolveSqlQualityChecks(space);

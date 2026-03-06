@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { compareRuns } from "@/lib/lakebase/run-comparison";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
@@ -40,10 +41,7 @@ export async function GET(request: NextRequest) {
       route: "/api/runs/compare",
     });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to compare runs",
-      },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

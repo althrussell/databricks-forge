@@ -11,7 +11,7 @@ import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
-import type { BenchmarkInput, EntityMatchingCandidate } from "../types";
+import type { BenchmarkInput, EntityMatchingCandidate, JoinSpecInput } from "../types";
 import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
@@ -22,13 +22,6 @@ const TEMPERATURE = 0.1;
 const BENCHMARKS_PER_BATCH = 4;
 const BATCH_SIZE = 3;
 const BATCH_CONCURRENCY = 10;
-
-interface JoinSpecInput {
-  leftTable: string;
-  rightTable: string;
-  sql: string;
-  relationshipType: string;
-}
 
 export interface BenchmarkGenerationInput {
   tableFqns: string[];

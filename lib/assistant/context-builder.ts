@@ -12,6 +12,7 @@
 import { retrieveContext, formatRetrievedContext, provenanceLabel } from "@/lib/embeddings/retriever";
 import type { RetrievedChunk } from "@/lib/embeddings/types";
 import type { AssistantIntent } from "./intent";
+import type { ConversationTurn } from "./engine";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { withPrisma } from "@/lib/prisma";
@@ -46,11 +47,6 @@ export interface AssistantContext {
   retrievalTopScore: number | null;
   retrievalAvgScore: number | null;
   lowConfidenceRetrieval: boolean;
-}
-
-interface ConversationTurn {
-  role: "user" | "assistant";
-  content: string;
 }
 
 const INTENT_SCOPES: Record<AssistantIntent, Array<{

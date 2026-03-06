@@ -14,7 +14,7 @@ import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 import type { BenchmarkResult, SqlResultPreview } from "@/lib/genie/benchmark-runner";
 
-const DELAY_BETWEEN_QUESTIONS_MS = 2000;
+const DELAY_BETWEEN_QUESTIONS_MS = 5000;
 
 // In-memory lock: one benchmark run at a time per workspace
 let activeBenchmarkSpaceId: string | null = null;
@@ -172,13 +172,22 @@ export async function POST(
           results.push(result);
           send({ type: "result", index: i, result });
         } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const isRateLimited = errMsg.includes("(429)") || errMsg.includes("RESOURCE_EXHAUSTED");
+
+          if (isRateLimited) {
+            send({ type: "rate_limited", index: i, question: bench.question });
+          }
+
           const result: BenchmarkResult = {
             question: bench.question,
             expectedSql: bench.expectedSql ?? null,
             actualSql: null,
             status: "FAILED",
             passed: false,
-            error: err instanceof Error ? err.message : String(err),
+            error: isRateLimited
+              ? `Rate limited by Databricks API after retries. ${errMsg}`
+              : errMsg,
           };
           results.push(result);
           send({ type: "result", index: i, result });

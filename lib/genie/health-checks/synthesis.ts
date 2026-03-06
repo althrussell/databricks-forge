@@ -16,9 +16,7 @@ import type {
   SynthesisResult,
 } from "./types";
 import { resolvePath } from "./evaluators";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SpaceJson = Record<string, any>;
+import type { SpaceJson } from "@/lib/genie/types";
 
 interface LlmCheckEvaluation {
   id: string;
@@ -166,7 +164,7 @@ export async function runSynthesis(report: SpaceHealthReport): Promise<Synthesis
   const endpoint = getFastServingEndpoint();
 
   const categorySummaries = Object.entries(report.categories)
-    .map(([id, cat]) => `- ${cat.label}: ${cat.passed}/${cat.total} passed (${cat.score}%)`)
+    .map(([_id, cat]) => `- ${cat.label}: ${cat.passed}/${cat.total} passed (${cat.score}%)`)
     .join("\n");
 
   const failedCheckSummaries = report.checks
