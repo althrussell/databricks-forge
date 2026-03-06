@@ -551,24 +551,38 @@ export default function BenchmarkPage() {
                   </CardHeader>
                   <CardContent className="space-y-1 p-4 pt-0">
                     {questions.map((q, idx) => (
-                      <label
+                      <div
                         key={idx}
-                        className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
+                        className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
                       >
-                        <Checkbox
-                          checked={selectedIndices.has(idx)}
-                          onCheckedChange={() => toggleSelection(idx)}
-                          className="mt-0.5"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm">{q.question}</div>
-                          {q.expectedSql && (
-                            <Badge variant="outline" className="mt-1 text-[10px]">
-                              Has expected SQL
-                            </Badge>
-                          )}
-                        </div>
-                      </label>
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                          <Checkbox
+                            checked={selectedIndices.has(idx)}
+                            onCheckedChange={() => toggleSelection(idx)}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm">{q.question}</div>
+                            {q.expectedSql && (
+                              <Badge variant="outline" className="mt-1 text-[10px]">
+                                Has expected SQL
+                              </Badge>
+                            )}
+                          </div>
+                        </label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 px-2"
+                          disabled={running}
+                          onClick={() =>
+                            runBenchmarks([{ question: q.question, expectedSql: q.expectedSql }])
+                          }
+                          title={`Run "${q.question}"`}
+                        >
+                          <Play className="size-3" />
+                        </Button>
+                      </div>
                     ))}
                   </CardContent>
                 </Card>

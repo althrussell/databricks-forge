@@ -1,16 +1,21 @@
 /**
  * Space Fixer -- maps health check failures to Genie Engine passes,
  * builds MetadataSnapshot for off-platform spaces, and merges improvements.
+ *
+ * Every LLM-backed strategy receives synthesized business context from the
+ * space itself (title, description, existing instructions) so fixes are
+ * contextually relevant rather than generic.
  */
 
 import { executeSQL } from "@/lib/dbx/sql";
 import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
 import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
 import { extractEntityCandidatesFromSchema } from "@/lib/genie/entity-extraction";
-import { defaultGenieEngineConfig, type SpaceJson } from "@/lib/genie/types";
+import { defaultGenieEngineConfig, type SpaceJson, type JoinSpecInput } from "@/lib/genie/types";
 import { resolveRegistry } from "@/lib/genie/health-checks/registry";
+import { chatCompletion } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
-import type { MetadataSnapshot, TableInfo, ColumnInfo } from "@/lib/domain/types";
+import type { MetadataSnapshot, TableInfo, ColumnInfo, BusinessContext } from "@/lib/domain/types";
 import type { FixStrategy } from "@/lib/genie/health-checks/types";
 
 interface FixRequest {
@@ -29,6 +34,91 @@ interface FixChange {
   description: string;
   added: number;
   modified: number;
+}
+
+/**
+ * Context extracted from the serialized space JSON to feed into LLM passes.
+ */
+interface SpaceContext {
+  title: string;
+  description: string;
+  domain: string;
+  existingInstructions: string[];
+  existingMeasureNames: string[];
+  existingFilterNames: string[];
+  existingExampleQuestions: string[];
+  existingBenchmarkQuestions: string[];
+  joinSpecs: JoinSpecInput[];
+}
+
+function extractSpaceContext(space: SpaceJson): SpaceContext {
+  const title = String(space.display_name ?? space.title ?? "");
+  const description = String(space.description ?? "");
+
+  const textInstructions = ((space.instructions?.text_instructions ?? []) as SpaceJson[]).map(
+    (i: SpaceJson) =>
+      Array.isArray(i.content) ? (i.content as string[]).join(" ") : String(i.content ?? ""),
+  );
+
+  const measureNames = ((space.instructions?.sql_snippets?.measures ?? []) as SpaceJson[]).map(
+    (m: SpaceJson) => String(m.display_name ?? m.alias ?? ""),
+  );
+
+  const filterNames = ((space.instructions?.sql_snippets?.filters ?? []) as SpaceJson[]).map(
+    (f: SpaceJson) => String(f.display_name ?? ""),
+  );
+
+  const exampleQuestions = ((space.instructions?.example_question_sqls ?? []) as SpaceJson[]).map(
+    (e: SpaceJson) =>
+      Array.isArray(e.question) ? String(e.question[0] ?? "") : String(e.question ?? ""),
+  );
+
+  const benchmarkQuestions = ((space.benchmarks?.questions ?? []) as SpaceJson[]).map(
+    (q: SpaceJson) =>
+      Array.isArray(q.question) ? String(q.question[0] ?? "") : String(q.question ?? ""),
+  );
+
+  const joinSpecs: JoinSpecInput[] = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map(
+    (j: SpaceJson) => ({
+      leftTable: String(j.left?.identifier ?? ""),
+      rightTable: String(j.right?.identifier ?? ""),
+      sql: Array.isArray(j.sql) ? (j.sql as string[]).join(" ") : String(j.sql ?? ""),
+      relationshipType: "many_to_one",
+    }),
+  );
+
+  const domain = title.toLowerCase().includes("retail")
+    ? "retail"
+    : title.toLowerCase().includes("finance") || title.toLowerCase().includes("bank")
+      ? "finance"
+      : title.toLowerCase().includes("health")
+        ? "healthcare"
+        : "general";
+
+  return {
+    title,
+    description,
+    domain,
+    existingInstructions: textInstructions,
+    existingMeasureNames: measureNames,
+    existingFilterNames: filterNames,
+    existingExampleQuestions: exampleQuestions,
+    existingBenchmarkQuestions: benchmarkQuestions,
+    joinSpecs,
+  };
+}
+
+function synthesizeBusinessContext(ctx: SpaceContext): BusinessContext | null {
+  if (!ctx.title && !ctx.description) return null;
+  return {
+    industries: ctx.domain !== "general" ? ctx.domain : "",
+    strategicGoals: ctx.description || `Analysis of ${ctx.title}`,
+    businessPriorities: "",
+    strategicInitiative: "",
+    valueChain: "",
+    revenueModel: "",
+    additionalContext: ctx.existingInstructions.join(" ").slice(0, 500),
+  };
 }
 
 /**
@@ -131,6 +221,10 @@ export async function buildMetadataForSpace(tableFqns: string[]): Promise<Metada
 /**
  * Run the fix workflow: determine strategies, build metadata if needed,
  * run relevant passes, and merge results into the space.
+ *
+ * Each LLM-backed strategy receives synthesized business context extracted
+ * from the space (title, description, existing instructions) so that
+ * generated content is contextually relevant.
  */
 export async function runFixes(request: FixRequest): Promise<FixResult> {
   const space = JSON.parse(request.serializedSpace) as SpaceJson;
@@ -148,8 +242,22 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
   const config = defaultGenieEngineConfig();
   const endpoint = getServingEndpoint();
   const fastEndpoint = getFastServingEndpoint();
+  const spaceCtx = extractSpaceContext(space);
+  const businessContext = synthesizeBusinessContext(spaceCtx);
 
-  for (const [strategy, checkIds] of strategies) {
+  const entityCandidates = extractEntityCandidatesFromSchema(
+    metadata.columns.map((c) => ({
+      tableFqn: c.tableFqn,
+      columnName: c.columnName,
+      dataType: c.dataType,
+    })),
+    tableFqns,
+  );
+  const entityCandidateColumns = new Set(
+    entityCandidates.map((c) => `${c.tableFqn.toLowerCase()}.${c.columnName.toLowerCase()}`),
+  );
+
+  for (const [strategy] of strategies) {
     try {
       switch (strategy) {
         case "column_intelligence": {
@@ -165,40 +273,98 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
 
           let descriptionsAdded = 0;
           let synonymsAdded = 0;
+          let tableDescriptionsAdded = 0;
           const tables = (space.data_sources?.tables ?? []) as SpaceJson[];
+
+          // --- Table-level descriptions ---
+          for (const table of tables) {
+            const fqn = String(table.identifier ?? "").toLowerCase();
+            if (!fqn) continue;
+            const hasDesc =
+              table.description &&
+              (typeof table.description === "string"
+                ? table.description.trim().length > 0
+                : Array.isArray(table.description) &&
+                  table.description.length > 0 &&
+                  (table.description as string[]).some((d) => d && String(d).trim().length > 0));
+            if (hasDesc) continue;
+            const tableColumns = metadata.columns.filter((c) => c.tableFqn.toLowerCase() === fqn);
+            if (tableColumns.length === 0) continue;
+            const tableName = fqn.split(".").pop() ?? "";
+            const colNames = tableColumns.slice(0, 20).map((c) => c.columnName);
+            const desc = inferTableDescription(tableName, colNames);
+            if (desc) {
+              table.description = [desc];
+              tableDescriptionsAdded++;
+            }
+          }
+
+          // --- Column-level enrichments ---
           for (const enrichment of output.enrichments) {
+            const hasDesc = enrichment.description && enrichment.description.trim().length > 0;
+            const hasSynonyms = enrichment.synonyms && enrichment.synonyms.length > 0;
+            if (!hasDesc && !hasSynonyms) continue;
+
             const table = tables.find(
               (t: SpaceJson) =>
                 (t.identifier as string)?.toLowerCase() === enrichment.tableFqn?.toLowerCase(),
             );
             if (!table) continue;
+
             const colConfigs = (table.column_configs ?? []) as SpaceJson[];
             const col = colConfigs.find(
               (c: SpaceJson) =>
-                (c.column_name as string)?.toLowerCase() === enrichment.columnName?.toLowerCase(),
+                ((c.column_name as string) ?? (c.name as string))?.toLowerCase() ===
+                enrichment.columnName?.toLowerCase(),
             );
-            if (!col) continue;
-            if (
-              !col.description ||
-              (Array.isArray(col.description) && col.description.length === 0)
-            ) {
-              col.description = [enrichment.description ?? ""];
-              descriptionsAdded++;
-            }
-            if (!col.synonyms || (Array.isArray(col.synonyms) && col.synonyms.length === 0)) {
-              if (enrichment.synonyms && enrichment.synonyms.length > 0) {
-                col.synonyms = enrichment.synonyms;
+
+            if (!col) {
+              const newCol: Record<string, unknown> = {
+                column_name: enrichment.columnName,
+                enable_format_assistance: true,
+              };
+              if (hasDesc) {
+                newCol.description = [enrichment.description];
+                descriptionsAdded++;
+              }
+              if (hasSynonyms) {
+                newCol.synonyms = enrichment.synonyms;
                 synonymsAdded++;
               }
+              if (enrichment.entityMatchingCandidate) {
+                newCol.enable_entity_matching = true;
+              }
+              colConfigs.push(newCol as SpaceJson);
+              if (!table.column_configs) table.column_configs = colConfigs;
+              continue;
+            }
+
+            const colDescEmpty =
+              !col.description ||
+              (Array.isArray(col.description) && col.description.length === 0) ||
+              (Array.isArray(col.description) &&
+                (col.description as string[]).every((d) => !d || String(d).trim() === ""));
+            if (colDescEmpty && hasDesc) {
+              col.description = [enrichment.description!];
+              descriptionsAdded++;
+            }
+            const colSynEmpty =
+              !col.synonyms || (Array.isArray(col.synonyms) && col.synonyms.length === 0);
+            if (colSynEmpty && hasSynonyms) {
+              col.synonyms = enrichment.synonyms;
+              synonymsAdded++;
             }
           }
 
-          changes.push({
-            section: "data_sources.tables.column_configs",
-            description: "Column intelligence: added descriptions and synonyms",
-            added: descriptionsAdded + synonymsAdded,
-            modified: 0,
-          });
+          const totalAdded = descriptionsAdded + synonymsAdded + tableDescriptionsAdded;
+          if (totalAdded > 0) {
+            changes.push({
+              section: "data_sources.tables.column_configs",
+              description: `Column intelligence: added ${descriptionsAdded} descriptions, ${synonymsAdded} synonyms, ${tableDescriptionsAdded} table descriptions`,
+              added: totalAdded,
+              modified: 0,
+            });
+          }
           strategiesRun.push(strategy);
           break;
         }
@@ -211,16 +377,20 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             metadata,
             allowlist,
             useCases: [],
-            businessContext: null,
+            businessContext,
             config,
             endpoint,
           });
 
           const snippets = space.instructions?.sql_snippets ?? {};
           const existingMeasureIds = new Set(
-            (snippets.measures ?? []).map((m: SpaceJson) => m.alias),
+            (snippets.measures ?? []).map((m: SpaceJson) =>
+              String(m.alias ?? m.display_name ?? "").toLowerCase(),
+            ),
           );
-          const newMeasures = output.measures.filter((m) => !existingMeasureIds.has(m.name));
+          const newMeasures = output.measures.filter(
+            (m) => !existingMeasureIds.has(m.name.toLowerCase()),
+          );
           if (newMeasures.length > 0) {
             snippets.measures = [
               ...(snippets.measures ?? []),
@@ -235,9 +405,13 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           }
 
           const existingFilterIds = new Set(
-            (snippets.filters ?? []).map((f: SpaceJson) => f.display_name),
+            (snippets.filters ?? []).map((f: SpaceJson) =>
+              String(f.display_name ?? "").toLowerCase(),
+            ),
           );
-          const newFilters = output.filters.filter((f) => !existingFilterIds.has(f.name));
+          const newFilters = output.filters.filter(
+            (f) => !existingFilterIds.has(f.name.toLowerCase()),
+          );
           if (newFilters.length > 0) {
             snippets.filters = [
               ...(snippets.filters ?? []),
@@ -250,15 +424,17 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             ];
           }
 
-          space.instructions = space.instructions ?? {};
-          space.instructions.sql_snippets = snippets;
-
-          changes.push({
-            section: "instructions.sql_snippets",
-            description: "Semantic expressions: added measures, filters, and expressions",
-            added: newMeasures.length + newFilters.length,
-            modified: 0,
-          });
+          const totalAdded = newMeasures.length + newFilters.length;
+          if (totalAdded > 0) {
+            space.instructions = space.instructions ?? {};
+            space.instructions.sql_snippets = snippets;
+            changes.push({
+              section: "instructions.sql_snippets",
+              description: `Semantic expressions: added ${newMeasures.length} measures and ${newFilters.length} filters`,
+              added: totalAdded,
+              modified: 0,
+            });
+          }
           strategiesRun.push(strategy);
           break;
         }
@@ -288,37 +464,21 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             sql: [j.sql],
           }));
 
-          space.instructions = space.instructions ?? {};
-          space.instructions.join_specs = [...existingJoins, ...newJoins];
-
-          changes.push({
-            section: "instructions.join_specs",
-            description: "Join inference: added join specifications",
-            added: newJoins.length,
-            modified: 0,
-          });
+          if (newJoins.length > 0) {
+            space.instructions = space.instructions ?? {};
+            space.instructions.join_specs = [...existingJoins, ...newJoins];
+            changes.push({
+              section: "instructions.join_specs",
+              description: `Join inference: added ${newJoins.length} join specification${newJoins.length !== 1 ? "s" : ""}`,
+              added: newJoins.length,
+              modified: 0,
+            });
+          }
           strategiesRun.push(strategy);
           break;
         }
 
         case "trusted_assets": {
-          const entityCandidates = extractEntityCandidatesFromSchema(
-            metadata.columns.map((c) => ({
-              tableFqn: c.tableFqn,
-              columnName: c.columnName,
-              dataType: c.dataType,
-            })),
-            tableFqns,
-          );
-          const joinSpecs = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map(
-            (j: SpaceJson) => ({
-              leftTable: j.left?.identifier ?? "",
-              rightTable: j.right?.identifier ?? "",
-              sql: Array.isArray(j.sql) ? j.sql.join(" ") : String(j.sql ?? ""),
-              relationshipType: "many_to_one",
-            }),
-          );
-
           const { runTrustedAssetAuthoring } = await import("@/lib/genie/passes/trusted-assets");
           const output = await runTrustedAssetAuthoring({
             tableFqns,
@@ -326,14 +486,12 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             allowlist,
             useCases: [],
             entityCandidates,
-            joinSpecs,
+            joinSpecs: spaceCtx.joinSpecs,
             endpoint,
           });
 
           const existingQuestions = new Set(
-            ((space.instructions?.example_question_sqls ?? []) as SpaceJson[]).map((e: SpaceJson) =>
-              (Array.isArray(e.question) ? e.question[0] : String(e.question ?? "")).toLowerCase(),
-            ),
+            spaceCtx.existingExampleQuestions.map((q) => q.toLowerCase()),
           );
           const newQueries = output.queries.filter(
             (q) => !existingQuestions.has(q.question.toLowerCase()),
@@ -349,14 +507,13 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
                 sql: [q.sql],
               })),
             ];
+            changes.push({
+              section: "instructions.example_question_sqls",
+              description: `Trusted assets: added ${newQueries.length} example question-SQL pair${newQueries.length !== 1 ? "s" : ""}`,
+              added: newQueries.length,
+              modified: 0,
+            });
           }
-
-          changes.push({
-            section: "instructions.example_question_sqls",
-            description: "Trusted assets: added example question-SQL pairs",
-            added: newQueries.length,
-            modified: 0,
-          });
           strategiesRun.push(strategy);
           break;
         }
@@ -365,13 +522,13 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           const { runInstructionGeneration } =
             await import("@/lib/genie/passes/instruction-generation");
           const output = await runInstructionGeneration({
-            domain: "general",
+            domain: spaceCtx.domain,
             subdomains: [],
-            businessName: "",
-            businessContext: null,
+            businessName: spaceCtx.title,
+            businessContext,
             config,
-            entityCandidates: [],
-            joinSpecs: [],
+            entityCandidates,
+            joinSpecs: spaceCtx.joinSpecs,
             endpoint: fastEndpoint,
             metadata,
             tableFqns,
@@ -386,36 +543,18 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
                 content: [text],
               })),
             ];
+            changes.push({
+              section: "instructions.text_instructions",
+              description: `Instruction generation: added ${output.instructions.length} text instruction${output.instructions.length !== 1 ? "s" : ""}`,
+              added: output.instructions.length,
+              modified: 0,
+            });
           }
-
-          changes.push({
-            section: "instructions.text_instructions",
-            description: "Instruction generation: added text instructions",
-            added: output.instructions.length,
-            modified: 0,
-          });
           strategiesRun.push(strategy);
           break;
         }
 
         case "benchmark_generation": {
-          const entityCandidates = extractEntityCandidatesFromSchema(
-            metadata.columns.map((c) => ({
-              tableFqn: c.tableFqn,
-              columnName: c.columnName,
-              dataType: c.dataType,
-            })),
-            tableFqns,
-          );
-          const joinSpecs = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map(
-            (j: SpaceJson) => ({
-              leftTable: j.left?.identifier ?? "",
-              rightTable: j.right?.identifier ?? "",
-              sql: Array.isArray(j.sql) ? j.sql.join(" ") : String(j.sql ?? ""),
-              relationshipType: "many_to_one",
-            }),
-          );
-
           const { runBenchmarkGeneration } =
             await import("@/lib/genie/passes/benchmark-generation");
           const output = await runBenchmarkGeneration({
@@ -425,39 +564,37 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             useCases: [],
             entityCandidates,
             customerBenchmarks: [],
-            joinSpecs,
+            joinSpecs: spaceCtx.joinSpecs,
             endpoint,
           });
 
           if (output.benchmarks.length > 0) {
             space.benchmarks = space.benchmarks ?? { questions: [] };
             const existing = new Set(
-              (space.benchmarks.questions ?? []).map((q: SpaceJson) =>
-                (Array.isArray(q.question)
-                  ? q.question[0]
-                  : String(q.question ?? "")
-                ).toLowerCase(),
-              ),
+              spaceCtx.existingBenchmarkQuestions.map((q) => q.toLowerCase()),
             );
             const newBenchmarks = output.benchmarks.filter(
               (b) => !existing.has(b.question.toLowerCase()),
             );
-            space.benchmarks.questions = [
-              ...(space.benchmarks.questions ?? []),
-              ...newBenchmarks.map((b) => ({
-                id: crypto.randomUUID().replace(/-/g, ""),
-                question: [b.question],
-                ...(b.expectedSql ? { answer: [{ format: "sql", content: [b.expectedSql] }] } : {}),
-              })),
-            ];
+            if (newBenchmarks.length > 0) {
+              space.benchmarks.questions = [
+                ...(space.benchmarks.questions ?? []),
+                ...newBenchmarks.map((b) => ({
+                  id: crypto.randomUUID().replace(/-/g, ""),
+                  question: [b.question],
+                  ...(b.expectedSql
+                    ? { answer: [{ format: "sql", content: [b.expectedSql] }] }
+                    : {}),
+                })),
+              ];
+              changes.push({
+                section: "benchmarks.questions",
+                description: `Benchmark generation: added ${newBenchmarks.length} benchmark question${newBenchmarks.length !== 1 ? "s" : ""}`,
+                added: newBenchmarks.length,
+                modified: 0,
+              });
+            }
           }
-
-          changes.push({
-            section: "benchmarks.questions",
-            description: "Benchmark generation: added benchmark questions",
-            added: output.benchmarks.length,
-            modified: 0,
-          });
           strategiesRun.push(strategy);
           break;
         }
@@ -466,52 +603,56 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           const tables = (space.data_sources?.tables ?? []) as SpaceJson[];
           let enabled = 0;
           for (const table of tables) {
+            const tableFqn = String(table.identifier ?? "").toLowerCase();
             const colConfigs = (table.column_configs ?? []) as SpaceJson[];
             for (const col of colConfigs) {
-              const dataType = String(col.data_type ?? col.type ?? "").toLowerCase();
-              if (
-                dataType.includes("string") ||
-                dataType.includes("varchar") ||
-                dataType.includes("char")
-              ) {
-                if (!col.enable_entity_matching) {
-                  col.enable_entity_matching = true;
-                  enabled++;
-                }
+              const colName = String(col.column_name ?? col.name ?? "").toLowerCase();
+              const key = `${tableFqn}.${colName}`;
+              if (entityCandidateColumns.has(key) && !col.enable_entity_matching) {
+                col.enable_entity_matching = true;
+                enabled++;
               }
             }
           }
 
-          changes.push({
-            section: "data_sources.tables.column_configs",
-            description: "Entity matching: enabled on string columns",
-            added: enabled,
-            modified: 0,
-          });
+          if (enabled > 0) {
+            changes.push({
+              section: "data_sources.tables.column_configs",
+              description: `Entity matching: enabled on ${enabled} candidate column${enabled !== 1 ? "s" : ""}`,
+              added: enabled,
+              modified: 0,
+            });
+          }
           strategiesRun.push(strategy);
           break;
         }
 
         case "sample_questions": {
-          const existingExamples = (space.instructions?.example_question_sqls ?? []) as SpaceJson[];
-          if (existingExamples.length > 0) {
-            const questions = existingExamples
-              .slice(0, 3)
-              .map((e: SpaceJson) =>
-                Array.isArray(e.question) ? e.question[0] : String(e.question ?? ""),
-              );
+          const existing = (space.config?.sample_questions ?? []) as SpaceJson[];
+          const existingTexts = new Set(
+            existing.map((q: SpaceJson) =>
+              (Array.isArray(q.question)
+                ? String(q.question[0] ?? "")
+                : String(q.question ?? "")
+              ).toLowerCase(),
+            ),
+          );
+          const generated = await generateSmartSampleQuestions(spaceCtx, tableFqns, fastEndpoint);
+          const newQuestions = generated.filter((q) => !existingTexts.has(q.toLowerCase()));
+
+          if (newQuestions.length > 0) {
             space.config = space.config ?? {};
             space.config.sample_questions = [
-              ...(space.config.sample_questions ?? []),
-              ...questions.map((q: string) => ({
+              ...existing,
+              ...newQuestions.map((q: string) => ({
                 id: crypto.randomUUID().replace(/-/g, ""),
                 question: [q],
               })),
             ];
             changes.push({
               section: "config.sample_questions",
-              description: "Sample questions: generated from existing example SQLs",
-              added: questions.length,
+              description: `Sample questions: generated ${newQuestions.length} contextual sample question${newQuestions.length !== 1 ? "s" : ""}`,
+              added: newQuestions.length,
               modified: 0,
             });
           }
@@ -520,7 +661,7 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
         }
 
         default:
-          logger.warn("Unknown fix strategy", { strategy, checkIds });
+          logger.warn("Unknown fix strategy", { strategy });
       }
     } catch (err) {
       logger.error("Fix strategy execution failed", { strategy, error: String(err) });
@@ -534,4 +675,53 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
   }
 
   return { updatedSpace: space, changes, strategiesRun };
+}
+
+/**
+ * Infer a brief table description from the table name and column names.
+ * Deterministic heuristic -- no LLM call.
+ */
+function inferTableDescription(tableName: string, columnNames: string[]): string | null {
+  const readable = tableName.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const colSummary = columnNames.slice(0, 8).join(", ");
+  if (!colSummary) return null;
+  return `${readable} table containing ${colSummary}`;
+}
+
+/**
+ * Generate user-friendly sample questions using the fast LLM endpoint,
+ * informed by the space's title, tables, and existing example SQLs.
+ */
+async function generateSmartSampleQuestions(
+  ctx: SpaceContext,
+  tableFqns: string[],
+  endpoint: string,
+): Promise<string[]> {
+  const tableNames = tableFqns.map((f) => f.split(".").pop() ?? f).join(", ");
+  const existingExamples = ctx.existingExampleQuestions.slice(0, 5).join("\n- ");
+
+  const prompt = `Generate 3 short, user-friendly sample questions for a data exploration space.
+Space: "${ctx.title || "Data Space"}"${ctx.description ? ` -- ${ctx.description}` : ""}
+Tables: ${tableNames || "various tables"}
+${existingExamples ? `Existing example questions (generate DIFFERENT ones):\n- ${existingExamples}` : ""}
+
+Return ONLY a JSON array of 3 question strings. Keep them simple and conversational.`;
+
+  try {
+    const result = await chatCompletion({
+      endpoint,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.4,
+      maxTokens: 300,
+      responseFormat: "json_object",
+    });
+    const parsed = JSON.parse(result.content ?? "[]");
+    const questions = Array.isArray(parsed) ? parsed : (parsed.questions ?? []);
+    return questions
+      .filter((q: unknown): q is string => typeof q === "string" && q.trim().length > 5)
+      .slice(0, 3);
+  } catch (err) {
+    logger.warn("Smart sample question generation failed, skipping", { error: String(err) });
+    return [];
+  }
 }

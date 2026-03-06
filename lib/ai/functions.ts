@@ -401,7 +401,8 @@ export const GEOSPATIAL_FUNCTIONS: Record<string, GeospatialFunction> = {
   },
   "ST_Centroid(geometry)": {
     function: "ST_Centroid(geometry)",
-    businessValue: "Get the center point of a polygon for label placement and representative location",
+    businessValue:
+      "Get the center point of a polygon for label placement and representative location",
     useCases: "Zone center for visualisation, representative point, label placement",
     category: "Spatial Transformations",
   },
@@ -413,16 +414,20 @@ export const GEOSPATIAL_FUNCTIONS: Record<string, GeospatialFunction> = {
   },
   "ST_Transform(geometry, targetSrid)": {
     function: "ST_Transform(geometry, targetSrid)",
-    businessValue: "Reproject geometry to a different coordinate system for accurate distance/area in metres",
-    useCases: "Coordinate system conversion, accurate metric calculations, map projection alignment",
+    businessValue:
+      "Reproject geometry to a different coordinate system for accurate distance/area in metres",
+    useCases:
+      "Coordinate system conversion, accurate metric calculations, map projection alignment",
     category: "Spatial Transformations",
   },
 
   // Spatial Measurements (additional)
   "ST_DistanceSphere(geom1, geom2)": {
     function: "ST_DistanceSphere(geom1, geom2)",
-    businessValue: "Calculate spherical distance in metres between points for fast geographic distance",
-    useCases: "Store distance in metres, delivery radius calculation, approximate geographic distance",
+    businessValue:
+      "Calculate spherical distance in metres between points for fast geographic distance",
+    useCases:
+      "Store distance in metres, delivery radius calculation, approximate geographic distance",
     category: "Spatial Measurements",
   },
   "ST_MakePolygon(ring)": {
@@ -462,7 +467,8 @@ export const WINDOW_FUNCTIONS: Record<string, WindowFunction> = {
   // Ranking
   "ROW_NUMBER()": {
     function: "ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)",
-    businessValue: "Assign sequential integers within each group for deduplication and ordered numbering",
+    businessValue:
+      "Assign sequential integers within each group for deduplication and ordered numbering",
     useCases: "Latest-row-per-customer, sequential IDs, per-group deduplication with QUALIFY",
     category: "Ranking",
   },
@@ -511,7 +517,8 @@ export const WINDOW_FUNCTIONS: Record<string, WindowFunction> = {
     category: "Analytic",
   },
   "LAST_VALUE(col)": {
-    function: "LAST_VALUE(col) OVER (PARTITION BY ... ORDER BY ... ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)",
+    function:
+      "LAST_VALUE(col) OVER (PARTITION BY ... ORDER BY ... ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)",
     businessValue: "Get the last value in a window for latest-state and endpoint comparisons",
     useCases: "Current state reference, final value comparison, last-touch attribution",
     category: "Analytic",
@@ -552,7 +559,8 @@ export interface LambdaFunction {
 export const LAMBDA_FUNCTIONS: Record<string, LambdaFunction> = {
   "transform(array, x -> expr)": {
     function: "transform(array, x -> expr)",
-    businessValue: "Apply an expression to every element in an array without EXPLODE + re-aggregate",
+    businessValue:
+      "Apply an expression to every element in an array without EXPLODE + re-aggregate",
     useCases: "Normalize tags, compute derived values per element, format array contents",
     category: "Array Transformation",
   },
@@ -570,7 +578,8 @@ export const LAMBDA_FUNCTIONS: Record<string, LambdaFunction> = {
   },
   "aggregate(array, init, (acc, x) -> expr)": {
     function: "aggregate(array, init, (acc, x) -> expr [, acc -> finalExpr])",
-    businessValue: "Reduce an array to a single value (sum, product, concatenation) without EXPLODE",
+    businessValue:
+      "Reduce an array to a single value (sum, product, concatenation) without EXPLODE",
     useCases: "Array sum, custom accumulation, string concatenation of array elements",
     category: "Array Reduction",
   },

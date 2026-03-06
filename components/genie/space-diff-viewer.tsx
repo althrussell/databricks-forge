@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Minus, Plus } from "lucide-react";
+import { FileCheck, Minus, Plus } from "lucide-react";
 
 interface FixChange {
   section: string;
@@ -130,6 +130,24 @@ export function SpaceDiffViewer({
 
   const addedCount = right.filter((l) => l.status === "added").length;
   const removedCount = left.filter((l) => l.status === "removed").length;
+  const noDiff = addedCount === 0 && removedCount === 0;
+
+  if (noDiff) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="flex flex-col items-center py-10 text-center">
+            <FileCheck className="mb-3 size-10 text-muted-foreground/50" />
+            <h3 className="text-sm font-medium">No Configuration Changes</h3>
+            <p className="mt-1 max-w-md text-xs text-muted-foreground">
+              The current and new configurations are identical. The fix strategies ran but did not
+              produce any modifications to the space configuration.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
