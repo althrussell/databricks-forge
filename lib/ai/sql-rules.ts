@@ -41,6 +41,18 @@ Databricks SQL features:
 - Use pipe syntax (|>) for complex multi-step transformations where it improves readability.
 - Databricks has NO STRING_AGG(). Use array_join(collect_list(col), ',') instead.
 
+Window functions:
+- Prefer window functions over self-joins for row comparisons, running totals, and ranking.
+- Specify explicit window frames (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) when cumulative behaviour is intended -- the default RANGE frame may group duplicate ORDER BY values unexpectedly.
+- Use named windows (WINDOW w AS (PARTITION BY ...)) when multiple columns share the same partitioning to reduce repetition.
+- Use LAST_VALUE with ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING to get the partition last value (default frame stops at CURRENT ROW).
+
+Lambda / higher-order functions:
+- Prefer transform(), filter(), exists(), aggregate() for array operations instead of EXPLODE + re-aggregate patterns -- fewer shuffles, better performance.
+- Use array_sort(array, (l, r) -> comparator) for custom sort orders instead of EXPLODE + ORDER BY + collect_list.
+- Use map_filter(), transform_keys(), transform_values() for map manipulation instead of exploding map entries.
+- Lambda expressions cannot contain subqueries or SQL UDFs.
+
 MERGE and DML best practices:
 - Prefer MERGE INTO over separate DELETE + INSERT for upsert patterns.
 - Always use WHEN MATCHED AND / WHEN NOT MATCHED for conditional merge logic.
@@ -82,6 +94,8 @@ DATABRICKS SQL RULES:
 - Prefer TIMESTAMP_NTZ for timezone-independent timestamps.
 - Use INTERVAL '30' DAY syntax for interval literals.
 - Prefer CREATE OR REPLACE over DROP + CREATE.
+- Specify explicit window frames (ROWS BETWEEN ...) for cumulative calculations.
+- Prefer transform()/filter()/aggregate() for array ops over EXPLODE + re-aggregate.
 `.trim();
 
 export const DATABRICKS_SQL_REVIEW_CHECKLIST = `
@@ -129,4 +143,8 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - INTERVAL '30' DAY syntax (not DATEADD with integer)
    - CREATE OR REPLACE over DROP IF EXISTS + CREATE
    - CLUSTER BY for liquid clustering (replaces Z-ORDER)
+   - Explicit window frames (ROWS BETWEEN) for cumulative calculations
+   - Named windows when multiple columns share partitioning
+   - transform()/filter()/aggregate() for array operations instead of EXPLODE + re-aggregate
+   - array_sort() with lambda for custom sort orders
 `.trim();

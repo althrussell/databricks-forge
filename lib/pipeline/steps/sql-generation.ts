@@ -15,6 +15,8 @@ import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
   generateGeospatialFunctionsSummary,
+  generateWindowFunctionsSummary,
+  generateLambdaFunctionsSummary,
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { updateRunMessage } from "@/lib/lakebase/runs";
@@ -94,6 +96,8 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   const aiFunctionsSummary = generateAIFunctionsSummary();
   const statisticalFunctionsSummary = generateStatisticalFunctionsSummary();
   const geospatialFunctionsSummary = generateGeospatialFunctionsSummary();
+  const windowFunctionsSummary = generateWindowFunctionsSummary();
+  const lambdaFunctionsSummary = generateLambdaFunctionsSummary();
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 
@@ -134,6 +138,8 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
             aiFunctionsSummary,
             statisticalFunctionsSummary,
             geospatialFunctionsSummary,
+            windowFunctionsSummary,
+            lambdaFunctionsSummary,
             columnsByTable,
             tableByFqn,
             metadata.foreignKeys,
@@ -201,6 +207,8 @@ async function generateSqlForUseCase(
   aiFunctionsSummary: string,
   statisticalFunctionsSummary: string,
   geospatialFunctionsSummary: string,
+  windowFunctionsSummary: string,
+  lambdaFunctionsSummary: string,
   columnsByTable: Map<string, ColumnInfo[]>,
   tableByFqn: Map<string, TableInfo>,
   allForeignKeys: ForeignKey[],
@@ -287,6 +295,12 @@ async function generateSqlForUseCase(
     ai_functions_summary: uc.type === "AI" ? aiFunctionsSummary : "",
     statistical_functions_detailed: uc.type === "Statistical" ? statisticalFunctionsSummary : "",
     geospatial_functions_summary: uc.type === "Geospatial" ? geospatialFunctionsSummary : "",
+    window_functions_summary: isWindowRelevant(uc.type, uc.analyticsTechnique)
+      ? windowFunctionsSummary
+      : "",
+    lambda_functions_summary: isLambdaRelevant(uc.type, uc.analyticsTechnique, involvedColumns)
+      ? lambdaFunctionsSummary
+      : "",
   };
 
   // Use streaming for SQL generation -- it's the longest-running LLM call
@@ -504,6 +518,42 @@ async function attemptSqlFix(
     });
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Use-case-type relevance checks for function summaries
+// ---------------------------------------------------------------------------
+
+const WINDOW_RELEVANT_TYPES = new Set([
+  "Statistical",
+  "Descriptive",
+  "Predictive",
+  "Diagnostic",
+  "Comparative",
+]);
+
+const WINDOW_RELEVANT_TECHNIQUES = /\b(time.?series|trend|ranking|segmentat|cohort|cumulative|running|moving.?average|period.?over|month.?over|year.?over|churn|retention|growth|lag|lead|percentile|distribution)/i;
+
+function isWindowRelevant(ucType: string, technique: string): boolean {
+  if (WINDOW_RELEVANT_TYPES.has(ucType)) return true;
+  return WINDOW_RELEVANT_TECHNIQUES.test(technique);
+}
+
+function isLambdaRelevant(
+  ucType: string,
+  technique: string,
+  columns: ColumnInfo[],
+): boolean {
+  const hasArrayOrMapCol = columns.some(
+    (c) =>
+      /^(ARRAY|MAP|STRUCT)/i.test(c.dataType) ||
+      c.dataType.toLowerCase().includes("array") ||
+      c.dataType.toLowerCase().includes("map"),
+  );
+  if (hasArrayOrMapCol) return true;
+  return /\b(array|transform|tag|categor|multi.?value|complex.?type|nested|json|parse)/i.test(
+    technique,
+  );
 }
 
 // ---------------------------------------------------------------------------

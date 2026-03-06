@@ -52,6 +52,10 @@ ${USER_DATA_DEFENCE}
 
 {geospatial_functions_summary}
 
+{window_functions_summary}
+
+{lambda_functions_summary}
+
 ### AI MODEL ENDPOINT (for ai_query calls)
 
 When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
@@ -114,7 +118,9 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - **QUALIFY**: Use \`QUALIFY\` instead of wrapping window functions in subqueries for **per-group deduplication** only. Pattern: \`SELECT *, ROW_NUMBER() OVER (PARTITION BY group_col ORDER BY ...) AS rn FROM table QUALIFY rn = 1\`. Do NOT use QUALIFY for top-N lists -- use \`ORDER BY ... LIMIT N\` instead
 - **Pipe syntax**: For complex multi-step transformations, consider using pipe syntax (\`|>\`) for readability. Pattern: \`FROM table |> WHERE ... |> AGGREGATE ... GROUP BY ... |> ORDER BY ...\`
 - **COLLATE**: For case-insensitive string comparisons, use \`COLLATE UTF8_LCASE\` instead of \`LOWER()\`/\`UPPER()\` wrappers
-- Prefer window functions over self-joins where possible
+- **Window functions**: Prefer window functions over self-joins. Use \`LAG(col, 1) OVER (PARTITION BY group ORDER BY date)\` for period-over-period comparisons. Use \`SUM(col) OVER (ORDER BY date)\` for running totals. Use \`AVG(col) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)\` for moving averages
+- **Window frames**: Specify explicit frames (\`ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\`) when cumulative behaviour is intended. Use \`ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\` for LAST_VALUE to see the entire partition
+- **Named windows**: When multiple columns use the same PARTITION BY, define a named window: \`SELECT SUM(x) OVER w, AVG(x) OVER w FROM t WINDOW w AS (PARTITION BY ...)\`
 - Use explicit column lists over SELECT *
 
 **8. GEOSPATIAL USE CASE RULES**
@@ -122,6 +128,16 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - Use ST functions for precise spatial calculations: \`ST_Distance()\`, \`ST_Contains()\`, \`ST_Within()\`
 - H3 resolution guide: 7 (city blocks, ~1.2 km), 9 (buildings, ~175 m), 5 (districts, ~8.5 km)
 - Combine H3 for fast filtering with ST_Distance for precise measurement
+
+**9. LAMBDA / HIGHER-ORDER FUNCTION RULES**
+- When operating on ARRAY columns, prefer lambda functions over EXPLODE + re-aggregate patterns (fewer shuffles, better performance)
+- Use \`transform(array, x -> expr)\` to apply an expression to every element: \`transform(tags, t -> lower(t))\`
+- Use \`filter(array, x -> predicate)\` to select elements: \`filter(prices, p -> p > 100)\`
+- Use \`exists(array, x -> predicate)\` to check if any element matches: \`exists(items, i -> i.status = 'overdue')\`
+- Use \`aggregate(array, init, (acc, x) -> expr)\` to reduce an array: \`aggregate(quantities, 0, (acc, x) -> acc + x)\`
+- Use \`array_sort(array, (l, r) -> comparator)\` for custom sort orders (return -1, 0, or 1)
+- For MAP columns, use \`map_filter()\`, \`transform_keys()\`, \`transform_values()\` instead of exploding map entries
+- Lambda expressions cannot contain subqueries or SQL UDFs
 
 ${DATABRICKS_SQL_RULES}
 
