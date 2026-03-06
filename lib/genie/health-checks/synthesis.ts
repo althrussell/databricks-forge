@@ -164,7 +164,7 @@ export async function runSynthesis(report: SpaceHealthReport): Promise<Synthesis
   const endpoint = getFastServingEndpoint();
 
   const categorySummaries = Object.entries(report.categories)
-    .map(([id, cat]) => `- ${cat.label}: ${cat.passed}/${cat.total} passed (${cat.score}%)`)
+    .map(([_id, cat]) => `- ${cat.label}: ${cat.passed}/${cat.total} passed (${cat.score}%)`)
     .join("\n");
 
   const failedCheckSummaries = report.checks

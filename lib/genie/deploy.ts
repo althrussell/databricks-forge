@@ -222,7 +222,7 @@ export function classifyDeployError(error: string): { category: string; treatAsS
  * Try to auto-fix common DDL issues that cause deployment failures.
  * Returns the fixed DDL string, or null if no fix is applicable.
  */
-export function attemptDdlAutoFix(ddl: string, error: string, _assetType: "metric_view"): string | null {
+export function attemptDdlAutoFix(ddl: string, error: string, _assetType?: "metric_view"): string | null {
   const msg = error.toUpperCase();
 
   if (msg.includes("PARSE") || msg.includes("SYNTAX")) {

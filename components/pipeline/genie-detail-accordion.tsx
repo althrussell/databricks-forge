@@ -51,8 +51,8 @@ export function GenieDetailAccordion({
       {/* Metric Views */}
       {(rec.metricViews.length > 0 ||
         mvProposals.length > 0 ||
-        ((parsed as Record<string, any>).data_sources?.metric_views &&
-          (parsed as Record<string, any>).data_sources.metric_views.length > 0)) && (
+        (parsed.data_sources?.metric_views &&
+          parsed.data_sources.metric_views.length > 0)) && (
         <AccordionItem value="metric-views">
           <AccordionTrigger className="text-xs font-medium">
             Metric Views ({rec.metricViewCount})
@@ -114,7 +114,7 @@ export function GenieDetailAccordion({
                             ? "Validation errors:"
                             : "Validation issues:"}
                         </p>
-                        {mv.validationIssues.map((issue: string, idx: number) => (
+                        {mv.validationIssues.map((issue, idx) => (
                           <p
                             key={idx}
                             className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}
@@ -131,18 +131,16 @@ export function GenieDetailAccordion({
                     )}
                   </div>
                 ))
-              ) : (parsed as Record<string, any>).data_sources?.metric_views &&
-                (parsed as Record<string, any>).data_sources.metric_views.length > 0 ? (
-                (parsed as Record<string, any>).data_sources.metric_views.map(
-                  (mv: { identifier: string; description?: string[] }) => (
-                    <div key={mv.identifier} className="space-y-0.5">
-                      <span className="truncate font-mono text-violet-500">{mv.identifier}</span>
-                      {mv.description && mv.description.length > 0 && (
-                        <p className="text-muted-foreground">{mv.description.join(" ")}</p>
-                      )}
-                    </div>
-                  ),
-                )
+              ) : parsed.data_sources?.metric_views &&
+                parsed.data_sources.metric_views.length > 0 ? (
+                parsed.data_sources.metric_views.map((mv) => (
+                  <div key={mv.identifier} className="space-y-0.5">
+                    <span className="truncate font-mono text-violet-500">{mv.identifier}</span>
+                    {mv.description && mv.description.length > 0 && (
+                      <p className="text-muted-foreground">{mv.description.join(" ")}</p>
+                    )}
+                  </div>
+                ))
               ) : (
                 rec.metricViews.map((mv) => (
                   <div key={mv} className="truncate font-mono text-violet-500">
@@ -215,41 +213,31 @@ export function GenieDetailAccordion({
       )}
 
       {/* Sample Questions */}
-      {((parsed as Record<string, any>).config?.sample_questions?.length ?? 0) > 0 && (
+      {(parsed.config?.sample_questions?.length ?? 0) > 0 && (
         <AccordionItem value="questions">
           <AccordionTrigger className="text-xs font-medium">
-            Sample Questions ({(parsed as Record<string, any>).config?.sample_questions?.length ?? 0})
+            Sample Questions ({parsed.config?.sample_questions?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <ul className="space-y-1 text-xs text-muted-foreground">
-              {((parsed as Record<string, any>).config?.sample_questions ?? []).map(
-                (q: { id: string; question: string[] }) => (
-                  <li key={q.id}>{q.question.join(" ")}</li>
-                ),
-              )}
+              {(parsed.config?.sample_questions ?? []).map((q) => (
+                <li key={q.id}>{q.question.join(" ")}</li>
+              ))}
             </ul>
           </AccordionContent>
         </AccordionItem>
       )}
 
       {/* SQL Examples */}
-      {((parsed as Record<string, any>).instructions?.example_question_sqls?.length ?? 0) > 0 && (
+      {(parsed.instructions?.example_question_sqls?.length ?? 0) > 0 && (
         <AccordionItem value="sql">
           <AccordionTrigger className="text-xs font-medium">
             SQL Examples (
-            {(parsed as Record<string, any>).instructions?.example_question_sqls?.length ?? 0})
+            {parsed.instructions?.example_question_sqls?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="max-h-64 space-y-3 overflow-auto">
-              {(
-                (parsed as Record<string, any>).instructions?.example_question_sqls ?? []
-              ).map(
-                (ex: {
-                  id: string;
-                  question: string[];
-                  sql: string[];
-                  usage_guidance?: string[];
-                }) => (
+              {(parsed.instructions?.example_question_sqls ?? []).map((ex) => (
                   <div key={ex.id}>
                     <p className="text-xs font-medium">{ex.question.join(" ")}</p>
                     <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
@@ -261,26 +249,22 @@ export function GenieDetailAccordion({
                       </p>
                     )}
                   </div>
-                ),
-              )}
+                ))}
             </div>
           </AccordionContent>
         </AccordionItem>
       )}
 
       {/* Measures */}
-      {((parsed as Record<string, any>).instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
+      {(parsed.instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
         <AccordionItem value="measures">
           <AccordionTrigger className="text-xs font-medium">
             Measures (
-            {(parsed as Record<string, any>).instructions?.sql_snippets?.measures?.length ?? 0})
+            {parsed.instructions?.sql_snippets?.measures?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-0.5 text-xs">
-              {(
-                (parsed as Record<string, any>).instructions?.sql_snippets?.measures ?? []
-              ).map(
-                (m: { id: string; alias: string; sql: string[]; synonyms?: string[] }) => (
+              {(parsed.instructions?.sql_snippets?.measures ?? []).map((m) => (
                   <div key={m.id} className="flex items-baseline gap-2 py-0.5">
                     <code className="rounded bg-muted px-1 font-mono text-[10px]">
                       {m.alias}
@@ -296,31 +280,22 @@ export function GenieDetailAccordion({
                       </span>
                     )}
                   </div>
-                ),
-              )}
+                ))}
             </div>
           </AccordionContent>
         </AccordionItem>
       )}
 
       {/* Filters */}
-      {((parsed as Record<string, any>).instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
+      {(parsed.instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
         <AccordionItem value="filters">
           <AccordionTrigger className="text-xs font-medium">
             Filters (
-            {(parsed as Record<string, any>).instructions?.sql_snippets?.filters?.length ?? 0})
+            {parsed.instructions?.sql_snippets?.filters?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-0.5 text-xs">
-              {(
-                (parsed as Record<string, any>).instructions?.sql_snippets?.filters ?? []
-              ).map(
-                (f: {
-                  id: string;
-                  display_name: string;
-                  sql: string[];
-                  synonyms?: string[];
-                }) => (
+              {(parsed.instructions?.sql_snippets?.filters ?? []).map((f) => (
                   <div key={f.id} className="flex items-baseline gap-2 py-0.5">
                     <code className="rounded bg-muted px-1 font-mono text-[10px]">
                       {f.display_name}
@@ -336,27 +311,22 @@ export function GenieDetailAccordion({
                       </span>
                     )}
                   </div>
-                ),
-              )}
+                ))}
             </div>
           </AccordionContent>
         </AccordionItem>
       )}
 
       {/* Dimensions */}
-      {((parsed as Record<string, any>).instructions?.sql_snippets?.expressions?.length ?? 0) >
-        0 && (
+      {(parsed.instructions?.sql_snippets?.expressions?.length ?? 0) > 0 && (
         <AccordionItem value="dimensions">
           <AccordionTrigger className="text-xs font-medium">
             Dimensions (
-            {(parsed as Record<string, any>).instructions?.sql_snippets?.expressions?.length ?? 0})
+            {parsed.instructions?.sql_snippets?.expressions?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-0.5 text-xs">
-              {(
-                (parsed as Record<string, any>).instructions?.sql_snippets?.expressions ?? []
-              ).map(
-                (e: { id: string; alias: string; sql: string[]; synonyms?: string[] }) => (
+              {(parsed.instructions?.sql_snippets?.expressions ?? []).map((e) => (
                   <div key={e.id} className="flex items-baseline gap-2 py-0.5">
                     <code className="rounded bg-muted px-1 font-mono text-[10px]">
                       {e.alias}
@@ -372,64 +342,59 @@ export function GenieDetailAccordion({
                       </span>
                     )}
                   </div>
-                ),
-              )}
+                ))}
             </div>
           </AccordionContent>
         </AccordionItem>
       )}
 
       {/* Join Relationships */}
-      {((parsed as Record<string, any>).instructions?.join_specs?.length ?? 0) > 0 && (
+      {(parsed.instructions?.join_specs?.length ?? 0) > 0 && (
         <AccordionItem value="joins">
           <AccordionTrigger className="text-xs font-medium">
             Join Relationships (
-            {(parsed as Record<string, any>).instructions?.join_specs?.length ?? 0})
+            {parsed.instructions?.join_specs?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-1 text-xs">
-              {((parsed as Record<string, any>).instructions?.join_specs ?? []).map(
-                (j: { id: string; sql: string[] }) => {
-                  const rtMatch = j.sql
-                    .find((s: string) => s.startsWith("--rt="))
-                    ?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
-                  const rt = rtMatch
-                    ? rtMatch[1].toLowerCase().replace(/_/g, " ")
-                    : null;
-                  const sqlDisplay = j.sql
-                    .filter((s: string) => !s.startsWith("--rt="))
-                    .join(" ");
-                  return (
-                    <div key={j.id} className="flex items-baseline gap-2 py-0.5">
-                      <span className="truncate font-mono text-muted-foreground">
-                        {sqlDisplay}
-                      </span>
-                      {rt && (
-                        <Badge variant="outline" className="shrink-0 text-[9px]">
-                          {rt}
-                        </Badge>
-                      )}
-                    </div>
-                  );
-                },
-              )}
+              {(parsed.instructions?.join_specs ?? []).map((j) => {
+                const rtMatch = j.sql
+                  .find((s) => s.startsWith("--rt="))
+                  ?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
+                const rt = rtMatch
+                  ? rtMatch[1].toLowerCase().replace(/_/g, " ")
+                  : null;
+                const sqlDisplay = j.sql
+                  .filter((s) => !s.startsWith("--rt="))
+                  .join(" ");
+                return (
+                  <div key={j.id} className="flex items-baseline gap-2 py-0.5">
+                    <span className="truncate font-mono text-muted-foreground">
+                      {sqlDisplay}
+                    </span>
+                    {rt && (
+                      <Badge variant="outline" className="shrink-0 text-[9px]">
+                        {rt}
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </AccordionContent>
         </AccordionItem>
       )}
 
       {/* Text Instructions */}
-      {((parsed as Record<string, any>).instructions?.text_instructions?.length ?? 0) > 0 && (
+      {(parsed.instructions?.text_instructions?.length ?? 0) > 0 && (
         <AccordionItem value="instructions">
           <AccordionTrigger className="text-xs font-medium">
             Text Instructions (
-            {(parsed as Record<string, any>).instructions?.text_instructions?.length ?? 0})
+            {parsed.instructions?.text_instructions?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-2 text-xs text-muted-foreground">
-              {(
-                (parsed as Record<string, any>).instructions?.text_instructions ?? []
-              ).map((ti: { id: string; content: string[] }) => (
+              {(parsed.instructions?.text_instructions ?? []).map((ti) => (
                 <p key={ti.id} className="whitespace-pre-line">
                   {ti.content.join("\n")}
                 </p>
@@ -440,21 +405,14 @@ export function GenieDetailAccordion({
       )}
 
       {/* Benchmarks */}
-      {((parsed as Record<string, any>).benchmarks?.questions?.length ?? 0) > 0 && (
+      {(parsed.benchmarks?.questions?.length ?? 0) > 0 && (
         <AccordionItem value="benchmarks">
           <AccordionTrigger className="text-xs font-medium">
-            Benchmarks ({(parsed as Record<string, any>).benchmarks?.questions?.length ?? 0})
+            Benchmarks ({parsed.benchmarks?.questions?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="max-h-64 space-y-2 overflow-auto">
-              {(
-                (parsed as Record<string, any>).benchmarks?.questions ?? []
-              ).map(
-                (b: {
-                  id: string;
-                  question: string[];
-                  answer?: { content: string[] }[];
-                }) => (
+              {(parsed.benchmarks?.questions ?? []).map((b) => (
                   <div key={b.id} className="rounded border p-2">
                     <p className="text-xs font-medium">{b.question.join(" ")}</p>
                     {b.answer && b.answer.length > 0 && (
@@ -463,8 +421,7 @@ export function GenieDetailAccordion({
                       </pre>
                     )}
                   </div>
-                ),
-              )}
+                ))}
             </div>
           </AccordionContent>
         </AccordionItem>

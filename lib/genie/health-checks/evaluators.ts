@@ -347,7 +347,7 @@ export function clearPendingSqlQualityChecks() {
 }
 
 export async function resolveSqlQualityChecks(
-  space: SpaceJson,
+  _space: SpaceJson,
 ): Promise<CheckResult[]> {
   const pending = [..._pendingSqlQualityChecks];
   _pendingSqlQualityChecks = [];

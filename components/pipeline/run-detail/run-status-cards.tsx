@@ -15,11 +15,10 @@ import type { PipelineRun, PipelineStep } from "@/lib/domain/types";
 
 export function RunProgressCard({
   run,
-  runId,
   onCancel,
 }: {
   run: PipelineRun;
-  runId: string;
+  runId?: string;
   onCancel: () => void;
 }) {
   return (
@@ -67,11 +66,10 @@ export function RunProgressCard({
 
 export function RunFailedCard({
   run,
-  runId,
   onResume,
 }: {
   run: PipelineRun;
-  runId: string;
+  runId?: string;
   onResume: () => void;
 }) {
   return (
@@ -102,11 +100,10 @@ export function RunFailedCard({
 
 export function RunCancelledCard({
   run,
-  runId,
   onResume,
 }: {
   run: PipelineRun;
-  runId: string;
+  runId?: string;
   onResume: () => void;
 }) {
   return (

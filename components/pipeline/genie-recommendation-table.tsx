@@ -14,7 +14,6 @@ import { GenieRecommendationRow, type DeployStatus } from "./genie-recommendatio
 
 interface GenieRecommendationTableProps {
   recommendations: GenieEngineRecommendation[];
-  tracked: TrackedGenieSpace[];
   selected: Set<string>;
   selectableDomains: string[];
   allSelected: boolean;
@@ -35,7 +34,6 @@ interface GenieRecommendationTableProps {
 
 export function GenieRecommendationTable({
   recommendations,
-  tracked,
   selected,
   selectableDomains,
   allSelected,

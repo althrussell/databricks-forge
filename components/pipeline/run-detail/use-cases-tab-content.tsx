@@ -7,12 +7,11 @@ import type { UseCase } from "@/lib/domain/types";
 export function UseCasesTabContent({
   useCases,
   lineageDiscoveredFqns,
-  runId,
   onUpdate,
 }: {
   useCases: UseCase[];
   lineageDiscoveredFqns: string[];
-  runId: string;
+  runId?: string;
   onUpdate: (updated: UseCase) => Promise<{ ok: boolean; error?: string }>;
 }) {
   if (useCases.length === 0) {

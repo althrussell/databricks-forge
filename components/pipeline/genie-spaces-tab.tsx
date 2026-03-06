@@ -38,7 +38,6 @@ export function GenieSpacesTab({
     loading,
     error,
     recommendations,
-    tracked,
     selected,
     detailDomain,
     detailRec,
@@ -127,7 +126,6 @@ export function GenieSpacesTab({
 
       <GenieRecommendationTable
         recommendations={recommendations}
-        tracked={tracked}
         selected={selected}
         selectableDomains={selectableDomains}
         allSelected={allSelected}
