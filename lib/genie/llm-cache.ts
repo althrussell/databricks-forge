@@ -23,6 +23,7 @@ import {
   type ChatCompletionOptions,
   type ChatCompletionResponse,
 } from "@/lib/dbx/model-serving";
+import { getFallbackEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -31,6 +32,8 @@ const MAX_RETRIES = 3;
 const MAX_429_RETRIES = 4;
 const INITIAL_BACKOFF_MS = 1_000;
 const DEFAULT_429_BACKOFF_MS = 60_000;
+const FALLBACK_MAX_ATTEMPTS = 2;
+const FALLBACK_BACKOFF_MS = 5_000;
 
 const MAX_GENIE_CONCURRENT = Math.max(
   1,
@@ -148,6 +151,7 @@ async function chatCompletionWithRetry(
 ): Promise<ChatCompletionResponse> {
   let lastError: Error | null = null;
   let rateLimitHits = 0;
+  let exhausted429 = false;
 
   const maxAttempts = MAX_429_RETRIES + 1; // upper bound; per-error-type caps checked below
 
@@ -182,7 +186,8 @@ async function chatCompletionWithRetry(
       if (isRateLimitError(error)) {
         rateLimitHits++;
         if (rateLimitHits > MAX_429_RETRIES) {
-          throw lastError;
+          exhausted429 = true;
+          break;
         }
         logger.warn("LLM call failed (will retry)", {
           attempt: attempt + 1,
@@ -201,6 +206,38 @@ async function chatCompletionWithRetry(
         endpoint: options.endpoint,
         error: lastError.message,
       });
+    }
+  }
+
+  // Attempt fallback endpoint when primary is 429-exhausted
+  if (exhausted429) {
+    const fallback = getFallbackEndpoint(options.endpoint);
+    if (fallback) {
+      logger.warn("LLM falling back to alternate endpoint", {
+        from: options.endpoint,
+        to: fallback,
+      });
+      const fallbackOptions = { ...options, endpoint: fallback };
+      for (let fa = 0; fa < FALLBACK_MAX_ATTEMPTS; fa++) {
+        try {
+          if (fa > 0) {
+            await new Promise((resolve) => setTimeout(resolve, FALLBACK_BACKOFF_MS));
+          }
+          await genieSemaphore.acquire();
+          try {
+            return await chatCompletion(fallbackOptions);
+          } finally {
+            genieSemaphore.release();
+          }
+        } catch (fbError) {
+          lastError = fbError instanceof Error ? fbError : new Error(String(fbError));
+          logger.warn("LLM fallback attempt failed", {
+            attempt: fa + 1,
+            endpoint: fallback,
+            error: lastError.message,
+          });
+        }
+      }
     }
   }
 

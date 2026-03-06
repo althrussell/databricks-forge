@@ -27,6 +27,7 @@ import {
   type TokenUsage,
 } from "@/lib/dbx/model-serving";
 import { assertWithinBudget, MAX_PROMPT_TOKENS } from "@/lib/ai/token-budget";
+import { getFallbackEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { insertPromptLog } from "@/lib/lakebase/prompt-logs";
 import { formatPrompt, PROMPT_VERSIONS, PROMPT_SYSTEM_MESSAGES, type PromptKey } from "./templates";
@@ -250,6 +251,7 @@ export async function executeAIQuery(options: AIQueryOptions): Promise<AIQueryRe
   }
 
   let lastError: Error | null = null;
+  let exhausted429 = false;
 
   await llmSemaphore.acquire();
   try {
@@ -320,8 +322,68 @@ export async function executeAIQuery(options: AIQueryOptions): Promise<AIQueryRe
         }
       }
     }
+
+    // If we exited the loop due to 429s (all retries consumed), mark for fallback
+    if (lastError && isRateLimitError(lastError)) {
+      exhausted429 = true;
+    }
   } finally {
     llmSemaphore.release();
+  }
+
+  // Attempt fallback endpoint when primary is 429-exhausted
+  if (exhausted429) {
+    const fallback = getFallbackEndpoint(options.modelEndpoint);
+    if (fallback) {
+      logger.warn("FMAPI falling back to alternate endpoint", {
+        promptKey: options.promptKey,
+        from: options.modelEndpoint,
+        to: fallback,
+      });
+      const fallbackOpts = { ...options, modelEndpoint: fallback };
+      for (let fa = 0; fa < 2; fa++) {
+        try {
+          if (fa > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
+          }
+          await llmSemaphore.acquire();
+          try {
+            const result = await executeAIQueryOnce(fallbackOpts, temperature, maxTokens);
+
+            if (options.runId) {
+              insertPromptLog({
+                logId: randomUUID(),
+                runId: options.runId,
+                step: options.step ?? options.promptKey,
+                promptKey: options.promptKey,
+                promptVersion,
+                model: fallback,
+                temperature,
+                renderedPrompt,
+                rawResponse: result.rawResponse,
+                honestyScore: result.honestyScore,
+                durationMs: result.durationMs,
+                tokenUsage: result.tokenUsage,
+                success: true,
+                errorMessage: null,
+              });
+            }
+
+            return result;
+          } finally {
+            llmSemaphore.release();
+          }
+        } catch (fbError) {
+          lastError = fbError instanceof Error ? fbError : new Error(String(fbError));
+          logger.warn("FMAPI fallback attempt failed", {
+            promptKey: options.promptKey,
+            attempt: fa + 1,
+            endpoint: fallback,
+            error: lastError.message,
+          });
+        }
+      }
+    }
   }
 
   // Fire-and-forget: log failed call (after all retries exhausted)
@@ -616,6 +678,85 @@ export async function executeAIQueryStream(
 
       if (!isRateLimitError(lastError)) {
         break;
+      }
+    }
+  }
+
+  // Attempt fallback endpoint when primary is 429-exhausted
+  if (lastError && isRateLimitError(lastError)) {
+    const fallback = getFallbackEndpoint(options.modelEndpoint);
+    if (fallback) {
+      logger.warn("FMAPI streaming falling back to alternate endpoint", {
+        promptKey: options.promptKey,
+        from: options.modelEndpoint,
+        to: fallback,
+      });
+      const fallbackStreamOpts = { ...streamOpts, endpoint: fallback };
+      for (let fa = 0; fa < 2; fa++) {
+        const startTime = Date.now();
+        try {
+          if (fa > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
+          }
+          await llmSemaphore.acquire();
+          const response = await chatCompletionStream(fallbackStreamOpts, onChunk).finally(() =>
+            llmSemaphore.release(),
+          );
+
+          const rawResponse = response.content;
+          const durationMs = Date.now() - startTime;
+
+          if (!rawResponse) {
+            throw new Error(`FMAPI streaming returned empty response for ${options.promptKey}`);
+          }
+
+          const honestyScore = extractHonestyScore(rawResponse);
+
+          logger.info("FMAPI streaming fallback response complete", {
+            promptKey: options.promptKey,
+            promptVersion,
+            model: response.model || fallback,
+            responseChars: rawResponse.length,
+            durationMs,
+            finishReason: response.finishReason,
+          });
+
+          if (options.runId) {
+            insertPromptLog({
+              logId: randomUUID(),
+              runId: options.runId,
+              step: options.step ?? options.promptKey,
+              promptKey: options.promptKey,
+              promptVersion,
+              model: fallback,
+              temperature,
+              renderedPrompt: prompt,
+              rawResponse,
+              honestyScore,
+              durationMs,
+              tokenUsage: response.usage,
+              success: true,
+              errorMessage: null,
+            });
+          }
+
+          return {
+            rawResponse,
+            honestyScore,
+            promptVersion,
+            durationMs,
+            tokenUsage: response.usage,
+            finishReason: response.finishReason,
+          };
+        } catch (fbError) {
+          lastError = fbError instanceof Error ? fbError : new Error(String(fbError));
+          logger.warn("FMAPI streaming fallback attempt failed", {
+            promptKey: options.promptKey,
+            attempt: fa + 1,
+            endpoint: fallback,
+            error: lastError.message,
+          });
+        }
       }
     }
   }

@@ -127,6 +127,22 @@ export function getReviewEndpoint(): string {
 }
 
 /**
+ * Returns an alternate endpoint to try when `currentEndpoint` is rate-limited.
+ *
+ * Prefers the review endpoint (`databricks-gpt-5-4`) as fallback for the
+ * premium/fast models.  If `currentEndpoint` *is* the review endpoint,
+ * falls back to the primary.  Returns `null` when no distinct alternative
+ * is available (avoids self-fallback loops).
+ */
+export function getFallbackEndpoint(currentEndpoint: string): string | null {
+  const review = getReviewEndpoint();
+  if (review !== currentEndpoint) return review;
+  const primary = getServingEndpoint();
+  if (primary !== currentEndpoint) return primary;
+  return null;
+}
+
+/**
  * Whether a dedicated review endpoint is configured.
  * Callers can use this to gate optional review passes.
  */

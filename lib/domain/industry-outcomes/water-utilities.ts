@@ -211,7 +211,11 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Flow & Turbidity Data",
                 "Compliance Thresholds",
               ],
-              typicalSourceSystems: ["SCADA", "Treatment Plant DCS", "Laboratory Information System"],
+              typicalSourceSystems: [
+                "SCADA",
+                "Treatment Plant DCS",
+                "Laboratory Information System",
+              ],
             },
             {
               name: "Treatment Plant Energy Optimisation",
@@ -251,7 +255,11 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Reactive vs Preventive Ratio",
                 "Cost per Asset",
               ],
-              typicalSourceSystems: ["CMMS", "Contract Management System", "Asset Management System"],
+              typicalSourceSystems: [
+                "CMMS",
+                "Contract Management System",
+                "Asset Management System",
+              ],
             },
           ],
           kpis: [
@@ -1097,11 +1105,7 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Resource Allocation",
                 "Delivery Capacity Metrics",
               ],
-              typicalSourceSystems: [
-                "PPM Platform (Planisware)",
-                "ERP",
-                "Project Controls",
-              ],
+              typicalSourceSystems: ["PPM Platform (Planisware)", "ERP", "Project Controls"],
             },
             {
               name: "Dam Improvement Program Scheduling & Compliance",
