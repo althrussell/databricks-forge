@@ -98,6 +98,39 @@ describe("extractSqlAliases", () => {
     expect(aliases.all.has("t")).toBe(true);
     expect(aliases.all.has("total")).toBe(true);
   });
+
+  it("detects CTE-derived aliases (FROM cte_name alias)", () => {
+    const sql = [
+      "WITH loan_counts AS (SELECT month, COUNT(*) AS cnt FROM t1 GROUP BY 1),",
+      "loan_amounts AS (SELECT month, SUM(amt) AS total FROM t1 GROUP BY 1)",
+      "SELECT lc.cnt, la.total FROM loan_counts lc JOIN loan_amounts la ON lc.month = la.month",
+    ].join("\n");
+    const aliases = extractSqlAliases(sql);
+    expect(aliases.cteNames.has("loan_counts")).toBe(true);
+    expect(aliases.cteNames.has("loan_amounts")).toBe(true);
+    expect(aliases.cteAliases.has("lc")).toBe(true);
+    expect(aliases.cteAliases.has("la")).toBe(true);
+  });
+
+  it("does not mark aliases to real tables as CTE-derived", () => {
+    const sql = "SELECT t.id FROM catalog.schema.orders t";
+    const aliases = extractSqlAliases(sql);
+    expect(aliases.cteAliases.size).toBe(0);
+    expect(aliases.tableAliases.has("t")).toBe(true);
+  });
+
+  it("detects implicit column aliases (without AS keyword)", () => {
+    const sql = "SELECT COUNT(*) total_count, SUM(amount) total_amount\nFROM t";
+    const aliases = extractSqlAliases(sql);
+    expect(aliases.columnAliases.has("total_count")).toBe(true);
+    expect(aliases.columnAliases.has("total_amount")).toBe(true);
+  });
+
+  it("does not capture SQL keywords as implicit aliases", () => {
+    const sql = "SELECT COALESCE(a, b) FROM t";
+    const aliases = extractSqlAliases(sql);
+    expect(aliases.columnAliases.has("from")).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -252,6 +285,56 @@ describe("validateColumnReferences", () => {
     const sql = "SELECT t.fake, t.fake FROM table1 t";
     const result = validateColumnReferences(sql, knownColumns);
     expect(result.unknownColumns).toHaveLength(1);
+  });
+
+  it("skips CTE-prefixed column references (CTE columns are user-defined)", () => {
+    const sql = [
+      "WITH loan_stats AS (",
+      "  SELECT",
+      "    EXTRACT(MONTH FROM loan_date) AS loan_month,",
+      "    COUNT(*) AS monthly_loan_count,",
+      "    PERCENTILE_APPROX(amount, 0.975) AS monthly_amount_upper,",
+      "    PERCENTILE_APPROX(amount, 0.025) AS monthly_amount_lower",
+      "  FROM catalog.schema.loans",
+      "  GROUP BY 1",
+      ")",
+      "SELECT",
+      "  ls.loan_month,",
+      "  ls.monthly_loan_count,",
+      "  ls.monthly_amount_upper,",
+      "  ls.monthly_amount_lower",
+      "FROM loan_stats ls",
+    ].join("\n");
+    const result = validateColumnReferences(sql, new Set(["loan_date", "amount"]), {
+      tablesInvolved: ["catalog.schema.loans"],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.unknownColumns).toHaveLength(0);
+  });
+
+  it("skips references via CTE alias even for columns not defined with AS", () => {
+    const sql = [
+      "WITH base AS (",
+      "  SELECT id, COUNT(*) total_count",
+      "  FROM catalog.schema.orders",
+      "  GROUP BY id",
+      ")",
+      "SELECT b.id, b.total_count FROM base b",
+    ].join("\n");
+    const result = validateColumnReferences(sql, new Set(["id"]), {
+      tablesInvolved: ["catalog.schema.orders"],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.unknownColumns).toHaveLength(0);
+  });
+
+  it("still flags hallucinated columns on real table aliases", () => {
+    const sql = "SELECT t.id, t.nonexistent_col FROM catalog.schema.orders t";
+    const result = validateColumnReferences(sql, new Set(["id"]), {
+      tablesInvolved: ["catalog.schema.orders"],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.unknownColumns).toContain("t.nonexistent_col");
   });
 
   it("reproduces the dashboard vulnerability_demographic_detail scenario", () => {

@@ -31,6 +31,8 @@ export interface SqlAliases {
   tableAliases: Set<string>;
   columnAliases: Set<string>;
   cteNames: Set<string>;
+  /** Table aliases that point to a CTE rather than a real table (e.g. `FROM my_cte mc` → `mc`). */
+  cteAliases: Set<string>;
   all: Set<string>;
 }
 
@@ -82,6 +84,7 @@ export function extractSqlAliases(sql: string): SqlAliases {
   const tableAliases = new Set<string>();
   const columnAliases = new Set<string>();
   const cteNames = new Set<string>();
+  const cteAliases = new Set<string>();
 
   // Table aliases: FROM/JOIN <fqn> [AS] <alias>
   const tableAliasPattern = /(?:FROM|JOIN)\s+[\w.]+\s+(?:AS\s+)?([a-z_]\w*)/gi;
@@ -103,6 +106,16 @@ export function extractSqlAliases(sql: string): SqlAliases {
     columnAliases.add(m[1].toLowerCase());
   }
 
+  // Implicit column aliases (without AS): `) alias,` or `) alias\n`
+  // Catches patterns like `COUNT(*) total_count,` or `SUM(x) revenue`
+  const implicitAliasPattern = /\)\s+([a-z_]\w*)(?:\s*[,\n])/gi;
+  while ((m = implicitAliasPattern.exec(normalizedSql)) !== null) {
+    const candidate = m[1].toLowerCase();
+    if (!SQL_KEYWORDS.has(candidate)) {
+      columnAliases.add(candidate);
+    }
+  }
+
   // CTE names: WITH cte_name AS ( and chained , cte_name AS (
   const ctePattern = /\bWITH\s+([a-z_]\w*)\s+AS\s*\(/gi;
   while ((m = ctePattern.exec(normalizedSql)) !== null) {
@@ -113,8 +126,17 @@ export function extractSqlAliases(sql: string): SqlAliases {
     cteNames.add(m[1].toLowerCase());
   }
 
-  const all = new Set([...tableAliases, ...columnAliases, ...cteNames]);
-  return { tableAliases, columnAliases, cteNames, all };
+  // CTE-derived aliases: FROM/JOIN <cte_name> [AS] <alias>
+  // Identifies table aliases that point to CTEs rather than real tables.
+  const fromCtePattern = /(?:FROM|JOIN)\s+([a-z_]\w*)\s+(?:AS\s+)?([a-z_]\w*)/gi;
+  while ((m = fromCtePattern.exec(normalizedSql)) !== null) {
+    if (cteNames.has(m[1].toLowerCase())) {
+      cteAliases.add(m[2].toLowerCase());
+    }
+  }
+
+  const all = new Set([...tableAliases, ...columnAliases, ...cteNames, ...cteAliases]);
+  return { tableAliases, columnAliases, cteNames, cteAliases, all };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +227,11 @@ export function validateColumnReferences(
 
     // Skip FQN parts (catalog, schema, table name fragments)
     if (fqnParts.has(colLower)) continue;
+
+    // Skip references where the prefix is a CTE or CTE-derived alias --
+    // CTE columns are user-defined in the query and cannot be validated
+    // against source table schemas.
+    if (aliases.cteNames.has(prefixLower) || aliases.cteAliases.has(prefixLower)) continue;
 
     // Skip known aliases and CTE names used as column references
     if (aliases.all.has(colLower)) continue;

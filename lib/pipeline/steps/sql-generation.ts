@@ -425,12 +425,20 @@ async function generateSqlForUseCase(
     if (review.fixedSql) {
       const fixError = await trySqlExecution(review.fixedSql);
       if (!fixError) {
-        logger.info("SQL review applied fix", {
-          useCaseId: uc.id,
-          qualityScore: review.qualityScore,
-          issueCount: review.issues.length,
-        });
-        currentSql = review.fixedSql;
+        const reviewColCheck = validateSqlOutput(review.fixedSql, uc.tablesInvolved, involvedColumns);
+        if (reviewColCheck.unknownColumns.length > 0) {
+          logger.warn("Review fix introduced hallucinated columns, keeping original", {
+            useCaseId: uc.id,
+            unknownColumns: reviewColCheck.unknownColumns,
+          });
+        } else {
+          logger.info("SQL review applied fix", {
+            useCaseId: uc.id,
+            qualityScore: review.qualityScore,
+            issueCount: review.issues.length,
+          });
+          currentSql = review.fixedSql;
+        }
       } else {
         logger.warn("Review fix failed EXPLAIN, keeping original", { useCaseId: uc.id });
       }
@@ -580,18 +588,81 @@ function buildColumnViolationMessage(
     })
     .join("\n");
 
+  const allKnownNames = knownColumns.map((c) => c.columnName);
   const bareNames = unknownColumns.map((c) => (c.includes(".") ? c.split(".").pop()! : c));
-  return [
+
+  const suggestions = bareNames
+    .map((bare) => {
+      const closest = findClosestColumn(bare, allKnownNames);
+      return closest ? `  - "${bare}" -> did you mean "${closest}"?` : null;
+    })
+    .filter((s): s is string => s !== null);
+
+  const lines = [
     `SCHEMA VIOLATION: SQL references columns that do not exist in the schema: ${bareNames.join(", ")}.`,
     `These columns are hallucinated -- they do NOT exist in any of the involved tables.`,
     ``,
     `The ONLY valid columns are:`,
     validColLines,
+  ];
+
+  if (suggestions.length > 0) {
+    lines.push(``, `Possible matches (use ONLY if semantically correct):`, ...suggestions);
+  }
+
+  lines.push(
     ``,
     `Remove ALL references to the non-existent columns listed above. Use ONLY columns`,
     `from the valid list. Do NOT substitute or guess alternative names -- if no suitable`,
     `column exists, simplify the query to remove that logic entirely.`,
-  ].join("\n");
+  );
+
+  return lines.join("\n");
+}
+
+/**
+ * Find the closest column name by Levenshtein distance.
+ * Returns the closest match if the edit distance is within 60% of the
+ * query length, otherwise null.
+ */
+function findClosestColumn(query: string, candidates: string[]): string | null {
+  if (candidates.length === 0) return null;
+
+  const q = query.toLowerCase();
+  const maxDist = Math.max(3, Math.floor(q.length * 0.6));
+  let bestDist = maxDist + 1;
+  let bestMatch: string | null = null;
+
+  for (const candidate of candidates) {
+    const dist = levenshtein(q, candidate.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestMatch = candidate;
+    }
+  }
+
+  return bestMatch;
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let curr = new Array<number>(n + 1);
+
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+
+  return prev[n];
 }
 
 // ---------------------------------------------------------------------------
