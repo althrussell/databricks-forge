@@ -12,9 +12,12 @@ function makeUseCase(overrides: Partial<UseCase> = {}): UseCase {
     name: "Predict Invoice Payment Risk",
     type: "AI",
     analyticsTechnique: "ai_classify",
-    statement: "Predict late-payment risk for receivables using historical payment behavior and account characteristics.",
-    solution: "Build a risk scoring pipeline with segmentation by customer profile and aging buckets.",
-    businessValue: "Reduce bad debt exposure and improve cash flow predictability with prioritized collections actions.",
+    statement:
+      "Predict late-payment risk for receivables using historical payment behavior and account characteristics.",
+    solution:
+      "Build a risk scoring pipeline with segmentation by customer profile and aging buckets.",
+    businessValue:
+      "Reduce bad debt exposure and improve cash flow predictability with prioritized collections actions.",
     beneficiary: "Accounts Receivable Lead",
     sponsor: "CFO",
     domain: "Finance",
@@ -39,8 +42,20 @@ function makeUseCase(overrides: Partial<UseCase> = {}): UseCase {
 
 describe("pipeline quality modules", () => {
   it("computes run baseline metrics", () => {
-    const ucs = [makeUseCase(), makeUseCase({ id: "UC-002", useCaseNo: 2, name: "Forecast DSO", tablesInvolved: ["main.finance.ar_invoice", "main.finance.customer"] })];
-    const baseline = computeRunQualityBaseline(ucs, ["main.finance.ar_invoice", "main.finance.customer", "main.finance.payment"]);
+    const ucs = [
+      makeUseCase(),
+      makeUseCase({
+        id: "UC-002",
+        useCaseNo: 2,
+        name: "Forecast DSO",
+        tablesInvolved: ["main.finance.ar_invoice", "main.finance.customer"],
+      }),
+    ];
+    const baseline = computeRunQualityBaseline(ucs, [
+      "main.finance.ar_invoice",
+      "main.finance.customer",
+      "main.finance.payment",
+    ]);
     expect(baseline.totalUseCases).toBe(2);
     expect(baseline.consultantReadinessScore).toBeGreaterThan(0.6);
     expect(baseline.groundedUseCaseRate).toBe(1);
@@ -55,7 +70,10 @@ describe("pipeline quality modules", () => {
       businessValue: "Analyze data for insights.",
       tablesInvolved: [],
     });
-    const result = applyDeterministicQualityFilter([accepted, generic], ["main.finance.ar_invoice"]);
+    const result = applyDeterministicQualityFilter(
+      [accepted, generic],
+      ["main.finance.ar_invoice"],
+    );
     expect(result.accepted).toHaveLength(1);
     expect(result.rejected).toHaveLength(1);
   });

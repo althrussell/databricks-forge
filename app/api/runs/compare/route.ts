@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       });
       return NextResponse.json(
         { error: "Both runA and runB query params (valid UUIDs) are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -40,9 +40,6 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
       route: "/api/runs/compare",
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

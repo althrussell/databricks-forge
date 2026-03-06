@@ -74,10 +74,7 @@ function today(): string {
 }
 
 /** Add branded footer with logo to a slide */
-function addFooter(
-  slide: PptxGenJS.Slide,
-  variant: "light" | "dark" = "light"
-): void {
+function addFooter(slide: PptxGenJS.Slide, variant: "light" | "dark" = "light"): void {
   const logo = getLogoBase64();
   if (logo) {
     slide.addImage({ data: logo, x: CONTENT_MARGIN, y: 6.98, w: 0.25, h: 0.26 });
@@ -99,7 +96,7 @@ function addAccentBar(
   x: number,
   y: number,
   w: number,
-  h: number
+  h: number,
 ): void {
   slide.addShape("rect", {
     x,
@@ -111,12 +108,7 @@ function addAccentBar(
 }
 
 /** Add red separator line across a slide */
-function addRedSeparator(
-  slide: PptxGenJS.Slide,
-  x: number,
-  y: number,
-  w: number
-): void {
+function addRedSeparator(slide: PptxGenJS.Slide, x: number, y: number, w: number): void {
   slide.addShape("rect", { x, y, w, h: 0.04, fill: { color: DB_RED } });
 }
 
@@ -153,25 +145,24 @@ function buildDomainSummary(domain: string, cases: UseCase[]): string[] {
   const aiCount = cases.filter((c) => c.type === "AI").length;
   const statsCount = cases.length - aiCount;
   const avgScore = Math.round(
-    (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100
+    (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100,
   );
   const top = [...cases].sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall)[0];
   const subdomains = [...new Set(cases.map((c) => c.subdomain).filter(Boolean))];
-  const techniques = [
-    ...new Set(cases.map((c) => c.analyticsTechnique).filter(Boolean)),
-  ].slice(0, 5);
+  const techniques = [...new Set(cases.map((c) => c.analyticsTechnique).filter(Boolean))].slice(
+    0,
+    5,
+  );
 
   const bullets: string[] = [];
-  bullets.push(
-    `${cases.length} use cases (${aiCount} AI, ${statsCount} Statistical)`
-  );
+  bullets.push(`${cases.length} use cases (${aiCount} AI, ${statsCount} Statistical)`);
   if (subdomains.length > 0) {
     bullets.push(`Subdomains: ${subdomains.slice(0, 5).join(", ")}`);
   }
   bullets.push(`Average score: ${avgScore}%`);
   if (top) {
     bullets.push(
-      `Highest-scoring: ${top.name} (${Math.round(effectiveScores(top).overall * 100)}%)`
+      `Highest-scoring: ${top.name} (${Math.round(effectiveScores(top).overall * 100)}%)`,
     );
   }
   if (techniques.length > 0) {
@@ -195,10 +186,7 @@ function headerCell(text: string): PptxGenJS.TableCell {
   };
 }
 
-function bodyCell(
-  text: string,
-  opts?: Partial<PptxGenJS.TextPropsOptions>
-): PptxGenJS.TableCell {
+function bodyCell(text: string, opts?: Partial<PptxGenJS.TextPropsOptions>): PptxGenJS.TableCell {
   return {
     text,
     options: {
@@ -222,7 +210,7 @@ export async function generatePptx(
   run: PipelineRun,
   useCases: UseCase[],
   lineageDiscoveredFqns: string[] = [],
-  summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null
+  summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null,
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const pptx = new PptxGenJS();
@@ -237,9 +225,7 @@ export async function generatePptx(
   const statsCount = useCases.length - aiCount;
   const avgScore = useCases.length
     ? Math.round(
-        (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
-          useCases.length) *
-          100
+        (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / useCases.length) * 100,
       )
     : 0;
 
@@ -393,10 +379,7 @@ export async function generatePptx(
     });
     addRedSeparator(tocSlide, CONTENT_MARGIN, 0.95, 4);
 
-    const pageStats = domainStats.slice(
-      page * ROWS_PER_TOC,
-      (page + 1) * ROWS_PER_TOC
-    );
+    const pageStats = domainStats.slice(page * ROWS_PER_TOC, (page + 1) * ROWS_PER_TOC);
 
     const tocData: PptxGenJS.TableRow[] = [
       [headerCell("Domain"), headerCell("Use Cases"), headerCell("Avg Score")],
@@ -405,7 +388,7 @@ export async function generatePptx(
           bodyCell(ds.domain, { bold: true }),
           bodyCell(String(ds.count), { align: "center" }),
           bodyCell(`${Math.round(ds.avgScore * 100)}%`, { align: "center" }),
-        ]
+        ],
       ),
     ];
 
@@ -427,7 +410,7 @@ export async function generatePptx(
   // =====================================================================
   for (const domain of domainOrder) {
     const cases = (domainGroups[domain] ?? []).sort(
-      (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
+      (a, b) => effectiveScores(b).overall - effectiveScores(a).overall,
     );
     if (cases.length === 0) continue;
 
@@ -534,11 +517,7 @@ export async function generatePptx(
       addRedSeparator(ucSlide, CONTENT_MARGIN, sepY, 5);
 
       // Subtitle line: Subdomain | Type | Technique
-      const subtitleParts = [
-        uc.subdomain,
-        uc.type,
-        uc.analyticsTechnique,
-      ].filter(Boolean);
+      const subtitleParts = [uc.subdomain, uc.type, uc.analyticsTechnique].filter(Boolean);
       ucSlide.addText(subtitleParts.join("  |  "), {
         x: CONTENT_MARGIN,
         y: sepY + 0.08,
@@ -612,7 +591,7 @@ export async function generatePptx(
             valign: "top",
             fontFace: "Calibri",
             paraSpaceAfter: 4,
-          }
+          },
         );
         yPos += fieldH + fieldGap;
       }
@@ -639,19 +618,29 @@ export async function generatePptx(
         const scores = [
           {
             label: hasUserScores ? "Priority (adj)" : "Priority",
-            value: Math.round((hasUserScores ? (uc.userPriorityScore ?? uc.priorityScore) : uc.priorityScore) * 100),
+            value: Math.round(
+              (hasUserScores ? (uc.userPriorityScore ?? uc.priorityScore) : uc.priorityScore) * 100,
+            ),
           },
           {
             label: hasUserScores ? "Feasibility (adj)" : "Feasibility",
-            value: Math.round((hasUserScores ? (uc.userFeasibilityScore ?? uc.feasibilityScore) : uc.feasibilityScore) * 100),
+            value: Math.round(
+              (hasUserScores
+                ? (uc.userFeasibilityScore ?? uc.feasibilityScore)
+                : uc.feasibilityScore) * 100,
+            ),
           },
           {
             label: hasUserScores ? "Impact (adj)" : "Impact",
-            value: Math.round((hasUserScores ? (uc.userImpactScore ?? uc.impactScore) : uc.impactScore) * 100),
+            value: Math.round(
+              (hasUserScores ? (uc.userImpactScore ?? uc.impactScore) : uc.impactScore) * 100,
+            ),
           },
           {
             label: hasUserScores ? "Overall (adj)" : "Overall",
-            value: Math.round((hasUserScores ? (uc.userOverallScore ?? uc.overallScore) : uc.overallScore) * 100),
+            value: Math.round(
+              (hasUserScores ? (uc.userOverallScore ?? uc.overallScore) : uc.overallScore) * 100,
+            ),
           },
         ];
 

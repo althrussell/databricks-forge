@@ -10,11 +10,7 @@
 
 import { getPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import type {
-  EmbeddingInput,
-  EmbeddingKind,
-  SearchResult,
-} from "./types";
+import type { EmbeddingInput, EmbeddingKind, SearchResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Insert / Upsert
@@ -23,9 +19,7 @@ import type {
 /**
  * Insert a batch of embedding records. Generates UUIDs server-side.
  */
-export async function insertEmbeddings(
-  inputs: EmbeddingInput[],
-): Promise<number> {
+export async function insertEmbeddings(inputs: EmbeddingInput[]): Promise<number> {
   if (inputs.length === 0) return 0;
 
   const prisma = await getPrisma();
@@ -92,9 +86,7 @@ export async function deleteEmbeddingsByRun(runId: string): Promise<number> {
 }
 
 /** Delete all embeddings for a given source record. */
-export async function deleteEmbeddingsBySource(
-  sourceId: string,
-): Promise<number> {
+export async function deleteEmbeddingsBySource(sourceId: string): Promise<number> {
   const prisma = await getPrisma();
   const result = await prisma.$executeRawUnsafe(
     "DELETE FROM forge_embeddings WHERE source_id = $1",
@@ -200,8 +192,7 @@ export async function searchByVector(
 
   params.push(topK);
 
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const rows: Array<{
     id: string;
@@ -212,7 +203,8 @@ export async function searchByVector(
     content_text: string;
     metadata_json: Record<string, unknown> | null;
     score: number;
-  }> = await prisma.$queryRawUnsafe(`
+  }> = await prisma.$queryRawUnsafe(
+    `
     SELECT
       id,
       kind,
@@ -226,7 +218,9 @@ export async function searchByVector(
     ${whereClause}
     ORDER BY embedding <=> $1::vector
     LIMIT $${params.length}
-  `, ...params);
+  `,
+    ...params,
+  );
 
   return rows
     .filter((r) => r.score >= minScore)
@@ -247,10 +241,7 @@ export async function searchByVector(
 // ---------------------------------------------------------------------------
 
 /** Count embeddings, optionally filtered by kind. */
-export async function countEmbeddings(
-  kind?: EmbeddingKind,
-  sourceId?: string,
-): Promise<number> {
+export async function countEmbeddings(kind?: EmbeddingKind, sourceId?: string): Promise<number> {
   const prisma = await getPrisma();
   const conditions: string[] = [];
   const params: string[] = [];

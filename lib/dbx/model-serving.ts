@@ -113,7 +113,7 @@ const LLM_STREAM_TIMEOUT_MS = 600_000; // 10 minutes
  * path with the chat completions payload format.
  */
 export async function chatCompletion(
-  options: ChatCompletionOptions
+  options: ChatCompletionOptions,
 ): Promise<ChatCompletionResponse> {
   const { host } = getConfig();
   const url = `${host}/serving-endpoints/${options.endpoint}/invocations`;
@@ -147,7 +147,7 @@ export async function chatCompletion(
     const text = await resp.text();
     throw new ModelServingError(
       `Model Serving request failed (${resp.status}): ${text}`,
-      resp.status
+      resp.status,
     );
   }
 
@@ -168,7 +168,7 @@ export async function chatCompletion(
  */
 export async function chatCompletionStream(
   options: ChatCompletionOptions,
-  onChunk?: StreamCallback
+  onChunk?: StreamCallback,
 ): Promise<ChatCompletionResponse> {
   const { host } = getConfig();
   const url = `${host}/serving-endpoints/${options.endpoint}/invocations`;
@@ -203,7 +203,7 @@ export async function chatCompletionStream(
     const text = await resp.text();
     throw new ModelServingError(
       `Model Serving streaming request failed (${resp.status}): ${text}`,
-      resp.status
+      resp.status,
     );
   }
 
@@ -220,7 +220,7 @@ export async function chatCompletionStream(
 
 async function parseSSEStream(
   body: ReadableStream<Uint8Array>,
-  onChunk?: StreamCallback
+  onChunk?: StreamCallback,
 ): Promise<ChatCompletionResponse> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -291,9 +291,7 @@ async function parseSSEStream(
 // Response parsing
 // ---------------------------------------------------------------------------
 
-function parseCompletionResponse(
-  data: Record<string, unknown>
-): ChatCompletionResponse {
+function parseCompletionResponse(data: Record<string, unknown>): ChatCompletionResponse {
   const choices = data.choices as Array<{
     message?: { content?: string };
     finish_reason?: string;

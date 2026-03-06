@@ -7,17 +7,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
-import {
-  getPromptLogsByRunId,
-  getPromptLogStats,
-} from "@/lib/lakebase/prompt-logs";
+import { getPromptLogsByRunId, getPromptLogStats } from "@/lib/lakebase/prompt-logs";
 import { getRunById } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   let runId: string | undefined;
   try {
@@ -30,10 +27,7 @@ export async function GET(
         runId,
         route: "/api/runs/[runId]/prompt-logs",
       });
-      return NextResponse.json(
-        { error: "Invalid run ID format" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
     const run = await getRunById(runId);
@@ -57,9 +51,6 @@ export async function GET(
       route: "/api/runs/[runId]/prompt-logs",
       runId,
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

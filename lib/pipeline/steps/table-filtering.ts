@@ -9,7 +9,12 @@
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { updateRunMessage, updateRunFilteredTables, getSchemaSnapshot, updateSchemaSnapshot } from "@/lib/lakebase/runs";
+import {
+  updateRunMessage,
+  updateRunFilteredTables,
+  getSchemaSnapshot,
+  updateSchemaSnapshot,
+} from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import type { ColumnInfo, PipelineContext, TableInfo } from "@/lib/domain/types";
 
@@ -23,23 +28,22 @@ export interface TableClassification {
 const BATCH_SIZE = 100; // tables per Model Serving call
 const MAX_COLUMNS_PER_TABLE = 8; // top columns shown to aid classification
 const MAX_FILTER_RETRIES = 2;
-const TECHNICAL_TABLE_RE = /(logs?|audit|changelog|snapshot|backup|monitor|health|debug|error|etl|pipeline|staging|temp|tmp|config|setting|metric)/i;
+const TECHNICAL_TABLE_RE =
+  /(logs?|audit|changelog|snapshot|backup|monitor|health|debug|error|etl|pipeline|staging|temp|tmp|config|setting|metric)/i;
 
 /**
  * Build a markdown table list for the prompt, including top column names
  * to improve classification accuracy.
  */
-function buildTablesMarkdown(
-  tables: TableInfo[],
-  columnsByTable: Map<string, string[]>
-): string {
+function buildTablesMarkdown(tables: TableInfo[], columnsByTable: Map<string, string[]>): string {
   return tables
     .map((t) => {
       const comment = t.comment ? ` -- ${t.comment}` : "";
       const cols = columnsByTable.get(t.fqn);
-      const colHint = cols && cols.length > 0
-        ? ` [columns: ${cols.slice(0, MAX_COLUMNS_PER_TABLE).join(", ")}${cols.length > MAX_COLUMNS_PER_TABLE ? ", ..." : ""}]`
-        : "";
+      const colHint =
+        cols && cols.length > 0
+          ? ` [columns: ${cols.slice(0, MAX_COLUMNS_PER_TABLE).join(", ")}${cols.length > MAX_COLUMNS_PER_TABLE ? ", ..." : ""}]`
+          : "";
       return `- ${t.fqn} (${t.tableType})${comment}${colHint}`;
     })
     .join("\n");
@@ -61,10 +65,7 @@ function buildColumnIndex(columns: ColumnInfo[]): Map<string, string[]> {
   return index;
 }
 
-export async function runTableFiltering(
-  ctx: PipelineContext,
-  runId?: string
-): Promise<string[]> {
+export async function runTableFiltering(ctx: PipelineContext, runId?: string): Promise<string[]> {
   const { run, metadata } = ctx;
   if (!metadata) throw new Error("Metadata not available for table filtering");
   if (!run.businessContext) throw new Error("Business context not available");
@@ -74,7 +75,11 @@ export async function runTableFiltering(
 
   // If very few tables, skip filtering -- include all
   if (tables.length <= 5) {
-    if (runId) await updateRunMessage(runId, `Skipping filter — only ${tables.length} tables, including all`);
+    if (runId)
+      await updateRunMessage(
+        runId,
+        `Skipping filter — only ${tables.length} tables, including all`,
+      );
     return tables.map((t) => t.fqn);
   }
 
@@ -86,7 +91,8 @@ export async function runTableFiltering(
   for (let i = 0; i < tables.length; i += BATCH_SIZE) {
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     const batch = tables.slice(i, i + BATCH_SIZE);
-    if (runId) await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
+    if (runId)
+      await updateRunMessage(runId, `Filtering tables (batch ${batchNum} of ${totalBatches})...`);
     try {
       const { filteredFqns, classifications } = await filterBatchWithRetry(
         batch,
@@ -140,10 +146,15 @@ export async function runTableFiltering(
   const lineageFqns = new Set(metadata.lineageDiscoveredFqns ?? []);
   const selectedCount = businessTables.filter((fqn) => !lineageFqns.has(fqn)).length;
   const lineageCount = businessTables.filter((fqn) => lineageFqns.has(fqn)).length;
-  const lineageNote = lineageCount > 0
-    ? `: ${selectedCount} from your selection + ${lineageCount} discovered via lineage`
-    : "";
-  if (runId) await updateRunMessage(runId, `Identified ${businessTables.length} business-relevant tables out of ${tables.length}${lineageNote}`);
+  const lineageNote =
+    lineageCount > 0
+      ? `: ${selectedCount} from your selection + ${lineageCount} discovered via lineage`
+      : "";
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Identified ${businessTables.length} business-relevant tables out of ${tables.length}${lineageNote}`,
+    );
 
   logger.info("Table filtering complete", {
     businessTables: businessTables.length,
@@ -170,16 +181,20 @@ async function filterBatchWithRetry(
     } catch (err) {
       lastError = err;
       if (attempt < MAX_FILTER_RETRIES) {
-        logger.warn("Retrying table filtering batch", { attempt: attempt + 1, maxRetries: MAX_FILTER_RETRIES });
+        logger.warn("Retrying table filtering batch", {
+          attempt: attempt + 1,
+          maxRetries: MAX_FILTER_RETRIES,
+        });
       }
     }
   }
-  throw (lastError instanceof Error ? lastError : new Error("Table filtering failed after retries"));
+  throw lastError instanceof Error ? lastError : new Error("Table filtering failed after retries");
 }
 
-function deterministicFallbackClassify(
-  tables: TableInfo[],
-): { filteredFqns: string[]; classifications: TableClassification[] } {
+function deterministicFallbackClassify(tables: TableInfo[]): {
+  filteredFqns: string[];
+  classifications: TableClassification[];
+} {
   const classifications: TableClassification[] = [];
   const filteredFqns: string[] = [];
   for (const t of tables) {
@@ -222,7 +237,7 @@ async function filterBatch(
   businessName: string,
   businessContext: { industries: string },
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<{ filteredFqns: string[]; classifications: TableClassification[] }> {
   const result = await executeAIQuery({
     promptKey: "FILTER_BUSINESS_TABLES_PROMPT",

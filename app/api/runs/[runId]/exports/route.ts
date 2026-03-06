@@ -14,7 +14,7 @@ import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   let runId: string | undefined;
   try {
@@ -27,10 +27,7 @@ export async function GET(
         runId,
         route: "/api/runs/[runId]/exports",
       });
-      return NextResponse.json(
-        { error: "Invalid run ID format" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
     const run = await getRunById(runId);
@@ -51,9 +48,6 @@ export async function GET(
       route: "/api/runs/[runId]/exports",
       runId,
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

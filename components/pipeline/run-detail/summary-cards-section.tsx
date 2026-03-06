@@ -30,9 +30,7 @@ export function SummaryCardsSection({
       />
       <SummaryCard
         title="Domains"
-        value={String(
-          new Set(useCases.map((uc) => uc.domain)).size
-        )}
+        value={String(new Set(useCases.map((uc) => uc.domain)).size)}
         tip={RUN_DETAIL.domainCount}
         onClick={() => {
           onOverviewClick();
@@ -41,9 +39,7 @@ export function SummaryCardsSection({
       />
       <SummaryCard
         title="AI Use Cases"
-        value={String(
-          useCases.filter((uc) => uc.type === "AI").length
-        )}
+        value={String(useCases.filter((uc) => uc.type === "AI").length)}
         tip={RUN_DETAIL.aiUseCases}
         onClick={onUseCasesClick}
       />
@@ -52,12 +48,8 @@ export function SummaryCardsSection({
         value={
           useCases.length > 0
             ? `${Math.round(
-                (useCases.reduce(
-                  (s, uc) => s + effectiveScores(uc).overall,
-                  0
-                ) /
-                  useCases.length) *
-                  100
+                (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / useCases.length) *
+                  100,
               )}%`
             : "N/A"
         }

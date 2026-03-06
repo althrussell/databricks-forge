@@ -64,21 +64,31 @@ export interface BuildMetadataGenieSpaceOpts {
   questionComplexity?: QuestionComplexity;
 }
 
-export function buildMetadataGenieSpace(
-  opts: BuildMetadataGenieSpaceOpts
-): SerializedSpace {
-  const { viewTarget, outcomeMap, llmDetection, catalogScope, lineageAccessible, questionComplexity } = opts;
+export function buildMetadataGenieSpace(opts: BuildMetadataGenieSpaceOpts): SerializedSpace {
+  const {
+    viewTarget,
+    outcomeMap,
+    llmDetection,
+    catalogScope,
+    lineageAccessible,
+    questionComplexity,
+  } = opts;
   const prefix = `${viewTarget.catalog}.${viewTarget.schema}`;
   const hasLineage = lineageAccessible === true;
 
   const tables = buildDataSourceTables(prefix, hasLineage);
   const joinSpecs = buildJoinSpecs(prefix);
-  const sampleQuestions = buildSampleQuestions(outcomeMap, llmDetection, hasLineage, questionComplexity);
+  const sampleQuestions = buildSampleQuestions(
+    outcomeMap,
+    llmDetection,
+    hasLineage,
+    questionComplexity,
+  );
   const textInstructions = buildTextInstructions(
     outcomeMap,
     llmDetection,
     catalogScope,
-    hasLineage
+    hasLineage,
   );
   const exampleSqls = buildExampleSqls(prefix, outcomeMap, llmDetection, hasLineage);
   const sqlSnippets = buildSqlSnippets(prefix, outcomeMap, hasLineage);
@@ -253,7 +263,9 @@ export function buildPreviewQuestions(
     }
 
     for (const sv of (outcomeMap.subVerticals ?? []).slice(0, 2)) {
-      questions.push(level === "simple" ? `What ${sv} data do we have?` : `What data is specific to ${sv}?`);
+      questions.push(
+        level === "simple" ? `What ${sv} data do we have?` : `What data is specific to ${sv}?`,
+      );
     }
   } else if (llmDetection.domains.length > 0) {
     for (const domain of llmDetection.domains.slice(0, 5)) {
@@ -268,7 +280,7 @@ export function buildPreviewQuestions(
         "Which tables have no description?",
         "Are any tables duplicated?",
         "What tables were created recently?",
-        "Which schemas have the most tables?"
+        "Which schemas have the most tables?",
       );
       break;
     case "medium":
@@ -277,7 +289,7 @@ export function buildPreviewQuestions(
         "Do we have any tables without descriptions?",
         "What tables might be duplicated across schemas?",
         "What are the most recently created tables?",
-        "Which schemas have the most tables?"
+        "Which schemas have the most tables?",
       );
       break;
     case "complex":
@@ -286,7 +298,7 @@ export function buildPreviewQuestions(
         "What data quality issues exist across the estate?",
         "Which tables have overlapping schemas or redundant structures?",
         "What are the most recently created tables and who owns them?",
-        "Which schemas have the most tables and what is their lineage coverage?"
+        "Which schemas have the most tables and what is their lineage coverage?",
       );
       break;
   }
@@ -297,10 +309,16 @@ export function buildPreviewQuestions(
         questions.push("Where does this data come from?", "What depends on this data?");
         break;
       case "medium":
-        questions.push("Where does this table get its data from?", "What downstream tables depend on our data?");
+        questions.push(
+          "Where does this table get its data from?",
+          "What downstream tables depend on our data?",
+        );
         break;
       case "complex":
-        questions.push("What is the full upstream lineage for this table?", "What downstream dependencies and impact paths exist?");
+        questions.push(
+          "What is the full upstream lineage for this table?",
+          "What downstream dependencies and impact paths exist?",
+        );
         break;
     }
   }
@@ -329,13 +347,13 @@ function buildTextInstructions(
   outcomeMap: IndustryOutcome | null | undefined,
   llmDetection: IndustryDetectionResult,
   catalogScope?: string[],
-  hasLineage?: boolean
+  hasLineage?: boolean,
 ): TextInstruction[] {
   const parts: string[] = [];
 
   parts.push(
     "You are a metadata exploration assistant helping business analysts discover and understand their data estate. " +
-      "Answer questions about what data exists, where it is stored, its structure, and how it is organised."
+      "Answer questions about what data exists, where it is stored, its structure, and how it is organised.",
   );
 
   if (outcomeMap) {
@@ -343,56 +361,50 @@ function buildTextInstructions(
       `This data estate belongs to the ${outcomeMap.name} industry.` +
         (outcomeMap.subVerticals?.length
           ? ` Sub-verticals include: ${outcomeMap.subVerticals.join(", ")}.`
-          : "")
+          : ""),
     );
     if (outcomeMap.suggestedDomains.length > 0) {
-      parts.push(
-        `Key business domains: ${outcomeMap.suggestedDomains.join(", ")}.`
-      );
+      parts.push(`Key business domains: ${outcomeMap.suggestedDomains.join(", ")}.`);
     }
   } else if (llmDetection.industries) {
     parts.push(`Detected industries: ${llmDetection.industries}.`);
     if (llmDetection.domains.length > 0) {
-      parts.push(
-        `Key business domains: ${llmDetection.domains.join(", ")}.`
-      );
+      parts.push(`Key business domains: ${llmDetection.domains.join(", ")}.`);
     }
   }
 
   if (catalogScope && catalogScope.length > 0) {
-    parts.push(
-      `This space is scoped to the following catalogs: ${catalogScope.join(", ")}.`
-    );
+    parts.push(`This space is scoped to the following catalogs: ${catalogScope.join(", ")}.`);
   }
 
   parts.push(
     "When searching for business-relevant tables, look at both table names and their comments/descriptions. " +
-      "Tables without comments may still contain important data — infer purpose from naming conventions."
+      "Tables without comments may still contain important data — infer purpose from naming conventions.",
   );
 
   parts.push(
-    "The data_source_format column indicates the storage format (DELTA, PARQUET, CSV, JSON, etc.). DELTA is the default managed format in Databricks."
+    "The data_source_format column indicates the storage format (DELTA, PARQUET, CSV, JSON, etc.). DELTA is the default managed format in Databricks.",
   );
 
   parts.push(
-    "table_type can be MANAGED, EXTERNAL, or VIEW. MANAGED tables are fully governed by Unity Catalog. EXTERNAL tables reference data stored outside Unity Catalog."
+    "table_type can be MANAGED, EXTERNAL, or VIEW. MANAGED tables are fully governed by Unity Catalog. EXTERNAL tables reference data stored outside Unity Catalog.",
   );
 
   parts.push(
     "Tags from mdg_table_tags and mdg_column_tags provide classifications like PII sensitivity, data quality tier, or domain labels. " +
-      "Use them to find sensitive or categorised data."
+      "Use them to find sensitive or categorised data.",
   );
 
   parts.push(
     "When a user asks about a table by business name, search both the table_name and comment columns using LIKE with wildcards. " +
-      "If multiple matches are found, present all of them and ask the user to clarify which one they mean."
+      "If multiple matches are found, present all of them and ask the user to clarify which one they mean.",
   );
 
   if (hasLineage) {
     parts.push(
       "The mdg_lineage view shows data flow between tables. " +
         "source_table_full_name and target_table_full_name are fully qualified names (catalog.schema.table). " +
-        "To join with mdg_tables, use CONCAT(table_catalog, '.', table_schema, '.', table_name) = source_table_full_name or target_table_full_name."
+        "To join with mdg_tables, use CONCAT(table_catalog, '.', table_schema, '.', table_name) = source_table_full_name or target_table_full_name.",
     );
   }
 
@@ -412,7 +424,7 @@ function buildExampleSqls(
   prefix: string,
   outcomeMap: IndustryOutcome | null | undefined,
   llmDetection: IndustryDetectionResult,
-  hasLineage?: boolean
+  hasLineage?: boolean,
 ): ExampleQuestionSql[] {
   const examples: ExampleQuestionSql[] = [];
 
@@ -446,9 +458,7 @@ function buildExampleSqls(
 
   examples.push({
     id: randomUUID(),
-    question: [
-      `What tables contain ${searchTerm} data?`,
-    ],
+    question: [`What tables contain ${searchTerm} data?`],
     sql: [
       `SELECT table_catalog, table_schema, table_name, comment FROM ${prefix}.mdg_tables WHERE LOWER(table_name) LIKE '%${searchTerm}%' OR LOWER(comment) LIKE '%${searchTerm}%' ORDER BY table_catalog, table_schema, table_name`,
     ],
@@ -522,23 +532,19 @@ function buildExampleSqls(
 function buildSqlSnippets(
   prefix: string,
   outcomeMap: IndustryOutcome | null | undefined,
-  hasLineage?: boolean
+  hasLineage?: boolean,
 ): SqlSnippets {
   const measures: SqlSnippetMeasure[] = [
     {
       id: randomUUID(),
       alias: "table_count_per_schema",
-      sql: [
-        `COUNT(*) FROM ${prefix}.mdg_tables GROUP BY table_catalog, table_schema`,
-      ],
+      sql: [`COUNT(*) FROM ${prefix}.mdg_tables GROUP BY table_catalog, table_schema`],
       synonyms: ["tables per schema", "schema size"],
     },
     {
       id: randomUUID(),
       alias: "column_count_per_table",
-      sql: [
-        `COUNT(*) FROM ${prefix}.mdg_columns GROUP BY table_catalog, table_schema, table_name`,
-      ],
+      sql: [`COUNT(*) FROM ${prefix}.mdg_columns GROUP BY table_catalog, table_schema, table_name`],
       synonyms: ["columns per table", "table width"],
     },
     {
@@ -630,9 +636,7 @@ function buildSqlSnippets(
     for (const domain of outcomeMap.suggestedDomains.slice(0, 3)) {
       filters.push({
         id: randomUUID(),
-        sql: [
-          `LOWER(table_name) LIKE '%${domain.toLowerCase().replace(/\s+/g, "_")}%'`,
-        ],
+        sql: [`LOWER(table_name) LIKE '%${domain.toLowerCase().replace(/\s+/g, "_")}%'`],
         display_name: `Tables related to ${domain}`,
         synonyms: [domain.toLowerCase()],
       });
@@ -706,11 +710,7 @@ function buildSqlSnippets(
 // ---------------------------------------------------------------------------
 
 function buildBenchmarks(prefix: string): BenchmarkQuestion[] {
-  const bq = (
-    question: string,
-    sql: string,
-    alternates: string[]
-  ): BenchmarkQuestion[] => {
+  const bq = (question: string, sql: string, alternates: string[]): BenchmarkQuestion[] => {
     return [question, ...alternates].map((q) => ({
       id: randomUUID(),
       question: [q],
@@ -722,32 +722,32 @@ function buildBenchmarks(prefix: string): BenchmarkQuestion[] {
     ...bq(
       "How many tables do we have?",
       `SELECT COUNT(*) AS total_tables FROM ${prefix}.mdg_tables`,
-      ["total number of tables", "count all tables"]
+      ["total number of tables", "count all tables"],
     ),
     ...bq(
       "Which schemas have the most tables?",
       `SELECT table_catalog, table_schema, COUNT(*) AS table_count FROM ${prefix}.mdg_tables GROUP BY table_catalog, table_schema ORDER BY table_count DESC LIMIT 20`,
-      ["largest schemas", "biggest schemas by table count"]
+      ["largest schemas", "biggest schemas by table count"],
     ),
     ...bq(
       "Show undocumented tables",
       `SELECT table_catalog, table_schema, table_name, table_type FROM ${prefix}.mdg_tables WHERE comment IS NULL OR TRIM(comment) = '' ORDER BY table_catalog, table_schema, table_name`,
-      ["tables without descriptions", "missing comments", "tables with no description"]
+      ["tables without descriptions", "missing comments", "tables with no description"],
     ),
     ...bq(
       "What data formats are used?",
       `SELECT data_source_format, COUNT(*) AS table_count FROM ${prefix}.mdg_tables WHERE data_source_format IS NOT NULL GROUP BY data_source_format ORDER BY table_count DESC`,
-      ["delta vs parquet", "storage formats", "table formats"]
+      ["delta vs parquet", "storage formats", "table formats"],
     ),
     ...bq(
       "Who owns the most tables?",
       `SELECT table_owner, COUNT(*) AS table_count FROM ${prefix}.mdg_tables GROUP BY table_owner ORDER BY table_count DESC LIMIT 20`,
-      ["table owners", "top table owners"]
+      ["table owners", "top table owners"],
     ),
     ...bq(
       "What catalogs do we have?",
       `SELECT catalog_name, catalog_owner, comment FROM ${prefix}.mdg_catalogs ORDER BY catalog_name`,
-      ["list catalogs", "show all catalogs", "available catalogs"]
+      ["list catalogs", "show all catalogs", "available catalogs"],
     ),
   ];
 }

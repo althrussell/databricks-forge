@@ -2,13 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 
 export default function Error({
@@ -31,21 +25,18 @@ export default function Error({
           </div>
           <CardTitle>Something went wrong</CardTitle>
           <CardDescription>
-            An unexpected error occurred. You can try again or go back to the
-            dashboard.
+            An unexpected error occurred. You can try again or go back to the dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-md bg-muted p-3 text-sm font-mono text-muted-foreground">
             {error.message || "Unknown error"}
             {error.digest && (
-              <span className="block mt-1 text-xs opacity-60">
-                Error ID: {error.digest}
-              </span>
+              <span className="block mt-1 text-xs opacity-60">Error ID: {error.digest}</span>
             )}
           </div>
           <div className="flex justify-center gap-3">
-            <Button variant="outline" onClick={() => window.location.href = "/"}>
+            <Button variant="outline" onClick={() => (window.location.href = "/")}>
               Dashboard
             </Button>
             <Button onClick={() => reset()}>Try Again</Button>

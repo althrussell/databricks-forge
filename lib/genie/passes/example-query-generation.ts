@@ -1,7 +1,11 @@
 import { type ChatMessage } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "../llm-cache";
 import { parseLLMJson } from "./parse-llm-json";
-import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import {
+  buildSchemaContextBlock,
+  validateSqlExpression,
+  type SchemaAllowlist,
+} from "../schema-allowlist";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import type { TrustedAssetQuery, QuestionComplexity, JoinSpecInput } from "../types";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
@@ -42,7 +46,11 @@ function humanize(columnName: string): string {
   return columnName.replace(/_/g, " ");
 }
 
-function buildGroupQuestion(groupCol: string, domain: string, complexity: QuestionComplexity): string {
+function buildGroupQuestion(
+  groupCol: string,
+  domain: string,
+  complexity: QuestionComplexity,
+): string {
   const col = humanize(groupCol);
   switch (complexity) {
     case "simple":
@@ -54,7 +62,11 @@ function buildGroupQuestion(groupCol: string, domain: string, complexity: Questi
   }
 }
 
-function buildJoinQuestion(leftName: string, rightName: string, complexity: QuestionComplexity): string {
+function buildJoinQuestion(
+  leftName: string,
+  rightName: string,
+  complexity: QuestionComplexity,
+): string {
   switch (complexity) {
     case "simple":
       return `How are ${humanize(leftName)} and ${humanize(rightName)} related?`;
@@ -86,8 +98,13 @@ export function buildDeterministicExampleQueries(
 
   for (const table of tableFqns.slice(0, 3)) {
     const cols = colsByTable.get(table.toLowerCase()) ?? [];
-    const timeCol = cols.find((c) => DATE_TYPE_PATTERN.test(c.dataType) && isSafeColumnName(c.columnName, sensitiveColumns));
-    const numericCol = cols.find((c) => NUMERIC_TYPE_PATTERN.test(c.dataType) && isSafeColumnName(c.columnName, sensitiveColumns));
+    const timeCol = cols.find(
+      (c) => DATE_TYPE_PATTERN.test(c.dataType) && isSafeColumnName(c.columnName, sensitiveColumns),
+    );
+    const numericCol = cols.find(
+      (c) =>
+        NUMERIC_TYPE_PATTERN.test(c.dataType) && isSafeColumnName(c.columnName, sensitiveColumns),
+    );
     const groupCol = cols.find(
       (c) =>
         !DATE_TYPE_PATTERN.test(c.dataType) &&
@@ -156,7 +173,10 @@ function getQuestionStyleDirective(complexity: QuestionComplexity): string {
   }
 }
 
-async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint: string): Promise<TrustedAssetQuery[]> {
+async function generateWithEndpoint(
+  input: ExampleQueryGenerationInput,
+  endpoint: string,
+): Promise<TrustedAssetQuery[]> {
   const complexity = input.questionComplexity ?? "simple";
   const schemaBlock = buildSchemaContextBlock(input.metadata, input.tableFqns);
   const joinBlock = input.joinSpecs
@@ -169,7 +189,7 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
       role: "system",
       content:
         "You generate Databricks SQL example questions for a Genie data space.\n" +
-        "Output strict JSON: {\"queries\":[{\"question\":\"...\",\"sql\":\"...\"}]}\n" +
+        'Output strict JSON: {"queries":[{"question":"...","sql":"..."}]}\n' +
         "Rules: only use schema identifiers provided, avoid sensitive columns (email/phone/ssn/address/dob and classified sensitive columns), max 6 queries.\n" +
         `Question style: ${getQuestionStyleDirective(complexity)}`,
     },
@@ -192,7 +212,10 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
     responseFormat: "json_object",
     signal: input.signal,
   });
-  const parsed = parseLLMJson(response.content ?? "", "genie:example-queries") as Record<string, unknown>;
+  const parsed = parseLLMJson(response.content ?? "", "genie:example-queries") as Record<
+    string,
+    unknown
+  >;
   const rawQueries = Array.isArray(parsed.queries) ? parsed.queries : [];
   let queries = (rawQueries as Record<string, unknown>[])
     .map((q) => ({
@@ -201,7 +224,9 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
       parameters: [],
     }))
     .filter((q) => q.question.length > 0 && q.sql.length > 0)
-    .filter((q) => validateSqlExpression(input.allowlist, q.sql, `example_query:${q.question}`, true))
+    .filter((q) =>
+      validateSqlExpression(input.allowlist, q.sql, `example_query:${q.question}`, true),
+    )
     .slice(0, MAX_QUERIES);
 
   if (isReviewEnabled("genie-example-queries") && queries.length > 0) {
@@ -213,7 +238,14 @@ async function generateWithEndpoint(input: ExampleQueryGenerationInput, endpoint
           surface: "genie-example-queries",
         });
         if (review.fixedSql) {
-          if (validateSqlExpression(input.allowlist, review.fixedSql, `example_query_fix:${q.question}`, true)) {
+          if (
+            validateSqlExpression(
+              input.allowlist,
+              review.fixedSql,
+              `example_query_fix:${q.question}`,
+              true,
+            )
+          ) {
             return { ...q, sql: review.fixedSql };
           }
         }

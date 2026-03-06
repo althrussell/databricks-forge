@@ -53,7 +53,7 @@ export async function archiveCurrentPromptTemplates(): Promise<void> {
  * Retrieve a prompt template by its version hash.
  */
 export async function getPromptTemplate(
-  versionHash: string
+  versionHash: string,
 ): Promise<{ promptKey: string; templateText: string; charCount: number } | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgePromptTemplate.findUnique({
@@ -72,7 +72,7 @@ export async function getPromptTemplate(
  * Retrieve multiple prompt templates by their version hashes (batch).
  */
 export async function getPromptTemplatesBatch(
-  versionHashes: string[]
+  versionHashes: string[],
 ): Promise<Map<string, { promptKey: string; templateText: string }>> {
   if (versionHashes.length === 0) return new Map();
   return withPrisma(async (prisma) => {

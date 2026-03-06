@@ -151,10 +151,14 @@ export async function getConversationWithMessages(
         let referencedTables: string[] | undefined;
         try {
           if (log.sourcesJson) sources = JSON.parse(log.sourcesJson);
-        } catch { /* ignore malformed JSON */ }
+        } catch {
+          /* ignore malformed JSON */
+        }
         try {
           if (log.referencedTablesJson) referencedTables = JSON.parse(log.referencedTablesJson);
-        } catch { /* ignore malformed JSON */ }
+        } catch {
+          /* ignore malformed JSON */
+        }
 
         messages.push({
           id: `${log.id}-a`,
@@ -211,10 +215,7 @@ export async function updateConversationTitle(
  * Delete a conversation and its associated logs.
  * Returns false if not found or not owned by userId.
  */
-export async function deleteConversation(
-  conversationId: string,
-  userId: string,
-): Promise<boolean> {
+export async function deleteConversation(conversationId: string, userId: string): Promise<boolean> {
   return withPrisma(async (prisma) => {
     const conv = await prisma.forgeConversation.findUnique({
       where: { id: conversationId },
@@ -277,9 +278,7 @@ export async function touchConversation(sessionId: string): Promise<void> {
 /**
  * Find a conversation by sessionId. Returns the conversation id or null.
  */
-export async function findConversationBySession(
-  sessionId: string,
-): Promise<string | null> {
+export async function findConversationBySession(sessionId: string): Promise<string | null> {
   return withPrisma(async (prisma) => {
     const conv = await prisma.forgeConversation.findUnique({
       where: { sessionId },

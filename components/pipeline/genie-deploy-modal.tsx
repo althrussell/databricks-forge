@@ -26,10 +26,7 @@ import {
   RefreshCw,
   Info,
 } from "lucide-react";
-import type {
-  GenieEngineRecommendation,
-  MetricViewProposal,
-} from "@/lib/genie/types";
+import type { GenieEngineRecommendation, MetricViewProposal } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
 
 // ---------------------------------------------------------------------------
@@ -145,10 +142,7 @@ export function GenieDeployModal({
   }, [domains]);
 
   // Default schema from first domain's tables
-  const defaultSchema = useMemo(
-    () => extractDefaultSchema(domains[0]?.tables ?? []),
-    [domains]
-  );
+  const defaultSchema = useMemo(() => extractDefaultSchema(domains[0]?.tables ?? []), [domains]);
 
   // Reset state on open transition (render-time adjustment avoids useEffect setState lint)
   const [prevOpen, setPrevOpen] = useState(false);
@@ -158,9 +152,7 @@ export function GenieDeployModal({
     setResults([]);
     setDeployLog([]);
     setIsRetry(false);
-    setSelectedAssets(
-      new Set(allAssets.filter((a) => !a.hasError).map((a) => a.id))
-    );
+    setSelectedAssets(new Set(allAssets.filter((a) => !a.hasError).map((a) => a.id)));
     setTargetSchema(defaultSchema ? [defaultSchema] : []);
   } else if (!open && prevOpen) {
     setPrevOpen(false);
@@ -214,7 +206,7 @@ export function GenieDeployModal({
   const hasAssets = allAssets.length > 0;
   const selectedCount = selectedAssets.size;
   const mvCount = allAssets.filter(
-    (a) => a.type === "metric_view" && selectedAssets.has(a.id)
+    (a) => a.type === "metric_view" && selectedAssets.has(a.id),
   ).length;
 
   // -------------------------------------------------------------------------
@@ -287,15 +279,14 @@ export function GenieDeployModal({
     setIsRetry(false);
 
     const schema = targetSchema[0] ?? defaultSchema;
-    const log = (msg: string) =>
-      setDeployLog((prev) => [...prev, msg]);
+    const log = (msg: string) => setDeployLog((prev) => [...prev, msg]);
 
     log(`Target schema: ${schema}`);
     log(`Deploying ${domains.length} domain(s)...`);
 
     const domainPayloads = domains.map((rec) => {
       const selectedMvs = parseMvProposals(rec).filter((mv) =>
-        selectedAssets.has(`mv:${rec.domain}:${mv.name}`)
+        selectedAssets.has(`mv:${rec.domain}:${mv.name}`),
       );
 
       return {
@@ -329,8 +320,7 @@ export function GenieDeployModal({
     setStep("deploying");
     setIsRetry(true);
     const prevLog = deployLog;
-    const log = (msg: string) =>
-      setDeployLog((prev) => [...prev, msg]);
+    const log = (msg: string) => setDeployLog((prev) => [...prev, msg]);
 
     setDeployLog([...prevLog, "", "--- Retrying failed assets ---"]);
 
@@ -344,7 +334,7 @@ export function GenieDeployModal({
       })
       .map((dr) => {
         const failedMvNames = new Set(
-          dr.assets.filter((a) => !a.success && a.type === "metric_view").map((a) => a.name)
+          dr.assets.filter((a) => !a.success && a.type === "metric_view").map((a) => a.name),
         );
 
         const rec = domains.find((d) => d.domain === dr.domain);
@@ -373,9 +363,7 @@ export function GenieDeployModal({
       return;
     }
 
-    const totalRetryAssets = retryPayloads.reduce(
-      (s, d) => s + d.metricViews.length, 0
-    );
+    const totalRetryAssets = retryPayloads.reduce((s, d) => s + d.metricViews.length, 0);
     log(`Retrying ${totalRetryAssets} failed asset(s) across ${retryPayloads.length} domain(s)...`);
 
     const retryResults = await callDeployApi(retryPayloads, schema, log);
@@ -387,9 +375,7 @@ export function GenieDeployModal({
 
         // Merge assets: replace failed ones with retry results, keep successes
         const retriedNames = new Set(retried.assets.map((a) => `${a.type}:${a.name}`));
-        const keptAssets = prev.assets.filter(
-          (a) => !retriedNames.has(`${a.type}:${a.name}`)
-        );
+        const keptAssets = prev.assets.filter((a) => !retriedNames.has(`${a.type}:${a.name}`));
         const mergedAssets = [...keptAssets, ...retried.assets];
 
         return {
@@ -424,11 +410,14 @@ export function GenieDeployModal({
   // -------------------------------------------------------------------------
 
   return (
-    <Dialog open={open} onOpenChange={(o) => {
-      if (step === "deploying") return;
-      if (!o && step === "done") onComplete();
-      onOpenChange(o);
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (step === "deploying") return;
+        if (!o && step === "done") onComplete();
+        onOpenChange(o);
+      }}
+    >
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -447,9 +436,17 @@ export function GenieDeployModal({
         <div className="flex items-center gap-1 text-xs text-muted-foreground px-1">
           <StepIndicator label="1. Assets" active={step === "select"} done={step !== "select"} />
           <ChevronRight className="h-3 w-3" />
-          <StepIndicator label="2. Schema" active={step === "schema"} done={step === "deploying" || step === "done"} />
+          <StepIndicator
+            label="2. Schema"
+            active={step === "schema"}
+            done={step === "deploying" || step === "done"}
+          />
           <ChevronRight className="h-3 w-3" />
-          <StepIndicator label="3. Deploy" active={step === "deploying" || step === "done"} done={step === "done"} />
+          <StepIndicator
+            label="3. Deploy"
+            active={step === "deploying" || step === "done"}
+            done={step === "done"}
+          />
         </div>
 
         <Separator />
@@ -476,12 +473,7 @@ export function GenieDeployModal({
           )}
 
           {(step === "deploying" || step === "done") && (
-            <DeployStep
-              deployLog={deployLog}
-              results={results}
-              step={step}
-              logEndRef={logEndRef}
-            />
+            <DeployStep deployLog={deployLog} results={results} step={step} logEndRef={logEndRef} />
           )}
         </div>
 
@@ -501,7 +493,11 @@ export function GenieDeployModal({
               ) : (
                 <Button
                   disabled={!defaultSchema}
-                  title={!defaultSchema ? "No target schema could be inferred — select assets first" : undefined}
+                  title={
+                    !defaultSchema
+                      ? "No target schema could be inferred — select assets first"
+                      : undefined
+                  }
                   onClick={() => {
                     setTargetSchema([defaultSchema]);
                     executeDeploy();
@@ -574,7 +570,12 @@ export function GenieDeployModal({
                   Retry Failed
                 </Button>
               )}
-              <Button onClick={() => { onComplete(); onOpenChange(false); }}>
+              <Button
+                onClick={() => {
+                  onComplete();
+                  onOpenChange(false);
+                }}
+              >
                 Close
               </Button>
             </>
@@ -589,15 +590,7 @@ export function GenieDeployModal({
 // Step indicator chip
 // ---------------------------------------------------------------------------
 
-function StepIndicator({
-  label,
-  active,
-  done,
-}: {
-  label: string;
-  active: boolean;
-  done: boolean;
-}) {
+function StepIndicator({ label, active, done }: { label: string; active: boolean; done: boolean }) {
   return (
     <span
       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -636,9 +629,7 @@ function SelectAssetsStep({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Layers className="h-8 w-8 text-muted-foreground mb-3" />
-        <p className="text-sm text-muted-foreground">
-          No metric views available to deploy.
-        </p>
+        <p className="text-sm text-muted-foreground">No metric views available to deploy.</p>
         <p className="text-xs text-muted-foreground mt-1">
           The Genie spaces will be created without additional assets.
         </p>
@@ -653,10 +644,7 @@ function SelectAssetsStep({
     <div className="space-y-3 py-2">
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <Checkbox
-            checked={allChecked}
-            onCheckedChange={toggleAll}
-          />
+          <Checkbox checked={allChecked} onCheckedChange={toggleAll} />
           <span className="text-xs font-medium">Select All</span>
         </div>
         <span className="text-xs text-muted-foreground">
@@ -666,15 +654,10 @@ function SelectAssetsStep({
 
       {Array.from(assetsByDomain.entries()).map(([domain, assets]) => (
         <div key={domain} className="rounded-md border">
-          <div className="bg-muted/30 px-3 py-1.5 text-xs font-medium">
-            {domain}
-          </div>
+          <div className="bg-muted/30 px-3 py-1.5 text-xs font-medium">{domain}</div>
           <div className="divide-y">
             {assets.map((asset) => (
-              <div
-                key={asset.id}
-                className="flex items-center gap-3 px-3 py-2"
-              >
+              <div key={asset.id} className="flex items-center gap-3 px-3 py-2">
                 <Checkbox
                   checked={selectedAssets.has(asset.id)}
                   onCheckedChange={() => toggleAsset(asset.id)}
@@ -682,9 +665,7 @@ function SelectAssetsStep({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono truncate">
-                      {asset.name}
-                    </code>
+                    <code className="text-xs font-mono truncate">{asset.name}</code>
                     <Badge
                       variant="outline"
                       className={`text-[9px] shrink-0 ${
@@ -734,8 +715,8 @@ function SchemaStep({
     <div className="space-y-3 py-2">
       <div className="px-1">
         <p className="text-xs text-muted-foreground">
-          Choose the target schema where metric views will be created.
-          The Genie space will reference these assets from this schema.
+          Choose the target schema where metric views will be created. The Genie space will
+          reference these assets from this schema.
         </p>
         {targetSchema.length > 0 && (
           <div className="mt-2 flex items-center gap-2">
@@ -782,7 +763,9 @@ function DeployStep({
             className={
               line.includes("ERROR") || line.includes("FAILED")
                 ? "text-destructive"
-                : line.includes("deployed") || line.includes("created") || line.includes("auto-fixed")
+                : line.includes("deployed") ||
+                    line.includes("created") ||
+                    line.includes("auto-fixed")
                   ? "text-green-600"
                   : line.includes("Stripped") || line.includes("Retry")
                     ? "text-amber-600"
@@ -821,9 +804,7 @@ function DeployStep({
                   )}
                   <span className="text-sm font-medium">{dr.domain}</span>
                   {dr.spaceId && !isDegraded && (
-                    <Badge className="bg-green-500/10 text-green-600 text-[9px]">
-                      Deployed
-                    </Badge>
+                    <Badge className="bg-green-500/10 text-green-600 text-[9px]">Deployed</Badge>
                   )}
                   {dr.spaceId && isDegraded && (
                     <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">
@@ -858,14 +839,15 @@ function DeployStep({
                         </Badge>
                         <span className="font-mono truncate">{ar.name}</span>
                         {ar.autoFixed && (
-                          <Badge variant="outline" className="text-[8px] shrink-0 border-amber-500/50 text-amber-600">
+                          <Badge
+                            variant="outline"
+                            className="text-[8px] shrink-0 border-amber-500/50 text-amber-600"
+                          >
                             auto-fixed
                           </Badge>
                         )}
                         {ar.error && (
-                          <span className="text-[10px] text-destructive truncate">
-                            {ar.error}
-                          </span>
+                          <span className="text-[10px] text-destructive truncate">{ar.error}</span>
                         )}
                       </div>
                     ))}
@@ -879,8 +861,8 @@ function DeployStep({
                         <Info className="h-3 w-3 shrink-0" />
                         <span className="truncate">
                           Removed metric view{" "}
-                          <code className="font-mono text-[10px]">{sr.identifier}</code>
-                          {" "}&mdash; {sr.reason}
+                          <code className="font-mono text-[10px]">{sr.identifier}</code> &mdash;{" "}
+                          {sr.reason}
                         </span>
                       </div>
                     ))}
@@ -888,9 +870,7 @@ function DeployStep({
                 )}
 
                 {dr.spaceError && (
-                  <p className="text-[10px] text-destructive mt-1 ml-6">
-                    {dr.spaceError}
-                  </p>
+                  <p className="text-[10px] text-destructive mt-1 ml-6">{dr.spaceError}</p>
                 )}
               </div>
             );

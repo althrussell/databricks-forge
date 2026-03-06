@@ -48,7 +48,9 @@ export function EmbeddingStatus() {
     }
   }, []);
 
-  React.useEffect(() => { fetchStats(); }, [fetchStats]);
+  React.useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   if (loading) return null;
 
@@ -99,9 +101,10 @@ export function EmbeddingStatus() {
       {expanded && stats && (
         <div className="border-t px-4 py-3">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {stats.byScope && Object.entries(stats.byScope).map(([scope, count]) => (
-              <ScopeStat key={scope} scope={scope} count={count as number} />
-            ))}
+            {stats.byScope &&
+              Object.entries(stats.byScope).map(([scope, count]) => (
+                <ScopeStat key={scope} scope={scope} count={count as number} />
+              ))}
           </div>
 
           {stats.byKind && Object.keys(stats.byKind).length > 0 && (

@@ -36,15 +36,11 @@ interface ImportNotebookOptions {
 /**
  * Import (create or update) a notebook in the Databricks workspace.
  */
-export async function importNotebook(
-  options: ImportNotebookOptions
-): Promise<void> {
+export async function importNotebook(options: ImportNotebookOptions): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/import`;
 
-  const base64Content = Buffer.from(options.content, "utf-8").toString(
-    "base64"
-  );
+  const base64Content = Buffer.from(options.content, "utf-8").toString("base64");
 
   const body = {
     path: options.path,
@@ -58,14 +54,12 @@ export async function importNotebook(
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify(body) },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
   );
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
-      `Workspace import failed (${response.status}): ${text}`
-    );
+    throw new Error(`Workspace import failed (${response.status}): ${text}`);
   }
 }
 
@@ -80,24 +74,19 @@ export async function mkdirs(path: string): Promise<void> {
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify({ path }) },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
   );
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
-      `Workspace mkdirs failed (${response.status}): ${text}`
-    );
+    throw new Error(`Workspace mkdirs failed (${response.status}): ${text}`);
   }
 }
 
 /**
  * Delete a workspace object (notebook or folder).
  */
-export async function deleteWorkspaceObject(
-  path: string,
-  recursive = false
-): Promise<void> {
+export async function deleteWorkspaceObject(path: string, recursive = false): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/workspace/delete`;
 
@@ -105,16 +94,14 @@ export async function deleteWorkspaceObject(
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify({ path, recursive }) },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
   );
 
   if (!response.ok) {
     const text = await response.text();
     // 404 is fine -- the object may not exist
     if (response.status !== 404) {
-      throw new Error(
-        `Workspace delete failed (${response.status}): ${text}`
-      );
+      throw new Error(`Workspace delete failed (${response.status}): ${text}`);
     }
   }
 }

@@ -45,8 +45,20 @@ export interface MigrationState {
   currentStep: MigrationStep | null;
   goldTables: Array<GoldTableProposal & { deployStatus: ArtifactStatus; error?: string }>;
   metricViews: Array<{ name: string; yaml: string; deployStatus: ArtifactStatus; error?: string }>;
-  dashboards: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
-  genieSpaces: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
+  dashboards: Array<{
+    name: string;
+    id?: string;
+    url?: string;
+    deployStatus: ArtifactStatus;
+    error?: string;
+  }>;
+  genieSpaces: Array<{
+    name: string;
+    id?: string;
+    url?: string;
+    deployStatus: ArtifactStatus;
+    error?: string;
+  }>;
   daxTranslations: DaxTranslation[];
   nameMapping: NameMapping[];
   rlsWarnings: RlsWarning[];
@@ -71,7 +83,7 @@ export async function runGoldSchemaStep(
   migrationId: string,
   scanId: string,
   targetCatalog: string,
-  targetSchema: string
+  targetSchema: string,
 ): Promise<MigrationState> {
   const scan = await getFabricScanDetail(scanId);
   if (!scan) throw new Error("Scan not found");
@@ -96,7 +108,10 @@ export async function runGoldSchemaStep(
 
   try {
     const proposal = await proposeGoldSchema(scan.datasets, targetCatalog, targetSchema);
-    state.goldTables = proposal.tables.map((t) => ({ ...t, deployStatus: "proposed" as ArtifactStatus }));
+    state.goldTables = proposal.tables.map((t) => ({
+      ...t,
+      deployStatus: "proposed" as ArtifactStatus,
+    }));
     state.nameMapping = proposal.nameMapping;
     state.warnings = proposal.warnings;
     state.rlsWarnings = extractRlsWarnings(scan.datasets, proposal.nameMapping);
@@ -105,7 +120,9 @@ export async function runGoldSchemaStep(
     return state;
   } catch (err) {
     state.status = "failed";
-    state.warnings.push(`Gold schema proposal failed: ${err instanceof Error ? err.message : String(err)}`);
+    state.warnings.push(
+      `Gold schema proposal failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     migrationStates.set(migrationId, state);
     throw err;
   }
@@ -126,7 +143,7 @@ export async function deployGoldTables(migrationId: string): Promise<MigrationSt
           await executeSQL(table.tagDdl, state.targetCatalog, state.targetSchema);
         } catch (tagErr) {
           state.warnings.push(
-            `Sensitivity tag failed for ${table.ucTableName}: ${tagErr instanceof Error ? tagErr.message : String(tagErr)}`
+            `Sensitivity tag failed for ${table.ucTableName}: ${tagErr instanceof Error ? tagErr.message : String(tagErr)}`,
           );
           logger.warn("[migration] Sensitivity tag DDL failed (non-fatal)", {
             table: table.ucTableName,
@@ -171,7 +188,7 @@ export async function runMetricViewStep(migrationId: string): Promise<MigrationS
     state.daxTranslations = await translateDaxMeasures(allMeasures, state.nameMapping);
 
     const successfulTranslations = state.daxTranslations.filter(
-      (t) => t.confidence !== "low" || !t.sqlExpression.startsWith("/*")
+      (t) => t.confidence !== "low" || !t.sqlExpression.startsWith("/*"),
     );
 
     const deployedTables = state.goldTables
@@ -202,14 +219,18 @@ export async function runMetricViewStep(migrationId: string): Promise<MigrationS
         logger.warn("[migration] Metric view engine call failed", {
           error: err instanceof Error ? err.message : String(err),
         });
-        state.warnings.push(`Metric view engine failed: ${err instanceof Error ? err.message : String(err)}`);
+        state.warnings.push(
+          `Metric view engine failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
     await persistMigrationState(state);
     return state;
   } catch (err) {
-    state.warnings.push(`Metric view step failed: ${err instanceof Error ? err.message : String(err)}`);
+    state.warnings.push(
+      `Metric view step failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     await persistMigrationState(state);
     throw err;
   }
@@ -273,7 +294,9 @@ export async function runDashboardStep(migrationId: string): Promise<MigrationSt
     await persistMigrationState(state);
     return state;
   } catch (err) {
-    state.warnings.push(`Dashboard step failed: ${err instanceof Error ? err.message : String(err)}`);
+    state.warnings.push(
+      `Dashboard step failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     await persistMigrationState(state);
     throw err;
   }
@@ -337,7 +360,7 @@ export async function runGenieStep(migrationId: string): Promise<MigrationState>
 // ---------------------------------------------------------------------------
 
 function extractMeasures(
-  datasets: FabricDataset[]
+  datasets: FabricDataset[],
 ): Array<{ name: string; expression: string; tableName: string }> {
   const measures: Array<{ name: string; expression: string; tableName: string }> = [];
   for (const ds of datasets) {
@@ -350,10 +373,7 @@ function extractMeasures(
   return measures;
 }
 
-function extractRlsWarnings(
-  datasets: FabricDataset[],
-  nameMapping: NameMapping[],
-): RlsWarning[] {
+function extractRlsWarnings(datasets: FabricDataset[], nameMapping: NameMapping[]): RlsWarning[] {
   const warnings: RlsWarning[] = [];
   const tableMap = new Map(
     nameMapping.filter((m) => m.source === "table").map((m) => [m.original, m.normalized]),

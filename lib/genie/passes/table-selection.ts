@@ -23,7 +23,7 @@ const TABLE_FQN_REGEX = /^[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*$/;
 export function runTableSelection(
   useCases: UseCase[],
   metadata: MetadataSnapshot,
-  config: GenieEngineConfig
+  config: GenieEngineConfig,
 ): DomainGroup[] {
   const maxTables = config.maxTablesPerSpace;
 
@@ -109,7 +109,7 @@ export function runTableSelection(
       if (parts.length >= 2) domainCatalogSchemas.add(`${parts[0]}.${parts[1]}`);
     }
     const metricViews = (metadata.metricViews ?? []).filter((mv) =>
-      domainCatalogSchemas.has(`${mv.catalog}.${mv.schema}`)
+      domainCatalogSchemas.has(`${mv.catalog}.${mv.schema}`),
     );
 
     // Collect subdomains

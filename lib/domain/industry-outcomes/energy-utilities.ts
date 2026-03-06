@@ -39,7 +39,12 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Production Optimization",
               description:
                 "Optimize energy production processes using real-time analytics and AI to maximize output and minimize waste.",
-              typicalDataEntities: ["Production Output", "Process Parameters", "Fuel Consumption", "Efficiency Metrics"],
+              typicalDataEntities: [
+                "Production Output",
+                "Process Parameters",
+                "Fuel Consumption",
+                "Efficiency Metrics",
+              ],
               typicalSourceSystems: ["SCADA", "Historian", "DCS"],
             },
             {
@@ -47,7 +52,11 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               description:
                 "Predict equipment failures across generation, transmission, and distribution assets to reduce unplanned downtime.",
               businessValue: "$6M infrastructure cost savings (Viessmann case).",
-              typicalDataEntities: ["IoT Sensor Readings", "Equipment Maintenance History", "Asset Registry"],
+              typicalDataEntities: [
+                "IoT Sensor Readings",
+                "Equipment Maintenance History",
+                "Asset Registry",
+              ],
               typicalSourceSystems: ["SCADA", "CMMS", "Asset Management System"],
             },
             {
@@ -61,8 +70,17 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Well Performance Optimization",
               description:
                 "Use subsurface data interpretation and ML to optimize oil and gas well performance and production rates.",
-              typicalDataEntities: ["Well Production Data", "Subsurface Logs", "Reservoir Models", "Completion Data"],
-              typicalSourceSystems: ["Historian", "Petroleum Data Management", "Reservoir Simulation"],
+              typicalDataEntities: [
+                "Well Production Data",
+                "Subsurface Logs",
+                "Reservoir Models",
+                "Completion Data",
+              ],
+              typicalSourceSystems: [
+                "Historian",
+                "Petroleum Data Management",
+                "Reservoir Simulation",
+              ],
             },
           ],
           kpis: [
@@ -71,11 +89,7 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
             "Energy loss reduction",
             "Maintenance cost savings",
           ],
-          personas: [
-            "VP Operations",
-            "Head of Asset Management",
-            "Chief Operating Officer",
-          ],
+          personas: ["VP Operations", "Head of Asset Management", "Chief Operating Officer"],
         },
         {
           name: "Asset Management & Safety",
@@ -84,7 +98,12 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Asset Health Monitoring",
               description:
                 "Monitor the condition of critical assets in real-time using IoT sensors and AI to prevent failures.",
-              typicalDataEntities: ["Sensor Readings", "Asset Configuration", "Condition Indicators", "Alarm History"],
+              typicalDataEntities: [
+                "Sensor Readings",
+                "Asset Configuration",
+                "Condition Indicators",
+                "Alarm History",
+              ],
               typicalSourceSystems: ["SCADA", "IoT Platform", "Asset Management System"],
             },
             {
@@ -93,27 +112,29 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
                 "Use ML models to predict safety incidents and enable preventive interventions.",
               businessValue:
                 "Predict dangerous well-bore influxes 45 minutes before they occur (NOV case).",
-              typicalDataEntities: ["Sensor Readings", "Operational Parameters", "Historical Incidents", "Risk Indicators"],
+              typicalDataEntities: [
+                "Sensor Readings",
+                "Operational Parameters",
+                "Historical Incidents",
+                "Risk Indicators",
+              ],
               typicalSourceSystems: ["SCADA", "DCS", "HSE System"],
             },
             {
               name: "Environmental Monitoring",
               description:
                 "Monitor emissions, leaks, and environmental impact in real-time for compliance and sustainability.",
-              typicalDataEntities: ["Emissions Readings", "Leak Detection Data", "Environmental Sensors", "Compliance Thresholds"],
+              typicalDataEntities: [
+                "Emissions Readings",
+                "Leak Detection Data",
+                "Environmental Sensors",
+                "Compliance Thresholds",
+              ],
               typicalSourceSystems: ["CEMS", "SCADA", "Environmental Management System"],
             },
           ],
-          kpis: [
-            "Safety incident reduction",
-            "Asset reliability",
-            "Environmental compliance",
-          ],
-          personas: [
-            "Head of HSE",
-            "VP Asset Integrity",
-            "Chief Safety Officer",
-          ],
+          kpis: ["Safety incident reduction", "Asset reliability", "Environmental compliance"],
+          personas: ["Head of HSE", "VP Asset Integrity", "Chief Safety Officer"],
         },
       ],
     },
@@ -129,27 +150,29 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               name: "ESG & Emissions Reporting",
               description:
                 "Automate Scope 1, 2, and 3 emissions tracking and ESG reporting using integrated data pipelines.",
-              typicalDataEntities: ["Emissions Data", "Energy Consumption", "Supply Chain Footprint", "ESG Metrics"],
+              typicalDataEntities: [
+                "Emissions Data",
+                "Energy Consumption",
+                "Supply Chain Footprint",
+                "ESG Metrics",
+              ],
               typicalSourceSystems: ["CEMS", "ERP", "Sustainability Platform"],
             },
             {
               name: "Regulatory Compliance Automation",
               description:
                 "Automate compliance with energy regulations across jurisdictions, reducing manual effort and risk.",
-              typicalDataEntities: ["Regulatory Requirements", "Compliance Evidence", "Audit Logs", "Reporting Schedules"],
+              typicalDataEntities: [
+                "Regulatory Requirements",
+                "Compliance Evidence",
+                "Audit Logs",
+                "Reporting Schedules",
+              ],
               typicalSourceSystems: ["ERP", "GRC Platform", "Regulatory Data Sources"],
             },
           ],
-          kpis: [
-            "Reporting accuracy",
-            "Compliance cost reduction",
-            "Emissions reduction tracking",
-          ],
-          personas: [
-            "Chief Sustainability Officer",
-            "VP Compliance",
-            "Chief Financial Officer",
-          ],
+          kpis: ["Reporting accuracy", "Compliance cost reduction", "Emissions reduction tracking"],
+          personas: ["Chief Sustainability Officer", "VP Compliance", "Chief Financial Officer"],
         },
         {
           name: "Enterprise Business Intelligence",
@@ -158,27 +181,29 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Energy Trading Analytics",
               description:
                 "Provide real-time analytics for energy trading decisions, incorporating market data, weather, and demand forecasts.",
-              typicalDataEntities: ["Market Prices", "Position Data", "Weather Forecasts", "Demand Forecasts"],
+              typicalDataEntities: [
+                "Market Prices",
+                "Position Data",
+                "Weather Forecasts",
+                "Demand Forecasts",
+              ],
               typicalSourceSystems: ["Trading Platform", "Market Data Feeds", "EMS"],
             },
             {
               name: "Financial Planning & Forecasting",
               description:
                 "Improve financial planning accuracy with AI-driven forecasting incorporating operational and market data.",
-              typicalDataEntities: ["Financial Actuals", "Operational Metrics", "Market Indicators", "Budget Plans"],
+              typicalDataEntities: [
+                "Financial Actuals",
+                "Operational Metrics",
+                "Market Indicators",
+                "Budget Plans",
+              ],
               typicalSourceSystems: ["ERP", "Trading Platform", "Planning System"],
             },
           ],
-          kpis: [
-            "Forecast accuracy",
-            "Decision speed",
-            "Cost-to-serve optimization",
-          ],
-          personas: [
-            "Chief Financial Officer",
-            "VP Trading",
-            "Head of Analytics",
-          ],
+          kpis: ["Forecast accuracy", "Decision speed", "Cost-to-serve optimization"],
+          personas: ["Chief Financial Officer", "VP Trading", "Head of Analytics"],
         },
       ],
     },
@@ -194,14 +219,24 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
               name: "Customer Demand Response",
               description:
                 "Optimize demand response programs using smart meter data and AI to balance grid load and reward customers.",
-              typicalDataEntities: ["Smart Meter Data", "Demand Response Events", "Customer Participation", "Grid Load"],
+              typicalDataEntities: [
+                "Smart Meter Data",
+                "Demand Response Events",
+                "Customer Participation",
+                "Grid Load",
+              ],
               typicalSourceSystems: ["MDM", "Demand Response Platform", "SCADA"],
             },
             {
               name: "Personalized Energy Recommendations",
               description:
                 "Provide personalized energy-saving recommendations to customers based on consumption patterns and building data.",
-              typicalDataEntities: ["Consumption History", "Building Attributes", "Weather Data", "Benchmark Comparisons"],
+              typicalDataEntities: [
+                "Consumption History",
+                "Building Attributes",
+                "Weather Data",
+                "Benchmark Comparisons",
+              ],
               typicalSourceSystems: ["MDM", "CRM", "Billing System"],
             },
           ],
@@ -210,11 +245,7 @@ export const ENERGY_UTILITIES: IndustryOutcome = {
             "Demand response participation",
             "Energy savings per customer",
           ],
-          personas: [
-            "VP Customer Experience",
-            "Head of Retail Energy",
-            "Chief Digital Officer",
-          ],
+          personas: ["VP Customer Experience", "Head of Retail Energy", "Chief Digital Officer"],
         },
       ],
     },

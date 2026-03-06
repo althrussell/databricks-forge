@@ -5,7 +5,8 @@ describe("Ask Forge evaluation framework", () => {
   it("scores grounded and cited responses highly", () => {
     const result = scoreAssistantResponse({
       question: "Which finance tables have stale writes?",
-      answer: "The most stale tables are `main.finance.ar_ledger` and `main.finance.ap_invoice` [1].",
+      answer:
+        "The most stale tables are `main.finance.ar_ledger` and `main.finance.ap_invoice` [1].",
       sourceCount: 3,
       retrievalTopScore: 0.82,
       sqlBlocks: [
@@ -37,7 +38,9 @@ describe("Ask Forge evaluation framework", () => {
       answer: "Use this maintenance statement [1].",
       sourceCount: 1,
       retrievalTopScore: 0.7,
-      sqlBlocks: ["DELETE FROM main.sales.orders WHERE order_date < date_sub(current_date(), 365);"],
+      sqlBlocks: [
+        "DELETE FROM main.sales.orders WHERE order_date < date_sub(current_date(), 365);",
+      ],
     });
 
     expect(result.actionSafetyScore).toBe(0);

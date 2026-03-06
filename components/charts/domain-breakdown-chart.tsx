@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface DomainBreakdownChartProps {
@@ -50,17 +43,12 @@ export function DomainBreakdownChart({
               outerRadius={70}
               paddingAngle={2}
               isAnimationActive={false}
-              label={({ name, value }) =>
-                data.length <= 6 ? `${name} (${value})` : `${value}`
-              }
+              label={({ name, value }) => (data.length <= 6 ? `${name} (${value})` : `${value}`)}
               labelLine={false}
               fontSize={10}
             >
               {data.map((_, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={CHART_COLORS[index % CHART_COLORS.length]}
-                />
+                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
               ))}
             </Pie>
             <Tooltip
@@ -74,11 +62,7 @@ export function DomainBreakdownChart({
               labelStyle={{ color: "var(--color-card-foreground)" }}
             />
             {data.length > 6 && (
-              <Legend
-                wrapperStyle={{ fontSize: 11 }}
-                iconType="circle"
-                iconSize={8}
-              />
+              <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
             )}
           </PieChart>
         </ResponsiveContainer>

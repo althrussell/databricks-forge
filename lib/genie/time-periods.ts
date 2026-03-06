@@ -14,8 +14,19 @@ import type { EnrichedSqlSnippetFilter, EnrichedSqlSnippetDimension } from "./ty
 const DATE_TYPE_PATTERN = /^(date|timestamp|datetime)/i;
 
 const MONTH_NAMES = [
-  "", "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 interface TimePeriodOptions {
@@ -37,7 +48,7 @@ interface TimePeriodResult {
 export function generateTimePeriods(
   columns: ColumnInfo[],
   tableFqns: string[],
-  options: TimePeriodOptions
+  options: TimePeriodOptions,
 ): TimePeriodResult {
   const fiscalYearStartMonth = Math.max(1, Math.min(12, options.fiscalYearStartMonth));
   const { targetDateColumns } = options;
@@ -45,9 +56,10 @@ export function generateTimePeriods(
   const filters: EnrichedSqlSnippetFilter[] = [];
   const dimensions: EnrichedSqlSnippetDimension[] = [];
 
-  const targetColSet = targetDateColumns && targetDateColumns.length > 0
-    ? new Set(targetDateColumns.map((c) => c.toLowerCase()))
-    : null;
+  const targetColSet =
+    targetDateColumns && targetDateColumns.length > 0
+      ? new Set(targetDateColumns.map((c) => c.toLowerCase()))
+      : null;
 
   const maxCols = options.maxDateColumns ?? 6;
 
@@ -70,12 +82,8 @@ export function generateTimePeriods(
     const colRef = `${tbl}.${quoteIdent(col.columnName)}`;
     const label = humanize(col.columnName);
 
-    filters.push(
-      ...generateFiltersForColumn(colRef, label, fiscalYearStartMonth)
-    );
-    dimensions.push(
-      ...generateDimensionsForColumn(colRef, label, fiscalYearStartMonth)
-    );
+    filters.push(...generateFiltersForColumn(colRef, label, fiscalYearStartMonth));
+    dimensions.push(...generateDimensionsForColumn(colRef, label, fiscalYearStartMonth));
   }
 
   return { filters, dimensions };
@@ -112,7 +120,7 @@ function prioritizeDateColumns(cols: ColumnInfo[]): ColumnInfo[] {
 function generateFiltersForColumn(
   colRef: string,
   label: string,
-  fiscalStart: number
+  fiscalStart: number,
 ): EnrichedSqlSnippetFilter[] {
   const fyStartName = MONTH_NAMES[fiscalStart];
 
@@ -147,9 +155,10 @@ function generateFiltersForColumn(
     },
     {
       name: `${label} Quarter to Date`,
-      sql: fiscalStart === 1
-        ? `${colRef} >= DATE_TRUNC('QUARTER', CURRENT_DATE())`
-        : buildFiscalQtdFilter(colRef, fiscalStart),
+      sql:
+        fiscalStart === 1
+          ? `${colRef} >= DATE_TRUNC('QUARTER', CURRENT_DATE())`
+          : buildFiscalQtdFilter(colRef, fiscalStart),
       synonyms: ["QTD", "this quarter", "current quarter"],
       instructions: `Filters from the start of the current fiscal quarter to today. Fiscal year starts in ${fyStartName}.`,
       isTimePeriod: true,
@@ -174,7 +183,7 @@ function generateFiltersForColumn(
 function generateDimensionsForColumn(
   colRef: string,
   label: string,
-  fiscalStart: number
+  fiscalStart: number,
 ): EnrichedSqlSnippetDimension[] {
   const fyStartName = MONTH_NAMES[fiscalStart];
 
@@ -188,18 +197,17 @@ function generateDimensionsForColumn(
     },
     {
       name: `${label} Quarter`,
-      sql: fiscalStart === 1
-        ? `DATE_TRUNC('QUARTER', ${colRef})`
-        : buildFiscalQuarterDimension(colRef, fiscalStart),
+      sql:
+        fiscalStart === 1
+          ? `DATE_TRUNC('QUARTER', ${colRef})`
+          : buildFiscalQuarterDimension(colRef, fiscalStart),
       synonyms: ["quarterly", "by quarter", "Q1", "Q2", "Q3", "Q4"],
       instructions: `Groups data by fiscal quarter. Fiscal year starts in ${fyStartName}.`,
       isTimePeriod: true,
     },
     {
       name: `${label} Year`,
-      sql: fiscalStart === 1
-        ? `YEAR(${colRef})`
-        : buildFiscalYearDimension(colRef, fiscalStart),
+      sql: fiscalStart === 1 ? `YEAR(${colRef})` : buildFiscalYearDimension(colRef, fiscalStart),
       synonyms: ["yearly", "annual", "by year"],
       instructions: `Groups data by fiscal year. Fiscal year starts in ${fyStartName}.`,
       isTimePeriod: true,

@@ -33,15 +33,14 @@ export interface ParseResult {
  */
 export async function parseOutcomeMapWithAI(
   markdown: string,
-  aiModel?: string
+  aiModel?: string,
 ): Promise<ParseResult> {
   const endpoint = aiModel || getFastServingEndpoint();
   // Truncate very large documents to avoid exceeding context windows
   const MAX_CHARS = 80_000;
   const truncated =
     markdown.length > MAX_CHARS
-      ? markdown.slice(0, MAX_CHARS) +
-        "\n\n[... document truncated for processing ...]"
+      ? markdown.slice(0, MAX_CHARS) + "\n\n[... document truncated for processing ...]"
       : markdown;
 
   try {
@@ -57,7 +56,10 @@ export async function parseOutcomeMapWithAI(
       step: "outcome-map-parse",
     });
 
-    const parsed = parseLLMJson(result.rawResponse, "outcome-map-parser") as Record<string, unknown>;
+    const parsed = parseLLMJson(result.rawResponse, "outcome-map-parser") as Record<
+      string,
+      unknown
+    >;
 
     // Validate required fields
     if (!parsed.id || !parsed.name || !Array.isArray(parsed.objectives)) {
@@ -90,9 +92,7 @@ export async function parseOutcomeMapWithAI(
 // ---------------------------------------------------------------------------
 
 function normalizeOutcome(raw: Record<string, unknown>): IndustryOutcome {
-  const objectives = Array.isArray(raw.objectives)
-    ? raw.objectives.map(normalizeObjective)
-    : [];
+  const objectives = Array.isArray(raw.objectives) ? raw.objectives.map(normalizeObjective) : [];
 
   return {
     id: String(raw.id ?? "custom"),
@@ -112,24 +112,18 @@ function normalizeObjective(raw: unknown): IndustryOutcome["objectives"][0] {
   return {
     name: String(obj.name ?? "Unknown"),
     whyChange: String(obj.whyChange ?? ""),
-    priorities: Array.isArray(obj.priorities)
-      ? obj.priorities.map(normalizePriority)
-      : [],
+    priorities: Array.isArray(obj.priorities) ? obj.priorities.map(normalizePriority) : [],
   };
 }
 
-function normalizePriority(
-  raw: unknown
-): IndustryOutcome["objectives"][0]["priorities"][0] {
+function normalizePriority(raw: unknown): IndustryOutcome["objectives"][0]["priorities"][0] {
   if (typeof raw !== "object" || raw === null) {
     return { name: "Unknown", useCases: [], kpis: [], personas: [] };
   }
   const obj = raw as Record<string, unknown>;
   return {
     name: String(obj.name ?? "Unknown"),
-    useCases: Array.isArray(obj.useCases)
-      ? obj.useCases.map(normalizeUseCase)
-      : [],
+    useCases: Array.isArray(obj.useCases) ? obj.useCases.map(normalizeUseCase) : [],
     kpis: normalizeStringArray(obj.kpis),
     personas: normalizeStringArray(obj.personas),
   };
@@ -168,7 +162,5 @@ function normalizeUseCase(raw: unknown): {
 
 function normalizeStringArray(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => String(item ?? "").trim())
-    .filter((s) => s.length > 0);
+  return raw.map((item) => String(item ?? "").trim()).filter((s) => s.length > 0);
 }

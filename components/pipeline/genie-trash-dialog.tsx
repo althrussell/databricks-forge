@@ -11,10 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  TrashPreviewSection,
-  type TrashPreview,
-} from "./genie-trash-preview";
+import { TrashPreviewSection, type TrashPreview } from "./genie-trash-preview";
 
 interface GenieTrashDialogProps {
   open: boolean;

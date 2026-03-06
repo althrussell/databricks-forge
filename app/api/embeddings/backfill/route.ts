@@ -19,7 +19,9 @@ import { logger } from "@/lib/logger";
 export async function POST() {
   if (!isEmbeddingEnabled()) {
     return NextResponse.json(
-      { error: "Embedding endpoint not configured (serving-endpoint-embedding resource not bound)" },
+      {
+        error: "Embedding endpoint not configured (serving-endpoint-embedding resource not bound)",
+      },
       { status: 503 },
     );
   }
@@ -86,10 +88,11 @@ async function ensurePgvectorSchema(): Promise<void> {
 // Backfill: Environment Scans
 // ---------------------------------------------------------------------------
 
-async function backfillScans(
-  results: { scans: { total: number; embedded: number; failed: number } },
-): Promise<void> {
-  const { listEnvironmentScans, getEnvironmentScan } = await import("@/lib/lakebase/environment-scans");
+async function backfillScans(results: {
+  scans: { total: number; embedded: number; failed: number };
+}): Promise<void> {
+  const { listEnvironmentScans, getEnvironmentScan } =
+    await import("@/lib/lakebase/environment-scans");
   const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
 
   const scans = await listEnvironmentScans(500, 0);
@@ -131,8 +134,20 @@ interface ColumnFromJson {
 
 function extractColumnsFromDetails(
   details: Array<{ tableFqn: string; columnsJson?: string | null }>,
-): Array<{ tableFqn: string; columnName: string; dataType: string; comment?: string; isNullable?: boolean }> {
-  const columns: Array<{ tableFqn: string; columnName: string; dataType: string; comment?: string; isNullable?: boolean }> = [];
+): Array<{
+  tableFqn: string;
+  columnName: string;
+  dataType: string;
+  comment?: string;
+  isNullable?: boolean;
+}> {
+  const columns: Array<{
+    tableFqn: string;
+    columnName: string;
+    dataType: string;
+    comment?: string;
+    isNullable?: boolean;
+  }> = [];
 
   for (const d of details) {
     if (!d.columnsJson) continue;
@@ -160,9 +175,9 @@ function extractColumnsFromDetails(
 // Backfill: Pipeline Runs
 // ---------------------------------------------------------------------------
 
-async function backfillRuns(
-  results: { runs: { total: number; embedded: number; failed: number } },
-): Promise<void> {
+async function backfillRuns(results: {
+  runs: { total: number; embedded: number; failed: number };
+}): Promise<void> {
   const { listRuns, getRunById } = await import("@/lib/lakebase/runs");
   const { getUseCasesByRunId } = await import("@/lib/lakebase/usecases");
   const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
@@ -196,9 +211,9 @@ async function backfillRuns(
 // Backfill: Genie Recommendations
 // ---------------------------------------------------------------------------
 
-async function backfillGenieRecs(
-  results: { genieRecs: { total: number; embedded: number; failed: number } },
-): Promise<void> {
+async function backfillGenieRecs(results: {
+  genieRecs: { total: number; embedded: number; failed: number };
+}): Promise<void> {
   const { listRuns } = await import("@/lib/lakebase/runs");
   const { getGenieRecommendationsByRunId } = await import("@/lib/lakebase/genie-recommendations");
   const { embedGenieRecommendations } = await import("@/lib/embeddings/embed-pipeline");
@@ -230,9 +245,9 @@ async function backfillGenieRecs(
 // Backfill: Outcome Maps
 // ---------------------------------------------------------------------------
 
-async function backfillOutcomeMaps(
-  results: { outcomeMaps: { total: number; embedded: number; failed: number } },
-): Promise<void> {
+async function backfillOutcomeMaps(results: {
+  outcomeMaps: { total: number; embedded: number; failed: number };
+}): Promise<void> {
   const { listOutcomeMaps, getOutcomeMap } = await import("@/lib/lakebase/outcome-maps");
   const { embedOutcomeMap } = await import("@/lib/embeddings/embed-pipeline");
 
@@ -260,9 +275,9 @@ async function backfillOutcomeMaps(
 // Backfill: Documents
 // ---------------------------------------------------------------------------
 
-async function backfillDocuments(
-  results: { documents: { total: number; embedded: number; failed: number } },
-): Promise<void> {
+async function backfillDocuments(results: {
+  documents: { total: number; embedded: number; failed: number };
+}): Promise<void> {
   const { listDocuments } = await import("@/lib/lakebase/documents");
   const { countEmbeddings } = await import("@/lib/embeddings/store");
 
@@ -300,9 +315,9 @@ async function backfillDocuments(
 // Backfill: Benchmark records
 // ---------------------------------------------------------------------------
 
-async function backfillBenchmarks(
-  results: { benchmarks: { total: number; embedded: number; failed: number } },
-): Promise<void> {
+async function backfillBenchmarks(results: {
+  benchmarks: { total: number; embedded: number; failed: number };
+}): Promise<void> {
   const { isBenchmarksEnabled } = await import("@/lib/benchmarks/config");
   if (!isBenchmarksEnabled()) return;
 
@@ -316,19 +331,21 @@ async function backfillBenchmarks(
   results.benchmarks.total = rows.length;
   if (rows.length === 0) return;
   try {
-    await embedBenchmarkRecords(rows.map((r) => ({
-      benchmarkId: r.benchmarkId,
-      kind: r.kind,
-      title: r.title,
-      summary: r.summary,
-      sourceUrl: r.sourceUrl,
-      publisher: r.publisher,
-      industry: r.industry,
-      region: r.region,
-      publishedAt: r.publishedAt,
-      ttlDays: r.ttlDays,
-      sourceContent: r.sourceContent,
-    })));
+    await embedBenchmarkRecords(
+      rows.map((r) => ({
+        benchmarkId: r.benchmarkId,
+        kind: r.kind,
+        title: r.title,
+        summary: r.summary,
+        sourceUrl: r.sourceUrl,
+        publisher: r.publisher,
+        industry: r.industry,
+        region: r.region,
+        publishedAt: r.publishedAt,
+        ttlDays: r.ttlDays,
+        sourceContent: r.sourceContent,
+      })),
+    );
     results.benchmarks.embedded = rows.length;
   } catch (err) {
     results.benchmarks.failed = rows.length;
@@ -342,9 +359,9 @@ async function backfillBenchmarks(
 // Backfill: Fabric/Power BI Scans
 // ---------------------------------------------------------------------------
 
-async function backfillFabricScans(
-  results: { fabricScans: { total: number; embedded: number; failed: number } },
-): Promise<void> {
+async function backfillFabricScans(results: {
+  fabricScans: { total: number; embedded: number; failed: number };
+}): Promise<void> {
   let scans: Array<{ id: string; status: string }>;
   try {
     const { listFabricScans } = await import("@/lib/lakebase/fabric-scans");

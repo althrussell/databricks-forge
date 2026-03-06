@@ -7,7 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { loadSettings } from "@/lib/settings";
 
@@ -35,9 +41,17 @@ function isSourceOutdated(row: BenchmarkRow): boolean {
   return freshUntil < Date.now();
 }
 
-const LIFECYCLE_OPTIONS: Array<BenchmarkRow["lifecycleStatus"]> = ["draft", "reviewed", "published", "deprecated"];
+const LIFECYCLE_OPTIONS: Array<BenchmarkRow["lifecycleStatus"]> = [
+  "draft",
+  "reviewed",
+  "published",
+  "deprecated",
+];
 
-function fetchStatusStyle(row: BenchmarkRow): { variant: "secondary" | "outline" | "default" | "destructive"; label: string } {
+function fetchStatusStyle(row: BenchmarkRow): {
+  variant: "secondary" | "outline" | "default" | "destructive";
+  label: string;
+} {
   if (row.sourceFetchStatus === "fetched") return { variant: "secondary", label: "Source fetched" };
   if (row.sourceFetchStatus === "manual") return { variant: "secondary", label: "Manual paste" };
   if (row.sourceFetchStatus === "failed" && row.sourceChunkCount > 0) {
@@ -55,8 +69,8 @@ export default function BenchmarksPage() {
       <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
         <h1 className="text-2xl font-bold tracking-tight">Benchmark Catalog</h1>
         <p className="max-w-md text-muted-foreground">
-          The benchmark catalog is currently disabled. Enable it in Settings to manage
-          industry benchmarks for pipeline prompt enrichment.
+          The benchmark catalog is currently disabled. Enable it in Settings to manage industry
+          benchmarks for pipeline prompt enrichment.
         </p>
         <Link href="/settings">
           <Button>Open Settings</Button>
@@ -122,11 +136,9 @@ function BenchmarksContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Update failed");
-      setRows((prev) => prev.map((r) =>
-        r.benchmarkId === row.benchmarkId
-          ? { ...r, ...data }
-          : r,
-      ));
+      setRows((prev) =>
+        prev.map((r) => (r.benchmarkId === row.benchmarkId ? { ...r, ...data } : r)),
+      );
     } finally {
       setTransitionKey(null);
     }
@@ -135,18 +147,22 @@ function BenchmarksContent() {
   async function fetchSource(row: BenchmarkRow) {
     setFetchingIds((prev) => new Set(prev).add(row.benchmarkId));
     try {
-      const res = await fetch(`/api/benchmarks/${row.benchmarkId}/fetch-source`, { method: "POST" });
+      const res = await fetch(`/api/benchmarks/${row.benchmarkId}/fetch-source`, {
+        method: "POST",
+      });
       const data = await res.json();
       if (data.record) {
-        setRows((prev) => prev.map((r) =>
-          r.benchmarkId === row.benchmarkId ? { ...r, ...data.record } : r,
-        ));
+        setRows((prev) =>
+          prev.map((r) => (r.benchmarkId === row.benchmarkId ? { ...r, ...data.record } : r)),
+        );
       } else {
-        setRows((prev) => prev.map((r) =>
-          r.benchmarkId === row.benchmarkId
-            ? { ...r, sourceFetchStatus: data.sourceFetchStatus ?? "failed" }
-            : r,
-        ));
+        setRows((prev) =>
+          prev.map((r) =>
+            r.benchmarkId === row.benchmarkId
+              ? { ...r, sourceFetchStatus: data.sourceFetchStatus ?? "failed" }
+              : r,
+          ),
+        );
       }
       if (data.success) {
         toast.success(`Source fetched (${(data.contentLength / 1024).toFixed(0)} KB)`);
@@ -177,9 +193,7 @@ function BenchmarksContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      setRows((prev) => prev.map((r) =>
-        r.benchmarkId === benchmarkId ? { ...r, ...data } : r,
-      ));
+      setRows((prev) => prev.map((r) => (r.benchmarkId === benchmarkId ? { ...r, ...data } : r)));
       setPasteId(null);
       setPasteText("");
       toast.success("Source content saved");
@@ -193,7 +207,8 @@ function BenchmarksContent() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Benchmark Catalog</h1>
         <p className="text-muted-foreground">
-          Public-source benchmark governance with lifecycle states: draft, reviewed, published, deprecated.
+          Public-source benchmark governance with lifecycle states: draft, reviewed, published,
+          deprecated.
         </p>
       </div>
 
@@ -203,9 +218,15 @@ function BenchmarksContent() {
           <CardDescription>Search and moderate benchmark records.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, summary, industry..." />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search title, summary, industry..."
+          />
           <Select value={kind} onValueChange={setKind}>
-            <SelectTrigger><SelectValue placeholder="Kind" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="Kind" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All kinds</SelectItem>
               <SelectItem value="kpi">KPI</SelectItem>
@@ -215,11 +236,15 @@ function BenchmarksContent() {
             </SelectContent>
           </Select>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               {LIFECYCLE_OPTIONS.map((s) => (
-                <SelectItem value={s} key={s}>{s}</SelectItem>
+                <SelectItem value={s} key={s}>
+                  {s}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -242,7 +267,8 @@ function BenchmarksContent() {
                   <div>
                     <p className="font-medium">{row.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {row.kind} • {row.publisher} • {row.industry || "global"} • confidence {(row.confidence * 100).toFixed(0)}%
+                      {row.kind} • {row.publisher} • {row.industry || "global"} • confidence{" "}
+                      {(row.confidence * 100).toFixed(0)}%
                     </p>
                   </div>
                   <Badge variant="secondary">{row.lifecycleStatus}</Badge>
@@ -251,11 +277,19 @@ function BenchmarksContent() {
 
                 {/* Source info row */}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <a href={row.sourceUrl} className="text-xs text-blue-600 underline underline-offset-2" target="_blank" rel="noreferrer">
+                  <a
+                    href={row.sourceUrl}
+                    className="text-xs text-blue-600 underline underline-offset-2"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Source
                   </a>
                   {isSourceOutdated(row) && (
-                    <Badge variant="outline" className="border-amber-500 text-amber-600 text-[10px] px-1.5 py-0">
+                    <Badge
+                      variant="outline"
+                      className="border-amber-500 text-amber-600 text-[10px] px-1.5 py-0"
+                    >
                       Source outdated
                     </Badge>
                   )}
@@ -334,7 +368,9 @@ function BenchmarksContent() {
                             await transition(row, s);
                             toast.success(`Status updated to ${s}`);
                           } catch (err) {
-                            toast.error(err instanceof Error ? err.message : "Status update failed");
+                            toast.error(
+                              err instanceof Error ? err.message : "Status update failed",
+                            );
                           }
                         }}
                       >
@@ -347,7 +383,9 @@ function BenchmarksContent() {
             );
           })}
           {!loading && filtered.length === 0 && (
-            <p className="text-sm text-muted-foreground">No benchmark records found for the selected filters.</p>
+            <p className="text-sm text-muted-foreground">
+              No benchmark records found for the selected filters.
+            </p>
           )}
         </CardContent>
       </Card>

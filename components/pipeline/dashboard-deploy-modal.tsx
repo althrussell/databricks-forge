@@ -90,7 +90,7 @@ export function DashboardDeployModal({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ parentPath, publish: publishAfterDeploy }),
-          }
+          },
         );
 
         if (!res.ok) {
@@ -240,9 +240,7 @@ export function DashboardDeployModal({
                 <div className="text-lg font-semibold">
                   {successCount} of {results.length} deployed
                 </div>
-                {failCount > 0 && (
-                  <div className="text-sm text-red-500">{failCount} failed</div>
-                )}
+                {failCount > 0 && <div className="text-sm text-red-500">{failCount} failed</div>}
               </div>
             </div>
 
@@ -283,9 +281,7 @@ export function DashboardDeployModal({
               Deploying...
             </Button>
           )}
-          {step === "done" && (
-            <Button onClick={handleClose}>Close</Button>
-          )}
+          {step === "done" && <Button onClick={handleClose}>Close</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

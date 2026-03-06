@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -36,10 +30,9 @@ export function DataSamplingSettings({
           Data Sampling
         </CardTitle>
         <CardDescription>
-          Control whether sample rows are fetched from tables during use case
-          discovery and SQL generation. Real data values help the AI understand
-          what each table contains, producing more relevant use cases and
-          more accurate SQL queries. Trade-off: reads row-level data and
+          Control whether sample rows are fetched from tables during use case discovery and SQL
+          generation. Real data values help the AI understand what each table contains, producing
+          more relevant use cases and more accurate SQL queries. Trade-off: reads row-level data and
           increases run time.
         </CardDescription>
       </CardHeader>
@@ -70,16 +63,13 @@ export function DataSamplingSettings({
           <div className="flex items-start gap-2">
             <Shield className="mt-0.5 h-4 w-4 text-amber-500" />
             <div className="text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">
-                Privacy &amp; data access
-              </p>
+              <p className="font-medium text-foreground">Privacy &amp; data access</p>
               <p className="mt-1">
-              When data sampling is enabled, Forge AI reads a small number
-              of rows from each table during use case discovery and SQL
-              generation. This data is sent to the AI model alongside the
-              schema so it can understand real data values, formats, and
-              patterns -- producing better use cases and more accurate SQL.
-              Sampled data is <strong>not</strong> persisted.
+                When data sampling is enabled, Forge AI reads a small number of rows from each table
+                during use case discovery and SQL generation. This data is sent to the AI model
+                alongside the schema so it can understand real data values, formats, and patterns --
+                producing better use cases and more accurate SQL. Sampled data is{" "}
+                <strong>not</strong> persisted.
               </p>
             </div>
           </div>

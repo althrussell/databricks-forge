@@ -11,14 +11,8 @@ import { randomUUID } from "crypto";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { probeSystemInformationSchema } from "@/lib/metadata-genie/probe";
 import { detectIndustry } from "@/lib/metadata-genie/industry-detect";
-import {
-  fetchUndocumentedTables,
-  generateTableDescriptions,
-} from "@/lib/metadata-genie/describe";
-import {
-  buildPreviewQuestions,
-  buildMetadataGenieSpace,
-} from "@/lib/metadata-genie/space-builder";
+import { fetchUndocumentedTables, generateTableDescriptions } from "@/lib/metadata-genie/describe";
+import { buildPreviewQuestions, buildMetadataGenieSpace } from "@/lib/metadata-genie/space-builder";
 import { saveMetadataGenieSpace } from "@/lib/lakebase/metadata-genie";
 import { logger } from "@/lib/logger";
 import { GenerateBodySchema } from "@/lib/metadata-genie/schemas";
@@ -28,7 +22,10 @@ export async function POST(request: NextRequest) {
     const raw = await request.json();
     const parsed = GenerateBodySchema.safeParse(raw);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid request body" },
+        { status: 400 },
+      );
     }
     const { title, catalogScope, questionComplexity } = parsed.data;
 
@@ -36,7 +33,7 @@ export async function POST(request: NextRequest) {
     if (!probe.accessible) {
       return NextResponse.json(
         { error: probe.error ?? "Cannot access system.information_schema" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -47,7 +44,7 @@ export async function POST(request: NextRequest) {
     let aiDescriptions: Record<string, string> = {};
     try {
       const undocumented = await fetchUndocumentedTables(
-        catalogScope ?? probe.catalogs ?? undefined
+        catalogScope ?? probe.catalogs ?? undefined,
       );
       if (undocumented.length > 0) {
         const descMap = await generateTableDescriptions(undocumented);
@@ -86,8 +83,7 @@ export async function POST(request: NextRequest) {
       domains: detection.llmDetection.domains,
       detection: detection.llmDetection,
       sampleQuestions,
-      aiDescriptions:
-        Object.keys(aiDescriptions).length > 0 ? aiDescriptions : undefined,
+      aiDescriptions: Object.keys(aiDescriptions).length > 0 ? aiDescriptions : undefined,
       lineageAccessible: probe.lineageAccessible,
       serializedSpace: JSON.stringify(previewSpace),
       tableCount: tableNames.length,

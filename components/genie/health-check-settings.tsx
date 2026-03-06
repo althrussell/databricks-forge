@@ -12,12 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,11 +20,20 @@ import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Settings, Loader2, Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import type { CheckDefinition, CategoryDefinition, Severity } from "@/lib/genie/health-checks/types";
+import type {
+  CheckDefinition,
+  CategoryDefinition,
+  Severity,
+} from "@/lib/genie/health-checks/types";
 
 interface HealthConfigResponse {
   config: {
-    overrides: Array<{ checkId: string; enabled?: boolean; params?: Record<string, unknown>; severity?: Severity }>;
+    overrides: Array<{
+      checkId: string;
+      enabled?: boolean;
+      params?: Record<string, unknown>;
+      severity?: Severity;
+    }>;
     customChecks: Array<Record<string, unknown>>;
     categoryWeights: Record<string, number> | null;
   };
@@ -178,7 +182,8 @@ export function HealthCheckSettingsDialog() {
         <DialogHeader>
           <DialogTitle>Health Check Settings</DialogTitle>
           <DialogDescription>
-            Configure check thresholds, enable/disable individual checks, and adjust category weights.
+            Configure check thresholds, enable/disable individual checks, and adjust category
+            weights.
           </DialogDescription>
         </DialogHeader>
 
@@ -214,7 +219,9 @@ export function HealthCheckSettingsDialog() {
                               onCheckedChange={() => toggleCheck(check.id)}
                             />
                             <div>
-                              <span className={`text-sm ${state.enabled ? "" : "text-muted-foreground line-through"}`}>
+                              <span
+                                className={`text-sm ${state.enabled ? "" : "text-muted-foreground line-through"}`}
+                              >
                                 {check.description}
                               </span>
                             </div>
@@ -241,8 +248,8 @@ export function HealthCheckSettingsDialog() {
 
             <TabsContent value="weights" className="mt-4 space-y-6">
               <p className="text-sm text-muted-foreground">
-                Adjust how much each category contributes to the overall health score.
-                Weights should sum to 100.
+                Adjust how much each category contributes to the overall health score. Weights
+                should sum to 100.
               </p>
               {Object.entries(categories).map(([catId, cat]) => (
                 <div key={catId} className="space-y-1">
@@ -269,7 +276,9 @@ export function HealthCheckSettingsDialog() {
                   />
                 </div>
               ))}
-              <div className={`text-sm font-medium ${totalWeight === 100 ? "text-green-600" : "text-red-600"}`}>
+              <div
+                className={`text-sm font-medium ${totalWeight === 100 ? "text-green-600" : "text-red-600"}`}
+              >
                 Total: {totalWeight}%{totalWeight !== 100 && " (must equal 100)"}
               </div>
             </TabsContent>
@@ -282,7 +291,11 @@ export function HealthCheckSettingsDialog() {
             Reset Defaults
           </Button>
           <Button onClick={handleSave} disabled={saving || totalWeight !== 100}>
-            {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+            {saving ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 size-4" />
+            )}
             Save Settings
           </Button>
         </DialogFooter>

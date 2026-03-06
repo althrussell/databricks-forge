@@ -66,7 +66,7 @@ export async function retrieveContext(
     topScore: results[0]?.score,
   });
 
-  const ranked = (opts.enforceSourcePriority === false ? results : rerankByProvenance(results));
+  const ranked = opts.enforceSourcePriority === false ? results : rerankByProvenance(results);
   return ranked.map((r) => ({
     content: r.contentText,
     kind: r.kind,
@@ -91,7 +91,12 @@ const PRIORITY_WEIGHT: Record<SourcePriority, number> = {
 
 function inferSourcePriority(result: SearchResult): SourcePriority {
   const label = (result.metadataJson?.sourcePriority as string | undefined) ?? "";
-  if (label === "CustomerFact" || label === "PlatformBestPractice" || label === "IndustryBenchmark" || label === "AdvisoryGuidance") {
+  if (
+    label === "CustomerFact" ||
+    label === "PlatformBestPractice" ||
+    label === "IndustryBenchmark" ||
+    label === "AdvisoryGuidance"
+  ) {
     return label;
   }
   switch (result.kind) {
@@ -125,12 +130,11 @@ function freshnessMultiplier(result: SearchResult): number {
 }
 
 function rerankByProvenance(results: SearchResult[]): SearchResult[] {
-  return [...results]
-    .sort((a, b) => {
-      const aScore = a.score * PRIORITY_WEIGHT[inferSourcePriority(a)] * freshnessMultiplier(a);
-      const bScore = b.score * PRIORITY_WEIGHT[inferSourcePriority(b)] * freshnessMultiplier(b);
-      return bScore - aScore;
-    });
+  return [...results].sort((a, b) => {
+    const aScore = a.score * PRIORITY_WEIGHT[inferSourcePriority(a)] * freshnessMultiplier(a);
+    const bScore = b.score * PRIORITY_WEIGHT[inferSourcePriority(b)] * freshnessMultiplier(b);
+    return bScore - aScore;
+  });
 }
 
 export function rerankByProvenanceForTest(results: SearchResult[]): SearchResult[] {
@@ -181,10 +185,7 @@ export function provenanceLabel(chunk: RetrievedChunk): string {
  * Format retrieved chunks into a string suitable for injection into
  * an LLM system prompt. Includes provenance labels and a preamble.
  */
-export function formatRetrievedContext(
-  chunks: RetrievedChunk[],
-  maxChars: number = 8000,
-): string {
+export function formatRetrievedContext(chunks: RetrievedChunk[], maxChars: number = 8000): string {
   if (chunks.length === 0) return "";
 
   const parts: string[] = [RAG_PREAMBLE];

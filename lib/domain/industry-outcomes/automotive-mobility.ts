@@ -56,8 +56,7 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
               name: "Dynamic Vehicle Pricing & Incentive Optimization",
               description:
                 "Apply ML models to real-time inventory age, regional demand signals, competitor pricing, and OEM incentive programmes to recommend optimal transaction prices and discount allocation at a VIN level.",
-              businessValue:
-                "1–3% improvement in front-end gross margin per vehicle retailed.",
+              businessValue: "1–3% improvement in front-end gross margin per vehicle retailed.",
             },
             {
               name: "Trade-In Valuation & Instant Offer Engine",
@@ -130,7 +129,12 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use customer credit profile, vehicle selection, and behavioural data to recommend the optimal F&I product bundle (finance plan, GAP, service plan, tyre-and-rim) at the right moment in the purchase journey, whether online or in the business office.",
               businessValue:
                 "10–20% increase in F&I income per unit; higher product penetration rates.",
-              typicalDataEntities: ["Credit Profile", "Vehicle Selection", "F&I Product Catalog", "Penetration History"],
+              typicalDataEntities: [
+                "Credit Profile",
+                "Vehicle Selection",
+                "F&I Product Catalog",
+                "Penetration History",
+              ],
               typicalSourceSystems: ["DMS", "F&I Platform", "Credit Bureau", "CRM"],
             },
             {
@@ -139,7 +143,12 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Integrate credit bureau data and internal payment history to pre-qualify customers for financing before they arrive at the dealership, reducing deal fallout and accelerating the approval cycle.",
               businessValue:
                 "25–35% reduction in finance approval cycle time; lower deal cancellation rate.",
-              typicalDataEntities: ["Credit Bureau Data", "Payment History", "Pre-Qualification Results", "Approval Workflow"],
+              typicalDataEntities: [
+                "Credit Bureau Data",
+                "Payment History",
+                "Pre-Qualification Results",
+                "Approval Workflow",
+              ],
               typicalSourceSystems: ["Credit Bureau", "F&I Platform", "DMS", "Finance Company"],
             },
             {
@@ -148,8 +157,18 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Automatically audit every F&I transaction for regulatory compliance — rate mark-up limits, disclosure requirements, and fair-lending rules — flagging exceptions in real time to reduce legal and reputational risk.",
               businessValue:
                 "Significant reduction in compliance-related fines and audit remediation costs.",
-              typicalDataEntities: ["F&I Transactions", "Compliance Rules", "Audit Exceptions", "Disclosure Records"],
-              typicalSourceSystems: ["F&I Platform", "DMS", "Compliance System", "Regulatory Database"],
+              typicalDataEntities: [
+                "F&I Transactions",
+                "Compliance Rules",
+                "Audit Exceptions",
+                "Disclosure Records",
+              ],
+              typicalSourceSystems: [
+                "F&I Platform",
+                "DMS",
+                "Compliance System",
+                "Regulatory Database",
+              ],
             },
           ],
           kpis: [
@@ -182,8 +201,18 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Forecast service demand by day, bay type, and technician skill using historical RO data, seasonal patterns, and connected-vehicle alerts to optimise appointment scheduling and reduce idle capacity.",
               businessValue:
                 "10–15% improvement in service bay utilization; reduced customer wait times.",
-              typicalDataEntities: ["Repair Order History", "Bay Capacity", "Technician Skills", "Connected Vehicle Alerts"],
-              typicalSourceSystems: ["DMS", "Service Scheduling", "Connected Vehicle Platform", "CRM"],
+              typicalDataEntities: [
+                "Repair Order History",
+                "Bay Capacity",
+                "Technician Skills",
+                "Connected Vehicle Alerts",
+              ],
+              typicalSourceSystems: [
+                "DMS",
+                "Service Scheduling",
+                "Connected Vehicle Platform",
+                "CRM",
+              ],
             },
             {
               name: "Digital Check-In & Vehicle Health Inspection",
@@ -198,15 +227,19 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Match repair orders to technicians based on certification, proficiency, and current workload, while tracking effective labour rate and hours-per-RO to identify coaching opportunities.",
               businessValue:
                 "5–10% increase in effective labour rate; improved technician retention.",
-              typicalDataEntities: ["Technician Certifications", "Repair Order Complexity", "Workload", "Labour Metrics"],
+              typicalDataEntities: [
+                "Technician Certifications",
+                "Repair Order Complexity",
+                "Workload",
+                "Labour Metrics",
+              ],
               typicalSourceSystems: ["DMS", "HR System", "Service Scheduling", "Training Platform"],
             },
             {
               name: "Service Retention & Lifecycle Marketing",
               description:
                 "Trigger personalised service reminders and offers based on vehicle age, mileage, warranty expiry, and past service history to retain customers beyond the warranty period and win back lapsed service customers.",
-              businessValue:
-                "8–12% improvement in service retention rate beyond year three.",
+              businessValue: "8–12% improvement in service retention rate beyond year three.",
               typicalDataEntities: ["Vehicle Age", "Mileage", "Warranty Status", "Service History"],
               typicalSourceSystems: ["DMS", "CRM", "Marketing Platform", "Warranty System"],
             },
@@ -234,16 +267,25 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use historical consumption, VIN parc data, seasonal trends, and service booking forecasts to set optimal stocking levels at each location, minimising lost sales from stock-outs while reducing obsolescence.",
               businessValue:
                 "15–20% reduction in parts inventory carrying cost; 10% improvement in fill rate.",
-              typicalDataEntities: ["Consumption History", "VIN Parc Data", "Service Forecasts", "Inventory Levels"],
+              typicalDataEntities: [
+                "Consumption History",
+                "VIN Parc Data",
+                "Service Forecasts",
+                "Inventory Levels",
+              ],
               typicalSourceSystems: ["Parts System", "DMS", "OEM Parts Catalog", "ERP"],
             },
             {
               name: "Accessory Attachment & Bundling at Point of Sale",
               description:
                 "Recommend accessories and protection products at vehicle handover using a propensity model trained on past attachment rates by model, trim, and customer segment, presenting bundles through the sales or online configurator workflow.",
-              businessValue:
-                "20–30% increase in accessory revenue per vehicle sold.",
-              typicalDataEntities: ["Accessory Catalog", "Attachment Rates", "Model Trim Data", "Customer Segments"],
+              businessValue: "20–30% increase in accessory revenue per vehicle sold.",
+              typicalDataEntities: [
+                "Accessory Catalog",
+                "Attachment Rates",
+                "Model Trim Data",
+                "Customer Segments",
+              ],
               typicalSourceSystems: ["DMS", "Configurator", "Parts System", "CRM"],
             },
             {
@@ -252,8 +294,18 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Monitor aftermarket and online competitor pricing for high-volume part numbers, enabling dynamic price adjustments that protect margin while remaining competitive against independent alternatives.",
               businessValue:
                 "3–5% improvement in parts gross margin while maintaining market share.",
-              typicalDataEntities: ["Part Numbers", "Competitor Prices", "Cost Data", "Margin Targets"],
-              typicalSourceSystems: ["Parts System", "Pricing Intelligence", "ERP", "Competitor Scraping"],
+              typicalDataEntities: [
+                "Part Numbers",
+                "Competitor Prices",
+                "Cost Data",
+                "Margin Targets",
+              ],
+              typicalSourceSystems: [
+                "Parts System",
+                "Pricing Intelligence",
+                "ERP",
+                "Competitor Scraping",
+              ],
             },
           ],
           kpis: [
@@ -279,17 +331,31 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Analyse warranty claim patterns across the dealer network to identify anomalous claim rates, repeat repairs, and potential fraud, enabling targeted audits and reducing warranty cost leakage.",
               businessValue:
                 "5–10% reduction in warranty cost per vehicle; faster audit resolution.",
-              typicalDataEntities: ["Warranty Claims", "Claim Patterns", "Repeat Repairs", "Dealer Metrics"],
+              typicalDataEntities: [
+                "Warranty Claims",
+                "Claim Patterns",
+                "Repeat Repairs",
+                "Dealer Metrics",
+              ],
               typicalSourceSystems: ["Warranty System", "DMS", "OEM Portal", "ERP"],
             },
             {
               name: "Early Warning Quality Feedback Loop",
               description:
                 "Aggregate field failure data, connected-vehicle DTCs, and customer complaint text to detect emerging quality issues weeks before they trigger formal recalls, enabling proactive containment and engineering fixes.",
-              businessValue:
-                "30–50% faster defect detection; reduced recall scope and cost.",
-              typicalDataEntities: ["Field Failures", "DTC Codes", "Complaint Text", "Component History"],
-              typicalSourceSystems: ["Connected Vehicle Platform", "Warranty System", "CRM", "Quality System"],
+              businessValue: "30–50% faster defect detection; reduced recall scope and cost.",
+              typicalDataEntities: [
+                "Field Failures",
+                "DTC Codes",
+                "Complaint Text",
+                "Component History",
+              ],
+              typicalSourceSystems: [
+                "Connected Vehicle Platform",
+                "Warranty System",
+                "CRM",
+                "Quality System",
+              ],
             },
             {
               name: "Recall Completion Rate Optimization",
@@ -297,7 +363,12 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use owner contact data, vehicle location, and communication preference models to maximise recall completion rates through targeted outreach campaigns across mail, email, SMS, and app notifications.",
               businessValue:
                 "10–20% improvement in recall completion rate; reduced regulatory exposure.",
-              typicalDataEntities: ["Owner Contact Data", "Vehicle Location", "Communication Preferences", "Recall Status"],
+              typicalDataEntities: [
+                "Owner Contact Data",
+                "Vehicle Location",
+                "Communication Preferences",
+                "Recall Status",
+              ],
               typicalSourceSystems: ["CRM", "DMS", "Recall System", "Marketing Platform"],
             },
           ],
@@ -352,8 +423,18 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Use driver preference data, location context, and usage patterns to personalise infotainment recommendations, cabin settings, and contextual offers (charging, parking, drive-through), building engagement and brand stickiness.",
               businessValue:
                 "Improved NPS and brand loyalty; enabler for third-party partnership revenue.",
-              typicalDataEntities: ["Driver Preferences", "Location Context", "Usage Patterns", "Offer Catalog"],
-              typicalSourceSystems: ["Connected Vehicle Platform", "Infotainment System", "CRM", "Partner APIs"],
+              typicalDataEntities: [
+                "Driver Preferences",
+                "Location Context",
+                "Usage Patterns",
+                "Offer Catalog",
+              ],
+              typicalSourceSystems: [
+                "Connected Vehicle Platform",
+                "Infotainment System",
+                "CRM",
+                "Partner APIs",
+              ],
             },
           ],
           kpis: [
@@ -386,15 +467,24 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
                 "Provide fleet operators with dashboards covering utilisation, fuel/energy efficiency, driver safety scores, and geofencing, enabling operational optimisation and duty-of-care compliance.",
               businessValue:
                 "5–10% reduction in fleet operating costs; improved driver safety outcomes.",
-              typicalDataEntities: ["Utilisation Metrics", "Fuel Efficiency", "Driver Safety Scores", "Geofence Events"],
-              typicalSourceSystems: ["Fleet Telematics", "Connected Vehicle Platform", "Fleet Management System", "HR System"],
+              typicalDataEntities: [
+                "Utilisation Metrics",
+                "Fuel Efficiency",
+                "Driver Safety Scores",
+                "Geofence Events",
+              ],
+              typicalSourceSystems: [
+                "Fleet Telematics",
+                "Connected Vehicle Platform",
+                "Fleet Management System",
+                "HR System",
+              ],
             },
             {
               name: "Vehicle Data Monetisation & Partner Ecosystem",
               description:
                 "Build a consent-managed data marketplace that enables third-party developers, insurers, smart-city platforms, and energy providers to access anonymised, aggregated vehicle data for product innovation.",
-              businessValue:
-                "Opens new B2B revenue streams; strengthens ecosystem partnerships.",
+              businessValue: "Opens new B2B revenue streams; strengthens ecosystem partnerships.",
             },
           ],
           kpis: [
@@ -478,8 +568,7 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
               name: "Remarketing Channel Optimization",
               description:
                 "Determine the highest-return disposition channel — retail, wholesale, auction, export, or certified pre-owned — for each returning vehicle based on condition, market demand, and holding cost, minimising time-to-sale.",
-              businessValue:
-                "10–15% reduction in average days to sell for de-fleeted vehicles.",
+              businessValue: "10–15% reduction in average days to sell for de-fleeted vehicles.",
             },
             {
               name: "Certified Pre-Owned Programme Analytics",
@@ -539,8 +628,7 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
               name: "EV Owner Experience & Range Confidence",
               description:
                 "Provide personalised range predictions, smart charging schedules, and route planning that factor in driving style, weather, payload, and real-time charger availability, reducing range anxiety and improving EV ownership satisfaction.",
-              businessValue:
-                "Improved EV NPS; higher EV re-purchase intent.",
+              businessValue: "Improved EV NPS; higher EV re-purchase intent.",
             },
           ],
           kpis: [

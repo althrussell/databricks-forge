@@ -42,7 +42,10 @@ export async function POST(
       warehouseId: config.warehouseId,
     });
 
-    logger.info("Space cloned for fix workflow", { originalSpaceId: spaceId, clonedSpaceId: result.space_id });
+    logger.info("Space cloned for fix workflow", {
+      originalSpaceId: spaceId,
+      clonedSpaceId: result.space_id,
+    });
 
     return NextResponse.json({
       clonedSpaceId: result.space_id,

@@ -32,7 +32,7 @@ interface UndocumentedTable {
  * Fetch tables that have no comment, along with their column names for context.
  */
 export async function fetchUndocumentedTables(
-  catalogScope?: string[]
+  catalogScope?: string[],
 ): Promise<UndocumentedTable[]> {
   const catFilter = catalogScope?.length
     ? `table_catalog IN (${catalogScope.map((c) => `'${validateIdentifier(c, "catalogScope")}'`).join(", ")})`
@@ -50,7 +50,7 @@ export async function fetchUndocumentedTables(
        AND table_name NOT LIKE '!_%' ESCAPE '!'
        AND (comment IS NULL OR TRIM(comment) = '')
      LIMIT ${MAX_TABLES}`,
-    (row) => ({ fqn: String(row[0]), tableName: String(row[1]) })
+    (row) => ({ fqn: String(row[0]), tableName: String(row[1]) }),
   );
 
   if (rows.length === 0) return [];
@@ -66,7 +66,7 @@ export async function fetchUndocumentedTables(
      FROM system.information_schema.columns
      WHERE CONCAT(table_catalog, '.', table_schema, '.', table_name) IN (${fqnPlaceholders})
      ORDER BY fqn, ordinal_position`,
-    (row) => ({ fqn: String(row[0]), col: String(row[1]) })
+    (row) => ({ fqn: String(row[0]), col: String(row[1]) }),
   );
 
   const colsByFqn = new Map<string, string[]>();
@@ -88,7 +88,7 @@ export async function fetchUndocumentedTables(
  * Returns a map of table FQN → description.
  */
 export async function generateTableDescriptions(
-  tables: UndocumentedTable[]
+  tables: UndocumentedTable[],
 ): Promise<Map<string, string>> {
   const descriptions = new Map<string, string>();
   if (tables.length === 0) return descriptions;
@@ -120,8 +120,9 @@ export async function generateTableDescriptions(
       const parsed = parseLLMJson(result.rawResponse, "metadata-genie:describe") as
         | { table_fqn: string; description: string }[]
         | { descriptions: { table_fqn: string; description: string }[] };
-      const items: { table_fqn: string; description: string }[] =
-        Array.isArray(parsed) ? parsed : parsed.descriptions ?? [];
+      const items: { table_fqn: string; description: string }[] = Array.isArray(parsed)
+        ? parsed
+        : (parsed.descriptions ?? []);
 
       for (const item of items) {
         if (item.table_fqn && item.description) {

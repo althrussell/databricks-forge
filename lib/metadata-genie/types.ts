@@ -67,11 +67,7 @@ export interface MetadataGenieDeployConfig {
 // Persisted State (returned from API)
 // ---------------------------------------------------------------------------
 
-export type MetadataGenieStatus =
-  | "draft"
-  | "views_deployed"
-  | "deployed"
-  | "trashed";
+export type MetadataGenieStatus = "draft" | "views_deployed" | "deployed" | "trashed";
 
 export interface MetadataGenieSpace {
   id: string;

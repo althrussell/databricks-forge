@@ -10,13 +10,7 @@ export const GAMES: IndustryOutcome = {
     "Game Publishing",
     "Esports",
   ],
-  suggestedDomains: [
-    "Marketing",
-    "Customer Experience",
-    "Operations",
-    "Finance",
-    "Engineering",
-  ],
+  suggestedDomains: ["Marketing", "Customer Experience", "Operations", "Finance", "Engineering"],
   suggestedPriorities: [
     "Increase Revenue",
     "Enhance Experience",
@@ -39,29 +33,69 @@ export const GAMES: IndustryOutcome = {
                 "Create a unified view of the player spanning multiple games, studios, and ecosystems including play sessions, efficacy, preferences, and purchase propensity.",
               businessValue:
                 "Foundational for all engagement, acquisition, and monetization use cases.",
-              typicalDataEntities: ["Player Profiles", "Session Data", "Purchase History", "Cross-Game Activity"],
-              typicalSourceSystems: ["Game Telemetry System", "Player Database", "Payment Platform", "Analytics Platform"],
+              typicalDataEntities: [
+                "Player Profiles",
+                "Session Data",
+                "Purchase History",
+                "Cross-Game Activity",
+              ],
+              typicalSourceSystems: [
+                "Game Telemetry System",
+                "Player Database",
+                "Payment Platform",
+                "Analytics Platform",
+              ],
             },
             {
               name: "Churn Mitigation",
               description:
                 "Understand and mitigate player churn across the player lifecycle using behavioral analytics and ML models.",
-              typicalDataEntities: ["Player Session Data", "In-Game Events", "Engagement Metrics", "Churn Risk Scores"],
-              typicalSourceSystems: ["Game Telemetry System", "Player Database", "Analytics Platform", "CRM"],
+              typicalDataEntities: [
+                "Player Session Data",
+                "In-Game Events",
+                "Engagement Metrics",
+                "Churn Risk Scores",
+              ],
+              typicalSourceSystems: [
+                "Game Telemetry System",
+                "Player Database",
+                "Analytics Platform",
+                "CRM",
+              ],
             },
             {
               name: "Player Segmentation",
               description:
                 "Better understand player behavior through ML-driven clustering to drive more impactful engagement and retention strategies.",
-              typicalDataEntities: ["Player Clusters", "Behavioral Attributes", "Engagement Scores", "Segment Definitions"],
-              typicalSourceSystems: ["Game Telemetry System", "Player Database", "Analytics Platform", "Marketing Platform"],
+              typicalDataEntities: [
+                "Player Clusters",
+                "Behavioral Attributes",
+                "Engagement Scores",
+                "Segment Definitions",
+              ],
+              typicalSourceSystems: [
+                "Game Telemetry System",
+                "Player Database",
+                "Analytics Platform",
+                "Marketing Platform",
+              ],
             },
             {
               name: "Player Identity Resolution",
               description:
                 "Identify players across their entire engagement journey from web to ad targeting to in-game across multiple platforms and titles.",
-              typicalDataEntities: ["Identity Graph", "Device Identifiers", "Cross-Platform Events", "Login Records"],
-              typicalSourceSystems: ["Auth System", "Game Telemetry System", "Ad Platform", "Analytics Platform"],
+              typicalDataEntities: [
+                "Identity Graph",
+                "Device Identifiers",
+                "Cross-Platform Events",
+                "Login Records",
+              ],
+              typicalSourceSystems: [
+                "Auth System",
+                "Game Telemetry System",
+                "Ad Platform",
+                "Analytics Platform",
+              ],
             },
           ],
           kpis: [
@@ -70,11 +104,7 @@ export const GAMES: IndustryOutcome = {
             "Session length",
             "Daily/Monthly Active Users",
           ],
-          personas: [
-            "VP of Data / Analytics",
-            "Studio General Manager",
-            "Head of Player Insights",
-          ],
+          personas: ["VP of Data / Analytics", "Studio General Manager", "Head of Player Insights"],
         },
         {
           name: "Grow Your Revenue",
@@ -101,11 +131,7 @@ export const GAMES: IndustryOutcome = {
             "Customer acquisition cost (CAC)",
             "Marketing ROI",
           ],
-          personas: [
-            "Chief Revenue Officer",
-            "Head of Monetization",
-            "Head of User Acquisition",
-          ],
+          personas: ["Chief Revenue Officer", "Head of Monetization", "Head of User Acquisition"],
         },
       ],
     },
@@ -133,11 +159,7 @@ export const GAMES: IndustryOutcome = {
             "Pre-launch sentiment score",
             "Development milestone accuracy",
           ],
-          personas: [
-            "Studio General Manager",
-            "Game Director",
-            "Head of Product",
-          ],
+          personas: ["Studio General Manager", "Game Director", "Head of Product"],
         },
         {
           name: "Effective Live Operations",
@@ -146,22 +168,52 @@ export const GAMES: IndustryOutcome = {
               name: "Live Event Performance Analytics",
               description:
                 "Monitor and optimize live events, seasonal content, and game updates in real-time to maximize player engagement.",
-              typicalDataEntities: ["Event Definitions", "Participation Metrics", "Engagement Rates", "Revenue per Event"],
-              typicalSourceSystems: ["Game Telemetry System", "Live Ops Platform", "Analytics Platform", "Content CMS"],
+              typicalDataEntities: [
+                "Event Definitions",
+                "Participation Metrics",
+                "Engagement Rates",
+                "Revenue per Event",
+              ],
+              typicalSourceSystems: [
+                "Game Telemetry System",
+                "Live Ops Platform",
+                "Analytics Platform",
+                "Content CMS",
+              ],
             },
             {
               name: "Game Balance Optimization",
               description:
                 "Use analytics to continuously monitor and adjust game balance, economy, and difficulty to maintain player satisfaction.",
-              typicalDataEntities: ["Economy Metrics", "Win Rates", "Item Usage", "Difficulty Progression"],
-              typicalSourceSystems: ["Game Telemetry System", "Economy Config", "Analytics Platform", "A/B Testing Platform"],
+              typicalDataEntities: [
+                "Economy Metrics",
+                "Win Rates",
+                "Item Usage",
+                "Difficulty Progression",
+              ],
+              typicalSourceSystems: [
+                "Game Telemetry System",
+                "Economy Config",
+                "Analytics Platform",
+                "A/B Testing Platform",
+              ],
             },
             {
               name: "Content Pipeline Optimization",
               description:
                 "Optimize content delivery scheduling based on player engagement patterns and seasonal trends.",
-              typicalDataEntities: ["Content Calendar", "Engagement Patterns", "Release Metrics", "Seasonal Trends"],
-              typicalSourceSystems: ["Content CMS", "Game Telemetry System", "Analytics Platform", "Live Ops Platform"],
+              typicalDataEntities: [
+                "Content Calendar",
+                "Engagement Patterns",
+                "Release Metrics",
+                "Seasonal Trends",
+              ],
+              typicalSourceSystems: [
+                "Content CMS",
+                "Game Telemetry System",
+                "Analytics Platform",
+                "Live Ops Platform",
+              ],
             },
           ],
           kpis: [
@@ -169,11 +221,7 @@ export const GAMES: IndustryOutcome = {
             "Player satisfaction post-update",
             "Content engagement metrics",
           ],
-          personas: [
-            "Head of Live Operations",
-            "Game Producer",
-            "Head of Analytics",
-          ],
+          personas: ["Head of Live Operations", "Game Producer", "Head of Analytics"],
         },
       ],
     },
@@ -189,8 +237,18 @@ export const GAMES: IndustryOutcome = {
               name: "Infrastructure Cost Optimization",
               description:
                 "Optimize cloud and backend infrastructure costs using analytics to rightsize resources and reduce waste.",
-              typicalDataEntities: ["Resource Utilization", "Cost by Service", "DAU/MAU Metrics", "Peak Load Patterns"],
-              typicalSourceSystems: ["Cloud Platform", "APM", "Billing System", "Game Telemetry System"],
+              typicalDataEntities: [
+                "Resource Utilization",
+                "Cost by Service",
+                "DAU/MAU Metrics",
+                "Peak Load Patterns",
+              ],
+              typicalSourceSystems: [
+                "Cloud Platform",
+                "APM",
+                "Billing System",
+                "Game Telemetry System",
+              ],
             },
             {
               name: "Data Democratization",
@@ -198,16 +256,8 @@ export const GAMES: IndustryOutcome = {
                 "Enable self-service analytics and AI-powered data exploration for non-technical stakeholders across the organization.",
             },
           ],
-          kpis: [
-            "Infrastructure cost per DAU",
-            "Data access time",
-            "Self-service adoption rate",
-          ],
-          personas: [
-            "Chief Technology Officer",
-            "VP Engineering",
-            "Head of Data Platform",
-          ],
+          kpis: ["Infrastructure cost per DAU", "Data access time", "Self-service adoption rate"],
+          personas: ["Chief Technology Officer", "VP Engineering", "Head of Data Platform"],
         },
       ],
     },

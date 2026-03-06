@@ -11,9 +11,7 @@ import type { DiscoveredDashboard } from "./types";
  * Scan all workspace dashboards and extract structured metadata.
  * Optionally filters to dashboards whose tables overlap with `scopeTables`.
  */
-export async function scanDashboards(
-  scopeTables?: Set<string>
-): Promise<DiscoveredDashboard[]> {
+export async function scanDashboards(scopeTables?: Set<string>): Promise<DiscoveredDashboard[]> {
   const discovered: DiscoveredDashboard[] = [];
 
   try {
@@ -26,7 +24,9 @@ export async function scanDashboards(
 
         if (!serialized) {
           const detail = await getDashboard(d.dashboard_id);
-          serialized = (detail as unknown as Record<string, unknown>).serialized_dashboard as string | undefined;
+          serialized = (detail as unknown as Record<string, unknown>).serialized_dashboard as
+            | string
+            | undefined;
         }
 
         const { tables, datasetCount, widgetCount } = parseDashboardPayload(serialized);

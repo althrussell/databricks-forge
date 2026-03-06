@@ -7,7 +7,7 @@ describe("parseLLMJson", () => {
   });
 
   it("parses plain JSON array", () => {
-    expect(parseLLMJson('[1, 2, 3]')).toEqual([1, 2, 3]);
+    expect(parseLLMJson("[1, 2, 3]")).toEqual([1, 2, 3]);
   });
 
   it("handles BOM prefix", () => {
@@ -24,7 +24,7 @@ describe("parseLLMJson", () => {
   });
 
   it("extracts JSON from ``` fences without language tag", () => {
-    const input = '```\n[1, 2]\n```';
+    const input = "```\n[1, 2]\n```";
     expect(parseLLMJson(input)).toEqual([1, 2]);
   });
 
@@ -49,7 +49,7 @@ describe("parseLLMJson", () => {
   });
 
   it("bracket-matches arrays", () => {
-    const input = 'Result: [1, 2, 3] end';
+    const input = "Result: [1, 2, 3] end";
     expect(parseLLMJson(input)).toEqual([1, 2, 3]);
   });
 
@@ -84,7 +84,8 @@ describe("parseLLMJson", () => {
     });
 
     it("recovers truncated object mid-string-value", () => {
-      const input = '{"queries": [{"question": "What is revenue?", "sql": "SELECT SUM(amount)"}, {"question": "Truncated quer';
+      const input =
+        '{"queries": [{"question": "What is revenue?", "sql": "SELECT SUM(amount)"}, {"question": "Truncated quer';
       const result = parseLLMJson(input) as { queries: unknown[] };
       expect(result.queries).toHaveLength(1);
       expect(result.queries[0]).toEqual({
@@ -94,7 +95,8 @@ describe("parseLLMJson", () => {
     });
 
     it("recovers truncated nested structure", () => {
-      const input = '{"benchmarks": [{"question": "Q1", "sql": "SELECT 1", "alt": ["a", "b"]}, {"question": "Q2", "sql": "SELECT';
+      const input =
+        '{"benchmarks": [{"question": "Q1", "sql": "SELECT 1", "alt": ["a", "b"]}, {"question": "Q2", "sql": "SELECT';
       const result = parseLLMJson(input) as { benchmarks: unknown[] };
       expect(result.benchmarks).toHaveLength(1);
       expect(result.benchmarks[0]).toEqual({

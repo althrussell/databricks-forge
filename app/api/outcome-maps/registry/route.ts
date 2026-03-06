@@ -16,7 +16,7 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to load outcomes" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

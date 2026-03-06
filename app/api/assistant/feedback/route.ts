@@ -16,10 +16,7 @@ export async function POST(req: NextRequest) {
     const text = body.text as string | undefined;
 
     if (!logId || !rating || !["up", "down"].includes(rating)) {
-      return Response.json(
-        { error: "logId and rating (up/down) are required" },
-        { status: 400 },
-      );
+      return Response.json({ error: "logId and rating (up/down) are required" }, { status: 400 });
     }
 
     await updateAssistantLog(logId, {
@@ -30,9 +27,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ success: true });
   } catch (err) {
     logger.error("[api/assistant/feedback] Error", { error: String(err) });
-    return Response.json(
-      { error: "Failed to submit feedback" },
-      { status: 500 },
-    );
+    return Response.json({ error: "Failed to submit feedback" }, { status: 500 });
   }
 }

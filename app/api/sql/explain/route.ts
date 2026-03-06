@@ -29,9 +29,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ valid: true });
   } catch (err) {
     logger.error("[api/sql/explain] Error", { error: String(err) });
-    return Response.json(
-      { valid: false, error: "Failed to validate SQL" },
-      { status: 500 },
-    );
+    return Response.json({ valid: false, error: "Failed to validate SQL" }, { status: 500 });
   }
 }

@@ -37,7 +37,12 @@ describe("runHealthCheck", () => {
   it("reports all four categories", () => {
     const report = runHealthCheck(perfectSpace);
     expect(Object.keys(report.categories)).toEqual(
-      expect.arrayContaining(["data_sources", "instructions", "semantic_richness", "quality_assurance"]),
+      expect.arrayContaining([
+        "data_sources",
+        "instructions",
+        "semantic_richness",
+        "quality_assurance",
+      ]),
     );
   });
 

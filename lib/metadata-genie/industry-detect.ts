@@ -14,10 +14,7 @@ import {
   getIndustryOutcomeAsync,
 } from "@/lib/domain/industry-outcomes-server";
 import { logger } from "@/lib/logger";
-import type {
-  IndustryDetectionOutput,
-  IndustryDetectionResult,
-} from "./types";
+import type { IndustryDetectionOutput, IndustryDetectionResult } from "./types";
 
 const FALLBACK_DETECTION: IndustryDetectionResult = {
   industries: "",
@@ -33,9 +30,7 @@ const FALLBACK_DETECTION: IndustryDetectionResult = {
  * 3. Maps the LLM's `industries` string to a canonical outcome map ID
  *    via `detectIndustryFromContext()`
  */
-export async function detectIndustry(
-  tableNames: string[]
-): Promise<IndustryDetectionOutput> {
+export async function detectIndustry(tableNames: string[]): Promise<IndustryDetectionOutput> {
   const summary = buildTableNameSummary(tableNames);
 
   let llmDetection: IndustryDetectionResult;
@@ -47,12 +42,15 @@ export async function detectIndustry(
       responseFormat: "json_object",
     });
 
-    const parsed = parseLLMJson(result.rawResponse, "metadata-genie:industry-detect") as Record<string, unknown>;
+    const parsed = parseLLMJson(result.rawResponse, "metadata-genie:industry-detect") as Record<
+      string,
+      unknown
+    >;
     llmDetection = {
       industries: (parsed.industries as string) ?? "",
-      domains: Array.isArray(parsed.domains) ? parsed.domains as string[] : [],
+      domains: Array.isArray(parsed.domains) ? (parsed.domains as string[]) : [],
       duplication_notes: Array.isArray(parsed.duplication_notes)
-        ? parsed.duplication_notes as string[]
+        ? (parsed.duplication_notes as string[])
         : [],
     };
   } catch (err) {

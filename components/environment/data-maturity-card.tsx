@@ -7,13 +7,7 @@ import { ENVIRONMENT } from "@/lib/help-text";
 import type { DataMaturityScore, MaturityPillar } from "@/lib/domain/data-maturity";
 import { BarChart3 } from "lucide-react";
 
-function PillarBar({
-  pillar,
-  barColorClass,
-}: {
-  pillar: MaturityPillar;
-  barColorClass: string;
-}) {
+function PillarBar({ pillar, barColorClass }: { pillar: MaturityPillar; barColorClass: string }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
@@ -75,10 +69,7 @@ export function DataMaturityCard({ maturity }: DataMaturityCardProps) {
         <div className="flex items-baseline gap-3">
           <span className="text-5xl font-bold tracking-tight">{maturity.overall}</span>
           <span className="text-lg text-muted-foreground">/100</span>
-          <Badge
-            variant="secondary"
-            className={levelColor[maturity.level]}
-          >
+          <Badge variant="secondary" className={levelColor[maturity.level]}>
             {maturity.level}
           </Badge>
         </div>

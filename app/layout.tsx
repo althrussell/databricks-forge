@@ -22,8 +22,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Forge AI",
-  description:
-    "Discover AI-powered use cases from your Unity Catalog metadata",
+  description: "Discover AI-powered use cases from your Unity Catalog metadata",
   icons: {
     icon: "/databricks-icon.svg",
   },
@@ -41,31 +40,31 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <TooltipProvider>
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
-          >
-            Skip to main content
-          </a>
-          <div className="flex h-screen overflow-hidden">
-            <SidebarNav />
-            <div className="flex min-h-0 flex-1 flex-col">
-              <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
-                <MobileNav />
-                <span className="text-sm font-semibold md:hidden">Forge AI</span>
-                <div className="hidden flex-1 md:block">
-                  <HeaderPageTitle />
-                </div>
-                <SearchBar />
-                <AskForgePanel />
-                <ThemeToggle />
-              </header>
-              <main id="main-content" className="flex-1 overflow-y-auto">
-                <div className="w-full px-6 py-6">{children}</div>
-              </main>
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
+            >
+              Skip to main content
+            </a>
+            <div className="flex h-screen overflow-hidden">
+              <SidebarNav />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+                  <MobileNav />
+                  <span className="text-sm font-semibold md:hidden">Forge AI</span>
+                  <div className="hidden flex-1 md:block">
+                    <HeaderPageTitle />
+                  </div>
+                  <SearchBar />
+                  <AskForgePanel />
+                  <ThemeToggle />
+                </header>
+                <main id="main-content" className="flex-1 overflow-y-auto">
+                  <div className="w-full px-6 py-6">{children}</div>
+                </main>
+              </div>
             </div>
-          </div>
-          <Toaster />
+            <Toaster />
           </TooltipProvider>
         </ThemeProvider>
       </body>

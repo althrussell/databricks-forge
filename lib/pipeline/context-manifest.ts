@@ -107,7 +107,10 @@ export function mergeManifest(
 /**
  * Derive the lightweight enrichment tags from a manifest.
  */
-export function deriveTags(manifest: Partial<RunContextManifest> & Pick<RunContextManifest, "benchmarks" | "outcomeMap" | "documents">): EnrichmentTag[] {
+export function deriveTags(
+  manifest: Partial<RunContextManifest> &
+    Pick<RunContextManifest, "benchmarks" | "outcomeMap" | "documents">,
+): EnrichmentTag[] {
   const tags: EnrichmentTag[] = [];
   if (manifest.benchmarks.strategy !== "default" && manifest.benchmarks.recordIds.length > 0) {
     tags.push("benchmark");
@@ -146,9 +149,7 @@ export async function persistManifest(
 
       let existing: RunContextManifest;
       try {
-        existing = row?.contextSourcesJson
-          ? JSON.parse(row.contextSourcesJson)
-          : emptyManifest();
+        existing = row?.contextSourcesJson ? JSON.parse(row.contextSourcesJson) : emptyManifest();
       } catch {
         existing = emptyManifest();
       }

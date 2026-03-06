@@ -40,9 +40,6 @@ export async function GET() {
     logger.error("[api/search/stats] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

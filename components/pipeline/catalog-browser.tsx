@@ -64,11 +64,7 @@ interface CatalogBrowserProps {
 /** How long cached children remain fresh before refetch on expand (ms). */
 const STALE_THRESHOLD_MS = 60_000;
 
-type BrowserPhase =
-  | "warming-up"
-  | "loading"
-  | "ready"
-  | "error";
+type BrowserPhase = "warming-up" | "loading" | "ready" | "error";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -119,9 +115,7 @@ export function CatalogBrowser({
       return true;
     } catch (err) {
       clearInterval(timer);
-      setError(
-        err instanceof Error ? err.message : "Failed to connect to SQL Warehouse"
-      );
+      setError(err instanceof Error ? err.message : "Failed to connect to SQL Warehouse");
       setErrorCode("WAREHOUSE_UNAVAILABLE");
       setPhase("error");
       return false;
@@ -153,7 +147,7 @@ export function CatalogBrowser({
           error: null,
           schemas: [],
           fetchedAt: null,
-        }))
+        })),
       );
       setPhase("ready");
     } catch (err) {
@@ -207,94 +201,18 @@ export function CatalogBrowser({
   }, [fetchCatalogs]);
 
   // ── Force-refresh a catalog's schemas ──────────────────────────────────
-  const refreshCatalogSchemas = useCallback(
-    async (catalogName: string) => {
-      setCatalogs((prev) =>
-        prev.map((c) =>
-          c.name === catalogName
-            ? { ...c, loading: true, error: null, schemas: [], fetchedAt: null }
-            : c
-        )
-      );
-
-      try {
-        const res = await fetch(
-          `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`
-        );
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.error ?? "Failed to fetch schemas");
-        }
-        const data = await res.json();
-        const schemaNames: string[] = data.schemas ?? [];
-        setCatalogs((prev) =>
-          prev.map((c) =>
-            c.name === catalogName
-              ? {
-                  ...c,
-                  loading: false,
-                  fetchedAt: Date.now(),
-                  schemas: schemaNames.map((s) => ({
-                    name: s,
-                    expanded: false,
-                    loading: false,
-                    error: null,
-                    tables: [],
-                    fetchedAt: null,
-                  })),
-                }
-              : c
-          )
-        );
-      } catch (err) {
-        setCatalogs((prev) =>
-          prev.map((c) =>
-            c.name === catalogName
-              ? {
-                  ...c,
-                  loading: false,
-                  error:
-                    err instanceof Error ? err.message : "Failed to load schemas",
-                }
-              : c
-          )
-        );
-      }
-    },
-    []
-  );
-
-  // ── Expand / collapse a catalog ────────────────────────────────────────
-  const toggleCatalog = async (catalogName: string) => {
-    const cat = catalogs.find((c) => c.name === catalogName);
-    if (!cat) return;
-
-    const isStale =
-      !cat.fetchedAt || Date.now() - cat.fetchedAt > STALE_THRESHOLD_MS;
-    const hasFreshData = cat.schemas.length > 0 && !isStale;
-
-    if (hasFreshData) {
-      // Toggle expand/collapse without refetch
-      setCatalogs((prev) =>
-        prev.map((c) =>
-          c.name === catalogName ? { ...c, expanded: !c.expanded } : c
-        )
-      );
-      return;
-    }
-
-    // Need to fetch schemas
+  const refreshCatalogSchemas = useCallback(async (catalogName: string) => {
     setCatalogs((prev) =>
       prev.map((c) =>
         c.name === catalogName
-          ? { ...c, expanded: true, loading: true, error: null }
-          : c
-      )
+          ? { ...c, loading: true, error: null, schemas: [], fetchedAt: null }
+          : c,
+      ),
     );
 
     try {
       const res = await fetch(
-        `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`
+        `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`,
       );
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -318,8 +236,8 @@ export function CatalogBrowser({
                   fetchedAt: null,
                 })),
               }
-            : c
-        )
+            : c,
+        ),
       );
     } catch (err) {
       setCatalogs((prev) =>
@@ -328,79 +246,135 @@ export function CatalogBrowser({
             ? {
                 ...c,
                 loading: false,
-                error:
-                  err instanceof Error ? err.message : "Failed to load schemas",
+                error: err instanceof Error ? err.message : "Failed to load schemas",
               }
-            : c
-        )
+            : c,
+        ),
+      );
+    }
+  }, []);
+
+  // ── Expand / collapse a catalog ────────────────────────────────────────
+  const toggleCatalog = async (catalogName: string) => {
+    const cat = catalogs.find((c) => c.name === catalogName);
+    if (!cat) return;
+
+    const isStale = !cat.fetchedAt || Date.now() - cat.fetchedAt > STALE_THRESHOLD_MS;
+    const hasFreshData = cat.schemas.length > 0 && !isStale;
+
+    if (hasFreshData) {
+      // Toggle expand/collapse without refetch
+      setCatalogs((prev) =>
+        prev.map((c) => (c.name === catalogName ? { ...c, expanded: !c.expanded } : c)),
+      );
+      return;
+    }
+
+    // Need to fetch schemas
+    setCatalogs((prev) =>
+      prev.map((c) =>
+        c.name === catalogName ? { ...c, expanded: true, loading: true, error: null } : c,
+      ),
+    );
+
+    try {
+      const res = await fetch(
+        `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`,
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Failed to fetch schemas");
+      }
+      const data = await res.json();
+      const schemaNames: string[] = data.schemas ?? [];
+      setCatalogs((prev) =>
+        prev.map((c) =>
+          c.name === catalogName
+            ? {
+                ...c,
+                loading: false,
+                fetchedAt: Date.now(),
+                schemas: schemaNames.map((s) => ({
+                  name: s,
+                  expanded: false,
+                  loading: false,
+                  error: null,
+                  tables: [],
+                  fetchedAt: null,
+                })),
+              }
+            : c,
+        ),
+      );
+    } catch (err) {
+      setCatalogs((prev) =>
+        prev.map((c) =>
+          c.name === catalogName
+            ? {
+                ...c,
+                loading: false,
+                error: err instanceof Error ? err.message : "Failed to load schemas",
+              }
+            : c,
+        ),
       );
     }
   };
 
   // ── Force-refresh a schema's tables ────────────────────────────────────
-  const refreshSchemaTables = useCallback(
-    async (catalogName: string, schemaName: string) => {
-      const updateSchema = (updater: (s: SchemaNode) => SchemaNode) => {
-        setCatalogs((prev) =>
-          prev.map((c) =>
-            c.name === catalogName
-              ? {
-                  ...c,
-                  schemas: c.schemas.map((s) =>
-                    s.name === schemaName ? updater(s) : s
-                  ),
-                }
-              : c
-          )
-        );
-      };
+  const refreshSchemaTables = useCallback(async (catalogName: string, schemaName: string) => {
+    const updateSchema = (updater: (s: SchemaNode) => SchemaNode) => {
+      setCatalogs((prev) =>
+        prev.map((c) =>
+          c.name === catalogName
+            ? {
+                ...c,
+                schemas: c.schemas.map((s) => (s.name === schemaName ? updater(s) : s)),
+              }
+            : c,
+        ),
+      );
+    };
 
+    updateSchema((s) => ({
+      ...s,
+      loading: true,
+      error: null,
+      tables: [],
+      fetchedAt: null,
+    }));
+
+    try {
+      const res = await fetch(
+        `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`,
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Failed to fetch tables");
+      }
+      const data = await res.json();
+      const tables: TableNode[] = (data.tables ?? []).map(
+        (t: { tableName: string; fqn: string; comment: string | null; tableType: string }) => ({
+          name: t.tableName,
+          fqn: t.fqn,
+          comment: t.comment,
+          tableType: t.tableType,
+        }),
+      );
       updateSchema((s) => ({
         ...s,
-        loading: true,
-        error: null,
-        tables: [],
-        fetchedAt: null,
+        loading: false,
+        fetchedAt: Date.now(),
+        tables,
       }));
-
-      try {
-        const res = await fetch(
-          `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`
-        );
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.error ?? "Failed to fetch tables");
-        }
-        const data = await res.json();
-        const tables: TableNode[] = (data.tables ?? []).map(
-          (t: {
-            tableName: string;
-            fqn: string;
-            comment: string | null;
-            tableType: string;
-          }) => ({
-            name: t.tableName,
-            fqn: t.fqn,
-            comment: t.comment,
-            tableType: t.tableType,
-          })
-        );
-        updateSchema((s) => ({
-          ...s,
-          loading: false,
-          fetchedAt: Date.now(),
-          tables,
-        }));
-      } catch (err) {
-        updateSchema((s) => ({
-          ...s,
-          loading: false,
-          error: err instanceof Error ? err.message : "Failed to load tables",
-        }));
-      }
-    },
-    []
-  );
+    } catch (err) {
+      updateSchema((s) => ({
+        ...s,
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to load tables",
+      }));
+    }
+  }, []);
 
   // ── Expand / collapse a schema (fetch tables) ─────────────────────────
   const toggleSchema = async (catalogName: string, schemaName: string) => {
@@ -410,12 +384,10 @@ export function CatalogBrowser({
           c.name === catalogName
             ? {
                 ...c,
-                schemas: c.schemas.map((s) =>
-                  s.name === schemaName ? updater(s) : s
-                ),
+                schemas: c.schemas.map((s) => (s.name === schemaName ? updater(s) : s)),
               }
-            : c
-        )
+            : c,
+        ),
       );
     };
 
@@ -423,8 +395,7 @@ export function CatalogBrowser({
     const sch = cat?.schemas.find((s) => s.name === schemaName);
     if (!sch) return;
 
-    const isStale =
-      !sch.fetchedAt || Date.now() - sch.fetchedAt > STALE_THRESHOLD_MS;
+    const isStale = !sch.fetchedAt || Date.now() - sch.fetchedAt > STALE_THRESHOLD_MS;
     const hasFreshData = sch.tables.length > 0 && !isStale;
 
     if (hasFreshData) {
@@ -436,7 +407,7 @@ export function CatalogBrowser({
 
     try {
       const res = await fetch(
-        `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`
+        `/api/metadata?type=tables&catalog=${encodeURIComponent(catalogName)}&schema=${encodeURIComponent(schemaName)}`,
       );
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -444,17 +415,12 @@ export function CatalogBrowser({
       }
       const data = await res.json();
       const tables: TableNode[] = (data.tables ?? []).map(
-        (t: {
-          tableName: string;
-          fqn: string;
-          comment: string | null;
-          tableType: string;
-        }) => ({
+        (t: { tableName: string; fqn: string; comment: string | null; tableType: string }) => ({
           name: t.tableName,
           fqn: t.fqn,
           comment: t.comment,
           tableType: t.tableType,
-        })
+        }),
       );
       updateSchema((s) => ({
         ...s,
@@ -481,8 +447,7 @@ export function CatalogBrowser({
       if (
         c.schemas.some((s) => {
           if (s.name.toLowerCase().includes(searchLower)) return true;
-          if (s.tables.some((t) => t.name.toLowerCase().includes(searchLower)))
-            return true;
+          if (s.tables.some((t) => t.name.toLowerCase().includes(searchLower))) return true;
           return false;
         })
       )
@@ -528,9 +493,7 @@ export function CatalogBrowser({
         {warmupElapsed >= 3 && (
           <p className="text-xs text-muted-foreground">
             The warehouse is waking up. This can take up to a few minutes on first use.
-            <span className="ml-1 tabular-nums text-muted-foreground/70">
-              ({warmupElapsed}s)
-            </span>
+            <span className="ml-1 tabular-nums text-muted-foreground/70">({warmupElapsed}s)</span>
           </p>
         )}
         <div className="space-y-2">
@@ -571,7 +534,7 @@ export function CatalogBrowser({
             ? "SQL Warehouse is not responding. It may still be starting up."
             : errorCode === "INSUFFICIENT_PERMISSIONS"
               ? "You don't have permission to view catalogs. Contact your workspace admin."
-              : error ?? "Failed to load catalogs"}
+              : (error ?? "Failed to load catalogs")}
         </p>
         {error && errorCode !== "INSUFFICIENT_PERMISSIONS" && (
           <p className="max-w-md text-xs text-muted-foreground">{error}</p>
@@ -589,12 +552,10 @@ export function CatalogBrowser({
     return (
       <div className="flex flex-col items-center gap-3 rounded-md border border-dashed p-6 text-center">
         <Database className="h-5 w-5 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          No catalogs found in this workspace.
-        </p>
+        <p className="text-sm text-muted-foreground">No catalogs found in this workspace.</p>
         <p className="max-w-sm text-xs text-muted-foreground/70">
-          This may happen if the warehouse just started. Try refreshing, or check
-          that your SQL Warehouse has access to Unity Catalog.
+          This may happen if the warehouse just started. Try refreshing, or check that your SQL
+          Warehouse has access to Unity Catalog.
         </p>
         <Button variant="outline" size="sm" onClick={refreshCatalogs}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -646,13 +607,9 @@ export function CatalogBrowser({
                   key={catalog.name}
                   catalog={catalog}
                   onToggleCatalog={() => toggleCatalog(catalog.name)}
-                  onToggleSchema={(schema) =>
-                    toggleSchema(catalog.name, schema)
-                  }
+                  onToggleSchema={(schema) => toggleSchema(catalog.name, schema)}
                   onRefreshCatalog={() => refreshCatalogSchemas(catalog.name)}
-                  onRefreshSchema={(schema) =>
-                    refreshSchemaTables(catalog.name, schema)
-                  }
+                  onRefreshSchema={(schema) => refreshSchemaTables(catalog.name, schema)}
                   isSelected={isSelected}
                   isCoveredBy={isCoveredBy}
                   onAdd={addSource}
@@ -675,12 +632,7 @@ export function CatalogBrowser({
           <div className="flex flex-wrap gap-1.5">
             {selectedSources.map((source) => {
               const depth = source.split(".").length;
-              const Icon =
-                depth === 1
-                  ? Database
-                  : depth === 2
-                    ? Layers
-                    : TableProperties;
+              const Icon = depth === 1 ? Database : depth === 2 ? Layers : TableProperties;
               return (
                 <Badge key={source} variant="secondary" className="gap-1 pr-1">
                   <Icon className="h-3 w-3 text-muted-foreground" />
@@ -733,23 +685,20 @@ function CatalogRow({
 }) {
   const catalogSelected = isSelected(catalog.name);
   const hasSearch = !!searchFilter;
-  const catalogNameMatches =
-    hasSearch && catalog.name.toLowerCase().includes(searchFilter);
+  const catalogNameMatches = hasSearch && catalog.name.toLowerCase().includes(searchFilter);
 
   // Filter schemas when searching
   const filteredSchemas = useMemo(() => {
     if (!hasSearch || catalogNameMatches) return catalog.schemas;
     return catalog.schemas.filter((s) => {
       if (s.name.toLowerCase().includes(searchFilter)) return true;
-      if (s.tables.some((t) => t.name.toLowerCase().includes(searchFilter)))
-        return true;
+      if (s.tables.some((t) => t.name.toLowerCase().includes(searchFilter))) return true;
       return false;
     });
   }, [catalog.schemas, hasSearch, catalogNameMatches, searchFilter]);
 
   const showExpanded =
-    catalog.expanded ||
-    (hasSearch && filteredSchemas.length > 0 && catalog.schemas.length > 0);
+    catalog.expanded || (hasSearch && filteredSchemas.length > 0 && catalog.schemas.length > 0);
 
   return (
     <div>
@@ -791,8 +740,8 @@ function CatalogRow({
           <RefreshCw className="h-3 w-3" />
         </Button>
 
-        {selectionMode === "table" && (
-          catalogSelected ? (
+        {selectionMode === "table" &&
+          (catalogSelected ? (
             <Button
               type="button"
               variant="ghost"
@@ -814,8 +763,7 @@ function CatalogRow({
               <Plus className="h-3 w-3" />
               Add all
             </Button>
-          )
-        )}
+          ))}
       </div>
 
       {/* Schemas */}
@@ -842,20 +790,18 @@ function CatalogRow({
             </div>
           )}
 
-          {!catalog.loading &&
-            !catalog.error &&
-            catalog.schemas.length === 0 && (
-              <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
-                No schemas found
-                <button
-                  type="button"
-                  onClick={onRefreshCatalog}
-                  className="underline hover:no-underline"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
+          {!catalog.loading && !catalog.error && catalog.schemas.length === 0 && (
+            <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+              No schemas found
+              <button
+                type="button"
+                onClick={onRefreshCatalog}
+                className="underline hover:no-underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           {filteredSchemas.map((schema) => (
             <SchemaRow
@@ -912,16 +858,12 @@ function SchemaRow({
   // Derive table list -- if the catalog or schema name already matches the
   // search, show ALL tables (don't filter children by the parent's match).
   const hasSearch = !!searchFilter;
-  const catalogNameMatches =
-    hasSearch && catalogName.toLowerCase().includes(searchFilter ?? "");
-  const schemaNameMatches =
-    hasSearch && schema.name.toLowerCase().includes(searchFilter ?? "");
+  const catalogNameMatches = hasSearch && catalogName.toLowerCase().includes(searchFilter ?? "");
+  const schemaNameMatches = hasSearch && schema.name.toLowerCase().includes(searchFilter ?? "");
   const tablesToShow =
     !hasSearch || catalogNameMatches || schemaNameMatches
       ? schema.tables
-      : schema.tables.filter((t) =>
-          t.name.toLowerCase().includes(searchFilter ?? "")
-        );
+      : schema.tables.filter((t) => t.name.toLowerCase().includes(searchFilter ?? ""));
 
   // Show expanded section when schema is expanded OR tables were loaded
   const isOpen = schema.expanded || schema.tables.length > 0;
@@ -944,7 +886,9 @@ function SchemaRow({
   return (
     <div>
       {/* Schema level */}
-      <div className={`group/schema flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/50 ${isSchemaMode && schemaSelected ? "bg-violet-50 dark:bg-violet-950/30" : ""}`}>
+      <div
+        className={`group/schema flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/50 ${isSchemaMode && schemaSelected ? "bg-violet-50 dark:bg-violet-950/30" : ""}`}
+      >
         <button
           type="button"
           onClick={handleSchemaClick}
@@ -1057,11 +1001,7 @@ function SchemaRow({
           {!schema.loading && !schema.error && schema.tables.length === 0 && (
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
               No tables found
-              <button
-                type="button"
-                onClick={onRefresh}
-                className="underline hover:no-underline"
-              >
+              <button type="button" onClick={onRefresh} className="underline hover:no-underline">
                 Retry
               </button>
             </div>
@@ -1071,8 +1011,7 @@ function SchemaRow({
             const tablePath = `${catalogName}.${schema.name}.${table.name}`;
             const tableSelected = isSelected(tablePath);
             const tableCovered = isCoveredBy(tablePath);
-            const displayName =
-              table.name || table.fqn.split(".").pop() || `table-${idx}`;
+            const displayName = table.name || table.fqn.split(".").pop() || `table-${idx}`;
 
             return (
               <div
@@ -1123,13 +1062,7 @@ function SchemaRow({
 // Highlight matching text
 // ---------------------------------------------------------------------------
 
-function HighlightMatch({
-  text,
-  query,
-}: {
-  text: string;
-  query?: string;
-}) {
+function HighlightMatch({ text, query }: { text: string; query?: string }) {
   if (!query) return <>{text}</>;
 
   const idx = text.toLowerCase().indexOf(query);

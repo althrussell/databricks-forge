@@ -67,7 +67,14 @@ export function evaluateJoinCandidates(
       }
     }
 
-    if (!validateSqlExpression(allowlist, c.sql, `${contextPrefix}:${c.leftTable}->${c.rightTable}`, true)) {
+    if (
+      !validateSqlExpression(
+        allowlist,
+        c.sql,
+        `${contextPrefix}:${c.leftTable}->${c.rightTable}`,
+        true,
+      )
+    ) {
       diagnostics.push({
         status: "rejected",
         source: c.source,

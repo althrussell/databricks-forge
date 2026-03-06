@@ -33,7 +33,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export function SemanticOverlap({ runA, runB }: SemanticOverlapProps) {
   const [pairs, setPairs] = React.useState<OverlapPair[]>([]);
-  const [stats, setStats] = React.useState<{ nearDuplicate: number; related: number; unique: number } | null>(null);
+  const [stats, setStats] = React.useState<{
+    nearDuplicate: number;
+    related: number;
+    unique: number;
+  } | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [enabled, setEnabled] = React.useState(true);
   const [filter, setFilter] = React.useState<string>("all");
@@ -97,22 +101,34 @@ export function SemanticOverlap({ runA, runB }: SemanticOverlapProps) {
           {stats && (
             <div className="flex gap-2">
               <button onClick={() => setFilter("all")}>
-                <Badge variant={filter === "all" ? "default" : "outline"} className="cursor-pointer text-[10px]">
+                <Badge
+                  variant={filter === "all" ? "default" : "outline"}
+                  className="cursor-pointer text-[10px]"
+                >
                   All ({pairs.length})
                 </Badge>
               </button>
               <button onClick={() => setFilter("near-duplicate")}>
-                <Badge variant={filter === "near-duplicate" ? "default" : "outline"} className="cursor-pointer text-[10px]">
+                <Badge
+                  variant={filter === "near-duplicate" ? "default" : "outline"}
+                  className="cursor-pointer text-[10px]"
+                >
                   Near-duplicate ({stats.nearDuplicate})
                 </Badge>
               </button>
               <button onClick={() => setFilter("related")}>
-                <Badge variant={filter === "related" ? "default" : "outline"} className="cursor-pointer text-[10px]">
+                <Badge
+                  variant={filter === "related" ? "default" : "outline"}
+                  className="cursor-pointer text-[10px]"
+                >
                   Related ({stats.related})
                 </Badge>
               </button>
               <button onClick={() => setFilter("unique")}>
-                <Badge variant={filter === "unique" ? "default" : "outline"} className="cursor-pointer text-[10px]">
+                <Badge
+                  variant={filter === "unique" ? "default" : "outline"}
+                  className="cursor-pointer text-[10px]"
+                >
                   Unique ({stats.unique})
                 </Badge>
               </button>
@@ -123,10 +139,7 @@ export function SemanticOverlap({ runA, runB }: SemanticOverlapProps) {
       <CardContent>
         <div className="space-y-2">
           {filtered.map((pair, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 rounded-md border p-2 text-xs"
-            >
+            <div key={i} className="flex items-center gap-2 rounded-md border p-2 text-xs">
               <Badge className={`shrink-0 text-[9px] ${CATEGORY_COLORS[pair.category] ?? ""}`}>
                 {pair.category}
               </Badge>

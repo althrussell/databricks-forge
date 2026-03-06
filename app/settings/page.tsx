@@ -122,7 +122,11 @@ export default function SettingsPage() {
       setAssetDiscoveryEnabled(false);
       setGenieDeployAuthMode("obo");
       setSemanticSearchEnabled(true);
-      setQuestionComplexity({ genieEngine: "simple", adhocGenie: "simple", metadataGenie: "simple" });
+      setQuestionComplexity({
+        genieEngine: "simple",
+        adhocGenie: "simple",
+        metadataGenie: "simple",
+      });
       toast.success("Local settings cleared");
     }
   };

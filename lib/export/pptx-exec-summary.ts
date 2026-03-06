@@ -100,7 +100,7 @@ interface BuildExecutiveSummaryItemsArgs {
 }
 
 export function buildExecutiveSummaryItems(
-  args: BuildExecutiveSummaryItemsArgs
+  args: BuildExecutiveSummaryItemsArgs,
 ): ExecutiveSummaryLine[] {
   const items: ExecutiveSummaryLine[] = [];
   const executiveSummary = normalizeText(args.executiveSummary ?? "");
@@ -118,7 +118,7 @@ export function buildExecutiveSummaryItems(
         ...splitLongFieldIntoBullets({
           label: "Strategic Goals",
           value: bc.strategicGoals,
-        })
+        }),
       );
     }
     if (bc.valueChain) {
@@ -143,7 +143,7 @@ export function buildExecutiveSummaryItems(
       label: "Business Priorities",
       value: args.businessPriorities.join(", "),
       splitThreshold: 120,
-    })
+    }),
   );
 
   return items;
@@ -178,7 +178,7 @@ function charsPerLine(width: number, fontSize: number): number {
 
 export function estimateExecutiveSummaryLineHeight(
   line: ExecutiveSummaryLine,
-  contentWidth: number
+  contentWidth: number,
 ): number {
   const fontSize = getFontSize(line.kind);
   const cpl = charsPerLine(contentWidth, fontSize);
@@ -195,7 +195,7 @@ export function estimateExecutiveSummaryLineHeight(
 
 export function paginateSummaryItems(
   lines: ExecutiveSummaryLine[],
-  options: PaginationOptions
+  options: PaginationOptions,
 ): ExecutiveSummaryLine[][] {
   const pages: ExecutiveSummaryLine[][] = [];
   const pageHeights: number[] = [];
@@ -213,10 +213,7 @@ export function paginateSummaryItems(
     const keepTogetherHeight =
       line.keepWithNext && nextLine ? lineHeight + getLineHeight(nextLine) : lineHeight;
 
-    if (
-      currentPage.length > 0 &&
-      currentHeight + keepTogetherHeight > options.availableHeight
-    ) {
+    if (currentPage.length > 0 && currentHeight + keepTogetherHeight > options.availableHeight) {
       pages.push(currentPage);
       pageHeights.push(currentHeight);
       currentPage = [];

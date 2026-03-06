@@ -6,15 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableDetailTabs } from "@/components/environment/table-detail-tabs";
-import {
-  ArrowLeft,
-  Table2,
-  Clock,
-  HardDrive,
-  Rows3,
-  FileStack,
-  AlertCircle,
-} from "lucide-react";
+import { ArrowLeft, Table2, Clock, HardDrive, Rows3, FileStack, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
 interface TableDetailData {
@@ -158,7 +150,9 @@ export default function TableDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-          <Link href="/environment"><ArrowLeft className="size-4" /></Link>
+          <Link href="/environment">
+            <ArrowLeft className="size-4" />
+          </Link>
         </Button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -167,19 +161,29 @@ export default function TableDetailPage() {
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {detail.dataDomain && (
-              <Badge variant="secondary" className="text-xs">{detail.dataDomain}</Badge>
+              <Badge variant="secondary" className="text-xs">
+                {detail.dataDomain}
+              </Badge>
             )}
             {detail.dataTier && (
-              <Badge variant="outline" className="text-xs">{detail.dataTier}</Badge>
+              <Badge variant="outline" className="text-xs">
+                {detail.dataTier}
+              </Badge>
             )}
             {detail.sensitivityLevel && detail.sensitivityLevel !== "none" && (
-              <Badge variant="destructive" className="text-xs">{detail.sensitivityLevel}</Badge>
+              <Badge variant="destructive" className="text-xs">
+                {detail.sensitivityLevel}
+              </Badge>
             )}
             {detail.format && (
-              <Badge variant="outline" className="text-xs">{detail.format}</Badge>
+              <Badge variant="outline" className="text-xs">
+                {detail.format}
+              </Badge>
             )}
             {detail.tableType && (
-              <Badge variant="outline" className="text-xs">{detail.tableType}</Badge>
+              <Badge variant="outline" className="text-xs">
+                {detail.tableType}
+              </Badge>
             )}
           </div>
         </div>
@@ -226,9 +230,7 @@ export default function TableDetailPage() {
         </div>
       </div>
 
-      {detail.owner && (
-        <p className="text-xs text-muted-foreground">Owner: {detail.owner}</p>
-      )}
+      {detail.owner && <p className="text-xs text-muted-foreground">Owner: {detail.owner}</p>}
 
       <TableDetailTabs
         columns={data.columns}

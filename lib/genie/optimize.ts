@@ -131,9 +131,10 @@ export async function generateOptimizations(
 
   const configJson = JSON.stringify(space, null, 2).slice(0, 30_000);
 
-  const prompt = OPTIMIZATION_PROMPT
-    .replace("{CONFIG_JSON}", configJson)
-    .replace("{FEEDBACK_TEXT}", feedbackText);
+  const prompt = OPTIMIZATION_PROMPT.replace("{CONFIG_JSON}", configJson).replace(
+    "{FEEDBACK_TEXT}",
+    feedbackText,
+  );
 
   try {
     const response = await chatCompletion({
@@ -183,9 +184,7 @@ export async function generateOptimizations(
           return s;
         }),
       );
-      const filtered = reviewed.filter(
-        (s): s is NonNullable<typeof s> => s !== null,
-      );
+      const filtered = reviewed.filter((s): s is NonNullable<typeof s> => s !== null);
       return {
         suggestions: filtered,
         summary: parsed.summary ?? "",

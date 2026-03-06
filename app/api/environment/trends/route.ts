@@ -47,10 +47,7 @@ export async function GET() {
         };
       }
 
-      const trends = computeScanTrends(
-        toSnapshot(previousScan),
-        toSnapshot(currentScan)
-      );
+      const trends = computeScanTrends(toSnapshot(previousScan), toSnapshot(currentScan));
 
       return { hasTrends: true as const, trends };
     });
@@ -60,9 +57,6 @@ export async function GET() {
     logger.error("[api/environment/trends] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to compute trends" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to compute trends" }, { status: 500 });
   }
 }

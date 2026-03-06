@@ -63,7 +63,7 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
         if (cancelled || !data?.exports) return;
         const nb = data.exports.find(
           (e: { format: string; filePath?: string | null }) =>
-            e.format === "notebooks" && e.filePath
+            e.format === "notebooks" && e.filePath,
         );
         if (nb?.filePath) {
           setNotebookUrl(nb.filePath);
@@ -71,7 +71,9 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
         }
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [runId]);
 
   const handleExport = async (format: string) => {
@@ -97,7 +99,13 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
       const a = document.createElement("a");
       a.href = url;
 
-      const extMap: Record<string, string> = { excel: "xlsx", pptx: "pptx", pdf: "pdf", csv: "csv", json: "json" };
+      const extMap: Record<string, string> = {
+        excel: "xlsx",
+        pptx: "pptx",
+        pdf: "pdf",
+        csv: "csv",
+        json: "json",
+      };
       const ext = extMap[format] ?? format;
       a.download = `forge_${businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.${ext}`;
       document.body.appendChild(a);
@@ -107,9 +115,7 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
 
       toast.success(`${format.toUpperCase()} exported successfully`);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `${format} export failed`
-      );
+      toast.error(error instanceof Error ? error.message : `${format} export failed`);
     } finally {
       setExporting(null);
     }
@@ -155,11 +161,7 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {EXPORT_FORMATS.map(({ key, label, icon: Icon, description }) => (
-            <DropdownMenuItem
-              key={key}
-              disabled={!!exporting}
-              onClick={() => handleExport(key)}
-            >
+            <DropdownMenuItem key={key} disabled={!!exporting} onClick={() => handleExport(key)}>
               <div className="flex items-start gap-2">
                 <Icon className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
@@ -172,10 +174,7 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
           {scanId && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                disabled={!!exporting}
-                onClick={handleBriefingExport}
-              >
+              <DropdownMenuItem disabled={!!exporting} onClick={handleBriefingExport}>
                 <Briefcase className="mr-2 h-4 w-4" />
                 {exporting === "briefing" ? "Exporting..." : "Executive Briefing"}
               </DropdownMenuItem>
@@ -187,20 +186,13 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
       {/* Deploy actions */}
       {hasDeployed ? (
         <>
-          <Button
-            size="sm"
-            onClick={() => window.open(notebookUrl!, "_blank")}
-          >
+          <Button size="sm" onClick={() => window.open(notebookUrl!, "_blank")}>
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
             Open Notebooks
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!!exporting}
-              >
+              <Button variant="outline" size="sm" disabled={!!exporting}>
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                 {exporting === "notebooks" ? "Deploying..." : "Redeploy"}
               </Button>
@@ -209,9 +201,8 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
               <AlertDialogHeader>
                 <AlertDialogTitle>Redeploy notebooks?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will overwrite all previously deployed notebooks in the
-                  workspace. Any manual edits made to those notebooks will be
-                  lost.
+                  This will overwrite all previously deployed notebooks in the workspace. Any manual
+                  edits made to those notebooks will be lost.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -224,11 +215,7 @@ export function ExportToolbar({ runId, businessName, scanId }: ExportToolbarProp
           </AlertDialog>
         </>
       ) : (
-        <Button
-          size="sm"
-          disabled={!!exporting}
-          onClick={() => handleExport("notebooks")}
-        >
+        <Button size="sm" disabled={!!exporting} onClick={() => handleExport("notebooks")}>
           <Rocket className="mr-1.5 h-3.5 w-3.5" />
           {exporting === "notebooks" ? "Deploying..." : "Deploy Notebooks"}
         </Button>

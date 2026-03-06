@@ -11,6 +11,7 @@ import type {
   EnrichedSqlSnippetDimension,
   EnrichedSqlSnippetFilter,
 } from "@/lib/genie/types";
+import type { FilterCandidate, MetricViewForDashboard } from "./types";
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
 export const DASHBOARD_SYSTEM_MESSAGE =
@@ -31,6 +32,8 @@ export interface DashboardPromptInput {
   measures?: EnrichedSqlSnippetMeasure[];
   dimensions?: EnrichedSqlSnippetDimension[];
   filters?: EnrichedSqlSnippetFilter[];
+  filterCandidates?: FilterCandidate[];
+  metricViews?: MetricViewForDashboard[];
 }
 
 export function buildDashboardDesignPrompt(input: DashboardPromptInput): string {
@@ -45,6 +48,8 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
     measures,
     dimensions,
     filters,
+    filterCandidates,
+    metricViews,
   } = input;
 
   const sections: string[] = [];
@@ -72,9 +77,7 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
     .slice(0, 8);
 
   if (topUseCases.length === 0) {
-    const fallback = useCases
-      .sort((a, b) => b.overallScore - a.overallScore)
-      .slice(0, 5);
+    const fallback = useCases.sort((a, b) => b.overallScore - a.overallScore).slice(0, 5);
     for (const uc of fallback) {
       sections.push(`### ${uc.name} (score: ${uc.overallScore.toFixed(2)})`);
       sections.push(`Statement: ${uc.statement}`);
@@ -133,15 +136,50 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
     sections.push("");
   }
 
+  if (filterCandidates && filterCandidates.length > 0) {
+    sections.push("## Filter Candidates");
+    sections.push("These columns are good candidates for interactive dashboard filters:");
+    for (const fc of filterCandidates.slice(0, 8)) {
+      sections.push(`- ${fc.name} (\`${fc.column}\` in ${fc.tableFqn}, type: ${fc.dataType})`);
+    }
+    sections.push("");
+  }
+
+  if (metricViews && metricViews.length > 0) {
+    sections.push("## Metric Views (Governed KPIs)");
+    sections.push("");
+    sections.push("When metric views are available, PREFER them for KPI and trend datasets.");
+    sections.push(
+      "Query syntax: SELECT dimension, MEASURE(`measure_name`) AS alias FROM fqn GROUP BY dimension",
+    );
+    sections.push("- All measures MUST be wrapped in MEASURE()");
+    sections.push("- SELECT * is NOT supported on metric views");
+    sections.push("- Only the listed dimensions and measures are valid");
+    sections.push("");
+    for (const mv of metricViews.slice(0, 5)) {
+      sections.push(`### ${mv.fqn}`);
+      if (mv.description) sections.push(mv.description);
+      sections.push(`Dimensions: ${mv.dimensions.map((d) => `${d.name} (${d.expr})`).join(", ")}`);
+      sections.push(`Measures: ${mv.measures.map((m) => `${m.name} (${m.expr})`).join(", ")}`);
+      sections.push("");
+    }
+  }
+
   // Instructions
   sections.push("## Instructions");
   sections.push("");
   sections.push("Design a Databricks AI/BI dashboard for this domain. Create:");
   sections.push("");
   sections.push("1. **Datasets** (2-4 SQL queries):");
-  sections.push('   - A KPI summary dataset (purpose: "kpi") returning a single row with 3 aggregate metrics');
-  sections.push('   - A trend dataset (purpose: "trend") with a date/time column for time-series charts');
-  sections.push('   - A breakdown dataset (purpose: "breakdown") grouping by a categorical dimension');
+  sections.push(
+    '   - A KPI summary dataset (purpose: "kpi") returning a single row with 3 aggregate metrics',
+  );
+  sections.push(
+    '   - A trend dataset (purpose: "trend") with a date/time column for time-series charts',
+  );
+  sections.push(
+    '   - A breakdown dataset (purpose: "breakdown") grouping by a categorical dimension',
+  );
   sections.push('   - Optionally a detail dataset (purpose: "detail") showing key records');
   sections.push("");
   sections.push("2. **Widgets** (6-10 visualisations):");
@@ -150,15 +188,45 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push('   - 1-2 bar/pie charts for breakdowns (type: "bar" or "pie")');
   sections.push('   - Optionally 1 table for detail records (type: "table")');
   sections.push("");
+  sections.push("3. **Filter widgets** (1-3 global filters, included in the widgets array):");
+  sections.push(
+    '   - 1 date-range filter (type: "filter-date-range-picker") if a date/timestamp column exists in any dataset',
+  );
+  sections.push(
+    '   - 1-2 categorical filters (type: "filter-multi-select") for dimensions with 3-10 distinct values',
+  );
+  sections.push("   - Filter fields MUST reference columns that exist in at least one dataset");
+  sections.push(
+    '   - Each filter widget has one field with role: "filter" and expression: "`column_name`"',
+  );
+  sections.push(
+    "   - The filter column name in the filter widget must match the column alias used in the dataset SQL",
+  );
+  sections.push("");
   sections.push("### SQL Rules");
   sections.push(DATABRICKS_SQL_RULES);
   sections.push("");
+  if (metricViews && metricViews.length > 0) {
+    sections.push("Metric view rules:");
+    sections.push(
+      "- If metric views are listed above, PREFER them for KPI and trend datasets instead of raw SQL.",
+    );
+    sections.push(
+      "- Use MEASURE(`measure_name`) for all aggregations from metric views. This ensures consistent KPI definitions.",
+    );
+    sections.push("- Never use SELECT * on a metric view.");
+    sections.push("");
+  }
   sections.push("Dashboard-specific SQL rules:");
   sections.push("- Use ONLY fully-qualified table names (catalog.schema.table)");
   sections.push("- Use ONLY tables listed in Available Tables above");
   sections.push("- Use Spark SQL syntax (date_sub, DATE_TRUNC, not INTERVAL)");
-  sections.push("- When a date/time column is STRING type, parse it safely with COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy')) -- NEVER use TO_DATE() which throws on format mismatches.");
-  sections.push("- Each dataset is a SINGLE SELECT query (no semicolons, no CTEs with multiple statements)");
+  sections.push(
+    "- When a date/time column is STRING type, parse it safely with COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy')) -- NEVER use TO_DATE() which throws on format mismatches.",
+  );
+  sections.push(
+    "- Each dataset is a SINGLE SELECT query (no semicolons, no CTEs with multiple statements)",
+  );
   sections.push("- KPI dataset must return exactly 1 row");
   sections.push("- Trend dataset must include a date column");
   sections.push("- Breakdown dataset should use GROUP BY with ORDER BY and LIMIT 10");
@@ -167,14 +235,22 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push("### Widget Fields");
   sections.push("Each widget field needs:");
   sections.push('- `name`: unique identifier (e.g., "sum(revenue)", "category", "order_date")');
-  sections.push('- `expression`: Lakeview expression — for counters: "`column_name`", for charts: "SUM(`col`)", "DATE_TRUNC(\\"MONTH\\", `date_col`)"');
-  sections.push('- `role`: one of "value" (counters), "x" (chart x-axis), "y" (chart y-axis), "color" (chart grouping), "column" (table columns)');
+  sections.push(
+    '- `expression`: Lakeview expression — for counters: "`column_name`", for charts: "SUM(`col`)", "DATE_TRUNC(\\"MONTH\\", `date_col`)"',
+  );
+  sections.push(
+    '- `role`: one of "value" (counters), "x" (chart x-axis), "y" (chart y-axis), "color" (chart grouping), "column" (table columns), "filter" (filter widgets)',
+  );
   sections.push("");
   sections.push("### CRITICAL Rules");
-  sections.push("- Counter fields use role: \"value\" and expression should be a simple column reference like \"`metric_name`\"");
-  sections.push("- Chart x-axis fields need role: \"x\", y-axis fields need role: \"y\"");
-  sections.push("- Pie charts need one field with role: \"y\" (angle/size) and one with role: \"color\" (categories)");
-  sections.push("- Table fields all use role: \"column\"");
+  sections.push(
+    '- Counter fields use role: "value" and expression should be a simple column reference like "`metric_name`"',
+  );
+  sections.push('- Chart x-axis fields need role: "x", y-axis fields need role: "y"');
+  sections.push(
+    '- Pie charts need one field with role: "y" (angle/size) and one with role: "color" (categories)',
+  );
+  sections.push('- Table fields all use role: "column"');
   sections.push("- Limit chart color/grouping dimensions to 3-8 distinct values");
   sections.push("");
   sections.push("### Output Format");
@@ -185,10 +261,14 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
   sections.push('  "title": "Dashboard Title",');
   sections.push('  "description": "Brief description",');
   sections.push('  "datasets": [');
-  sections.push('    {"name": "snake_case_name", "displayName": "Human Name", "sql": "SELECT ...", "purpose": "kpi|trend|breakdown|detail"}');
+  sections.push(
+    '    {"name": "snake_case_name", "displayName": "Human Name", "sql": "SELECT ...", "purpose": "kpi|trend|breakdown|detail"}',
+  );
   sections.push("  ],");
   sections.push('  "widgets": [');
-  sections.push('    {"type": "counter|bar|line|pie|table", "title": "Widget Title", "datasetName": "snake_case_name", "fields": [{"name": "field_id", "expression": "`col`", "role": "value|x|y|color|column"}]}');
+  sections.push(
+    '    {"type": "counter|bar|line|pie|table|filter-multi-select|filter-single-select|filter-date-range-picker", "title": "Widget Title", "datasetName": "snake_case_name", "fields": [{"name": "field_id", "expression": "`col`", "role": "value|x|y|color|column|filter"}]}',
+  );
   sections.push("  ]");
   sections.push("}");
   sections.push("```");

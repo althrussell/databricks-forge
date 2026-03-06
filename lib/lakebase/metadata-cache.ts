@@ -12,9 +12,7 @@ import type { MetadataSnapshot } from "@/lib/domain/types";
 /**
  * Save a metadata snapshot to the cache table.
  */
-export async function saveMetadataSnapshot(
-  snapshot: MetadataSnapshot
-): Promise<void> {
+export async function saveMetadataSnapshot(snapshot: MetadataSnapshot): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeMetadataCache.upsert({
       where: { cacheKey: snapshot.cacheKey },
@@ -38,9 +36,7 @@ export async function saveMetadataSnapshot(
  * Load a metadata snapshot from the cache by key.
  * Returns null if not found or if the stored JSON is invalid.
  */
-export async function loadMetadataSnapshot(
-  cacheKey: string
-): Promise<MetadataSnapshot | null> {
+export async function loadMetadataSnapshot(cacheKey: string): Promise<MetadataSnapshot | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeMetadataCache.findUnique({
       where: { cacheKey },
@@ -66,9 +62,7 @@ export async function loadMetadataSnapshot(
 /**
  * Load metadata for a run by looking up its metadataCacheKey.
  */
-export async function loadMetadataForRun(
-  runId: string
-): Promise<MetadataSnapshot | null> {
+export async function loadMetadataForRun(runId: string): Promise<MetadataSnapshot | null> {
   const cacheKey = await withPrisma(async (prisma) => {
     const run = await prisma.forgeRun.findUnique({
       where: { runId },
@@ -85,9 +79,7 @@ export async function loadMetadataForRun(
  * Load only `lineageDiscoveredFqns` for a run, avoiding the full metadata
  * snapshot transfer and parse.  Returns [] when no cache entry exists.
  */
-export async function loadLineageFqnsForRun(
-  runId: string
-): Promise<string[]> {
+export async function loadLineageFqnsForRun(runId: string): Promise<string[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.$queryRaw<
       Array<{ fqns: string | null }>
@@ -99,9 +91,7 @@ export async function loadLineageFqnsForRun(
 
     if (!rows.length || !rows[0].fqns) return [];
     try {
-      const parsed = typeof rows[0].fqns === "string"
-        ? JSON.parse(rows[0].fqns)
-        : rows[0].fqns;
+      const parsed = typeof rows[0].fqns === "string" ? JSON.parse(rows[0].fqns) : rows[0].fqns;
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,8 +22,18 @@ import type {
 } from "@/lib/settings";
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function GenieToggle({
@@ -48,16 +52,12 @@ function GenieToggle({
       type="button"
       onClick={() => onToggle(!checked)}
       className={`rounded-lg border-2 p-4 text-left transition-colors ${
-        checked
-          ? "border-violet-500/50 bg-violet-500/5"
-          : "border-muted text-muted-foreground"
+        checked ? "border-violet-500/50 bg-violet-500/5" : "border-muted text-muted-foreground"
       }`}
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">{label}</span>
-        <div
-          className={`h-4 w-4 rounded-full ${checked ? "bg-violet-500" : "bg-muted"}`}
-        />
+        <div className={`h-4 w-4 rounded-full ${checked ? "bg-violet-500" : "bg-muted"}`} />
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </button>
@@ -66,11 +66,17 @@ function GenieToggle({
 
 interface GenieDefaultsSettingsProps {
   genieDefaults: GenieEngineDefaults;
-  onGenieDefaultsChange: (value: GenieEngineDefaults | ((prev: GenieEngineDefaults) => GenieEngineDefaults)) => void;
+  onGenieDefaultsChange: (
+    value: GenieEngineDefaults | ((prev: GenieEngineDefaults) => GenieEngineDefaults),
+  ) => void;
   genieDeployAuthMode: GenieAuthMode;
   onGenieDeployAuthModeChange: (value: GenieAuthMode) => void;
   questionComplexity: QuestionComplexitySettings;
-  onQuestionComplexityChange: (value: QuestionComplexitySettings | ((prev: QuestionComplexitySettings) => QuestionComplexitySettings)) => void;
+  onQuestionComplexityChange: (
+    value:
+      | QuestionComplexitySettings
+      | ((prev: QuestionComplexitySettings) => QuestionComplexitySettings),
+  ) => void;
 }
 
 export function GenieDefaultsSettings({
@@ -90,17 +96,15 @@ export function GenieDefaultsSettings({
           <InfoTip tip={SETTINGS.genieEngine} />
         </CardTitle>
         <CardDescription>
-          Global defaults for Genie Space generation. These apply to all new
-          runs. Per-run configuration (glossary, custom SQL, column overrides,
-          benchmarks, instructions) is still editable within each run.
+          Global defaults for Genie Space generation. These apply to all new runs. Per-run
+          configuration (glossary, custom SQL, column overrides, benchmarks, instructions) is still
+          editable within each run.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div
           className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-            genieDefaults.engineEnabled
-              ? "border-violet-500/50 bg-violet-500/5"
-              : "border-muted"
+            genieDefaults.engineEnabled ? "border-violet-500/50 bg-violet-500/5" : "border-muted"
           }`}
         >
           <div>
@@ -153,9 +157,7 @@ export function GenieDefaultsSettings({
                   }
                   className="w-24"
                 />
-                <span className="text-xs text-muted-foreground">
-                  Up to 30 tables per space
-                </span>
+                <span className="text-xs text-muted-foreground">Up to 30 tables per space</span>
               </div>
             </div>
             <div className="space-y-2">
@@ -204,7 +206,8 @@ export function GenieDefaultsSettings({
                 className="w-24"
               />
               <span className="text-xs text-muted-foreground">
-                0 = all domains (default). Limits auto-generation; you can always regenerate more from the Genie Workbench.
+                0 = all domains (default). Limits auto-generation; you can always regenerate more
+                from the Genie Workbench.
               </span>
             </div>
           </div>
@@ -215,11 +218,11 @@ export function GenieDefaultsSettings({
               <InfoTip tip={SETTINGS.entityMatching} />
             </div>
             <div className="flex gap-2">
-              {([
+              {[
                 { value: "auto" as const, label: "Auto (from sample data)" },
                 { value: "manual" as const, label: "Manual only" },
                 { value: "off" as const, label: "Disabled" },
-              ]).map((opt) => (
+              ].map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
@@ -240,7 +243,8 @@ export function GenieDefaultsSettings({
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Auto uses sample data to detect value aliases (e.g. &quot;Florida&quot; &rarr; &quot;FL&quot;)
+              Auto uses sample data to detect value aliases (e.g. &quot;Florida&quot; &rarr;
+              &quot;FL&quot;)
             </p>
           </div>
 
@@ -249,19 +253,19 @@ export function GenieDefaultsSettings({
               <Label>Question Complexity</Label>
               <InfoTip tip="Controls the language style of sample questions generated for Genie Spaces. Simple: short plain-English questions. Medium: slightly more specific with business concepts. Complex: analytical language with trends, correlations, and technical terms." />
             </div>
-            {([
+            {[
               { key: "genieEngine" as const, label: "Genie Engine" },
               { key: "adhocGenie" as const, label: "Adhoc Genie" },
               { key: "metadataGenie" as const, label: "Metadata Genie" },
-            ]).map((surface) => (
+            ].map((surface) => (
               <div key={surface.key} className="flex items-center gap-3">
                 <span className="w-32 text-xs text-muted-foreground">{surface.label}</span>
                 <div className="flex gap-1.5">
-                  {([
+                  {[
                     { value: "simple" as QuestionComplexity, label: "Simple" },
                     { value: "medium" as QuestionComplexity, label: "Medium" },
                     { value: "complex" as QuestionComplexity, label: "Complex" },
-                  ]).map((opt) => (
+                  ].map((opt) => (
                     <button
                       key={opt.value}
                       type="button"
@@ -284,7 +288,8 @@ export function GenieDefaultsSettings({
               </div>
             ))}
             <p className="text-[10px] text-muted-foreground">
-              Simple produces short, everyday questions. Medium adds business context. Complex uses analytical language.
+              Simple produces short, everyday questions. Medium adds business context. Complex uses
+              analytical language.
             </p>
           </div>
 
@@ -301,19 +306,25 @@ export function GenieDefaultsSettings({
               label="Trusted Assets"
               description="Generate parameterized SQL queries and UDF definitions"
               checked={genieDefaults.generateTrustedAssets}
-              onToggle={(v) => onGenieDefaultsChange((prev) => ({ ...prev, generateTrustedAssets: v }))}
+              onToggle={(v) =>
+                onGenieDefaultsChange((prev) => ({ ...prev, generateTrustedAssets: v }))
+              }
             />
             <GenieToggle
               label="Auto Benchmarks"
               description="Generate test questions with expected SQL to evaluate Genie accuracy"
               checked={genieDefaults.generateBenchmarks}
-              onToggle={(v) => onGenieDefaultsChange((prev) => ({ ...prev, generateBenchmarks: v }))}
+              onToggle={(v) =>
+                onGenieDefaultsChange((prev) => ({ ...prev, generateBenchmarks: v }))
+              }
             />
             <GenieToggle
               label="Metric Views"
               description="Propose metric view definitions (KPIs, dimensions, measures)"
               checked={genieDefaults.generateMetricViews}
-              onToggle={(v) => onGenieDefaultsChange((prev) => ({ ...prev, generateMetricViews: v }))}
+              onToggle={(v) =>
+                onGenieDefaultsChange((prev) => ({ ...prev, generateMetricViews: v }))
+              }
             />
             <GenieToggle
               label="Auto Time Periods"
@@ -331,10 +342,12 @@ export function GenieDefaultsSettings({
               <InfoTip tip="Controls which identity is used when creating, updating, or deleting Genie Spaces in Databricks. User (OBO) uses the logged-in user's credentials; Service Principal uses the app's service principal." />
             </div>
             <div className="flex gap-2">
-              {([
-                { value: "obo" as const, label: "User (recommended)" },
-                { value: "sp" as const, label: "Service Principal" },
-              ] as const).map((opt) => (
+              {(
+                [
+                  { value: "obo" as const, label: "User (recommended)" },
+                  { value: "sp" as const, label: "Service Principal" },
+                ] as const
+              ).map((opt) => (
                 <button
                   key={opt.value}
                   type="button"

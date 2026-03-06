@@ -44,7 +44,7 @@ interface UseCaseItem {
 
 export async function runUsecaseGeneration(
   ctx: PipelineContext,
-  runId?: string
+  runId?: string,
 ): Promise<UseCase[]> {
   const { run, metadata, filteredTables } = ctx;
   if (!metadata) throw new Error("Metadata not available");
@@ -54,9 +54,7 @@ export async function runUsecaseGeneration(
 
   // Filter metadata to only business-relevant tables
   const tables = metadata.tables.filter((t) => filteredTables.includes(t.fqn));
-  const columns = metadata.columns.filter((c) =>
-    filteredTables.includes(c.tableFqn)
-  );
+  const columns = metadata.columns.filter((c) => filteredTables.includes(c.tableFqn));
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 
@@ -95,7 +93,8 @@ export async function runUsecaseGeneration(
     const { getFeedbackExamples } = await import("@/lib/lakebase/usecases");
     const examples = await getFeedbackExamples(run.config.ucMetadata, 8);
     if (examples.length > 0) {
-      feedbackExamplesSection = "\n\n**USER-APPROVED USE CASES FROM PRIOR RUNS** (generate similar quality and style):\n" +
+      feedbackExamplesSection =
+        "\n\n**USER-APPROVED USE CASES FROM PRIOR RUNS** (generate similar quality and style):\n" +
         examples.map((ex, i) => `${i + 1}. "${ex.name}" (${ex.type}) — ${ex.statement}`).join("\n");
     }
   } catch {
@@ -170,12 +169,12 @@ export async function runUsecaseGeneration(
   // Estimate base token cost (everything except schema_markdown which varies per batch)
   const sharedContextTokens = estimateTokens(
     JSON.stringify(bc) +
-    fkMarkdown +
-    lineageContext +
-    focusAreasInstruction +
-    industryReferenceUseCases +
-    generateAIFunctionsSummary() +
-    generateGeospatialFunctionsSummary()
+      fkMarkdown +
+      lineageContext +
+      focusAreasInstruction +
+      industryReferenceUseCases +
+      generateAIFunctionsSummary() +
+      generateGeospatialFunctionsSummary(),
   );
   // Add overhead for the prompt template itself (~2000 tokens)
   const baseTokens = sharedContextTokens + 2000;
@@ -191,7 +190,7 @@ export async function runUsecaseGeneration(
   const batches = buildTokenAwareBatches(
     tables,
     (table) => buildSchemaMarkdown([table], columnsByTable.get(table.fqn) ?? []),
-    baseTokens
+    baseTokens,
   );
 
   logger.info("Use case generation starting", {
@@ -211,20 +210,24 @@ export async function runUsecaseGeneration(
     batchGroupIdx++;
     const totalGroups = Math.ceil(batches.length / MAX_CONCURRENT_BATCHES);
     const samplingNote = sampleRows > 0 ? ` with ${sampleRows}-row sampling` : "";
-    if (runId) await updateRunMessage(runId, `Generating AI & statistical use cases${samplingNote} (batch group ${batchGroupIdx} of ${totalGroups})...`);
+    if (runId)
+      await updateRunMessage(
+        runId,
+        `Generating AI & statistical use cases${samplingNote} (batch group ${batchGroupIdx} of ${totalGroups})...`,
+      );
     const concurrentBatches = batches.slice(i, i + MAX_CONCURRENT_BATCHES);
 
     // Build cross-batch feedback: list of already-generated use case names
     const previousFeedback = buildPreviousUseCasesFeedback(allUseCases);
 
     // Fetch sample data for all tables in this concurrent group (if enabled)
-    const concurrentTableFqns = concurrentBatches
-      .flat()
-      .map((t) => t.fqn);
+    const concurrentTableFqns = concurrentBatches.flat().map((t) => t.fqn);
     let sampleDataSection = "";
     if (sampleRows > 0 && concurrentTableFqns.length > 0) {
       const sampleResult = await fetchSampleData(concurrentTableFqns, sampleRows, {
-        runId, userEmail: run.createdBy, step: "usecase-generation",
+        runId,
+        userEmail: run.createdBy,
+        step: "usecase-generation",
       });
       sampleDataSection = sampleResult.markdown;
       // Accumulate structured sample data for downstream Genie Engine use
@@ -245,9 +248,7 @@ export async function runUsecaseGeneration(
     }
 
     const batchPromises = concurrentBatches.flatMap((batch) => {
-      const batchColumns = columns.filter((c) =>
-        batch.some((t) => t.fqn === c.tableFqn)
-      );
+      const batchColumns = columns.filter((c) => batch.some((t) => t.fqn === c.tableFqn));
       const schemaMarkdown = buildSchemaMarkdown(batch, batchColumns);
 
       const tableCount = batch.length;
@@ -297,8 +298,7 @@ export async function runUsecaseGeneration(
           {
             ...baseVars,
             ai_functions_summary: "",
-            statistical_functions_detailed:
-              generateStatisticalFunctionsSummary(),
+            statistical_functions_detailed: generateStatisticalFunctionsSummary(),
           },
           "Statistical",
           run.runId,
@@ -320,7 +320,9 @@ export async function runUsecaseGeneration(
         }
       } else {
         failedBatchCalls++;
-        logger.warn("Use case generation batch failed", { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
+        logger.warn("Use case generation batch failed", {
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
       }
     }
   }
@@ -330,7 +332,11 @@ export async function runUsecaseGeneration(
     uc.useCaseNo = idx + 1;
   });
 
-  if (runId) await updateRunMessage(runId, `Generated ${allUseCases.length} raw use cases from ${tables.length} tables`);
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Generated ${allUseCases.length} raw use cases from ${tables.length} tables`,
+    );
 
   if (allUseCases.length === 0 && tables.length > 0) {
     const allRequestsFailed = attemptedBatchCalls > 0 && failedBatchCalls === attemptedBatchCalls;
@@ -410,11 +416,12 @@ async function generateBatch(
   }
 
   return items
-    .filter((item) =>
-      typeof item.name === "string" &&
-      typeof item.statement === "string" &&
-      typeof item.business_value === "string" &&
-      typeof item.analytics_technique === "string"
+    .filter(
+      (item) =>
+        typeof item.name === "string" &&
+        typeof item.statement === "string" &&
+        typeof item.business_value === "string" &&
+        typeof item.analytics_technique === "string",
     )
     .map((item) => {
       // tables_involved can be an array (expected) or comma-separated string (fallback)
@@ -422,7 +429,10 @@ async function generateBatch(
       if (Array.isArray(item.tables_involved)) {
         tablesInvolved = item.tables_involved.map((t) => t.trim()).filter(Boolean);
       } else if (typeof item.tables_involved === "string") {
-        tablesInvolved = item.tables_involved.split(",").map((t) => t.trim()).filter(Boolean);
+        tablesInvolved = item.tables_involved
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
       } else {
         tablesInvolved = [];
       }
@@ -432,7 +442,7 @@ async function generateBatch(
         runId: useCaseRunId,
         useCaseNo: item.no ?? 0,
         name: item.name?.trim() ?? "",
-        type: ((item.type?.trim() as UseCaseType) || type),
+        type: (item.type?.trim() as UseCaseType) || type,
         analyticsTechnique: item.analytics_technique?.trim() ?? "",
         statement: item.statement?.trim() ?? "",
         solution: item.solution?.trim() ?? "",
@@ -467,23 +477,25 @@ async function generateBatch(
 function buildFilteredLineageSummary(
   graph: LineageGraph,
   filteredTables: string[],
-  maxEdges: number
+  maxEdges: number,
 ): string {
   if (graph.edges.length === 0) return "";
 
   const filteredSet = new Set(filteredTables);
   const relevant = graph.edges.filter(
-    (e) => filteredSet.has(e.sourceTableFqn) || filteredSet.has(e.targetTableFqn)
+    (e) => filteredSet.has(e.sourceTableFqn) || filteredSet.has(e.targetTableFqn),
   );
   if (relevant.length === 0) return "";
 
   const edges = relevant.slice(0, maxEdges);
-  const lines = edges.map((e) =>
-    `${e.sourceTableFqn} -> ${e.targetTableFqn}${e.entityType ? ` (via ${e.entityType})` : ""}`
+  const lines = edges.map(
+    (e) =>
+      `${e.sourceTableFqn} -> ${e.targetTableFqn}${e.entityType ? ` (via ${e.entityType})` : ""}`,
   );
   const header = "**Data Lineage Context** (actual pipeline data flows):";
-  const suffix = relevant.length > maxEdges
-    ? `\n... and ${relevant.length - maxEdges} more data flow edges`
-    : "";
+  const suffix =
+    relevant.length > maxEdges
+      ? `\n... and ${relevant.length - maxEdges} more data flow edges`
+      : "";
   return `${header}\n${lines.join("\n")}${suffix}`;
 }

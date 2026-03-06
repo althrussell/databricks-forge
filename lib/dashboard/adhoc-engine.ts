@@ -15,7 +15,7 @@
  */
 
 import type { UseCase, BusinessContext, ColumnInfo, MetadataSnapshot } from "@/lib/domain/types";
-import type { DashboardDesign, DashboardRecommendation } from "./types";
+import type { DashboardDesign, DashboardRecommendation, FilterCandidate } from "./types";
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
@@ -23,6 +23,7 @@ import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { fetchTableInfoBatch, fetchColumnsBatch } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { validateDatasetSql } from "./validation";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
 import { getServingEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
@@ -123,7 +124,10 @@ function synthesiseUseCases(
         ...base,
         useCaseNo: useCases.length + 1,
         name: `Query ${i + 1}`,
-        statement: `Analyse data from ${tables.slice(0, 3).map((t) => t.split(".").pop()).join(", ")}`,
+        statement: `Analyse data from ${tables
+          .slice(0, 3)
+          .map((t) => t.split(".").pop())
+          .join(", ")}`,
         tablesInvolved: tables,
         sqlCode: sqlBlocks[i],
       });
@@ -145,6 +149,34 @@ function synthesiseUseCases(
   }
 
   return useCases;
+}
+
+function buildFilterCandidatesFromColumns(
+  columns: ColumnInfo[],
+  tableFqns: string[],
+): FilterCandidate[] {
+  const candidates: FilterCandidate[] = [];
+  const targetSet = new Set(tableFqns.map((f) => f.toLowerCase()));
+  const seen = new Set<string>();
+
+  for (const col of columns) {
+    if (!targetSet.has(col.tableFqn.toLowerCase())) continue;
+    const key = `${col.tableFqn}.${col.columnName}`.toLowerCase();
+    if (seen.has(key)) continue;
+
+    const dt = col.dataType.toUpperCase();
+    if (dt.includes("DATE") || dt.includes("TIMESTAMP")) {
+      seen.add(key);
+      candidates.push({
+        name: col.columnName,
+        column: col.columnName,
+        tableFqn: col.tableFqn,
+        dataType: dt,
+      });
+    }
+  }
+
+  return candidates.slice(0, 6);
 }
 
 function buildBusinessContext(conversationSummary?: string): BusinessContext | null {
@@ -203,6 +235,7 @@ export async function runAdHocDashboardEngine(
   const businessContext = buildBusinessContext(conversationSummary);
   const domain = domainHint || tableInfos[0]?.schema || "General";
   const businessName = title || "Ask Forge";
+  const filterCandidates = buildFilterCandidatesFromColumns(columns, tables);
 
   const prompt = buildDashboardDesignPrompt({
     businessName,
@@ -212,6 +245,7 @@ export async function runAdHocDashboardEngine(
     useCases,
     tables,
     columnSchemas,
+    filterCandidates,
   });
 
   const messages: ChatMessage[] = [
@@ -273,7 +307,14 @@ export async function runAdHocDashboardEngine(
           surface: "adhoc-dashboard",
         });
         if (review.fixedSql) {
-          if (validateSqlExpression(allowlist, review.fixedSql, `adhoc_dashboard_fix:${ds.name}`, true)) {
+          if (
+            validateSqlExpression(
+              allowlist,
+              review.fixedSql,
+              `adhoc_dashboard_fix:${ds.name}`,
+              true,
+            )
+          ) {
             logger.info("Ad-hoc Dashboard: review applied fix", {
               dataset: ds.name,
               qualityScore: review.qualityScore,
@@ -295,13 +336,28 @@ export async function runAdHocDashboardEngine(
         return ds;
       }),
     );
-    design.datasets = reviewed.filter(
-      (ds): ds is NonNullable<typeof ds> => ds !== null,
-    );
+    design.datasets = reviewed.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
     if (design.datasets.length === 0) {
       throw new Error("All dashboard datasets were rejected by SQL review");
     }
   }
+
+  // EXPLAIN validation: dry-run each dataset SQL to catch planning errors
+  const explainResults = await Promise.all(
+    design.datasets.map(async (ds) => {
+      if (!ds.sql) return ds;
+      const err = await validateDatasetSql(ds.sql, ds.name);
+      return err ? null : ds;
+    }),
+  );
+  design.datasets = explainResults.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
+  if (design.datasets.length === 0) {
+    throw new Error("All dashboard datasets failed EXPLAIN validation");
+  }
+  // Drop widgets that reference removed datasets
+  design.widgets = design.widgets.filter((w) =>
+    design.datasets.some((ds) => ds.name === w.datasetName),
+  );
 
   const lakeviewDashboard = assembleLakeviewDashboard(design);
   const useCaseIds = useCases.map((uc) => uc.id);

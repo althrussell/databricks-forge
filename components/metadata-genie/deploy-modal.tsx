@@ -20,12 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
-import {
-  CheckCircle2,
-  Loader2,
-  Rocket,
-  ExternalLink,
-} from "lucide-react";
+import { CheckCircle2, Loader2, Rocket, ExternalLink } from "lucide-react";
 import { loadSettings } from "@/lib/settings";
 
 type Step = "schema" | "deploying" | "done";
@@ -118,15 +113,12 @@ export function MetadataGenieDeployModal({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {step === "done"
-              ? "Deployment Complete"
-              : `Deploy ${spaceTitle}`}
+            {step === "done" ? "Deployment Complete" : `Deploy ${spaceTitle}`}
           </DialogTitle>
           <DialogDescription>
             {step === "schema" &&
               "Choose a catalog and schema where the 10 curated metadata views will be created. Genie Space consumers will need SELECT access to this schema."}
-            {step === "deploying" &&
-              "Creating views and deploying the Genie Space..."}
+            {step === "deploying" && "Creating views and deploying the Genie Space..."}
             {step === "done" && "Your Meta Data Genie is ready to use."}
           </DialogDescription>
         </DialogHeader>
@@ -144,14 +136,10 @@ export function MetadataGenieDeployModal({
             {targetSchema.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 Views will be created as{" "}
-                <code className="text-xs font-medium">
-                  {targetSchema[0]}.mdg_*
-                </code>
+                <code className="text-xs font-medium">{targetSchema[0]}.mdg_*</code>
               </p>
             )}
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
         )}
 
@@ -162,9 +150,7 @@ export function MetadataGenieDeployModal({
             <p className="mt-4 text-sm text-muted-foreground">
               Creating 10 curated views and deploying the Genie Space...
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This typically takes 10-15 seconds
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">This typically takes 10-15 seconds</p>
           </div>
         )}
 
@@ -172,15 +158,9 @@ export function MetadataGenieDeployModal({
         {step === "done" && deployResult && (
           <div className="flex flex-col items-center py-6">
             <CheckCircle2 className="h-12 w-12 text-green-500" />
-            <p className="mt-4 text-sm font-medium">
-              {spaceTitle} is live
-            </p>
+            <p className="mt-4 text-sm font-medium">{spaceTitle} is live</p>
             <Button asChild className="mt-4">
-              <a
-                href={deployResult.spaceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={deployResult.spaceUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Open Genie Space
               </a>
@@ -194,10 +174,7 @@ export function MetadataGenieDeployModal({
               <Button variant="ghost" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleDeploy}
-                disabled={targetSchema.length === 0}
-              >
+              <Button onClick={handleDeploy} disabled={targetSchema.length === 0}>
                 <Rocket className="mr-2 h-4 w-4" />
                 Deploy
               </Button>

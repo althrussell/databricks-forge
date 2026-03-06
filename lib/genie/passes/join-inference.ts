@@ -13,7 +13,12 @@ import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { MetadataSnapshot } from "@/lib/domain/types";
-import { buildSchemaContextBlock, isValidTable, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import {
+  buildSchemaContextBlock,
+  isValidTable,
+  validateSqlExpression,
+  type SchemaAllowlist,
+} from "../schema-allowlist";
 import { canonicalKeyGroups } from "../key-synonyms";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
@@ -38,9 +43,7 @@ export interface JoinInferenceOutput {
   }>;
 }
 
-export async function runJoinInference(
-  input: JoinInferenceInput
-): Promise<JoinInferenceOutput> {
+export async function runJoinInference(input: JoinInferenceInput): Promise<JoinInferenceOutput> {
   const { tableFqns, metadata, allowlist, existingJoinKeys, endpoint, signal } = input;
 
   if (tableFqns.length < 2) {
@@ -49,9 +52,7 @@ export async function runJoinInference(
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
-  const existingList = [...existingJoinKeys]
-    .map((k) => k.replace("|", " <-> "))
-    .join("\n");
+  const existingList = [...existingJoinKeys].map((k) => k.replace("|", " <-> ")).join("\n");
 
   const systemMessage = `You are a data modeling expert identifying table relationships for a Databricks Genie space.
 
@@ -107,8 +108,10 @@ ${synonymHints}`;
     }))
     .filter((j) => {
       if (!j.leftTable || !j.rightTable || !j.sql) return false;
-      if (!isValidTable(allowlist, j.leftTable) || !isValidTable(allowlist, j.rightTable)) return false;
-      if (!validateSqlExpression(allowlist, j.sql, `join:${j.leftTable}->${j.rightTable}`, true)) return false;
+      if (!isValidTable(allowlist, j.leftTable) || !isValidTable(allowlist, j.rightTable))
+        return false;
+      if (!validateSqlExpression(allowlist, j.sql, `join:${j.leftTable}->${j.rightTable}`, true))
+        return false;
 
       const pairKey = `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`;
       const reverseKey = `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`;

@@ -22,12 +22,9 @@ import { logger } from "@/lib/logger";
 export async function GET(request: NextRequest) {
   try {
     const format = request.nextUrl.searchParams.get("format") ?? "json";
-    const includeImplicit =
-      request.nextUrl.searchParams.get("includeImplicit") !== "false";
-    const includeLineage =
-      request.nextUrl.searchParams.get("includeLineage") !== "false";
-    const domain =
-      request.nextUrl.searchParams.get("domain") ?? undefined;
+    const includeImplicit = request.nextUrl.searchParams.get("includeImplicit") !== "false";
+    const includeLineage = request.nextUrl.searchParams.get("includeLineage") !== "false";
+    const domain = request.nextUrl.searchParams.get("domain") ?? undefined;
 
     const estate = await getAggregateEstateView();
 
@@ -83,9 +80,6 @@ export async function GET(request: NextRequest) {
     logger.error("[api/environment/aggregate/erd] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to generate aggregate ERD" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to generate aggregate ERD" }, { status: 500 });
   }
 }

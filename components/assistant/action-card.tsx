@@ -25,7 +25,10 @@ interface ActionCardProps {
   onAction: (action: ActionCardData) => void;
 }
 
-const ACTION_CONFIG: Record<string, { icon: React.ReactNode; variant: "default" | "outline" | "secondary" }> = {
+const ACTION_CONFIG: Record<
+  string,
+  { icon: React.ReactNode; variant: "default" | "outline" | "secondary" }
+> = {
   run_sql: { icon: <Play className="size-3.5" />, variant: "default" },
   deploy_notebook: { icon: <BookOpen className="size-3.5" />, variant: "outline" },
   deploy_dashboard: { icon: <LayoutDashboard className="size-3.5" />, variant: "default" },
@@ -39,7 +42,10 @@ const ACTION_CONFIG: Record<string, { icon: React.ReactNode; variant: "default" 
 };
 
 export function ActionCard({ action, onAction }: ActionCardProps) {
-  const config = ACTION_CONFIG[action.type] ?? { icon: <Play className="size-3.5" />, variant: "outline" as const };
+  const config = ACTION_CONFIG[action.type] ?? {
+    icon: <Play className="size-3.5" />,
+    variant: "outline" as const,
+  };
 
   return (
     <Button

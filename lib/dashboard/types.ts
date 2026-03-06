@@ -11,9 +11,17 @@
 
 export type DatasetPurpose = "kpi" | "trend" | "breakdown" | "detail";
 
-export type WidgetType = "counter" | "bar" | "line" | "pie" | "table";
+export type WidgetType =
+  | "counter"
+  | "bar"
+  | "line"
+  | "pie"
+  | "table"
+  | "filter-multi-select"
+  | "filter-single-select"
+  | "filter-date-range-picker";
 
-export type FieldRole = "x" | "y" | "value" | "color" | "column";
+export type FieldRole = "x" | "y" | "value" | "color" | "column" | "filter";
 
 export interface DatasetDesign {
   name: string;
@@ -33,6 +41,8 @@ export interface WidgetDesign {
   title: string;
   datasetName: string;
   fields: WidgetFieldDesign[];
+  /** For filter widgets: the column to filter on (must exist in the dataset). */
+  filterField?: string;
 }
 
 export interface DashboardDesign {
@@ -85,7 +95,9 @@ export interface LakeviewAxisEncoding {
 
 export interface LakeviewChartEncodings {
   x: LakeviewAxisEncoding;
-  y: LakeviewAxisEncoding | { scale: { type: "quantitative" }; fields: { fieldName: string; displayName: string }[] };
+  y:
+    | LakeviewAxisEncoding
+    | { scale: { type: "quantitative" }; fields: { fieldName: string; displayName: string }[] };
   color?: { fieldName: string; scale: { type: "categorical" }; displayName: string };
 }
 
@@ -103,6 +115,14 @@ export interface LakeviewPieEncodings {
   color: { fieldName: string; scale: { type: "categorical" }; displayName: string };
 }
 
+export interface LakeviewFilterEncoding {
+  fields: Array<{
+    fieldName: string;
+    displayName: string;
+    queryName: string;
+  }>;
+}
+
 export interface LakeviewFrame {
   showTitle: boolean;
   title: string;
@@ -111,7 +131,12 @@ export interface LakeviewFrame {
 export interface LakeviewWidgetSpec {
   version: number;
   widgetType: string;
-  encodings: LakeviewCounterEncoding | LakeviewChartEncodings | LakeviewTableEncodings | LakeviewPieEncodings;
+  encodings:
+    | LakeviewCounterEncoding
+    | LakeviewChartEncodings
+    | LakeviewTableEncodings
+    | LakeviewPieEncodings
+    | LakeviewFilterEncoding;
   frame: LakeviewFrame;
 }
 
@@ -191,6 +216,25 @@ export interface TrackedDashboard {
   dashboardUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt Enrichment Types
+// ---------------------------------------------------------------------------
+
+export interface FilterCandidate {
+  name: string;
+  column: string;
+  tableFqn: string;
+  dataType: string;
+}
+
+export interface MetricViewForDashboard {
+  fqn: string;
+  name: string;
+  description: string;
+  dimensions: Array<{ name: string; expr: string }>;
+  measures: Array<{ name: string; expr: string }>;
 }
 
 // ---------------------------------------------------------------------------

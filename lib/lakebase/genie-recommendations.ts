@@ -6,7 +6,11 @@
  */
 
 import { withPrisma } from "@/lib/prisma";
-import type { GenieSpaceRecommendation, GenieEngineRecommendation, GenieEnginePassOutputs } from "@/lib/genie/types";
+import type {
+  GenieSpaceRecommendation,
+  GenieEngineRecommendation,
+  GenieEnginePassOutputs,
+} from "@/lib/genie/types";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -61,7 +65,9 @@ function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
     try {
       const proposals = JSON.parse(row.metricViewProposals);
       if (Array.isArray(proposals)) metricViewCount = proposals.length;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return {
@@ -101,7 +107,7 @@ function dbRowToRecommendation(row: DbRow): GenieEngineRecommendation {
 
 /** List all stored Genie recommendations for a run (includes engine-extended fields). */
 export async function getGenieRecommendationsByRunId(
-  runId: string
+  runId: string,
 ): Promise<GenieEngineRecommendation[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeGenieRecommendation.findMany({
@@ -137,53 +143,55 @@ export async function saveGenieRecommendations(
   }
 
   await withPrisma(async (prisma) => {
-    await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-      if (replaceDomains?.length) {
-        await tx.forgeGenieRecommendation.deleteMany({
-          where: { runId, domain: { in: replaceDomains } },
+    await prisma.$transaction(
+      async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+        if (replaceDomains?.length) {
+          await tx.forgeGenieRecommendation.deleteMany({
+            where: { runId, domain: { in: replaceDomains } },
+          });
+        } else {
+          await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
+        }
+
+        if (recommendations.length === 0) return;
+
+        await tx.forgeGenieRecommendation.createMany({
+          data: recommendations.map((rec, idx) => {
+            const po = outputsByDomain.get(rec.domain);
+            const id = replaceDomains?.length
+              ? `${runId}_genie_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`
+              : `${runId}_genie_${idx}`;
+            return {
+              id,
+              runId,
+              domain: rec.domain,
+              subdomains: JSON.stringify(rec.subdomains),
+              title: rec.title,
+              description: rec.description,
+              tableCount: rec.tableCount,
+              metricViewCount: rec.metricViewCount,
+              useCaseCount: rec.useCaseCount,
+              sqlExampleCount: rec.sqlExampleCount,
+              joinCount: rec.joinCount,
+              measureCount: rec.measureCount,
+              filterCount: rec.filterCount,
+              dimensionCount: rec.dimensionCount,
+              tables: JSON.stringify(rec.tables),
+              metricViews: JSON.stringify(rec.metricViews),
+              serializedSpace: rec.serializedSpace,
+              benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
+              columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
+              metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
+              trustedFunctions: null,
+              engineConfigVersion: engineConfigVersion ?? 0,
+              recommendationType: rec.recommendationType ?? "new",
+              existingAssetId: rec.existingAssetId ?? null,
+              changeSummary: rec.changeSummary ?? null,
+            };
+          }),
         });
-      } else {
-        await tx.forgeGenieRecommendation.deleteMany({ where: { runId } });
-      }
-
-      if (recommendations.length === 0) return;
-
-      await tx.forgeGenieRecommendation.createMany({
-        data: recommendations.map((rec, idx) => {
-          const po = outputsByDomain.get(rec.domain);
-          const id = replaceDomains?.length
-            ? `${runId}_genie_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`
-            : `${runId}_genie_${idx}`;
-          return {
-            id,
-            runId,
-            domain: rec.domain,
-            subdomains: JSON.stringify(rec.subdomains),
-            title: rec.title,
-            description: rec.description,
-            tableCount: rec.tableCount,
-            metricViewCount: rec.metricViewCount,
-            useCaseCount: rec.useCaseCount,
-            sqlExampleCount: rec.sqlExampleCount,
-            joinCount: rec.joinCount,
-            measureCount: rec.measureCount,
-            filterCount: rec.filterCount,
-            dimensionCount: rec.dimensionCount,
-            tables: JSON.stringify(rec.tables),
-            metricViews: JSON.stringify(rec.metricViews),
-            serializedSpace: rec.serializedSpace,
-            benchmarks: po ? JSON.stringify(po.benchmarkQuestions) : null,
-            columnEnrichments: po ? JSON.stringify(po.columnEnrichments) : null,
-            metricViewProposals: po ? JSON.stringify(po.metricViewProposals) : null,
-            trustedFunctions: null,
-            engineConfigVersion: engineConfigVersion ?? 0,
-            recommendationType: rec.recommendationType ?? "new",
-            existingAssetId: rec.existingAssetId ?? null,
-            changeSummary: rec.changeSummary ?? null,
-          };
-        }),
-      });
-    });
+      },
+    );
   });
 
   // Generate vector embeddings for Genie recommendations (best-effort)

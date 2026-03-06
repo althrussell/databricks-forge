@@ -13,39 +13,47 @@ import type { DiscoveryResult } from "./types";
  */
 export function buildAssetContextForGeneration(
   discovery: DiscoveryResult,
-  filteredTables: string[]
+  filteredTables: string[],
 ): string {
   const sections: string[] = [];
 
   if (discovery.genieSpaces.length > 0) {
     const relevant = discovery.genieSpaces.filter((s) =>
-      s.tables.some((t) => filteredTables.includes(t))
+      s.tables.some((t) => filteredTables.includes(t)),
     );
     if (relevant.length > 0) {
       sections.push("## Existing Genie Spaces");
-      sections.push("The customer already has these Genie spaces. Avoid duplicating their coverage:");
+      sections.push(
+        "The customer already has these Genie spaces. Avoid duplicating their coverage:",
+      );
       for (const s of relevant) {
-        sections.push(`- **${s.title}**: covers ${s.tables.length} tables, ${s.measureCount} measures, ${s.sampleQuestionCount} sample questions`);
+        sections.push(
+          `- **${s.title}**: covers ${s.tables.length} tables, ${s.measureCount} measures, ${s.sampleQuestionCount} sample questions`,
+        );
       }
     }
   }
 
   if (discovery.dashboards.length > 0) {
     const relevant = discovery.dashboards.filter((d) =>
-      d.tables.some((t) => filteredTables.includes(t))
+      d.tables.some((t) => filteredTables.includes(t)),
     );
     if (relevant.length > 0) {
       sections.push("## Existing Dashboards");
       sections.push("The customer already has these dashboards. Focus on areas NOT covered:");
       for (const d of relevant) {
-        sections.push(`- **${d.displayName}**: ${d.datasetCount} datasets, covers tables: ${d.tables.join(", ")}`);
+        sections.push(
+          `- **${d.displayName}**: ${d.datasetCount} datasets, covers tables: ${d.tables.join(", ")}`,
+        );
       }
     }
   }
 
   if (discovery.metricViews.length > 0) {
     sections.push("## Existing Metric Views");
-    sections.push("These metric views already exist. Propose use cases that go beyond basic KPI reporting:");
+    sections.push(
+      "These metric views already exist. Propose use cases that go beyond basic KPI reporting:",
+    );
     for (const mv of discovery.metricViews.slice(0, 20)) {
       sections.push(`- \`${mv.fqn}\`${mv.comment ? ` — ${mv.comment}` : ""}`);
     }
@@ -69,9 +77,7 @@ export function buildAssetContextForGeneration(
  * Build a concise asset context for scoring prompts.
  * Helps the LLM assign higher novelty scores to gap-filling use cases.
  */
-export function buildAssetContextForScoring(
-  discovery: DiscoveryResult
-): string {
+export function buildAssetContextForScoring(discovery: DiscoveryResult): string {
   const coveredTables = new Set<string>();
   for (const s of discovery.genieSpaces) {
     for (const t of s.tables) coveredTables.add(t);

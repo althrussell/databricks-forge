@@ -6,11 +6,7 @@
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import { getRunById } from "./runs";
 import { getUseCasesByRunId } from "./usecases";
-import {
-  getPromptLogStats,
-  getPromptLogsByRunId,
-  type PromptLogEntry,
-} from "./prompt-logs";
+import { getPromptLogStats, getPromptLogsByRunId, type PromptLogEntry } from "./prompt-logs";
 import { getPromptTemplatesBatch } from "./prompt-templates";
 import { logger } from "@/lib/logger";
 
@@ -78,36 +74,50 @@ export interface RunComparisonResult {
 // Core comparison
 // ---------------------------------------------------------------------------
 
-export async function compareRuns(
-  runAId: string,
-  runBId: string
-): Promise<RunComparisonResult> {
-  const [runA, runB] = await Promise.all([
-    getRunById(runAId),
-    getRunById(runBId),
-  ]);
+export async function compareRuns(runAId: string, runBId: string): Promise<RunComparisonResult> {
+  const [runA, runB] = await Promise.all([getRunById(runAId), getRunById(runBId)]);
 
   if (!runA || !runB) {
     throw new Error("One or both runs not found");
   }
 
-  const [useCasesA, useCasesB, statsA, statsB, logsA, logsB] =
-    await Promise.all([
-      getUseCasesByRunId(runAId),
-      getUseCasesByRunId(runBId),
-      getPromptLogStats(runAId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt log stats", { runId: runAId, error: String(e) }); return null; }),
-      getPromptLogStats(runBId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt log stats", { runId: runBId, error: String(e) }); return null; }),
-      getPromptLogsByRunId(runAId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt logs", { runId: runAId, error: String(e) }); return []; }),
-      getPromptLogsByRunId(runBId).catch((e) => { logger.debug("[run-comparison] Failed to get prompt logs", { runId: runBId, error: String(e) }); return []; }),
-    ]);
+  const [useCasesA, useCasesB, statsA, statsB, logsA, logsB] = await Promise.all([
+    getUseCasesByRunId(runAId),
+    getUseCasesByRunId(runBId),
+    getPromptLogStats(runAId).catch((e) => {
+      logger.debug("[run-comparison] Failed to get prompt log stats", {
+        runId: runAId,
+        error: String(e),
+      });
+      return null;
+    }),
+    getPromptLogStats(runBId).catch((e) => {
+      logger.debug("[run-comparison] Failed to get prompt log stats", {
+        runId: runBId,
+        error: String(e),
+      });
+      return null;
+    }),
+    getPromptLogsByRunId(runAId).catch((e) => {
+      logger.debug("[run-comparison] Failed to get prompt logs", {
+        runId: runAId,
+        error: String(e),
+      });
+      return [];
+    }),
+    getPromptLogsByRunId(runBId).catch((e) => {
+      logger.debug("[run-comparison] Failed to get prompt logs", {
+        runId: runBId,
+        error: String(e),
+      });
+      return [];
+    }),
+  ]);
 
   const metricsA = buildMetrics(useCasesA, statsA);
   const metricsB = buildMetrics(useCasesB, statsB);
 
-  const promptDiffs = await buildPromptDiffs(
-    runA.promptVersions,
-    runB.promptVersions
-  );
+  const promptDiffs = await buildPromptDiffs(runA.promptVersions, runB.promptVersions);
 
   const stepMetrics = buildStepMetrics(runA, runB, logsA, logsB);
   const overlap = computeOverlap(useCasesA, useCasesB);
@@ -129,12 +139,10 @@ export async function compareRuns(
 
 function buildMetrics(
   useCases: UseCase[],
-  stats: Awaited<ReturnType<typeof getPromptLogStats>> | null
+  stats: Awaited<ReturnType<typeof getPromptLogStats>> | null,
 ): RunMetrics {
   const avgOverallScore =
-    useCases.length > 0
-      ? useCases.reduce((s, uc) => s + uc.overallScore, 0) / useCases.length
-      : 0;
+    useCases.length > 0 ? useCases.reduce((s, uc) => s + uc.overallScore, 0) / useCases.length : 0;
 
   const withSql = useCases.filter((uc) => uc.sqlCode);
   const sqlSuccessRate =
@@ -159,7 +167,7 @@ function buildStepMetrics(
   runA: PipelineRun,
   runB: PipelineRun,
   logsA: PromptLogEntry[],
-  logsB: PromptLogEntry[]
+  logsB: PromptLogEntry[],
 ): StepMetrics[] {
   const allSteps = new Set([
     ...runA.stepLog.map((s) => s.step),
@@ -189,25 +197,15 @@ function buildStepMetrics(
     const stepLogsA = logMapA.get(step) ?? [];
     const stepLogsB = logMapB.get(step) ?? [];
 
-    const tokensA = stepLogsA.reduce(
-      (s, l) => s + (l.tokenUsage?.totalTokens ?? 0),
-      0
-    );
-    const tokensB = stepLogsB.reduce(
-      (s, l) => s + (l.tokenUsage?.totalTokens ?? 0),
-      0
-    );
+    const tokensA = stepLogsA.reduce((s, l) => s + (l.tokenUsage?.totalTokens ?? 0), 0);
+    const tokensB = stepLogsB.reduce((s, l) => s + (l.tokenUsage?.totalTokens ?? 0), 0);
     const successRateA =
       stepLogsA.length > 0
-        ? Math.round(
-            (stepLogsA.filter((l) => l.success).length / stepLogsA.length) * 100
-          )
+        ? Math.round((stepLogsA.filter((l) => l.success).length / stepLogsA.length) * 100)
         : 100;
     const successRateB =
       stepLogsB.length > 0
-        ? Math.round(
-            (stepLogsB.filter((l) => l.success).length / stepLogsB.length) * 100
-          )
+        ? Math.round((stepLogsB.filter((l) => l.success).length / stepLogsB.length) * 100)
         : 100;
 
     result.push({
@@ -228,14 +226,11 @@ function buildStepMetrics(
 
 async function buildPromptDiffs(
   versionsA: Record<string, string> | null,
-  versionsB: Record<string, string> | null
+  versionsB: Record<string, string> | null,
 ): Promise<PromptDiff[]> {
   if (!versionsA || !versionsB) return [];
 
-  const allKeys = new Set([
-    ...Object.keys(versionsA),
-    ...Object.keys(versionsB),
-  ]);
+  const allKeys = new Set([...Object.keys(versionsA), ...Object.keys(versionsB)]);
 
   const changedKeys: PromptDiff[] = [];
   const hashesToFetch = new Set<string>();
@@ -270,7 +265,7 @@ async function buildPromptDiffs(
 
 function computeOverlap(
   useCasesA: UseCase[],
-  useCasesB: UseCase[]
+  useCasesB: UseCase[],
 ): RunComparisonResult["overlap"] {
   const namesA = new Set(useCasesA.map((uc) => uc.name.toLowerCase()));
   const namesB = new Set(useCasesB.map((uc) => uc.name.toLowerCase()));
@@ -290,17 +285,14 @@ function computeOverlap(
  * Fuzzy alignment of use cases between two runs. Matches by normalised name
  * overlap (Jaccard on words). Only pairs with similarity >= 0.3 are returned.
  */
-function computeAlignment(
-  useCasesA: UseCase[],
-  useCasesB: UseCase[]
-): UseCaseAlignmentEntry[] {
+function computeAlignment(useCasesA: UseCase[], useCasesB: UseCase[]): UseCaseAlignmentEntry[] {
   const tokenise = (s: string) =>
     new Set(
       s
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, "")
         .split(/\s+/)
-        .filter((w) => w.length > 2)
+        .filter((w) => w.length > 2),
     );
 
   const tokensA = useCasesA.map((uc) => ({ uc, tokens: tokenise(uc.name) }));

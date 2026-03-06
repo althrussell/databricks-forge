@@ -52,9 +52,7 @@ export default function RunsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pipeline Runs</h1>
-          <p className="mt-1 text-muted-foreground">
-            View and manage your discovery pipeline runs
-          </p>
+          <p className="mt-1 text-muted-foreground">View and manage your discovery pipeline runs</p>
         </div>
         <Button asChild>
           <Link href="/configure">New Discovery</Link>

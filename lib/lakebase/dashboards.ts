@@ -40,9 +40,7 @@ function dbRowToTracked(row: {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export async function listTrackedDashboards(
-  runId?: string
-): Promise<TrackedDashboard[]> {
+export async function listTrackedDashboards(runId?: string): Promise<TrackedDashboard[]> {
   return withPrisma(async (prisma) => {
     const where = runId ? { runId } : {};
     const rows = await prisma.forgeDashboard.findMany({
@@ -55,7 +53,7 @@ export async function listTrackedDashboards(
 
 export async function getTrackedDashboardByRunDomain(
   runId: string,
-  domain: string
+  domain: string,
 ): Promise<TrackedDashboard | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeDashboard.findUnique({
@@ -71,7 +69,7 @@ export async function trackDashboardCreated(
   runId: string,
   domain: string,
   title: string,
-  dashboardUrl: string | null
+  dashboardUrl: string | null,
 ): Promise<TrackedDashboard> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeDashboard.upsert({
@@ -83,10 +81,7 @@ export async function trackDashboardCreated(
   });
 }
 
-export async function trackDashboardUpdated(
-  dashboardId: string,
-  title?: string
-): Promise<void> {
+export async function trackDashboardUpdated(dashboardId: string, title?: string): Promise<void> {
   await withPrisma(async (prisma) => {
     const data: Record<string, unknown> = { status: "updated" };
     if (title) data.title = title;
@@ -97,9 +92,7 @@ export async function trackDashboardUpdated(
   });
 }
 
-export async function trackDashboardTrashed(
-  dashboardId: string
-): Promise<void> {
+export async function trackDashboardTrashed(dashboardId: string): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeDashboard.updateMany({
       where: { dashboardId },

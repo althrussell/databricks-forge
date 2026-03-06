@@ -33,16 +33,16 @@ export async function DELETE(request: NextRequest) {
     const raw = await request.json();
     const parsed = DeleteBodySchema.safeParse(raw);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid request body" },
+        { status: 400 },
+      );
     }
     const { id, dropViews } = parsed.data;
 
     const space = await getMetadataGenieSpace(id);
     if (!space) {
-      return NextResponse.json(
-        { error: "Metadata Genie space not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Metadata Genie space not found" }, { status: 404 });
     }
 
     // Trash the Genie Space if deployed

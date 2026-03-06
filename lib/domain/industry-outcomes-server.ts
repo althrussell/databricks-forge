@@ -8,11 +8,7 @@
  * @module server-only
  */
 
-import {
-  INDUSTRY_OUTCOMES,
-  getIndustryOutcome,
-  type IndustryOutcome,
-} from "./industry-outcomes";
+import { INDUSTRY_OUTCOMES, getIndustryOutcome, type IndustryOutcome } from "./industry-outcomes";
 
 // ---------------------------------------------------------------------------
 // Dynamic Registry (built-in + custom from Lakebase)
@@ -24,9 +20,7 @@ import {
  */
 export async function getAllIndustryOutcomes(): Promise<IndustryOutcome[]> {
   try {
-    const { loadAllCustomOutcomes } = await import(
-      "@/lib/lakebase/outcome-maps"
-    );
+    const { loadAllCustomOutcomes } = await import("@/lib/lakebase/outcome-maps");
     const customOutcomes = await loadAllCustomOutcomes();
 
     // Custom maps override built-in if same id
@@ -44,18 +38,14 @@ export async function getAllIndustryOutcomes(): Promise<IndustryOutcome[]> {
  * Look up an industry outcome by id, checking custom maps first, then built-in.
  * Async — for server-side code with DB access.
  */
-export async function getIndustryOutcomeAsync(
-  id: string
-): Promise<IndustryOutcome | undefined> {
+export async function getIndustryOutcomeAsync(id: string): Promise<IndustryOutcome | undefined> {
   // Check built-in first (fast path)
   const builtIn = getIndustryOutcome(id);
   if (builtIn) return builtIn;
 
   // Check custom maps
   try {
-    const { getOutcomeMapByIndustryId } = await import(
-      "@/lib/lakebase/outcome-maps"
-    );
+    const { getOutcomeMapByIndustryId } = await import("@/lib/lakebase/outcome-maps");
     const custom = await getOutcomeMapByIndustryId(id);
     return custom?.parsedOutcome ?? undefined;
   } catch {
@@ -74,93 +64,107 @@ export async function getIndustryOutcomeAsync(
  */
 const INDUSTRY_ALIASES: Record<string, string> = {
   "financial services": "banking",
-  "fintech": "banking",
-  "neobank": "banking",
+  fintech: "banking",
+  neobank: "banking",
   "wealth management": "banking",
   "capital markets": "banking",
-  "payments": "banking",
-  "pharma": "hls",
-  "pharmaceutical": "hls",
-  "pharmaceuticals": "hls",
-  "healthcare": "hls",
+  payments: "banking",
+  pharma: "hls",
+  pharmaceutical: "hls",
+  pharmaceuticals: "hls",
+  healthcare: "hls",
   "life sciences": "hls",
-  "biotech": "hls",
-  "biotechnology": "hls",
+  biotech: "hls",
+  biotechnology: "hls",
   "medical devices": "hls",
-  "retail": "rcg",
+  retail: "rcg",
   "consumer goods": "rcg",
-  "cpg": "rcg",
-  "ecommerce": "rcg",
+  cpg: "rcg",
+  ecommerce: "rcg",
   "e-commerce": "rcg",
-  "grocery": "rcg",
-  "fashion": "rcg",
-  "hospitality": "rcg",
-  "travel": "rcg",
-  "telco": "communications",
-  "telecom": "communications",
-  "telecommunications": "communications",
-  "broadband": "communications",
-  "isp": "communications",
-  "energy": "energy-utilities",
-  "utilities": "energy-utilities",
+  grocery: "rcg",
+  fashion: "rcg",
+  hospitality: "rcg",
+  travel: "rcg",
+  telco: "communications",
+  telecom: "communications",
+  telecommunications: "communications",
+  broadband: "communications",
+  isp: "communications",
+  energy: "energy-utilities",
+  utilities: "energy-utilities",
   "oil and gas": "energy-utilities",
   "oil & gas": "energy-utilities",
-  "renewables": "energy-utilities",
-  "mining": "energy-utilities",
-  "water": "water-utilities",
-  "wastewater": "water-utilities",
-  "media": "media-advertising",
-  "advertising": "media-advertising",
-  "adtech": "media-advertising",
-  "streaming": "media-advertising",
-  "publishing": "media-advertising",
-  "technology": "digital-natives",
-  "saas": "digital-natives",
-  "software": "digital-natives",
-  "cloud": "digital-natives",
-  "platform": "digital-natives",
-  "gaming": "games",
-  "esports": "games",
-  "igaming": "sports-betting",
-  "rail": "rail-transport",
-  "railway": "rail-transport",
-  "freight": "rail-transport",
-  "logistics": "rail-transport",
-  "transport": "rail-transport",
-  "automotive": "automotive-mobility",
-  "mobility": "automotive-mobility",
-  "oem": "automotive-mobility",
-  "vehicle": "automotive-mobility",
-  "fleet": "automotive-mobility",
-  "betting": "sports-betting",
-  "wagering": "sports-betting",
-  "gambling": "sports-betting",
-  "lotteries": "sports-betting",
-  "underwriting": "insurance",
-  "reinsurance": "insurance",
-  "claims": "insurance",
-  "insurtech": "insurance",
-  "manufacturing": "manufacturing",
-  "industrial": "manufacturing",
-  "aerospace": "manufacturing",
-  "defense": "manufacturing",
-  "semiconductors": "manufacturing",
-  "superannuation": "superannuation",
+  renewables: "energy-utilities",
+  mining: "energy-utilities",
+  water: "water-utilities",
+  wastewater: "water-utilities",
+  media: "media-advertising",
+  advertising: "media-advertising",
+  adtech: "media-advertising",
+  streaming: "media-advertising",
+  publishing: "media-advertising",
+  technology: "digital-natives",
+  saas: "digital-natives",
+  software: "digital-natives",
+  cloud: "digital-natives",
+  platform: "digital-natives",
+  gaming: "games",
+  esports: "games",
+  igaming: "sports-betting",
+  rail: "rail-transport",
+  railway: "rail-transport",
+  freight: "rail-transport",
+  logistics: "rail-transport",
+  transport: "rail-transport",
+  automotive: "automotive-mobility",
+  mobility: "automotive-mobility",
+  oem: "automotive-mobility",
+  vehicle: "automotive-mobility",
+  fleet: "automotive-mobility",
+  betting: "sports-betting",
+  wagering: "sports-betting",
+  gambling: "sports-betting",
+  lotteries: "sports-betting",
+  underwriting: "insurance",
+  reinsurance: "insurance",
+  claims: "insurance",
+  insurtech: "insurance",
+  manufacturing: "manufacturing",
+  industrial: "manufacturing",
+  aerospace: "manufacturing",
+  defense: "manufacturing",
+  semiconductors: "manufacturing",
+  superannuation: "superannuation",
   "super fund": "superannuation",
   "pension fund": "superannuation",
   "retirement fund": "superannuation",
-  "retirement": "superannuation",
-  "pension": "superannuation",
-  "annuity": "superannuation",
+  retirement: "superannuation",
+  pension: "superannuation",
+  annuity: "superannuation",
   "defined benefit": "superannuation",
   "defined contribution": "superannuation",
 };
 
 /** Words too generic to contribute meaningful signal on their own. */
 const STOP_WORDS = new Set([
-  "and", "the", "for", "with", "from", "services", "solutions",
-  "management", "data", "digital", "analytics", "operations",
-  "group", "company", "industry", "sector", "business",
+  "and",
+  "the",
+  "for",
+  "with",
+  "from",
+  "services",
+  "solutions",
+  "management",
+  "data",
+  "digital",
+  "analytics",
+  "operations",
+  "group",
+  "company",
+  "industry",
+  "sector",
+  "business",
 ]);
 
 /**
@@ -171,9 +175,7 @@ const STOP_WORDS = new Set([
  * confident match is found. Used by the pipeline engine to auto-select
  * an industry when the user hasn't chosen one manually.
  */
-export async function detectIndustryFromContext(
-  industriesStr: string
-): Promise<string | null> {
+export async function detectIndustryFromContext(industriesStr: string): Promise<string | null> {
   if (!industriesStr.trim()) return null;
 
   const outcomes = await getAllIndustryOutcomes();
@@ -205,15 +207,14 @@ export async function detectIndustryFromContext(
     let score = 0;
 
     const nameLower = outcome.name.toLowerCase();
-    const nameWords = nameLower
-      .split(/[\s&/,]+/)
-      .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
-    const subVerticals = (outcome.subVerticals ?? []).map((sv) =>
-      sv.toLowerCase()
-    );
+    const nameWords = nameLower.split(/[\s&/,]+/).filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+    const subVerticals = (outcome.subVerticals ?? []).map((sv) => sv.toLowerCase());
 
     // 1. Exact name match (strongest signal, word-boundary aware)
-    const nameRe = new RegExp(`(?:^|[\\s,;&/])${nameLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[\\s,;&/])`, "i");
+    const nameRe = new RegExp(
+      `(?:^|[\\s,;&/])${nameLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[\\s,;&/])`,
+      "i",
+    );
     if (nameRe.test(inputLower) || inputLower === nameLower) {
       score += 10;
     }
@@ -273,7 +274,7 @@ export async function detectIndustryFromContext(
 export async function buildReferenceUseCasesPrompt(
   industryId: string,
   businessDomains?: string,
-  maxUseCases: number = 40
+  maxUseCases: number = 40,
 ): Promise<string> {
   const industry = await getIndustryOutcomeAsync(industryId);
   if (!industry) return "";
@@ -330,9 +331,7 @@ export async function buildReferenceUseCasesPrompt(
 /**
  * Build industry context string for business context prompt enrichment.
  */
-export async function buildIndustryContextPrompt(
-  industryId: string
-): Promise<string> {
+export async function buildIndustryContextPrompt(industryId: string): Promise<string> {
   const industry = await getIndustryOutcomeAsync(industryId);
   if (!industry) return "";
 
@@ -343,9 +342,7 @@ export async function buildIndustryContextPrompt(
   ];
 
   if (industry.subVerticals?.length) {
-    lines.push(
-      `Sub-verticals include: ${industry.subVerticals.join(", ")}.`
-    );
+    lines.push(`Sub-verticals include: ${industry.subVerticals.join(", ")}.`);
   }
 
   lines.push("");
@@ -364,9 +361,7 @@ export async function buildIndustryContextPrompt(
 /**
  * Build industry KPIs string for scoring prompt enrichment.
  */
-export async function buildIndustryKPIsPrompt(
-  industryId: string
-): Promise<string> {
+export async function buildIndustryKPIsPrompt(industryId: string): Promise<string> {
   const industry = await getIndustryOutcomeAsync(industryId);
   if (!industry) return "";
 
@@ -387,7 +382,7 @@ export async function buildIndustryKPIsPrompt(
 
   lines.push("");
   lines.push(
-    "Use cases that directly address these KPIs should receive higher strategic alignment scores."
+    "Use cases that directly address these KPIs should receive higher strategic alignment scores.",
   );
 
   return lines.join("\n");

@@ -47,7 +47,11 @@ export function ERDPreview({ mermaidCode }: ERDPreviewProps) {
         </Button>
       </div>
       <pre className="max-h-[300px] overflow-auto rounded-md bg-muted p-3 text-xs">
-        <code>{mermaidCode.length > 2000 ? mermaidCode.slice(0, 2000) + `\n... (${lineCount} lines total)` : mermaidCode}</code>
+        <code>
+          {mermaidCode.length > 2000
+            ? mermaidCode.slice(0, 2000) + `\n... (${lineCount} lines total)`
+            : mermaidCode}
+        </code>
       </pre>
     </div>
   );

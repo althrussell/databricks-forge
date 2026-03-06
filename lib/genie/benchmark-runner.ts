@@ -3,10 +3,7 @@
  * Genie Space via the Conversation API and reports accuracy.
  */
 
-import {
-  startConversation,
-  type GenieConversationMessage,
-} from "@/lib/dbx/genie";
+import { startConversation, type GenieConversationMessage } from "@/lib/dbx/genie";
 import { reviewBatch, type BatchReviewItem, type BatchReviewResult } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
@@ -66,9 +63,7 @@ export async function reviewBenchmarkExpectedSql(
   logger.info("Benchmark expectedSql review complete", {
     reviewed: items.length,
     failCount,
-    avgScore: Math.round(
-      results.reduce((s, r) => s + r.result.qualityScore, 0) / results.length,
-    ),
+    avgScore: Math.round(results.reduce((s, r) => s + r.result.qualityScore, 0) / results.length),
   });
 
   return results;
@@ -109,17 +104,13 @@ const SIMILARITY_THRESHOLD = 0.6;
 export async function runBenchmarks(
   spaceId: string,
   benchmarks: Array<{ question: string; expectedSql?: string }>,
-  timeoutPerQuestion = 90_000
+  timeoutPerQuestion = 90_000,
 ): Promise<BenchmarkRunSummary> {
   const results: BenchmarkResult[] = [];
 
   for (const bench of benchmarks) {
     try {
-      const msg = await startConversation(
-        spaceId,
-        bench.question,
-        timeoutPerQuestion
-      );
+      const msg = await startConversation(spaceId, bench.question, timeoutPerQuestion);
 
       const completed = msg.status === "COMPLETED";
       let passed = completed;

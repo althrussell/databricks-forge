@@ -12,7 +12,7 @@ import { logger } from "@/lib/logger";
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -22,10 +22,7 @@ export async function POST(
     const cancelled = await cancelPipeline(runId);
 
     if (!cancelled) {
-      return NextResponse.json(
-        { error: "No active pipeline to cancel" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "No active pipeline to cancel" }, { status: 404 });
     }
 
     logger.info("Pipeline cancelled by user", { runId });

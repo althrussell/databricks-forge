@@ -5,18 +5,8 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -251,9 +241,7 @@ export default function SpaceDetailPage() {
     }
   })();
 
-  const genieUrl = databricksHost
-    ? `${databricksHost}/genie/rooms/${spaceId}`
-    : "";
+  const genieUrl = databricksHost ? `${databricksHost}/genie/rooms/${spaceId}` : "";
 
   // If a fix result is pending review, show the optimization review
   if (fixResult) {
@@ -299,10 +287,11 @@ export default function SpaceDetailPage() {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {detail.healthReport && (
-            <HealthGradeInline report={detail.healthReport} />
-          )}
-          <Badge variant={detail.source === "pipeline" ? "secondary" : "outline"} className="text-xs">
+          {detail.healthReport && <HealthGradeInline report={detail.healthReport} />}
+          <Badge
+            variant={detail.source === "pipeline" ? "secondary" : "outline"}
+            className="text-xs"
+          >
             {detail.source === "pipeline" ? "Pipeline" : "Workspace"}
           </Badge>
         </div>
@@ -340,11 +329,27 @@ export default function SpaceDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
                   <StatItem icon={Table2} label="Tables" value={detail.metadata?.tableCount ?? 0} />
-                  <StatItem icon={BarChart3} label="Measures" value={detail.metadata?.measureCount ?? 0} />
-                  <StatItem icon={MessageSquare} label="Sample Questions" value={detail.metadata?.sampleQuestionCount ?? 0} />
-                  <StatItem icon={Link2} label="Filters" value={detail.metadata?.filterCount ?? 0} />
+                  <StatItem
+                    icon={BarChart3}
+                    label="Measures"
+                    value={detail.metadata?.measureCount ?? 0}
+                  />
+                  <StatItem
+                    icon={MessageSquare}
+                    label="Sample Questions"
+                    value={detail.metadata?.sampleQuestionCount ?? 0}
+                  />
+                  <StatItem
+                    icon={Link2}
+                    label="Filters"
+                    value={detail.metadata?.filterCount ?? 0}
+                  />
                   <StatItem icon={Sparkles} label="Joins" value={detail.metadata?.joinCount ?? 0} />
-                  <StatItem icon={FlaskConical} label="Benchmarks" value={detail.metadata?.benchmarkCount ?? 0} />
+                  <StatItem
+                    icon={FlaskConical}
+                    label="Benchmarks"
+                    value={detail.metadata?.benchmarkCount ?? 0}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -367,26 +372,31 @@ export default function SpaceDetailPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
-                  <Badge variant="outline" className="text-xs">{detail.status}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {detail.status}
+                  </Badge>
                 </div>
-                {detail.metadata?.metricViewCount !== undefined && detail.metadata.metricViewCount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Metric Views</span>
-                    <span>{detail.metadata.metricViewCount}</span>
-                  </div>
-                )}
-                {detail.metadata?.expressionCount !== undefined && detail.metadata.expressionCount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Expressions</span>
-                    <span>{detail.metadata.expressionCount}</span>
-                  </div>
-                )}
-                {detail.metadata?.exampleSqlCount !== undefined && detail.metadata.exampleSqlCount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Example SQLs</span>
-                    <span>{detail.metadata.exampleSqlCount}</span>
-                  </div>
-                )}
+                {detail.metadata?.metricViewCount !== undefined &&
+                  detail.metadata.metricViewCount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Metric Views</span>
+                      <span>{detail.metadata.metricViewCount}</span>
+                    </div>
+                  )}
+                {detail.metadata?.expressionCount !== undefined &&
+                  detail.metadata.expressionCount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Expressions</span>
+                      <span>{detail.metadata.expressionCount}</span>
+                    </div>
+                  )}
+                {detail.metadata?.exampleSqlCount !== undefined &&
+                  detail.metadata.exampleSqlCount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Example SQLs</span>
+                      <span>{detail.metadata.exampleSqlCount}</span>
+                    </div>
+                  )}
               </CardContent>
             </Card>
           </div>
@@ -413,7 +423,11 @@ export default function SpaceDetailPage() {
                   </Link>
                 </Button>
                 <Button size="sm" variant="outline" onClick={handleClone} disabled={cloning}>
-                  {cloning ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Copy className="mr-1.5 size-4" />}
+                  {cloning ? (
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  ) : (
+                    <Copy className="mr-1.5 size-4" />
+                  )}
                   Clone
                 </Button>
                 {detail.runId && (
@@ -574,9 +588,7 @@ function InlineHealthReport({
     <div className="space-y-6">
       {/* Score header */}
       <div className={`flex items-center gap-4 rounded-lg p-4 ${gradeBg(report.grade)}`}>
-        <div className={`text-4xl font-bold ${gradeColor(report.grade)}`}>
-          {report.grade}
-        </div>
+        <div className={`text-4xl font-bold ${gradeColor(report.grade)}`}>{report.grade}</div>
         <div>
           <div className="text-2xl font-semibold">{report.overallScore}/100</div>
           <div className="text-sm text-muted-foreground">
@@ -609,12 +621,12 @@ function InlineHealthReport({
       {/* Fix All + Run Benchmarks */}
       <div className="flex gap-2">
         {fixableChecks.length > 0 && (
-          <Button
-            size="sm"
-            onClick={() => onFix(fixableChecks.map((c) => c.id))}
-            disabled={fixing}
-          >
-            {fixing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Wrench className="mr-2 size-4" />}
+          <Button size="sm" onClick={() => onFix(fixableChecks.map((c) => c.id))} disabled={fixing}>
+            {fixing ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Wrench className="mr-2 size-4" />
+            )}
             Fix All ({fixableChecks.length})
           </Button>
         )}

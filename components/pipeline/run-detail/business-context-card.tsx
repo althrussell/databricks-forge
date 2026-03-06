@@ -1,27 +1,10 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Building2,
-  Target,
-  TrendingUp,
-  Network,
-  DollarSign,
-  Cpu,
-} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2, Target, TrendingUp, Network, DollarSign, Cpu } from "lucide-react";
 import type { BusinessContext } from "@/lib/domain/types";
 
-export function BusinessContextCard({
-  context,
-}: {
-  context: BusinessContext;
-}) {
+export function BusinessContextCard({ context }: { context: BusinessContext }) {
   const sections = [
     {
       icon: <Building2 className="h-4 w-4 text-blue-500" />,
@@ -60,9 +43,7 @@ export function BusinessContextCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">
-          AI-Generated Business Context
-        </CardTitle>
+        <CardTitle className="text-sm font-medium">AI-Generated Business Context</CardTitle>
         <CardDescription>
           Automatically derived from business name and configuration
         </CardDescription>
@@ -73,9 +54,7 @@ export function BusinessContextCard({
             <div key={s.label} className="rounded-md border bg-muted/30 p-3">
               <div className="mb-1 flex items-center gap-2">
                 {s.icon}
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {s.label}
-                </p>
+                <p className="text-xs font-semibold text-muted-foreground">{s.label}</p>
               </div>
               <p className="text-sm leading-relaxed">{s.value}</p>
             </div>

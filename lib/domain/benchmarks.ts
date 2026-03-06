@@ -23,12 +23,7 @@ export const BENCHMARK_LICENSE_CLASSES = [
   "restricted",
 ] as const;
 
-export const BENCHMARK_LIFECYCLE = [
-  "draft",
-  "reviewed",
-  "published",
-  "deprecated",
-] as const;
+export const BENCHMARK_LIFECYCLE = ["draft", "reviewed", "published", "deprecated"] as const;
 
 export type BenchmarkKind = (typeof BENCHMARK_KINDS)[number];
 export type BenchmarkLifecycle = (typeof BENCHMARK_LIFECYCLE)[number];
@@ -49,12 +44,15 @@ export const BenchmarkRecordSchema = z.object({
   confidence: z.number().min(0).max(1),
   ttl_days: z.number().int().min(1).max(3650),
   tags: z.array(z.string().min(1).max(80)).optional().default([]),
-  provenance: z.object({
-    source_class: z.string().min(2).max(80),
-    captured_at: z.string().datetime().optional(),
-    citation: z.string().min(8).max(500).optional(),
-    notes: z.string().max(1000).optional(),
-  }).passthrough().optional(),
+  provenance: z
+    .object({
+      source_class: z.string().min(2).max(80),
+      captured_at: z.string().datetime().optional(),
+      citation: z.string().min(8).max(500).optional(),
+      notes: z.string().max(1000).optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
 export type BenchmarkSeedRecord = z.infer<typeof BenchmarkRecordSchema>;
@@ -94,7 +92,9 @@ export function isPublicSourceUrl(sourceUrl: string): boolean {
     const url = new URL(sourceUrl);
     if (!["https:", "http:"].includes(url.protocol)) return false;
     const host = url.hostname.toLowerCase();
-    return PUBLIC_HOST_ALLOWLIST.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+    return PUBLIC_HOST_ALLOWLIST.some(
+      (allowed) => host === allowed || host.endsWith(`.${allowed}`),
+    );
   } catch {
     return false;
   }

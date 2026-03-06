@@ -16,9 +16,7 @@ const MAX_CONTEXT_CHARS = 8000;
  *
  * Returns empty string if the scan doesn't exist or has no usable data.
  */
-export async function buildPbiContextForGeneration(
-  scanId: string,
-): Promise<string> {
+export async function buildPbiContextForGeneration(scanId: string): Promise<string> {
   try {
     const detail = await getFabricScanDetail(scanId);
     if (!detail) {
@@ -36,15 +34,13 @@ export async function buildPbiContextForGeneration(
   }
 }
 
-function buildContextFromDetail(
-  detail: FabricScanDetail,
-): string {
+function buildContextFromDetail(detail: FabricScanDetail): string {
   const sections: string[] = [];
 
   sections.push("## Existing Power BI / Fabric Estate");
   sections.push(
     `The customer has ${detail.datasetCount} PBI datasets, ${detail.reportCount} reports, and ${detail.measureCount} DAX measures. ` +
-    "Propose use cases that directly replace these PBI assets with Databricks-native alternatives (Gold tables, metric views, Lakeview dashboards, Genie spaces).",
+      "Propose use cases that directly replace these PBI assets with Databricks-native alternatives (Gold tables, metric views, Lakeview dashboards, Genie spaces).",
   );
 
   const datasetSection = buildDatasetSection(detail.datasets);
@@ -70,17 +66,24 @@ function buildDatasetSection(datasets: FabricDataset[]): string {
   const lines: string[] = ["### PBI Datasets & Measures"];
 
   for (const ds of datasets) {
-    lines.push(`\n**${ds.name}**${ds.sensitivityLabel ? ` [sensitivity: ${ds.sensitivityLabel}]` : ""}`);
+    lines.push(
+      `\n**${ds.name}**${ds.sensitivityLabel ? ` [sensitivity: ${ds.sensitivityLabel}]` : ""}`,
+    );
 
     if (ds.tables.length > 0) {
       lines.push("Tables:");
       for (const table of ds.tables) {
-        const colSummary = table.columns.slice(0, 10).map((c) => `${c.name} (${c.dataType})`).join(", ");
+        const colSummary = table.columns
+          .slice(0, 10)
+          .map((c) => `${c.name} (${c.dataType})`)
+          .join(", ");
         const extra = table.columns.length > 10 ? ` +${table.columns.length - 10} more` : "";
         lines.push(`- ${table.name}: ${colSummary}${extra}`);
 
-        for (const measure of (table.measures ?? [])) {
-          lines.push(`  - Measure: ${measure.name} = \`${truncateExpression(measure.expression)}\`${measure.description ? ` -- ${measure.description}` : ""}`);
+        for (const measure of table.measures ?? []) {
+          lines.push(
+            `  - Measure: ${measure.name} = \`${truncateExpression(measure.expression)}\`${measure.description ? ` -- ${measure.description}` : ""}`,
+          );
         }
       }
     }
@@ -88,12 +91,16 @@ function buildDatasetSection(datasets: FabricDataset[]): string {
     if (ds.measures.length > 0) {
       lines.push("Dataset-level measures:");
       for (const m of ds.measures) {
-        lines.push(`- ${m.name} = \`${truncateExpression(m.expression)}\`${m.description ? ` -- ${m.description}` : ""}`);
+        lines.push(
+          `- ${m.name} = \`${truncateExpression(m.expression)}\`${m.description ? ` -- ${m.description}` : ""}`,
+        );
       }
     }
 
     if (ds.datasources.length > 0) {
-      lines.push(`Data sources: ${ds.datasources.map((d) => d.datasourceType || "unknown").join(", ")}`);
+      lines.push(
+        `Data sources: ${ds.datasources.map((d) => d.datasourceType || "unknown").join(", ")}`,
+      );
     }
   }
 
@@ -109,7 +116,9 @@ function buildReportSection(reports: FabricReport[], datasets: FabricDataset[]):
   for (const r of reports) {
     const dsRef = r.datasetId ? dsNameMap.get(r.datasetId) : null;
     const tiles = r.tiles.length > 0 ? ` -- tiles: ${r.tiles.map((t) => t.title).join(", ")}` : "";
-    lines.push(`- **${r.name}**${r.reportType ? ` (${r.reportType})` : ""}${dsRef ? ` [dataset: ${dsRef}]` : ""}${tiles}`);
+    lines.push(
+      `- **${r.name}**${r.reportType ? ` (${r.reportType})` : ""}${dsRef ? ` [dataset: ${dsRef}]` : ""}${tiles}`,
+    );
   }
 
   return lines.join("\n");
@@ -117,7 +126,9 @@ function buildReportSection(reports: FabricReport[], datasets: FabricDataset[]):
 
 function buildRelationshipSection(datasets: FabricDataset[]): string {
   const allRels = datasets.flatMap((ds) =>
-    ds.relationships.map((r) => `${ds.name}: ${r.fromTable}.${r.fromColumn} → ${r.toTable}.${r.toColumn}`),
+    ds.relationships.map(
+      (r) => `${ds.name}: ${r.fromTable}.${r.fromColumn} → ${r.toTable}.${r.toColumn}`,
+    ),
   );
   if (allRels.length === 0) return "";
 

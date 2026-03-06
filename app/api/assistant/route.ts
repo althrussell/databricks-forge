@@ -31,7 +31,9 @@ export async function POST(req: NextRequest) {
     const history = (body.history ?? []) as ConversationTurn[];
     const sessionId = (body.sessionId as string) ?? crypto.randomUUID();
     const raw = body.persona as string;
-    const persona: AssistantPersona = VALID_PERSONAS.has(raw as AssistantPersona) ? (raw as AssistantPersona) : "business";
+    const persona: AssistantPersona = VALID_PERSONAS.has(raw as AssistantPersona)
+      ? (raw as AssistantPersona)
+      : "business";
 
     if (!question || typeof question !== "string" || question.trim().length < 2) {
       return Response.json(
@@ -123,9 +125,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     logger.error("[api/assistant] Request error", { error: String(err) });
-    return Response.json(
-      { error: "Failed to process request" },
-      { status: 500 },
-    );
+    return Response.json({ error: "Failed to process request" }, { status: 500 });
   }
 }

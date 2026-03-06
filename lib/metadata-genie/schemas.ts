@@ -26,7 +26,9 @@ export const DeleteBodySchema = z.object({
   dropViews: z.boolean().optional(),
 });
 
-export const SpaceEditBodySchema = z.object({
-  type: z.string().min(1, "type is required"),
-  id: z.string().min(1, "id is required"),
-}).passthrough();
+export const SpaceEditBodySchema = z
+  .object({
+    type: z.string().min(1, "type is required"),
+    id: z.string().min(1, "id is required"),
+  })
+  .passthrough();

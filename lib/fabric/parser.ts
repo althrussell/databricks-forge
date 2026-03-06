@@ -187,17 +187,11 @@ function parseReport(rep: any, workspaceId: string): FabricReport {
 // Per-workspace API parser
 // ---------------------------------------------------------------------------
 
-export function parseWorkspaceDatasets(
-  raw: any[],
-  workspaceId: string
-): FabricDataset[] {
+export function parseWorkspaceDatasets(raw: any[], workspaceId: string): FabricDataset[] {
   return raw.map((ds) => parseDataset(ds, workspaceId));
 }
 
-export function parseWorkspaceReports(
-  raw: any[],
-  workspaceId: string
-): FabricReport[] {
+export function parseWorkspaceReports(raw: any[], workspaceId: string): FabricReport[] {
   return raw.map((rep) => parseReport(rep, workspaceId));
 }
 
@@ -205,10 +199,7 @@ export function parseWorkspaceReports(
  * Parse per-workspace dashboards API response into FabricReport entries
  * with reportType "Dashboard", matching the admin scanner parser output.
  */
-export function parseWorkspaceDashboards(
-  raw: any[],
-  workspaceId: string,
-): FabricReport[] {
+export function parseWorkspaceDashboards(raw: any[], workspaceId: string): FabricReport[] {
   return raw.map((dash) => ({
     id: "",
     workspaceId,

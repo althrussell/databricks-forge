@@ -230,9 +230,7 @@ function getDefaultTemperature(promptKey: PromptKey): number {
  * Endpoint: POST /serving-endpoints/{endpoint}/invocations
  * Docs: https://docs.databricks.com/en/machine-learning/model-serving/score-foundation-models.html
  */
-export async function executeAIQuery(
-  options: AIQueryOptions
-): Promise<AIQueryResult> {
+export async function executeAIQuery(options: AIQueryOptions): Promise<AIQueryResult> {
   const maxRetries = options.retries ?? 2;
   const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
   const maxTokens = options.maxTokens;
@@ -240,9 +238,7 @@ export async function executeAIQuery(
 
   // Pre-render the prompt once for logging (executeAIQueryOnce also renders it,
   // but we need it here to log on both success and failure paths)
-  const renderedPrompt = options.runId
-    ? formatPrompt(options.promptKey, options.variables)
-    : "";
+  const renderedPrompt = options.runId ? formatPrompt(options.promptKey, options.variables) : "";
 
   // Pre-flight token budget check
   const preflightPrompt = renderedPrompt || formatPrompt(options.promptKey, options.variables);
@@ -408,7 +404,7 @@ function isNonRetryableError(error: Error): boolean {
 async function executeAIQueryOnce(
   options: AIQueryOptions,
   temperature: number,
-  maxTokens: number | undefined
+  maxTokens: number | undefined,
 ): Promise<AIQueryResult> {
   const prompt = formatPrompt(options.promptKey, options.variables);
   const promptVersion = PROMPT_VERSIONS[options.promptKey] ?? "unknown";
@@ -503,7 +499,7 @@ async function executeAIQueryOnce(
  */
 export async function executeAIQueryStream(
   options: AIQueryOptions,
-  onChunk?: StreamCallback
+  onChunk?: StreamCallback,
 ): Promise<AIQueryResult> {
   const temperature = options.temperature ?? getDefaultTemperature(options.promptKey);
   const maxTokens = options.maxTokens;
@@ -556,8 +552,9 @@ export async function executeAIQueryStream(
 
     try {
       await llmSemaphore.acquire();
-      const response = await chatCompletionStream(streamOpts, onChunk)
-        .finally(() => llmSemaphore.release());
+      const response = await chatCompletionStream(streamOpts, onChunk).finally(() =>
+        llmSemaphore.release(),
+      );
 
       const rawResponse = response.content;
       const durationMs = Date.now() - startTime;
@@ -653,10 +650,7 @@ export async function executeAIQueryStream(
  * Parse a CSV response from the LLM into rows of string arrays.
  * Handles quoted fields and malformed rows gracefully.
  */
-export function parseCSVResponse(
-  rawResponse: string,
-  expectedColumns: number
-): string[][] {
+export function parseCSVResponse(rawResponse: string, expectedColumns: number): string[][] {
   const cleaned = cleanCSVResponse(rawResponse);
   const lines = cleaned.split("\n").filter((l) => l.trim().length > 0);
 
@@ -677,9 +671,7 @@ export function parseCSVResponse(
 /**
  * Parse a JSON response from the LLM.
  */
-export function parseJSONResponse<T = Record<string, unknown>>(
-  rawResponse: string
-): T {
+export function parseJSONResponse<T = Record<string, unknown>>(rawResponse: string): T {
   const cleaned = cleanJSONResponse(rawResponse);
   return JSON.parse(cleaned);
 }
@@ -697,8 +689,7 @@ function cleanCSVResponse(response: string): string {
   const firstLine = cleaned.split("\n")[0];
   if (
     firstLine &&
-    (firstLine.toLowerCase().includes("no,") ||
-      firstLine.toLowerCase().includes("no, name"))
+    (firstLine.toLowerCase().includes("no,") || firstLine.toLowerCase().includes("no, name"))
   ) {
     cleaned = cleaned.substring(cleaned.indexOf("\n") + 1);
   }
@@ -713,7 +704,7 @@ function cleanJSONResponse(response: string): string {
   // Find the first { or [
   const jsonStart = Math.min(
     cleaned.indexOf("{") === -1 ? Infinity : cleaned.indexOf("{"),
-    cleaned.indexOf("[") === -1 ? Infinity : cleaned.indexOf("[")
+    cleaned.indexOf("[") === -1 ? Infinity : cleaned.indexOf("["),
   );
   if (jsonStart !== Infinity) {
     cleaned = cleaned.substring(jsonStart);

@@ -62,10 +62,7 @@ export interface RetryOptions {
  * Retryable errors (timeouts, warehouse starting) are retried up to
  * `maxRetries` times with exponential backoff.
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const {
     maxRetries = 2,
     initialBackoffMs = 3_000,
@@ -78,10 +75,7 @@ export async function withRetry<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       if (attempt > 0) {
-        const backoffMs = Math.min(
-          initialBackoffMs * Math.pow(2, attempt - 1),
-          maxBackoffMs
-        );
+        const backoffMs = Math.min(initialBackoffMs * Math.pow(2, attempt - 1), maxBackoffMs);
         logger.info(`[${label}] Retry ${attempt}/${maxRetries} after ${backoffMs}ms`);
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }

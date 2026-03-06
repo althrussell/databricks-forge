@@ -18,6 +18,7 @@ import type {
   LakeviewWidgetField,
   LakeviewWidgetSpec,
   DashboardRecommendation,
+  LakeviewFilterEncoding,
 } from "./types";
 
 const GRID_WIDTH = 6;
@@ -29,6 +30,9 @@ const WIDGET_VERSIONS: Record<string, number> = {
   bar: 3,
   line: 3,
   pie: 3,
+  "filter-multi-select": 2,
+  "filter-single-select": 2,
+  "filter-date-range-picker": 2,
 };
 
 function sanitiseWidgetName(name: string): string {
@@ -52,15 +56,22 @@ function buildTextWidget(text: string, y: number): LakeviewWidget {
 
 function buildCounterWidget(
   design: WidgetDesign,
-  position: LakeviewPosition
+  position: LakeviewPosition,
+  filteredDatasets: Set<string>,
 ): LakeviewWidget {
   const valueField = design.fields.find((f) => f.role === "value") ?? design.fields[0];
   if (!valueField) {
     throw new Error(`Counter widget "${design.title}" has no value field`);
   }
 
+  // When filters reference this counter's dataset, use disaggregated: false
+  // with an aggregation expression so the filter can slice the data.
+  const hasFilters = filteredDatasets.has(design.datasetName);
+  const needsAgg = hasFilters && !valueField.expression.match(/^`[^`]+`$/);
+  const fieldName = needsAgg ? valueField.name : valueField.name;
+
   const field: LakeviewWidgetField = {
-    name: valueField.name,
+    name: fieldName,
     expression: valueField.expression,
   };
 
@@ -69,7 +80,7 @@ function buildCounterWidget(
     query: {
       datasetName: design.datasetName,
       fields: [field],
-      disaggregated: true,
+      disaggregated: !hasFilters,
     },
   };
 
@@ -77,7 +88,7 @@ function buildCounterWidget(
     version: WIDGET_VERSIONS.counter,
     widgetType: "counter",
     encodings: {
-      value: { fieldName: valueField.name, displayName: design.title },
+      value: { fieldName, displayName: design.title },
     },
     frame: { showTitle: true, title: design.title },
   };
@@ -92,10 +103,7 @@ function buildCounterWidget(
   };
 }
 
-function buildChartWidget(
-  design: WidgetDesign,
-  position: LakeviewPosition
-): LakeviewWidget {
+function buildChartWidget(design: WidgetDesign, position: LakeviewPosition): LakeviewWidget {
   const fields: LakeviewWidgetField[] = design.fields.map((f) => ({
     name: f.name,
     expression: f.expression,
@@ -172,10 +180,7 @@ function buildChartWidget(
   };
 }
 
-function buildTableWidget(
-  design: WidgetDesign,
-  position: LakeviewPosition
-): LakeviewWidget {
+function buildTableWidget(design: WidgetDesign, position: LakeviewPosition): LakeviewWidget {
   const fields: LakeviewWidgetField[] = design.fields.map((f) => ({
     name: f.name,
     expression: f.expression,
@@ -212,6 +217,80 @@ function buildTableWidget(
   };
 }
 
+function isFilterType(type: string): boolean {
+  return (
+    type === "filter-multi-select" ||
+    type === "filter-single-select" ||
+    type === "filter-date-range-picker"
+  );
+}
+
+function buildFilterWidget(design: WidgetDesign, position: LakeviewPosition): LakeviewWidget {
+  const filterField = design.fields.find((f) => f.role === "filter") ?? design.fields[0];
+  if (!filterField) {
+    throw new Error(`Filter widget "${design.title}" has no filter field`);
+  }
+
+  const queryName = `ds_${design.datasetName}_${sanitiseWidgetName(filterField.name)}`;
+
+  const field: LakeviewWidgetField = {
+    name: filterField.name,
+    expression: filterField.expression,
+  };
+
+  const query: LakeviewWidgetQuery = {
+    name: queryName,
+    query: {
+      datasetName: design.datasetName,
+      fields: [field],
+      disaggregated: false,
+    },
+  };
+
+  const encodings: LakeviewFilterEncoding = {
+    fields: [
+      {
+        fieldName: filterField.name,
+        displayName: design.title,
+        queryName,
+      },
+    ],
+  };
+
+  const spec: LakeviewWidgetSpec = {
+    version: WIDGET_VERSIONS[design.type] ?? 2,
+    widgetType: design.type,
+    encodings: encodings as LakeviewWidgetSpec["encodings"],
+    frame: { showTitle: true, title: design.title },
+  };
+
+  return {
+    widget: {
+      name: sanitiseWidgetName(design.title),
+      queries: [query],
+      spec,
+    },
+    position,
+  };
+}
+
+function buildGlobalFiltersPage(filterDesigns: WidgetDesign[]): LakeviewPage {
+  const layout: LakeviewWidget[] = [];
+  let currentY = 0;
+
+  for (const design of filterDesigns) {
+    layout.push(buildFilterWidget(design, { x: 0, y: currentY, width: 2, height: 2 }));
+    currentY += 2;
+  }
+
+  return {
+    name: "filters",
+    displayName: "Filters",
+    pageType: "PAGE_TYPE_GLOBAL_FILTERS",
+    layout,
+  };
+}
+
 /**
  * Lay out widgets on the 6-column grid.
  *
@@ -223,9 +302,7 @@ function buildTableWidget(
  *  5. Section header "Breakdown" or "Details"
  *  6. Remaining charts/tables
  */
-export function assembleLakeviewDashboard(
-  design: DashboardDesign
-): SerializedLakeviewDashboard {
+export function assembleLakeviewDashboard(design: DashboardDesign): SerializedLakeviewDashboard {
   // Build datasets
   const datasets: LakeviewDataset[] = design.datasets.map((ds) => ({
     name: ds.name,
@@ -233,12 +310,16 @@ export function assembleLakeviewDashboard(
     queryLines: ds.sql.split("\n").map((line) => line + " "),
   }));
 
-  // Sort widgets by type for layout
-  const counters = design.widgets.filter((w) => w.type === "counter");
-  const charts = design.widgets.filter(
-    (w) => w.type === "bar" || w.type === "line" || w.type === "pie"
+  // Separate filter widgets from visualisation widgets
+  const filters = design.widgets.filter((w) => isFilterType(w.type));
+  const vizWidgets = design.widgets.filter((w) => !isFilterType(w.type));
+
+  // Sort visualisation widgets by type for layout
+  const counters = vizWidgets.filter((w) => w.type === "counter");
+  const charts = vizWidgets.filter(
+    (w) => w.type === "bar" || w.type === "line" || w.type === "pie",
   );
-  const tables = design.widgets.filter((w) => w.type === "table");
+  const tables = vizWidgets.filter((w) => w.type === "table");
 
   const layout: LakeviewWidget[] = [];
   let currentY = 0;
@@ -253,6 +334,9 @@ export function assembleLakeviewDashboard(
     currentY += 1;
   }
 
+  // Determine which datasets are referenced by filter widgets
+  const filteredDatasets = new Set(filters.map((f) => f.datasetName));
+
   // KPI Counters (rows of 3)
   if (counters.length > 0) {
     const counterRows = [];
@@ -266,7 +350,7 @@ export function assembleLakeviewDashboard(
       for (const counter of row) {
         const width = x + counterWidth > GRID_WIDTH ? GRID_WIDTH - x : counterWidth;
         layout.push(
-          buildCounterWidget(counter, { x, y: currentY, width, height: 3 })
+          buildCounterWidget(counter, { x, y: currentY, width, height: 3 }, filteredDatasets),
         );
         x += width;
       }
@@ -282,16 +366,10 @@ export function assembleLakeviewDashboard(
     for (let i = 0; i < charts.length; i += 2) {
       const pair = charts.slice(i, i + 2);
       if (pair.length === 2) {
-        layout.push(
-          buildChartWidget(pair[0], { x: 0, y: currentY, width: 3, height: 5 })
-        );
-        layout.push(
-          buildChartWidget(pair[1], { x: 3, y: currentY, width: 3, height: 5 })
-        );
+        layout.push(buildChartWidget(pair[0], { x: 0, y: currentY, width: 3, height: 5 }));
+        layout.push(buildChartWidget(pair[1], { x: 3, y: currentY, width: 3, height: 5 }));
       } else {
-        layout.push(
-          buildChartWidget(pair[0], { x: 0, y: currentY, width: GRID_WIDTH, height: 5 })
-        );
+        layout.push(buildChartWidget(pair[0], { x: 0, y: currentY, width: GRID_WIDTH, height: 5 }));
       }
       currentY += 5;
     }
@@ -303,9 +381,7 @@ export function assembleLakeviewDashboard(
     currentY += 1;
 
     for (const table of tables) {
-      layout.push(
-        buildTableWidget(table, { x: 0, y: currentY, width: GRID_WIDTH, height: 6 })
-      );
+      layout.push(buildTableWidget(table, { x: 0, y: currentY, width: GRID_WIDTH, height: 6 }));
       currentY += 6;
     }
   }
@@ -317,7 +393,13 @@ export function assembleLakeviewDashboard(
     layout,
   };
 
-  return { datasets, pages: [page] };
+  const pages: LakeviewPage[] = [page];
+
+  if (filters.length > 0) {
+    pages.push(buildGlobalFiltersPage(filters));
+  }
+
+  return { datasets, pages };
 }
 
 /**
@@ -329,18 +411,14 @@ export function buildDashboardRecommendation(
   domain: string,
   subdomains: string[],
   businessName: string,
-  useCaseIds: string[]
+  useCaseIds: string[],
 ): DashboardRecommendation {
   const title = `${businessName} - ${domain} Dashboard`;
-  const descParts: string[] = [
-    `AI/BI dashboard for the ${domain} domain of ${businessName}.`,
-  ];
+  const descParts: string[] = [`AI/BI dashboard for the ${domain} domain of ${businessName}.`];
   if (subdomains.length > 0) {
     descParts.push(`Covers: ${subdomains.join(", ")}.`);
   }
-  descParts.push(
-    `${design.datasets.length} datasets, ${design.widgets.length} visualisations.`
-  );
+  descParts.push(`${design.datasets.length} datasets, ${design.widgets.length} visualisations.`);
 
   return {
     domain,

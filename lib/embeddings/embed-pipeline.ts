@@ -33,7 +33,11 @@ import { logger } from "@/lib/logger";
 function parseTables(val: string[] | string | undefined): string[] {
   if (Array.isArray(val)) return val;
   if (typeof val !== "string" || !val) return [];
-  try { return JSON.parse(val); } catch { return []; }
+  try {
+    return JSON.parse(val);
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -426,8 +430,17 @@ export async function embedFabricScan(
       datasetId: string;
       name: string;
       workspaceName?: string;
-      tables: Array<{ name: string; columns: Array<{ name: string; dataType: string }>; measures: Array<{ name: string; expression: string; description?: string }> }>;
-      relationships: Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }>;
+      tables: Array<{
+        name: string;
+        columns: Array<{ name: string; dataType: string }>;
+        measures: Array<{ name: string; expression: string; description?: string }>;
+      }>;
+      relationships: Array<{
+        fromTable: string;
+        fromColumn: string;
+        toTable: string;
+        toColumn: string;
+      }>;
       sensitivityLabel?: string | null;
     }>;
     reports: Array<{
@@ -446,7 +459,7 @@ export async function embedFabricScan(
       workspaceName?: string;
       metadata?: Record<string, unknown>;
     }>;
-  }
+  },
 ): Promise<void> {
   if (!isEmbeddingEnabled()) return;
 
@@ -461,19 +474,25 @@ export async function embedFabricScan(
         sourceId: ds.datasetId,
         scanId,
         contentText: allTexts[allTexts.length - 1],
-        metadataJson: { name: ds.name, workspace: ds.workspaceName, sensitivity: ds.sensitivityLabel },
+        metadataJson: {
+          name: ds.name,
+          workspace: ds.workspaceName,
+          sensitivity: ds.sensitivityLabel,
+        },
         embedding: [],
       });
 
       for (const table of ds.tables) {
         for (const measure of table.measures) {
-          allTexts.push(composeFabricMeasure({
-            name: measure.name,
-            expression: measure.expression,
-            tableName: table.name,
-            datasetName: ds.name,
-            description: measure.description,
-          }));
+          allTexts.push(
+            composeFabricMeasure({
+              name: measure.name,
+              expression: measure.expression,
+              tableName: table.name,
+              datasetName: ds.name,
+              description: measure.description,
+            }),
+          );
           allInputs.push({
             kind: "fabric_measure",
             sourceId: `${ds.datasetId}:${table.name}:${measure.name}`,

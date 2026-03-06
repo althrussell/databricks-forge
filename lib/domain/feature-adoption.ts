@@ -110,13 +110,13 @@ function sample(arr: string[], max = 10): string[] {
 
 export function computeFeatureAdoption(
   tables: TableInput[],
-  histories: HistoryInput[]
+  histories: HistoryInput[],
 ): FeatureAdoptionSummary {
   const historyMap = new Map(histories.map((h) => [h.tableFqn, h]));
 
   // Filter to Delta tables only for Delta-specific features
   const deltaTables = tables.filter(
-    (t) => t.format === "delta" || t.format === "DELTA" || !t.format
+    (t) => t.format === "delta" || t.format === "DELTA" || !t.format,
   );
 
   // --- Clustering vs Partitioning ---
@@ -181,14 +181,16 @@ export function computeFeatureAdoption(
   }
 
   // --- Documentation & Governance ---
-  const withoutDescription = tables.filter(
-    (t) => !t.comment && !t.generatedDescription
-  ).map((t) => t.tableFqn);
+  const withoutDescription = tables
+    .filter((t) => !t.comment && !t.generatedDescription)
+    .map((t) => t.tableFqn);
   const withoutOwner = tables.filter((t) => !t.owner).map((t) => t.tableFqn);
-  const withTags = tables.filter((t) => {
-    const tags = safeParseArray(t.tagsJson);
-    return tags.length > 0;
-  }).map((t) => t.tableFqn);
+  const withTags = tables
+    .filter((t) => {
+      const tags = safeParseArray(t.tagsJson);
+      return tags.length > 0;
+    })
+    .map((t) => t.tableFqn);
 
   // --- Build findings ---
   const findings: FeatureAdoptionFinding[] = [];
@@ -200,7 +202,8 @@ export function computeFeatureAdoption(
       category: "performance",
       severity: pct > 50 ? "high" : pct > 20 ? "medium" : "low",
       current: `${legacyPartition.length} tables (${pct}%) use legacy Hive-style partitioning. ${liquidClustering.length} tables already use liquid clustering.`,
-      recommendation: "Migrate high-traffic tables from legacy partitioning to liquid clustering for automatic data layout optimization, faster queries, and elimination of partition-related small file problems.",
+      recommendation:
+        "Migrate high-traffic tables from legacy partitioning to liquid clustering for automatic data layout optimization, faster queries, and elimination of partition-related small file problems.",
       tablesAffected: legacyPartition.length,
       tables: sample(legacyPartition),
     });
@@ -212,7 +215,8 @@ export function computeFeatureAdoption(
       category: "reliability",
       severity: "high",
       current: `${streamingWithoutCdf.length} tables with streaming writes do not have CDF enabled. ${cdfEnabled.length} tables have CDF enabled.`,
-      recommendation: "Enable Change Data Feed on streaming tables to support incremental processing, CDC pipelines, and audit trails. This eliminates the need for full table scans to detect changes.",
+      recommendation:
+        "Enable Change Data Feed on streaming tables to support incremental processing, CDC pipelines, and audit trails. This eliminates the need for full table scans to detect changes.",
       tablesAffected: streamingWithoutCdf.length,
       tables: sample(streamingWithoutCdf),
     });
@@ -224,7 +228,8 @@ export function computeFeatureAdoption(
       category: "performance",
       severity: largeWithoutAutoOpt.length > 10 ? "high" : "medium",
       current: `${largeWithoutAutoOpt.length} large tables (>1 GB) lack auto-optimize. ${autoOptimize.length} tables have auto-optimize enabled.`,
-      recommendation: "Enable auto-optimize (optimizeWrite + autoCompact) on large tables to automatically compact small files during writes, reducing storage costs and improving query performance.",
+      recommendation:
+        "Enable auto-optimize (optimizeWrite + autoCompact) on large tables to automatically compact small files during writes, reducing storage costs and improving query performance.",
       tablesAffected: largeWithoutAutoOpt.length,
       tables: sample(largeWithoutAutoOpt),
     });
@@ -236,7 +241,8 @@ export function computeFeatureAdoption(
       category: "performance",
       severity: "medium",
       current: `${outdatedProtocol.length} tables use Delta reader version 1. Modern features (deletion vectors, column mapping, liquid clustering) require version 2+.`,
-      recommendation: "Upgrade Delta protocol versions to unlock deletion vectors, column mapping, and liquid clustering. Run ALTER TABLE ... SET TBLPROPERTIES for affected tables.",
+      recommendation:
+        "Upgrade Delta protocol versions to unlock deletion vectors, column mapping, and liquid clustering. Run ALTER TABLE ... SET TBLPROPERTIES for affected tables.",
       tablesAffected: outdatedProtocol.length,
       tables: sample(outdatedProtocol),
     });
@@ -249,7 +255,8 @@ export function computeFeatureAdoption(
       category: "governance",
       severity: pct > 50 ? "high" : pct > 20 ? "medium" : "low",
       current: `${withoutDescription.length} tables (${pct}%) have no description or comment. Undocumented tables are harder to discover and govern.`,
-      recommendation: "Add COMMENT ON TABLE for undocumented tables. Use AI-generated descriptions from the estate scan as a starting point for documentation.",
+      recommendation:
+        "Add COMMENT ON TABLE for undocumented tables. Use AI-generated descriptions from the estate scan as a starting point for documentation.",
       tablesAffected: withoutDescription.length,
       tables: sample(withoutDescription),
     });
@@ -263,7 +270,8 @@ export function computeFeatureAdoption(
         category: "governance",
         severity: pct > 60 ? "high" : "medium",
         current: `${withoutOwner.length} tables (${pct}%) have no owner assigned in Unity Catalog.`,
-        recommendation: "Assign owners to tables in Unity Catalog for clear accountability, incident response, and governance workflows.",
+        recommendation:
+          "Assign owners to tables in Unity Catalog for clear accountability, incident response, and governance workflows.",
         tablesAffected: withoutOwner.length,
         tables: sample(withoutOwner),
       });
@@ -277,7 +285,8 @@ export function computeFeatureAdoption(
       category: "governance",
       severity: tagPct < 10 ? "high" : "medium",
       current: `Only ${withTags.length} tables (${tagPct}%) have Unity Catalog tags applied.`,
-      recommendation: "Apply UC tags (sensitivity, domain, data classification) to improve discoverability, enforce access policies, and support automated governance workflows.",
+      recommendation:
+        "Apply UC tags (sensitivity, domain, data classification) to improve discoverability, enforce access policies, and support automated governance workflows.",
       tablesAffected: tables.length - withTags.length,
       tables: sample(tables.filter((t) => !withTags.includes(t.tableFqn)).map((t) => t.tableFqn)),
     });
@@ -289,13 +298,19 @@ export function computeFeatureAdoption(
   const total = Math.max(deltaTables.length, 1);
 
   // Deductions for each gap area
-  if (legacyPartition.length > 0) score -= Math.min(20, Math.round((legacyPartition.length / total) * 20));
+  if (legacyPartition.length > 0)
+    score -= Math.min(20, Math.round((legacyPartition.length / total) * 20));
   if (streamingWithoutCdf.length > 0) score -= Math.min(15, streamingWithoutCdf.length * 3);
-  if (largeWithoutAutoOpt.length > 0) score -= Math.min(15, Math.round((largeWithoutAutoOpt.length / total) * 15));
-  if (outdatedProtocol.length > 0) score -= Math.min(10, Math.round((outdatedProtocol.length / total) * 10));
-  if (withoutDescription.length > 0) score -= Math.min(15, Math.round((withoutDescription.length / tables.length) * 15));
-  if (withoutOwner.length > 0) score -= Math.min(10, Math.round((withoutOwner.length / tables.length) * 10));
-  if (withTags.length < tables.length * 0.5) score -= Math.min(15, Math.round(((tables.length - withTags.length) / tables.length) * 15));
+  if (largeWithoutAutoOpt.length > 0)
+    score -= Math.min(15, Math.round((largeWithoutAutoOpt.length / total) * 15));
+  if (outdatedProtocol.length > 0)
+    score -= Math.min(10, Math.round((outdatedProtocol.length / total) * 10));
+  if (withoutDescription.length > 0)
+    score -= Math.min(15, Math.round((withoutDescription.length / tables.length) * 15));
+  if (withoutOwner.length > 0)
+    score -= Math.min(10, Math.round((withoutOwner.length / tables.length) * 10));
+  if (withTags.length < tables.length * 0.5)
+    score -= Math.min(15, Math.round(((tables.length - withTags.length) / tables.length) * 15));
 
   return {
     adoptionScore: Math.max(0, Math.min(100, score)),

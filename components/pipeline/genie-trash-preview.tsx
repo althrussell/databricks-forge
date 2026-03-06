@@ -23,11 +23,8 @@ export function TrashPreviewSection({
   onDropCheckedChange: (v: boolean) => void;
 }) {
   const hasSafe =
-    preview.safeToDelete.functions.length > 0 ||
-    preview.safeToDelete.metricViews.length > 0;
-  const hasShared =
-    preview.shared.functions.length > 0 ||
-    preview.shared.metricViews.length > 0;
+    preview.safeToDelete.functions.length > 0 || preview.safeToDelete.metricViews.length > 0;
+  const hasShared = preview.shared.functions.length > 0 || preview.shared.metricViews.length > 0;
   const hasAny = hasSafe || hasShared;
 
   if (!hasAny) return null;
@@ -72,12 +69,18 @@ export function TrashPreviewSection({
             Shared with other spaces (will be kept):
           </p>
           {preview.shared.functions.map((s) => (
-            <p key={s.fqn} className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate">
+            <p
+              key={s.fqn}
+              className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate"
+            >
               fn: {s.fqn} — used by {s.usedBy.join(", ")}
             </p>
           ))}
           {preview.shared.metricViews.map((s) => (
-            <p key={s.fqn} className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate">
+            <p
+              key={s.fqn}
+              className="text-xs font-mono text-amber-600 dark:text-amber-500 truncate"
+            >
               mv: {s.fqn} — used by {s.usedBy.join(", ")}
             </p>
           ))}

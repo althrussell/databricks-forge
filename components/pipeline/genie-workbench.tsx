@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,12 +74,12 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       const res = await fetch(`/api/runs/${runId}/genie-recommendations`);
       const data = await res.json();
       if (res.ok && data.recommendations) {
-        const names: string[] = data.recommendations.map(
-          (r: { domain: string }) => r.domain
-        );
+        const names: string[] = data.recommendations.map((r: { domain: string }) => r.domain);
         setDomains(names);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [runId]);
 
   const startPolling = useCallback(() => {
@@ -110,7 +105,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             setLastErrorType(null);
             setRefreshKey((k) => k + 1);
             fetchDomains();
-            toast.success(`Genie Engine complete: ${data.domainCount} domain${data.domainCount !== 1 ? "s" : ""} generated`);
+            toast.success(
+              `Genie Engine complete: ${data.domainCount} domain${data.domainCount !== 1 ? "s" : ""} generated`,
+            );
           } else if (data.status === "cancelled") {
             stopPolling();
             setGenerating(false);
@@ -162,7 +159,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       }
     }
     checkActiveJob();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [runId, startPolling]);
 
   const fetchConfig = useCallback(async () => {
@@ -210,37 +209,44 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
     }
   }, [runId, config]);
 
-  const handleRegenerate = useCallback(async (filterDomains?: string[]) => {
-    if (configDirty) {
-      await handleSaveConfig();
-    }
+  const handleRegenerate = useCallback(
+    async (filterDomains?: string[]) => {
+      if (configDirty) {
+        await handleSaveConfig();
+      }
 
-    setGenerating(true);
-    setGenProgress(0);
-    setCompletedDomains(0);
-    setTotalDomains(0);
-    setCompletedDomainNames([]);
-    setLastError(null);
-    setLastErrorType(null);
-    setGenMessage(filterDomains?.length ? `Regenerating ${filterDomains.length} domain${filterDomains.length !== 1 ? "s" : ""}...` : "Starting...");
-    try {
-      const body = filterDomains?.length ? JSON.stringify({ domains: filterDomains }) : undefined;
-      const res = await fetch(`/api/runs/${runId}/genie-engine/generate`, {
-        method: "POST",
-        ...(body ? { headers: { "Content-Type": "application/json" }, body } : {}),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        startPolling();
-      } else {
-        toast.error(data.error || "Failed to start generation");
+      setGenerating(true);
+      setGenProgress(0);
+      setCompletedDomains(0);
+      setTotalDomains(0);
+      setCompletedDomainNames([]);
+      setLastError(null);
+      setLastErrorType(null);
+      setGenMessage(
+        filterDomains?.length
+          ? `Regenerating ${filterDomains.length} domain${filterDomains.length !== 1 ? "s" : ""}...`
+          : "Starting...",
+      );
+      try {
+        const body = filterDomains?.length ? JSON.stringify({ domains: filterDomains }) : undefined;
+        const res = await fetch(`/api/runs/${runId}/genie-engine/generate`, {
+          method: "POST",
+          ...(body ? { headers: { "Content-Type": "application/json" }, body } : {}),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          startPolling();
+        } else {
+          toast.error(data.error || "Failed to start generation");
+          setGenerating(false);
+        }
+      } catch {
+        toast.error("Failed to start generation");
         setGenerating(false);
       }
-    } catch {
-      toast.error("Failed to start generation");
-      setGenerating(false);
-    }
-  }, [runId, configDirty, handleSaveConfig, startPolling]);
+    },
+    [runId, configDirty, handleSaveConfig, startPolling],
+  );
 
   const handleCancel = useCallback(async () => {
     try {
@@ -283,9 +289,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
               </Badge>
             )}
             {config.llmRefinement && (
-              <Badge className="bg-violet-500/10 text-violet-600 text-xs">
-                LLM Enabled
-              </Badge>
+              <Badge className="bg-violet-500/10 text-violet-600 text-xs">LLM Enabled</Badge>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -306,7 +310,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
                 disabled={generating || !engineEnabled}
                 className="bg-violet-600 hover:bg-violet-700"
               >
-                {generating ? "Generating..." : `Regenerate ${selectedDomains.size} Domain${selectedDomains.size !== 1 ? "s" : ""}`}
+                {generating
+                  ? "Generating..."
+                  : `Regenerate ${selectedDomains.size} Domain${selectedDomains.size !== 1 ? "s" : ""}`}
               </Button>
             ) : (
               <Button
@@ -373,7 +379,9 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             </div>
             <p className="text-[10px] text-muted-foreground">
               {totalDomains > 0 && (
-                <span className="font-medium">[{completedDomains} of {totalDomains} complete] </span>
+                <span className="font-medium">
+                  [{completedDomains} of {totalDomains} complete]{" "}
+                </span>
               )}
               {genMessage}
             </p>
@@ -385,9 +393,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div className="flex-1 space-y-1">
               <p className="text-sm font-medium text-destructive">
-                {lastErrorType === "auth"
-                  ? "Database session expired"
-                  : "Generation failed"}
+                {lastErrorType === "auth" ? "Database session expired" : "Generation failed"}
               </p>
               <p className="text-xs text-muted-foreground">
                 {lastErrorType === "auth"
@@ -407,7 +413,10 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
                 Retry
               </Button>
               <button
-                onClick={() => { setLastError(null); setLastErrorType(null); }}
+                onClick={() => {
+                  setLastError(null);
+                  setLastErrorType(null);
+                }}
                 className="text-muted-foreground hover:text-foreground"
                 aria-label="Dismiss error"
               >

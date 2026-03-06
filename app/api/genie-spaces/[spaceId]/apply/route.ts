@@ -61,7 +61,11 @@ export async function POST(
       logger.warn("Failed to persist post-fix health score", { spaceId, error: String(err) });
     });
 
-    logger.info("Fix applied and re-scored", { spaceId, score: report.overallScore, grade: report.grade });
+    logger.info("Fix applied and re-scored", {
+      spaceId,
+      score: report.overallScore,
+      grade: report.grade,
+    });
 
     return NextResponse.json({
       success: true,

@@ -42,10 +42,7 @@ export function normalizeIdentifier(name: string): string {
 /**
  * Normalize a table name, ensuring uniqueness within a set.
  */
-export function normalizeTableName(
-  name: string,
-  existingNames: Set<string>
-): string {
+export function normalizeTableName(name: string, existingNames: Set<string>): string {
   const base = normalizeIdentifier(name);
   let result = base;
   let suffix = 2;
@@ -64,7 +61,7 @@ export function buildNameMapping(
     name: string;
     columns: Array<{ name: string }>;
     measures: Array<{ name: string }>;
-  }>
+  }>,
 ): NameMapping[] {
   const mappings: NameMapping[] = [];
   const usedTableNames = new Set<string>();
@@ -84,11 +81,19 @@ export function buildNameMapping(
         suffix++;
       }
       usedColumnNames.add(normalizedCol);
-      mappings.push({ original: `${table.name}.${col.name}`, normalized: `${normalizedTable}.${normalizedCol}`, source: "column" });
+      mappings.push({
+        original: `${table.name}.${col.name}`,
+        normalized: `${normalizedTable}.${normalizedCol}`,
+        source: "column",
+      });
     }
 
     for (const m of table.measures) {
-      mappings.push({ original: `${table.name}.[${m.name}]`, normalized: normalizeIdentifier(m.name), source: "measure" });
+      mappings.push({
+        original: `${table.name}.[${m.name}]`,
+        normalized: normalizeIdentifier(m.name),
+        source: "measure",
+      });
     }
   }
 

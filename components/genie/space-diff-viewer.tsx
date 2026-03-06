@@ -2,12 +2,7 @@
 
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Minus, Plus } from "lucide-react";
 
 interface FixChange {
@@ -158,9 +153,7 @@ export function SpaceDiffViewer({
                       {c.added}
                     </span>
                   )}
-                  {c.modified > 0 && (
-                    <span className="text-amber-600">~{c.modified}</span>
-                  )}
+                  {c.modified > 0 && <span className="text-amber-600">~{c.modified}</span>}
                 </div>
               ))}
             </div>

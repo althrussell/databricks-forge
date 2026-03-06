@@ -42,7 +42,10 @@ import dynamic from "next/dynamic";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { loadSettings } from "@/lib/settings";
 import type { ERDGraph } from "@/lib/domain/types";
-import { SemanticSearchInput, type SemanticSearchResult } from "@/components/search/semantic-search-input";
+import {
+  SemanticSearchInput,
+  type SemanticSearchResult,
+} from "@/components/search/semantic-search-input";
 import type {
   AggregateData,
   GovernanceQualityStats,
@@ -62,7 +65,7 @@ const ERDViewer = dynamic(
     import("@/components/environment/erd-viewer").then((m) => ({
       default: m.ERDViewer,
     })),
-  { ssr: false, loading: () => <Skeleton className="h-[600px] w-full" /> }
+  { ssr: false, loading: () => <Skeleton className="h-[600px] w-full" /> },
 );
 
 // ---------------------------------------------------------------------------
@@ -155,9 +158,7 @@ export default function EstatePage() {
       setSelectedScan(scan);
       setViewMode("single-scan");
 
-      const erdResp = await fetch(
-        `/api/environment-scan/${scanId}/erd?format=json`
-      );
+      const erdResp = await fetch(`/api/environment-scan/${scanId}/erd?format=json`);
       if (erdResp.ok) {
         setSelectedErdGraph(await erdResp.json());
       }
@@ -175,25 +176,28 @@ export default function EstatePage() {
   }, []);
 
   // Delete a scan
-  const deleteScan = useCallback(async (scanId: string) => {
-    try {
-      const resp = await fetch(`/api/environment-scan/${scanId}`, { method: "DELETE" });
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error(body.error ?? "Delete failed");
+  const deleteScan = useCallback(
+    async (scanId: string) => {
+      try {
+        const resp = await fetch(`/api/environment-scan/${scanId}`, { method: "DELETE" });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error ?? "Delete failed");
+        }
+        toast.success("Scan deleted");
+        if (selectedScan?.scanId === scanId) {
+          setViewMode("aggregate");
+          setSelectedScan(null);
+          setSelectedErdGraph(null);
+        }
+        fetchAggregate();
+        fetchAggregateErd();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to delete scan");
       }
-      toast.success("Scan deleted");
-      if (selectedScan?.scanId === scanId) {
-        setViewMode("aggregate");
-        setSelectedScan(null);
-        setSelectedErdGraph(null);
-      }
-      fetchAggregate();
-      fetchAggregateErd();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete scan");
-    }
-  }, [selectedScan, fetchAggregate, fetchAggregateErd]);
+    },
+    [selectedScan, fetchAggregate, fetchAggregateErd],
+  );
 
   // Derive the UC scope string from selected catalog browser sources
   const ucScope = selectedSources.join(", ");
@@ -201,9 +205,7 @@ export default function EstatePage() {
   // Start a new scan
   const handleScan = useCallback(async () => {
     if (selectedSources.length === 0) {
-      toast.error(
-        "Select at least one catalog or schema to scan."
-      );
+      toast.error("Select at least one catalog or schema to scan.");
       return;
     }
     const scope = selectedSources.join(", ");
@@ -241,9 +243,7 @@ export default function EstatePage() {
         attempts++;
         try {
           // Poll progress endpoint for live status
-          const progResp = await fetch(
-            `/api/environment-scan/${scanId}/progress`
-          );
+          const progResp = await fetch(`/api/environment-scan/${scanId}/progress`);
           if (progResp.ok) {
             consecutiveMisses = 0;
             const prog: ScanProgressData = await progResp.json();
@@ -313,7 +313,7 @@ export default function EstatePage() {
       // Start polling immediately
       setTimeout(poll, 1_000);
     },
-    [fetchAggregate, fetchAggregateErd, loadSingleScan]
+    [fetchAggregate, fetchAggregateErd, loadSingleScan],
   );
 
   // On mount: load aggregate data and resume any in-progress scan
@@ -341,7 +341,9 @@ export default function EstatePage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [fetchAggregate, fetchAggregateErd, fetchGovernanceQuality, pollForScan]);
 
   const [exporting, setExporting] = useState(false);
@@ -370,12 +372,12 @@ export default function EstatePage() {
     if (viewMode === "single-scan" && selectedScan) {
       downloadExcel(
         `/api/environment-scan/${selectedScan.scanId}/export?format=excel`,
-        `estate-report-${selectedScan.scanId.slice(0, 8)}.xlsx`
+        `estate-report-${selectedScan.scanId.slice(0, 8)}.xlsx`,
       );
     } else {
       downloadExcel(
         `/api/environment/aggregate/export?format=excel`,
-        `estate-report-aggregate.xlsx`
+        `estate-report-aggregate.xlsx`,
       );
     }
   }, [viewMode, selectedScan, downloadExcel]);
@@ -385,10 +387,7 @@ export default function EstatePage() {
     const n = typeof bytes === "string" ? parseInt(bytes, 10) : bytes;
     if (isNaN(n) || n === 0) return "0 B";
     const units = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.min(
-      Math.floor(Math.log(n) / Math.log(1024)),
-      units.length - 1
-    );
+    const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
     return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
   };
 
@@ -414,9 +413,7 @@ export default function EstatePage() {
 
   // Active data depends on view mode
   const activeDetails: TableDetailRow[] =
-    viewMode === "single-scan"
-      ? selectedScan?.details ?? []
-      : aggregate?.details ?? [];
+    viewMode === "single-scan" ? (selectedScan?.details ?? []) : (aggregate?.details ?? []);
 
   const filteredTables = activeDetails.filter((t) => {
     if (semanticSourceIds.size > 0) {
@@ -456,9 +453,7 @@ export default function EstatePage() {
               <>
                 <div className="flex items-center gap-2">
                   <Globe className="h-6 w-6 text-primary" />
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Estate Overview
-                  </h1>
+                  <h1 className="text-2xl font-bold tracking-tight">Estate Overview</h1>
                   {aggregate && aggregate.stats.totalScans > 0 && (
                     <Badge variant="secondary" className="ml-2">
                       Combined from {aggregate.stats.totalScans} scan
@@ -467,17 +462,15 @@ export default function EstatePage() {
                   )}
                 </div>
                 <p className="mt-1 text-muted-foreground">
-                  Holistic view of your data estate — latest data per table
-                  from all discovery runs and environment scans.
+                  Holistic view of your data estate — latest data per table from all discovery runs
+                  and environment scans.
                 </p>
               </>
             ) : viewMode === "single-scan" && selectedScan ? (
               <>
                 <div className="flex items-center gap-2">
                   <Database className="h-5 w-5 text-muted-foreground" />
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Scan: {selectedScan.ucPath}
-                  </h1>
+                  <h1 className="text-2xl font-bold tracking-tight">Scan: {selectedScan.ucPath}</h1>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {new Date(selectedScan.createdAt).toLocaleString()}
@@ -493,11 +486,7 @@ export default function EstatePage() {
 
         <div className="flex items-center gap-2">
           {(viewMode === "single-scan" || (aggregate && aggregate.stats.totalScans > 0)) && (
-            <Button
-              variant="outline"
-              disabled={exporting}
-              onClick={handleExport}
-            >
+            <Button variant="outline" disabled={exporting} onClick={handleExport}>
               {exporting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -514,9 +503,7 @@ export default function EstatePage() {
           <Button
             variant="outline"
             onClick={() =>
-              viewMode === "new-scan"
-                ? setViewMode("aggregate")
-                : setViewMode("new-scan")
+              viewMode === "new-scan" ? setViewMode("aggregate") : setViewMode("new-scan")
             }
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -534,8 +521,8 @@ export default function EstatePage() {
               Start a New Scan
             </CardTitle>
             <CardDescription>
-              Browse your Unity Catalog and select catalogs, schemas, or
-              individual tables to scan. Results are merged into the estate view.
+              Browse your Unity Catalog and select catalogs, schemas, or individual tables to scan.
+              Results are merged into the estate view.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -550,14 +537,10 @@ export default function EstatePage() {
                   ? `Scope: ${ucScope}`
                   : "Select at least one catalog or schema above."}
               </p>
-              <Button
-                onClick={handleScan}
-                disabled={scanning || selectedSources.length === 0}
-              >
+              <Button onClick={handleScan} disabled={scanning || selectedSources.length === 0}>
                 {scanning ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />{" "}
-                    Scanning...
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Scanning...
                   </>
                 ) : (
                   <>
@@ -571,9 +554,7 @@ export default function EstatePage() {
       )}
 
       {/* Live scan progress */}
-      {scanning && scanProgress && (
-        <ScanProgressCard progress={scanProgress} />
-      )}
+      {scanning && scanProgress && <ScanProgressCard progress={scanProgress} />}
 
       {/* Loading state */}
       {loading && viewMode === "aggregate" ? (
@@ -586,20 +567,16 @@ export default function EstatePage() {
           <Skeleton className="h-96" />
         </div>
       ) : /* Empty state */
-      viewMode === "aggregate" &&
-        (!aggregate || aggregate.stats.totalScans === 0) ? (
+      viewMode === "aggregate" && (!aggregate || aggregate.stats.totalScans === 0) ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Globe className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <h2 className="text-xl font-semibold">No estate data yet</h2>
             <p className="mt-2 max-w-md text-muted-foreground">
-              Run a discovery pipeline or start a standalone environment scan
-              to populate the estate view.
+              Run a discovery pipeline or start a standalone environment scan to populate the estate
+              view.
             </p>
-            <Button
-              className="mt-6"
-              onClick={() => setViewMode("new-scan")}
-            >
+            <Button className="mt-6" onClick={() => setViewMode("new-scan")}>
               <Plus className="mr-2 h-4 w-4" />
               Start Your First Scan
             </Button>
@@ -610,22 +587,14 @@ export default function EstatePage() {
         <Tabs defaultValue="summary" className="space-y-4">
           <TabsList>
             <TabsTrigger value="summary">Summary</TabsTrigger>
-            <TabsTrigger value="tables">
-              Tables ({activeDetails.length})
-            </TabsTrigger>
+            <TabsTrigger value="tables">Tables ({activeDetails.length})</TabsTrigger>
             <TabsTrigger value="erd" className="gap-1">
               ERD
               <InfoTip tip={ENVIRONMENT.erdView} />
             </TabsTrigger>
-            {viewMode === "aggregate" && (
-              <TabsTrigger value="coverage">Table Coverage</TabsTrigger>
-            )}
-            {viewMode === "aggregate" && (
-              <TabsTrigger value="governance">Governance</TabsTrigger>
-            )}
-            {viewMode === "single-scan" && (
-              <TabsTrigger value="export">Export</TabsTrigger>
-            )}
+            {viewMode === "aggregate" && <TabsTrigger value="coverage">Table Coverage</TabsTrigger>}
+            {viewMode === "aggregate" && <TabsTrigger value="governance">Governance</TabsTrigger>}
+            {viewMode === "single-scan" && <TabsTrigger value="export">Export</TabsTrigger>}
           </TabsList>
 
           {/* Summary */}
@@ -666,34 +635,64 @@ export default function EstatePage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>
-                      <LabelWithTip label="Table" tip="Fully qualified table name (catalog.schema.table) with its description if one exists — either human-authored or AI-generated." />
+                      <LabelWithTip
+                        label="Table"
+                        tip="Fully qualified table name (catalog.schema.table) with its description if one exists — either human-authored or AI-generated."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Domain" tip="Business domain assigned by AI analysis. Groups tables by the business function they serve (e.g. Finance, Customer, Operations)." />
+                      <LabelWithTip
+                        label="Domain"
+                        tip="Business domain assigned by AI analysis. Groups tables by the business function they serve (e.g. Finance, Customer, Operations)."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Tier" tip="Medallion architecture tier: bronze = raw ingested data, silver = cleansed and conformed, gold = analytics-ready for business users, system = internal/technical." />
+                      <LabelWithTip
+                        label="Tier"
+                        tip="Medallion architecture tier: bronze = raw ingested data, silver = cleansed and conformed, gold = analytics-ready for business users, system = internal/technical."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Size" tip="Physical storage size of the table on disk. Views and inaccessible tables may show as '—'." />
+                      <LabelWithTip
+                        label="Size"
+                        tip="Physical storage size of the table on disk. Views and inaccessible tables may show as '—'."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Rows" tip="Total row count from Delta table statistics. Available when ANALYZE TABLE has been run, or estimated from the latest write operation metrics. '—' means stats are not yet computed." />
+                      <LabelWithTip
+                        label="Rows"
+                        tip="Total row count from Delta table statistics. Available when ANALYZE TABLE has been run, or estimated from the latest write operation metrics. '—' means stats are not yet computed."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Owner" tip="The Unity Catalog owner of this table. Tables without owners lack clear accountability when issues arise." />
+                      <LabelWithTip
+                        label="Owner"
+                        tip="The Unity Catalog owner of this table. Tables without owners lack clear accountability when issues arise."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Gov." tip="Governance score (0-100) based on documentation, ownership, tagging, sensitivity labelling, and maintenance status. Higher is better." />
+                      <LabelWithTip
+                        label="Gov."
+                        tip="Governance score (0-100) based on documentation, ownership, tagging, sensitivity labelling, and maintenance status. Higher is better."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Sensitivity" tip="Data sensitivity classification determined by AI. 'Confidential' or 'restricted' indicates PII or regulated data requiring compliance controls." />
+                      <LabelWithTip
+                        label="Sensitivity"
+                        tip="Data sensitivity classification determined by AI. 'Confidential' or 'restricted' indicates PII or regulated data requiring compliance controls."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Modified" tip="When this table was last modified. Helps identify stale or abandoned datasets." />
+                      <LabelWithTip
+                        label="Modified"
+                        tip="When this table was last modified. Helps identify stale or abandoned datasets."
+                      />
                     </TableHead>
                     <TableHead>
-                      <LabelWithTip label="Via" tip="How this table was discovered. 'Selected' means it was within your chosen scan scope. 'Lineage' means it was found by following data dependencies from other tables." />
+                      <LabelWithTip
+                        label="Via"
+                        tip="How this table was discovered. 'Selected' means it was within your chosen scan scope. 'Lineage' means it was found by following data dependencies from other tables."
+                      />
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -709,11 +708,7 @@ export default function EstatePage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {t.dataDomain ? (
-                          <Badge variant="secondary">{t.dataDomain}</Badge>
-                        ) : (
-                          "—"
-                        )}
+                        {t.dataDomain ? <Badge variant="secondary">{t.dataDomain}</Badge> : "—"}
                       </TableCell>
                       <TableCell>
                         {t.dataTier ? (
@@ -739,32 +734,30 @@ export default function EstatePage() {
                       <TableCell className="text-xs tabular-nums">
                         {humanNumber(t.numRows)}
                       </TableCell>
-                      <TableCell className="text-xs">
-                        {t.owner ?? "—"}
-                      </TableCell>
+                      <TableCell className="text-xs">{t.owner ?? "—"}</TableCell>
                       <TableCell className="text-xs tabular-nums">
                         {t.governanceScore != null ? (
-                          <span className={
-                            t.governanceScore >= 70
-                              ? "text-green-600 font-semibold"
-                              : t.governanceScore >= 40
-                                ? "text-amber-600 font-semibold"
-                                : "text-red-600 font-semibold"
-                          }>
+                          <span
+                            className={
+                              t.governanceScore >= 70
+                                ? "text-green-600 font-semibold"
+                                : t.governanceScore >= 40
+                                  ? "text-amber-600 font-semibold"
+                                  : "text-red-600 font-semibold"
+                            }
+                          >
                             {t.governanceScore.toFixed(0)}
                           </span>
-                        ) : "—"}
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell>
                         {t.sensitivityLevel === "confidential" ||
                         t.sensitivityLevel === "restricted" ? (
-                          <Badge variant="destructive">
-                            {t.sensitivityLevel}
-                          </Badge>
+                          <Badge variant="destructive">{t.sensitivityLevel}</Badge>
                         ) : t.sensitivityLevel ? (
-                          <Badge variant="secondary">
-                            {t.sensitivityLevel}
-                          </Badge>
+                          <Badge variant="secondary">{t.sensitivityLevel}</Badge>
                         ) : (
                           "—"
                         )}
@@ -774,11 +767,7 @@ export default function EstatePage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={
-                            t.discoveredVia === "lineage"
-                              ? "outline"
-                              : "default"
-                          }
+                          variant={t.discoveredVia === "lineage" ? "outline" : "default"}
                           className="text-xs"
                         >
                           {t.discoveredVia}
@@ -788,10 +777,7 @@ export default function EstatePage() {
                   ))}
                   {filteredTables.length === 0 && (
                     <TableRow>
-                      <TableCell
-                        colSpan={10}
-                        className="text-center py-8 text-muted-foreground"
-                      >
+                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                         No tables found
                       </TableCell>
                     </TableRow>
@@ -842,15 +828,11 @@ export default function EstatePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Download a comprehensive Excel report for this scan with
-                    executive summary, table inventory, domains, data products,
-                    PII analysis, implicit relationships, redundancy report,
-                    governance scorecard, table health, lineage, and more.
+                    Download a comprehensive Excel report for this scan with executive summary,
+                    table inventory, domains, data products, PII analysis, implicit relationships,
+                    redundancy report, governance scorecard, table health, lineage, and more.
                   </p>
-                  <Button
-                    disabled={exporting}
-                    onClick={handleExport}
-                  >
+                  <Button disabled={exporting} onClick={handleExport}>
                     {exporting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />

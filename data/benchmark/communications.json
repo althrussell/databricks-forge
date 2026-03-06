@@ -63,7 +63,7 @@
       "industry": "communications",
       "region": "us",
       "license_class": "public_domain",
-      "confidence": 0.80,
+      "confidence": 0.8,
       "ttl_days": 730,
       "tags": ["privacy", "consent"]
     },

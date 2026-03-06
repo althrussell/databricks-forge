@@ -155,7 +155,8 @@ async function chatCompletionWithRetry(
     try {
       if (attempt > 0) {
         if (isRateLimitError(lastError)) {
-          const retryAfterMs = (lastError && extractRetryAfterMs(lastError)) ?? DEFAULT_429_BACKOFF_MS;
+          const retryAfterMs =
+            (lastError && extractRetryAfterMs(lastError)) ?? DEFAULT_429_BACKOFF_MS;
           logger.warn("LLM rate-limited (429), backing off", {
             attempt,
             retryAfterMs,

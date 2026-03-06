@@ -11,14 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  LayoutDashboard,
-  Rocket,
-  Loader2,
-  Check,
-  AlertCircle,
-  ExternalLink,
-} from "lucide-react";
+import { LayoutDashboard, Rocket, Loader2, Check, AlertCircle, ExternalLink } from "lucide-react";
 
 export interface DashboardDeployPayload {
   proposal?: {
@@ -40,11 +33,7 @@ interface DeployDashboardDialogProps {
 
 type Phase = "idle" | "generating" | "done" | "error";
 
-export function DeployDashboardDialog({
-  open,
-  payload,
-  onOpenChange,
-}: DeployDashboardDialogProps) {
+export function DeployDashboardDialog({ open, payload, onOpenChange }: DeployDashboardDialogProps) {
   const [phase, setPhase] = React.useState<Phase>("idle");
   const [result, setResult] = React.useState<{
     dashboardUrl?: string;
@@ -119,8 +108,8 @@ export function DeployDashboardDialog({
             Deploy as Dashboard
           </DialogTitle>
           <DialogDescription>
-            Forge will design a Lakeview dashboard from the referenced tables
-            and deploy it to your Databricks workspace.
+            Forge will design a Lakeview dashboard from the referenced tables and deploy it to your
+            Databricks workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -130,9 +119,7 @@ export function DeployDashboardDialog({
               <div>
                 <p className="text-sm font-medium">{title}</p>
                 {proposal?.description && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {proposal.description}
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{proposal.description}</p>
                 )}
               </div>
 
@@ -158,10 +145,7 @@ export function DeployDashboardDialog({
                   </p>
                   <ul className="space-y-1">
                     {widgets.map((w, i) => (
-                      <li
-                        key={i}
-                        className="flex items-start gap-2 text-xs text-muted-foreground"
-                      >
+                      <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                         <LayoutDashboard className="mt-0.5 size-3 shrink-0 text-primary" />
                         {w}
                       </li>
@@ -172,9 +156,7 @@ export function DeployDashboardDialog({
 
               {sqlBlocks.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                    SQL Context
-                  </p>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">SQL Context</p>
                   <pre className="max-h-[120px] overflow-auto rounded-md bg-muted p-3 text-xs">
                     <code>{sqlBlocks[0]}</code>
                   </pre>
@@ -191,12 +173,8 @@ export function DeployDashboardDialog({
           {phase === "generating" && (
             <div className="flex flex-col items-center gap-3 py-6">
               <Loader2 className="size-6 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Designing and deploying dashboard...
-              </p>
-              <p className="text-xs text-muted-foreground">
-                This typically takes 10-20 seconds.
-              </p>
+              <p className="text-sm text-muted-foreground">Designing and deploying dashboard...</p>
+              <p className="text-xs text-muted-foreground">This typically takes 10-20 seconds.</p>
             </div>
           )}
 
@@ -206,9 +184,7 @@ export function DeployDashboardDialog({
                 <Check className="size-4" />
                 Dashboard deployed successfully
               </div>
-              {result.title && (
-                <p className="text-sm font-medium">{result.title}</p>
-              )}
+              {result.title && <p className="text-sm font-medium">{result.title}</p>}
               {(result.datasetCount || result.widgetCount) && (
                 <p className="text-xs text-muted-foreground">
                   {result.datasetCount} dataset{result.datasetCount !== 1 ? "s" : ""},{" "}
@@ -217,11 +193,7 @@ export function DeployDashboardDialog({
               )}
               {result.dashboardUrl && (
                 <Button variant="outline" size="sm" className="gap-1.5" asChild>
-                  <a
-                    href={result.dashboardUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <a href={result.dashboardUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="size-3.5" />
                     Open in Databricks
                   </a>
@@ -244,11 +216,7 @@ export function DeployDashboardDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleDeploy}
-                className="gap-1.5"
-                disabled={tables.length === 0}
-              >
+              <Button onClick={handleDeploy} className="gap-1.5" disabled={tables.length === 0}>
                 <Rocket className="size-3.5" />
                 Deploy Dashboard
               </Button>

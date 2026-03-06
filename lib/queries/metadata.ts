@@ -15,15 +15,12 @@ import type { TableInfo, ColumnInfo, ForeignKey, MetricViewInfo } from "@/lib/do
 // Error codes for structured error reporting
 // ---------------------------------------------------------------------------
 
-export type MetadataErrorCode =
-  | "WAREHOUSE_UNAVAILABLE"
-  | "INSUFFICIENT_PERMISSIONS"
-  | "NO_DATA";
+export type MetadataErrorCode = "WAREHOUSE_UNAVAILABLE" | "INSUFFICIENT_PERMISSIONS" | "NO_DATA";
 
 export class MetadataError extends Error {
   constructor(
     message: string,
-    public readonly code: MetadataErrorCode
+    public readonly code: MetadataErrorCode,
   ) {
     super(message);
     this.name = "MetadataError";
@@ -63,7 +60,7 @@ export async function ensureWarehouseReady(): Promise<WarehouseStatus> {
         initialBackoffMs: 5_000,
         maxBackoffMs: 20_000,
         label: "ensureWarehouseReady",
-      }
+      },
     );
     return { ready: true, latencyMs: Date.now() - start };
   } catch (error) {
@@ -94,7 +91,7 @@ export interface ScopeProbeResult {
  */
 export async function probeCatalogAccess(
   catalog: string,
-  schema?: string
+  schema?: string,
 ): Promise<ScopeProbeResult> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
   const label = schema ? `${catalog}.${schema}` : catalog;
@@ -105,14 +102,14 @@ export async function probeCatalogAccess(
         `SELECT 1 FROM \`${safeCatalog}\`.information_schema.tables WHERE table_schema = '${safeSchema}' LIMIT 1`,
         undefined,
         undefined,
-        { submitTimeoutMs: 10_000 }
+        { submitTimeoutMs: 10_000 },
       );
     } else {
       await executeSQL(
         `SELECT 1 FROM \`${safeCatalog}\`.information_schema.schemata LIMIT 1`,
         undefined,
         undefined,
-        { submitTimeoutMs: 10_000 }
+        { submitTimeoutMs: 10_000 },
       );
     }
     return { catalog, schema, label, accessible: true };
@@ -128,10 +125,10 @@ export async function probeCatalogAccess(
  * Uses `Promise.allSettled` so one failing probe cannot break the batch.
  */
 export async function filterAccessibleScopes(
-  scopes: Array<{ catalog: string; schema?: string }>
+  scopes: Array<{ catalog: string; schema?: string }>,
 ): Promise<{ accessible: typeof scopes; skipped: ScopeProbeResult[] }> {
   const results = await Promise.allSettled(
-    scopes.map((s) => probeCatalogAccess(s.catalog, s.schema))
+    scopes.map((s) => probeCatalogAccess(s.catalog, s.schema)),
   );
 
   const accessible: typeof scopes = [];
@@ -217,7 +214,7 @@ export async function listCatalogs(): Promise<string[]> {
       initialBackoffMs: 3_000,
       maxBackoffMs: 10_000,
       label: "listCatalogs",
-    }
+    },
   );
 }
 
@@ -234,10 +231,11 @@ export async function listSchemas(catalog: string): Promise<string[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
   return withRetry(
     async () => {
-      const result = await executeSQL(
-        `SHOW SCHEMAS IN \`${safeCatalog}\``
-      );
-      logger.info("[metadata] SHOW SCHEMAS", { catalog: safeCatalog, rowCount: result.rows.length });
+      const result = await executeSQL(`SHOW SCHEMAS IN \`${safeCatalog}\``);
+      logger.info("[metadata] SHOW SCHEMAS", {
+        catalog: safeCatalog,
+        rowCount: result.rows.length,
+      });
       return result.rows
         .map((r) => r[0])
         .filter((s) => s !== "information_schema" && s !== "default");
@@ -247,7 +245,7 @@ export async function listSchemas(catalog: string): Promise<string[]> {
       initialBackoffMs: 2_000,
       maxBackoffMs: 5_000,
       label: "listSchemas",
-    }
+    },
   );
 }
 
@@ -260,23 +258,17 @@ export async function listSchemas(catalog: string): Promise<string[]> {
  *
  * Wrapped in retry logic to survive transient warehouse errors.
  */
-export async function listTables(
-  catalog: string,
-  schema?: string
-): Promise<TableInfo[]> {
+export async function listTables(catalog: string, schema?: string): Promise<TableInfo[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
 
   if (schema) {
     const safeSchema = validateIdentifier(schema, "schema");
-    return withRetry(
-      () => showTablesInSchema(safeCatalog, safeSchema),
-      {
-        maxRetries: 1,
-        initialBackoffMs: 2_000,
-        maxBackoffMs: 5_000,
-        label: "listTables",
-      }
-    );
+    return withRetry(() => showTablesInSchema(safeCatalog, safeSchema), {
+      maxRetries: 1,
+      initialBackoffMs: 2_000,
+      maxBackoffMs: 5_000,
+      label: "listTables",
+    });
   }
 
   // No schema specified -- list all schemas and show tables for each
@@ -300,10 +292,7 @@ export async function listTables(
  * into the SQL rather than relying on Statement Execution API context
  * params (which may not apply to SHOW commands in all environments).
  */
-async function showTablesInSchema(
-  catalog: string,
-  schema: string
-): Promise<TableInfo[]> {
+async function showTablesInSchema(catalog: string, schema: string): Promise<TableInfo[]> {
   const sql = `SHOW TABLES IN \`${catalog}\`.\`${schema}\``;
   const result = await executeSQL(sql);
 
@@ -320,9 +309,7 @@ async function showTablesInSchema(
 
   // Find column positions by name (SHOW TABLES returns: database, tableName, isTemporary)
   const nameIdx = result.columns.findIndex(
-    (c) =>
-      c.name.toLowerCase() === "tablename" ||
-      c.name.toLowerCase() === "table_name"
+    (c) => c.name.toLowerCase() === "tablename" || c.name.toLowerCase() === "table_name",
   );
 
   // Fall back to positional index 1 if column name not found
@@ -331,7 +318,7 @@ async function showTablesInSchema(
   if (nameIdx < 0) {
     logger.warn(
       "[metadata] Could not find tableName column by name, falling back to positional index 1",
-      { colNames }
+      { colNames },
     );
   }
 
@@ -356,7 +343,7 @@ async function showTablesInSchema(
  */
 export async function fetchTableComments(
   catalog: string,
-  schema?: string
+  schema?: string,
 ): Promise<Map<string, string>> {
   const comments = new Map<string, string>();
   try {
@@ -401,10 +388,7 @@ export async function fetchTableComments(
 /**
  * Merge table comments into a list of TableInfo objects in-place.
  */
-export function mergeTableComments(
-  tables: TableInfo[],
-  comments: Map<string, string>
-): void {
+export function mergeTableComments(tables: TableInfo[], comments: Map<string, string>): void {
   for (const table of tables) {
     const comment = comments.get(table.fqn);
     if (comment) {
@@ -422,7 +406,7 @@ export function mergeTableComments(
  */
 export async function fetchTableTypes(
   catalog: string,
-  schema?: string
+  schema?: string,
 ): Promise<{ types: Map<string, string>; formats: Map<string, string> }> {
   const types = new Map<string, string>();
   const formats = new Map<string, string>();
@@ -472,7 +456,7 @@ export async function fetchTableTypes(
  */
 export function mergeTableTypes(
   tables: TableInfo[],
-  typesOrResult: Map<string, string> | { types: Map<string, string>; formats: Map<string, string> }
+  typesOrResult: Map<string, string> | { types: Map<string, string>; formats: Map<string, string> },
 ): void {
   const types = typesOrResult instanceof Map ? typesOrResult : typesOrResult.types;
   const formats = typesOrResult instanceof Map ? null : typesOrResult.formats;
@@ -493,10 +477,7 @@ export function mergeTableTypes(
 /**
  * List columns for tables in a catalog.schema scope.
  */
-export async function listColumns(
-  catalog: string,
-  schema?: string
-): Promise<ColumnInfo[]> {
+export async function listColumns(catalog: string, schema?: string): Promise<ColumnInfo[]> {
   const safeCatalog = validateIdentifier(catalog, "catalog");
   let sql = `
     SELECT table_catalog, table_schema, table_name,
@@ -516,10 +497,7 @@ export async function listColumns(
  * Attempt to get foreign key relationships. Falls back to empty array
  * if the information_schema view is not available.
  */
-export async function listForeignKeys(
-  catalog: string,
-  schema?: string
-): Promise<ForeignKey[]> {
+export async function listForeignKeys(catalog: string, schema?: string): Promise<ForeignKey[]> {
   try {
     const safeCatalog = validateIdentifier(catalog, "catalog");
     let sql = `
@@ -560,10 +538,7 @@ export async function listForeignKeys(
  * Attempt to discover Unity Catalog metric views in a catalog.
  * Falls back to empty array if the table_type is not recognised or the query fails.
  */
-export async function listMetricViews(
-  catalog: string,
-  schema?: string
-): Promise<MetricViewInfo[]> {
+export async function listMetricViews(catalog: string, schema?: string): Promise<MetricViewInfo[]> {
   try {
     const safeCatalog = validateIdentifier(catalog, "catalog");
     let sql = `
@@ -753,7 +728,10 @@ export async function fetchForeignKeysBatch(fqns: string[]): Promise<ForeignKey[
         JOIN \`${safeCatalog}\`.information_schema.constraint_column_usage ccu
           ON tc.constraint_name = ccu.constraint_name
         WHERE tc.constraint_type = 'FOREIGN KEY'
-          AND (${whereClause.replace(/table_catalog/g, "kcu.table_catalog").replace(/table_schema/g, "kcu.table_schema").replace(/table_name/g, "kcu.table_name")})
+          AND (${whereClause
+            .replace(/table_catalog/g, "kcu.table_catalog")
+            .replace(/table_schema/g, "kcu.table_schema")
+            .replace(/table_name/g, "kcu.table_name")})
       `;
       const result = await executeSQL(sql);
       for (const row of result.rows) {
@@ -787,7 +765,7 @@ export async function fetchForeignKeysBatch(fqns: string[]): Promise<ForeignKey[
 export function buildSchemaMarkdown(
   tables: TableInfo[],
   columns: ColumnInfo[],
-  maxCommentLength: number = 80
+  maxCommentLength: number = 80,
 ): string {
   const columnsByTable: Record<string, ColumnInfo[]> = {};
   for (const col of columns) {
@@ -823,7 +801,7 @@ export function buildForeignKeyMarkdown(fks: ForeignKey[]): string {
 
   const lines = fks.map(
     (fk) =>
-      `- ${fk.tableFqn}.${fk.columnName} -> ${fk.referencedTableFqn}.${fk.referencedColumnName}`
+      `- ${fk.tableFqn}.${fk.columnName} -> ${fk.referencedTableFqn}.${fk.referencedColumnName}`,
   );
   return lines.join("\n");
 }

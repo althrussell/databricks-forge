@@ -5,13 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   Accordion,
@@ -79,28 +73,19 @@ const INDUSTRY_ICON_COLORS: Record<string, string> = {
 
 function countUseCases(industry: IndustryOutcome): number {
   return industry.objectives.reduce(
-    (acc, obj) =>
-      acc +
-      obj.priorities.reduce((a, p) => a + p.useCases.length, 0),
-    0
+    (acc, obj) => acc + obj.priorities.reduce((a, p) => a + p.useCases.length, 0),
+    0,
   );
 }
 
 function countPriorities(industry: IndustryOutcome): number {
-  return industry.objectives.reduce(
-    (acc, obj) => acc + obj.priorities.length,
-    0
-  );
+  return industry.objectives.reduce((acc, obj) => acc + obj.priorities.length, 0);
 }
 
-function matchesSearch(
-  industry: IndustryOutcome,
-  query: string
-): boolean {
+function matchesSearch(industry: IndustryOutcome, query: string): boolean {
   const q = query.toLowerCase();
   if (industry.name.toLowerCase().includes(q)) return true;
-  if (industry.subVerticals?.some((sv) => sv.toLowerCase().includes(q)))
-    return true;
+  if (industry.subVerticals?.some((sv) => sv.toLowerCase().includes(q))) return true;
   for (const obj of industry.objectives) {
     if (obj.name.toLowerCase().includes(q)) return true;
     for (const pri of obj.priorities) {
@@ -120,8 +105,7 @@ function matchesSearch(
 
 export default function OutcomesPage() {
   const { outcomes, loading } = useIndustryOutcomes();
-  const [selectedIndustry, setSelectedIndustry] =
-    useState<IndustryOutcome | null>(null);
+  const [selectedIndustry, setSelectedIndustry] = useState<IndustryOutcome | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredIndustries = useMemo(() => {
@@ -131,38 +115,38 @@ export default function OutcomesPage() {
 
   const totalUseCases = useMemo(
     () => outcomes.reduce((acc, i) => acc + countUseCases(i), 0),
-    [outcomes]
+    [outcomes],
   );
 
   return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
-                <Layers className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
+              <Layers className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">Industry Outcome Maps</h1>
+                <InfoTip tip={OUTCOMES.pageDescription} />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Industry Outcome Maps
-                  </h1>
-                  <InfoTip tip={OUTCOMES.pageDescription} />
-                </div>
               <p className="text-sm text-muted-foreground">
-                {loading ? "Loading..." : (
-                  <>{outcomes.length} industries &middot;{" "}
-                  {totalUseCases} reference use cases</>
+                {loading ? (
+                  "Loading..."
+                ) : (
+                  <>
+                    {outcomes.length} industries &middot; {totalUseCases} reference use cases
+                  </>
                 )}
               </p>
             </div>
           </div>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-            These outcome maps contain curated high-value use cases, strategic
-            priorities, and KPIs for each industry. When you select an industry
-            during discovery, this data enriches the AI prompts to generate
-            more relevant, strategically-aligned use cases.
+            These outcome maps contain curated high-value use cases, strategic priorities, and KPIs
+            for each industry. When you select an industry during discovery, this data enriches the
+            AI prompts to generate more relevant, strategically-aligned use cases.
           </p>
         </div>
         <Link href="/outcomes/ingest">
@@ -188,10 +172,7 @@ export default function OutcomesPage() {
         /* ------------------------------------------------------------------ */
         /* Industry Detail View                                                */
         /* ------------------------------------------------------------------ */
-        <IndustryDetailView
-          industry={selectedIndustry}
-          onBack={() => setSelectedIndustry(null)}
-        />
+        <IndustryDetailView industry={selectedIndustry} onBack={() => setSelectedIndustry(null)} />
       ) : (
         /* ------------------------------------------------------------------ */
         /* Industry Grid                                                       */
@@ -227,7 +208,7 @@ export default function OutcomesPage() {
           )}
         </>
       )}
-      </div>
+    </div>
   );
 }
 
@@ -235,19 +216,11 @@ export default function OutcomesPage() {
 // Industry Card (Grid View)
 // ---------------------------------------------------------------------------
 
-function IndustryCard({
-  industry,
-  onClick,
-}: {
-  industry: IndustryOutcome;
-  onClick: () => void;
-}) {
+function IndustryCard({ industry, onClick }: { industry: IndustryOutcome; onClick: () => void }) {
   const ucCount = countUseCases(industry);
   const priCount = countPriorities(industry);
-  const gradientClass =
-    INDUSTRY_COLORS[industry.id] ?? "from-gray-500/20 to-gray-600/5";
-  const iconColor =
-    INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
+  const gradientClass = INDUSTRY_COLORS[industry.id] ?? "from-gray-500/20 to-gray-600/5";
+  const iconColor = INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
 
   return (
     <Card
@@ -311,13 +284,10 @@ function IndustryDetailView({
   const ucCount = countUseCases(industry);
   const priCount = countPriorities(industry);
   const personaCount = new Set(
-    industry.objectives.flatMap((obj) =>
-      obj.priorities.flatMap((p) => p.personas)
-    )
+    industry.objectives.flatMap((obj) => obj.priorities.flatMap((p) => p.personas)),
   ).size;
 
-  const iconColor =
-    INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
+  const iconColor = INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
 
   return (
     <div className="space-y-6">
@@ -345,9 +315,7 @@ function IndustryDetailView({
             <div>
               <CardTitle className="text-xl">{industry.name}</CardTitle>
               {industry.subVerticals && (
-                <CardDescription>
-                  {industry.subVerticals.join(" · ")}
-                </CardDescription>
+                <CardDescription>{industry.subVerticals.join(" · ")}</CardDescription>
               )}
             </div>
           </div>
@@ -421,11 +389,7 @@ function IndustryDetailView({
 
       {/* Objectives */}
       {industry.objectives.map((objective) => (
-        <ObjectiveSection
-          key={objective.name}
-          objective={objective}
-          industryId={industry.id}
-        />
+        <ObjectiveSection key={objective.name} objective={objective} industryId={industry.id} />
       ))}
     </div>
   );
@@ -442,8 +406,7 @@ function ObjectiveSection({
   objective: IndustryObjective;
   industryId: string;
 }) {
-  const iconColor =
-    INDUSTRY_ICON_COLORS[industryId] ?? "text-gray-600 dark:text-gray-400";
+  const iconColor = INDUSTRY_ICON_COLORS[industryId] ?? "text-gray-600 dark:text-gray-400";
 
   return (
     <Card>
@@ -459,10 +422,7 @@ function ObjectiveSection({
       <CardContent>
         <Accordion type="multiple" className="space-y-2">
           {objective.priorities.map((priority) => (
-            <PriorityAccordion
-              key={priority.name}
-              priority={priority}
-            />
+            <PriorityAccordion key={priority.name} priority={priority} />
           ))}
         </Accordion>
       </CardContent>
@@ -476,10 +436,7 @@ function ObjectiveSection({
 
 function PriorityAccordion({ priority }: { priority: StrategicPriority }) {
   return (
-    <AccordionItem
-      value={priority.name}
-      className="rounded-lg border bg-muted/20 px-4"
-    >
+    <AccordionItem value={priority.name} className="rounded-lg border bg-muted/20 px-4">
       <AccordionTrigger className="py-3 hover:no-underline">
         <div className="flex items-center gap-3">
           <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -529,10 +486,7 @@ function PriorityAccordion({ priority }: { priority: StrategicPriority }) {
                     </p>
                     <ul className="space-y-0.5">
                       {priority.personas.map((persona) => (
-                        <li
-                          key={persona}
-                          className="text-xs text-foreground/80"
-                        >
+                        <li key={persona} className="text-xs text-foreground/80">
                           {persona}
                         </li>
                       ))}
@@ -578,15 +532,7 @@ function UseCaseRow({ useCase }: { useCase: ReferenceUseCase }) {
 // Stat Pill
 // ---------------------------------------------------------------------------
 
-function StatPill({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-}) {
+function StatPill({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3">
       <div className="flex items-center gap-1.5">

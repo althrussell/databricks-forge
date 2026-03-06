@@ -1,18 +1,8 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   ChevronDown,
   Lightbulb,
@@ -284,9 +274,7 @@ export default function HelpPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Help</h1>
-        <p className="mt-1 text-muted-foreground">
-          Learn how to get the most from Forge AI.
-        </p>
+        <p className="mt-1 text-muted-foreground">Learn how to get the most from Forge AI.</p>
       </div>
 
       {/* Quick Start */}
@@ -296,19 +284,14 @@ export default function HelpPage() {
             <Rocket className="h-5 w-5" />
             Quick Start
           </CardTitle>
-          <CardDescription>
-            Get from zero to actionable use cases in four steps.
-          </CardDescription>
+          <CardDescription>Get from zero to actionable use cases in four steps.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             {QUICK_START.map((item) => {
               const Icon = item.icon;
               return (
-                <div
-                  key={item.step}
-                  className="flex gap-3 rounded-lg border p-4"
-                >
+                <div key={item.step} className="flex gap-3 rounded-lg border p-4">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Icon className="h-4 w-4" />
                   </div>
@@ -319,9 +302,7 @@ export default function HelpPage() {
                       </Badge>
                       {item.title}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.description}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
                   </div>
                 </div>
               );
@@ -360,9 +341,7 @@ export default function HelpPage() {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="px-3 pb-4">
-                    <p className="mb-3 text-sm text-muted-foreground">
-                      {feature.description}
-                    </p>
+                    <p className="mb-3 text-sm text-muted-foreground">{feature.description}</p>
                     <ul className="space-y-1.5">
                       {feature.details.map((detail, j) => (
                         <li key={j} className="flex gap-2 text-xs text-muted-foreground">
@@ -437,9 +416,7 @@ export default function HelpPage() {
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <p className="px-3 pb-3 text-sm text-muted-foreground">
-                  {item.answer}
-                </p>
+                <p className="px-3 pb-3 text-sm text-muted-foreground">{item.answer}</p>
               </CollapsibleContent>
             </Collapsible>
           ))}
@@ -453,9 +430,7 @@ export default function HelpPage() {
             <BarChart3 className="h-5 w-5" />
             Discovery Pipeline Steps
           </CardTitle>
-          <CardDescription>
-            The discovery pipeline runs these 7 steps sequentially.
-          </CardDescription>
+          <CardDescription>The discovery pipeline runs these 7 steps sequentially.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -520,17 +495,15 @@ export default function HelpPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Forge AI reads only metadata (table and column names, data types,
-            foreign keys) from your Unity Catalog. No row-level data is accessed
-            unless data sampling is explicitly enabled in Settings — sampled data
-            is sent to the LLM but never persisted.
+            Forge AI reads only metadata (table and column names, data types, foreign keys) from
+            your Unity Catalog. No row-level data is accessed unless data sampling is explicitly
+            enabled in Settings — sampled data is sent to the LLM but never persisted.
           </p>
           <p className="text-sm text-muted-foreground">
-            All LLM calls go through your workspace&apos;s Model Serving
-            endpoints — no data leaves your Databricks environment.
-            Authentication is handled automatically by the Databricks Apps
-            platform. Conversation history and pipeline results are stored in
-            Lakebase within your workspace.
+            All LLM calls go through your workspace&apos;s Model Serving endpoints — no data leaves
+            your Databricks environment. Authentication is handled automatically by the Databricks
+            Apps platform. Conversation history and pipeline results are stored in Lakebase within
+            your workspace.
           </p>
         </CardContent>
       </Card>

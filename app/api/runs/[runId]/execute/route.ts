@@ -8,17 +8,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { failOrphanedRunningRun, getRunById } from "@/lib/lakebase/runs";
-import {
-  startPipeline,
-  resumePipeline,
-  getActivePipelineRunIds,
-} from "@/lib/pipeline/engine";
+import { startPipeline, resumePipeline, getActivePipelineRunIds } from "@/lib/pipeline/engine";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { isValidUUID } from "@/lib/validation";
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -40,10 +36,7 @@ export async function POST(
 
     if (run.status === "running") {
       logger.warn("[execute] Pipeline is already running", { runId });
-      return NextResponse.json(
-        { error: "Pipeline is already running" },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Pipeline is already running" }, { status: 409 });
     }
 
     const { searchParams } = new URL(_request.url);
@@ -67,9 +60,6 @@ export async function POST(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[execute] Failed to start pipeline", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

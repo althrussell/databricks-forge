@@ -54,10 +54,7 @@ export interface ValidateColumnOptions {
  * These are runtime struct fields, not table columns, so they must be
  * allowlisted to avoid false-positive hallucination flags.
  */
-export const AI_FUNCTION_RETURN_FIELDS = new Set([
-  "result",
-  "errormessage",
-]);
+export const AI_FUNCTION_RETURN_FIELDS = new Set(["result", "errormessage"]);
 
 // ---------------------------------------------------------------------------
 // Comment stripping
@@ -68,9 +65,7 @@ export const AI_FUNCTION_RETURN_FIELDS = new Set([
  * Removes `-- line comments` and `/* block comments *​/`.
  */
 export function stripSqlComments(sql: string): string {
-  return sql
-    .replace(/--[^\n]*/g, "")
-    .replace(/\/\*[\s\S]*?\*\//g, "");
+  return sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -228,9 +223,7 @@ export function validateColumnReferences(
 
   const dedupedUnknown = [...new Set(unknownCols)];
   if (dedupedUnknown.length > 0) {
-    warnings.push(
-      `SQL references unknown columns: ${dedupedUnknown.slice(0, 10).join(", ")}`,
-    );
+    warnings.push(`SQL references unknown columns: ${dedupedUnknown.slice(0, 10).join(", ")}`);
   }
 
   return {

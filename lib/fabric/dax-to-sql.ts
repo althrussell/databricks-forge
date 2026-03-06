@@ -120,11 +120,12 @@ export async function translateDaxMeasures(
     tableName: string;
   }>,
   nameMapping: NameMapping[],
-  options?: { batchSize?: number }
+  options?: { batchSize?: number },
 ): Promise<DaxTranslation[]> {
   const resolve = buildResolver(nameMapping);
   const results: DaxTranslation[] = [];
-  const llmBatch: Array<{ index: number; name: string; expression: string; tableName: string }> = [];
+  const llmBatch: Array<{ index: number; name: string; expression: string; tableName: string }> =
+    [];
 
   for (let i = 0; i < measures.length; i++) {
     const m = measures[i];
@@ -172,9 +173,7 @@ export async function translateDaxMeasures(
         if (review) {
           if (review.verdict === "fail") {
             r.confidence = "low";
-            r.warnings.push(
-              ...review.issues.map((i) => `Review: ${i.message}`),
-            );
+            r.warnings.push(...review.issues.map((i) => `Review: ${i.message}`));
           } else if (review.verdict === "warn" && r.confidence === "high") {
             r.confidence = "medium";
             r.warnings.push(
@@ -209,7 +208,7 @@ function tryTemplate(dax: string, resolve: (ref: string) => string): string | nu
 
 async function translateBatchWithLLM(
   batch: Array<{ index: number; name: string; expression: string; tableName: string }>,
-  nameMapping: NameMapping[]
+  nameMapping: NameMapping[],
 ): Promise<DaxTranslation[]> {
   const tableMappings = nameMapping
     .filter((m) => m.source === "table")
@@ -222,9 +221,11 @@ async function translateBatchWithLLM(
     .map((m) => `${m.original} → ${m.normalized}`)
     .join("\n");
 
-  const measuresText = batch.map((m, i) =>
-    `${i + 1}. Measure: ${m.name}\n   Table: ${m.tableName}\n   DAX: ${m.expression}`
-  ).join("\n\n");
+  const measuresText = batch
+    .map(
+      (m, i) => `${i + 1}. Measure: ${m.name}\n   Table: ${m.tableName}\n   DAX: ${m.expression}`,
+    )
+    .join("\n\n");
 
   const prompt = `Translate these Power BI DAX measures to Databricks SQL expressions.
 

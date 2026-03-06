@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
         results: [],
         total: 0,
         enabled: false,
-        message: "Semantic search is not available. The embedding endpoint (serving-endpoint-embedding) is not configured.",
+        message:
+          "Semantic search is not available. The embedding endpoint (serving-endpoint-embedding) is not configured.",
       });
     }
 
@@ -38,10 +39,7 @@ export async function GET(request: NextRequest) {
     const q = params.get("q");
 
     if (!q || q.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Query parameter 'q' is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Query parameter 'q' is required" }, { status: 400 });
     }
 
     const tableExists = await embeddingsTableExists();
@@ -50,7 +48,8 @@ export async function GET(request: NextRequest) {
         results: [],
         total: 0,
         enabled: true,
-        message: "Semantic search is not yet available. Run an estate scan or pipeline to generate embeddings.",
+        message:
+          "Semantic search is not yet available. Run an estate scan or pipeline to generate embeddings.",
       });
     }
 
@@ -100,9 +99,6 @@ export async function GET(request: NextRequest) {
     logger.error("[api/search] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

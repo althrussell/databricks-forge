@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
       sampleRowsPerTable: body.sampleRowsPerTable ?? 0,
       industry: body.industry ?? "",
       discoveryDepth: (body.discoveryDepth ?? "balanced") as DiscoveryDepth,
-      depthConfig: body.depthConfig ?? DEFAULT_DEPTH_CONFIGS[(body.discoveryDepth ?? "balanced") as DiscoveryDepth],
+      depthConfig:
+        body.depthConfig ??
+        DEFAULT_DEPTH_CONFIGS[(body.discoveryDepth ?? "balanced") as DiscoveryDepth],
       estateScanEnabled: body.estateScanEnabled ?? false,
       assetDiscoveryEnabled: body.assetDiscoveryEnabled ?? false,
       fabricScanId: body.fabricScanId ?? null,
@@ -87,11 +89,14 @@ export async function GET(request: NextRequest) {
     const userEmail = await getCurrentUserEmail();
     const runs = await listRuns(limit, offset, userEmail);
 
-    return NextResponse.json({ runs }, {
-      headers: {
-        "Cache-Control": "public, s-maxage=5, stale-while-revalidate=30",
+    return NextResponse.json(
+      { runs },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=5, stale-while-revalidate=30",
+        },
       },
-    });
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { error: msg });

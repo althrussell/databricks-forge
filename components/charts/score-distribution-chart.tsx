@@ -54,7 +54,11 @@ export function ScoreDistributionChart({
           <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="name" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+            <YAxis
+              allowDecimals={false}
+              tick={{ fontSize: 11 }}
+              className="fill-muted-foreground"
+            />
             <Tooltip
               contentStyle={{
                 backgroundColor: "var(--color-card)",

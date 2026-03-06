@@ -2,18 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
@@ -35,10 +25,7 @@ interface ActivityEntry {
   createdAt: string;
 }
 
-const ACTION_CONFIG: Record<
-  string,
-  { icon: React.ReactNode; label: string; color: string }
-> = {
+const ACTION_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
   created_run: {
     icon: <Plus className="h-3.5 w-3.5" />,
     label: "Created run",
@@ -110,8 +97,8 @@ function ActivityList({ activities, loading }: { activities: ActivityEntry[]; lo
   if (activities.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No activity recorded yet. Actions like creating runs, exporting
-        results, and pipeline completions will appear here.
+        No activity recorded yet. Actions like creating runs, exporting results, and pipeline
+        completions will appear here.
       </p>
     );
   }
@@ -125,24 +112,16 @@ function ActivityList({ activities, loading }: { activities: ActivityEntry[]; lo
           color: "text-muted-foreground",
         };
         const businessName =
-          (a.metadata?.businessName as string) ??
-          (a.metadata?.format as string) ??
-          "";
+          (a.metadata?.businessName as string) ?? (a.metadata?.format as string) ?? "";
 
         return (
-          <div
-            key={a.activityId}
-            className="flex items-center gap-3 rounded-md border p-2.5"
-          >
+          <div key={a.activityId} className="flex items-center gap-3 rounded-md border p-2.5">
             <div className={config.color}>{config.icon}</div>
             <div className="flex-1 min-w-0">
               <p className="text-sm">
                 <span className="font-medium">{config.label}</span>
                 {businessName && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    &mdash; {businessName}
-                  </span>
+                  <span className="text-muted-foreground"> &mdash; {businessName}</span>
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -156,10 +135,7 @@ function ActivityList({ activities, loading }: { activities: ActivityEntry[]; lo
               </p>
             </div>
             {a.resourceId && a.action !== "deleted_run" && (
-              <Link
-                href={`/runs/${a.resourceId}`}
-                className="text-xs text-primary hover:underline"
-              >
+              <Link href={`/runs/${a.resourceId}`} className="text-xs text-primary hover:underline">
                 View
               </Link>
             )}

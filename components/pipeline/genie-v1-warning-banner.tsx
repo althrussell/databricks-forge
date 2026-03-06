@@ -19,7 +19,8 @@ export function GenieV1WarningBanner({ enhancementCount }: GenieV1WarningBannerP
         </p>
         {enhancementCount > 0 && (
           <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/80">
-            {enhancementCount} {enhancementCount === 1 ? "space improves" : "spaces improve"} existing resources. Deploying creates new spaces alongside your originals.
+            {enhancementCount} {enhancementCount === 1 ? "space improves" : "spaces improve"}{" "}
+            existing resources. Deploying creates new spaces alongside your originals.
           </p>
         )}
       </div>

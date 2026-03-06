@@ -23,7 +23,9 @@ export interface DashboardProposal {
  */
 export function extractDashboardIntent(markdown: string): DashboardProposal | null {
   const hasDashboardContent =
-    /\b(dashboard|chart|widget|visuali[sz]ation|trend|bar chart|pie chart|line chart|table widget)\b/i.test(markdown);
+    /\b(dashboard|chart|widget|visuali[sz]ation|trend|bar chart|pie chart|line chart|table widget)\b/i.test(
+      markdown,
+    );
 
   if (!hasDashboardContent) return null;
 

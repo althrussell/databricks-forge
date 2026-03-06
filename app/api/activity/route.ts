@@ -14,10 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     await ensureMigrated();
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(
-      Math.max(parseInt(searchParams.get("limit") ?? "20", 10) || 20, 1),
-      100
-    );
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") ?? "20", 10) || 20, 1), 100);
 
     const activities = await getRecentActivity(limit);
 
@@ -25,9 +22,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[activity] Failed to fetch activity", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

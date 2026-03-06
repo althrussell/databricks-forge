@@ -101,10 +101,7 @@ describe("rankUseCases", () => {
   });
 
   it("does not mutate the original array", () => {
-    const cases = [
-      makeUseCase({ overallScore: 0.5 }),
-      makeUseCase({ overallScore: 0.9 }),
-    ];
+    const cases = [makeUseCase({ overallScore: 0.5 }), makeUseCase({ overallScore: 0.9 })];
     const ranked = rankUseCases(cases);
     expect(ranked).not.toBe(cases);
   });

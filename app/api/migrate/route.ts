@@ -16,9 +16,6 @@ export async function POST() {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[migrate] Migration failed", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

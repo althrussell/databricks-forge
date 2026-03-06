@@ -34,13 +34,19 @@ export async function POST(request: NextRequest) {
       try {
         space = JSON.parse(parsed.serialized_space);
       } catch {
-        return NextResponse.json({ error: "Failed to parse serialized_space field" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Failed to parse serialized_space field" },
+          { status: 400 },
+        );
       }
     } else if (parsed.data_sources || parsed.instructions || parsed.benchmarks) {
       space = parsed;
     } else {
       return NextResponse.json(
-        { error: "JSON must be either a serialized_space object or an API response containing serialized_space" },
+        {
+          error:
+            "JSON must be either a serialized_space object or an API response containing serialized_space",
+        },
         { status: 400 },
       );
     }
@@ -53,7 +59,8 @@ export async function POST(request: NextRequest) {
 
     // Extract title/description if present in config
     const title = (space as Record<string, unknown>).config
-      ? ((space as Record<string, Record<string, unknown>>).config.title as string) ?? "Imported Space"
+      ? (((space as Record<string, Record<string, unknown>>).config.title as string) ??
+        "Imported Space")
       : "Imported Space";
 
     logger.info("Imported space analyzed", {

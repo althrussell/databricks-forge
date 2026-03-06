@@ -65,16 +65,8 @@ interface BuildOptions {
 /**
  * Build an ERDGraph from scan data.
  */
-export function buildERDGraph(
-  scan: ScanData,
-  options: BuildOptions = {}
-): ERDGraph {
-  const {
-    includeFKs = true,
-    includeImplicit = true,
-    includeLineage = true,
-    domain,
-  } = options;
+export function buildERDGraph(scan: ScanData, options: BuildOptions = {}): ERDGraph {
+  const { includeFKs = true, includeImplicit = true, includeLineage = true, domain } = options;
 
   // Filter details by domain if specified
   let filteredDetails = scan.details;
@@ -90,7 +82,12 @@ export function buildERDGraph(
     let columns: ERDNode["columns"] = [];
     if (d.columnsJson) {
       try {
-        const parsed: Array<{ name: string; type: string; nullable?: boolean; comment?: string | null }> = JSON.parse(d.columnsJson);
+        const parsed: Array<{
+          name: string;
+          type: string;
+          nullable?: boolean;
+          comment?: string | null;
+        }> = JSON.parse(d.columnsJson);
         columns = parsed.map((c) => ({
           name: c.name,
           type: c.type,
@@ -98,7 +95,9 @@ export function buildERDGraph(
           isPK: false,
           isFK: false,
         }));
-      } catch { /* malformed JSON — skip */ }
+      } catch {
+        /* malformed JSON — skip */
+      }
     }
 
     return {
@@ -222,9 +221,7 @@ export function buildERDGraph(
  * FKs use solid lines, implicit use dotted lines.
  */
 export function generateMermaidERD(graph: ERDGraph): string {
-  const schemaEdges = graph.edges.filter(
-    (e) => e.edgeType === "fk" || e.edgeType === "implicit"
-  );
+  const schemaEdges = graph.edges.filter((e) => e.edgeType === "fk" || e.edgeType === "implicit");
 
   if (graph.nodes.length === 0) return "erDiagram\n  %% No tables found";
 

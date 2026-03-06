@@ -6,9 +6,7 @@ import {
 } from "@/lib/genie/passes/metric-view-proposals";
 import type { SchemaAllowlist } from "@/lib/genie/schema-allowlist";
 
-function makeAllowlist(
-  tables: Record<string, string[]>,
-): SchemaAllowlist {
+function makeAllowlist(tables: Record<string, string[]>): SchemaAllowlist {
   const tableSet = new Set<string>();
   const columns = new Map<string, Set<string>>();
   const columnTypes = new Map<string, string>();
@@ -35,9 +33,9 @@ describe("stripFqnPrefixes", () => {
   });
 
   it("strips backtick-quoted 4-part FQN", () => {
-    expect(
-      stripFqnPrefixes("SUM(retail.demo.loans.`Origination Quarter`)")
-    ).toBe("SUM(`Origination Quarter`)");
+    expect(stripFqnPrefixes("SUM(retail.demo.loans.`Origination Quarter`)")).toBe(
+      "SUM(`Origination Quarter`)",
+    );
   });
 
   it("strips multiple FQN refs in one expression", () => {
@@ -149,8 +147,11 @@ measures:
 describe("validateMetricViewYaml — measure shadowing", () => {
   const allowlist = makeAllowlist({
     "retail.demo.quality": [
-      "Total Complaints", "Unique Complainants", "Timely Response Count",
-      "District", "Product",
+      "Total Complaints",
+      "Unique Complainants",
+      "Timely Response Count",
+      "District",
+      "Product",
     ],
   });
 

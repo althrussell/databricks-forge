@@ -25,9 +25,7 @@ import { isValidTable, validateSqlExpression, type SchemaAllowlist } from "./sch
 import { logger } from "@/lib/logger";
 
 function makeId(seed: string, category: string, index: number): string {
-  const hash = createHash("md5")
-    .update(`${seed}:${category}:${index}`)
-    .digest("hex");
+  const hash = createHash("md5").update(`${seed}:${category}:${index}`).digest("hex");
   return hash.slice(0, 32);
 }
 
@@ -58,7 +56,10 @@ function rewriteJoinSql(
   // Replace FQN.column references (catalog.schema.table.column) with `alias`.`column`.
   // Process the longer FQN first to avoid partial matches.
   const replacements: [string, string][] = (
-    [[leftFqn, leftAlias], [rightFqn, rightAlias]] as [string, string][]
+    [
+      [leftFqn, leftAlias],
+      [rightFqn, rightAlias],
+    ] as [string, string][]
   ).sort((a, b) => b[0].length - a[0].length);
 
   for (const [fqn, alias] of replacements) {
@@ -67,7 +68,7 @@ function rewriteJoinSql(
     result = result.replace(
       new RegExp(`${escaped}\\.(?:\`([^\`]+)\`|([a-zA-Z_]\\w*))`, "g"),
       (_m, quoted: string | undefined, bare: string | undefined) =>
-        `\`${alias}\`.\`${quoted ?? bare}\``
+        `\`${alias}\`.\`${quoted ?? bare}\``,
     );
   }
 
@@ -89,7 +90,9 @@ export function determineQualityGate(
   let gateDecision: "allow" | "warn" | "block" = "allow";
   if (degradedReasons.includes("no_validated_joins")) {
     gateDecision = "block";
-    gateReasons.push("No validated joins for multi-table space — cross-table queries may not work correctly.");
+    gateReasons.push(
+      "No validated joins for multi-table space — cross-table queries may not work correctly.",
+    );
   } else if (qualityScore < 70 || degradedReasons.length > 0) {
     gateDecision = "warn";
     gateReasons.push("Space quality is degraded; review preview diagnostics before deploy.");
@@ -103,7 +106,7 @@ export function determineQualityGate(
  */
 export function assembleSerializedSpace(
   outputs: GenieEnginePassOutputs,
-  opts: AssembleOptions
+  opts: AssembleOptions,
 ): SerializedSpace {
   const { runId, allowlist, metadata } = opts;
   const { domain } = outputs;
@@ -181,9 +184,7 @@ export function assembleSerializedSpace(
           descParts.push("Synonyms: " + synonymParts.join("; ") + ".");
         }
 
-        const hiddenCols = enrichments
-          .filter((ce) => ce.hidden)
-          .map((ce) => ce.columnName);
+        const hiddenCols = enrichments.filter((ce) => ce.hidden).map((ce) => ce.columnName);
         if (hiddenCols.length > 0) {
           descParts.push("Ignore columns: " + hiddenCols.join(", ") + ".");
         }
@@ -212,7 +213,7 @@ export function assembleSerializedSpace(
 
   if (totalDataObjects > MAX_DATA_OBJECTS) {
     const joinedTableIds = new Set(
-      outputs.joinSpecs.flatMap((j) => [j.leftTable.toLowerCase(), j.rightTable.toLowerCase()])
+      outputs.joinSpecs.flatMap((j) => [j.leftTable.toLowerCase(), j.rightTable.toLowerCase()]),
     );
 
     cappedTables = [...dataTables].sort((a, b) => {
@@ -238,12 +239,10 @@ export function assembleSerializedSpace(
   }
 
   // 3. Sample questions
-  const sampleQuestions: SampleQuestion[] = outputs.sampleQuestions
-    .slice(0, 5)
-    .map((q, i) => ({
-      id: makeId(seed, "q", i),
-      question: [q],
-    }));
+  const sampleQuestions: SampleQuestion[] = outputs.sampleQuestions.slice(0, 5).map((q, i) => ({
+    id: makeId(seed, "q", i),
+    question: [q],
+  }));
 
   // 4. SQL examples (from trusted queries + use case SQL)
   // Cap at 8 examples; drop any with SQL longer than 4000 chars (Genie comprehension degrades)
@@ -260,7 +259,8 @@ export function assembleSerializedSpace(
       };
       if (tq.parameters.length > 0) {
         const guidance = tq.parameters.map(
-          (p) => `Parameter "${p.name}" (${p.type}): ${p.comment}${p.defaultValue ? ` [default: ${p.defaultValue}]` : ""}`
+          (p) =>
+            `Parameter "${p.name}" (${p.type}): ${p.comment}${p.defaultValue ? ` [default: ${p.defaultValue}]` : ""}`,
         );
         entry.usage_guidance = guidance;
       }
@@ -272,7 +272,9 @@ export function assembleSerializedSpace(
   //    - sql uses backtick-quoted alias.column references
   //    - relationship_type is encoded as a SQL comment: --rt=FROM_RELATIONSHIP_TYPE_...--
   const joinSpecs: JoinSpec[] = outputs.joinSpecs
-    .filter((j) => validateSqlExpression(allowlist, j.sql, `asm_join:${j.leftTable}->${j.rightTable}`, true))
+    .filter((j) =>
+      validateSqlExpression(allowlist, j.sql, `asm_join:${j.leftTable}->${j.rightTable}`, true),
+    )
     .map((j, i) => {
       const leftAlias = fqnToAlias(j.leftTable);
       let rightAlias = fqnToAlias(j.rightTable);
@@ -334,13 +336,9 @@ export function assembleSerializedSpace(
 
   // 7. Text instructions -- API allows at most one TextInstruction entry;
   //    all instruction strings go into its content[] array.
-  const instrContent = outputs.textInstructions.filter(
-    (t) => t.trim().length > 0
-  );
+  const instrContent = outputs.textInstructions.filter((t) => t.trim().length > 0);
   const textInstructions: TextInstruction[] =
-    instrContent.length > 0
-      ? [{ id: makeId(seed, "instr", 0), content: instrContent }]
-      : [];
+    instrContent.length > 0 ? [{ id: makeId(seed, "instr", 0), content: instrContent }] : [];
 
   // Hard-truncate instructions to 3000 chars (Genie API recommended limit).
   // The instruction-generation pass already budgets, but this is a safety net.
@@ -368,15 +366,17 @@ export function assembleSerializedSpace(
     });
     instrTotalChars = trimmed.reduce((s, t) => s + t.length, 0);
   }
-  logger.info("Genie instruction size", { domain, totalChars: instrTotalChars, blocks: instrContent.length });
+  logger.info("Genie instruction size", {
+    domain,
+    totalChars: instrTotalChars,
+    blocks: instrContent.length,
+  });
 
   // 8. Benchmarks -- each phrasing gets its own entry sharing the same answer
   const benchmarks: BenchmarkQuestion[] = [];
   let benchIdx = 0;
   for (const b of outputs.benchmarkQuestions) {
-    const answer = b.expectedSql
-      ? [{ format: "SQL", content: [b.expectedSql] }]
-      : undefined;
+    const answer = b.expectedSql ? [{ format: "SQL", content: [b.expectedSql] }] : undefined;
     const allPhrasings = [b.question, ...b.alternatePhrasings];
     for (const phrasing of allPhrasings) {
       benchmarks.push({
@@ -488,13 +488,15 @@ export function buildRecommendation(
     qualityScore?: number;
     promptVersion?: string;
     joinDiagnostics?: JoinDiagnostic[];
-  }
+  },
 ): GenieSpaceRecommendation {
   const title = options?.titleOverride
     ? options.titleOverride
     : generateTitle(businessName, outputs.domain, outputs.subdomains, outputs.tables);
   const descParts = generateDescription(
-    businessName, outputs.domain, outputs.subdomains,
+    businessName,
+    outputs.domain,
+    outputs.subdomains,
     space.instructions.sql_snippets.measures.length,
     space.instructions.sql_snippets.filters.length,
     space.instructions.sql_snippets.expressions.length,

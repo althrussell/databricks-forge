@@ -16,7 +16,7 @@ import { SpaceEditBodySchema } from "@/lib/metadata-genie/schemas";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string; domain: string }> }
+  { params }: { params: Promise<{ runId: string; domain: string }> },
 ) {
   try {
     const { runId, domain } = await params;
@@ -33,7 +33,10 @@ export async function PATCH(
     const raw = await request.json();
     const parsed = SpaceEditBodySchema.safeParse(raw);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Missing type or id" }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Missing type or id" },
+        { status: 400 },
+      );
     }
     const body = parsed.data;
 
@@ -43,7 +46,10 @@ export async function PATCH(
       });
 
       if (!rec) {
-        return { error: `No recommendation found for domain "${decodedDomain}"`, status: 404 } as const;
+        return {
+          error: `No recommendation found for domain "${decodedDomain}"`,
+          status: 404,
+        } as const;
       }
 
       let space: Record<string, unknown>;
@@ -79,18 +85,14 @@ export async function PATCH(
           });
           break;
         case "update_instruction":
-          modified = updateInArray(
-            (instructions?.text_instructions ?? []) as unknown[],
-            body.id,
-            { content: body.content as string[] | undefined }
-          );
+          modified = updateInArray((instructions?.text_instructions ?? []) as unknown[], body.id, {
+            content: body.content as string[] | undefined,
+          });
           break;
         case "update_question":
-          modified = updateInArray(
-            ((config?.sample_questions ?? []) as unknown[]),
-            body.id,
-            { question: body.question as string[] | undefined }
-          );
+          modified = updateInArray((config?.sample_questions ?? []) as unknown[], body.id, {
+            question: body.question as string[] | undefined,
+          });
           break;
         case "remove_measure":
           modified = removeFromArray(snippets, "measures", body.id);
@@ -143,10 +145,12 @@ export async function PATCH(
 function updateInArray(
   arr: unknown[] | undefined,
   id: string,
-  updates: Record<string, unknown>
+  updates: Record<string, unknown>,
 ): boolean {
   if (!Array.isArray(arr)) return false;
-  const item = arr.find((el) => (el as Record<string, unknown>).id === id) as Record<string, unknown> | undefined;
+  const item = arr.find((el) => (el as Record<string, unknown>).id === id) as
+    | Record<string, unknown>
+    | undefined;
   if (!item) return false;
   for (const [key, value] of Object.entries(updates)) {
     if (value !== undefined) item[key] = value;
@@ -157,7 +161,7 @@ function updateInArray(
 function removeFromArray(
   parent: Record<string, unknown[]> | undefined,
   key: string,
-  id: string
+  id: string,
 ): boolean {
   if (!parent || !Array.isArray(parent[key])) return false;
   const before = parent[key].length;
@@ -168,7 +172,7 @@ function removeFromArray(
 function removeFromObject(
   parent: Record<string, unknown> | undefined,
   key: string,
-  id: string
+  id: string,
 ): boolean {
   if (!parent || !Array.isArray(parent[key])) return false;
   const arr = parent[key] as unknown[];

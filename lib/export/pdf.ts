@@ -54,15 +54,10 @@ function drawLogo(
   x: number,
   y: number,
   height: number,
-  color: string = DB_RED
+  color: string = DB_RED,
 ): void {
   const scale = height / DB_LOGO_VB_H;
-  doc
-    .save()
-    .translate(x, y)
-    .scale(scale)
-    .path(DB_LOGO_PATH)
-    .fill(color);
+  doc.save().translate(x, y).scale(scale).path(DB_LOGO_PATH).fill(color);
   doc.restore();
 }
 
@@ -94,18 +89,13 @@ function addAccentBar(
   x: number,
   y: number,
   w: number,
-  h: number
+  h: number,
 ): void {
   doc.save().rect(x, y, w, h).fill(color).restore();
 }
 
 /** Draw a red separator line (brand element from official template) */
-function addRedSeparator(
-  doc: PDFKit.PDFDocument,
-  x: number,
-  y: number,
-  w: number
-): void {
+function addRedSeparator(doc: PDFKit.PDFDocument, x: number, y: number, w: number): void {
   doc
     .save()
     .moveTo(x, y)
@@ -120,7 +110,7 @@ function addRedSeparator(
 function addBrandShapes(
   doc: PDFKit.PDFDocument,
   region: { x: number; y: number; w: number; h: number },
-  opacity: number = 0.9
+  opacity: number = 0.9,
 ): void {
   const { x, y, w, h } = region;
   doc.save().opacity(opacity);
@@ -140,7 +130,7 @@ function addBrandShapes(
     .polygon(
       [triCx, triCy - triBase * 0.75],
       [triCx - triBase / 2, triCy + triBase * 0.25],
-      [triCx + triBase / 2, triCy + triBase * 0.25]
+      [triCx + triBase / 2, triCy + triBase * 0.25],
     )
     .fill(DB_RED);
 
@@ -152,27 +142,24 @@ function buildDomainSummary(domain: string, cases: UseCase[]): string[] {
   const aiCount = cases.filter((c) => c.type === "AI").length;
   const statsCount = cases.length - aiCount;
   const avgScore = Math.round(
-    (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100
+    (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100,
   );
   const top = [...cases].sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall)[0];
-  const subdomains = [
-    ...new Set(cases.map((c) => c.subdomain).filter(Boolean)),
-  ];
-  const techniques = [
-    ...new Set(cases.map((c) => c.analyticsTechnique).filter(Boolean)),
-  ].slice(0, 5);
+  const subdomains = [...new Set(cases.map((c) => c.subdomain).filter(Boolean))];
+  const techniques = [...new Set(cases.map((c) => c.analyticsTechnique).filter(Boolean))].slice(
+    0,
+    5,
+  );
 
   const bullets: string[] = [];
-  bullets.push(
-    `${cases.length} use cases (${aiCount} AI, ${statsCount} Statistical)`
-  );
+  bullets.push(`${cases.length} use cases (${aiCount} AI, ${statsCount} Statistical)`);
   if (subdomains.length > 0) {
     bullets.push(`Subdomains: ${subdomains.slice(0, 5).join(", ")}`);
   }
   bullets.push(`Average score: ${avgScore}%`);
   if (top) {
     bullets.push(
-      `Highest-scoring: ${top.name} (${Math.round(effectiveScores(top).overall * 100)}%)`
+      `Highest-scoring: ${top.name} (${Math.round(effectiveScores(top).overall * 100)}%)`,
     );
   }
   if (techniques.length > 0) {
@@ -189,7 +176,7 @@ function drawTable(
   x: number,
   y: number,
   colWidths: number[],
-  options?: { maxRows?: number }
+  options?: { maxRows?: number },
 ): number {
   const rowH = 28;
   const headerH = 32;
@@ -221,11 +208,7 @@ function drawTable(
   for (let r = 0; r < displayRows.length; r++) {
     // Alternating row background
     if (r % 2 === 1) {
-      doc
-        .save()
-        .rect(x, ry, tableW, rowH)
-        .fill(WARM_WHITE)
-        .restore();
+      doc.save().rect(x, ry, tableW, rowH).fill(WARM_WHITE).restore();
     }
     // Bottom border
     doc
@@ -267,7 +250,7 @@ export async function generatePdf(
   run: PipelineRun,
   useCases: UseCase[],
   lineageDiscoveredFqns: string[] = [],
-  summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null
+  summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null,
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   return new Promise<Buffer>((resolve, reject) => {
@@ -295,9 +278,7 @@ export async function generatePdf(
     const statsCount = useCases.length - aiCount;
     const avgScore = useCases.length
       ? Math.round(
-          (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
-            useCases.length) *
-            100
+          (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / useCases.length) * 100,
         )
       : 0;
 
@@ -353,12 +334,9 @@ export async function generatePdf(
       .fontSize(11)
       .fillColor(TEXT_LIGHT)
       .font("Helvetica")
-      .text(
-        `${useCases.length} use cases  |  ${domainStats.length} domains`,
-        MARGIN,
-        375,
-        { width: PAGE_W * 0.48 }
-      );
+      .text(`${useCases.length} use cases  |  ${domainStats.length} domains`, MARGIN, 375, {
+        width: PAGE_W * 0.48,
+      });
 
     addFooter(doc, "dark");
 
@@ -401,22 +379,16 @@ export async function generatePdf(
 
     if (bc) {
       if (bc.industries) summaryItems.push(`Industry: ${bc.industries}`);
-      if (bc.strategicGoals)
-        summaryItems.push(`Strategic Goals: ${bc.strategicGoals}`);
+      if (bc.strategicGoals) summaryItems.push(`Strategic Goals: ${bc.strategicGoals}`);
       if (bc.valueChain) summaryItems.push(`Value Chain: ${bc.valueChain}`);
-      if (bc.revenueModel)
-        summaryItems.push(`Revenue Model: ${bc.revenueModel}`);
+      if (bc.revenueModel) summaryItems.push(`Revenue Model: ${bc.revenueModel}`);
     }
     summaryItems.push(
-      `${useCases.length} use cases discovered across ${domainStats.length} domains`
+      `${useCases.length} use cases discovered across ${domainStats.length} domains`,
     );
-    summaryItems.push(
-      `${aiCount} AI use cases, ${statsCount} Statistical use cases`
-    );
+    summaryItems.push(`${aiCount} AI use cases, ${statsCount} Statistical use cases`);
     summaryItems.push(`Average overall score: ${avgScore}%`);
-    summaryItems.push(
-      `Business Priorities: ${run.config.businessPriorities.join(", ")}`
-    );
+    summaryItems.push(`Business Priorities: ${run.config.businessPriorities.join(", ")}`);
 
     for (const item of summaryItems) {
       doc
@@ -439,7 +411,7 @@ export async function generatePdf(
         "Disclaimer: This analysis is based on Unity Catalog metadata only. No actual data was accessed or read during this process.",
         MARGIN,
         PAGE_H - 60,
-        { width: CONTENT_W }
+        { width: CONTENT_W },
       );
 
     addFooter(doc);
@@ -467,10 +439,7 @@ export async function generatePdf(
 
       addRedSeparator(doc, MARGIN, MARGIN + 42, 50);
 
-      const pageStats = domainStats.slice(
-        page * ROWS_PER_TOC,
-        (page + 1) * ROWS_PER_TOC
-      );
+      const pageStats = domainStats.slice(page * ROWS_PER_TOC, (page + 1) * ROWS_PER_TOC);
 
       const headers = ["Domain", "Use Cases", "Avg Score", "AI", "Statistical"];
       const rows = pageStats.map((ds) => [
@@ -481,9 +450,7 @@ export async function generatePdf(
         String(ds.statsCount),
       ]);
 
-      drawTable(doc, headers, rows, MARGIN + 10, MARGIN + 55, [
-        280, 80, 90, 80, 90,
-      ]);
+      drawTable(doc, headers, rows, MARGIN + 10, MARGIN + 55, [280, 80, 90, 80, 90]);
 
       addFooter(doc);
     }
@@ -493,7 +460,7 @@ export async function generatePdf(
     // ===================================================================
     for (const domain of domainOrder) {
       const cases = (domainGroups[domain] ?? []).sort(
-        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
+        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall,
       );
       if (cases.length === 0) continue;
 
@@ -589,14 +556,12 @@ export async function generatePdf(
         {
           label: "Avg Score",
           value: `${Math.round(
-            (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100
+            (cases.reduce((s, c) => s + effectiveScores(c).overall, 0) / cases.length) * 100,
           )}%`,
         },
         {
           label: "Top Score",
-          value: `${Math.round(
-            Math.max(...cases.map((c) => effectiveScores(c).overall)) * 100
-          )}%`,
+          value: `${Math.round(Math.max(...cases.map((c) => effectiveScores(c).overall)) * 100)}%`,
         },
       ];
 
@@ -650,11 +615,7 @@ export async function generatePdf(
         addRedSeparator(doc, MARGIN, sepY, 50);
 
         // Subtitle: Subdomain | Type | Technique
-        const subtitleParts = [
-          uc.subdomain,
-          uc.type,
-          uc.analyticsTechnique,
-        ].filter(Boolean);
+        const subtitleParts = [uc.subdomain, uc.type, uc.analyticsTechnique].filter(Boolean);
         doc
           .fontSize(12)
           .fillColor(DB_RED)
@@ -734,22 +695,33 @@ export async function generatePdf(
           const scores = [
             {
               label: "Priority",
-              value: Math.round((hasUserScores ? (uc.userPriorityScore ?? uc.priorityScore) : uc.priorityScore) * 100),
+              value: Math.round(
+                (hasUserScores ? (uc.userPriorityScore ?? uc.priorityScore) : uc.priorityScore) *
+                  100,
+              ),
               system: hasUserScores ? Math.round(uc.priorityScore * 100) : null,
             },
             {
               label: "Feasibility",
-              value: Math.round((hasUserScores ? (uc.userFeasibilityScore ?? uc.feasibilityScore) : uc.feasibilityScore) * 100),
+              value: Math.round(
+                (hasUserScores
+                  ? (uc.userFeasibilityScore ?? uc.feasibilityScore)
+                  : uc.feasibilityScore) * 100,
+              ),
               system: hasUserScores ? Math.round(uc.feasibilityScore * 100) : null,
             },
             {
               label: "Impact",
-              value: Math.round((hasUserScores ? (uc.userImpactScore ?? uc.impactScore) : uc.impactScore) * 100),
+              value: Math.round(
+                (hasUserScores ? (uc.userImpactScore ?? uc.impactScore) : uc.impactScore) * 100,
+              ),
               system: hasUserScores ? Math.round(uc.impactScore * 100) : null,
             },
             {
               label: "Overall",
-              value: Math.round((hasUserScores ? (uc.userOverallScore ?? uc.overallScore) : uc.overallScore) * 100),
+              value: Math.round(
+                (hasUserScores ? (uc.userOverallScore ?? uc.overallScore) : uc.overallScore) * 100,
+              ),
               system: hasUserScores ? Math.round(uc.overallScore * 100) : null,
             },
           ];
@@ -758,11 +730,7 @@ export async function generatePdf(
           for (let i = 0; i < scores.length; i++) {
             const sx = MARGIN + 15 + i * scoreBlockW;
             const scoreColor =
-              scores[i].value >= 70
-                ? SCORE_GREEN
-                : scores[i].value >= 40
-                  ? SCORE_AMBER
-                  : DB_RED;
+              scores[i].value >= 70 ? SCORE_GREEN : scores[i].value >= 40 ? SCORE_AMBER : DB_RED;
 
             doc
               .fontSize(10)

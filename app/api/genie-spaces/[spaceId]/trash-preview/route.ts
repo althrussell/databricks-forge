@@ -8,10 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
-import {
-  getDeployedAssets,
-  findSpacesReferencingAssets,
-} from "@/lib/lakebase/genie-spaces";
+import { getDeployedAssets, findSpacesReferencingAssets } from "@/lib/lakebase/genie-spaces";
 import { isSafeId } from "@/lib/validation";
 
 interface SharedAsset {

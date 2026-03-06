@@ -6,7 +6,7 @@ import type { UseCase } from "@/lib/domain/types";
 export function useUseCaseUpdate(
   runId: string,
   useCases: UseCase[],
-  setUseCases: React.Dispatch<React.SetStateAction<UseCase[]>>
+  setUseCases: React.Dispatch<React.SetStateAction<UseCase[]>>,
 ) {
   return useCallback(
     async (updated: UseCase): Promise<{ ok: boolean; error?: string }> => {
@@ -64,6 +64,6 @@ export function useUseCaseUpdate(
         };
       }
     },
-    [runId, useCases, setUseCases]
+    [runId, useCases, setUseCases],
   );
 }

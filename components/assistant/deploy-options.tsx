@@ -15,7 +15,11 @@ export function DeployOptions({ sql }: DeployOptionsProps) {
   const [title, setTitle] = React.useState("Forge Assistant Query");
   const [path, setPath] = React.useState("/Shared/forge_assistant/");
   const [deploying, setDeploying] = React.useState(false);
-  const [result, setResult] = React.useState<{ success: boolean; path?: string; error?: string } | null>(null);
+  const [result, setResult] = React.useState<{
+    success: boolean;
+    path?: string;
+    error?: string;
+  } | null>(null);
 
   const handleDeploy = async () => {
     setDeploying(true);
@@ -44,7 +48,9 @@ export function DeployOptions({ sql }: DeployOptionsProps) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="notebook-title" className="text-xs">Title</Label>
+          <Label htmlFor="notebook-title" className="text-xs">
+            Title
+          </Label>
           <Input
             id="notebook-title"
             value={title}
@@ -53,7 +59,9 @@ export function DeployOptions({ sql }: DeployOptionsProps) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="notebook-path" className="text-xs">Workspace Path</Label>
+          <Label htmlFor="notebook-path" className="text-xs">
+            Workspace Path
+          </Label>
           <Input
             id="notebook-path"
             value={path}
@@ -64,7 +72,11 @@ export function DeployOptions({ sql }: DeployOptionsProps) {
       </div>
 
       <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={handleDeploy} disabled={deploying}>
-        {deploying ? <Loader2 className="size-3.5 animate-spin" /> : <BookOpen className="size-3.5" />}
+        {deploying ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <BookOpen className="size-3.5" />
+        )}
         {deploying ? "Deploying…" : "Deploy Notebook"}
       </Button>
 
@@ -72,7 +84,9 @@ export function DeployOptions({ sql }: DeployOptionsProps) {
         <div className="flex items-center gap-2 text-xs text-green-600">
           <Check className="size-3.5" />
           <span>Deployed to</span>
-          <Badge variant="secondary" className="text-[10px]">{result.path}</Badge>
+          <Badge variant="secondary" className="text-[10px]">
+            {result.path}
+          </Badge>
         </div>
       )}
 

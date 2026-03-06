@@ -151,9 +151,7 @@ export function ConversationHistory({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: trimmed }),
       });
-      setConversations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)),
-      );
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
     } catch {
       // best-effort
     } finally {
@@ -237,7 +235,9 @@ export function ConversationHistory({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete all conversations?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete all {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} and their messages. This cannot be undone.
+                    This will permanently delete all {conversations.length} conversation
+                    {conversations.length !== 1 ? "s" : ""} and their messages. This cannot be
+                    undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

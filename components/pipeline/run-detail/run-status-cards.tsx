@@ -1,13 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { RunProgress } from "@/components/pipeline/run-progress";
 import { Square, RotateCcw } from "lucide-react";
@@ -29,9 +23,7 @@ export function RunProgressCard({
             <CardTitle className="text-lg">Pipeline Progress</CardTitle>
             <CardDescription>
               {run.statusMessage ??
-                (run.currentStep
-                  ? `Currently: ${run.currentStep}`
-                  : "Waiting to start...")}
+                (run.currentStep ? `Currently: ${run.currentStep}` : "Waiting to start...")}
             </CardDescription>
           </div>
           <Button
@@ -48,9 +40,7 @@ export function RunProgressCard({
       <CardContent>
         <div className="mb-4">
           <Progress value={run.progressPct} className="h-3" />
-          <p className="mt-1 text-right text-sm text-muted-foreground">
-            {run.progressPct}%
-          </p>
+          <p className="mt-1 text-right text-sm text-muted-foreground">{run.progressPct}%</p>
         </div>
         <RunProgress
           currentStep={run.currentStep as PipelineStep}
@@ -76,9 +66,7 @@ export function RunFailedCard({
     <Card className="border-destructive/50">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg text-destructive">
-            Pipeline Failed
-          </CardTitle>
+          <CardTitle className="text-lg text-destructive">Pipeline Failed</CardTitle>
           <Button size="sm" onClick={onResume}>
             <RotateCcw className="mr-1 h-3.5 w-3.5" />
             Resume Pipeline
@@ -110,9 +98,7 @@ export function RunCancelledCard({
     <Card className="border-amber-500/50">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg text-amber-600">
-            Pipeline Cancelled
-          </CardTitle>
+          <CardTitle className="text-lg text-amber-600">Pipeline Cancelled</CardTitle>
           <Button size="sm" onClick={onResume}>
             <RotateCcw className="mr-1 h-3.5 w-3.5" />
             Resume Pipeline
@@ -120,7 +106,9 @@ export function RunCancelledCard({
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">This pipeline was stopped by a user. You can resume it from the last successful step.</p>
+        <p className="text-sm text-muted-foreground">
+          This pipeline was stopped by a user. You can resume it from the last successful step.
+        </p>
         <div className="mt-4">
           <RunProgress
             currentStep={run.currentStep as PipelineStep}

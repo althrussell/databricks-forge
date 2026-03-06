@@ -38,10 +38,7 @@ async function parseErrorBody(res: Response): Promise<{ message: string; code?: 
 /**
  * Fetch JSON from `url`. Throws `FetchError` on non-2xx responses.
  */
-export async function fetchJson<T>(
-  url: string,
-  init?: RequestInit,
-): Promise<T> {
+export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
     const { message, code } = await parseErrorBody(res);

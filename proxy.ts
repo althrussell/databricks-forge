@@ -26,22 +26,15 @@ export function proxy(req: NextRequest) {
   // --- Authentication ---
   const userToken = req.headers.get("x-forwarded-access-token");
   const hasPat = !!process.env.DATABRICKS_TOKEN || !!process.env.DATABRICKS_API_TOKEN;
-  const hasOAuth =
-    !!process.env.DATABRICKS_CLIENT_ID &&
-    !!process.env.DATABRICKS_CLIENT_SECRET;
+  const hasOAuth = !!process.env.DATABRICKS_CLIENT_ID && !!process.env.DATABRICKS_CLIENT_SECRET;
 
   if (!userToken && !hasPat && !hasOAuth) {
-    return NextResponse.json(
-      { error: "Authentication required" },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
   // --- Rate limiting ---
   const clientKey =
-    req.headers.get("x-forwarded-email") ??
-    req.headers.get("x-forwarded-for") ??
-    "unknown";
+    req.headers.get("x-forwarded-email") ?? req.headers.get("x-forwarded-for") ?? "unknown";
 
   const rateLimitResult = checkRateLimit(pathname, clientKey);
   if (rateLimitResult) {

@@ -128,7 +128,9 @@ describe("generateTimePeriods", () => {
     const tsColumns: ColumnInfo[] = [
       makeColumn("cat.schema.events", "event_timestamp", "timestamp"),
     ];
-    const result = generateTimePeriods(tsColumns, ["cat.schema.events"], { fiscalYearStartMonth: 1 });
+    const result = generateTimePeriods(tsColumns, ["cat.schema.events"], {
+      fiscalYearStartMonth: 1,
+    });
     expect(result.filters.length).toBeGreaterThan(0);
   });
 

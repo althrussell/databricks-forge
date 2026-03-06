@@ -35,10 +35,7 @@ export function ScoreRadarChart({
   size = 200,
 }: ScoreRadarChartProps) {
   const hasUserScores =
-    userPriority != null ||
-    userFeasibility != null ||
-    userImpact != null ||
-    userOverall != null;
+    userPriority != null || userFeasibility != null || userImpact != null || userOverall != null;
 
   const data = [
     {
@@ -66,10 +63,7 @@ export function ScoreRadarChart({
   return (
     <ResponsiveContainer width="100%" height={size}>
       <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
-        <PolarGrid
-          stroke="var(--color-border)"
-          strokeOpacity={0.5}
-        />
+        <PolarGrid stroke="var(--color-border)" strokeOpacity={0.5} />
         <PolarAngleAxis
           dataKey="metric"
           tick={{ fontSize: 12, fontWeight: 600, fill: "var(--color-foreground)" }}

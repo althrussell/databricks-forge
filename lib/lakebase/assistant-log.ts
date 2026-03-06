@@ -46,9 +46,7 @@ export interface UpdateAssistantLogInput {
 /**
  * Create a new assistant interaction log entry.
  */
-export async function createAssistantLog(
-  input: CreateAssistantLogInput,
-): Promise<string> {
+export async function createAssistantLog(input: CreateAssistantLogInput): Promise<string> {
   return withPrisma(async (prisma) => {
     const log = await prisma.forgeAssistantLog.create({
       data: {
@@ -65,7 +63,9 @@ export async function createAssistantLog(
         totalTokens: input.totalTokens,
         userId: input.userId,
         sourcesJson: input.sources ? JSON.stringify(input.sources) : null,
-        referencedTablesJson: input.referencedTables ? JSON.stringify(input.referencedTables) : null,
+        referencedTablesJson: input.referencedTables
+          ? JSON.stringify(input.referencedTables)
+          : null,
         persona: input.persona,
       },
     });
@@ -101,10 +101,7 @@ export async function updateAssistantLog(
 /**
  * Get recent assistant logs for a session.
  */
-export async function getSessionLogs(
-  sessionId: string,
-  limit = 50,
-) {
+export async function getSessionLogs(sessionId: string, limit = 50) {
   return withPrisma(async (prisma) => {
     return prisma.forgeAssistantLog.findMany({
       where: { sessionId },

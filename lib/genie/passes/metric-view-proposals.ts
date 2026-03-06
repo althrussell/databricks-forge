@@ -50,15 +50,9 @@ const TEMPERATURE = 0.2;
  */
 export function stripFqnPrefixes(sql: string): string {
   // Backtick-quoted column: catalog.schema.table.`col name` -> `col name`
-  let result = sql.replace(
-    /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.(`[^`]+`)/g,
-    "$1"
-  );
+  let result = sql.replace(/\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.(`[^`]+`)/g, "$1");
   // Unquoted column: catalog.schema.table.column -> column
-  result = result.replace(
-    /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g,
-    "$1"
-  );
+  result = result.replace(/\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g, "$1");
   return result;
 }
 
@@ -173,12 +167,8 @@ function buildSeedYaml(
   dimensions: EnrichedSqlSnippetDimension[],
 ): string {
   const topMeasures = measures.slice(0, 6);
-  const topDims = dimensions
-    .filter((d) => !d.isTimePeriod)
-    .slice(0, 4);
-  const timeDims = dimensions
-    .filter((d) => d.isTimePeriod)
-    .slice(0, 2);
+  const topDims = dimensions.filter((d) => !d.isTimePeriod).slice(0, 4);
+  const timeDims = dimensions.filter((d) => d.isTimePeriod).slice(0, 2);
   const allDims = [...topDims, ...timeDims];
 
   if (topMeasures.length === 0 || allDims.length === 0) return "";
@@ -217,16 +207,11 @@ interface ValidationResult {
  * validate every `alias.column` reference in expr/on fields against the
  * schema allowlist.
  */
-export function validateColumnReferences(
-  yaml: string,
-  allowlist: SchemaAllowlist,
-): string[] {
+export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlist): string[] {
   const issues: string[] = [];
 
   // Primary source table -> implicit "source" alias
-  const sourceMatch = yaml.match(
-    /^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m,
-  );
+  const sourceMatch = yaml.match(/^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m);
   if (!sourceMatch) return issues;
   const sourceFqn = sourceMatch[1];
 
@@ -269,9 +254,7 @@ export function validateColumnReferences(
   const reported = new Set<string>();
 
   // SQL keywords and YAML fields that look like alias.column but aren't
-  const SKIP_ALIASES = new Set([
-    "version", "catalog", "schema", "language", "yaml",
-  ]);
+  const SKIP_ALIASES = new Set(["version", "catalog", "schema", "language", "yaml"]);
 
   function checkRef(alias: string, column: string, display: string): void {
     if (SKIP_ALIASES.has(alias.toLowerCase())) return;
@@ -290,9 +273,7 @@ export function validateColumnReferences(
     if (!isValidColumn(allowlist, tableFqn, column)) {
       if (!reported.has(display)) {
         reported.add(display);
-        issues.push(
-          `Column \`${display}\` not found in table ${tableFqn}`,
-        );
+        issues.push(`Column \`${display}\` not found in table ${tableFqn}`);
       }
     }
   }
@@ -355,22 +336,29 @@ export function validateMetricViewYaml(
   const measureExprs = measureBlock.match(/expr:\s*.+/g) ?? [];
   for (const exprLine of measureExprs) {
     if (/\bOVER\s*\(/i.test(exprLine)) {
-      issues.push(`Window function (OVER) in measure expr is not supported in metric views: ${exprLine.trim()}`);
+      issues.push(
+        `Window function (OVER) in measure expr is not supported in metric views: ${exprLine.trim()}`,
+      );
     }
   }
 
   // Detect AI functions anywhere in metric view expressions -- they are
   // non-deterministic and prohibitively expensive per-row.
-  const AI_FN_PATTERN = /\b(ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
+  const AI_FN_PATTERN =
+    /\b(ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
   const allExprLines = yaml.match(/(?:expr|filter|on):\s*.+/g) ?? [];
   for (const line of allExprLines) {
     const aiMatch = line.match(AI_FN_PATTERN);
     if (aiMatch) {
-      issues.push(`AI function "${aiMatch[1]}" in metric view expression is not allowed (non-deterministic and expensive): ${line.trim()}`);
+      issues.push(
+        `AI function "${aiMatch[1]}" in metric view expression is not allowed (non-deterministic and expensive): ${line.trim()}`,
+      );
     }
   }
 
-  const joinSourceMatches = yaml.matchAll(/joins:[\s\S]*?source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/g);
+  const joinSourceMatches = yaml.matchAll(
+    /joins:[\s\S]*?source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/g,
+  );
   for (const m of joinSourceMatches) {
     const joinFqn = m[1];
     if (!isValidTable(allowlist, joinFqn)) {
@@ -423,15 +411,16 @@ export function validateMetricViewYaml(
     issues.push("DDL missing $$ delimiters");
   }
 
-  const hasCritical = issues.some((i) =>
-    i.startsWith("Missing required") ||
-    i.includes("not found in schema") ||
-    i.includes("not found in table") ||
-    i.includes("Unknown alias") ||
-    i.includes("Window function") ||
-    i.includes("AI function") ||
-    i.includes("shadows source column") ||
-    i.includes("Nested aggregate")
+  const hasCritical = issues.some(
+    (i) =>
+      i.startsWith("Missing required") ||
+      i.includes("not found in schema") ||
+      i.includes("not found in table") ||
+      i.includes("Unknown alias") ||
+      i.includes("Window function") ||
+      i.includes("AI function") ||
+      i.includes("shadows source column") ||
+      i.includes("Nested aggregate"),
   );
 
   return {
@@ -485,9 +474,7 @@ export function autoRenameShadowedMeasures(
   ddl: string,
   allowlist: SchemaAllowlist,
 ): { yaml: string; ddl: string; renamed: number } {
-  const sourceMatch = yaml.match(
-    /^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m,
-  );
+  const sourceMatch = yaml.match(/^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m);
   if (!sourceMatch) return { yaml, ddl, renamed: 0 };
 
   const sourceCols = allowlist.columns.get(sourceMatch[1].toLowerCase());
@@ -515,10 +502,7 @@ export function autoRenameShadowedMeasures(
 
   for (const [oldName, newName] of renames) {
     const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(
-      `(-\\s*name:\\s*)(["']?)${escaped}\\2(\\s*(?:\\n|$))`,
-      "g",
-    );
+    const pattern = new RegExp(`(-\\s*name:\\s*)(["']?)${escaped}\\2(\\s*(?:\\n|$))`, "g");
     modYaml = applyInMeasuresBlock(modYaml, pattern, `$1${newName}$3`);
     modDdl = applyInMeasuresBlock(modDdl, pattern, `$1${newName}$3`);
   }
@@ -526,11 +510,7 @@ export function autoRenameShadowedMeasures(
   return { yaml: modYaml, ddl: modDdl, renamed: renames.size };
 }
 
-function applyInMeasuresBlock(
-  text: string,
-  pattern: RegExp,
-  replacement: string,
-): string {
+function applyInMeasuresBlock(text: string, pattern: RegExp, replacement: string): string {
   const idx = text.indexOf("measures:");
   if (idx === -1) return text;
   return text.slice(0, idx) + text.slice(idx).replace(pattern, replacement);
@@ -551,9 +531,7 @@ const COLUMN_ERROR_PATTERNS = [
 ];
 
 function hasColumnErrors(issues: string[]): boolean {
-  return issues.some((i) =>
-    COLUMN_ERROR_PATTERNS.some((p) => i.includes(p))
-  );
+  return issues.some((i) => COLUMN_ERROR_PATTERNS.some((p) => i.includes(p)));
 }
 
 async function repairProposal(
@@ -611,7 +589,10 @@ Fix the YAML and DDL to only reference tables and columns from the SCHEMA CONTEX
       signal,
     });
 
-    const parsed = parseLLMJson(result.content ?? "", "genie:metric-views:repair") as Record<string, unknown>;
+    const parsed = parseLLMJson(result.content ?? "", "genie:metric-views:repair") as Record<
+      string,
+      unknown
+    >;
     const repairedYaml = String(parsed.yaml ?? "");
     const repairedDdl = String(parsed.ddl ?? "");
 
@@ -639,8 +620,17 @@ export async function runMetricViewProposals(
   input: MetricViewProposalsInput,
 ): Promise<MetricViewProposalsOutput> {
   const {
-    domain, tableFqns, metadata, allowlist, useCases,
-    measures, dimensions, joinSpecs, columnEnrichments, endpoint, signal,
+    domain,
+    tableFqns,
+    metadata,
+    allowlist,
+    useCases,
+    measures,
+    dimensions,
+    joinSpecs,
+    columnEnrichments,
+    endpoint,
+    signal,
   } = input;
 
   if (tableFqns.length === 0 || measures.length === 0) {
@@ -661,7 +651,10 @@ export async function runMetricViewProposals(
   // Build measures/dimensions context (strip FQN prefixes for metric view context)
   const measuresBlock = measures
     .slice(0, 15)
-    .map((m) => `- ${m.name}: ${stripFqnPrefixes(m.sql)}${m.instructions ? ` — ${m.instructions}` : ""}`)
+    .map(
+      (m) =>
+        `- ${m.name}: ${stripFqnPrefixes(m.sql)}${m.instructions ? ` — ${m.instructions}` : ""}`,
+    )
     .join("\n");
 
   const dimensionsBlock = dimensions
@@ -677,11 +670,12 @@ export async function runMetricViewProposals(
     .join("\n");
 
   // Build join context
-  const joinBlock = joinSpecs.length > 0
-    ? joinSpecs.map((j) =>
-        `- ${j.leftTable} → ${j.rightTable} ON ${j.sql} (${j.relationshipType})`
-      ).join("\n")
-    : "";
+  const joinBlock =
+    joinSpecs.length > 0
+      ? joinSpecs
+          .map((j) => `- ${j.leftTable} → ${j.rightTable} ON ${j.sql} (${j.relationshipType})`)
+          .join("\n")
+      : "";
 
   // Build column enrichments context
   const enrichmentBlock = columnEnrichments
@@ -762,7 +756,10 @@ ${joinBlock ? `### JOIN RELATIONSHIPS\n${joinBlock}\n` : ""}
 ${enrichmentBlock ? `### COLUMN DESCRIPTIONS (use to inform descriptive dimension/measure names)\n${enrichmentBlock}\n` : ""}
 ${seedYaml ? `### SEED YAML (starting point — improve, extend, and add joins/filters/ratios)\n\`\`\`yaml\n${seedYaml}\n\`\`\`\n` : ""}
 ### DOMAIN USE CASES (for context)
-${useCases.slice(0, 5).map((uc) => `- ${uc.name}: ${uc.statement}`).join("\n")}
+${useCases
+  .slice(0, 5)
+  .map((uc) => `- ${uc.name}: ${uc.statement}`)
+  .join("\n")}
 
 Create metric view proposals for this domain.`;
 
@@ -785,7 +782,9 @@ Create metric view proposals for this domain.`;
     const parsed = parseLLMJson(content, "genie:metric-views") as Record<string, unknown>;
     const items: Record<string, unknown>[] = Array.isArray(parsed.proposals)
       ? parsed.proposals
-      : Array.isArray(parsed) ? parsed : [];
+      : Array.isArray(parsed)
+        ? parsed
+        : [];
 
     const proposals: MetricViewProposal[] = items
       .map((p) => {
@@ -796,13 +795,19 @@ Create metric view proposals for this domain.`;
         // Preserve CREATE VIEW and source: lines (those need FQN).
         ddlStr = ddlStr.replace(
           /^(\s*(?:expr|on):\s*)(.+)$/gm,
-          (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
+          (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
         );
 
-        const { yaml: fixedYaml, ddl: fixedDdl, renamed } = autoRenameShadowedMeasures(yamlStr, ddlStr, allowlist);
+        const {
+          yaml: fixedYaml,
+          ddl: fixedDdl,
+          renamed,
+        } = autoRenameShadowedMeasures(yamlStr, ddlStr, allowlist);
         if (renamed > 0) {
           logger.info("Auto-renamed shadowed measure names before validation", {
-            domain, name: String(p.name ?? ""), renamed,
+            domain,
+            name: String(p.name ?? ""),
+            renamed,
           });
         }
 
@@ -838,19 +843,21 @@ Create metric view proposals for this domain.`;
         issues: proposal.validationIssues,
       });
 
-      const repaired = await repairProposal(
-        proposal, schemaBlock, columnsBlock, endpoint, signal,
-      );
+      const repaired = await repairProposal(proposal, schemaBlock, columnsBlock, endpoint, signal);
 
       if (!repaired) continue;
 
       // Strip FQN prefixes from repaired DDL expr/on lines
       repaired.ddl = repaired.ddl.replace(
         /^(\s*(?:expr|on):\s*)(.+)$/gm,
-        (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
+        (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
       );
 
-      const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(repaired.yaml, repaired.ddl, allowlist);
+      const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(
+        repaired.yaml,
+        repaired.ddl,
+        allowlist,
+      );
       repaired.yaml = reFixedYaml;
       repaired.ddl = reFixedDdl;
 
@@ -905,7 +912,7 @@ Create metric view proposals for this domain.`;
             proposal.validationStatus = "warning";
           }
           proposal.validationIssues.push(
-            `Could not pre-validate — no CREATE permission on source schema. Deploy to a schema you own.`
+            `Could not pre-validate — no CREATE permission on source schema. Deploy to a schema you own.`,
           );
           logger.info("Metric view dry-run skipped (permission)", {
             domain,
@@ -937,13 +944,12 @@ Create metric view proposals for this domain.`;
             if (revalidation.status !== "error") {
               proposal.ddl = review.fixedSql;
               logger.info("Metric view: review applied DDL fix", {
-                name: proposal.name, qualityScore: review.qualityScore,
+                name: proposal.name,
+                qualityScore: review.qualityScore,
               });
             }
           } else if (review.verdict === "fail") {
-            proposal.validationIssues.push(
-              ...review.issues.map((i) => `Review: ${i.message}`),
-            );
+            proposal.validationIssues.push(...review.issues.map((i) => `Review: ${i.message}`));
             if (proposal.validationStatus === "valid") {
               proposal.validationStatus = "warning";
             }

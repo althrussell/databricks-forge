@@ -47,7 +47,10 @@ export async function saveEnvironmentScan(
   columnTags: ColumnTag[] = [],
 ): Promise<void> {
   // Build a per-table column lookup (lowercase FQN keys for case-insensitive matching)
-  const columnsByTable = new Map<string, Array<{ name: string; type: string; nullable: boolean; comment: string | null }>>();
+  const columnsByTable = new Map<
+    string,
+    Array<{ name: string; type: string; nullable: boolean; comment: string | null }>
+  >();
   for (const col of columns) {
     const key = col.tableFqn.toLowerCase();
     if (!columnsByTable.has(key)) columnsByTable.set(key, []);
@@ -67,7 +70,10 @@ export async function saveEnvironmentScan(
     tagsByTable.set(key, arr);
   }
 
-  const columnTagsByTable = new Map<string, Array<{ columnName: string; tagName: string; tagValue: string }>>();
+  const columnTagsByTable = new Map<
+    string,
+    Array<{ columnName: string; tagName: string; tagValue: string }>
+  >();
   for (const tag of columnTags) {
     const key = tag.tableFqn.toLowerCase();
     const arr = columnTagsByTable.get(key) ?? [];
@@ -79,177 +85,180 @@ export async function saveEnvironmentScan(
 
   try {
     await withPrisma(async (prisma) => {
-      await prisma.$transaction(async (tx) => {
-        // 1. Upsert the scan record
-        await tx.forgeEnvironmentScan.upsert({
-          where: { scanId: scan.scanId },
-          create: {
-            scanId: scan.scanId,
-            runId: scan.runId,
-            ucPath: scan.ucPath,
-            tableCount: scan.tableCount,
-            totalSizeBytes: BigInt(scan.totalSizeBytes),
-            totalFiles: scan.totalFiles,
-            totalRows: BigInt(scan.totalRows),
-            tablesWithStreaming: scan.tablesWithStreaming,
-            tablesWithCDF: scan.tablesWithCDF,
-            tablesNeedingOptimize: scan.tablesNeedingOptimize,
-            tablesNeedingVacuum: scan.tablesNeedingVacuum,
-            lineageDiscoveredCount: scan.lineageDiscoveredCount,
-            domainCount: scan.domainCount,
-            piiTablesCount: scan.piiTablesCount,
-            redundancyPairsCount: scan.redundancyPairsCount,
-            dataProductCount: scan.dataProductCount,
-            avgGovernanceScore: scan.avgGovernanceScore,
-            scanDurationMs: scan.scanDurationMs,
-            scanSummaryJson: null,
-            passResultsJson: JSON.stringify(scan.passResults),
-            genieSpaceCount: scan.genieSpaceCount,
-            dashboardCount: scan.dashboardCount,
-            metricViewCount: scan.metricViewCount,
-            analyticsCoveragePercent: scan.analyticsCoveragePercent,
-          },
-          update: {
-            runId: scan.runId,
-            ucPath: scan.ucPath,
-            tableCount: scan.tableCount,
-            totalSizeBytes: BigInt(scan.totalSizeBytes),
-            totalFiles: scan.totalFiles,
-            totalRows: BigInt(scan.totalRows),
-            tablesWithStreaming: scan.tablesWithStreaming,
-            tablesWithCDF: scan.tablesWithCDF,
-            tablesNeedingOptimize: scan.tablesNeedingOptimize,
-            tablesNeedingVacuum: scan.tablesNeedingVacuum,
-            lineageDiscoveredCount: scan.lineageDiscoveredCount,
-            domainCount: scan.domainCount,
-            piiTablesCount: scan.piiTablesCount,
-            redundancyPairsCount: scan.redundancyPairsCount,
-            dataProductCount: scan.dataProductCount,
-            avgGovernanceScore: scan.avgGovernanceScore,
-            scanDurationMs: scan.scanDurationMs,
-            passResultsJson: JSON.stringify(scan.passResults),
-            genieSpaceCount: scan.genieSpaceCount,
-            dashboardCount: scan.dashboardCount,
-            metricViewCount: scan.metricViewCount,
-            analyticsCoveragePercent: scan.analyticsCoveragePercent,
-          },
-        });
-
-        // Build a lookup for health scores from histories
-        const healthScoreMap = new Map<string, number>();
-        for (const h of histories) {
-          healthScoreMap.set(h.tableFqn, h.healthScore);
-        }
-
-        // 2. Insert table details (batched)
-        for (let i = 0; i < details.length; i += BATCH_SIZE) {
-          await tx.forgeTableDetail.createMany({
-            data: details.slice(i, i + BATCH_SIZE).map((d) => ({
+      await prisma.$transaction(
+        async (tx) => {
+          // 1. Upsert the scan record
+          await tx.forgeEnvironmentScan.upsert({
+            where: { scanId: scan.scanId },
+            create: {
               scanId: scan.scanId,
-              tableFqn: d.fqn,
-              catalog: d.catalog,
-              schema: d.schema,
-              tableName: d.tableName,
-              tableType: d.tableType,
-              comment: d.comment,
-              generatedDescription: d.generatedDescription,
-              format: d.format,
-              provider: d.provider,
-              location: d.location,
-              isManaged: d.isManaged,
-              owner: d.owner,
-              sizeInBytes: d.sizeInBytes != null ? BigInt(d.sizeInBytes) : null,
-              numFiles: d.numFiles,
-              numRows: d.numRows != null ? BigInt(d.numRows) : null,
-              partitionColumns: JSON.stringify(d.partitionColumns),
-              clusteringColumns: JSON.stringify(d.clusteringColumns),
-              deltaMinReaderVersion: d.deltaMinReaderVersion,
-              deltaMinWriterVersion: d.deltaMinWriterVersion,
-              cdfEnabled: d.tableProperties["delta.enableChangeDataFeed"] === "true",
-              autoOptimize: d.tableProperties["delta.autoOptimize.optimizeWrite"] === "true",
-              tableCreatedAt: d.createdAt,
-              lastModified: d.lastModified,
-              createdBy: d.createdBy,
-              lastAccess: d.lastAccess,
-              isManagedLocation: d.isManagedLocation,
-              columnsJson: JSON.stringify(columnsByTable.get(d.fqn.toLowerCase()) ?? []),
-              propertiesJson: JSON.stringify(d.tableProperties),
-              tagsJson: JSON.stringify(tagsByTable.get(d.fqn.toLowerCase()) ?? []),
-              columnTagsJson: JSON.stringify(columnTagsByTable.get(d.fqn.toLowerCase()) ?? []),
-              dataDomain: d.dataDomain,
-              dataSubdomain: d.dataSubdomain,
-              dataTier: d.dataTier,
-              sensitivityLevel: d.sensitivityLevel,
-              governancePriority: d.governancePriority,
-              governanceScore: healthScoreMap.get(d.fqn) ?? null,
-              discoveredVia: d.discoveredVia,
-            })),
-            skipDuplicates: true,
+              runId: scan.runId,
+              ucPath: scan.ucPath,
+              tableCount: scan.tableCount,
+              totalSizeBytes: BigInt(scan.totalSizeBytes),
+              totalFiles: scan.totalFiles,
+              totalRows: BigInt(scan.totalRows),
+              tablesWithStreaming: scan.tablesWithStreaming,
+              tablesWithCDF: scan.tablesWithCDF,
+              tablesNeedingOptimize: scan.tablesNeedingOptimize,
+              tablesNeedingVacuum: scan.tablesNeedingVacuum,
+              lineageDiscoveredCount: scan.lineageDiscoveredCount,
+              domainCount: scan.domainCount,
+              piiTablesCount: scan.piiTablesCount,
+              redundancyPairsCount: scan.redundancyPairsCount,
+              dataProductCount: scan.dataProductCount,
+              avgGovernanceScore: scan.avgGovernanceScore,
+              scanDurationMs: scan.scanDurationMs,
+              scanSummaryJson: null,
+              passResultsJson: JSON.stringify(scan.passResults),
+              genieSpaceCount: scan.genieSpaceCount,
+              dashboardCount: scan.dashboardCount,
+              metricViewCount: scan.metricViewCount,
+              analyticsCoveragePercent: scan.analyticsCoveragePercent,
+            },
+            update: {
+              runId: scan.runId,
+              ucPath: scan.ucPath,
+              tableCount: scan.tableCount,
+              totalSizeBytes: BigInt(scan.totalSizeBytes),
+              totalFiles: scan.totalFiles,
+              totalRows: BigInt(scan.totalRows),
+              tablesWithStreaming: scan.tablesWithStreaming,
+              tablesWithCDF: scan.tablesWithCDF,
+              tablesNeedingOptimize: scan.tablesNeedingOptimize,
+              tablesNeedingVacuum: scan.tablesNeedingVacuum,
+              lineageDiscoveredCount: scan.lineageDiscoveredCount,
+              domainCount: scan.domainCount,
+              piiTablesCount: scan.piiTablesCount,
+              redundancyPairsCount: scan.redundancyPairsCount,
+              dataProductCount: scan.dataProductCount,
+              avgGovernanceScore: scan.avgGovernanceScore,
+              scanDurationMs: scan.scanDurationMs,
+              passResultsJson: JSON.stringify(scan.passResults),
+              genieSpaceCount: scan.genieSpaceCount,
+              dashboardCount: scan.dashboardCount,
+              metricViewCount: scan.metricViewCount,
+              analyticsCoveragePercent: scan.analyticsCoveragePercent,
+            },
           });
-        }
 
-        // 3. Insert history summaries (batched)
-        for (let i = 0; i < histories.length; i += BATCH_SIZE) {
-          await tx.forgeTableHistorySummary.createMany({
-            data: histories.slice(i, i + BATCH_SIZE).map((h) => ({
-              scanId: scan.scanId,
-              tableFqn: h.tableFqn,
-              lastWriteTimestamp: h.lastWriteTimestamp,
-              lastWriteOperation: h.lastWriteOperation,
-              lastWriteRows: h.lastWriteRows != null ? BigInt(h.lastWriteRows) : null,
-              lastWriteBytes: h.lastWriteBytes != null ? BigInt(h.lastWriteBytes) : null,
-              totalWriteOps: h.totalWriteOps,
-              totalStreamingOps: h.totalStreamingOps,
-              totalOptimizeOps: h.totalOptimizeOps,
-              totalVacuumOps: h.totalVacuumOps,
-              totalMergeOps: h.totalMergeOps,
-              lastOptimizeTimestamp: h.lastOptimizeTimestamp,
-              lastVacuumTimestamp: h.lastVacuumTimestamp,
-              hasStreamingWrites: h.hasStreamingWrites,
-              historyDays: h.historyDays,
-              topOperationsJson: JSON.stringify(h.topOperations),
-              healthScore: h.healthScore,
-              issuesJson: JSON.stringify(h.issues),
-              recommendationsJson: JSON.stringify(h.recommendations),
-            })),
-            skipDuplicates: true,
-          });
-        }
+          // Build a lookup for health scores from histories
+          const healthScoreMap = new Map<string, number>();
+          for (const h of histories) {
+            healthScoreMap.set(h.tableFqn, h.healthScore);
+          }
 
-        // 4. Insert lineage edges (batched)
-        for (let i = 0; i < lineageEdges.length; i += BATCH_SIZE) {
-          await tx.forgeTableLineage.createMany({
-            data: lineageEdges.slice(i, i + BATCH_SIZE).map((e) => ({
-              scanId: scan.scanId,
-              sourceTableFqn: e.sourceTableFqn,
-              targetTableFqn: e.targetTableFqn,
-              sourceType: e.sourceType,
-              targetType: e.targetType,
-              entityType: e.entityType,
-              lastEventTime: e.lastEventTime,
-              eventCount: e.eventCount,
-            })),
-            skipDuplicates: true,
-          });
-        }
+          // 2. Insert table details (batched)
+          for (let i = 0; i < details.length; i += BATCH_SIZE) {
+            await tx.forgeTableDetail.createMany({
+              data: details.slice(i, i + BATCH_SIZE).map((d) => ({
+                scanId: scan.scanId,
+                tableFqn: d.fqn,
+                catalog: d.catalog,
+                schema: d.schema,
+                tableName: d.tableName,
+                tableType: d.tableType,
+                comment: d.comment,
+                generatedDescription: d.generatedDescription,
+                format: d.format,
+                provider: d.provider,
+                location: d.location,
+                isManaged: d.isManaged,
+                owner: d.owner,
+                sizeInBytes: d.sizeInBytes != null ? BigInt(d.sizeInBytes) : null,
+                numFiles: d.numFiles,
+                numRows: d.numRows != null ? BigInt(d.numRows) : null,
+                partitionColumns: JSON.stringify(d.partitionColumns),
+                clusteringColumns: JSON.stringify(d.clusteringColumns),
+                deltaMinReaderVersion: d.deltaMinReaderVersion,
+                deltaMinWriterVersion: d.deltaMinWriterVersion,
+                cdfEnabled: d.tableProperties["delta.enableChangeDataFeed"] === "true",
+                autoOptimize: d.tableProperties["delta.autoOptimize.optimizeWrite"] === "true",
+                tableCreatedAt: d.createdAt,
+                lastModified: d.lastModified,
+                createdBy: d.createdBy,
+                lastAccess: d.lastAccess,
+                isManagedLocation: d.isManagedLocation,
+                columnsJson: JSON.stringify(columnsByTable.get(d.fqn.toLowerCase()) ?? []),
+                propertiesJson: JSON.stringify(d.tableProperties),
+                tagsJson: JSON.stringify(tagsByTable.get(d.fqn.toLowerCase()) ?? []),
+                columnTagsJson: JSON.stringify(columnTagsByTable.get(d.fqn.toLowerCase()) ?? []),
+                dataDomain: d.dataDomain,
+                dataSubdomain: d.dataSubdomain,
+                dataTier: d.dataTier,
+                sensitivityLevel: d.sensitivityLevel,
+                governancePriority: d.governancePriority,
+                governanceScore: healthScoreMap.get(d.fqn) ?? null,
+                discoveredVia: d.discoveredVia,
+              })),
+              skipDuplicates: true,
+            });
+          }
 
-        // 5. Insert insights (batched)
-        for (let i = 0; i < insights.length; i += BATCH_SIZE) {
-          await tx.forgeTableInsight.createMany({
-            data: insights.slice(i, i + BATCH_SIZE).map((ins) => ({
-              scanId: scan.scanId,
-              insightType: ins.insightType,
-              tableFqn: ins.tableFqn,
-              payloadJson: ins.payloadJson,
-              severity: ins.severity,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }, {
-        maxWait: 10_000,
-        timeout: 120_000,
-      });
+          // 3. Insert history summaries (batched)
+          for (let i = 0; i < histories.length; i += BATCH_SIZE) {
+            await tx.forgeTableHistorySummary.createMany({
+              data: histories.slice(i, i + BATCH_SIZE).map((h) => ({
+                scanId: scan.scanId,
+                tableFqn: h.tableFqn,
+                lastWriteTimestamp: h.lastWriteTimestamp,
+                lastWriteOperation: h.lastWriteOperation,
+                lastWriteRows: h.lastWriteRows != null ? BigInt(h.lastWriteRows) : null,
+                lastWriteBytes: h.lastWriteBytes != null ? BigInt(h.lastWriteBytes) : null,
+                totalWriteOps: h.totalWriteOps,
+                totalStreamingOps: h.totalStreamingOps,
+                totalOptimizeOps: h.totalOptimizeOps,
+                totalVacuumOps: h.totalVacuumOps,
+                totalMergeOps: h.totalMergeOps,
+                lastOptimizeTimestamp: h.lastOptimizeTimestamp,
+                lastVacuumTimestamp: h.lastVacuumTimestamp,
+                hasStreamingWrites: h.hasStreamingWrites,
+                historyDays: h.historyDays,
+                topOperationsJson: JSON.stringify(h.topOperations),
+                healthScore: h.healthScore,
+                issuesJson: JSON.stringify(h.issues),
+                recommendationsJson: JSON.stringify(h.recommendations),
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          // 4. Insert lineage edges (batched)
+          for (let i = 0; i < lineageEdges.length; i += BATCH_SIZE) {
+            await tx.forgeTableLineage.createMany({
+              data: lineageEdges.slice(i, i + BATCH_SIZE).map((e) => ({
+                scanId: scan.scanId,
+                sourceTableFqn: e.sourceTableFqn,
+                targetTableFqn: e.targetTableFqn,
+                sourceType: e.sourceType,
+                targetType: e.targetType,
+                entityType: e.entityType,
+                lastEventTime: e.lastEventTime,
+                eventCount: e.eventCount,
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          // 5. Insert insights (batched)
+          for (let i = 0; i < insights.length; i += BATCH_SIZE) {
+            await tx.forgeTableInsight.createMany({
+              data: insights.slice(i, i + BATCH_SIZE).map((ins) => ({
+                scanId: scan.scanId,
+                insightType: ins.insightType,
+                tableFqn: ins.tableFqn,
+                payloadJson: ins.payloadJson,
+                severity: ins.severity,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        },
+        {
+          maxWait: 10_000,
+          timeout: 120_000,
+        },
+      );
     });
 
     logger.info("[environment-scans] Saved scan", {
@@ -341,7 +350,7 @@ export async function getEnvironmentScanByRunId(runId: string) {
  */
 export async function getLatestScanIdForRun(
   runId: string,
-  ucPath?: string
+  ucPath?: string,
 ): Promise<string | null> {
   return withPrisma(async (prisma) => {
     const linked = await prisma.forgeEnvironmentScan.findFirst({
@@ -415,153 +424,155 @@ export interface AggregateEstateView {
  */
 export async function getAggregateEstateView(): Promise<AggregateEstateView> {
   return withPrisma(async (prisma) => {
-
-  const scans = await prisma.forgeEnvironmentScan.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      scanId: true,
-      runId: true,
-      ucPath: true,
-      tableCount: true,
-      createdAt: true,
-    },
-  });
-
-  if (scans.length === 0) {
-    return {
-      details: [],
-      histories: [],
-      lineage: [],
-      insights: [],
-      stats: {
-        totalTables: 0,
-        totalScans: 0,
-        totalSizeBytes: "0",
-        totalRows: "0",
-        domainCount: 0,
-        piiTablesCount: 0,
-        avgGovernanceScore: 0,
-        oldestScanAt: null,
-        newestScanAt: null,
-        coverageByScope: [],
+    const scans = await prisma.forgeEnvironmentScan.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        scanId: true,
+        runId: true,
+        ucPath: true,
+        tableCount: true,
+        createdAt: true,
       },
-    };
-  }
+    });
 
-  // DB-side dedup: DISTINCT ON picks the latest row per dedup key
-  // (ordered by scan created_at DESC), returning only IDs.
-  // Then Prisma findMany fetches the full typed rows by those IDs.
-  const [detailIds, historyIds, lineageIds, insightIds] = await Promise.all([
-    prisma.$queryRaw<Array<{ id: string }>>`
+    if (scans.length === 0) {
+      return {
+        details: [],
+        histories: [],
+        lineage: [],
+        insights: [],
+        stats: {
+          totalTables: 0,
+          totalScans: 0,
+          totalSizeBytes: "0",
+          totalRows: "0",
+          domainCount: 0,
+          piiTablesCount: 0,
+          avgGovernanceScore: 0,
+          oldestScanAt: null,
+          newestScanAt: null,
+          coverageByScope: [],
+        },
+      };
+    }
+
+    // DB-side dedup: DISTINCT ON picks the latest row per dedup key
+    // (ordered by scan created_at DESC), returning only IDs.
+    // Then Prisma findMany fetches the full typed rows by those IDs.
+    const [detailIds, historyIds, lineageIds, insightIds] = await Promise.all([
+      prisma.$queryRaw<Array<{ id: string }>>`
       SELECT DISTINCT ON (d.table_fqn) d.id
       FROM forge_table_details d
       JOIN forge_environment_scans s ON s.scan_id = d.scan_id
       ORDER BY d.table_fqn, s.created_at DESC`,
-    prisma.$queryRaw<Array<{ id: string }>>`
+      prisma.$queryRaw<Array<{ id: string }>>`
       SELECT DISTINCT ON (h.table_fqn) h.id
       FROM forge_table_history_summaries h
       JOIN forge_environment_scans s ON s.scan_id = h.scan_id
       ORDER BY h.table_fqn, s.created_at DESC`,
-    prisma.$queryRaw<Array<{ id: string }>>`
+      prisma.$queryRaw<Array<{ id: string }>>`
       SELECT DISTINCT ON (l.source_table_fqn, l.target_table_fqn) l.id
       FROM forge_table_lineage l
       JOIN forge_environment_scans s ON s.scan_id = l.scan_id
       ORDER BY l.source_table_fqn, l.target_table_fqn, s.created_at DESC`,
-    prisma.$queryRaw<Array<{ id: string }>>`
+      prisma.$queryRaw<Array<{ id: string }>>`
       SELECT DISTINCT ON (i.insight_type, COALESCE(i.table_fqn, '')) i.id
       FROM forge_table_insights i
       JOIN forge_environment_scans s ON s.scan_id = i.scan_id
       ORDER BY i.insight_type, COALESCE(i.table_fqn, ''), s.created_at DESC`,
-  ]);
+    ]);
 
-  const [mergedDetails, mergedHistories, mergedLineage, mergedInsights] = await Promise.all([
-    detailIds.length > 0
-      ? prisma.forgeTableDetail.findMany({
-          where: { id: { in: detailIds.map((r) => r.id) } },
-        })
-      : Promise.resolve([]),
-    historyIds.length > 0
-      ? prisma.forgeTableHistorySummary.findMany({
-          where: { id: { in: historyIds.map((r) => r.id) } },
-        })
-      : Promise.resolve([]),
-    lineageIds.length > 0
-      ? prisma.forgeTableLineage.findMany({
-          where: { id: { in: lineageIds.map((r) => r.id) } },
-        })
-      : Promise.resolve([]),
-    insightIds.length > 0
-      ? prisma.forgeTableInsight.findMany({
-          where: { id: { in: insightIds.map((r) => r.id) } },
-        })
-      : Promise.resolve([]),
-  ]);
+    const [mergedDetails, mergedHistories, mergedLineage, mergedInsights] = await Promise.all([
+      detailIds.length > 0
+        ? prisma.forgeTableDetail.findMany({
+            where: { id: { in: detailIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([]),
+      historyIds.length > 0
+        ? prisma.forgeTableHistorySummary.findMany({
+            where: { id: { in: historyIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([]),
+      lineageIds.length > 0
+        ? prisma.forgeTableLineage.findMany({
+            where: { id: { in: lineageIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([]),
+      insightIds.length > 0
+        ? prisma.forgeTableInsight.findMany({
+            where: { id: { in: insightIds.map((r) => r.id) } },
+          })
+        : Promise.resolve([]),
+    ]);
 
-  // Compute aggregate stats
-  const domains = new Set(mergedDetails.map((d) => d.dataDomain).filter(Boolean));
-  const piiCount = mergedDetails.filter(
-    (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted"
-  ).length;
-  const govScores = mergedDetails.filter((d) => d.governanceScore != null).map((d) => d.governanceScore!);
-  const avgGov = govScores.length > 0 ? govScores.reduce((a, b) => a + b, 0) / govScores.length : 0;
-  const totalSize = mergedDetails.reduce((sum, d) => sum + (d.sizeInBytes ?? BigInt(0)), BigInt(0));
-  const totalRows = mergedDetails.reduce((sum, d) => sum + (d.numRows ?? BigInt(0)), BigInt(0));
+    // Compute aggregate stats
+    const domains = new Set(mergedDetails.map((d) => d.dataDomain).filter(Boolean));
+    const piiCount = mergedDetails.filter(
+      (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted",
+    ).length;
+    const govScores = mergedDetails
+      .filter((d) => d.governanceScore != null)
+      .map((d) => d.governanceScore!);
+    const avgGov =
+      govScores.length > 0 ? govScores.reduce((a, b) => a + b, 0) / govScores.length : 0;
+    const totalSize = mergedDetails.reduce(
+      (sum, d) => sum + (d.sizeInBytes ?? BigInt(0)),
+      BigInt(0),
+    );
+    const totalRows = mergedDetails.reduce((sum, d) => sum + (d.numRows ?? BigInt(0)), BigInt(0));
 
-  // Coverage: which scans contributed
-  const coverageByScope = scans.map((s) => ({
-    ucPath: s.ucPath,
-    scanId: s.scanId,
-    runId: s.runId,
-    tableCount: s.tableCount,
-    scannedAt: s.createdAt.toISOString(),
-  }));
+    // Coverage: which scans contributed
+    const coverageByScope = scans.map((s) => ({
+      ucPath: s.ucPath,
+      scanId: s.scanId,
+      runId: s.runId,
+      tableCount: s.tableCount,
+      scannedAt: s.createdAt.toISOString(),
+    }));
 
-  // Serialize BigInts for JSON
-  const serializeDetail = (d: typeof mergedDetails[number]) => {
-    const { sizeInBytes, numRows, ...rest } = d;
-    return {
-      ...rest,
-      sizeInBytes: sizeInBytes?.toString() ?? null,
-      numRows: numRows?.toString() ?? null,
+    // Serialize BigInts for JSON
+    const serializeDetail = (d: (typeof mergedDetails)[number]) => {
+      const { sizeInBytes, numRows, ...rest } = d;
+      return {
+        ...rest,
+        sizeInBytes: sizeInBytes?.toString() ?? null,
+        numRows: numRows?.toString() ?? null,
+      };
     };
-  };
-  const serializeHistory = (h: typeof mergedHistories[number]) => {
-    const { lastWriteRows, lastWriteBytes, ...rest } = h;
-    return {
-      ...rest,
-      lastWriteRows: lastWriteRows?.toString() ?? null,
-      lastWriteBytes: lastWriteBytes?.toString() ?? null,
+    const serializeHistory = (h: (typeof mergedHistories)[number]) => {
+      const { lastWriteRows, lastWriteBytes, ...rest } = h;
+      return {
+        ...rest,
+        lastWriteRows: lastWriteRows?.toString() ?? null,
+        lastWriteBytes: lastWriteBytes?.toString() ?? null,
+      };
     };
-  };
 
-  return {
-    details: mergedDetails.map(serializeDetail),
-    histories: mergedHistories.map(serializeHistory),
-    lineage: mergedLineage,
-    insights: mergedInsights,
-    stats: {
-      totalTables: mergedDetails.length,
-      totalScans: scans.length,
-      totalSizeBytes: totalSize.toString(),
-      totalRows: totalRows.toString(),
-      domainCount: domains.size,
-      piiTablesCount: piiCount,
-      avgGovernanceScore: avgGov,
-      oldestScanAt: scans.length > 0 ? scans[scans.length - 1].createdAt.toISOString() : null,
-      newestScanAt: scans.length > 0 ? scans[0].createdAt.toISOString() : null,
-      coverageByScope,
-    },
-  };
+    return {
+      details: mergedDetails.map(serializeDetail),
+      histories: mergedHistories.map(serializeHistory),
+      lineage: mergedLineage,
+      insights: mergedInsights,
+      stats: {
+        totalTables: mergedDetails.length,
+        totalScans: scans.length,
+        totalSizeBytes: totalSize.toString(),
+        totalRows: totalRows.toString(),
+        domainCount: domains.size,
+        piiTablesCount: piiCount,
+        avgGovernanceScore: avgGov,
+        oldestScanAt: scans.length > 0 ? scans[scans.length - 1].createdAt.toISOString() : null,
+        newestScanAt: scans.length > 0 ? scans[0].createdAt.toISOString() : null,
+        coverageByScope,
+      },
+    };
   });
 }
 
 /**
  * Get insights for a scan, optionally filtered by type.
  */
-export async function getInsightsByScanId(
-  scanId: string,
-  insightType?: string
-) {
+export async function getInsightsByScanId(scanId: string, insightType?: string) {
   return withPrisma(async (prisma) => {
     return prisma.forgeTableInsight.findMany({
       where: {
@@ -628,7 +639,9 @@ export async function getAggregateForExcel(): Promise<ScanWithRelations | null> 
         ? prisma.forgeTableHistorySummary.findMany({
             where: { id: { in: historyIds.map((r) => r.id) } },
           })
-        : Promise.resolve([] as Awaited<ReturnType<typeof prisma.forgeTableHistorySummary.findMany>>),
+        : Promise.resolve(
+            [] as Awaited<ReturnType<typeof prisma.forgeTableHistorySummary.findMany>>,
+          ),
       lineageIds.length > 0
         ? prisma.forgeTableLineage.findMany({
             where: { id: { in: lineageIds.map((r) => r.id) } },
@@ -644,10 +657,13 @@ export async function getAggregateForExcel(): Promise<ScanWithRelations | null> 
     // --- Aggregate scan-level stats ---
     const domains = new Set(details.map((d) => d.dataDomain).filter(Boolean));
     const piiCount = details.filter(
-      (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted"
+      (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted",
     ).length;
-    const govScores = details.filter((d) => d.governanceScore != null).map((d) => d.governanceScore!);
-    const avgGov = govScores.length > 0 ? govScores.reduce((a, b) => a + b, 0) / govScores.length : 0;
+    const govScores = details
+      .filter((d) => d.governanceScore != null)
+      .map((d) => d.governanceScore!);
+    const avgGov =
+      govScores.length > 0 ? govScores.reduce((a, b) => a + b, 0) / govScores.length : 0;
     const totalSize = details.reduce((sum, d) => sum + (d.sizeInBytes ?? BigInt(0)), BigInt(0));
     const totalFiles = details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0);
     const redundancyCount = insights.filter((i) => i.insightType === "redundancy").length;
@@ -658,10 +674,10 @@ export async function getAggregateForExcel(): Promise<ScanWithRelations | null> 
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const needsOptimize = histories.filter(
-      (h) => !h.lastOptimizeTimestamp || h.lastOptimizeTimestamp < thirtyDaysAgo
+      (h) => !h.lastOptimizeTimestamp || h.lastOptimizeTimestamp < thirtyDaysAgo,
     ).length;
     const needsVacuum = histories.filter(
-      (h) => !h.lastVacuumTimestamp || h.lastVacuumTimestamp < thirtyDaysAgo
+      (h) => !h.lastVacuumTimestamp || h.lastVacuumTimestamp < thirtyDaysAgo,
     ).length;
 
     const ucPaths = [...new Set(scans.map((s) => s.ucPath))].join(", ");

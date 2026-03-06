@@ -56,11 +56,16 @@ export async function fetchSampleData(
     tableFqns.map(async (fqn) => {
       const cleanFqn = fqn.replace(/`/g, "");
       const result = await executeSQL(
-        `SELECT * FROM \`${cleanFqn.split(".").join("\`.\`")}\` LIMIT ${rowLimit}`
+        `SELECT * FROM \`${cleanFqn.split(".").join("\`.\`")}\` LIMIT ${rowLimit}`,
       );
 
       if (!result.columns || result.columns.length === 0 || result.rows.length === 0) {
-        return { fqn: cleanFqn, markdown: `**${cleanFqn}**: (empty table)\n`, rowCount: 0, entry: null };
+        return {
+          fqn: cleanFqn,
+          markdown: `**${cleanFqn}**: (empty table)\n`,
+          rowCount: 0,
+          entry: null,
+        };
       }
 
       const colNames = result.columns.map((c) => c.name);
@@ -85,7 +90,7 @@ export async function fetchSampleData(
       };
 
       return { fqn: cleanFqn, markdown, rowCount: result.rows.length, entry };
-    })
+    }),
   );
 
   for (let i = 0; i < results.length; i++) {
@@ -117,7 +122,7 @@ export async function fetchSampleData(
 
   if (tablesSkipped > 0) {
     logger.info(
-      `Data sampling: ${tablesSampled}/${tableFqns.length} tables sampled, ${tablesSkipped} skipped (falling back to metadata only for those)`
+      `Data sampling: ${tablesSampled}/${tableFqns.length} tables sampled, ${tablesSkipped} skipped (falling back to metadata only for those)`,
     );
   }
 

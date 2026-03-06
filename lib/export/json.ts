@@ -51,10 +51,7 @@ interface ExportJson {
   }>;
 }
 
-export function generateJson(
-  run: PipelineRun,
-  useCases: UseCase[]
-): Buffer {
+export function generateJson(run: PipelineRun, useCases: UseCase[]): Buffer {
   const domains = new Set(useCases.map((uc) => uc.domain));
 
   const payload: ExportJson = {

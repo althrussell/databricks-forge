@@ -11,7 +11,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getEnvironmentScan } from "@/lib/lakebase/environment-scans";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
-import { generateExecutiveBriefing, type BriefingEstateData, type BriefingDiscoveryData } from "@/lib/export/executive-briefing";
+import {
+  generateExecutiveBriefing,
+  type BriefingEstateData,
+  type BriefingDiscoveryData,
+} from "@/lib/export/executive-briefing";
 import { isValidUUID } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 
@@ -88,9 +92,6 @@ export async function GET(request: NextRequest) {
     logger.error("[api/export/executive-briefing] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to generate executive briefing" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to generate executive briefing" }, { status: 500 });
   }
 }

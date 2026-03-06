@@ -18,13 +18,8 @@ import type { UseCase } from "./types";
  * standalone metric (raw ROI sub-score) but does not separately contribute
  * to the overall score.
  */
-export function computeOverallScore(
-  priorityScore: number,
-  feasibilityScore: number
-): number {
-  return Number(
-    (priorityScore * 0.75 + feasibilityScore * 0.25).toFixed(3)
-  );
+export function computeOverallScore(priorityScore: number, feasibilityScore: number): number {
+  return Number((priorityScore * 0.75 + feasibilityScore * 0.25).toFixed(3));
 }
 
 /**
@@ -68,9 +63,7 @@ export function rankUseCases(useCases: UseCase[]): UseCase[] {
 /**
  * Group use cases by domain.
  */
-export function groupByDomain(
-  useCases: UseCase[]
-): Record<string, UseCase[]> {
+export function groupByDomain(useCases: UseCase[]): Record<string, UseCase[]> {
   const groups: Record<string, UseCase[]> = {};
   for (const uc of useCases) {
     if (!groups[uc.domain]) groups[uc.domain] = [];
@@ -99,9 +92,7 @@ export function computeDomainStats(useCases: UseCase[]): DomainStats[] {
       domain,
       count: cases.length,
       avgScore: Number(
-        (
-          cases.reduce((sum, uc) => sum + effectiveScores(uc).overall, 0) / cases.length
-        ).toFixed(3)
+        (cases.reduce((sum, uc) => sum + effectiveScores(uc).overall, 0) / cases.length).toFixed(3),
       ),
       topScore: Math.max(...cases.map((uc) => effectiveScores(uc).overall)),
       aiCount: cases.filter((uc) => uc.type === "AI").length,
@@ -133,7 +124,7 @@ export interface SchemaCoverage {
  */
 export function computeSchemaCoverage(
   filteredTables: string[],
-  useCases: UseCase[]
+  useCases: UseCase[],
 ): SchemaCoverage {
   // Build a count of how many use cases reference each table
   const tableCounts = new Map<string, number>();
@@ -168,9 +159,8 @@ export function computeSchemaCoverage(
     totalTables: filteredTables.length,
     coveredTables: covered.length,
     uncoveredTables: uncovered,
-    coveragePct: filteredTables.length > 0
-      ? Math.round((covered.length / filteredTables.length) * 100)
-      : 0,
+    coveragePct:
+      filteredTables.length > 0 ? Math.round((covered.length / filteredTables.length) * 100) : 0,
     topTables,
   };
 }

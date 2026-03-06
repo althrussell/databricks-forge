@@ -2,11 +2,7 @@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { BrainCircuit } from "lucide-react";
 import type { GenieEngineRecommendation, TrackedGenieSpace } from "@/lib/genie/types";
 import { ExternalLinkIcon, TrashIcon } from "./genie-spaces-icons";
@@ -82,10 +78,7 @@ export function GenieRecommendationRow({
             />
           )}
           {!engineGenerating && !isV1Domain(rec) && (
-            <BrainCircuit
-              className="h-3.5 w-3.5 text-violet-500"
-              aria-label="AI enriched"
-            />
+            <BrainCircuit className="h-3.5 w-3.5 text-violet-500" aria-label="AI enriched" />
           )}
           {!engineGenerating && engineEnabled && isV1Domain(rec) && (
             <Badge variant="outline" className="text-[9px] border-amber-400 text-amber-600">
@@ -95,12 +88,16 @@ export function GenieRecommendationRow({
           {rec.recommendationType === "enhancement" && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="outline" className="text-[9px] border-sky-400 text-sky-600 cursor-help">
+                <Badge
+                  variant="outline"
+                  className="text-[9px] border-sky-400 text-sky-600 cursor-help"
+                >
                   Improves existing
                 </Badge>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-[220px]">
-                Enriches an existing Genie space. Deploying creates a new space &mdash; your original is untouched.
+                Enriches an existing Genie space. Deploying creates a new space &mdash; your
+                original is untouched.
               </TooltipContent>
             </Tooltip>
           )}

@@ -26,7 +26,7 @@ import { logger } from "@/lib/logger";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -52,7 +52,7 @@ export async function POST(
     if (run.status !== "completed") {
       return NextResponse.json(
         { error: "Run must be completed to generate dashboards" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -70,7 +70,7 @@ export async function POST(
     if (existingJob?.status === "generating") {
       return NextResponse.json(
         { error: "Dashboard generation already in progress", status: "generating" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -95,7 +95,9 @@ export async function POST(
           widgetCount: d.widgetCount,
         }));
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     await startDashboardJob(runId);
 
