@@ -160,7 +160,87 @@ function getFilterCandidatesForDomain(
   return candidates.slice(0, 6);
 }
 
-function getMetricViewDataForDomain(
+/**
+ * Parse dimensions and measures from YAML text into structured form.
+ */
+function parseDimsAndMeasuresFromYaml(yaml: string): {
+  dims: MetricViewForDashboard["dimensions"];
+  measures: MetricViewForDashboard["measures"];
+} {
+  const dims: MetricViewForDashboard["dimensions"] = [];
+  const measures: MetricViewForDashboard["measures"] = [];
+  const yamlLines = (yaml ?? "").split("\n");
+  let section: "none" | "dimensions" | "measures" = "none";
+
+  for (const line of yamlLines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("dimensions:")) {
+      section = "dimensions";
+      continue;
+    }
+    if (trimmed.startsWith("measures:")) {
+      section = "measures";
+      continue;
+    }
+    if (
+      trimmed.startsWith("joins:") ||
+      trimmed.startsWith("filter:") ||
+      trimmed.startsWith("materialization:")
+    ) {
+      section = "none";
+      continue;
+    }
+
+    if (section === "dimensions" || section === "measures") {
+      const nameMatch = trimmed.match(/^-?\s*name:\s*(.+)/);
+      if (nameMatch) {
+        const name = nameMatch[1].replace(/^["']|["']$/g, "").trim();
+        const idx = yamlLines.indexOf(line);
+        const nextLine = yamlLines[idx + 1]?.trim() ?? "";
+        const exprMatch = nextLine.match(/^expr:\s*(.+)/);
+        const expr = exprMatch ? exprMatch[1].replace(/^["']|["']$/g, "").trim() : name;
+
+        if (section === "dimensions") dims.push({ name, expr });
+        else measures.push({ name, expr });
+      }
+    }
+  }
+
+  return { dims, measures };
+}
+
+/**
+ * Read metric views from the new ForgeMetricViewProposal table.
+ * Returns empty array if the table hasn't been populated (old runs).
+ */
+async function getMetricViewsFromProposalTable(
+  runId: string,
+  domain: string,
+): Promise<MetricViewForDashboard[]> {
+  try {
+    const { getMetricViewProposalsByRunDomain } =
+      await import("@/lib/lakebase/metric-view-proposals");
+    const proposals = await getMetricViewProposalsByRunDomain(runId, domain);
+    if (proposals.length === 0) return [];
+
+    return proposals
+      .filter((p) => p.validationStatus !== "error")
+      .map((p) => {
+        const { dims, measures } = parseDimsAndMeasuresFromYaml(p.yaml);
+        const fqn = p.deployedFqn ?? p.name;
+        return { fqn, name: p.name, description: p.description ?? "", dimensions: dims, measures };
+      })
+      .filter((mv) => mv.measures.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Backward-compatible fallback: read metric view proposals from the old
+ * GenieEngineRecommendation table.
+ */
+function getMetricViewsFromGenieRecommendation(
   domain: string,
   genieRecommendations?: GenieEngineRecommendation[],
 ): MetricViewForDashboard[] {
@@ -176,61 +256,38 @@ function getMetricViewDataForDomain(
     return proposals
       .filter((p) => p.validationStatus !== "error")
       .map((p) => {
-        const dims: MetricViewForDashboard["dimensions"] = [];
-        const measures: MetricViewForDashboard["measures"] = [];
-
-        // Parse dimensions and measures from the YAML text
-        const yamlLines = (p.yaml ?? "").split("\n");
-        let section: "none" | "dimensions" | "measures" = "none";
-
-        for (const line of yamlLines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("dimensions:")) {
-            section = "dimensions";
-            continue;
-          }
-          if (trimmed.startsWith("measures:")) {
-            section = "measures";
-            continue;
-          }
-          if (
-            trimmed.startsWith("joins:") ||
-            trimmed.startsWith("filter:") ||
-            trimmed.startsWith("materialization:")
-          ) {
-            section = "none";
-            continue;
-          }
-
-          if (section === "dimensions" || section === "measures") {
-            const nameMatch = trimmed.match(/^-?\s*name:\s*(.+)/);
-            if (nameMatch) {
-              const name = nameMatch[1].replace(/^["']|["']$/g, "").trim();
-              // Look ahead for expr on the next line
-              const idx = yamlLines.indexOf(line);
-              const nextLine = yamlLines[idx + 1]?.trim() ?? "";
-              const exprMatch = nextLine.match(/^expr:\s*(.+)/);
-              const expr = exprMatch ? exprMatch[1].replace(/^["']|["']$/g, "").trim() : name;
-
-              if (section === "dimensions") dims.push({ name, expr });
-              else measures.push({ name, expr });
-            }
-          }
-        }
-
+        const { dims, measures } = parseDimsAndMeasuresFromYaml(p.yaml);
         const fqn =
           deployedFqns.size > 0
             ? ((rec.metricViews ?? []).find((f) =>
                 f.toLowerCase().includes(p.name.toLowerCase()),
               ) ?? p.name)
             : p.name;
-
         return { fqn, name: p.name, description: p.description, dimensions: dims, measures };
       })
       .filter((mv) => mv.measures.length > 0);
   } catch {
     return [];
   }
+}
+
+/**
+ * Get metric view data for a domain — tries the new standalone table first,
+ * falls back to the old GenieEngineRecommendation table for backward compat.
+ */
+async function getMetricViewDataForDomain(
+  domain: string,
+  runId?: string,
+  genieRecommendations?: GenieEngineRecommendation[],
+): Promise<MetricViewForDashboard[]> {
+  // Try new table first
+  if (runId) {
+    const fromNewTable = await getMetricViewsFromProposalTable(runId, domain);
+    if (fromNewTable.length > 0) return fromNewTable;
+  }
+
+  // Fallback to old table
+  return getMetricViewsFromGenieRecommendation(domain, genieRecommendations);
 }
 
 function buildMetricViewLookups(metricViews: MetricViewForDashboard[]): {
@@ -270,11 +327,12 @@ async function processDomain(
   businessName: string,
   businessContext: import("@/lib/domain/types").BusinessContext | null,
   genieRecommendations?: GenieEngineRecommendation[],
+  runId?: string,
 ): Promise<DashboardRecommendation | null> {
   const columnSchemas = buildColumnSchemas(metadata, group.tables);
   const genieOutputs = getGenieOutputsForDomain(group.domain, genieRecommendations);
   const filterCandidates = getFilterCandidatesForDomain(metadata, group.tables, genieOutputs);
-  const metricViews = getMetricViewDataForDomain(group.domain, genieRecommendations);
+  const metricViews = await getMetricViewDataForDomain(group.domain, runId, genieRecommendations);
   const mvLookups = buildMetricViewLookups(metricViews);
 
   const prompt = buildDashboardDesignPrompt({
@@ -520,6 +578,7 @@ export async function runDashboardEngine(
         businessName,
         businessContext,
         genieRecommendations,
+        run.runId,
       );
 
       if (rec) {

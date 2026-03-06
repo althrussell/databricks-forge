@@ -11,6 +11,10 @@ import { safeErrorMessage } from "@/lib/error-utils";
 import { executeSQL } from "@/lib/dbx/sql";
 import { withPrisma } from "@/lib/prisma";
 import { getRunById } from "@/lib/lakebase/runs";
+import {
+  getMetricViewProposalsByRunDomain,
+  updateDeploymentStatus,
+} from "@/lib/lakebase/metric-view-proposals";
 import { logger } from "@/lib/logger";
 import { isSafeId, validateDdl } from "@/lib/validation";
 
@@ -63,7 +67,20 @@ export async function POST(
     );
     const metricViewFqn = fqnMatch ? fqnMatch[1].replace(/`/g, "") : body.name;
 
-    // Add the metric view to the domain's serialized space
+    // Update the standalone ForgeMetricViewProposal table
+    try {
+      const proposals = await getMetricViewProposalsByRunDomain(runId, decodedDomain);
+      const match = proposals.find((p) => p.name.toLowerCase() === body.name.toLowerCase());
+      if (match) {
+        await updateDeploymentStatus(match.id, "deployed", metricViewFqn);
+      }
+    } catch (err) {
+      logger.warn("Failed to update MV proposal deployment status (non-fatal)", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // Add the metric view to the domain's serialized space (backward compat)
     await withPrisma(async (prisma) => {
       const rec = await prisma.forgeGenieRecommendation.findFirst({
         where: { runId, domain: decodedDomain },

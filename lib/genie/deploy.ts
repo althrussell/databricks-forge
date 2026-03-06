@@ -10,6 +10,7 @@
 import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import { validateFqn } from "@/lib/validation";
+import { nestSnowflakeJoins } from "./passes/metric-view-proposals";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -149,8 +150,9 @@ export function stripAiFunctionEntries(ddl: string): string {
  * 1. Strip FQN column prefixes from expr: and on: lines
  * 2. Remove `comment:` lines (unsupported by Databricks YAML parser)
  * 3. Qualify ambiguous join criteria with `source.` prefix
- * 4. Strip window: blocks (experimental, frequently malformed)
- * 5. Strip dimension/measure entries that use AI functions (non-deterministic, expensive)
+ * 4. Restructure flat snowflake joins into nested joins
+ * 5. Strip window: blocks (experimental, frequently malformed)
+ * 6. Strip dimension/measure entries that use AI functions (non-deterministic, expensive)
  */
 export function sanitizeMetricViewDdl(ddl: string): string {
   let result = ddl
@@ -167,6 +169,9 @@ export function sanitizeMetricViewDdl(ddl: string): string {
     /^(\s*on:\s*)(.+)$/gm,
     (_match, prefix: string, expr: string) => prefix + qualifyJoinCriteria(expr).trim(),
   );
+
+  // Restructure flat snowflake joins into nested joins
+  result = nestSnowflakeJoins(result);
 
   // Remove window blocks that the YAML parser rejects
   result = stripWindowBlocks(result);

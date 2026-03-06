@@ -25,6 +25,8 @@ import {
   trackDashboardUpdated,
 } from "@/lib/lakebase/dashboards";
 import { logger } from "@/lib/logger";
+import { ensureMetricViewsDeployed } from "@/lib/genie/metric-view-dependencies";
+import { getMetricViewProposalsByRunDomain } from "@/lib/lakebase/metric-view-proposals";
 
 export async function POST(
   request: NextRequest,
@@ -58,6 +60,37 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const parentPath = (body.parentPath as string) ?? DEFAULT_DASHBOARD_PARENT_PATH;
     const shouldPublish = body.publish === true;
+
+    // Pre-flight: auto-deploy any metric views this dashboard might reference
+    try {
+      const mvProposals = await getMetricViewProposalsByRunDomain(runId, decodedDomain);
+      const deployedFqns = mvProposals
+        .filter((p) => p.deployedFqn && p.validationStatus !== "error")
+        .map((p) => p.deployedFqn!);
+      const proposedFqns = mvProposals
+        .filter((p) => p.deploymentStatus === "proposed" && p.validationStatus !== "error" && p.ddl)
+        .map((p) => {
+          const fqnMatch = p.ddl.match(
+            /VIEW\s+(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
+          );
+          return fqnMatch ? fqnMatch[1].replace(/`/g, "") : null;
+        })
+        .filter((fqn): fqn is string => fqn !== null);
+
+      if (proposedFqns.length > 0) {
+        const depResult = await ensureMetricViewsDeployed(proposedFqns);
+        if (depResult.failed.length > 0) {
+          logger.warn("Some metric view dependencies for dashboard could not be auto-deployed", {
+            domain: decodedDomain,
+            failed: depResult.failed,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn("Dashboard MV dependency check failed (non-fatal)", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     // Check if there's already a tracked dashboard for this run+domain
     const tracked = await listTrackedDashboards(runId);

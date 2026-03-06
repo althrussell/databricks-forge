@@ -57,6 +57,7 @@ model ForgeRun {
   discoveredDashboards     ForgeDiscoveredDashboard[]
   assetCoverages           ForgeAssetCoverage[]
   qualityMetrics           ForgeQualityMetric[]
+  metricViewProposals      ForgeMetricViewProposal[]
 
   @@map("forge_runs")
 }
@@ -234,6 +235,37 @@ model ForgeGenieRecommendation {
   @@unique([runId, domain])
   @@index([runId])
   @@map("forge_genie_recommendations")
+}
+
+// ---------------------------------------------------------------------------
+// Metric View Proposals (standalone first-class artifacts)
+// ---------------------------------------------------------------------------
+
+model ForgeMetricViewProposal {
+  id               String    @id @map("mv_proposal_id")
+  runId            String?   @map("run_id")
+  schemaScope      String    @map("schema_scope")
+  domain           String?
+  name             String
+  description      String?
+  yaml             String
+  ddl              String
+  sourceTablesJson String?   @map("source_tables_json")
+  hasJoins         Boolean   @default(false) @map("has_joins")
+  validationStatus String    @default("pending") @map("validation_status")
+  validationIssues String?   @map("validation_issues")
+  deploymentStatus String    @default("proposed") @map("deployment_status")
+  deployedFqn      String?   @map("deployed_fqn")
+  deployedAt       DateTime? @map("deployed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  run ForgeRun? @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([schemaScope])
+  @@index([deployedFqn])
+  @@map("forge_metric_view_proposals")
 }
 
 // ---------------------------------------------------------------------------

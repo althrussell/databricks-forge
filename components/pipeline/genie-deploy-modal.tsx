@@ -642,6 +642,15 @@ function SelectAssetsStep({
 
   return (
     <div className="space-y-3 py-2">
+      <div className="rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-2 mx-1">
+        <div className="flex gap-2">
+          <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-blue-700 dark:text-blue-300">
+            Any metric views referenced by Genie spaces will be automatically deployed if missing.
+            Manage all metric view proposals in the <strong>Metric Views</strong> tab.
+          </p>
+        </div>
+      </div>
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <Checkbox checked={allChecked} onCheckedChange={toggleAll} />
