@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateBenchmarkFeedback } from "@/lib/lakebase/space-health";
 import { isSafeId } from "@/lib/validation";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function POST(
   request: NextRequest,
@@ -40,7 +41,6 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

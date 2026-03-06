@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getHealthScoreHistory } from "@/lib/lakebase/space-health";
 import { isSafeId } from "@/lib/validation";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function GET(
   _request: NextRequest,
@@ -39,7 +40,6 @@ export async function GET(
 
     return NextResponse.json({ history, trend });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

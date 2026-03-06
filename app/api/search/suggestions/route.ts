@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { suggestSimilarUseCases } from "@/lib/embeddings/run-suggestions";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { logger } from "@/lib/logger";
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Suggestion search failed" },
+      { error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

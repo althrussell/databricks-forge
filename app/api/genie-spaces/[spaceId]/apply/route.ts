@@ -14,6 +14,7 @@ import { getSpaceAuthMode } from "@/lib/lakebase/genie-spaces";
 import { invalidateSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function POST(
   request: NextRequest,
@@ -69,6 +70,6 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Apply fix failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

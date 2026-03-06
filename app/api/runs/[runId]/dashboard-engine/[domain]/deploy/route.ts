@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import { getConfig } from "@/lib/dbx/client";
 import {
@@ -130,6 +131,6 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Dashboard deploy failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

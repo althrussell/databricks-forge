@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { logger } from "@/lib/logger";
 import {
   listCatalogs,
@@ -111,10 +112,8 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
       path: "/api/metadata",
     });
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch metadata";
     return NextResponse.json(
-      { error: message, code: "WAREHOUSE_UNAVAILABLE" },
+      { error: safeErrorMessage(error), code: "WAREHOUSE_UNAVAILABLE" },
       { status: 502 }
     );
   }

@@ -10,6 +10,7 @@ import { runHealthCheck, enrichReportWithSqlQuality } from "@/lib/genie/space-he
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { extractSpaceMetadata } from "@/lib/genie/space-metadata";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,6 +70,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Import analysis failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

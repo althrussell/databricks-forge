@@ -16,6 +16,7 @@ import { getTrackedBySpaceId } from "@/lib/lakebase/genie-spaces";
 import { extractSpaceMetadata, parseSerializedSpace } from "@/lib/genie/space-metadata";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function GET(
   _request: NextRequest,
@@ -89,6 +90,6 @@ export async function GET(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Space detail fetch failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

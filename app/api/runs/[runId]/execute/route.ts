@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { failOrphanedRunningRun, getRunById } from "@/lib/lakebase/runs";
 import {
   startPipeline,
@@ -67,10 +68,7 @@ export async function POST(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[execute] Failed to start pipeline", { error: msg });
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to start pipeline",
-      },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

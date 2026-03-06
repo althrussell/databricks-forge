@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { listEnvironmentScans } from "@/lib/lakebase/environment-scans";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { logger } from "@/lib/logger";
@@ -23,7 +24,7 @@ export async function GET() {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to list environment scans" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to start environment scan" },
+      { error: safeErrorMessage(error) },
       { status: 500 }
     );
   }

@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
@@ -126,6 +127,6 @@ export async function POST(
     logger.error("Genie space deploy failed", {
       error: message,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

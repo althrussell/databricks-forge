@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getDashboardRecommendationsByRunId } from "@/lib/lakebase/dashboard-recommendations";
 import { isValidUUID } from "@/lib/validation";
 
@@ -39,7 +40,6 @@ export async function GET(
       serializedDashboard: rec.serializedDashboard,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

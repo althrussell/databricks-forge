@@ -15,6 +15,7 @@ import {
   trackGenieSpaceCreated,
 } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import type { GenieAuthMode } from "@/lib/settings";
 import { revalidateSerializedSpace } from "@/lib/genie/deploy-validation";
 import { validateFqn } from "@/lib/validation";
@@ -285,6 +286,6 @@ export async function POST(request: NextRequest) {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

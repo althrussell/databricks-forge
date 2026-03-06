@@ -5,6 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getEmbeddingStats } from "@/lib/embeddings/re-embed";
 import { embeddingsTableExists } from "@/lib/embeddings/store";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
@@ -40,7 +41,7 @@ export async function GET() {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Failed to get embedding stats" },
+      { error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

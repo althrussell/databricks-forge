@@ -707,30 +707,39 @@ third-party API, or cross-region endpoint.
 
 ## 16. Known Limitations and Recommendations
 
+### Resolved
+
+| Area | Resolution |
+|------|-----------|
+| **CSP header** | `Content-Security-Policy` configured in `next.config.ts` (`default-src 'self'`, `script-src 'self' 'unsafe-inline'`, `frame-ancestors 'none'`, etc.) |
+| **HSTS header** | `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` added to `next.config.ts` |
+| **App-level rate limiting** | In-memory sliding-window limiter in `lib/rate-limit.ts`, activated via `middleware.ts` (LLM routes: 3k/min, general: 12k/min per client) |
+| **Health endpoint exposure** | `/api/health` returns only `{ status, version, uptime, timestamp }` for unauthenticated callers; full diagnostics (checks, authRuntime, host) require auth headers |
+| **Error message sanitisation** | `safeErrorMessage()` in `lib/error-utils.ts` returns generic message in production; applied to all API route error responses. Error boundaries rely on Next.js production sanitisation |
+| **Prompt injection (Ask Forge)** | User question now wrapped in `---BEGIN USER QUESTION---` / `---END USER QUESTION---` delimiters with marker stripping in `lib/assistant/prompts.ts` |
+| **Sample data audit logging** | `fetchSampleData()` logs structured audit entry with table FQNs, runId, userEmail, and step |
+| **Dependency audits in CI** | `npm audit --audit-level=high` step added to `.github/workflows/ci.yml` |
+| **Multi-tenant isolation (Phase 1)** | `listRuns()` accepts optional `userEmail` filter; `GET /api/runs` and `app/runs/page.tsx` scope results to the current user |
+
 ### Current Limitations
 
 | Area | Limitation | Risk Level |
 |------|-----------|------------|
-| **App-level rate limiting** | No rate limiting on API routes | Medium |
-| **CSP header** | No Content-Security-Policy header configured | Low |
-| **HSTS header** | No Strict-Transport-Security header (TLS handled by proxy) | Low |
-| **Multi-tenant isolation** | All app users can see/modify all pipeline runs | Medium |
-| **Health endpoint exposure** | Database/warehouse error messages visible without auth | Low |
-| **Error message sanitisation** | `error.message` shown in error boundaries (sanitised in production by Next.js) | Low |
-| **Prompt injection** | Delimiter-based mitigation reduces but cannot eliminate risk | Medium |
+| **Multi-tenant isolation (Phase 2)** | Direct-ID access (`getRunById`, update, delete, export) has no ownership check -- any authenticated user with a `runId` can access it | Medium |
+| **Multi-tenant isolation (Phase 3)** | No admin/shared-viewer role for team-wide visibility when needed | Low |
+| **Prompt injection** | Delimiter-based mitigation reduces but cannot eliminate risk (inherent LLM limitation) | Medium |
+| **`unsafe-inline` in CSP** | `script-src 'self' 'unsafe-inline'` still required by Next.js; nonce-based CSP would be stronger | Low |
 
-### Recommendations for Hardening
+### Recommendations for Further Hardening
 
-1. **Add Content-Security-Policy header** -- restrict script sources to `self`.
-2. **Add rate limiting** -- use middleware to limit API requests per IP/user.
-3. **Add HSTS header** -- enforce HTTPS at the application level as defense-in-depth.
-4. **Implement run-level access control** -- associate runs with the creating user
-   and restrict visibility.
-5. **Restrict health endpoint** -- return only `status` for unauthenticated callers;
-   detailed checks behind auth.
-6. **Audit sample data usage** -- when sampling is enabled, log which tables were
-   sampled and by whom.
-7. **Regular dependency audits** -- run `npm audit` in CI to catch known vulnerabilities.
+1. **Implement full run ownership checks** -- add ownership verification to `getRunById`,
+   `updateRunStatus`, `deleteRun`, and all export/action routes. Return 403 for non-owners.
+2. **Add admin/shared-viewer role** -- allow designated users to view all runs for team
+   collaboration and oversight.
+3. **Nonce-based CSP** -- replace `'unsafe-inline'` with per-request nonces once Next.js
+   supports it natively.
+4. **Extend multi-tenant isolation** -- apply per-user scoping to environment scans,
+   Fabric scans, connections, and Genie Space operations.
 
 ---
 

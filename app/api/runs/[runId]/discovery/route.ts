@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isValidUUID } from "@/lib/validation";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
 import { getConfig } from "@/lib/dbx/client";
 
@@ -37,7 +38,6 @@ export async function GET(
 
     return NextResponse.json({ ...data, databricksHost });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

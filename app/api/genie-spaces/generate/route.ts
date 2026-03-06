@@ -15,6 +15,7 @@ import {
   type AdHocGenieConfig,
 } from "@/lib/genie/adhoc-engine";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 interface AdHocJobStatus {
   jobId: string;
@@ -149,8 +150,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ jobId, mode: "full" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 

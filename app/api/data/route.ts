@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { deleteAllData } from "@/lib/lakebase/reset";
 import { isRateLimitErrorMessage } from "@/lib/lakebase/auth-errors";
@@ -48,7 +49,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: msg || "Failed to delete data" },
+      { error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

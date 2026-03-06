@@ -237,10 +237,13 @@ export async function getRunById(runId: string): Promise<PipelineRun | null> {
 
 export async function listRuns(
   limit = 50,
-  offset = 0
+  offset = 0,
+  userEmail?: string | null,
 ): Promise<PipelineRun[]> {
   return withPrisma(async (prisma) => {
+    const where = userEmail ? { createdBy: userEmail } : {};
     const rows = await prisma.forgeRun.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       take: limit,
       skip: offset,

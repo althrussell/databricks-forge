@@ -10,6 +10,7 @@ import { getConfig } from "@/lib/dbx/client";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function POST(
   _request: NextRequest,
@@ -50,6 +51,6 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Clone failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

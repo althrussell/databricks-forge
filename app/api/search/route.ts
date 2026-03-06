@@ -16,6 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { generateEmbedding } from "@/lib/embeddings/client";
 import { searchByVector, embeddingsTableExists } from "@/lib/embeddings/store";
 import { SEARCH_SCOPES, type EmbeddingKind } from "@/lib/embeddings/types";
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Search failed" },
+      { error: safeErrorMessage(error) },
       { status: 500 },
     );
   }

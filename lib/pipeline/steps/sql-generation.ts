@@ -270,7 +270,9 @@ async function generateSqlForUseCase(
   // Fetch sample data if enabled
   let sampleDataSection = "";
   if (sampleRowsPerTable > 0 && uc.tablesInvolved.length > 0) {
-    const sampleResult = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable);
+    const sampleResult = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable, {
+      runId, userEmail: run.createdBy, step: "sql-generation",
+    });
     sampleDataSection = sampleResult.markdown;
   }
 

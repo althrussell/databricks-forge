@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGenieSpace } from "@/lib/dbx/genie";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
+import { safeErrorMessage } from "@/lib/error-utils";
 
 export async function GET(
   _request: NextRequest,
@@ -41,7 +42,6 @@ export async function GET(
       total: questions.length,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

@@ -12,6 +12,7 @@ import { getHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 
 const MAX_BATCH_SIZE = 50;
@@ -94,7 +95,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(reports);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

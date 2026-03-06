@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { executeSQL } from "@/lib/dbx/sql";
 import { trashGenieSpace } from "@/lib/dbx/genie";
 import { generateDropViewDDL } from "@/lib/metadata-genie/view-ddl";
@@ -23,8 +24,7 @@ export async function GET() {
     const spaces = await listMetadataGenieSpaces();
     return NextResponse.json({ spaces });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -83,6 +83,6 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Metadata Genie trash failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import { createRun, listRuns } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
 import { safeParseBody, CreateRunSchema } from "@/lib/validation";
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] POST failed", { error: msg });
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -83,7 +84,8 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(parseInt(searchParams.get("offset") ?? "0", 10) || 0, 0);
 
     await ensureMigrated();
-    const runs = await listRuns(limit, offset);
+    const userEmail = await getCurrentUserEmail();
+    const runs = await listRuns(limit, offset, userEmail);
 
     return NextResponse.json({ runs }, {
       headers: {
@@ -93,6 +95,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { error: msg });
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

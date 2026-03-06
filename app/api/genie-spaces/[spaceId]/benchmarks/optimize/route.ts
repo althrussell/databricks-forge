@@ -13,6 +13,7 @@ import { generateOptimizations } from "@/lib/genie/optimize";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+import { safeErrorMessage } from "@/lib/error-utils";
 import type { FeedbackEntry } from "@/lib/genie/benchmark-feedback";
 
 export async function POST(
@@ -65,6 +66,6 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     logger.error("Field-level optimization failed", { error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

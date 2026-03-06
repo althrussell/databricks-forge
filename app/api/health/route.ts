@@ -47,7 +47,7 @@ interface CheckResult {
 
 const startTime = Date.now();
 
-export async function GET() {
+export async function GET(request: Request) {
   const checks = await Promise.allSettled([checkDatabase(), checkWarehouse()]);
 
   const database: CheckResult =
@@ -67,6 +67,28 @@ export async function GET() {
         ? "degraded"
         : "unhealthy";
 
+  const hdrs = new Headers(request.headers);
+  const isAuthenticated =
+    !!hdrs.get("x-forwarded-email") ||
+    !!hdrs.get("x-forwarded-access-token") ||
+    !!hdrs.get("x-forwarded-preferred-username");
+
+  const base = {
+    status: overallStatus,
+    version: packageJson.version,
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    timestamp: new Date().toISOString(),
+  };
+
+  const httpStatus = overallStatus === "unhealthy" ? 503 : 200;
+  const cacheHeaders = {
+    "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+  };
+
+  if (!isAuthenticated) {
+    return NextResponse.json(base, { status: httpStatus, headers: cacheHeaders });
+  }
+
   let userEmail: string | null = null;
   let host: string | null = null;
   try {
@@ -77,23 +99,14 @@ export async function GET() {
   }
 
   const health: HealthCheck & { userEmail?: string | null; host?: string | null } = {
-    status: overallStatus,
-    version: packageJson.version,
-    uptime: Math.floor((Date.now() - startTime) / 1000),
-    timestamp: new Date().toISOString(),
+    ...base,
     checks: { database, warehouse },
     authRuntime: getDatabaseAuthRuntimeState(),
     userEmail,
     host,
   };
 
-  const httpStatus = overallStatus === "unhealthy" ? 503 : 200;
-  return NextResponse.json(health, {
-    status: httpStatus,
-    headers: {
-      "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
-    },
-  });
+  return NextResponse.json(health, { status: httpStatus, headers: cacheHeaders });
 }
 
 async function checkDatabase(): Promise<CheckResult> {
