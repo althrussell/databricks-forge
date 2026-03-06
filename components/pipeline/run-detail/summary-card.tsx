@@ -14,9 +14,7 @@ export function SummaryCard({ title, value, tip, onClick }: SummaryCardProps) {
   return (
     <Card
       className={
-        onClick
-          ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-          : ""
+        onClick ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30" : ""
       }
       onClick={onClick}
     >

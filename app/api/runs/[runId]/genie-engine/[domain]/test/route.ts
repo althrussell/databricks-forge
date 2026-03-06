@@ -8,10 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
-import {
-  startConversation,
-  type GenieConversationMessage,
-} from "@/lib/dbx/genie";
+import { startConversation, type GenieConversationMessage } from "@/lib/dbx/genie";
 import { getRunById } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 
@@ -25,7 +22,7 @@ export interface TestResult {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string; domain: string }> }
+  { params }: { params: Promise<{ runId: string; domain: string }> },
 ) {
   try {
     const { runId, domain } = await params;
@@ -47,7 +44,7 @@ export async function POST(
     if (!body.spaceId || !body.questions?.length) {
       return NextResponse.json(
         { error: "Missing required fields: spaceId, questions" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 

@@ -107,14 +107,16 @@ export function runHealthCheck(
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
     .map((check) => {
       const checkDef = registry.checks.find((c) => c.id === check.id);
-      const fixHint = check.fixable && check.fixStrategy
-        ? ` (auto-fixable via ${check.fixStrategy.replace(/_/g, " ")})`
-        : "";
+      const fixHint =
+        check.fixable && check.fixStrategy
+          ? ` (auto-fixable via ${check.fixStrategy.replace(/_/g, " ")})`
+          : "";
       return {
-        category: check.severity === "critical" ? "warning" as const : "suggestion" as const,
+        category: check.severity === "critical" ? ("warning" as const) : ("suggestion" as const),
         severity: check.severity,
         description: check.description + (check.detail ? `: ${check.detail}` : ""),
-        recommendation: (checkDef?.quick_win ?? `Address the "${check.description}" check`) + fixHint,
+        recommendation:
+          (checkDef?.quick_win ?? `Address the "${check.description}" check`) + fixHint,
         reference: check.id,
       };
     });
@@ -166,7 +168,8 @@ export async function enrichReportWithSqlQuality(
   report.overallScore =
     totalWeight > 0
       ? Math.round(
-          Object.values(report.categories).reduce((sum, c) => sum + c.score * c.weight, 0) / totalWeight,
+          Object.values(report.categories).reduce((sum, c) => sum + c.score * c.weight, 0) /
+            totalWeight,
         )
       : 0;
   report.grade = computeGrade(report.overallScore);

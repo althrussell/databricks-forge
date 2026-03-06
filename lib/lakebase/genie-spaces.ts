@@ -67,9 +67,7 @@ function parseDeployedAssets(json: string | null): DeployedAssets | null {
 // ---------------------------------------------------------------------------
 
 /** List all tracked Genie spaces (optionally filtered by runId). */
-export async function listTrackedGenieSpaces(
-  runId?: string
-): Promise<TrackedGenieSpace[]> {
+export async function listTrackedGenieSpaces(runId?: string): Promise<TrackedGenieSpace[]> {
   return withPrisma(async (prisma) => {
     const where = runId ? { runId } : {};
     const rows = await prisma.forgeGenieSpace.findMany({
@@ -81,9 +79,7 @@ export async function listTrackedGenieSpaces(
 }
 
 /** Get a tracked space by its Databricks space ID. */
-export async function getTrackedBySpaceId(
-  spaceId: string
-): Promise<TrackedGenieSpace | null> {
+export async function getTrackedBySpaceId(spaceId: string): Promise<TrackedGenieSpace | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
@@ -95,7 +91,7 @@ export async function getTrackedBySpaceId(
 /** Get a tracked space by run + domain. */
 export async function getTrackedByRunDomain(
   runId: string,
-  domain: string
+  domain: string,
 ): Promise<TrackedGenieSpace | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeGenieSpace.findFirst({
@@ -129,13 +125,28 @@ export async function trackGenieSpaceCreated(
       if (existing) {
         const row = await prisma.forgeGenieSpace.update({
           where: { id: existing.id },
-          data: { spaceId, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
+          data: {
+            spaceId,
+            title,
+            status: "created",
+            deployedAssetsJson: assetsJson,
+            authMode: authMode ?? null,
+          },
         });
         return dbRowToTracked(row);
       }
     }
     const row = await prisma.forgeGenieSpace.create({
-      data: { id, spaceId, runId, domain, title, status: "created", deployedAssetsJson: assetsJson, authMode: authMode ?? null },
+      data: {
+        id,
+        spaceId,
+        runId,
+        domain,
+        title,
+        status: "created",
+        deployedAssetsJson: assetsJson,
+        authMode: authMode ?? null,
+      },
     });
     return dbRowToTracked(row);
   });
@@ -177,9 +188,7 @@ export async function trackGenieSpaceUpdated(
 }
 
 /** Mark a tracked space as trashed. */
-export async function trackGenieSpaceTrashed(
-  spaceId: string
-): Promise<void> {
+export async function trackGenieSpaceTrashed(spaceId: string): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeGenieSpace.update({
       where: { spaceId },
@@ -189,9 +198,7 @@ export async function trackGenieSpaceTrashed(
 }
 
 /** Get the auth mode used to create a space (falls back to "sp" for legacy rows). */
-export async function getSpaceAuthMode(
-  spaceId: string,
-): Promise<GenieAuthMode> {
+export async function getSpaceAuthMode(spaceId: string): Promise<GenieAuthMode> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
@@ -206,9 +213,7 @@ export async function getSpaceAuthMode(
 // ---------------------------------------------------------------------------
 
 /** Get the deployed asset FQNs for a tracked space. */
-export async function getDeployedAssets(
-  spaceId: string,
-): Promise<DeployedAssets | null> {
+export async function getDeployedAssets(spaceId: string): Promise<DeployedAssets | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
@@ -259,10 +264,7 @@ export async function findSpacesReferencingAssets(
   });
 }
 
-function mergeAssets(
-  existing: DeployedAssets | null,
-  incoming: DeployedAssets,
-): DeployedAssets {
+function mergeAssets(existing: DeployedAssets | null, incoming: DeployedAssets): DeployedAssets {
   if (!existing) return incoming;
   const fns = new Set([...existing.functions, ...incoming.functions]);
   const mvs = new Set([...existing.metricViews, ...incoming.metricViews]);

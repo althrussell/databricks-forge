@@ -48,7 +48,11 @@ function extractTextContent(node: React.ReactNode): string {
   return "";
 }
 
-function CodeBlock({ children, isSql, onRunSql }: {
+function CodeBlock({
+  children,
+  isSql,
+  onRunSql,
+}: {
   children: React.ReactNode;
   isSql: boolean;
   onRunSql?: (sql: string) => void;
@@ -104,43 +108,43 @@ export function AnswerStream({ content, isStreaming, onRunSql }: AnswerStreamPro
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [content]);
 
-  const components = React.useMemo<Components>(() => ({
-    p({ children }) {
-      if (typeof children === "string") {
-        return <p>{injectCitations(children)}</p>;
-      }
-      return <p>{children}</p>;
-    },
-    li({ children }) {
-      if (typeof children === "string") {
-        return <li>{injectCitations(children)}</li>;
-      }
-      return <li>{children}</li>;
-    },
-    pre({ children }) {
-      const codeChild = React.Children.toArray(children).find(
-        (child): child is React.ReactElement =>
-          React.isValidElement(child) && (child as React.ReactElement).type === "code",
-      ) as React.ReactElement | undefined;
-      const className = (codeChild?.props as { className?: string })?.className ?? "";
-      const isSql = /language-sql/i.test(className);
-      return (
-        <CodeBlock isSql={isSql} onRunSql={onRunSql}>
-          {children}
-        </CodeBlock>
-      );
-    },
-  }), [onRunSql]);
+  const components = React.useMemo<Components>(
+    () => ({
+      p({ children }) {
+        if (typeof children === "string") {
+          return <p>{injectCitations(children)}</p>;
+        }
+        return <p>{children}</p>;
+      },
+      li({ children }) {
+        if (typeof children === "string") {
+          return <li>{injectCitations(children)}</li>;
+        }
+        return <li>{children}</li>;
+      },
+      pre({ children }) {
+        const codeChild = React.Children.toArray(children).find(
+          (child): child is React.ReactElement =>
+            React.isValidElement(child) && (child as React.ReactElement).type === "code",
+        ) as React.ReactElement | undefined;
+        const className = (codeChild?.props as { className?: string })?.className ?? "";
+        const isSql = /language-sql/i.test(className);
+        return (
+          <CodeBlock isSql={isSql} onRunSql={onRunSql}>
+            {children}
+          </CodeBlock>
+        );
+      },
+    }),
+    [onRunSql],
+  );
 
   if (!content && !isStreaming) return null;
 
   return (
     <div className="relative">
       <div className="prose prose-sm dark:prose-invert max-w-none break-words text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-border [&_pre]:bg-muted/60 [&_pre]:p-4 [&_pre]:text-xs [&_pre]:text-foreground [&_code]:rounded [&_code]:border [&_code]:border-border/50 [&_code]:bg-muted/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-xs [&_code]:text-foreground [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:text-xs [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1 [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
-        <ReactMarkdown
-          remarkPlugins={REMARK_PLUGINS}
-          components={components}
-        >
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
           {content}
         </ReactMarkdown>
       </div>

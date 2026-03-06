@@ -16,7 +16,11 @@ import type {
   QuestionComplexity,
   JoinSpecInput,
 } from "../types";
-import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import {
+  buildSchemaContextBlock,
+  validateSqlExpression,
+  type SchemaAllowlist,
+} from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
@@ -43,9 +47,19 @@ export interface TrustedAssetsOutput {
 }
 
 export async function runTrustedAssetAuthoring(
-  input: TrustedAssetsInput
+  input: TrustedAssetsInput,
 ): Promise<TrustedAssetsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, entityCandidates, joinSpecs, endpoint, questionComplexity, signal } = input;
+  const {
+    tableFqns,
+    metadata,
+    allowlist,
+    useCases,
+    entityCandidates,
+    joinSpecs,
+    endpoint,
+    questionComplexity,
+    signal,
+  } = input;
 
   const topUseCases = useCases
     .filter((uc) => uc.sqlCode && uc.sqlStatus === "generated")
@@ -74,7 +88,14 @@ export async function runTrustedAssetAuthoring(
     batches.map((batch) => async () => {
       try {
         return await processTrustedAssetBatch(
-          batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, questionComplexity, signal
+          batch,
+          schemaBlock,
+          entityBlock,
+          joinBlock,
+          allowlist,
+          endpoint,
+          questionComplexity,
+          signal,
         );
       } catch (err) {
         logger.warn("Trusted asset batch failed, continuing with remaining batches", {
@@ -98,19 +119,17 @@ export async function runTrustedAssetAuthoring(
 
 function buildEntityBlock(entityCandidates: EntityMatchingCandidate[]): string {
   if (entityCandidates.length === 0) return "";
-  return `### ENTITY MATCHING COLUMNS (use these values in parameter comments)\n${
-    entityCandidates
-      .filter((c) => c.sampleValues.length > 0)
-      .slice(0, 20)
-      .map((c) => `- ${c.tableFqn}.${c.columnName}: [${c.sampleValues.slice(0, 15).join(", ")}]`)
-      .join("\n")
-  }`;
+  return `### ENTITY MATCHING COLUMNS (use these values in parameter comments)\n${entityCandidates
+    .filter((c) => c.sampleValues.length > 0)
+    .slice(0, 20)
+    .map((c) => `- ${c.tableFqn}.${c.columnName}: [${c.sampleValues.slice(0, 15).join(", ")}]`)
+    .join("\n")}`;
 }
 
 function buildJoinBlock(joinSpecs: JoinSpecInput[]): string {
   if (joinSpecs.length === 0) return "";
   const lines = joinSpecs.map(
-    (j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql} (${j.relationshipType})`
+    (j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql} (${j.relationshipType})`,
   );
   return `### TABLE RELATIONSHIPS (use these exact join conditions)\n${lines.join("\n")}`;
 }
@@ -139,9 +158,10 @@ async function processTrustedAssetBatch(
   const MAX_SQL_CHARS = 3000;
   const sqlExamples = batch
     .map((uc) => {
-      const sql = (uc.sqlCode ?? "").length > MAX_SQL_CHARS
-        ? uc.sqlCode!.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
-        : uc.sqlCode;
+      const sql =
+        (uc.sqlCode ?? "").length > MAX_SQL_CHARS
+          ? uc.sqlCode!.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
+          : uc.sqlCode;
       return `Question: ${uc.name}\nSQL:\n${sql}`;
     })
     .join("\n\n---\n\n");
@@ -209,7 +229,9 @@ Create parameterized queries from these examples.`;
       sql: String(q.sql ?? ""),
       parameters: parseArray(q.parameters).map((p) => ({
         name: String(p.name ?? ""),
-        type: (["String", "Date", "Numeric"].includes(String(p.type)) ? String(p.type) : "String") as "String" | "Date" | "Numeric",
+        type: (["String", "Date", "Numeric"].includes(String(p.type))
+          ? String(p.type)
+          : "String") as "String" | "Date" | "Numeric",
         comment: String(p.comment ?? ""),
         defaultValue: p.defaultValue ? String(p.defaultValue) : null,
       })),
@@ -225,7 +247,14 @@ Create parameterized queries from these examples.`;
           surface: "genie-trusted-assets",
         });
         if (review.fixedSql) {
-          if (validateSqlExpression(allowlist, review.fixedSql, `trusted_query_fix:${q.question}`, true)) {
+          if (
+            validateSqlExpression(
+              allowlist,
+              review.fixedSql,
+              `trusted_query_fix:${q.question}`,
+              true,
+            )
+          ) {
             return { ...q, sql: review.fixedSql };
           }
           logger.warn("Trusted asset review fix failed schema validation, keeping original", {

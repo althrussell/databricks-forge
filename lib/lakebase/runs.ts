@@ -202,7 +202,7 @@ function serializeGenerationOptions(config: PipelineRunConfig): string {
 export async function createRun(
   runId: string,
   config: PipelineRunConfig,
-  createdBy?: string | null
+  createdBy?: string | null,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.create({
@@ -225,7 +225,9 @@ export async function createRun(
     });
   });
 
-  archiveCurrentPromptTemplates().catch((e) => logger.warn("[runs] Failed to archive prompt templates", { error: String(e) }));
+  archiveCurrentPromptTemplates().catch((e) =>
+    logger.warn("[runs] Failed to archive prompt templates", { error: String(e) }),
+  );
 }
 
 export async function getRunById(runId: string): Promise<PipelineRun | null> {
@@ -258,7 +260,7 @@ export async function updateRunStatus(
   currentStep: PipelineStep | null,
   progressPct: number,
   errorMessage?: string,
-  statusMessage?: string
+  statusMessage?: string,
 ): Promise<void> {
   const data: Record<string, unknown> = {
     status,
@@ -285,7 +287,7 @@ export async function updateRunStatus(
 
 export async function failOrphanedRunningRun(
   runId: string,
-  activeRunIds: string[]
+  activeRunIds: string[],
 ): Promise<boolean> {
   return withPrisma(async (prisma) => {
     if (activeRunIds.includes(runId)) return false;
@@ -299,8 +301,7 @@ export async function failOrphanedRunningRun(
         status: "failed",
         errorMessage:
           "Run was interrupted by app restart or deployment. Please retry or resume this run.",
-        statusMessage:
-          "Run interrupted by app restart/deployment. Please retry or resume.",
+        statusMessage: "Run interrupted by app restart/deployment. Please retry or resume.",
         completedAt: new Date(),
       },
     });
@@ -315,7 +316,7 @@ export async function failOrphanedRunningRun(
 export async function updateRunMessage(
   runId: string,
   statusMessage: string,
-  progressPct?: number
+  progressPct?: number,
 ): Promise<void> {
   const data: Record<string, unknown> = { statusMessage };
   if (progressPct !== undefined) {
@@ -350,7 +351,7 @@ export async function deleteRun(runId: string): Promise<void> {
 
 export async function updateRunBusinessContext(
   runId: string,
-  context: BusinessContext
+  context: BusinessContext,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.update({
@@ -366,7 +367,7 @@ export async function updateRunBusinessContext(
  */
 export async function updateRunFilteredTables(
   runId: string,
-  classifications: Array<{ fqn: string; classification: string; reason: string }>
+  classifications: Array<{ fqn: string; classification: string; reason: string }>,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.update({
@@ -380,10 +381,7 @@ export async function updateRunFilteredTables(
  * Link a metadata cache key to a run so we know which cached metadata
  * snapshot was used for this run's analysis.
  */
-export async function updateRunMetadataCacheKey(
-  runId: string,
-  cacheKey: string
-): Promise<void> {
+export async function updateRunMetadataCacheKey(runId: string, cacheKey: string): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.update({
       where: { runId },
@@ -402,7 +400,7 @@ export async function updateRunMetadataCacheKey(
 export async function updateRunIndustry(
   runId: string,
   industry: string,
-  autoDetected: boolean = false
+  autoDetected: boolean = false,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     const row = await prisma.forgeRun.findUnique({
@@ -432,9 +430,7 @@ export async function updateRunIndustry(
  * Read the raw filteredTablesJson from a run row.
  * Returns the array of FQNs classified as "business", or null if not yet set.
  */
-export async function getRunFilteredTables(
-  runId: string
-): Promise<string[] | null> {
+export async function getRunFilteredTables(runId: string): Promise<string[] | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeRun.findUnique({
       where: { runId },
@@ -446,9 +442,7 @@ export async function getRunFilteredTables(
         fqn: string;
         classification: string;
       }>;
-      return classifications
-        .filter((c) => c.classification === "business")
-        .map((c) => c.fqn);
+      return classifications.filter((c) => c.classification === "business").map((c) => c.fqn);
     } catch (e) {
       logger.debug("[runs] Failed to parse filteredTablesJson", { runId, error: String(e) });
       return null;
@@ -460,10 +454,7 @@ export async function getRunFilteredTables(
  * Append or update a step log entry in the generationOptions JSON.
  * Reads the current value, merges the entry, and writes back atomically.
  */
-export async function updateRunStepLog(
-  runId: string,
-  entry: StepLogEntry
-): Promise<void> {
+export async function updateRunStepLog(runId: string, entry: StepLogEntry): Promise<void> {
   await withPrisma(async (prisma) => {
     const row = await prisma.forgeRun.findUnique({
       where: { runId },
@@ -478,9 +469,7 @@ export async function updateRunStepLog(
       logger.debug("[runs] Failed to parse generationOptions", { runId, error: String(e) });
     }
 
-    const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog)
-      ? genOpts.stepLog
-      : [];
+    const stepLog: StepLogEntry[] = Array.isArray(genOpts.stepLog) ? genOpts.stepLog : [];
 
     const existingIdx = stepLog.findIndex((e) => e.step === entry.step);
     if (existingIdx >= 0) {
@@ -511,10 +500,7 @@ export type SchemaSnapshotEntry = {
 
 export type SchemaSnapshot = Record<string, SchemaSnapshotEntry>;
 
-export async function updateSchemaSnapshot(
-  runId: string,
-  snapshot: SchemaSnapshot,
-): Promise<void> {
+export async function updateSchemaSnapshot(runId: string, snapshot: SchemaSnapshot): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeRun.update({
       where: { runId },
@@ -523,9 +509,7 @@ export async function updateSchemaSnapshot(
   });
 }
 
-export async function getSchemaSnapshot(
-  runId: string,
-): Promise<SchemaSnapshot | null> {
+export async function getSchemaSnapshot(runId: string): Promise<SchemaSnapshot | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeRun.findUnique({
       where: { runId },

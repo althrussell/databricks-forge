@@ -22,9 +22,15 @@ import type {
 
 import { DEFAULT_CHECKS_YAML } from "./default-checks-embedded";
 
-let cachedDefaults: { categories: Record<string, CategoryDefinition>; checks: CheckDefinition[] } | null = null;
+let cachedDefaults: {
+  categories: Record<string, CategoryDefinition>;
+  checks: CheckDefinition[];
+} | null = null;
 
-function loadDefaultChecks(): { categories: Record<string, CategoryDefinition>; checks: CheckDefinition[] } {
+function loadDefaultChecks(): {
+  categories: Record<string, CategoryDefinition>;
+  checks: CheckDefinition[];
+} {
   if (cachedDefaults) return cachedDefaults;
 
   const parsed = parseYaml(DEFAULT_CHECKS_YAML) as DefaultChecksYaml;
@@ -61,10 +67,7 @@ function loadDefaultChecks(): { categories: Record<string, CategoryDefinition>; 
  * Validate a user custom check: the category must exist in defined categories
  * and the evaluator must be a registered type.
  */
-function validateCustomCheck(
-  check: UserCustomCheck,
-  validCategories: Set<string>,
-): string | null {
+function validateCustomCheck(check: UserCustomCheck, validCategories: Set<string>): string | null {
   if (!validCategories.has(check.category)) {
     return `Custom check "${check.id}": invalid category "${check.category}"`;
   }

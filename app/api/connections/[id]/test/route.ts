@@ -31,7 +31,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     if (!secret) {
       return NextResponse.json(
         { error: "Could not decrypt connection credentials" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -51,9 +51,6 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Connection test failed";
-    return NextResponse.json(
-      { success: false, message: msg, workspaces: [] },
-      { status: 200 }
-    );
+    return NextResponse.json({ success: false, message: msg, workspaces: [] }, { status: 200 });
   }
 }

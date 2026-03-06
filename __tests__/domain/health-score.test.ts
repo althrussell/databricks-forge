@@ -102,10 +102,10 @@ describe("computeTableHealth", () => {
   it("deducts 10 for streaming without CDF", () => {
     const result = computeTableHealth(
       makeDetail({ tableProperties: {} }),
-      makeHistory({ hasStreamingWrites: true })
+      makeHistory({ hasStreamingWrites: true }),
     );
     expect(result.issues).toContain(
-      "Streaming writes detected but Change Data Feed (CDF) is not enabled"
+      "Streaming writes detected but Change Data Feed (CDF) is not enabled",
     );
   });
 
@@ -160,7 +160,7 @@ describe("computeAllTableHealth", () => {
     const results = computeAllTableHealth(details, histories);
     expect(results.size).toBe(2);
     expect(results.get("cat.s.t1")!.healthScore).toBeGreaterThanOrEqual(
-      results.get("cat.s.t2")!.healthScore
+      results.get("cat.s.t2")!.healthScore,
     );
   });
 });

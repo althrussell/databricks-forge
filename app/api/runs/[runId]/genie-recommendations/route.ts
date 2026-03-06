@@ -22,7 +22,7 @@ import type { GenieSpaceRecommendation } from "@/lib/genie/types";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -38,7 +38,7 @@ export async function GET(
     if (run.status !== "completed") {
       return NextResponse.json(
         { error: "Run is not completed. Genie recommendations require a completed pipeline run." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -49,10 +49,7 @@ export async function GET(
     if (recommendations.length === 0) {
       const useCases = await getUseCasesByRunId(runId);
       if (useCases.length === 0) {
-        return NextResponse.json(
-          { error: "No use cases found for this run." },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: "No use cases found for this run." }, { status: 404 });
       }
 
       const metadata = await loadMetadataForRun(runId);
@@ -63,12 +60,17 @@ export async function GET(
               "Metadata snapshot not found for this run. " +
               "This may be a run from before metadata caching was enabled.",
           },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
       const { config } = await getGenieEngineConfig(runId);
-      recommendations = generateGenieRecommendations(run, useCases, metadata, config.questionComplexity);
+      recommendations = generateGenieRecommendations(
+        run,
+        useCases,
+        metadata,
+        config.questionComplexity,
+      );
     }
 
     // Load tracking status for this run
@@ -77,7 +79,9 @@ export async function GET(
     let databricksHost: string | null = null;
     try {
       databricksHost = getConfig().host;
-    } catch { /* host unavailable in some dev environments */ }
+    } catch {
+      /* host unavailable in some dev environments */
+    }
 
     return NextResponse.json({
       runId,

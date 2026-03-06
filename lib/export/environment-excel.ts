@@ -92,7 +92,11 @@ function humanNumber(n: number | bigint | null | undefined): string {
 
 function safeJSON<T>(json: string | null | undefined, fallback: T): T {
   if (!json) return fallback;
-  try { return JSON.parse(json) as T; } catch { return fallback; }
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -196,9 +200,7 @@ export interface ScanWithRelations {
 /**
  * Generate the 12-sheet Environment Report Excel.
  */
-export async function generateEnvironmentExcel(
-  scan: ScanWithRelations
-): Promise<Buffer> {
+export async function generateEnvironmentExcel(scan: ScanWithRelations): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Databricks Forge AI";
   wb.created = new Date();
@@ -241,7 +243,11 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     piiTablesCount: scan.piiTablesCount,
     tablesWithDescription: scan.details.filter((d) => d.comment || d.generatedDescription).length,
     tablesWithTags: scan.details.filter((d) => {
-      try { return JSON.parse(d.tagsJson ?? "[]").length > 0; } catch { return false; }
+      try {
+        return JSON.parse(d.tagsJson ?? "[]").length > 0;
+      } catch {
+        return false;
+      }
     }).length,
     tablesWithOwner: scan.details.filter((d) => d.owner).length,
     tablesWithTier: scan.details.filter((d) => d.dataTier).length,
@@ -255,7 +261,9 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     tablesNeedingVacuum: scan.tablesNeedingVacuum,
     tablesWithStreaming: scan.tablesWithStreaming,
     tablesWithCDF: scan.tablesWithCDF,
-    avgHealthScore: scan.histories.reduce((s, h) => s + (h.healthScore ?? 0), 0) / Math.max(scan.histories.length, 1),
+    avgHealthScore:
+      scan.histories.reduce((s, h) => s + (h.healthScore ?? 0), 0) /
+      Math.max(scan.histories.length, 1),
     tablesWithAutoOptimize: adoption.stats.autoOptimizeCount,
     tablesWithLiquidClustering: adoption.stats.liquidClusteringCount,
   });
@@ -265,19 +273,31 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     { metric: "  Governance Pillar", value: `${maturity.pillars.governance.score}/100` },
     { metric: "  Architecture Pillar", value: `${maturity.pillars.architecture.score}/100` },
     { metric: "  Operations Pillar", value: `${maturity.pillars.operations.score}/100` },
-    { metric: "  Analytics Readiness Pillar", value: `${maturity.pillars.analyticsReadiness.score}/100` },
+    {
+      metric: "  Analytics Readiness Pillar",
+      value: `${maturity.pillars.analyticsReadiness.score}/100`,
+    },
     { metric: "FEATURE ADOPTION SCORE", value: `${adoption.adoptionScore}/100` },
     { metric: "", value: "" },
     { metric: "Scan ID", value: scan.scanId },
     { metric: "UC Scope", value: scan.ucPath },
     { metric: "Scanned At", value: scan.createdAt.toISOString() },
-    { metric: "Scan Duration", value: scan.scanDurationMs ? `${(scan.scanDurationMs / 1000).toFixed(1)}s` : "—" },
+    {
+      metric: "Scan Duration",
+      value: scan.scanDurationMs ? `${(scan.scanDurationMs / 1000).toFixed(1)}s` : "—",
+    },
     { metric: "Total Tables", value: scan.tableCount },
     { metric: "Tables via Lineage Discovery", value: scan.lineageDiscoveredCount },
     { metric: "Total Size", value: humanSize(scan.totalSizeBytes) },
-    { metric: "Total Rows", value: humanNumber(scan.details.reduce((sum, d) => sum + Number(d.numRows ?? 0), 0)) },
+    {
+      metric: "Total Rows",
+      value: humanNumber(scan.details.reduce((sum, d) => sum + Number(d.numRows ?? 0), 0)),
+    },
     { metric: "Total Files", value: scan.totalFiles },
-    { metric: "Managed vs External", value: `${scan.details.filter((d) => d.isManaged).length} / ${scan.details.filter((d) => !d.isManaged).length}` },
+    {
+      metric: "Managed vs External",
+      value: `${scan.details.filter((d) => d.isManaged).length} / ${scan.details.filter((d) => !d.isManaged).length}`,
+    },
     { metric: "Tables with Streaming", value: scan.tablesWithStreaming },
     { metric: "Tables with CDF", value: scan.tablesWithCDF },
     { metric: "Tables Needing OPTIMIZE", value: scan.tablesNeedingOptimize },
@@ -287,21 +307,31 @@ function addExecutiveSummary(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
     { metric: "Redundancy Pairs", value: scan.redundancyPairsCount },
     { metric: "Data Products", value: scan.dataProductCount },
     { metric: "Avg Governance Score", value: scan.avgGovernanceScore.toFixed(1) },
-    ...(((scan.genieSpaceCount ?? 0) + (scan.dashboardCount ?? 0) + (scan.metricViewCount ?? 0) > 0) ? [
-      { metric: "", value: "" as string | number },
-      { metric: "ANALYTICS COVERAGE", value: "" as string | number },
-      { metric: "Existing Genie Spaces", value: scan.genieSpaceCount ?? 0 },
-      { metric: "Existing Dashboards", value: scan.dashboardCount ?? 0 },
-      { metric: "Existing Metric Views", value: scan.metricViewCount ?? 0 },
-      { metric: "Table Coverage", value: `${(scan.analyticsCoveragePercent ?? 0).toFixed(0)}%` },
-    ] : []),
+    ...((scan.genieSpaceCount ?? 0) + (scan.dashboardCount ?? 0) + (scan.metricViewCount ?? 0) > 0
+      ? [
+          { metric: "", value: "" as string | number },
+          { metric: "ANALYTICS COVERAGE", value: "" as string | number },
+          { metric: "Existing Genie Spaces", value: scan.genieSpaceCount ?? 0 },
+          { metric: "Existing Dashboards", value: scan.dashboardCount ?? 0 },
+          { metric: "Existing Metric Views", value: scan.metricViewCount ?? 0 },
+          {
+            metric: "Table Coverage",
+            value: `${(scan.analyticsCoveragePercent ?? 0).toFixed(0)}%`,
+          },
+        ]
+      : []),
   ];
 
   for (const r of rows) {
     const row = sheet.addRow(r);
     // Bold the headline maturity/adoption rows
-    if (typeof r.metric === "string" && r.metric.startsWith("DATA MATURITY") || r.metric.startsWith("FEATURE ADOPTION")) {
-      row.eachCell((cell) => { cell.font = { bold: true, size: 12 }; });
+    if (
+      (typeof r.metric === "string" && r.metric.startsWith("DATA MATURITY")) ||
+      r.metric.startsWith("FEATURE ADOPTION")
+    ) {
+      row.eachCell((cell) => {
+        cell.font = { bold: true, size: 12 };
+      });
     }
   }
   styleHeaderRow(sheet);
@@ -416,7 +446,23 @@ function addDataProducts(wb: ExcelJS.Workbook, scan: ScanWithRelations): void {
 
   const products = scan.insights
     .filter((i) => i.insightType === "data_product")
-    .map((i) => safeJSON<{ productName: string; description: string; tables: string[]; primaryDomain: string; maturityLevel: string; ownerHint: string }>(i.payloadJson, { productName: "", description: "", tables: [], primaryDomain: "", maturityLevel: "", ownerHint: "" }));
+    .map((i) =>
+      safeJSON<{
+        productName: string;
+        description: string;
+        tables: string[];
+        primaryDomain: string;
+        maturityLevel: string;
+        ownerHint: string;
+      }>(i.payloadJson, {
+        productName: "",
+        description: "",
+        tables: [],
+        primaryDomain: "",
+        maturityLevel: "",
+        ownerHint: "",
+      }),
+    );
 
   for (const p of products) {
     sheet.addRow({
@@ -450,7 +496,23 @@ function addSensitivityPII(wb: ExcelJS.Workbook, scan: ScanWithRelations): void 
 
   const piiInsights = scan.insights
     .filter((i) => i.insightType === "pii_detection")
-    .map((i) => safeJSON<{ tableFqn: string; columnName: string; classification: string; confidence: string; reason: string; regulation: string }>(i.payloadJson, { tableFqn: "", columnName: "", classification: "", confidence: "", reason: "", regulation: "" }));
+    .map((i) =>
+      safeJSON<{
+        tableFqn: string;
+        columnName: string;
+        classification: string;
+        confidence: string;
+        reason: string;
+        regulation: string;
+      }>(i.payloadJson, {
+        tableFqn: "",
+        columnName: "",
+        classification: "",
+        confidence: "",
+        reason: "",
+        regulation: "",
+      }),
+    );
 
   for (const p of piiInsights) {
     sheet.addRow({
@@ -484,7 +546,23 @@ function addImplicitRelationships(wb: ExcelJS.Workbook, scan: ScanWithRelations)
 
   const rels = scan.insights
     .filter((i) => i.insightType === "implicit_relationship")
-    .map((i) => safeJSON<{ sourceTableFqn: string; sourceColumn: string; targetTableFqn: string; targetColumn: string; confidence: string; reasoning: string }>(i.payloadJson, { sourceTableFqn: "", sourceColumn: "", targetTableFqn: "", targetColumn: "", confidence: "", reasoning: "" }));
+    .map((i) =>
+      safeJSON<{
+        sourceTableFqn: string;
+        sourceColumn: string;
+        targetTableFqn: string;
+        targetColumn: string;
+        confidence: string;
+        reasoning: string;
+      }>(i.payloadJson, {
+        sourceTableFqn: "",
+        sourceColumn: "",
+        targetTableFqn: "",
+        targetColumn: "",
+        confidence: "",
+        reasoning: "",
+      }),
+    );
 
   for (const r of rels) {
     sheet.addRow({
@@ -518,7 +596,23 @@ function addRedundancyReport(wb: ExcelJS.Workbook, scan: ScanWithRelations): voi
 
   const pairs = scan.insights
     .filter((i) => i.insightType === "redundancy")
-    .map((i) => safeJSON<{ tableA: string; tableB: string; similarityPercent: number; sharedColumns: string[]; reason: string; recommendation: string }>(i.payloadJson, { tableA: "", tableB: "", similarityPercent: 0, sharedColumns: [], reason: "", recommendation: "" }));
+    .map((i) =>
+      safeJSON<{
+        tableA: string;
+        tableB: string;
+        similarityPercent: number;
+        sharedColumns: string[];
+        reason: string;
+        recommendation: string;
+      }>(i.payloadJson, {
+        tableA: "",
+        tableB: "",
+        similarityPercent: 0,
+        sharedColumns: [],
+        reason: "",
+        recommendation: "",
+      }),
+    );
 
   pairs.sort((a, b) => b.similarityPercent - a.similarityPercent);
 
@@ -553,7 +647,13 @@ function addGovernanceScorecard(wb: ExcelJS.Workbook, scan: ScanWithRelations): 
 
   const gaps = scan.insights
     .filter((i) => i.insightType === "governance_gap")
-    .map((i) => safeJSON<{ tableFqn: string; overallScore: number; gaps: Array<{ category: string; severity: string; detail: string; recommendation: string }> }>(i.payloadJson, { tableFqn: "", overallScore: 0, gaps: [] }));
+    .map((i) =>
+      safeJSON<{
+        tableFqn: string;
+        overallScore: number;
+        gaps: Array<{ category: string; severity: string; detail: string; recommendation: string }>;
+      }>(i.payloadJson, { tableFqn: "", overallScore: 0, gaps: [] }),
+    );
 
   gaps.sort((a, b) => a.overallScore - b.overallScore);
 
@@ -563,8 +663,14 @@ function addGovernanceScorecard(wb: ExcelJS.Workbook, scan: ScanWithRelations): 
       fqn: g.tableFqn,
       score: g.overallScore,
       categories: g.gaps.map((gap) => gap.category).join(", "),
-      gaps: g.gaps.slice(0, 3).map((gap) => `[${gap.severity}] ${gap.detail}`).join(" | "),
-      recs: g.gaps.slice(0, 3).map((gap) => gap.recommendation).join(" | "),
+      gaps: g.gaps
+        .slice(0, 3)
+        .map((gap) => `[${gap.severity}] ${gap.detail}`)
+        .join(" | "),
+      recs: g.gaps
+        .slice(0, 3)
+        .map((gap) => gap.recommendation)
+        .join(" | "),
     });
     rowNum++;
     const scoreCell = row.getCell("score");
@@ -751,11 +857,12 @@ function addFeatureAdoption(wb: ExcelJS.Workbook, scan: ScanWithRelations): void
     category: "",
     severity: "",
     current: `${adoption.adoptionScore}/100`,
-    recommendation: adoption.adoptionScore >= 80
-      ? "Strong feature adoption. Focus on remaining gaps."
-      : adoption.adoptionScore >= 50
-        ? "Moderate adoption. Several opportunities to improve performance and governance."
-        : "Low adoption. Significant opportunities to leverage Databricks platform features.",
+    recommendation:
+      adoption.adoptionScore >= 80
+        ? "Strong feature adoption. Focus on remaining gaps."
+        : adoption.adoptionScore >= 50
+          ? "Moderate adoption. Several opportunities to improve performance and governance."
+          : "Low adoption. Significant opportunities to leverage Databricks platform features.",
     affected: "",
     examples: "",
   });
@@ -776,11 +883,12 @@ function addFeatureAdoption(wb: ExcelJS.Workbook, scan: ScanWithRelations): void
     });
 
     const sevCell = row.getCell("severity");
-    const { fill, font } = f.severity === "high"
-      ? { fill: RED_FILL, font: RED_FONT }
-      : f.severity === "medium"
-        ? { fill: AMBER_FILL, font: AMBER_FONT }
-        : { fill: GREEN_FILL, font: GREEN_FONT };
+    const { fill, font } =
+      f.severity === "high"
+        ? { fill: RED_FILL, font: RED_FONT }
+        : f.severity === "medium"
+          ? { fill: AMBER_FILL, font: AMBER_FONT }
+          : { fill: GREEN_FILL, font: GREEN_FONT };
     sevCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
     sevCell.font = { color: { argb: font }, bold: true };
   }
@@ -849,13 +957,21 @@ function addAnalyticsCoverage(wb: ExcelJS.Workbook, scan: ScanWithRelations): vo
       { header: "Value", key: "value", width: 55 },
     ];
 
-    sheet.addRow({ metric: "ANALYTICS MATURITY SCORE", value: `${maturity.overallScore}/100 — ${maturity.level}` });
+    sheet.addRow({
+      metric: "ANALYTICS MATURITY SCORE",
+      value: `${maturity.overallScore}/100 — ${maturity.level}`,
+    });
     const scoreRow = sheet.getRow(sheet.rowCount);
-    scoreRow.eachCell((cell) => { cell.font = { bold: true, size: 12 }; });
+    scoreRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 12 };
+    });
     applyScoreCell(scoreRow.getCell("value"), maturity.overallScore);
 
     for (const [dim, data] of Object.entries(maturity.dimensions)) {
-      sheet.addRow({ metric: `  ${dim.charAt(0).toUpperCase() + dim.slice(1)}`, value: `${data.score}/100 — ${data.summary}` });
+      sheet.addRow({
+        metric: `  ${dim.charAt(0).toUpperCase() + dim.slice(1)}`,
+        value: `${data.score}/100 — ${data.summary}`,
+      });
     }
 
     sheet.addRow({ metric: "", value: "" });
@@ -863,7 +979,9 @@ function addAnalyticsCoverage(wb: ExcelJS.Workbook, scan: ScanWithRelations): vo
     if (maturity.uncoveredDomains.length > 0) {
       sheet.addRow({ metric: "UNCOVERED DOMAINS", value: maturity.uncoveredDomains.join(", ") });
       const ucRow = sheet.getRow(sheet.rowCount);
-      ucRow.eachCell((cell) => { cell.font = { bold: true }; });
+      ucRow.eachCell((cell) => {
+        cell.font = { bold: true };
+      });
     }
 
     sheet.addRow({ metric: "", value: "" });

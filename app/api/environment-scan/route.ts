@@ -23,10 +23,7 @@ export async function GET() {
     logger.error("[api/environment-scan] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -36,9 +33,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const ucMetadata = body.ucMetadata;
-    const lineageDepth = typeof body.lineageDepth === "number"
-      ? Math.min(Math.max(Math.round(body.lineageDepth), 1), 10)
-      : undefined;
+    const lineageDepth =
+      typeof body.lineageDepth === "number"
+        ? Math.min(Math.max(Math.round(body.lineageDepth), 1), 10)
+        : undefined;
     const assetDiscoveryEnabled = body.assetDiscoveryEnabled === true;
 
     if (!ucMetadata || typeof ucMetadata !== "string") {
@@ -46,35 +44,29 @@ export async function POST(request: NextRequest) {
         hasUcMetadata: !!ucMetadata,
         ucMetadataType: typeof ucMetadata,
       });
-      return NextResponse.json(
-        { error: "ucMetadata is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "ucMetadata is required" }, { status: 400 });
     }
 
     const scanId = uuidv4();
 
     // Import dynamically to avoid circular dependencies
-    const { runStandaloneEnrichment } = await import(
-      "@/lib/pipeline/standalone-scan"
-    );
+    const { runStandaloneEnrichment } = await import("@/lib/pipeline/standalone-scan");
 
     // Fire and forget -- the scan runs asynchronously
-    runStandaloneEnrichment(scanId, ucMetadata, lineageDepth, assetDiscoveryEnabled).catch((error) => {
-      logger.error("[api/environment-scan] Standalone scan failed", {
-        scanId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+    runStandaloneEnrichment(scanId, ucMetadata, lineageDepth, assetDiscoveryEnabled).catch(
+      (error) => {
+        logger.error("[api/environment-scan] Standalone scan failed", {
+          scanId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
 
     return NextResponse.json({ scanId }, { status: 201 });
   } catch (error) {
     logger.error("[api/environment-scan] POST failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

@@ -3,13 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,9 +87,8 @@ export function AIObservabilityTab({
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center justify-center py-12">
           <p className="text-muted-foreground">
-            No prompt logs available for this run. Logs are captured
-            automatically for runs executed after the audit logging feature was
-            enabled.
+            No prompt logs available for this run. Logs are captured automatically for runs executed
+            after the audit logging feature was enabled.
           </p>
         </CardContent>
       </Card>
@@ -152,9 +145,7 @@ export function AIObservabilityTab({
                 <p className="text-xs text-muted-foreground">Avg Duration</p>
               </div>
               <p className="mt-1 text-2xl font-bold">
-                {stats.avgDurationMs > 0
-                  ? `${(stats.avgDurationMs / 1000).toFixed(1)}s`
-                  : "N/A"}
+                {stats.avgDurationMs > 0 ? `${(stats.avgDurationMs / 1000).toFixed(1)}s` : "N/A"}
               </p>
             </CardContent>
           </Card>
@@ -165,9 +156,7 @@ export function AIObservabilityTab({
                 <p className="text-xs text-muted-foreground">Total Duration</p>
               </div>
               <p className="mt-1 text-2xl font-bold">
-                {stats.totalDurationMs > 0
-                  ? `${Math.round(stats.totalDurationMs / 1000)}s`
-                  : "N/A"}
+                {stats.totalDurationMs > 0 ? `${Math.round(stats.totalDurationMs / 1000)}s` : "N/A"}
               </p>
             </CardContent>
           </Card>
@@ -183,8 +172,7 @@ export function AIObservabilityTab({
               LLM Call Log ({logs.length} calls)
             </CardTitle>
             <CardDescription>
-              Every AI query call with prompt, response, timing, and honesty
-              scores
+              Every AI query call with prompt, response, timing, and honesty scores
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -200,9 +188,7 @@ export function AIObservabilityTab({
                         <button
                           className="flex w-full items-center justify-between p-3 text-left transition-colors hover:bg-muted/50"
                           onClick={() =>
-                            setExpandedLog(
-                              expandedLog === log.logId ? null : log.logId
-                            )
+                            setExpandedLog(expandedLog === log.logId ? null : log.logId)
                           }
                         >
                           <div className="flex items-center gap-3">
@@ -212,9 +198,7 @@ export function AIObservabilityTab({
                               <XCircle className="h-4 w-4 shrink-0 text-red-500" />
                             )}
                             <div>
-                              <p className="text-sm font-medium">
-                                {log.promptKey}
-                              </p>
+                              <p className="text-sm font-medium">{log.promptKey}</p>
                               <p className="text-xs text-muted-foreground">
                                 {log.model} &middot; temp {log.temperature}
                                 {log.durationMs != null &&
@@ -255,8 +239,7 @@ export function AIObservabilityTab({
                                 </p>
                                 <pre className="max-h-48 overflow-auto rounded-md bg-muted/50 p-2 font-mono leading-relaxed">
                                   {log.renderedPrompt.length > 2000
-                                    ? log.renderedPrompt.slice(0, 2000) +
-                                      "\n... (truncated)"
+                                    ? log.renderedPrompt.slice(0, 2000) + "\n... (truncated)"
                                     : log.renderedPrompt}
                                 </pre>
                               </div>
@@ -267,20 +250,15 @@ export function AIObservabilityTab({
                                   </p>
                                   <pre className="max-h-48 overflow-auto rounded-md bg-muted/50 p-2 font-mono leading-relaxed">
                                     {log.rawResponse.length > 2000
-                                      ? log.rawResponse.slice(0, 2000) +
-                                        "\n... (truncated)"
+                                      ? log.rawResponse.slice(0, 2000) + "\n... (truncated)"
                                       : log.rawResponse}
                                   </pre>
                                 </div>
                               )}
                               {log.errorMessage && (
                                 <div>
-                                  <p className="mb-1 font-semibold text-destructive">
-                                    Error
-                                  </p>
-                                  <p className="text-destructive">
-                                    {log.errorMessage}
-                                  </p>
+                                  <p className="mb-1 font-semibold text-destructive">Error</p>
+                                  <p className="text-destructive">{log.errorMessage}</p>
                                 </div>
                               )}
                             </div>
@@ -321,16 +299,13 @@ export function AIObservabilityTab({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Rerun this pipeline?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will create a new pipeline run using the same
-                    configuration and start it immediately. The run will consume
-                    LLM and SQL Warehouse resources.
+                    This will create a new pipeline run using the same configuration and start it
+                    immediately. The run will consume LLM and SQL Warehouse resources.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={onRerun}>
-                    Rerun
-                  </AlertDialogAction>
+                  <AlertDialogAction onClick={onRerun}>Rerun</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>

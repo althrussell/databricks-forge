@@ -15,18 +15,12 @@ export async function GET(request: NextRequest) {
     const format = request.nextUrl.searchParams.get("format") ?? "excel";
 
     if (format !== "excel") {
-      return NextResponse.json(
-        { error: "Only excel format is supported" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Only excel format is supported" }, { status: 400 });
     }
 
     const aggregate = await getAggregateForExcel();
     if (!aggregate) {
-      return NextResponse.json(
-        { error: "No environment scans found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "No environment scans found" }, { status: 404 });
     }
 
     const buffer = await generateEnvironmentExcel(aggregate);
@@ -35,8 +29,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(uint8, {
       status: 200,
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="estate-report-aggregate.xlsx"`,
       },
     });
@@ -46,7 +39,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(
       { error: "Failed to export aggregate environment report" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

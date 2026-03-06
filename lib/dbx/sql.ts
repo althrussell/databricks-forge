@@ -97,7 +97,7 @@ export async function executeSQL(
   sql: string,
   catalog?: string,
   schema?: string,
-  options?: ExecuteSQLOptions
+  options?: ExecuteSQLOptions,
 ): Promise<SqlResult> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/sql/statements/`;
@@ -120,14 +120,12 @@ export async function executeSQL(
   const response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify(body) },
-    submitTimeoutMs
+    submitTimeoutMs,
   );
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
-      `SQL Statement Execution API error (${response.status}): ${text}`
-    );
+    throw new Error(`SQL Statement Execution API error (${response.status}): ${text}`);
   }
 
   let result: StatementResponse = await response.json();
@@ -144,9 +142,7 @@ export async function executeSQL(
   }
 
   if (result.status.state === "FAILED") {
-    throw new Error(
-      `SQL execution failed: ${result.status.error?.message ?? "Unknown error"}`
-    );
+    throw new Error(`SQL execution failed: ${result.status.error?.message ?? "Unknown error"}`);
   }
 
   if (result.status.state === "CANCELED") {
@@ -175,10 +171,11 @@ export async function executeSQL(
       const chunkResp: Response = await fetchWithTimeout(
         `${config.host}${nextLink}`,
         { headers: chunkHeaders },
-        TIMEOUTS.SQL_CHUNK
+        TIMEOUTS.SQL_CHUNK,
       );
       if (!chunkResp.ok) break;
-      const chunk: { data_array?: string[][]; next_chunk_internal_link?: string } = await chunkResp.json();
+      const chunk: { data_array?: string[][]; next_chunk_internal_link?: string } =
+        await chunkResp.json();
       if (chunk.data_array) {
         allRows = allRows.concat(chunk.data_array);
       }
@@ -200,7 +197,7 @@ export async function executeSQLMapped<T>(
   sql: string,
   mapper: (row: string[], columns: SqlColumn[]) => T,
   catalog?: string,
-  schema?: string
+  schema?: string,
 ): Promise<T[]> {
   const result = await executeSQL(sql, catalog, schema);
   return result.rows.map((row) => mapper(row, result.columns));
@@ -212,7 +209,7 @@ export async function executeSQLMapped<T>(
 export async function executeSQLScalar<T = string>(
   sql: string,
   catalog?: string,
-  schema?: string
+  schema?: string,
 ): Promise<T | null> {
   const result = await executeSQL(sql, catalog, schema);
   if (result.rows.length === 0 || result.rows[0].length === 0) return null;
@@ -223,17 +220,11 @@ export async function executeSQLScalar<T = string>(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-async function pollStatement(
-  statementId: string
-): Promise<StatementResponse> {
+async function pollStatement(statementId: string): Promise<StatementResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/sql/statements/${statementId}`;
   const headers = await getHeaders();
-  const response = await fetchWithTimeout(
-    url,
-    { method: "GET", headers },
-    TIMEOUTS.SQL_POLL
-  );
+  const response = await fetchWithTimeout(url, { method: "GET", headers }, TIMEOUTS.SQL_POLL);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Poll error (${response.status}): ${text}`);

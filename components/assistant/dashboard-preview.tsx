@@ -58,7 +58,9 @@ export function DashboardPreview({
           <LayoutDashboard className="size-4 text-primary" />
           <p className="text-sm font-medium">{title}</p>
           {isExisting && (
-            <Badge variant="secondary" className="text-[10px]">Existing</Badge>
+            <Badge variant="secondary" className="text-[10px]">
+              Existing
+            </Badge>
           )}
         </div>
         {dashboardUrl && (
@@ -71,9 +73,7 @@ export function DashboardPreview({
         )}
       </div>
 
-      {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      )}
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
 
       {widgets.length > 0 && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -91,7 +91,9 @@ export function DashboardPreview({
 
       {datasets.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[10px] font-medium text-muted-foreground">Datasets ({datasets.length})</p>
+          <p className="text-[10px] font-medium text-muted-foreground">
+            Datasets ({datasets.length})
+          </p>
           {datasets.map((ds, i) => (
             <div key={i} className="rounded-md bg-muted/30 p-2">
               <p className="text-xs font-medium">{ds.displayName}</p>

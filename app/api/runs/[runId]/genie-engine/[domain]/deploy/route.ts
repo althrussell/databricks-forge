@@ -25,7 +25,7 @@ import { revalidateSerializedSpace } from "@/lib/genie/deploy-validation";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string; domain: string }> }
+  { params }: { params: Promise<{ runId: string; domain: string }> },
 ) {
   try {
     const { runId, domain } = await params;
@@ -40,24 +40,26 @@ export async function POST(
     }
 
     const recs = await getGenieRecommendationsByRunId(runId);
-    const rec = recs.find(
-      (r) => r.domain.toLowerCase() === decodedDomain.toLowerCase()
-    );
+    const rec = recs.find((r) => r.domain.toLowerCase() === decodedDomain.toLowerCase());
 
     if (!rec) {
       return NextResponse.json(
         { error: `No recommendation found for domain "${decodedDomain}"` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     const config = getConfig();
-    const body = await request.json().catch(() => ({})) as Record<string, string>;
+    const body = (await request.json().catch(() => ({}))) as Record<string, string>;
     const authMode = (body.authMode as GenieAuthMode) || undefined;
     const validation = await revalidateSerializedSpace(rec.serializedSpace);
     if (!validation.ok) {
       return NextResponse.json(
-        { error: validation.error, code: validation.code, diagnostics: validation.diagnostics ?? null },
+        {
+          error: validation.error,
+          code: validation.code,
+          diagnostics: validation.diagnostics ?? null,
+        },
         { status: 409 },
       );
     }
@@ -65,7 +67,7 @@ export async function POST(
     // Check if there's already a tracked space for this run+domain
     const tracked = await listTrackedGenieSpaces(runId);
     const existing = tracked.find(
-      (t) => t.domain.toLowerCase() === decodedDomain.toLowerCase() && t.status !== "trashed"
+      (t) => t.domain.toLowerCase() === decodedDomain.toLowerCase() && t.status !== "trashed",
     );
 
     let spaceId: string;

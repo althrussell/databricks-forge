@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { resilientFetch } from "@/lib/resilient-fetch";
 import { toast } from "sonner";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
-import type { PromptLogEntry, PromptLogStats } from "@/components/pipeline/run-detail/ai-observability-tab";
+import type {
+  PromptLogEntry,
+  PromptLogStats,
+} from "@/components/pipeline/run-detail/ai-observability-tab";
 
 export function useRunDetail(runId: string) {
   const router = useRouter();
@@ -44,9 +47,8 @@ export function useRunDetail(runId: string) {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const url = useCases.length === 0
-        ? `/api/runs/${runId}?fields=summary`
-        : `/api/runs/${runId}`;
+      const url =
+        useCases.length === 0 ? `/api/runs/${runId}?fields=summary` : `/api/runs/${runId}`;
       const res = await resilientFetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error("Run not found");
       const data = await res.json();
@@ -74,8 +76,9 @@ export function useRunDetail(runId: string) {
         setPromptLogs(data.logs ?? []);
         setPromptStats(data.stats ?? null);
       }
-    } catch { /* non-critical */ }
-    finally {
+    } catch {
+      /* non-critical */
+    } finally {
       setLogsLoading(false);
       setLogsLoaded(true);
     }
@@ -98,14 +101,16 @@ export function useRunDetail(runId: string) {
         const data = await res.json();
         setRun(data.run);
         setIndustryEditing(false);
-        toast.success(industryId ? "Industry outcome map assigned" : "Industry outcome map removed");
+        toast.success(
+          industryId ? "Industry outcome map assigned" : "Industry outcome map removed",
+        );
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to update industry");
       } finally {
         setIndustrySaving(false);
       }
     },
-    [run, runId]
+    [run, runId],
   );
 
   const handleRerun = useCallback(async () => {
@@ -159,13 +164,22 @@ export function useRunDetail(runId: string) {
         const completed = (data.scans ?? [])
           .filter((s: { status: string }) => s.status === "completed")
           .slice(0, 20)
-          .map((s: { id: string; datasetCount?: number; reportCount?: number; createdAt?: string }) => ({
-            id: s.id,
-            label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
-          }));
+          .map(
+            (s: {
+              id: string;
+              datasetCount?: number;
+              reportCount?: number;
+              createdAt?: string;
+            }) => ({
+              id: s.id,
+              label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
+            }),
+          );
         setPbiScans(completed);
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }, []);
 
   const enrichWithPbi = useCallback(async () => {
@@ -183,7 +197,9 @@ export function useRunDetail(runId: string) {
         setPbiDialogOpen(false);
         fetchRun();
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
     setPbiEnriching(false);
   }, [pbiSelectedScan, runId, fetchRun]);
 
@@ -223,11 +239,15 @@ export function useRunDetail(runId: string) {
                     }
                   }
                 }
-              } catch { /* ignore */ }
+              } catch {
+                /* ignore */
+              }
             }, 3000);
           }
         } else setGenieGenerating(false);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     checkGenieStatus();
     return () => {
@@ -263,11 +283,15 @@ export function useRunDetail(runId: string) {
                     }
                   }
                 }
-              } catch { /* ignore */ }
+              } catch {
+                /* ignore */
+              }
             }, 3000);
           }
         } else setDashboardGenerating(false);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     checkDashboardStatus();
     return () => {

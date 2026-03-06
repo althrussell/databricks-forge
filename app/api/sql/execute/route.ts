@@ -35,9 +35,6 @@ export async function POST(req: NextRequest) {
     return Response.json(result);
   } catch (err) {
     logger.error("[api/sql/execute] Error", { error: String(err) });
-    return Response.json(
-      { error: "Failed to execute SQL" },
-      { status: 500 },
-    );
+    return Response.json({ error: "Failed to execute SQL" }, { status: 500 });
   }
 }

@@ -16,16 +16,9 @@
  *   8. Governance Gap Analysis (composite)
  */
 
-import {
-  chatCompletion,
-  type ChatMessage,
-} from "@/lib/dbx/model-serving";
+import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { formatPrompt } from "@/lib/ai/templates";
-import {
-  buildTokenAwareBatches,
-  estimateTokens,
-  truncateColumns,
-} from "@/lib/ai/token-budget";
+import { buildTokenAwareBatches, estimateTokens, truncateColumns } from "@/lib/ai/token-budget";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { logger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
@@ -93,7 +86,10 @@ const MAX_COLS_DESCRIPTIONS = 15;
 // ---------------------------------------------------------------------------
 
 function renderDomainTable(t: TableInput): string {
-  const cols = t.columns.slice(0, MAX_COLS_DOMAIN).map((c) => c.name).join(", ");
+  const cols = t.columns
+    .slice(0, MAX_COLS_DOMAIN)
+    .map((c) => c.name)
+    .join(", ");
   return `- ${t.fqn}: columns=[${cols}]${t.comment ? ` comment="${t.comment}"` : ""}${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`;
 }
 
@@ -105,7 +101,10 @@ function renderPIITable(t: TableInput): string {
 }
 
 function renderDescriptionTable(t: TableInput): string {
-  const cols = t.columns.slice(0, MAX_COLS_DESCRIPTIONS).map((c) => c.name).join(", ");
+  const cols = t.columns
+    .slice(0, MAX_COLS_DESCRIPTIONS)
+    .map((c) => c.name)
+    .join(", ");
   return `- ${t.fqn}: columns=[${cols}]${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`;
 }
 
@@ -136,18 +135,25 @@ function renderProductTable(t: TableInput): string {
 function renderGovernanceTable(
   t: TableInput,
   sensitiveTableSet: Set<string>,
-  lineagedTables: Set<string>
+  lineagedTables: Set<string>,
 ): string {
   const gaps: string[] = [];
   if (!t.comment) gaps.push("no_description");
   if (!t.detail?.owner) gaps.push("no_owner");
   if (t.tags.length === 0) gaps.push("no_tags");
-  if (sensitiveTableSet.has(t.fqn) && !t.tags.some((tag) => tag.toLowerCase().includes("pii") || tag.toLowerCase().includes("sensitive"))) {
+  if (
+    sensitiveTableSet.has(t.fqn) &&
+    !t.tags.some(
+      (tag) => tag.toLowerCase().includes("pii") || tag.toLowerCase().includes("sensitive"),
+    )
+  ) {
     gaps.push("pii_untagged");
   }
   if (!lineagedTables.has(t.fqn)) gaps.push("no_lineage");
   if (t.history) {
-    const dOptimize = t.history.lastOptimizeTimestamp ? daysSince(t.history.lastOptimizeTimestamp) : 999;
+    const dOptimize = t.history.lastOptimizeTimestamp
+      ? daysSince(t.history.lastOptimizeTimestamp)
+      : 999;
     const dVacuum = t.history.lastVacuumTimestamp ? daysSince(t.history.lastVacuumTimestamp) : 999;
     const dWrite = t.history.lastWriteTimestamp ? daysSince(t.history.lastWriteTimestamp) : 999;
     if (dOptimize > 30) gaps.push("stale_optimize");
@@ -161,10 +167,7 @@ function renderGovernanceTable(
  * Compute the base token cost of a prompt template (everything except the
  * `{table_list}` placeholder content).
  */
-function basePromptTokens(
-  templateKey: string,
-  extraVars: Record<string, string> = {}
-): number {
+function basePromptTokens(templateKey: string, extraVars: Record<string, string> = {}): number {
   const vars: Record<string, string> = { table_list: "", ...extraVars };
   const prompt = formatPrompt(templateKey as never, vars);
   return estimateTokens(prompt);
@@ -183,7 +186,7 @@ function basePromptTokens(
 export async function runIntelligenceLayer(
   tables: TableInput[],
   lineageGraph: LineageGraph,
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<IntelligenceResult> {
   const passResults: Record<string, "success" | "failed" | "skipped"> = {};
   const result: IntelligenceResult = {
@@ -318,7 +321,11 @@ export async function runIntelligenceLayer(
   try {
     progress("governance", 0);
     result.governanceGaps = await passGovernanceGaps(
-      tables, lineageGraph, result.sensitivities, result.domains, options
+      tables,
+      lineageGraph,
+      result.sensitivities,
+      result.domains,
+      options,
     );
     passResults["governance"] = "success";
     progress("governance", 100);
@@ -332,7 +339,11 @@ export async function runIntelligenceLayer(
     try {
       progress("analytics-maturity", 0);
       result.analyticsMaturity = await passAnalyticsMaturity(
-        tables, result.domains, result.tierAssignments, options.discoveryResult, options
+        tables,
+        result.domains,
+        result.tierAssignments,
+        options.discoveryResult,
+        options,
       );
       passResults["analytics-maturity"] = "success";
       progress("analytics-maturity", 100);
@@ -363,7 +374,7 @@ export async function runIntelligenceLayer(
 async function passDomainCategorisation(
   tables: TableInput[],
   lineageGraph: LineageGraph,
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<DataDomain[]> {
   const allAssignments: Array<{ table_fqn: string; domain: string; subdomain: string }> = [];
   const lineageSummary = buildLineageSummary(lineageGraph, 20);
@@ -401,7 +412,10 @@ async function passDomainCategorisation(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(content, "env-intelligence:domains");
+    const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(
+      content,
+      "env-intelligence:domains",
+    );
     allAssignments.push(...parsed);
   }
 
@@ -431,7 +445,7 @@ async function passDomainCategorisation(
 
 async function passPIIDetection(
   tables: TableInput[],
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<SensitivityClassification[]> {
   // Phase 1: Deterministic rules (fast, reliable for obvious patterns)
   const ruleResults = detectPIIDeterministic(tables);
@@ -474,7 +488,7 @@ async function passPIIDetection(
 async function passAutoDescriptions(
   tables: TableInput[],
   lineageGraph: LineageGraph,
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<Map<string, string>> {
   const descriptions = new Map<string, string>();
   const lineageSummary = buildLineageSummary(lineageGraph, 15);
@@ -493,7 +507,10 @@ async function passAutoDescriptions(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; description: string }>(content, "env-intelligence:descriptions");
+    const parsed = safeParseArray<{ table_fqn: string; description: string }>(
+      content,
+      "env-intelligence:descriptions",
+    );
     for (const p of parsed) {
       descriptions.set(p.table_fqn, p.description);
     }
@@ -508,7 +525,7 @@ async function passAutoDescriptions(
 
 async function passRedundancyDetection(
   tables: TableInput[],
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<RedundancyPair[]> {
   const allPairs: RedundancyPair[] = [];
 
@@ -536,7 +553,7 @@ async function passRedundancyDetection(
 
 async function passImplicitRelationships(
   tables: TableInput[],
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<ImplicitRelationship[]> {
   const allRels: ImplicitRelationship[] = [];
 
@@ -565,7 +582,7 @@ async function passImplicitRelationships(
 async function passMedallionTier(
   tables: TableInput[],
   lineageGraph: LineageGraph,
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<Map<string, { tier: DataTier; reasoning: string }>> {
   const assignments = new Map<string, { tier: DataTier; reasoning: string }>();
   const lineageSummary = buildLineageSummary(lineageGraph, 20);
@@ -584,7 +601,10 @@ async function passMedallionTier(
     });
 
     const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(content, "env-intelligence:tiers");
+    const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(
+      content,
+      "env-intelligence:tiers",
+    );
     for (const p of parsed) {
       if (["bronze", "silver", "gold", "system"].includes(p.tier)) {
         assignments.set(p.table_fqn, { tier: p.tier, reasoning: p.reasoning });
@@ -603,12 +623,15 @@ async function passDataProducts(
   tables: TableInput[],
   lineageGraph: LineageGraph,
   domains: DataDomain[],
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<DataProduct[]> {
   const lineageSummary = buildLineageSummary(lineageGraph, 30);
-  const domainSummary = domains.map((d) =>
-    `- ${d.domain}/${d.subdomain}: [${d.tables.slice(0, 10).join(", ")}${d.tables.length > 10 ? ` +${d.tables.length - 10} more` : ""}]`
-  ).join("\n");
+  const domainSummary = domains
+    .map(
+      (d) =>
+        `- ${d.domain}/${d.subdomain}: [${d.tables.slice(0, 10).join(", ")}${d.tables.length > 10 ? ` +${d.tables.length - 10} more` : ""}]`,
+    )
+    .join("\n");
 
   const base = basePromptTokens("ENV_DATA_PRODUCTS_PROMPT", {
     domain_summary: domainSummary ? `Domain assignments:\n${domainSummary}` : "",
@@ -642,7 +665,7 @@ async function passGovernanceGaps(
   lineageGraph: LineageGraph,
   sensitivities: SensitivityClassification[],
   _domains: DataDomain[],
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<GovernanceGap[]> {
   const allGaps: GovernanceGap[] = [];
   const sensitiveTableSet = new Set(sensitivities.map((s) => s.tableFqn));
@@ -675,16 +698,13 @@ async function passGovernanceGaps(
 // LLM call helper
 // ---------------------------------------------------------------------------
 
-interface LLMResult { content: string; finishReason: string | null; }
+interface LLMResult {
+  content: string;
+  finishReason: string | null;
+}
 
-async function callLLM(
-  prompt: string,
-  endpoint: string,
-  maxTokens = 65536,
-): Promise<LLMResult> {
-  const messages: ChatMessage[] = [
-    { role: "user", content: prompt },
-  ];
+async function callLLM(prompt: string, endpoint: string, maxTokens = 65536): Promise<LLMResult> {
+  const messages: ChatMessage[] = [{ role: "user", content: prompt }];
 
   const response = await chatCompletion({
     endpoint,
@@ -737,7 +757,7 @@ async function passAnalyticsMaturity(
   domains: DataDomain[],
   tierAssignments: Map<string, { tier: DataTier; reasoning: string }>,
   discoveryResult: DiscoveryResult,
-  options: IntelligenceOptions
+  options: IntelligenceOptions,
 ): Promise<AnalyticsMaturityAssessment> {
   const tierCounts: Record<string, number> = { bronze: 0, silver: 0, gold: 0, unknown: 0 };
   for (const [, assignment] of tierAssignments) {
@@ -753,13 +773,17 @@ async function passAnalyticsMaturity(
   if (discoveryResult.genieSpaces.length > 0) {
     assetLines.push(`### Genie Spaces (${discoveryResult.genieSpaces.length})`);
     for (const s of discoveryResult.genieSpaces.slice(0, 20)) {
-      assetLines.push(`- "${s.title}": ${s.tables.length} tables, ${s.sampleQuestionCount} questions, ${s.measureCount} measures`);
+      assetLines.push(
+        `- "${s.title}": ${s.tables.length} tables, ${s.sampleQuestionCount} questions, ${s.measureCount} measures`,
+      );
     }
   }
   if (discoveryResult.dashboards.length > 0) {
     assetLines.push(`### Dashboards (${discoveryResult.dashboards.length})`);
     for (const d of discoveryResult.dashboards.slice(0, 20)) {
-      assetLines.push(`- "${d.displayName}": ${d.tables.length} tables, ${d.datasetCount} datasets, ${d.widgetCount} widgets${d.isPublished ? " (published)" : ""}`);
+      assetLines.push(
+        `- "${d.displayName}": ${d.tables.length} tables, ${d.datasetCount} datasets, ${d.widgetCount} widgets${d.isPublished ? " (published)" : ""}`,
+      );
     }
   }
   if (discoveryResult.metricViews.length > 0) {
@@ -800,7 +824,12 @@ async function passAnalyticsMaturity(
     level?: string;
     dimensions?: Record<string, { score?: number; summary?: string }>;
     uncoveredDomains?: string[];
-    topRecommendations?: Array<{ priority?: number; action?: string; impact?: string; effort?: string }>;
+    topRecommendations?: Array<{
+      priority?: number;
+      action?: string;
+      impact?: string;
+      effort?: string;
+    }>;
   };
   const level: MaturityLevel = VALID_LEVELS.has(parsed.level as MaturityLevel)
     ? (parsed.level as MaturityLevel)
@@ -809,18 +838,32 @@ async function passAnalyticsMaturity(
     overallScore: Math.max(0, Math.min(100, parsed.overallScore ?? 0)),
     level,
     dimensions: {
-      coverage: { score: parsed.dimensions?.coverage?.score ?? 0, summary: parsed.dimensions?.coverage?.summary ?? "" },
-      depth: { score: parsed.dimensions?.depth?.score ?? 0, summary: parsed.dimensions?.depth?.summary ?? "" },
-      freshness: { score: parsed.dimensions?.freshness?.score ?? 0, summary: parsed.dimensions?.freshness?.summary ?? "" },
-      completeness: { score: parsed.dimensions?.completeness?.score ?? 0, summary: parsed.dimensions?.completeness?.summary ?? "" },
+      coverage: {
+        score: parsed.dimensions?.coverage?.score ?? 0,
+        summary: parsed.dimensions?.coverage?.summary ?? "",
+      },
+      depth: {
+        score: parsed.dimensions?.depth?.score ?? 0,
+        summary: parsed.dimensions?.depth?.summary ?? "",
+      },
+      freshness: {
+        score: parsed.dimensions?.freshness?.score ?? 0,
+        summary: parsed.dimensions?.freshness?.summary ?? "",
+      },
+      completeness: {
+        score: parsed.dimensions?.completeness?.score ?? 0,
+        summary: parsed.dimensions?.completeness?.summary ?? "",
+      },
     },
     uncoveredDomains: Array.isArray(parsed.uncoveredDomains) ? parsed.uncoveredDomains : [],
-    topRecommendations: Array.isArray(parsed.topRecommendations) ? parsed.topRecommendations.map((r, i) => ({
-      priority: r.priority ?? i + 1,
-      action: r.action ?? "",
-      impact: (r.impact ?? "medium") as "high" | "medium" | "low",
-      effort: (r.effort ?? "medium") as "high" | "medium" | "low",
-    })) : [],
+    topRecommendations: Array.isArray(parsed.topRecommendations)
+      ? parsed.topRecommendations.map((r, i) => ({
+          priority: r.priority ?? i + 1,
+          action: r.action ?? "",
+          impact: (r.impact ?? "medium") as "high" | "medium" | "low",
+          effort: (r.effort ?? "medium") as "high" | "medium" | "low",
+        }))
+      : [],
   };
 }
 
@@ -831,12 +874,11 @@ async function passAnalyticsMaturity(
 function buildLineageSummary(graph: LineageGraph, maxEdges: number): string {
   if (graph.edges.length === 0) return "";
   const edges = graph.edges.slice(0, maxEdges);
-  const lines = edges.map((e) =>
-    `${e.sourceTableFqn} -> ${e.targetTableFqn}${e.entityType ? ` (${e.entityType})` : ""}`
+  const lines = edges.map(
+    (e) => `${e.sourceTableFqn} -> ${e.targetTableFqn}${e.entityType ? ` (${e.entityType})` : ""}`,
   );
-  const suffix = graph.edges.length > maxEdges
-    ? `\n... and ${graph.edges.length - maxEdges} more edges`
-    : "";
+  const suffix =
+    graph.edges.length > maxEdges ? `\n... and ${graph.edges.length - maxEdges} more edges` : "";
   return lines.join("\n") + suffix;
 }
 
@@ -869,11 +911,21 @@ function deduplicatePairs(pairs: RedundancyPair[]): RedundancyPair[] {
  * Build TableInput array from enrichment results for the intelligence layer.
  */
 export function buildTableInputs(
-  details: Map<string, { detail: TableDetail | null; history: TableHistorySummary | null; properties: Record<string, string> }>,
+  details: Map<
+    string,
+    {
+      detail: TableDetail | null;
+      history: TableHistorySummary | null;
+      properties: Record<string, string>;
+    }
+  >,
   columns: ColumnInfo[],
-  tags: Array<{ tableFqn: string; tagName: string; tagValue: string }>
+  tags: Array<{ tableFqn: string; tagName: string; tagValue: string }>,
 ): TableInput[] {
-  const columnsByTable = new Map<string, Array<{ name: string; type: string; comment: string | null }>>();
+  const columnsByTable = new Map<
+    string,
+    Array<{ name: string; type: string; comment: string | null }>
+  >();
   for (const col of columns) {
     const existing = columnsByTable.get(col.tableFqn) ?? [];
     existing.push({ name: col.columnName, type: col.dataType, comment: col.comment });

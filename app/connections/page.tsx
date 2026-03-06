@@ -5,13 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +39,11 @@ import {
   Building2,
   ExternalLink,
 } from "lucide-react";
-import type { ConnectionSummary, CreateConnectionInput, TestConnectionResult } from "@/lib/connections/types";
+import type {
+  ConnectionSummary,
+  CreateConnectionInput,
+  TestConnectionResult,
+} from "@/lib/connections/types";
 
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
@@ -63,7 +61,9 @@ export default function ConnectionsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchConnections(); }, [fetchConnections]);
+  useEffect(() => {
+    fetchConnections();
+  }, [fetchConnections]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -108,8 +108,13 @@ export default function ConnectionsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
-              <CardHeader><Skeleton className="h-5 w-40" /><Skeleton className="h-4 w-24 mt-1" /></CardHeader>
-              <CardContent><Skeleton className="h-4 w-full" /></CardContent>
+              <CardHeader>
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-24 mt-1" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full" />
+              </CardContent>
             </Card>
           ))}
         </div>
@@ -119,7 +124,8 @@ export default function ConnectionsPage() {
             <Cable className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <h3 className="font-semibold text-lg">No connections yet</h3>
             <p className="text-muted-foreground text-sm max-w-sm mt-1">
-              Add a Microsoft Fabric or Power BI connection to scan your external analytics estate and plan a migration to Databricks.
+              Add a Microsoft Fabric or Power BI connection to scan your external analytics estate
+              and plan a migration to Databricks.
             </p>
             <Button className="mt-4" onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
@@ -186,17 +192,20 @@ function ConnectionCard({
                 className="text-xs"
               >
                 {conn.accessLevel === "admin" ? (
-                  <><ShieldCheck className="h-3 w-3 mr-1" />Admin Scanner</>
+                  <>
+                    <ShieldCheck className="h-3 w-3 mr-1" />
+                    Admin Scanner
+                  </>
                 ) : (
-                  <><Building2 className="h-3 w-3 mr-1" />Per-Workspace</>
+                  <>
+                    <Building2 className="h-3 w-3 mr-1" />
+                    Per-Workspace
+                  </>
                 )}
               </Badge>
             </CardDescription>
           </div>
-          <Badge
-            variant={conn.status === "active" ? "default" : "secondary"}
-            className="text-xs"
-          >
+          <Badge variant={conn.status === "active" ? "default" : "secondary"} className="text-xs">
             {conn.status}
           </Badge>
         </div>
@@ -242,7 +251,8 @@ function ConnectionCard({
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete connection?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete &ldquo;{conn.name}&rdquo; and all associated scan data. This action cannot be undone.
+                  This will permanently delete &ldquo;{conn.name}&rdquo; and all associated scan
+                  data. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -344,11 +354,14 @@ function AddConnectionDialog({ onCreated }: { onCreated: () => void }) {
           </div>
           {accessLevel === "admin" ? (
             <p className="text-xs text-muted-foreground">
-              Requires: Entra ID app registration, SP in allowed security group, Fabric admin enables scanner APIs. Returns full metadata including M expressions, sensitivity labels, and Fabric artifacts.
+              Requires: Entra ID app registration, SP in allowed security group, Fabric admin
+              enables scanner APIs. Returns full metadata including M expressions, sensitivity
+              labels, and Fabric artifacts.
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              No admin access needed. SP or user token with workspace Member/Admin role. Returns reduced metadata (no M expressions, no sensitivity labels).
+              No admin access needed. SP or user token with workspace Member/Admin role. Returns
+              reduced metadata (no M expressions, no sensitivity labels).
             </p>
           )}
         </div>

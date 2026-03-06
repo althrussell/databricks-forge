@@ -11,12 +11,7 @@
  */
 
 import { createHash } from "crypto";
-import type {
-  PipelineRun,
-  UseCase,
-  MetadataSnapshot,
-  BusinessContext,
-} from "@/lib/domain/types";
+import type { PipelineRun, UseCase, MetadataSnapshot, BusinessContext } from "@/lib/domain/types";
 import type {
   GenieSpaceRecommendation,
   SerializedSpace,
@@ -38,9 +33,7 @@ import { statementToQuestion } from "./engine";
 // ---------------------------------------------------------------------------
 
 function makeId(runId: string, domain: string, index: number): string {
-  const hash = createHash("md5")
-    .update(`${runId}:${domain}:${index}`)
-    .digest("hex");
+  const hash = createHash("md5").update(`${runId}:${domain}:${index}`).digest("hex");
   return hash.slice(0, 32);
 }
 
@@ -58,11 +51,7 @@ interface ExtractedSnippets {
  * Extract sql_snippets (measures, filters, dimensions) from use case SQL code.
  * Uses regex to find aggregate functions, WHERE conditions, and GROUP BY expressions.
  */
-function extractSqlSnippets(
-  useCases: UseCase[],
-  runId: string,
-  domain: string
-): ExtractedSnippets {
+function extractSqlSnippets(useCases: UseCase[], runId: string, domain: string): ExtractedSnippets {
   const measureMap = new Map<string, string>(); // sql -> alias
   const filterMap = new Map<string, string>(); // sql -> display_name
   const expressionMap = new Map<string, string>(); // sql -> alias
@@ -72,28 +61,21 @@ function extractSqlSnippets(
     const sql = uc.sqlCode;
 
     // Extract aggregate measures: SUM(...), AVG(...), COUNT(...), etc.
-    const aggRegex =
-      /\b(SUM|AVG|COUNT|MAX|MIN|COUNT\s*\(\s*DISTINCT)\s*\(\s*([^)]+)\)/gi;
+    const aggRegex = /\b(SUM|AVG|COUNT|MAX|MIN|COUNT\s*\(\s*DISTINCT)\s*\(\s*([^)]+)\)/gi;
     let match: RegExpExecArray | null;
     while ((match = aggRegex.exec(sql)) !== null) {
       const func = match[1].toUpperCase().replace(/\s+/g, " ");
       const col = match[2].trim();
       const fullExpr = `${func}(${col})`;
       if (!measureMap.has(fullExpr)) {
-        const colName = col
-          .replace(/.*\./, "")
-          .replace(/[`"]/g, "")
-          .toLowerCase();
-        const funcPrefix = func.startsWith("COUNT")
-          ? "count"
-          : func.toLowerCase();
+        const colName = col.replace(/.*\./, "").replace(/[`"]/g, "").toLowerCase();
+        const funcPrefix = func.startsWith("COUNT") ? "count" : func.toLowerCase();
         measureMap.set(fullExpr, `${funcPrefix}_${colName}`);
       }
     }
 
     // Extract WHERE conditions (simple equality/comparison patterns)
-    const whereRegex =
-      /WHERE\s+([\s\S]*?)(?:GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|UNION|;|\)|$)/gi;
+    const whereRegex = /WHERE\s+([\s\S]*?)(?:GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|UNION|;|\)|$)/gi;
     let whereMatch: RegExpExecArray | null;
     while ((whereMatch = whereRegex.exec(sql)) !== null) {
       const whereClauses = whereMatch[1];
@@ -104,13 +86,10 @@ function extractSqlSnippets(
         if (!trimmed || trimmed.length > 120) continue;
         // Match patterns like column = 'value' or column >= date
         const simpleMatch = trimmed.match(
-          /^([a-z_]\w*(?:\.[a-z_]\w*)*)\s*(=|!=|<>|>=|<=|>|<|LIKE|IN|IS NOT NULL|IS NULL)\s*(.+)$/i
+          /^([a-z_]\w*(?:\.[a-z_]\w*)*)\s*(=|!=|<>|>=|<=|>|<|LIKE|IN|IS NOT NULL|IS NULL)\s*(.+)$/i,
         );
         if (simpleMatch) {
-          const colName = simpleMatch[1]
-            .replace(/.*\./, "")
-            .replace(/[`"]/g, "")
-            .toLowerCase();
+          const colName = simpleMatch[1].replace(/.*\./, "").replace(/[`"]/g, "").toLowerCase();
           if (!filterMap.has(trimmed)) {
             filterMap.set(trimmed, `${colName}_filter`);
           }
@@ -119,8 +98,7 @@ function extractSqlSnippets(
     }
 
     // Extract dimension expressions from GROUP BY
-    const groupByRegex =
-      /GROUP\s+BY\s+([\s\S]*?)(?:HAVING|ORDER\s+BY|LIMIT|UNION|;|\)|$)/gi;
+    const groupByRegex = /GROUP\s+BY\s+([\s\S]*?)(?:HAVING|ORDER\s+BY|LIMIT|UNION|;|\)|$)/gi;
     let groupMatch: RegExpExecArray | null;
     while ((groupMatch = groupByRegex.exec(sql)) !== null) {
       const groupCols = groupMatch[1].split(",");
@@ -129,7 +107,7 @@ function extractSqlSnippets(
         if (!trimmed || trimmed.length > 100) continue;
         // Look for function calls like YEAR(col), MONTH(col), DATE_TRUNC(...)
         const funcMatch = trimmed.match(
-          /^(YEAR|MONTH|DAY|QUARTER|DATE_TRUNC|DATE_FORMAT|UPPER|LOWER|CONCAT)\s*\(\s*(.+)\)/i
+          /^(YEAR|MONTH|DAY|QUARTER|DATE_TRUNC|DATE_FORMAT|UPPER|LOWER|CONCAT)\s*\(\s*(.+)\)/i,
         );
         if (funcMatch) {
           const func = funcMatch[1].toLowerCase();
@@ -165,9 +143,7 @@ function extractSqlSnippets(
     }));
 
   idx = 0;
-  const expressions: SqlSnippetExpression[] = Array.from(
-    expressionMap.entries()
-  )
+  const expressions: SqlSnippetExpression[] = Array.from(expressionMap.entries())
     .slice(0, 10)
     .map(([sql, alias]) => ({
       id: makeId(runId, `${domain}_expr`, idx++),
@@ -225,9 +201,7 @@ export function generateGenieRecommendations(
 
   for (const [domain, domainUseCases] of domainMap.entries()) {
     // Sort by score descending
-    const sorted = [...domainUseCases].sort(
-      (a, b) => b.overallScore - a.overallScore
-    );
+    const sorted = [...domainUseCases].sort((a, b) => b.overallScore - a.overallScore);
 
     // 1. Collect tables (strip backticks + filter out invalid identifiers)
     const tableSet = new Set<string>();
@@ -249,13 +223,11 @@ export function generateGenieRecommendations(
       if (parts.length >= 2) domainCatalogSchemas.add(`${parts[0]}.${parts[1]}`);
     }
     const metricViews = (metadata.metricViews ?? []).filter((mv) =>
-      domainCatalogSchemas.has(`${mv.catalog}.${mv.schema}`)
+      domainCatalogSchemas.has(`${mv.catalog}.${mv.schema}`),
     );
 
     // 3. Subdomains
-    const subdomains = [
-      ...new Set(sorted.map((uc) => uc.subdomain).filter(Boolean)),
-    ];
+    const subdomains = [...new Set(sorted.map((uc) => uc.subdomain).filter(Boolean))];
 
     // 4. Join specs -- FK relationships where both tables are in this domain
     const joinSpecs: JoinSpec[] = [];
@@ -278,12 +250,10 @@ export function generateGenieRecommendations(
     }
 
     // 5. Sample questions (from top 5 use case statements)
-    const sampleQuestions: SampleQuestion[] = sorted
-      .slice(0, 5)
-      .map((uc, i) => ({
-        id: makeId(run.runId, `${domain}_q`, i),
-        question: [statementToQuestion(uc.statement, questionComplexity)],
-      }));
+    const sampleQuestions: SampleQuestion[] = sorted.slice(0, 5).map((uc, i) => ({
+      id: makeId(run.runId, `${domain}_q`, i),
+      question: [statementToQuestion(uc.statement, questionComplexity)],
+    }));
 
     // 6. Example SQL queries (up to 10 with generated SQL)
     const exampleSqls: ExampleQuestionSql[] = sorted
@@ -299,30 +269,21 @@ export function generateGenieRecommendations(
     const snippets = extractSqlSnippets(sorted, run.runId, domain);
 
     // 8. Text instructions
-    const textInstructions = buildTextInstructions(
-      run,
-      domain,
-      subdomains,
-      sorted
-    );
+    const textInstructions = buildTextInstructions(run, domain, subdomains, sorted);
 
     // 9. Build data_sources.tables (must be sorted by identifier per Genie API)
     const dataTables: DataSourceTable[] = tables
       .sort((a, b) => a.localeCompare(b))
       .map((fqn) => {
         const comment = tableComments.get(fqn);
-        return comment
-          ? { identifier: fqn, description: [comment] }
-          : { identifier: fqn };
+        return comment ? { identifier: fqn, description: [comment] } : { identifier: fqn };
       });
 
     // 10. Build data_sources.metric_views (sorted for consistency)
     const dataMetricViews: DataSourceMetricView[] = metricViews
       .sort((a, b) => a.fqn.localeCompare(b.fqn))
       .map((mv) =>
-        mv.comment
-          ? { identifier: mv.fqn, description: [mv.comment] }
-          : { identifier: mv.fqn }
+        mv.comment ? { identifier: mv.fqn, description: [mv.comment] } : { identifier: mv.fqn },
       );
 
     // 11. Assemble serialized_space
@@ -385,26 +346,23 @@ export function generateGenieRecommendations(
 // Helpers
 // ---------------------------------------------------------------------------
 
-
 function buildDescription(
   run: PipelineRun,
   domain: string,
   subdomains: string[],
-  useCases: UseCase[]
+  useCases: UseCase[],
 ): string {
   const bc = run.businessContext;
   const parts: string[] = [];
 
-  parts.push(
-    `Genie space for the ${domain} domain of ${run.config.businessName}.`
-  );
+  parts.push(`Genie space for the ${domain} domain of ${run.config.businessName}.`);
 
   if (subdomains.length > 0) {
     parts.push(`Covers: ${subdomains.join(", ")}.`);
   }
 
   parts.push(
-    `${useCases.length} use cases across ${new Set(useCases.map((uc) => uc.type)).size > 1 ? "AI and Statistical" : useCases[0]?.type ?? "AI"} analytics.`
+    `${useCases.length} use cases across ${new Set(useCases.map((uc) => uc.type)).size > 1 ? "AI and Statistical" : (useCases[0]?.type ?? "AI")} analytics.`,
   );
 
   if (bc?.industries) {
@@ -418,7 +376,7 @@ function buildTextInstructions(
   run: PipelineRun,
   domain: string,
   subdomains: string[],
-  useCases: UseCase[]
+  useCases: UseCase[],
 ): TextInstruction[] {
   const bc: BusinessContext | null = run.businessContext;
   const instructions: TextInstruction[] = [];
@@ -430,12 +388,9 @@ function buildTextInstructions(
 
   if (bc) {
     if (bc.industries) contextLines.push(`Industry: ${bc.industries}.`);
-    if (bc.strategicGoals)
-      contextLines.push(`Strategic goals: ${bc.strategicGoals}`);
-    if (bc.businessPriorities)
-      contextLines.push(`Business priorities: ${bc.businessPriorities}`);
-    if (bc.valueChain)
-      contextLines.push(`Value chain: ${bc.valueChain}`);
+    if (bc.strategicGoals) contextLines.push(`Strategic goals: ${bc.strategicGoals}`);
+    if (bc.businessPriorities) contextLines.push(`Business priorities: ${bc.businessPriorities}`);
+    if (bc.valueChain) contextLines.push(`Value chain: ${bc.valueChain}`);
   }
 
   if (subdomains.length > 0) {
@@ -443,13 +398,9 @@ function buildTextInstructions(
   }
 
   // Analytics techniques used in this domain
-  const techniques = [
-    ...new Set(useCases.map((uc) => uc.analyticsTechnique).filter(Boolean)),
-  ];
+  const techniques = [...new Set(useCases.map((uc) => uc.analyticsTechnique).filter(Boolean))];
   if (techniques.length > 0) {
-    contextLines.push(
-      `Analytics techniques in this domain: ${techniques.join(", ")}.`
-    );
+    contextLines.push(`Analytics techniques in this domain: ${techniques.join(", ")}.`);
   }
 
   instructions.push({

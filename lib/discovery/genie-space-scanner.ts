@@ -12,9 +12,7 @@ import type { DiscoveredGenieSpace } from "./types";
  * Scan all workspace Genie spaces and extract structured metadata.
  * Optionally filters to spaces whose tables overlap with `scopeTables`.
  */
-export async function scanGenieSpaces(
-  scopeTables?: Set<string>
-): Promise<DiscoveredGenieSpace[]> {
+export async function scanGenieSpaces(scopeTables?: Set<string>): Promise<DiscoveredGenieSpace[]> {
   const discovered: DiscoveredGenieSpace[] = [];
 
   try {
@@ -55,8 +53,11 @@ export async function scanGenieSpaces(
           sampleQuestionCount: parsed.config?.sample_questions?.length ?? 0,
           measureCount: snippets?.measures?.length ?? 0,
           filterCount: snippets?.filters?.length ?? 0,
-          instructionLength: parsed.instructions?.text_instructions
-            ?.reduce((sum, i) => sum + (i.content?.join(" ").length ?? 0), 0) ?? 0,
+          instructionLength:
+            parsed.instructions?.text_instructions?.reduce(
+              (sum, i) => sum + (i.content?.join(" ").length ?? 0),
+              0,
+            ) ?? 0,
         });
       } catch (err) {
         logger.warn(`[asset-discovery] Failed to fetch Genie space ${id}`, {

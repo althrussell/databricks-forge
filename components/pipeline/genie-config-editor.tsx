@@ -36,9 +36,7 @@ export function GenieConfigEditor({ config, onChange, disabled }: GenieConfigEdi
   if (disabled) {
     return (
       <div className="rounded-lg border-2 border-dashed border-muted p-8 text-center">
-        <p className="text-sm font-medium text-muted-foreground">
-          Genie Engine is disabled
-        </p>
+        <p className="text-sm font-medium text-muted-foreground">Genie Engine is disabled</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Enable the Genie Engine in global Settings to configure per-run parameters.
         </p>
@@ -49,11 +47,11 @@ export function GenieConfigEditor({ config, onChange, disabled }: GenieConfigEdi
   return (
     <div className="space-y-4">
       <p className="text-[10px] text-muted-foreground">
-        Engine toggles, entity matching, fiscal year, and trusted asset settings are configured in global <span className="font-semibold">Settings</span>.
-        Per-run overrides below let you customise glossary, SQL, column metadata, benchmarks, and instructions.
+        Engine toggles, entity matching, fiscal year, and trusted asset settings are configured in
+        global <span className="font-semibold">Settings</span>. Per-run overrides below let you
+        customise glossary, SQL, column metadata, benchmarks, and instructions.
       </p>
       <Accordion type="multiple" defaultValue={["glossary"]} className="w-full">
-
         {/* Business Glossary */}
         <AccordionItem value="glossary">
           <AccordionTrigger className="text-sm font-medium">
@@ -70,7 +68,11 @@ export function GenieConfigEditor({ config, onChange, disabled }: GenieConfigEdi
         {/* Custom SQL Expressions */}
         <AccordionItem value="expressions">
           <AccordionTrigger className="text-sm font-medium">
-            Custom SQL Expressions ({config.customMeasures.length + config.customFilters.length + config.customDimensions.length})
+            Custom SQL Expressions (
+            {config.customMeasures.length +
+              config.customFilters.length +
+              config.customDimensions.length}
+            )
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
@@ -189,7 +191,10 @@ function GlossaryEditor({
       {
         term: newTerm.trim(),
         definition: newDef.trim(),
-        synonyms: newSynonyms.split(",").map((s) => s.trim()).filter(Boolean),
+        synonyms: newSynonyms
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       },
     ]);
     setNewTerm("");
@@ -210,7 +215,9 @@ function GlossaryEditor({
             {entry.synonyms.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {entry.synonyms.map((s, si) => (
-                  <Badge key={si} variant="outline" className="text-[9px]">{s}</Badge>
+                  <Badge key={si} variant="outline" className="text-[9px]">
+                    {s}
+                  </Badge>
                 ))}
               </div>
             )}
@@ -340,7 +347,10 @@ function ClarificationEditor({
       ...rules,
       {
         topic: newTopic.trim(),
-        missingDetails: newDetails.split(",").map((s) => s.trim()).filter(Boolean),
+        missingDetails: newDetails
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         clarificationQuestion: newQuestion.trim(),
       },
     ]);
@@ -421,7 +431,7 @@ function ColumnOverridesEditor({
         (o) =>
           o.tableFqn.toLowerCase().includes(search.toLowerCase()) ||
           o.columnName.toLowerCase().includes(search.toLowerCase()) ||
-          (o.displayName ?? "").toLowerCase().includes(search.toLowerCase())
+          (o.displayName ?? "").toLowerCase().includes(search.toLowerCase()),
       )
     : overrides;
 
@@ -433,7 +443,10 @@ function ColumnOverridesEditor({
         tableFqn: newFqn.trim(),
         columnName: newCol.trim(),
         displayName: newDisplay.trim() || undefined,
-        synonyms: newSynonyms.split(",").map((s) => s.trim()).filter(Boolean),
+        synonyms: newSynonyms
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         hidden: newHidden,
       },
     ]);
@@ -446,9 +459,7 @@ function ColumnOverridesEditor({
 
   const removeOverride = (idx: number) => {
     const original = overrides.findIndex(
-      (o) =>
-        o.tableFqn === filtered[idx].tableFqn &&
-        o.columnName === filtered[idx].columnName
+      (o) => o.tableFqn === filtered[idx].tableFqn && o.columnName === filtered[idx].columnName,
     );
     if (original >= 0) onChange(overrides.filter((_, i) => i !== original));
   };
@@ -459,8 +470,8 @@ function ColumnOverridesEditor({
       overrides.map((o) =>
         o.tableFqn === target.tableFqn && o.columnName === target.columnName
           ? { ...o, hidden: !o.hidden }
-          : o
-      )
+          : o,
+      ),
     );
   };
 
@@ -483,7 +494,9 @@ function ColumnOverridesEditor({
               <button
                 onClick={() => toggleHidden(idx)}
                 className={`h-4 w-4 shrink-0 rounded border text-[8px] leading-none ${
-                  o.hidden ? "bg-red-100 text-red-500 border-red-300" : "bg-green-100 text-green-600 border-green-300"
+                  o.hidden
+                    ? "bg-red-100 text-red-500 border-red-300"
+                    : "bg-green-100 text-green-600 border-green-300"
                 }`}
                 title={o.hidden ? "Hidden — click to show" : "Visible — click to hide"}
               >
@@ -492,13 +505,13 @@ function ColumnOverridesEditor({
               <span className="truncate font-mono text-[10px] text-muted-foreground">
                 {o.tableFqn}.{o.columnName}
               </span>
-              {o.displayName && (
-                <span className="text-[10px]">&rarr; {o.displayName}</span>
-              )}
+              {o.displayName && <span className="text-[10px]">&rarr; {o.displayName}</span>}
               {o.synonyms && o.synonyms.length > 0 && (
                 <span className="flex gap-0.5">
                   {o.synonyms.map((s, si) => (
-                    <Badge key={si} variant="outline" className="text-[8px]">{s}</Badge>
+                    <Badge key={si} variant="outline" className="text-[8px]">
+                      {s}
+                    </Badge>
                   ))}
                 </span>
               )}
@@ -597,8 +610,8 @@ function BenchmarkEditor({
   return (
     <div className="space-y-3 py-2">
       <p className="text-[10px] text-muted-foreground">
-        Add questions with expected SQL to evaluate Genie space accuracy.
-        Auto-generated benchmarks from the engine will be merged with these.
+        Add questions with expected SQL to evaluate Genie space accuracy. Auto-generated benchmarks
+        from the engine will be merged with these.
       </p>
 
       {benchmarks.map((b, idx) => (
@@ -609,7 +622,9 @@ function BenchmarkEditor({
             {b.alternatePhrasings.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {b.alternatePhrasings.map((ap, ai) => (
-                  <Badge key={ai} variant="outline" className="text-[9px]">{ap}</Badge>
+                  <Badge key={ai} variant="outline" className="text-[9px]">
+                    {ap}
+                  </Badge>
                 ))}
               </div>
             )}

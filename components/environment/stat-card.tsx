@@ -2,11 +2,7 @@
 
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
 
 export interface StatCardProps {
@@ -17,21 +13,9 @@ export interface StatCardProps {
   tooltip?: string;
 }
 
-export function StatCard({
-  title,
-  value,
-  icon,
-  alert,
-  tooltip,
-}: StatCardProps) {
+export function StatCard({ title, value, icon, alert, tooltip }: StatCardProps) {
   return (
-    <Card
-      className={
-        alert
-          ? "border-orange-300 bg-orange-50/50 dark:bg-orange-950/10"
-          : ""
-      }
-    >
+    <Card className={alert ? "border-orange-300 bg-orange-50/50 dark:bg-orange-950/10" : ""}>
       <CardContent className="pt-4 pb-3 px-4">
         <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
           {icon}

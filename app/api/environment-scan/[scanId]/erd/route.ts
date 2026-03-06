@@ -7,13 +7,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getEnvironmentScan } from "@/lib/lakebase/environment-scans";
-import { buildERDGraph, generateMermaidERD, generateMermaidLineageFlow } from "@/lib/export/erd-generator";
+import {
+  buildERDGraph,
+  generateMermaidERD,
+  generateMermaidLineageFlow,
+} from "@/lib/export/erd-generator";
 import { isValidUUID } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ scanId: string }> }
+  { params }: { params: Promise<{ scanId: string }> },
 ) {
   try {
     const { scanId } = await params;
@@ -50,9 +54,6 @@ export async function GET(
     logger.error("[api/environment-scan/erd] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to generate ERD" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to generate ERD" }, { status: 500 });
   }
 }

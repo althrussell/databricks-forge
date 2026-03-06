@@ -113,9 +113,7 @@ export function loadSettings(): AppSettings {
           ? parsed.defaultExportFormat
           : DEFAULTS.defaultExportFormat,
       notebookPath:
-        typeof parsed.notebookPath === "string"
-          ? parsed.notebookPath
-          : DEFAULTS.notebookPath,
+        typeof parsed.notebookPath === "string" ? parsed.notebookPath : DEFAULTS.notebookPath,
       defaultDiscoveryDepth:
         typeof parsed.defaultDiscoveryDepth === "string" &&
         (DISCOVERY_DEPTHS as readonly string[]).includes(parsed.defaultDiscoveryDepth)
@@ -162,9 +160,7 @@ function isValidDepthConfig(v: unknown): v is DiscoveryDepthConfig {
   );
 }
 
-function parseDepthConfigs(
-  raw: unknown
-): Record<DiscoveryDepth, DiscoveryDepthConfig> {
+function parseDepthConfigs(raw: unknown): Record<DiscoveryDepth, DiscoveryDepthConfig> {
   const result = { ...DEFAULT_DEPTH_CONFIGS };
   if (typeof raw !== "object" || raw === null) return result;
   const obj = raw as Record<string, unknown>;
@@ -186,11 +182,15 @@ function parseGenieEngineDefaults(raw: unknown): GenieEngineDefaults {
   if (typeof obj.maxTablesPerSpace === "number") result.maxTablesPerSpace = obj.maxTablesPerSpace;
   if (typeof obj.maxAutoSpaces === "number") result.maxAutoSpaces = obj.maxAutoSpaces;
   if (typeof obj.llmRefinement === "boolean") result.llmRefinement = obj.llmRefinement;
-  if (typeof obj.generateBenchmarks === "boolean") result.generateBenchmarks = obj.generateBenchmarks;
-  if (typeof obj.generateMetricViews === "boolean") result.generateMetricViews = obj.generateMetricViews;
+  if (typeof obj.generateBenchmarks === "boolean")
+    result.generateBenchmarks = obj.generateBenchmarks;
+  if (typeof obj.generateMetricViews === "boolean")
+    result.generateMetricViews = obj.generateMetricViews;
   if (typeof obj.autoTimePeriods === "boolean") result.autoTimePeriods = obj.autoTimePeriods;
-  if (typeof obj.generateTrustedAssets === "boolean") result.generateTrustedAssets = obj.generateTrustedAssets;
-  if (typeof obj.fiscalYearStartMonth === "number") result.fiscalYearStartMonth = obj.fiscalYearStartMonth;
+  if (typeof obj.generateTrustedAssets === "boolean")
+    result.generateTrustedAssets = obj.generateTrustedAssets;
+  if (typeof obj.fiscalYearStartMonth === "number")
+    result.fiscalYearStartMonth = obj.fiscalYearStartMonth;
   if (typeof obj.entityMatchingMode === "string" && VALID_ENTITY_MODES.has(obj.entityMatchingMode))
     result.entityMatchingMode = obj.entityMatchingMode as GenieEngineDefaults["entityMatchingMode"];
   return result;

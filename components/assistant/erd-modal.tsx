@@ -14,11 +14,12 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
   const [graph, setGraph] = React.useState<ERDGraph | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [ERDViewer, setERDViewer] = React.useState<React.ComponentType<{ graph: ERDGraph }> | null>(null);
+  const [ERDViewer, setERDViewer] = React.useState<React.ComponentType<{ graph: ERDGraph }> | null>(
+    null,
+  );
 
   React.useEffect(() => {
-    import("@/components/environment/erd-viewer")
-      .then((m) => setERDViewer(() => m.ERDViewer));
+    import("@/components/environment/erd-viewer").then((m) => setERDViewer(() => m.ERDViewer));
   }, []);
 
   React.useEffect(() => {
@@ -46,11 +47,13 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
         const filteredGraph: ERDGraph = {
           nodes: fullGraph.nodes.filter((n) => relevantFqns.has(n.tableFqn)),
           edges: filteredEdges,
-          domains: [...new Set(
-            fullGraph.nodes
-              .filter((n) => relevantFqns.has(n.tableFqn) && n.domain)
-              .map((n) => n.domain!),
-          )],
+          domains: [
+            ...new Set(
+              fullGraph.nodes
+                .filter((n) => relevantFqns.has(n.tableFqn) && n.domain)
+                .map((n) => n.domain!),
+            ),
+          ],
           stats: {
             fkCount: filteredEdges.filter((e) => e.edgeType === "fk").length,
             implicitCount: filteredEdges.filter((e) => e.edgeType === "implicit").length,
@@ -71,7 +74,9 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
     }
 
     fetchERD();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [tableFqns]);
 
   React.useEffect(() => {
@@ -85,16 +90,16 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="flex max-h-[90vh] w-full max-w-7xl flex-col rounded-xl border bg-background shadow-lg">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
             <Network className="size-5 text-primary" />
-            <h2 className="text-base font-semibold">
-              Entity Relationship Diagram
-            </h2>
+            <h2 className="text-base font-semibold">Entity Relationship Diagram</h2>
             <span className="text-sm text-muted-foreground">
               {graph ? `${graph.nodes.length} tables, ${graph.edges.length} relationships` : ""}
             </span>

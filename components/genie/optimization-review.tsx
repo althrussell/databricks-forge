@@ -3,22 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Check,
-  Copy,
-  Eye,
-  Loader2,
-  Plus,
-  Wrench,
-  X,
-} from "lucide-react";
+import { Check, Copy, Eye, Loader2, Plus, Wrench, X } from "lucide-react";
 import { SpaceDiffViewer } from "./space-diff-viewer";
 
 interface FixChange {
@@ -79,9 +66,7 @@ export function OptimizationReview({
   enableSelection = false,
   onBuildSelectedSpace,
 }: OptimizationReviewProps) {
-  const [selected, setSelected] = useState<Set<number>>(
-    new Set(changes.map((_, i) => i)),
-  );
+  const [selected, setSelected] = useState<Set<number>>(new Set(changes.map((_, i) => i)));
   const [showDiff, setShowDiff] = useState(false);
 
   const isSelectable = enableSelection && !!onBuildSelectedSpace;
@@ -147,7 +132,11 @@ export function OptimizationReview({
         />
         <div className="flex gap-2">
           <Button onClick={handleApply} disabled={applying || cloning || creating}>
-            {applying ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Check className="mr-2 size-4" />}
+            {applying ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Check className="mr-2 size-4" />
+            )}
             Apply to Space
           </Button>
           <Button
@@ -155,7 +144,11 @@ export function OptimizationReview({
             onClick={handleCloneAndApply}
             disabled={applying || cloning || creating}
           >
-            {cloning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Copy className="mr-2 size-4" />}
+            {cloning ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Copy className="mr-2 size-4" />
+            )}
             Clone and Apply
           </Button>
           {onCreateNew && (
@@ -164,7 +157,11 @@ export function OptimizationReview({
               onClick={handleCreateNew}
               disabled={applying || cloning || creating}
             >
-              {creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
+              {creating ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Plus className="mr-2 size-4" />
+              )}
               Create New Space
             </Button>
           )}
@@ -189,9 +186,9 @@ export function OptimizationReview({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            {changes.length} suggestion{changes.length !== 1 ? "s" : ""} generated
-            from {strategiesRun.length} strateg{strategiesRun.length !== 1 ? "ies" : "y"}:
-            {" "}{strategiesRun.map((s) => s.replace(/_/g, " ")).join(", ")}.
+            {changes.length} suggestion{changes.length !== 1 ? "s" : ""} generated from{" "}
+            {strategiesRun.length} strateg{strategiesRun.length !== 1 ? "ies" : "y"}:{" "}
+            {strategiesRun.map((s) => s.replace(/_/g, " ")).join(", ")}.
           </p>
           <div className="mt-2 flex gap-3 text-xs">
             {highCount > 0 && (
@@ -249,14 +246,16 @@ export function OptimizationReview({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{change.section}</span>
-                    <Badge className={`text-[10px] ${priorityColor(priority)}`}>
-                      {priority}
-                    </Badge>
+                    <Badge className={`text-[10px] ${priorityColor(priority)}`}>{priority}</Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{change.description}</p>
                   <div className="mt-1 flex gap-3 text-[10px] text-muted-foreground">
-                    {change.added > 0 && <span className="text-green-600">+{change.added} added</span>}
-                    {change.modified > 0 && <span className="text-amber-600">{change.modified} modified</span>}
+                    {change.added > 0 && (
+                      <span className="text-green-600">+{change.added} added</span>
+                    )}
+                    {change.modified > 0 && (
+                      <span className="text-amber-600">{change.modified} modified</span>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -276,7 +275,11 @@ export function OptimizationReview({
           onClick={handleApply}
           disabled={applying || cloning || creating || !hasSelection}
         >
-          {applying ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Check className="mr-2 size-4" />}
+          {applying ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Check className="mr-2 size-4" />
+          )}
           Apply to Space
         </Button>
         <Button
@@ -284,7 +287,11 @@ export function OptimizationReview({
           onClick={handleCloneAndApply}
           disabled={applying || cloning || creating || !hasSelection}
         >
-          {cloning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Copy className="mr-2 size-4" />}
+          {cloning ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Copy className="mr-2 size-4" />
+          )}
           Clone and Apply
         </Button>
         {onCreateNew && (
@@ -293,7 +300,11 @@ export function OptimizationReview({
             onClick={handleCreateNew}
             disabled={applying || cloning || creating || !hasSelection}
           >
-            {creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
+            {creating ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Plus className="mr-2 size-4" />
+            )}
             Create New Space
           </Button>
         )}

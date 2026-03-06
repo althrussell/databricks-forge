@@ -35,10 +35,7 @@ export function estimateTokens(text: string): number {
 /**
  * Estimate prompt tokens after template variable substitution.
  */
-export function estimatePromptTokens(
-  template: string,
-  variables: Record<string, string>
-): number {
+export function estimatePromptTokens(template: string, variables: Record<string, string>): number {
   let rendered = template;
   for (const [key, value] of Object.entries(variables)) {
     rendered = rendered.replaceAll(`{${key}}`, value);
@@ -64,7 +61,7 @@ export function buildTokenAwareBatches<T>(
   items: T[],
   renderItem: (item: T) => string,
   baseTokens: number,
-  maxBudget: number = MAX_PROMPT_TOKENS
+  maxBudget: number = MAX_PROMPT_TOKENS,
 ): T[][] {
   if (items.length === 0) return [];
 
@@ -127,7 +124,7 @@ export class TokenBudgetExceededError extends Error {
 
   constructor(promptKey: string, estimatedTokens: number, maxTokens: number) {
     super(
-      `Prompt "${promptKey}" estimated at ${estimatedTokens.toLocaleString()} tokens exceeds budget of ${maxTokens.toLocaleString()} tokens`
+      `Prompt "${promptKey}" estimated at ${estimatedTokens.toLocaleString()} tokens exceeds budget of ${maxTokens.toLocaleString()} tokens`,
     );
     this.name = "TokenBudgetExceededError";
     this.promptKey = promptKey;
@@ -143,7 +140,7 @@ export class TokenBudgetExceededError extends Error {
 export function assertWithinBudget(
   promptKey: string,
   promptText: string,
-  maxBudget: number = MAX_PROMPT_TOKENS
+  maxBudget: number = MAX_PROMPT_TOKENS,
 ): void {
   const estimated = estimateTokens(promptText);
   if (estimated > maxBudget) {
@@ -167,7 +164,7 @@ export function assertWithinBudget(
  */
 export function truncateColumns<C>(
   columns: C[],
-  maxColumns: number
+  maxColumns: number,
 ): { truncated: C[]; omitted: number } {
   if (columns.length <= maxColumns) {
     return { truncated: columns, omitted: 0 };
@@ -181,10 +178,7 @@ export function truncateColumns<C>(
 /**
  * Truncate a comment/description string to a maximum length.
  */
-export function truncateComment(
-  comment: string | null | undefined,
-  maxLength: number
-): string {
+export function truncateComment(comment: string | null | undefined, maxLength: number): string {
   if (!comment) return "";
   if (comment.length <= maxLength) return comment;
   return comment.slice(0, maxLength - 3) + "...";

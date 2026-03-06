@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BrainCircuit, Loader2, RefreshCw } from "lucide-react";
 
@@ -18,13 +12,7 @@ interface SemanticSearchSettingsProps {
   onRebuildEmbeddings: () => void;
 }
 
-function ToggleButton({
-  enabled,
-  onClick,
-}: {
-  enabled: boolean;
-  onClick: () => void;
-}) {
+function ToggleButton({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -57,17 +45,15 @@ export function SemanticSearchSettings({
           Semantic Search &amp; RAG
         </CardTitle>
         <CardDescription>
-          Enable semantic search, knowledge base, and AI-grounded retrieval
-          across your data estate. Turning this off hides search and
-          knowledge base features but does not delete existing embeddings.
+          Enable semantic search, knowledge base, and AI-grounded retrieval across your data estate.
+          Turning this off hides search and knowledge base features but does not delete existing
+          embeddings.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div
           className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-            semanticSearchEnabled
-              ? "border-violet-500/50 bg-violet-500/5"
-              : "border-muted"
+            semanticSearchEnabled ? "border-violet-500/50 bg-violet-500/5" : "border-muted"
           }`}
         >
           <div>
@@ -90,7 +76,9 @@ export function SemanticSearchSettings({
             <p className="text-xs text-muted-foreground">
               Re-generate the vector knowledge base from all estate scans, pipelines, and documents.
               {embeddingCount !== null && (
-                <span className="ml-1 font-medium">{embeddingCount.toLocaleString()} vectors currently stored.</span>
+                <span className="ml-1 font-medium">
+                  {embeddingCount.toLocaleString()} vectors currently stored.
+                </span>
               )}
             </p>
           </div>

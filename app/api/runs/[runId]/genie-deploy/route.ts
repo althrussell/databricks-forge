@@ -69,7 +69,7 @@ interface DomainResult {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   const { runId } = await params;
 
@@ -81,16 +81,13 @@ export async function POST(
     const body = (await request.json()) as RequestBody;
 
     if (!body.domains || !Array.isArray(body.domains) || body.domains.length === 0) {
-      return NextResponse.json(
-        { error: "Missing required field: domains" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required field: domains" }, { status: 400 });
     }
 
     if (!body.targetSchema || body.targetSchema.split(".").length !== 2) {
       return NextResponse.json(
         { error: "targetSchema must be in catalog.schema format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -99,7 +96,7 @@ export async function POST(
     } catch {
       return NextResponse.json(
         { error: "targetSchema contains invalid characters" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -146,11 +143,7 @@ export async function POST(
       // fully-qualified catalog.schema.object names for functions and metric views.
       const finalSpace = normalizeIdentifiersToFqn(validatedSpace, body.targetSchema);
 
-      const allStripped = [
-        ...mvValidationStripped,
-        ...strippedRefs,
-        ...finalStripped,
-      ];
+      const allStripped = [...mvValidationStripped, ...strippedRefs, ...finalStripped];
 
       if (allStripped.length > 0) {
         logger.info("Stripped references from serialized space", {
@@ -184,10 +177,14 @@ export async function POST(
             });
             try {
               await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
-            } catch { /* exhausted retry */ }
+            } catch {
+              /* exhausted retry */
+            }
           }
           logger.info("Genie space updated", {
-            runId, domain: domainReq.domain, spaceId,
+            runId,
+            domain: domainReq.domain,
+            spaceId,
           });
         } else {
           const result = await createGenieSpace({
@@ -218,9 +215,17 @@ export async function POST(
             });
             try {
               await trackGenieSpaceCreated(
-                trackingId, spaceId, runId, domainReq.domain, domainReq.title, deployedAssetsPayload, body.authMode,
+                trackingId,
+                spaceId,
+                runId,
+                domainReq.domain,
+                domainReq.title,
+                deployedAssetsPayload,
+                body.authMode,
               );
-            } catch { /* exhausted retry */ }
+            } catch {
+              /* exhausted retry */
+            }
           }
         }
 
@@ -245,17 +250,19 @@ export async function POST(
           metricViews: deployedMvs.map((m) => m.fqn),
         };
         if (orphanedAssets.metricViews.length > 0) {
-          logger.warn("Genie space creation failed -- UC assets deployed but not attached to any space", {
-            domain: domainReq.domain,
-            orphanedAssets,
-          });
+          logger.warn(
+            "Genie space creation failed -- UC assets deployed but not attached to any space",
+            {
+              domain: domainReq.domain,
+              orphanedAssets,
+            },
+          );
         }
         results.push({
           domain: domainReq.domain,
           assets,
           spaceError: msg,
-          orphanedAssets: orphanedAssets.metricViews.length > 0
-            ? orphanedAssets : undefined,
+          orphanedAssets: orphanedAssets.metricViews.length > 0 ? orphanedAssets : undefined,
           patchedSpace: finalSpace,
           strippedRefs: allStripped.length > 0 ? allStripped : undefined,
         });
@@ -273,5 +280,3 @@ export async function POST(
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
-
-

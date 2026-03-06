@@ -94,7 +94,10 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
   const [running, setRunning] = React.useState(false);
   const [result, setResult] = React.useState<SqlExecutionResult | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const [inspectedCell, setInspectedCell] = React.useState<{ col: SqlColumn; value: string | null } | null>(null);
+  const [inspectedCell, setInspectedCell] = React.useState<{
+    col: SqlColumn;
+    value: string | null;
+  } | null>(null);
 
   // Pagination
   const [page, setPage] = React.useState(0);
@@ -148,7 +151,9 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
     if (!result?.result) return;
     const { columns, rows } = result.result;
     const header = columns.map((c) => c.name).join(",");
-    const body = rows.map((row) => row.map((cell) => `"${(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const body = rows
+      .map((row) => row.map((cell) => `"${(cell ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const csv = `${header}\n${body}`;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -190,11 +195,21 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
             {copied ? "Copied" : "Copy"}
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setEditing(!editing)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => setEditing(!editing)}
+          >
             {editing ? "Done" : "Edit"}
           </Button>
           {running ? (
-            <Button size="sm" variant="destructive" className="h-7 gap-1 text-xs" onClick={handleCancel}>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-7 gap-1 text-xs"
+              onClick={handleCancel}
+            >
               <Square className="size-3" />
               Cancel
             </Button>
@@ -250,16 +265,35 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
             <div className="flex-1" />
             {totalPages > 1 && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                >
                   <ChevronLeft className="size-3" />
                 </Button>
-                <span>{page + 1}/{totalPages}</span>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>
+                <span>
+                  {page + 1}/{totalPages}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                >
                   <ChevronRight className="size-3" />
                 </Button>
               </div>
             )}
-            <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleExportCsv}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={handleExportCsv}
+            >
               <Download className="size-3" />
               CSV
             </Button>
@@ -269,7 +303,9 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-muted">
                 <TableRow>
-                  <TableHead className="w-8 text-center text-[10px] text-muted-foreground">#</TableHead>
+                  <TableHead className="w-8 text-center text-[10px] text-muted-foreground">
+                    #
+                  </TableHead>
                   {result.result.columns.map((col, ci) => (
                     <TableHead
                       key={col.name}
@@ -278,12 +314,15 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
                     >
                       <div className="flex items-center gap-1">
                         <span>{col.name}</span>
-                        <span className="text-[10px] font-normal text-muted-foreground">{col.typeName}</span>
-                        {sortCol === ci && (
-                          sortAsc
-                            ? <ArrowUp className="size-3 text-primary" />
-                            : <ArrowDown className="size-3 text-primary" />
-                        )}
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {col.typeName}
+                        </span>
+                        {sortCol === ci &&
+                          (sortAsc ? (
+                            <ArrowUp className="size-3 text-primary" />
+                          ) : (
+                            <ArrowDown className="size-3 text-primary" />
+                          ))}
                       </div>
                     </TableHead>
                   ))}
@@ -299,7 +338,9 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
                       <TableCell
                         key={ci}
                         className="max-w-[200px] cursor-pointer truncate text-xs hover:bg-accent/50"
-                        onClick={() => setInspectedCell({ col: result.result!.columns[ci], value: cell })}
+                        onClick={() =>
+                          setInspectedCell({ col: result.result!.columns[ci], value: cell })
+                        }
                       >
                         {cell === null || cell === undefined ? (
                           <span className="italic text-muted-foreground">null</span>
@@ -322,9 +363,16 @@ export function SqlRunner({ sql, onRequestFix }: SqlRunnerProps) {
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium">{inspectedCell.col.name}</span>
-              <Badge variant="secondary" className="text-[10px]">{inspectedCell.col.typeName}</Badge>
+              <Badge variant="secondary" className="text-[10px]">
+                {inspectedCell.col.typeName}
+              </Badge>
             </div>
-            <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setInspectedCell(null)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={() => setInspectedCell(null)}
+            >
               Close
             </Button>
           </div>

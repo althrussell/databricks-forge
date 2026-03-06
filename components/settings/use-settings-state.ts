@@ -7,7 +7,11 @@ import {
   type DiscoveryDepth,
   type DiscoveryDepthConfig,
 } from "@/lib/domain/types";
-import type { GenieEngineDefaults, GenieAuthMode, QuestionComplexitySettings } from "@/lib/settings";
+import type {
+  GenieEngineDefaults,
+  GenieAuthMode,
+  QuestionComplexitySettings,
+} from "@/lib/settings";
 
 export function useSettingsState() {
   const [sampleRowsPerTable, setSampleRowsPerTable] = useState(() => {
@@ -26,10 +30,12 @@ export function useSettingsState() {
     if (typeof window === "undefined") return "balanced";
     return loadSettings().defaultDiscoveryDepth ?? "balanced";
   });
-  const [depthConfigs, setDepthConfigs] = useState<Record<DiscoveryDepth, DiscoveryDepthConfig>>(() => {
-    if (typeof window === "undefined") return { ...DEFAULT_DEPTH_CONFIGS };
-    return loadSettings().discoveryDepthConfigs;
-  });
+  const [depthConfigs, setDepthConfigs] = useState<Record<DiscoveryDepth, DiscoveryDepthConfig>>(
+    () => {
+      if (typeof window === "undefined") return { ...DEFAULT_DEPTH_CONFIGS };
+      return loadSettings().discoveryDepthConfigs;
+    },
+  );
   const [genieDefaults, setGenieDefaults] = useState<GenieEngineDefaults>(() => {
     if (typeof window === "undefined") {
       return {
@@ -77,7 +83,9 @@ export function useSettingsState() {
   const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
   const [embeddingCount, setEmbeddingCount] = useState<number | null>(null);
-  const [profile, setProfile] = useState<{ email: string | null; host: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ email: string | null; host: string | null } | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -104,7 +112,11 @@ export function useSettingsState() {
       .catch(() => setProfile({ email: null, host: null }));
   }, []);
 
-  const updateDepthParam = (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => {
+  const updateDepthParam = (
+    depth: DiscoveryDepth,
+    key: keyof DiscoveryDepthConfig,
+    value: number,
+  ) => {
     setDepthConfigs((prev) => ({ ...prev, [depth]: { ...prev[depth], [key]: value } }));
   };
 

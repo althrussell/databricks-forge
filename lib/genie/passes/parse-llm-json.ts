@@ -58,7 +58,7 @@ export function parseLLMJson(raw: string, caller?: string): unknown {
     raw: trimmed.slice(0, 4000),
   });
   throw new SyntaxError(
-    `parseLLMJson${caller ? ` [${caller}]` : ""}: unable to extract valid JSON from LLM response (${trimmed.length} chars, starts with: ${JSON.stringify(trimmed.slice(0, 60))})`
+    `parseLLMJson${caller ? ` [${caller}]` : ""}: unable to extract valid JSON from LLM response (${trimmed.length} chars, starts with: ${JSON.stringify(trimmed.slice(0, 60))})`,
   );
 }
 
@@ -98,7 +98,7 @@ function tryRepairAndParse(text: string, caller?: string): unknown {
     repairedDiff: repaired !== text,
   });
   throw new SyntaxError(
-    `parseLLMJson${caller ? ` [${caller}]` : ""}: unable to extract valid JSON from LLM response (${text.length} chars)`
+    `parseLLMJson${caller ? ` [${caller}]` : ""}: unable to extract valid JSON from LLM response (${text.length} chars)`,
   );
 }
 

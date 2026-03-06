@@ -106,7 +106,10 @@ export async function buildMetadataForSpace(tableFqns: string[]): Promise<Metada
         }
       }
     } catch (err) {
-      logger.warn("Failed to query columns for off-platform space table", { fqn, error: String(err) });
+      logger.warn("Failed to query columns for off-platform space table", {
+        fqn,
+        error: String(err),
+      });
     }
   }
 
@@ -164,16 +167,21 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           let synonymsAdded = 0;
           const tables = (space.data_sources?.tables ?? []) as SpaceJson[];
           for (const enrichment of output.enrichments) {
-            const table = tables.find((t: SpaceJson) =>
-              (t.identifier as string)?.toLowerCase() === enrichment.tableFqn?.toLowerCase(),
+            const table = tables.find(
+              (t: SpaceJson) =>
+                (t.identifier as string)?.toLowerCase() === enrichment.tableFqn?.toLowerCase(),
             );
             if (!table) continue;
             const colConfigs = (table.column_configs ?? []) as SpaceJson[];
             const col = colConfigs.find(
-              (c: SpaceJson) => (c.column_name as string)?.toLowerCase() === enrichment.columnName?.toLowerCase(),
+              (c: SpaceJson) =>
+                (c.column_name as string)?.toLowerCase() === enrichment.columnName?.toLowerCase(),
             );
             if (!col) continue;
-            if (!col.description || (Array.isArray(col.description) && col.description.length === 0)) {
+            if (
+              !col.description ||
+              (Array.isArray(col.description) && col.description.length === 0)
+            ) {
               col.description = [enrichment.description ?? ""];
               descriptionsAdded++;
             }
@@ -196,7 +204,8 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
         }
 
         case "semantic_expressions": {
-          const { runSemanticExpressions } = await import("@/lib/genie/passes/semantic-expressions");
+          const { runSemanticExpressions } =
+            await import("@/lib/genie/passes/semantic-expressions");
           const output = await runSemanticExpressions({
             tableFqns,
             metadata,
@@ -208,27 +217,37 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           });
 
           const snippets = space.instructions?.sql_snippets ?? {};
-          const existingMeasureIds = new Set((snippets.measures ?? []).map((m: SpaceJson) => m.alias));
+          const existingMeasureIds = new Set(
+            (snippets.measures ?? []).map((m: SpaceJson) => m.alias),
+          );
           const newMeasures = output.measures.filter((m) => !existingMeasureIds.has(m.name));
           if (newMeasures.length > 0) {
-            snippets.measures = [...(snippets.measures ?? []), ...newMeasures.map((m) => ({
-              id: crypto.randomUUID().replace(/-/g, ""),
-              alias: m.name,
-              sql: [m.sql],
-              display_name: m.name,
-              synonyms: m.synonyms ?? [],
-            }))];
+            snippets.measures = [
+              ...(snippets.measures ?? []),
+              ...newMeasures.map((m) => ({
+                id: crypto.randomUUID().replace(/-/g, ""),
+                alias: m.name,
+                sql: [m.sql],
+                display_name: m.name,
+                synonyms: m.synonyms ?? [],
+              })),
+            ];
           }
 
-          const existingFilterIds = new Set((snippets.filters ?? []).map((f: SpaceJson) => f.display_name));
+          const existingFilterIds = new Set(
+            (snippets.filters ?? []).map((f: SpaceJson) => f.display_name),
+          );
           const newFilters = output.filters.filter((f) => !existingFilterIds.has(f.name));
           if (newFilters.length > 0) {
-            snippets.filters = [...(snippets.filters ?? []), ...newFilters.map((f) => ({
-              id: crypto.randomUUID().replace(/-/g, ""),
-              sql: [f.sql],
-              display_name: f.name,
-              synonyms: f.synonyms ?? [],
-            }))];
+            snippets.filters = [
+              ...(snippets.filters ?? []),
+              ...newFilters.map((f) => ({
+                id: crypto.randomUUID().replace(/-/g, ""),
+                sql: [f.sql],
+                display_name: f.name,
+                synonyms: f.synonyms ?? [],
+              })),
+            ];
           }
 
           space.instructions = space.instructions ?? {};
@@ -248,8 +267,9 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           const { runJoinInference } = await import("@/lib/genie/passes/join-inference");
           const existingJoins = (space.instructions?.join_specs ?? []) as SpaceJson[];
           const existingJoinKeys = new Set(
-            existingJoins.map((j: SpaceJson) =>
-              `${(j.left?.identifier ?? "").toLowerCase()}|${(j.right?.identifier ?? "").toLowerCase()}`,
+            existingJoins.map(
+              (j: SpaceJson) =>
+                `${(j.left?.identifier ?? "").toLowerCase()}|${(j.right?.identifier ?? "").toLowerCase()}`,
             ),
           );
 
@@ -283,15 +303,21 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
 
         case "trusted_assets": {
           const entityCandidates = extractEntityCandidatesFromSchema(
-            metadata.columns.map((c) => ({ tableFqn: c.tableFqn, columnName: c.columnName, dataType: c.dataType })),
+            metadata.columns.map((c) => ({
+              tableFqn: c.tableFqn,
+              columnName: c.columnName,
+              dataType: c.dataType,
+            })),
             tableFqns,
           );
-          const joinSpecs = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map((j: SpaceJson) => ({
-            leftTable: j.left?.identifier ?? "",
-            rightTable: j.right?.identifier ?? "",
-            sql: Array.isArray(j.sql) ? j.sql.join(" ") : String(j.sql ?? ""),
-            relationshipType: "many_to_one",
-          }));
+          const joinSpecs = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map(
+            (j: SpaceJson) => ({
+              leftTable: j.left?.identifier ?? "",
+              rightTable: j.right?.identifier ?? "",
+              sql: Array.isArray(j.sql) ? j.sql.join(" ") : String(j.sql ?? ""),
+              relationshipType: "many_to_one",
+            }),
+          );
 
           const { runTrustedAssetAuthoring } = await import("@/lib/genie/passes/trusted-assets");
           const output = await runTrustedAssetAuthoring({
@@ -305,8 +331,8 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           });
 
           const existingQuestions = new Set(
-            ((space.instructions?.example_question_sqls ?? []) as SpaceJson[]).map(
-              (e: SpaceJson) => (Array.isArray(e.question) ? e.question[0] : String(e.question ?? "")).toLowerCase(),
+            ((space.instructions?.example_question_sqls ?? []) as SpaceJson[]).map((e: SpaceJson) =>
+              (Array.isArray(e.question) ? e.question[0] : String(e.question ?? "")).toLowerCase(),
             ),
           );
           const newQueries = output.queries.filter(
@@ -336,7 +362,8 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
         }
 
         case "instruction_generation": {
-          const { runInstructionGeneration } = await import("@/lib/genie/passes/instruction-generation");
+          const { runInstructionGeneration } =
+            await import("@/lib/genie/passes/instruction-generation");
           const output = await runInstructionGeneration({
             domain: "general",
             subdomains: [],
@@ -373,17 +400,24 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
 
         case "benchmark_generation": {
           const entityCandidates = extractEntityCandidatesFromSchema(
-            metadata.columns.map((c) => ({ tableFqn: c.tableFqn, columnName: c.columnName, dataType: c.dataType })),
+            metadata.columns.map((c) => ({
+              tableFqn: c.tableFqn,
+              columnName: c.columnName,
+              dataType: c.dataType,
+            })),
             tableFqns,
           );
-          const joinSpecs = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map((j: SpaceJson) => ({
-            leftTable: j.left?.identifier ?? "",
-            rightTable: j.right?.identifier ?? "",
-            sql: Array.isArray(j.sql) ? j.sql.join(" ") : String(j.sql ?? ""),
-            relationshipType: "many_to_one",
-          }));
+          const joinSpecs = ((space.instructions?.join_specs ?? []) as SpaceJson[]).map(
+            (j: SpaceJson) => ({
+              leftTable: j.left?.identifier ?? "",
+              rightTable: j.right?.identifier ?? "",
+              sql: Array.isArray(j.sql) ? j.sql.join(" ") : String(j.sql ?? ""),
+              relationshipType: "many_to_one",
+            }),
+          );
 
-          const { runBenchmarkGeneration } = await import("@/lib/genie/passes/benchmark-generation");
+          const { runBenchmarkGeneration } =
+            await import("@/lib/genie/passes/benchmark-generation");
           const output = await runBenchmarkGeneration({
             tableFqns,
             metadata,
@@ -398,8 +432,11 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           if (output.benchmarks.length > 0) {
             space.benchmarks = space.benchmarks ?? { questions: [] };
             const existing = new Set(
-              (space.benchmarks.questions ?? []).map(
-                (q: SpaceJson) => (Array.isArray(q.question) ? q.question[0] : String(q.question ?? "")).toLowerCase(),
+              (space.benchmarks.questions ?? []).map((q: SpaceJson) =>
+                (Array.isArray(q.question)
+                  ? q.question[0]
+                  : String(q.question ?? "")
+                ).toLowerCase(),
               ),
             );
             const newBenchmarks = output.benchmarks.filter(
@@ -432,7 +469,11 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             const colConfigs = (table.column_configs ?? []) as SpaceJson[];
             for (const col of colConfigs) {
               const dataType = String(col.data_type ?? col.type ?? "").toLowerCase();
-              if (dataType.includes("string") || dataType.includes("varchar") || dataType.includes("char")) {
+              if (
+                dataType.includes("string") ||
+                dataType.includes("varchar") ||
+                dataType.includes("char")
+              ) {
                 if (!col.enable_entity_matching) {
                   col.enable_entity_matching = true;
                   enabled++;
@@ -454,9 +495,11 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
         case "sample_questions": {
           const existingExamples = (space.instructions?.example_question_sqls ?? []) as SpaceJson[];
           if (existingExamples.length > 0) {
-            const questions = existingExamples.slice(0, 3).map((e: SpaceJson) =>
-              Array.isArray(e.question) ? e.question[0] : String(e.question ?? ""),
-            );
+            const questions = existingExamples
+              .slice(0, 3)
+              .map((e: SpaceJson) =>
+                Array.isArray(e.question) ? e.question[0] : String(e.question ?? ""),
+              );
             space.config = space.config ?? {};
             space.config.sample_questions = [
               ...(space.config.sample_questions ?? []),

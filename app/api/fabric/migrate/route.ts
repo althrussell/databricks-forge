@@ -24,7 +24,7 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to list migrations" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     if (!body.scanId || !body.targetCatalog || !body.targetSchema) {
       return NextResponse.json(
         { error: "scanId, targetCatalog, and targetSchema are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -50,14 +50,14 @@ export async function POST(request: NextRequest) {
       migrationId,
       body.scanId,
       body.targetCatalog,
-      body.targetSchema
+      body.targetSchema,
     );
 
     return NextResponse.json(state, { status: 201 });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to start migration" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

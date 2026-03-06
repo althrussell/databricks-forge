@@ -7,15 +7,30 @@
  */
 
 import { classifyIntent, type AssistantIntent, type IntentClassification } from "./intent";
-import { buildAssistantContext, buildSourceReferences, type AssistantContext, type TableEnrichment } from "./context-builder";
+import {
+  buildAssistantContext,
+  buildSourceReferences,
+  type AssistantContext,
+  type TableEnrichment,
+} from "./context-builder";
 import { extractTableFqnsFromText, mergeTableReferenceLists } from "./context-builder";
 import { buildAssistantMessages, type AssistantPersona } from "./prompts";
-import { extractSqlBlocks, validateSql, isColumnResolutionError, buildSqlFixPrompt } from "./sql-proposer";
+import {
+  extractSqlBlocks,
+  validateSql,
+  isColumnResolutionError,
+  buildSqlFixPrompt,
+} from "./sql-proposer";
 import { validateColumnReferences } from "@/lib/validation/sql-columns";
 import { extractDashboardIntent, type DashboardProposal } from "./dashboard-proposer";
 import { retrieveContext } from "@/lib/embeddings/retriever";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
-import { chatCompletion, chatCompletionStream, type StreamCallback, type TokenUsage } from "@/lib/dbx/model-serving";
+import {
+  chatCompletion,
+  chatCompletionStream,
+  type StreamCallback,
+  type TokenUsage,
+} from "@/lib/dbx/model-serving";
 import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
@@ -155,9 +170,7 @@ export async function runAssistantEngine(
       answer: noDataAnswer,
       intent: intentResult,
       sources: [],
-      actions: [
-        { type: "start_discovery", label: "Start Discovery", payload: {} },
-      ],
+      actions: [{ type: "start_discovery", label: "Start Discovery", payload: {} }],
       tables: [],
       tableEnrichments: [],
       sqlBlocks: [],
@@ -208,7 +221,7 @@ export async function runAssistantEngine(
       return [];
     }
     const knownCols = context.tableEnrichments.flatMap((t) =>
-      t.columns.map((c) => ({ tableFqn: t.tableFqn, name: c.name, dataType: c.dataType }))
+      t.columns.map((c) => ({ tableFqn: t.tableFqn, name: c.name, dataType: c.dataType })),
     );
     const knownColumnNames = new Set(knownCols.map((c) => c.name.toLowerCase()));
 
@@ -219,11 +232,15 @@ export async function runAssistantEngine(
             allowAiFunctionFields: true,
           });
 
-          const errorToFix = staticResult.unknownColumns.length > 0
-            ? `SCHEMA VIOLATION: SQL references columns that do not exist: ${staticResult.unknownColumns.join(", ")}. Use ONLY columns from the provided schema.`
-            : await validateSql(sql);
+          const errorToFix =
+            staticResult.unknownColumns.length > 0
+              ? `SCHEMA VIOLATION: SQL references columns that do not exist: ${staticResult.unknownColumns.join(", ")}. Use ONLY columns from the provided schema.`
+              : await validateSql(sql);
 
-          if (errorToFix && (staticResult.unknownColumns.length > 0 || isColumnResolutionError(errorToFix))) {
+          if (
+            errorToFix &&
+            (staticResult.unknownColumns.length > 0 || isColumnResolutionError(errorToFix))
+          ) {
             logger.info("[assistant/engine] SQL column error, attempting fix", {
               blockIndex: i,
               staticHallucinations: staticResult.unknownColumns.length,
@@ -234,7 +251,10 @@ export async function runAssistantEngine(
             const fixResponse = await chatCompletion({
               endpoint: getServingEndpoint(),
               messages: [
-                { role: "system", content: "You are a SQL fixer. Return ONLY corrected SQL in a ```sql block." },
+                {
+                  role: "system",
+                  content: "You are a SQL fixer. Return ONLY corrected SQL in a ```sql block.",
+                },
                 { role: "user", content: fixPrompt },
               ],
               temperature: 0.1,
@@ -262,7 +282,7 @@ export async function runAssistantEngine(
           });
           return null;
         }
-      })
+      }),
     );
 
     return results
@@ -375,8 +395,13 @@ export async function runAssistantEngine(
 
   const conversationSummary = buildConversationSummary(history, question);
   const actions = buildActions(
-    intentResult.intent, sqlBlocks, dashboardProposal, reconciledTables,
-    genieSpaceMatch, context.tableEnrichments, conversationSummary,
+    intentResult.intent,
+    sqlBlocks,
+    dashboardProposal,
+    reconciledTables,
+    genieSpaceMatch,
+    context.tableEnrichments,
+    conversationSummary,
   );
 
   const durationMs = Date.now() - start;
@@ -428,7 +453,9 @@ export async function runAssistantEngine(
           metricName: "assistant_overall_score",
           metricValue: evalResult.overallScore / 100,
           floorValue: Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
-          passed: evalResult.overallScore / 100 >= Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
+          passed:
+            evalResult.overallScore / 100 >=
+            Number(process.env.FORGE_MIN_ASSISTANT_QUALITY ?? "0.7"),
           assistantLogId: logId,
         },
         {
@@ -445,7 +472,9 @@ export async function runAssistantEngine(
         },
       ]);
     })
-    .catch((err) => logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) }));
+    .catch((err) =>
+      logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) }),
+    );
 
   return {
     answer,
@@ -524,7 +553,10 @@ function buildActions(
     let dashDomainHint = "";
     let dashBestCount = 0;
     for (const [schema, count] of dSchemaCounts) {
-      if (count > dashBestCount) { dashBestCount = count; dashDomainHint = schema; }
+      if (count > dashBestCount) {
+        dashBestCount = count;
+        dashDomainHint = schema;
+      }
     }
 
     actions.push({
@@ -535,9 +567,7 @@ function buildActions(
         sqlBlocks: sqlBlocks.slice(0, 3),
         conversationSummary: conversationSummary || undefined,
         domainHint: dashDomainHint || undefined,
-        tableEnrichments: dashboardProposal.tables
-          .map((t) => enrichmentMap.get(t))
-          .filter(Boolean),
+        tableEnrichments: dashboardProposal.tables.map((t) => enrichmentMap.get(t)).filter(Boolean),
       },
     });
   }
@@ -556,15 +586,16 @@ function buildActions(
         payload: { tables },
       });
 
-      const schemas = tables
-        .map((t) => t.split(".")[1])
-        .filter(Boolean);
+      const schemas = tables.map((t) => t.split(".")[1]).filter(Boolean);
       const schemaCounts = new Map<string, number>();
       for (const s of schemas) schemaCounts.set(s, (schemaCounts.get(s) || 0) + 1);
       let domainHint = "";
       let bestCount = 0;
       for (const [schema, count] of schemaCounts) {
-        if (count > bestCount) { bestCount = count; domainHint = schema; }
+        if (count > bestCount) {
+          bestCount = count;
+          domainHint = schema;
+        }
       }
 
       actions.push({

@@ -33,16 +33,21 @@ const BLOCKED_DOMAINS = new Set([
 function isDomainBlocked(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    return [...BLOCKED_DOMAINS].some(
-      (d) => hostname === d || hostname.endsWith(`.${d}`),
-    );
+    return [...BLOCKED_DOMAINS].some((d) => hostname === d || hostname.endsWith(`.${d}`));
   } catch {
     return false;
   }
 }
 
 const NOISE_TAGS: (keyof HTMLElementTagNameMap)[] = [
-  "script", "style", "nav", "footer", "header", "aside", "noscript", "iframe",
+  "script",
+  "style",
+  "nav",
+  "footer",
+  "header",
+  "aside",
+  "noscript",
+  "iframe",
 ];
 
 const NOISE_REGEX = new RegExp(
@@ -79,8 +84,7 @@ export async function fetchAndConvertSource(url: string): Promise<string | null>
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; DatabricksForgeBot/1.0; +https://databricks.com)",
+        "User-Agent": "Mozilla/5.0 (compatible; DatabricksForgeBot/1.0; +https://databricks.com)",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },

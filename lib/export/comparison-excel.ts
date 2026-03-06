@@ -42,9 +42,7 @@ function styleDataRows(sheet: ExcelJS.Worksheet, startRow: number, endRow: numbe
   }
 }
 
-export async function generateComparisonExcel(
-  comparison: RunComparisonResult
-): Promise<Buffer> {
+export async function generateComparisonExcel(comparison: RunComparisonResult): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const { runA, runB } = comparison;
 
@@ -58,18 +56,64 @@ export async function generateComparisonExcel(
   ];
   styleHeaderRow(summary);
 
-  const metrics: Array<{ metric: string; a: string | number; b: string | number; delta: string }> = [
-    { metric: "Run ID", a: runA.run.runId.substring(0, 8), b: runB.run.runId.substring(0, 8), delta: "" },
-    { metric: "Status", a: runA.run.status, b: runB.run.status, delta: "" },
-    { metric: "Use Cases", a: runA.metrics.useCaseCount, b: runB.metrics.useCaseCount, delta: String(runB.metrics.useCaseCount - runA.metrics.useCaseCount) },
-    { metric: "Avg Overall Score", a: runA.metrics.avgOverallScore.toFixed(3), b: runB.metrics.avgOverallScore.toFixed(3), delta: (runB.metrics.avgOverallScore - runA.metrics.avgOverallScore).toFixed(3) },
-    { metric: "Domains", a: runA.metrics.domains.length, b: runB.metrics.domains.length, delta: String(runB.metrics.domains.length - runA.metrics.domains.length) },
-    { metric: "AI Use Cases", a: runA.metrics.aiCount, b: runB.metrics.aiCount, delta: String(runB.metrics.aiCount - runA.metrics.aiCount) },
-    { metric: "Statistical Use Cases", a: runA.metrics.statisticalCount, b: runB.metrics.statisticalCount, delta: String(runB.metrics.statisticalCount - runA.metrics.statisticalCount) },
-    { metric: "SQL Success Rate", a: `${(runA.metrics.sqlSuccessRate * 100).toFixed(1)}%`, b: `${(runB.metrics.sqlSuccessRate * 100).toFixed(1)}%`, delta: `${((runB.metrics.sqlSuccessRate - runA.metrics.sqlSuccessRate) * 100).toFixed(1)}%` },
-    { metric: "Total Tokens", a: runA.metrics.totalTokens, b: runB.metrics.totalTokens, delta: String(runB.metrics.totalTokens - runA.metrics.totalTokens) },
-    { metric: "Total Duration (s)", a: (runA.metrics.totalDurationMs / 1000).toFixed(1), b: (runB.metrics.totalDurationMs / 1000).toFixed(1), delta: `${((runB.metrics.totalDurationMs - runA.metrics.totalDurationMs) / 1000).toFixed(1)}s` },
-  ];
+  const metrics: Array<{ metric: string; a: string | number; b: string | number; delta: string }> =
+    [
+      {
+        metric: "Run ID",
+        a: runA.run.runId.substring(0, 8),
+        b: runB.run.runId.substring(0, 8),
+        delta: "",
+      },
+      { metric: "Status", a: runA.run.status, b: runB.run.status, delta: "" },
+      {
+        metric: "Use Cases",
+        a: runA.metrics.useCaseCount,
+        b: runB.metrics.useCaseCount,
+        delta: String(runB.metrics.useCaseCount - runA.metrics.useCaseCount),
+      },
+      {
+        metric: "Avg Overall Score",
+        a: runA.metrics.avgOverallScore.toFixed(3),
+        b: runB.metrics.avgOverallScore.toFixed(3),
+        delta: (runB.metrics.avgOverallScore - runA.metrics.avgOverallScore).toFixed(3),
+      },
+      {
+        metric: "Domains",
+        a: runA.metrics.domains.length,
+        b: runB.metrics.domains.length,
+        delta: String(runB.metrics.domains.length - runA.metrics.domains.length),
+      },
+      {
+        metric: "AI Use Cases",
+        a: runA.metrics.aiCount,
+        b: runB.metrics.aiCount,
+        delta: String(runB.metrics.aiCount - runA.metrics.aiCount),
+      },
+      {
+        metric: "Statistical Use Cases",
+        a: runA.metrics.statisticalCount,
+        b: runB.metrics.statisticalCount,
+        delta: String(runB.metrics.statisticalCount - runA.metrics.statisticalCount),
+      },
+      {
+        metric: "SQL Success Rate",
+        a: `${(runA.metrics.sqlSuccessRate * 100).toFixed(1)}%`,
+        b: `${(runB.metrics.sqlSuccessRate * 100).toFixed(1)}%`,
+        delta: `${((runB.metrics.sqlSuccessRate - runA.metrics.sqlSuccessRate) * 100).toFixed(1)}%`,
+      },
+      {
+        metric: "Total Tokens",
+        a: runA.metrics.totalTokens,
+        b: runB.metrics.totalTokens,
+        delta: String(runB.metrics.totalTokens - runA.metrics.totalTokens),
+      },
+      {
+        metric: "Total Duration (s)",
+        a: (runA.metrics.totalDurationMs / 1000).toFixed(1),
+        b: (runB.metrics.totalDurationMs / 1000).toFixed(1),
+        delta: `${((runB.metrics.totalDurationMs - runA.metrics.totalDurationMs) / 1000).toFixed(1)}s`,
+      },
+    ];
 
   for (const m of metrics) summary.addRow(m);
   styleDataRows(summary, 2, summary.rowCount);
@@ -113,9 +157,21 @@ export async function generateComparisonExcel(
   ];
   styleHeaderRow(overlap);
 
-  overlap.addRow({ category: "Shared Use Cases", count: comparison.overlap.sharedCount, details: comparison.overlap.sharedNames.slice(0, 20).join(", ") });
-  overlap.addRow({ category: "Unique to Run A", count: comparison.overlap.uniqueACount, details: "" });
-  overlap.addRow({ category: "Unique to Run B", count: comparison.overlap.uniqueBCount, details: "" });
+  overlap.addRow({
+    category: "Shared Use Cases",
+    count: comparison.overlap.sharedCount,
+    details: comparison.overlap.sharedNames.slice(0, 20).join(", "),
+  });
+  overlap.addRow({
+    category: "Unique to Run A",
+    count: comparison.overlap.uniqueACount,
+    details: "",
+  });
+  overlap.addRow({
+    category: "Unique to Run B",
+    count: comparison.overlap.uniqueBCount,
+    details: "",
+  });
   styleDataRows(overlap, 2, overlap.rowCount);
 
   // --- Alignment Sheet ---
@@ -157,10 +213,22 @@ export async function generateComparisonExcel(
     { setting: "Business Name", a: runA.run.config.businessName, b: runB.run.config.businessName },
     { setting: "UC Metadata", a: runA.run.config.ucMetadata, b: runB.run.config.ucMetadata },
     { setting: "AI Model", a: runA.run.config.aiModel, b: runB.run.config.aiModel },
-    { setting: "Discovery Depth", a: runA.run.config.discoveryDepth ?? "balanced", b: runB.run.config.discoveryDepth ?? "balanced" },
+    {
+      setting: "Discovery Depth",
+      a: runA.run.config.discoveryDepth ?? "balanced",
+      b: runB.run.config.discoveryDepth ?? "balanced",
+    },
     { setting: "Industry", a: runA.run.config.industry ?? "—", b: runB.run.config.industry ?? "—" },
-    { setting: "Sample Rows", a: String(runA.run.config.sampleRowsPerTable ?? 0), b: String(runB.run.config.sampleRowsPerTable ?? 0) },
-    { setting: "Priorities", a: runA.run.config.businessPriorities.join(", "), b: runB.run.config.businessPriorities.join(", ") },
+    {
+      setting: "Sample Rows",
+      a: String(runA.run.config.sampleRowsPerTable ?? 0),
+      b: String(runB.run.config.sampleRowsPerTable ?? 0),
+    },
+    {
+      setting: "Priorities",
+      a: runA.run.config.businessPriorities.join(", "),
+      b: runB.run.config.businessPriorities.join(", "),
+    },
   ];
 
   for (const c of configPairs) config.addRow(c);

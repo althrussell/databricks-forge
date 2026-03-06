@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to list scans" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -32,18 +32,12 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as { connectionId: string; incremental?: boolean };
 
     if (!body.connectionId) {
-      return NextResponse.json(
-        { error: "connectionId is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "connectionId is required" }, { status: 400 });
     }
 
     const conn = await getConnection(body.connectionId);
     if (!conn) {
-      return NextResponse.json(
-        { error: "Connection not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
 
     const userEmail = await getCurrentUserEmail();
@@ -52,7 +46,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to start scan" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

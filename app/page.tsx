@@ -76,18 +76,13 @@ async function fetchDashboardStats(): Promise<{
       ]);
 
       // Derive all KPIs from the grouped/raw results
-      const statusLookup = new Map(
-        runStatusGroups.map((g) => [g.status, g._count._all])
-      );
+      const statusLookup = new Map(runStatusGroups.map((g) => [g.status, g._count._all]));
       const completedRuns = statusLookup.get("completed") ?? 0;
       const failedRuns = statusLookup.get("failed") ?? 0;
-      const runningRuns =
-        (statusLookup.get("running") ?? 0) + (statusLookup.get("pending") ?? 0);
+      const runningRuns = (statusLookup.get("running") ?? 0) + (statusLookup.get("pending") ?? 0);
       const totalRuns = runStatusGroups.reduce((sum, g) => sum + g._count._all, 0);
 
-      const typeLookup = new Map(
-        typeGroups.map((g) => [g.type, g._count._all])
-      );
+      const typeLookup = new Map(typeGroups.map((g) => [g.type, g._count._all]));
       const aiCount = typeLookup.get("AI") ?? 0;
       const statisticalCount = typeLookup.get("Statistical") ?? 0;
       const geospatialCount = typeLookup.get("Geospatial") ?? 0;
@@ -96,9 +91,7 @@ async function fetchDashboardStats(): Promise<{
       const scores = scoreRows.map((r) => r.overallScore!);
       const avgScore =
         scores.length > 0
-          ? Math.round(
-              (scores.reduce((a, b) => a + b, 0) / scores.length) * 100
-            )
+          ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100)
           : 0;
 
       const domainBreakdown = domainGroups.map((g) => ({
@@ -112,15 +105,18 @@ async function fetchDashboardStats(): Promise<{
       const assistantRows = qualityRows.filter(
         (m) => m.metricType === "assistant" && m.metricName === "assistant_overall_score",
       );
-      const avgConsultantReadiness = consultantRows.length > 0
-        ? consultantRows.reduce((s, m) => s + m.metricValue, 0) / consultantRows.length
-        : null;
-      const avgAssistantScore = assistantRows.length > 0
-        ? assistantRows.reduce((s, m) => s + m.metricValue, 0) / assistantRows.length
-        : null;
-      const releaseGatePassRate = consultantRows.length > 0
-        ? consultantRows.filter((m) => m.passed === true).length / consultantRows.length
-        : null;
+      const avgConsultantReadiness =
+        consultantRows.length > 0
+          ? consultantRows.reduce((s, m) => s + m.metricValue, 0) / consultantRows.length
+          : null;
+      const avgAssistantScore =
+        assistantRows.length > 0
+          ? assistantRows.reduce((s, m) => s + m.metricValue, 0) / assistantRows.length
+          : null;
+      const releaseGatePassRate =
+        consultantRows.length > 0
+          ? consultantRows.filter((m) => m.passed === true).length / consultantRows.length
+          : null;
 
       const now = Date.now();
       const freshBenchmarks = benchmarkRows.filter((r) => {
@@ -128,9 +124,8 @@ async function fetchDashboardStats(): Promise<{
         const expiry = start + r.ttlDays * 24 * 60 * 60 * 1000;
         return expiry >= now;
       });
-      const benchmarkFreshnessRate = benchmarkRows.length > 0
-        ? freshBenchmarks.length / benchmarkRows.length
-        : null;
+      const benchmarkFreshnessRate =
+        benchmarkRows.length > 0 ? freshBenchmarks.length / benchmarkRows.length : null;
       const benchmarkIndustryCoverage = new Set(
         benchmarkRows.map((r) => (r.industry ?? "").trim()).filter(Boolean),
       ).size;
@@ -215,8 +210,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Forge AI</h1>
             <p className="mt-1 text-muted-foreground">
-              Transform your Unity Catalog metadata into actionable,
-              AI-generated use cases.
+              Transform your Unity Catalog metadata into actionable, AI-generated use cases.
             </p>
           </div>
         </div>

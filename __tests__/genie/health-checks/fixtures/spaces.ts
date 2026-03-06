@@ -22,9 +22,28 @@ export const perfectSpace = {
         identifier: "catalog.schema.orders",
         description: ["Order transactions"],
         column_configs: [
-          { id: hexId(10), name: "order_id", description: ["Unique order ID"], synonyms: ["id"], enable_entity_matching: true, enable_format_assistance: true },
-          { id: hexId(11), name: "customer_id", description: ["Customer FK"], synonyms: ["cust"], enable_entity_matching: false },
-          { id: hexId(12), name: "total", description: ["Order total"], synonyms: ["amount"], enable_entity_matching: false },
+          {
+            id: hexId(10),
+            name: "order_id",
+            description: ["Unique order ID"],
+            synonyms: ["id"],
+            enable_entity_matching: true,
+            enable_format_assistance: true,
+          },
+          {
+            id: hexId(11),
+            name: "customer_id",
+            description: ["Customer FK"],
+            synonyms: ["cust"],
+            enable_entity_matching: false,
+          },
+          {
+            id: hexId(12),
+            name: "total",
+            description: ["Order total"],
+            synonyms: ["amount"],
+            enable_entity_matching: false,
+          },
         ],
       },
       {
@@ -32,16 +51,26 @@ export const perfectSpace = {
         identifier: "catalog.schema.customers",
         description: ["Customer master"],
         column_configs: [
-          { id: hexId(20), name: "customer_id", description: ["Primary key"], synonyms: ["id"], enable_entity_matching: true },
-          { id: hexId(21), name: "name", description: ["Full name"], synonyms: ["customer name"], enable_entity_matching: true },
+          {
+            id: hexId(20),
+            name: "customer_id",
+            description: ["Primary key"],
+            synonyms: ["id"],
+            enable_entity_matching: true,
+          },
+          {
+            id: hexId(21),
+            name: "name",
+            description: ["Full name"],
+            synonyms: ["customer name"],
+            enable_entity_matching: true,
+          },
         ],
       },
     ],
   },
   instructions: {
-    text_instructions: [
-      { id: hexId(30), content: ["This space is about order analytics."] },
-    ],
+    text_instructions: [{ id: hexId(30), content: ["This space is about order analytics."] }],
     example_question_sqls: Array.from({ length: 10 }, (_, i) => ({
       id: hexId(40 + i),
       question: [`Question ${i + 1}`],
@@ -59,14 +88,41 @@ export const perfectSpace = {
     ],
     sql_snippets: {
       measures: [
-        { id: hexId(60), alias: "total_revenue", sql: ["SUM(o.total)"], display_name: "Total Revenue", synonyms: ["revenue"], comment: "Sum of order totals" },
-        { id: hexId(61), alias: "order_count", sql: ["COUNT(o.order_id)"], display_name: "Order Count", synonyms: ["num orders"], comment: "Number of orders" },
+        {
+          id: hexId(60),
+          alias: "total_revenue",
+          sql: ["SUM(o.total)"],
+          display_name: "Total Revenue",
+          synonyms: ["revenue"],
+          comment: "Sum of order totals",
+        },
+        {
+          id: hexId(61),
+          alias: "order_count",
+          sql: ["COUNT(o.order_id)"],
+          display_name: "Order Count",
+          synonyms: ["num orders"],
+          comment: "Number of orders",
+        },
       ],
       filters: [
-        { id: hexId(70), sql: ["o.order_date >= DATEADD(month, -1, CURRENT_DATE())"], display_name: "Last 30 days", synonyms: ["recent"], comment: "Filter to last 30 days" },
+        {
+          id: hexId(70),
+          sql: ["o.order_date >= DATEADD(month, -1, CURRENT_DATE())"],
+          display_name: "Last 30 days",
+          synonyms: ["recent"],
+          comment: "Filter to last 30 days",
+        },
       ],
       expressions: [
-        { id: hexId(80), alias: "is_high_value", sql: ["o.total > 1000"], synonyms: ["premium"], display_name: "High Value Order", instruction: "Use to identify high value orders" },
+        {
+          id: hexId(80),
+          alias: "is_high_value",
+          sql: ["o.total > 1000"],
+          synonyms: ["premium"],
+          display_name: "High Value Order",
+          instruction: "Use to identify high value orders",
+        },
       ],
     },
   },
@@ -104,9 +160,7 @@ export const emptySpace = {
 export const partialSpace = {
   version: 2,
   config: {
-    sample_questions: [
-      { id: hexId(200), question: ["Show me sales"] },
-    ],
+    sample_questions: [{ id: hexId(200), question: ["Show me sales"] }],
   },
   data_sources: {
     tables: [
@@ -123,12 +177,18 @@ export const partialSpace = {
     ],
   },
   instructions: {
-    text_instructions: [
-      { id: hexId(220), content: ["Analyze sales."] },
-    ],
+    text_instructions: [{ id: hexId(220), content: ["Analyze sales."] }],
     example_question_sqls: [
-      { id: hexId(230), question: ["What is total sales?"], sql: ["SELECT SUM(amount) FROM sales"] },
-      { id: hexId(231), question: ["Show by month"], sql: ["SELECT month, SUM(amount) FROM sales GROUP BY month"] },
+      {
+        id: hexId(230),
+        question: ["What is total sales?"],
+        sql: ["SELECT SUM(amount) FROM sales"],
+      },
+      {
+        id: hexId(231),
+        question: ["Show by month"],
+        sql: ["SELECT month, SUM(amount) FROM sales GROUP BY month"],
+      },
     ],
     join_specs: [],
     sql_snippets: {

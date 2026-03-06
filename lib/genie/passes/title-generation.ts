@@ -47,12 +47,10 @@ export function deterministicFallbackTitle(
   if (cleanDomain) {
     return normalizeTitle(`${cleanDomain} Insights`);
   }
-  const tableTokens = tableFqns
-    .slice(0, 2)
-    .map((fqn) => {
-      const part = fqn.split(".").pop() ?? fqn;
-      return part.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    });
+  const tableTokens = tableFqns.slice(0, 2).map((fqn) => {
+    const part = fqn.split(".").pop() ?? fqn;
+    return part.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  });
   return normalizeTitle(`${tableTokens.join(" ")} Insights`.trim() || "Business Insights");
 }
 
@@ -62,7 +60,10 @@ function normalizeTitle(raw: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  title = title.replace(/\b\d+\s+tables?\b/gi, "").replace(/\s+/g, " ").trim();
+  title = title
+    .replace(/\b\d+\s+tables?\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   const words = title.split(" ").filter(Boolean);
   const deduped: string[] = [];
@@ -109,7 +110,7 @@ async function generateWithEndpoint(
         `Subdomains: ${subdomains}`,
         `Tables: ${tableNames}`,
         `UserIntentSummary: ${intent}`,
-        "Output JSON: {\"title\":\"...\"}",
+        'Output JSON: {"title":"..."}',
       ].join("\n"),
     },
   ];
@@ -123,12 +124,17 @@ async function generateWithEndpoint(
     signal: input.signal,
   });
 
-  const parsed = parseLLMJson(response.content ?? "", "genie:title-generation") as Record<string, unknown>;
+  const parsed = parseLLMJson(response.content ?? "", "genie:title-generation") as Record<
+    string,
+    unknown
+  >;
   const candidate = normalizeTitle(String(parsed.title ?? ""));
   return isValidTitle(candidate) ? candidate : null;
 }
 
-export async function runTitleGeneration(input: TitleGenerationInput): Promise<TitleGenerationOutput> {
+export async function runTitleGeneration(
+  input: TitleGenerationInput,
+): Promise<TitleGenerationOutput> {
   try {
     const fastTitle = await generateWithEndpoint(input, input.endpoint);
     if (fastTitle) return { title: fastTitle, source: "llm" };

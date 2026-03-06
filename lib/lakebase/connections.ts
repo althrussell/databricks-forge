@@ -92,7 +92,7 @@ function dbRowToSummary(row: {
 
 export async function createConnection(
   input: CreateConnectionInput,
-  createdBy?: string | null
+  createdBy?: string | null,
 ): Promise<ConnectionConfig> {
   return withPrisma(async (prisma) => {
     const id = randomUUID();
@@ -121,9 +121,7 @@ export async function createConnection(
 // Read
 // ---------------------------------------------------------------------------
 
-export async function getConnection(
-  id: string
-): Promise<ConnectionConfig | null> {
+export async function getConnection(id: string): Promise<ConnectionConfig | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeConnection.findUnique({ where: { id } });
     return row ? dbRowToConfig(row) : null;
@@ -155,7 +153,7 @@ export async function listConnections(): Promise<ConnectionSummary[]> {
  * Returns the decrypted client secret for API calls. Never expose to frontend.
  */
 export async function getConnectionSecret(
-  id: string
+  id: string,
 ): Promise<{ clientId: string; clientSecret: string; tenantId: string } | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeConnection.findUnique({
@@ -177,14 +175,13 @@ export async function getConnectionSecret(
 
 export async function updateConnection(
   id: string,
-  input: UpdateConnectionInput
+  input: UpdateConnectionInput,
 ): Promise<ConnectionConfig | null> {
   return withPrisma(async (prisma) => {
     const data: Record<string, unknown> = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.status !== undefined) data.status = input.status;
-    if (input.clientSecret !== undefined)
-      data.clientSecret = encrypt(input.clientSecret);
+    if (input.clientSecret !== undefined) data.clientSecret = encrypt(input.clientSecret);
     if (input.workspaceFilter !== undefined)
       data.configJson = JSON.stringify({
         workspaceFilter: input.workspaceFilter,

@@ -119,9 +119,6 @@ export async function GET() {
     logger.error("[api/environment/table-coverage] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to load table coverage" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to load table coverage" }, { status: 500 });
   }
 }

@@ -39,7 +39,9 @@ function hasSpecificity(uc: UseCase): boolean {
   if ((uc.tablesInvolved?.length ?? 0) === 0) return false;
   if ((uc.statement ?? "").trim().length < 40) return false;
   if ((uc.businessValue ?? "").trim().length < 30) return false;
-  return !GENERIC_PATTERNS.some((rx) => rx.test(uc.statement ?? "") || rx.test(uc.businessValue ?? ""));
+  return !GENERIC_PATTERNS.some(
+    (rx) => rx.test(uc.statement ?? "") || rx.test(uc.businessValue ?? ""),
+  );
 }
 
 export function computeRunQualityBaseline(
@@ -52,9 +54,10 @@ export function computeRunQualityBaseline(
   const sqlGenerated = useCases.filter((uc) => uc.sqlStatus === "generated").length;
   const sqlGeneratedRate = totalUseCases > 0 ? sqlGenerated / totalUseCases : 0;
 
-  const avgOverallScore = totalUseCases > 0
-    ? useCases.reduce((sum, uc) => sum + (uc.overallScore ?? 0), 0) / totalUseCases
-    : 0;
+  const avgOverallScore =
+    totalUseCases > 0
+      ? useCases.reduce((sum, uc) => sum + (uc.overallScore ?? 0), 0) / totalUseCases
+      : 0;
 
   const covered = useCases.filter((uc) => (uc.tablesInvolved?.length ?? 0) > 0).length;
   const groundedUseCaseRate = totalUseCases > 0 ? covered / totalUseCases : 0;
@@ -68,33 +71,43 @@ export function computeRunQualityBaseline(
     if (!key) continue;
     nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
   }
-  const duplicateNames = [...nameCounts.values()].filter((c) => c > 1).reduce((a, b) => a + b - 1, 0);
+  const duplicateNames = [...nameCounts.values()]
+    .filter((c) => c > 1)
+    .reduce((a, b) => a + b - 1, 0);
   const duplicateNameRate = totalUseCases > 0 ? duplicateNames / totalUseCases : 0;
 
   const coverage = computeSchemaCoverage(filteredTables, useCases);
   const schemaCoveragePct = coverage.coveragePct / 100;
 
   if (lowSpecificityRate > 0.25) {
-    findings.push(`High low-specificity rate (${Math.round(lowSpecificityRate * 100)}%) suggests generic output risk.`);
+    findings.push(
+      `High low-specificity rate (${Math.round(lowSpecificityRate * 100)}%) suggests generic output risk.`,
+    );
   }
   if (schemaCoveragePct < 0.3 && filteredTables.length >= 15) {
-    findings.push(`Low table coverage (${Math.round(schemaCoveragePct * 100)}%) indicates narrow discovery breadth.`);
+    findings.push(
+      `Low table coverage (${Math.round(schemaCoveragePct * 100)}%) indicates narrow discovery breadth.`,
+    );
   }
   if (sqlGeneratedRate < 0.7) {
-    findings.push(`SQL generation success is ${Math.round(sqlGeneratedRate * 100)}%, below target.`);
+    findings.push(
+      `SQL generation success is ${Math.round(sqlGeneratedRate * 100)}%, below target.`,
+    );
   }
   if (duplicateNameRate > 0.1) {
-    findings.push(`Duplicate-name rate (${Math.round(duplicateNameRate * 100)}%) indicates dedup weakness.`);
+    findings.push(
+      `Duplicate-name rate (${Math.round(duplicateNameRate * 100)}%) indicates dedup weakness.`,
+    );
   }
 
   // Deterministic + model-derived blended quality indicator (0-1)
   const consultantReadinessScore = clamp01(
     avgOverallScore * 0.35 +
-    groundedUseCaseRate * 0.2 +
-    sqlGeneratedRate * 0.2 +
-    schemaCoveragePct * 0.1 +
-    (1 - lowSpecificityRate) * 0.1 +
-    (1 - duplicateNameRate) * 0.05,
+      groundedUseCaseRate * 0.2 +
+      sqlGeneratedRate * 0.2 +
+      schemaCoveragePct * 0.1 +
+      (1 - lowSpecificityRate) * 0.1 +
+      (1 - duplicateNameRate) * 0.05,
   );
 
   return {

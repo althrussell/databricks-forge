@@ -4,11 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 
 export function ScanTrendsPanel() {
@@ -78,9 +74,7 @@ export function ScanTrendsPanel() {
               {trends.metrics.map((m) => (
                 <div key={m.label} className="rounded-md border px-3 py-2">
                   <p className="text-[10px] text-muted-foreground">{m.label}</p>
-                  <p className="text-sm font-medium">
-                    {m.current}
-                  </p>
+                  <p className="text-sm font-medium">{m.current}</p>
                   <p className={`text-xs ${sentimentColor[m.sentiment]}`}>
                     {directionIcon[m.direction]} {m.changeLabel}
                   </p>
@@ -91,26 +85,38 @@ export function ScanTrendsPanel() {
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {trends.newTables.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-emerald-600">New Tables (+{trends.newTables.length})</p>
+                    <p className="text-xs font-semibold text-emerald-600">
+                      New Tables (+{trends.newTables.length})
+                    </p>
                     <div className="mt-1 max-h-32 overflow-y-auto">
                       {trends.newTables.slice(0, 10).map((t) => (
-                        <p key={t} className="truncate font-mono text-[10px]">{t}</p>
+                        <p key={t} className="truncate font-mono text-[10px]">
+                          {t}
+                        </p>
                       ))}
                       {trends.newTables.length > 10 && (
-                        <p className="text-[10px] text-muted-foreground">... and {trends.newTables.length - 10} more</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          ... and {trends.newTables.length - 10} more
+                        </p>
                       )}
                     </div>
                   </div>
                 )}
                 {trends.removedTables.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-red-600">Removed Tables (-{trends.removedTables.length})</p>
+                    <p className="text-xs font-semibold text-red-600">
+                      Removed Tables (-{trends.removedTables.length})
+                    </p>
                     <div className="mt-1 max-h-32 overflow-y-auto">
                       {trends.removedTables.slice(0, 10).map((t) => (
-                        <p key={t} className="truncate font-mono text-[10px]">{t}</p>
+                        <p key={t} className="truncate font-mono text-[10px]">
+                          {t}
+                        </p>
                       ))}
                       {trends.removedTables.length > 10 && (
-                        <p className="text-[10px] text-muted-foreground">... and {trends.removedTables.length - 10} more</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          ... and {trends.removedTables.length - 10} more
+                        </p>
                       )}
                     </div>
                   </div>

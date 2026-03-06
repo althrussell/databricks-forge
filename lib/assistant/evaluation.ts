@@ -55,19 +55,15 @@ export function scoreAssistantResponse(input: AssistantEvalInput): AssistantEval
     findings.push("Top retrieval score is below 0.5; grounding confidence is limited.");
   }
 
-  const confidenceScore = input.retrievalTopScore == null
-    ? 30
-    : clampScore(input.retrievalTopScore * 100);
+  const confidenceScore =
+    input.retrievalTopScore == null ? 30 : clampScore(input.retrievalTopScore * 100);
   if (input.retrievalTopScore == null) {
     findings.push("No retrieval score available for confidence estimation.");
   }
 
   const actionSafetyScore = scoreActionSafety(input.sqlBlocks, findings);
   const overallScore = clampScore(
-    citationScore * 0.2 +
-    groundingScore * 0.35 +
-    actionSafetyScore * 0.3 +
-    confidenceScore * 0.15,
+    citationScore * 0.2 + groundingScore * 0.35 + actionSafetyScore * 0.3 + confidenceScore * 0.15,
   );
 
   return {

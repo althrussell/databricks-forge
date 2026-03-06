@@ -38,7 +38,10 @@ export async function POST(request: NextRequest) {
   try {
     if (!isEmbeddingEnabled()) {
       return NextResponse.json(
-        { error: "Knowledge base uploads require the embedding endpoint (serving-endpoint-embedding) to be configured." },
+        {
+          error:
+            "Knowledge base uploads require the embedding endpoint (serving-endpoint-embedding) to be configured.",
+        },
         { status: 503 },
       );
     }
@@ -48,13 +51,14 @@ export async function POST(request: NextRequest) {
     const category = (formData.get("category") as string) || "other";
 
     if (!file) {
-      return NextResponse.json(
-        { error: "No file provided" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    if (!ALLOWED_TYPES.has(file.type) && !file.name.endsWith(".md") && !file.name.endsWith(".txt")) {
+    if (
+      !ALLOWED_TYPES.has(file.type) &&
+      !file.name.endsWith(".md") &&
+      !file.name.endsWith(".txt")
+    ) {
       return NextResponse.json(
         { error: "Unsupported file type. Allowed: PDF, Markdown, plain text" },
         { status: 400 },
@@ -96,10 +100,7 @@ export async function POST(request: NextRequest) {
           filename: file.name,
           error: err instanceof Error ? err.message : String(err),
         });
-        return NextResponse.json(
-          { error: "Failed to parse PDF" },
-          { status: 422 },
-        );
+        return NextResponse.json({ error: "Failed to parse PDF" }, { status: 422 });
       }
     } else {
       text = buffer.toString("utf-8");
@@ -107,10 +108,7 @@ export async function POST(request: NextRequest) {
 
     if (!text || text.trim().length === 0) {
       await updateDocumentStatus(docId, "empty");
-      return NextResponse.json(
-        { error: "Document contains no extractable text" },
-        { status: 422 },
-      );
+      return NextResponse.json({ error: "Document contains no extractable text" }, { status: 422 });
     }
 
     // Chunk and embed (async, non-blocking for large docs)
@@ -132,10 +130,7 @@ export async function POST(request: NextRequest) {
     logger.error("[knowledge-base/upload] POST failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 

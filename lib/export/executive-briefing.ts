@@ -124,15 +124,37 @@ function addFooter(slide: PptxGenJS.Slide, variant: "light" | "dark" = "light"):
     slide.addImage({ data: logo, x: CONTENT_MARGIN, y: 6.98, w: 0.25, h: 0.26 });
   }
   slide.addText(`Databricks Forge AI Executive Briefing  |  ${today()}`, {
-    x: CONTENT_MARGIN + 0.35, y: 7.0, w: CONTENT_W - 0.35,
-    fontSize: 10, color: variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR, align: "right",
+    x: CONTENT_MARGIN + 0.35,
+    y: 7.0,
+    w: CONTENT_W - 0.35,
+    fontSize: 10,
+    color: variant === "dark" ? TEXT_LIGHT : FOOTER_COLOR,
+    align: "right",
   });
 }
 
 function addBrandShapes(slide: PptxGenJS.Slide): void {
-  slide.addShape("ellipse", { x: 11.3, y: -0.3, w: 2.5, h: 2.5, fill: { color: WHITE, transparency: 92 } });
-  slide.addShape("ellipse", { x: -0.5, y: 5.8, w: 2.0, h: 2.0, fill: { color: WHITE, transparency: 92 } });
-  slide.addShape("ellipse", { x: 12.0, y: 6.5, w: 0.6, h: 0.6, fill: { color: DB_RED, transparency: 50 } });
+  slide.addShape("ellipse", {
+    x: 11.3,
+    y: -0.3,
+    w: 2.5,
+    h: 2.5,
+    fill: { color: WHITE, transparency: 92 },
+  });
+  slide.addShape("ellipse", {
+    x: -0.5,
+    y: 5.8,
+    w: 2.0,
+    h: 2.0,
+    fill: { color: WHITE, transparency: 92 },
+  });
+  slide.addShape("ellipse", {
+    x: 12.0,
+    y: 6.5,
+    w: 0.6,
+    h: 0.6,
+    fill: { color: DB_RED, transparency: 50 },
+  });
 }
 
 function addRedSeparator(slide: PptxGenJS.Slide, x: number, y: number, w: number): void {
@@ -149,7 +171,14 @@ function humanSize(bytes: number): string {
 function headerCell(text: string): PptxGenJS.TableCell {
   return {
     text,
-    options: { bold: true, color: WHITE, fill: { color: DB_DARK }, fontSize: 12, align: "left", valign: "middle" },
+    options: {
+      bold: true,
+      color: WHITE,
+      fill: { color: DB_DARK },
+      fontSize: 12,
+      align: "left",
+      valign: "middle",
+    },
   };
 }
 
@@ -161,14 +190,13 @@ function scoreColor(score: number): string {
   return score >= 70 ? SCORE_GREEN : score >= 40 ? SCORE_AMBER : DB_RED;
 }
 
-
 // ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
 export async function generateExecutiveBriefing(
   estate: BriefingEstateData,
-  discovery: BriefingDiscoveryData | null
+  discovery: BriefingDiscoveryData | null,
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
@@ -183,7 +211,11 @@ export async function generateExecutiveBriefing(
     piiTablesCount: estate.piiTablesCount,
     tablesWithDescription: estate.details.filter((d) => d.comment || d.generatedDescription).length,
     tablesWithTags: estate.details.filter((d) => {
-      try { return JSON.parse(d.tagsJson ?? "[]").length > 0; } catch { return false; }
+      try {
+        return JSON.parse(d.tagsJson ?? "[]").length > 0;
+      } catch {
+        return false;
+      }
     }).length,
     tablesWithOwner: estate.details.filter((d) => d.owner).length,
     tablesWithTier: estate.details.filter((d) => d.dataTier).length,
@@ -197,16 +229,21 @@ export async function generateExecutiveBriefing(
     tablesNeedingVacuum: estate.tablesNeedingVacuum,
     tablesWithStreaming: estate.tablesWithStreaming,
     tablesWithCDF: estate.tablesWithCDF,
-    avgHealthScore: estate.histories.length > 0
-      ? estate.histories.reduce((s, h) => s + (h.healthScore ?? 0), 0) / estate.histories.length
-      : 50,
+    avgHealthScore:
+      estate.histories.length > 0
+        ? estate.histories.reduce((s, h) => s + (h.healthScore ?? 0), 0) / estate.histories.length
+        : 50,
     tablesWithAutoOptimize: adoption.stats.autoOptimizeCount,
     tablesWithLiquidClustering: adoption.stats.liquidClusteringCount,
     useCaseCount: discovery?.useCases.length,
-    tablesCoveredByUseCases: discovery ? new Set(discovery.useCases.flatMap((uc) => uc.tablesInvolved)).size : undefined,
-    avgUseCaseScore: discovery && discovery.useCases.length > 0
-      ? discovery.useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / discovery.useCases.length
+    tablesCoveredByUseCases: discovery
+      ? new Set(discovery.useCases.flatMap((uc) => uc.tablesInvolved)).size
       : undefined,
+    avgUseCaseScore:
+      discovery && discovery.useCases.length > 0
+        ? discovery.useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
+          discovery.useCases.length
+        : undefined,
     aiUseCaseCount: discovery?.useCases.filter((uc) => uc.type === "AI").length,
     statisticalUseCaseCount: discovery?.useCases.filter((uc) => uc.type === "Statistical").length,
   });
@@ -223,17 +260,37 @@ export async function generateExecutiveBriefing(
   }
   addRedSeparator(titleSlide, 1.5, 1.3, 3.5);
   titleSlide.addText("Executive Briefing", {
-    x: 1.5, y: 1.6, w: 10, fontSize: 44, bold: true, color: WHITE, fontFace: "Calibri",
+    x: 1.5,
+    y: 1.6,
+    w: 10,
+    fontSize: 44,
+    bold: true,
+    color: WHITE,
+    fontFace: "Calibri",
   });
   titleSlide.addText("Data Estate Intelligence & Use Case Discovery", {
-    x: 1.5, y: 2.6, w: 10, fontSize: 24, color: TEXT_LIGHT,
+    x: 1.5,
+    y: 2.6,
+    w: 10,
+    fontSize: 24,
+    color: TEXT_LIGHT,
   });
   addRedSeparator(titleSlide, 1.5, 3.6, 2.5);
   titleSlide.addText(discovery?.businessName ?? estate.ucPath, {
-    x: 1.5, y: 3.9, w: 10, fontSize: 32, bold: true, color: DB_RED, fontFace: "Calibri",
+    x: 1.5,
+    y: 3.9,
+    w: 10,
+    fontSize: 32,
+    bold: true,
+    color: DB_RED,
+    fontFace: "Calibri",
   });
   titleSlide.addText(`Data Maturity: ${maturity.overall}/100 — ${maturity.level}`, {
-    x: 1.5, y: 5.0, w: 10, fontSize: 20, color: TEXT_LIGHT,
+    x: 1.5,
+    y: 5.0,
+    w: 10,
+    fontSize: 20,
+    color: TEXT_LIGHT,
   });
   addFooter(titleSlide, "dark");
 
@@ -242,29 +299,66 @@ export async function generateExecutiveBriefing(
   // =====================================================================
   const overviewSlide = pptx.addSlide();
   overviewSlide.addText("Data Estate Overview", {
-    x: CONTENT_MARGIN, y: 0.3, w: CONTENT_W, fontSize: 28, bold: true, color: DB_DARK,
+    x: CONTENT_MARGIN,
+    y: 0.3,
+    w: CONTENT_W,
+    fontSize: 28,
+    bold: true,
+    color: DB_DARK,
   });
   addRedSeparator(overviewSlide, CONTENT_MARGIN, 0.95, 2);
 
   // Maturity score prominently
   overviewSlide.addText(`${maturity.overall}`, {
-    x: CONTENT_MARGIN, y: 1.2, w: 2, fontSize: 60, bold: true, color: scoreColor(maturity.overall), align: "center",
+    x: CONTENT_MARGIN,
+    y: 1.2,
+    w: 2,
+    fontSize: 60,
+    bold: true,
+    color: scoreColor(maturity.overall),
+    align: "center",
   });
   overviewSlide.addText(`/100\n${maturity.level}`, {
-    x: CONTENT_MARGIN, y: 2.9, w: 2, fontSize: 14, color: MID_GRAY, align: "center",
+    x: CONTENT_MARGIN,
+    y: 2.9,
+    w: 2,
+    fontSize: 14,
+    color: MID_GRAY,
+    align: "center",
   });
 
   // Pillar bars
-  const pillars = [maturity.pillars.governance, maturity.pillars.architecture, maturity.pillars.operations, maturity.pillars.analyticsReadiness];
+  const pillars = [
+    maturity.pillars.governance,
+    maturity.pillars.architecture,
+    maturity.pillars.operations,
+    maturity.pillars.analyticsReadiness,
+  ];
   let pillarY = 1.3;
   for (const p of pillars) {
     overviewSlide.addText(`${p.name}: ${p.score}/100`, {
-      x: 2.8, y: pillarY, w: 4, fontSize: 12, color: TEXT_COLOR,
+      x: 2.8,
+      y: pillarY,
+      w: 4,
+      fontSize: 12,
+      color: TEXT_COLOR,
     });
     // Bar background
-    overviewSlide.addShape("rect", { x: 2.8, y: pillarY + 0.35, w: 4, h: 0.15, fill: { color: "E5E7EB" } });
+    overviewSlide.addShape("rect", {
+      x: 2.8,
+      y: pillarY + 0.35,
+      w: 4,
+      h: 0.15,
+      fill: { color: "E5E7EB" },
+    });
     // Bar fill
-    overviewSlide.addShape("rect", { x: 2.8, y: pillarY + 0.35, w: 4 * (p.score / 100), h: 0.15, fill: { color: scoreColor(p.score) } });
+    overviewSlide.addShape("rect", {
+      x: 2.8,
+      y: pillarY + 0.35,
+      w: 4 * (p.score / 100),
+      h: 0.15,
+      fill: { color: scoreColor(p.score) },
+    });
     pillarY += 0.7;
   }
 
@@ -277,10 +371,19 @@ export async function generateExecutiveBriefing(
     [bodyCell("Data Products"), bodyCell(String(estate.dataProductCount))],
     [bodyCell("Feature Adoption Score"), bodyCell(`${adoption.adoptionScore}/100`)],
     [bodyCell("Lineage Edges"), bodyCell(String(estate.lineageEdgeCount))],
-    [bodyCell("Tables via Lineage"), bodyCell(estate.lineageDiscoveredCount > 0 ? `${estate.lineageDiscoveredCount} discovered` : "None")],
+    [
+      bodyCell("Tables via Lineage"),
+      bodyCell(
+        estate.lineageDiscoveredCount > 0 ? `${estate.lineageDiscoveredCount} discovered` : "None",
+      ),
+    ],
   ];
   overviewSlide.addTable(estateRows, {
-    x: 7.5, y: 1.2, w: 5.2, fontSize: 11, border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+    x: 7.5,
+    y: 1.2,
+    w: 5.2,
+    fontSize: 11,
+    border: { type: "solid", pt: 0.5, color: "D1D5DB" },
     colW: [3, 2.2],
   });
   addFooter(overviewSlide);
@@ -290,25 +393,84 @@ export async function generateExecutiveBriefing(
   // =====================================================================
   const govSlide = pptx.addSlide();
   govSlide.addText("Governance Posture", {
-    x: CONTENT_MARGIN, y: 0.3, w: CONTENT_W, fontSize: 28, bold: true, color: DB_DARK,
+    x: CONTENT_MARGIN,
+    y: 0.3,
+    w: CONTENT_W,
+    fontSize: 28,
+    bold: true,
+    color: DB_DARK,
   });
   addRedSeparator(govSlide, CONTENT_MARGIN, 0.95, 2);
 
-  const docPct = estate.tableCount > 0 ? Math.round((estate.details.filter((d) => d.comment || d.generatedDescription).length / estate.tableCount) * 100) : 0;
-  const ownerPct = estate.tableCount > 0 ? Math.round((estate.details.filter((d) => d.owner).length / estate.tableCount) * 100) : 0;
-  const piiPct = estate.tableCount > 0 ? Math.round((estate.piiTablesCount / estate.tableCount) * 100) : 0;
+  const docPct =
+    estate.tableCount > 0
+      ? Math.round(
+          (estate.details.filter((d) => d.comment || d.generatedDescription).length /
+            estate.tableCount) *
+            100,
+        )
+      : 0;
+  const ownerPct =
+    estate.tableCount > 0
+      ? Math.round((estate.details.filter((d) => d.owner).length / estate.tableCount) * 100)
+      : 0;
+  const piiPct =
+    estate.tableCount > 0 ? Math.round((estate.piiTablesCount / estate.tableCount) * 100) : 0;
   const govGaps = estate.insights.filter((i) => i.insightType === "governance_gap");
 
   const govRows: PptxGenJS.TableCell[][] = [
     [headerCell("Indicator"), headerCell("Value"), headerCell("Assessment")],
-    [bodyCell("Avg Governance Score"), bodyCell(`${estate.avgGovernanceScore.toFixed(0)}/100`), bodyCell(estate.avgGovernanceScore >= 70 ? "Strong" : estate.avgGovernanceScore >= 40 ? "Needs improvement" : "Critical gaps")],
-    [bodyCell("Documentation Coverage"), bodyCell(`${docPct}%`), bodyCell(docPct >= 70 ? "Well documented" : docPct >= 40 ? "Partial" : "Most tables undocumented")],
-    [bodyCell("Ownership Assignment"), bodyCell(`${ownerPct}%`), bodyCell(ownerPct >= 70 ? "Good ownership" : ownerPct >= 40 ? "Partial" : "Ownership gaps — accountability risk")],
-    [bodyCell("Tables with PII"), bodyCell(`${estate.piiTablesCount} (${piiPct}%)`), bodyCell(estate.piiTablesCount > 0 ? "Requires compliance controls" : "No PII detected")],
-    [bodyCell("Governance Gaps Found"), bodyCell(String(govGaps.length)), bodyCell(govGaps.length > 10 ? "Many gaps requiring attention" : govGaps.length > 0 ? "Some gaps identified" : "No gaps found")],
+    [
+      bodyCell("Avg Governance Score"),
+      bodyCell(`${estate.avgGovernanceScore.toFixed(0)}/100`),
+      bodyCell(
+        estate.avgGovernanceScore >= 70
+          ? "Strong"
+          : estate.avgGovernanceScore >= 40
+            ? "Needs improvement"
+            : "Critical gaps",
+      ),
+    ],
+    [
+      bodyCell("Documentation Coverage"),
+      bodyCell(`${docPct}%`),
+      bodyCell(
+        docPct >= 70 ? "Well documented" : docPct >= 40 ? "Partial" : "Most tables undocumented",
+      ),
+    ],
+    [
+      bodyCell("Ownership Assignment"),
+      bodyCell(`${ownerPct}%`),
+      bodyCell(
+        ownerPct >= 70
+          ? "Good ownership"
+          : ownerPct >= 40
+            ? "Partial"
+            : "Ownership gaps — accountability risk",
+      ),
+    ],
+    [
+      bodyCell("Tables with PII"),
+      bodyCell(`${estate.piiTablesCount} (${piiPct}%)`),
+      bodyCell(estate.piiTablesCount > 0 ? "Requires compliance controls" : "No PII detected"),
+    ],
+    [
+      bodyCell("Governance Gaps Found"),
+      bodyCell(String(govGaps.length)),
+      bodyCell(
+        govGaps.length > 10
+          ? "Many gaps requiring attention"
+          : govGaps.length > 0
+            ? "Some gaps identified"
+            : "No gaps found",
+      ),
+    ],
   ];
   govSlide.addTable(govRows, {
-    x: CONTENT_MARGIN, y: 1.3, w: CONTENT_W, fontSize: 11,
+    x: CONTENT_MARGIN,
+    y: 1.3,
+    w: CONTENT_W,
+    fontSize: 11,
     border: { type: "solid", pt: 0.5, color: "D1D5DB" },
     colW: [4, 2.5, 5.63],
   });
@@ -319,7 +481,12 @@ export async function generateExecutiveBriefing(
   // =====================================================================
   const archSlide = pptx.addSlide();
   archSlide.addText("Architecture Quality", {
-    x: CONTENT_MARGIN, y: 0.3, w: CONTENT_W, fontSize: 28, bold: true, color: DB_DARK,
+    x: CONTENT_MARGIN,
+    y: 0.3,
+    w: CONTENT_W,
+    fontSize: 28,
+    bold: true,
+    color: DB_DARK,
   });
   addRedSeparator(archSlide, CONTENT_MARGIN, 0.95, 2);
 
@@ -333,14 +500,32 @@ export async function generateExecutiveBriefing(
 
   const archRows: PptxGenJS.TableCell[][] = [
     [headerCell("Indicator"), headerCell("Value")],
-    [bodyCell("Medallion Tiers"), bodyCell(`Bronze: ${tiers.bronze} | Silver: ${tiers.silver} | Gold: ${tiers.gold} | Unclassified: ${tiers.unclassified}`)],
+    [
+      bodyCell("Medallion Tiers"),
+      bodyCell(
+        `Bronze: ${tiers.bronze} | Silver: ${tiers.silver} | Gold: ${tiers.gold} | Unclassified: ${tiers.unclassified}`,
+      ),
+    ],
     [bodyCell("Redundancy Pairs"), bodyCell(String(estate.redundancyPairsCount))],
     [bodyCell("Data Products"), bodyCell(String(estate.dataProductCount))],
-    [bodyCell("Lineage Coverage"), bodyCell(`${estate.lineageEdgeCount} edges, ${estate.lineageDiscoveredCount} tables discovered via lineage`)],
-    [bodyCell("Managed vs External"), bodyCell(`${estate.details.filter((d) => d.isManaged).length} / ${estate.details.filter((d) => !d.isManaged).length}`)],
+    [
+      bodyCell("Lineage Coverage"),
+      bodyCell(
+        `${estate.lineageEdgeCount} edges, ${estate.lineageDiscoveredCount} tables discovered via lineage`,
+      ),
+    ],
+    [
+      bodyCell("Managed vs External"),
+      bodyCell(
+        `${estate.details.filter((d) => d.isManaged).length} / ${estate.details.filter((d) => !d.isManaged).length}`,
+      ),
+    ],
   ];
   archSlide.addTable(archRows, {
-    x: CONTENT_MARGIN, y: 1.3, w: CONTENT_W, fontSize: 11,
+    x: CONTENT_MARGIN,
+    y: 1.3,
+    w: CONTENT_W,
+    fontSize: 11,
     border: { type: "solid", pt: 0.5, color: "D1D5DB" },
     colW: [4, 8.13],
   });
@@ -351,19 +536,30 @@ export async function generateExecutiveBriefing(
   // =====================================================================
   const featSlide = pptx.addSlide();
   featSlide.addText("Databricks Feature Adoption", {
-    x: CONTENT_MARGIN, y: 0.3, w: CONTENT_W, fontSize: 28, bold: true, color: DB_DARK,
+    x: CONTENT_MARGIN,
+    y: 0.3,
+    w: CONTENT_W,
+    fontSize: 28,
+    bold: true,
+    color: DB_DARK,
   });
   addRedSeparator(featSlide, CONTENT_MARGIN, 0.95, 2);
 
   featSlide.addText(`Adoption Score: ${adoption.adoptionScore}/100`, {
-    x: CONTENT_MARGIN, y: 1.2, w: CONTENT_W, fontSize: 20, bold: true, color: scoreColor(adoption.adoptionScore),
+    x: CONTENT_MARGIN,
+    y: 1.2,
+    w: CONTENT_W,
+    fontSize: 20,
+    bold: true,
+    color: scoreColor(adoption.adoptionScore),
   });
 
   const featRows: PptxGenJS.TableCell[][] = [
     [headerCell("Feature"), headerCell("Status"), headerCell("Recommendation")],
   ];
   for (const f of adoption.findings.slice(0, 6)) {
-    const sevColor = f.severity === "high" ? DB_RED : f.severity === "medium" ? SCORE_AMBER : SCORE_GREEN;
+    const sevColor =
+      f.severity === "high" ? DB_RED : f.severity === "medium" ? SCORE_AMBER : SCORE_GREEN;
     featRows.push([
       bodyCell(f.feature, { bold: true }),
       bodyCell(f.current, { color: sevColor }),
@@ -371,7 +567,10 @@ export async function generateExecutiveBriefing(
     ]);
   }
   featSlide.addTable(featRows, {
-    x: CONTENT_MARGIN, y: 1.8, w: CONTENT_W, fontSize: 10,
+    x: CONTENT_MARGIN,
+    y: 1.8,
+    w: CONTENT_W,
+    fontSize: 10,
     border: { type: "solid", pt: 0.5, color: "D1D5DB" },
     colW: [2.5, 4.5, 5.13],
     rowH: [0.35, ...Array(featRows.length - 1).fill(0.6)],
@@ -385,23 +584,40 @@ export async function generateExecutiveBriefing(
   if (discovery && discovery.useCases.length > 0) {
     const ucSlide = pptx.addSlide();
     ucSlide.addText("Use Case Discovery Highlights", {
-      x: CONTENT_MARGIN, y: 0.3, w: CONTENT_W, fontSize: 28, bold: true, color: DB_DARK,
+      x: CONTENT_MARGIN,
+      y: 0.3,
+      w: CONTENT_W,
+      fontSize: 28,
+      bold: true,
+      color: DB_DARK,
     });
     addRedSeparator(ucSlide, CONTENT_MARGIN, 0.95, 2);
 
     const domainStats = computeDomainStats(discovery.useCases);
     const aiCount = discovery.useCases.filter((uc) => uc.type === "AI").length;
-    const avgScore = Math.round((discovery.useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / discovery.useCases.length) * 100);
+    const avgScore = Math.round(
+      (discovery.useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
+        discovery.useCases.length) *
+        100,
+    );
 
     ucSlide.addText(
       `${discovery.useCases.length} use cases discovered across ${domainStats.length} domains (${aiCount} AI, ${discovery.useCases.length - aiCount} Statistical) — avg score ${avgScore}%`,
-      { x: CONTENT_MARGIN, y: 1.2, w: CONTENT_W, fontSize: 14, color: TEXT_COLOR }
+      { x: CONTENT_MARGIN, y: 1.2, w: CONTENT_W, fontSize: 14, color: TEXT_COLOR },
     );
 
     // Top 8 use cases table
-    const topUc = [...discovery.useCases].sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall).slice(0, 8);
+    const topUc = [...discovery.useCases]
+      .sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall)
+      .slice(0, 8);
     const ucRows: PptxGenJS.TableCell[][] = [
-      [headerCell("#"), headerCell("Use Case"), headerCell("Domain"), headerCell("Type"), headerCell("Score")],
+      [
+        headerCell("#"),
+        headerCell("Use Case"),
+        headerCell("Domain"),
+        headerCell("Type"),
+        headerCell("Score"),
+      ],
     ];
     topUc.forEach((uc, i) => {
       ucRows.push([
@@ -409,11 +625,17 @@ export async function generateExecutiveBriefing(
         bodyCell(uc.name),
         bodyCell(uc.domain),
         bodyCell(uc.type),
-        bodyCell(`${Math.round(effectiveScores(uc).overall * 100)}%`, { color: scoreColor(effectiveScores(uc).overall * 100), bold: true }),
+        bodyCell(`${Math.round(effectiveScores(uc).overall * 100)}%`, {
+          color: scoreColor(effectiveScores(uc).overall * 100),
+          bold: true,
+        }),
       ]);
     });
     ucSlide.addTable(ucRows, {
-      x: CONTENT_MARGIN, y: 1.7, w: CONTENT_W, fontSize: 10,
+      x: CONTENT_MARGIN,
+      y: 1.7,
+      w: CONTENT_W,
+      fontSize: 10,
       border: { type: "solid", pt: 0.5, color: "D1D5DB" },
       colW: [0.5, 5, 2.5, 1.5, 2.63],
     });
@@ -426,18 +648,23 @@ export async function generateExecutiveBriefing(
   if (discovery && discovery.useCases.length > 0) {
     const expSlide = pptx.addSlide();
     expSlide.addText("Expansion Opportunities", {
-      x: CONTENT_MARGIN, y: 0.3, w: CONTENT_W, fontSize: 28, bold: true, color: DB_DARK,
+      x: CONTENT_MARGIN,
+      y: 0.3,
+      w: CONTENT_W,
+      fontSize: 28,
+      bold: true,
+      color: DB_DARK,
     });
     addRedSeparator(expSlide, CONTENT_MARGIN, 0.95, 2);
 
     const coverage = computeSchemaCoverage(discovery.filteredTables, discovery.useCases);
     expSlide.addText(
       `Schema Coverage: ${coverage.coveragePct}% (${coverage.coveredTables} of ${coverage.totalTables} tables have use cases)`,
-      { x: CONTENT_MARGIN, y: 1.2, w: CONTENT_W, fontSize: 14, color: TEXT_COLOR }
+      { x: CONTENT_MARGIN, y: 1.2, w: CONTENT_W, fontSize: 14, color: TEXT_COLOR },
     );
     expSlide.addText(
       `${coverage.uncoveredTables.length} tables have no associated use cases — these represent untapped data with potential for new analytics.`,
-      { x: CONTENT_MARGIN, y: 1.6, w: CONTENT_W, fontSize: 12, color: MID_GRAY }
+      { x: CONTENT_MARGIN, y: 1.6, w: CONTENT_W, fontSize: 12, color: MID_GRAY },
     );
 
     // Top uncovered tables
@@ -449,10 +676,16 @@ export async function generateExecutiveBriefing(
         uncoveredRows.push([bodyCell(fqn), bodyCell("No use cases generated — expansion signal")]);
       }
       if (coverage.uncoveredTables.length > 12) {
-        uncoveredRows.push([bodyCell(`... and ${coverage.uncoveredTables.length - 12} more`), bodyCell("")]);
+        uncoveredRows.push([
+          bodyCell(`... and ${coverage.uncoveredTables.length - 12} more`),
+          bodyCell(""),
+        ]);
       }
       expSlide.addTable(uncoveredRows, {
-        x: CONTENT_MARGIN, y: 2.2, w: CONTENT_W, fontSize: 10,
+        x: CONTENT_MARGIN,
+        y: 2.2,
+        w: CONTENT_W,
+        fontSize: 10,
         border: { type: "solid", pt: 0.5, color: "D1D5DB" },
         colW: [7, 5.13],
       });
@@ -461,13 +694,23 @@ export async function generateExecutiveBriefing(
     // Top referenced tables
     if (coverage.topTables.length > 0) {
       expSlide.addText("Most Valuable Data Assets (most use case references):", {
-        x: CONTENT_MARGIN, y: 5.4, w: CONTENT_W, fontSize: 12, bold: true, color: TEXT_COLOR,
+        x: CONTENT_MARGIN,
+        y: 5.4,
+        w: CONTENT_W,
+        fontSize: 12,
+        bold: true,
+        color: TEXT_COLOR,
       });
-      const topText = coverage.topTables.slice(0, 5)
+      const topText = coverage.topTables
+        .slice(0, 5)
         .map((t) => `${t.fqn} (${t.useCaseCount} use cases)`)
         .join("  |  ");
       expSlide.addText(topText, {
-        x: CONTENT_MARGIN, y: 5.8, w: CONTENT_W, fontSize: 10, color: MID_GRAY,
+        x: CONTENT_MARGIN,
+        y: 5.8,
+        w: CONTENT_W,
+        fontSize: 10,
+        color: MID_GRAY,
       });
     }
     addFooter(expSlide);

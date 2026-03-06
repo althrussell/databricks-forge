@@ -50,10 +50,8 @@ export async function createOutcomeMap(opts: {
     const id = randomUUID();
 
     const useCaseCount = opts.parsedOutcome.objectives.reduce(
-      (total, obj) =>
-        total +
-        obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
-      0
+      (total, obj) => total + obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
+      0,
     );
 
     const row = await prisma.forgeOutcomeMap.create({
@@ -87,9 +85,7 @@ export async function createOutcomeMap(opts: {
 // Read
 // ---------------------------------------------------------------------------
 
-export async function getOutcomeMap(
-  id: string
-): Promise<OutcomeMapRecord | null> {
+export async function getOutcomeMap(id: string): Promise<OutcomeMapRecord | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeOutcomeMap.findUnique({ where: { id } });
     return row ? dbRowToRecord(row) : null;
@@ -97,7 +93,7 @@ export async function getOutcomeMap(
 }
 
 export async function getOutcomeMapByIndustryId(
-  industryId: string
+  industryId: string,
 ): Promise<OutcomeMapRecord | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeOutcomeMap.findUnique({
@@ -165,7 +161,7 @@ export async function updateOutcomeMap(
     industryId?: string;
     rawMarkdown?: string;
     parsedOutcome?: IndustryOutcome;
-  }
+  },
 ): Promise<OutcomeMapRecord | null> {
   return withPrisma(async (prisma) => {
     const data: Record<string, unknown> = {};
@@ -175,10 +171,8 @@ export async function updateOutcomeMap(
     if (opts.parsedOutcome !== undefined) {
       data.parsedJson = JSON.stringify(opts.parsedOutcome);
       data.useCaseCount = opts.parsedOutcome.objectives.reduce(
-        (total, obj) =>
-          total +
-          obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
-        0
+        (total, obj) => total + obj.priorities.reduce((pTotal, p) => pTotal + p.useCases.length, 0),
+        0,
       );
     }
 

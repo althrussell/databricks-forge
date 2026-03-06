@@ -22,9 +22,7 @@ export async function ensureEmbeddingSchema(): Promise<void> {
   const prisma = await getPrisma();
 
   try {
-    await prisma.$executeRawUnsafe(
-      `CREATE EXTENSION IF NOT EXISTS vector`
-    );
+    await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
     logger.info("[embeddings] pgvector extension ensured");
   } catch (err) {
     logger.warn("[embeddings] Failed to create pgvector extension (may already exist)", {
@@ -47,16 +45,16 @@ export async function ensureEmbeddingSchema(): Promise<void> {
   `);
 
   await prisma.$executeRawUnsafe(
-    `CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)`
+    `CREATE INDEX IF NOT EXISTS idx_embeddings_kind ON forge_embeddings(kind)`,
   );
   await prisma.$executeRawUnsafe(
-    `CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)`
+    `CREATE INDEX IF NOT EXISTS idx_embeddings_source ON forge_embeddings(source_id)`,
   );
   await prisma.$executeRawUnsafe(
-    `CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)`
+    `CREATE INDEX IF NOT EXISTS idx_embeddings_run ON forge_embeddings(run_id)`,
   );
   await prisma.$executeRawUnsafe(
-    `CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)`
+    `CREATE INDEX IF NOT EXISTS idx_embeddings_scan ON forge_embeddings(scan_id)`,
   );
 
   try {

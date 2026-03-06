@@ -22,7 +22,7 @@ const MIN_CASES_PER_DOMAIN = 3;
 
 export async function runDomainClustering(
   ctx: PipelineContext,
-  runId?: string
+  runId?: string,
 ): Promise<UseCase[]> {
   const { run, useCases } = ctx;
   if (!run.businessContext) throw new Error("Business context not available");
@@ -32,11 +32,14 @@ export async function runDomainClustering(
   const updatedCases = [...useCases];
 
   // Step 5a: Assign domains
-  if (runId) await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
+  if (runId)
+    await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
     await assignDomains(updatedCases, run.config.businessName, bc, getFastServingEndpoint(), runId);
   } catch (error) {
-    logger.error("Domain assignment failed", { error: error instanceof Error ? error.message : String(error) });
+    logger.error("Domain assignment failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     // Fallback: assign all to "General"
     updatedCases.forEach((uc) => {
       uc.domain = "General";
@@ -50,11 +53,25 @@ export async function runDomainClustering(
     const domainCases = updatedCases.filter((uc) => uc.domain === domain);
     if (domainCases.length < 2) continue;
 
-    if (runId) await updateRunMessage(runId, `Assigning subdomains for domain: ${domain} (${di + 1}/${domains.length})...`);
+    if (runId)
+      await updateRunMessage(
+        runId,
+        `Assigning subdomains for domain: ${domain} (${di + 1}/${domains.length})...`,
+      );
     try {
-      await assignSubdomains(domainCases, domain, run.config.businessName, bc, getFastServingEndpoint(), runId);
+      await assignSubdomains(
+        domainCases,
+        domain,
+        run.config.businessName,
+        bc,
+        getFastServingEndpoint(),
+        runId,
+      );
     } catch (error) {
-      logger.warn("Subdomain assignment failed", { domain, error: error instanceof Error ? error.message : String(error) });
+      logger.warn("Subdomain assignment failed", {
+        domain,
+        error: error instanceof Error ? error.message : String(error),
+      });
       domainCases.forEach((uc) => {
         uc.subdomain = "General";
       });
@@ -66,7 +83,7 @@ export async function runDomainClustering(
     updatedCases.reduce<Record<string, number>>((acc, uc) => {
       acc[uc.domain] = (acc[uc.domain] ?? 0) + 1;
       return acc;
-    }, {})
+    }, {}),
   ).filter(([, count]) => count < MIN_CASES_PER_DOMAIN).length;
 
   if (smallDomainCount > 0 && runId) {
@@ -75,7 +92,9 @@ export async function runDomainClustering(
   try {
     await mergeSmallDomains(updatedCases, getFastServingEndpoint(), runId);
   } catch (error) {
-    logger.warn("Domain merge failed", { error: error instanceof Error ? error.message : String(error) });
+    logger.warn("Domain merge failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const finalDomainCount = [...new Set(updatedCases.map((uc) => uc.domain))].length;
@@ -91,7 +110,7 @@ async function assignDomains(
   businessName: string,
   businessContext: { industries: string },
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<void> {
   const targetDomainCount = Math.max(3, Math.min(25, Math.round(useCases.length / 10)));
 
@@ -132,7 +151,9 @@ async function assignDomains(
       logger.warn("Failed to parse domain assignment JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
       });
-      batch.forEach((uc) => { uc.domain = "General"; });
+      batch.forEach((uc) => {
+        uc.domain = "General";
+      });
       continue;
     }
 
@@ -155,7 +176,7 @@ async function assignSubdomains(
   businessName: string,
   businessContext: { industries: string },
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<void> {
   const renderUseCase = (uc: UseCase) =>
     `${uc.useCaseNo}, "${uc.name}", "${uc.type}", "${uc.statement}"`;
@@ -194,7 +215,9 @@ async function assignSubdomains(
         domain: domainName,
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
       });
-      batch.forEach((uc) => { uc.subdomain = "General"; });
+      batch.forEach((uc) => {
+        uc.subdomain = "General";
+      });
       continue;
     }
 
@@ -213,15 +236,14 @@ async function assignSubdomains(
   }
 
   const singleItemSubdomains = new Set(
-    [...subdomainCounts.entries()]
-      .filter(([, count]) => count < 2)
-      .map(([name]) => name)
+    [...subdomainCounts.entries()].filter(([, count]) => count < 2).map(([name]) => name),
   );
 
   if (singleItemSubdomains.size > 0) {
-    const largestSubdomain = [...subdomainCounts.entries()]
-      .filter(([name]) => !singleItemSubdomains.has(name))
-      .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "General";
+    const largestSubdomain =
+      [...subdomainCounts.entries()]
+        .filter(([name]) => !singleItemSubdomains.has(name))
+        .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "General";
 
     for (const [no, sd] of subdomainMap.entries()) {
       if (singleItemSubdomains.has(sd)) {
@@ -238,7 +260,7 @@ async function assignSubdomains(
 async function mergeSmallDomains(
   useCases: UseCase[],
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<void> {
   const domainCounts: Record<string, number> = {};
   for (const uc of useCases) {
@@ -271,7 +293,10 @@ async function mergeSmallDomains(
 
     let mergeMap: Record<string, string>;
     try {
-      mergeMap = parseLLMJson(result.rawResponse, "domain-clustering:merge") as Record<string, string>;
+      mergeMap = parseLLMJson(result.rawResponse, "domain-clustering:merge") as Record<
+        string,
+        string
+      >;
     } catch (parseErr) {
       logger.warn("Failed to parse domain merge JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
@@ -285,6 +310,8 @@ async function mergeSmallDomains(
       }
     }
   } catch (error) {
-    logger.warn("Domain merge failed", { error: error instanceof Error ? error.message : String(error) });
+    logger.warn("Domain merge failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

@@ -107,10 +107,7 @@ describe("buildSchemaMarkdown", () => {
 
   it("handles multiple tables", () => {
     const tables = [makeTable("cat.s.t1"), makeTable("cat.s.t2")];
-    const columns = [
-      makeColumn("cat.s.t1", "id", "int"),
-      makeColumn("cat.s.t2", "name", "string"),
-    ];
+    const columns = [makeColumn("cat.s.t1", "id", "int"), makeColumn("cat.s.t2", "name", "string")];
 
     const md = buildSchemaMarkdown(tables, columns);
     expect(md).toContain("### cat.s.t1");

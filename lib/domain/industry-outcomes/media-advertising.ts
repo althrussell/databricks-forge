@@ -10,13 +10,7 @@ export const MEDIA_ADVERTISING: IndustryOutcome = {
     "Advertising Technology",
     "Digital Media",
   ],
-  suggestedDomains: [
-    "Marketing",
-    "Customer Experience",
-    "Operations",
-    "Sales",
-    "Cybersecurity",
-  ],
+  suggestedDomains: ["Marketing", "Customer Experience", "Operations", "Sales", "Cybersecurity"],
   suggestedPriorities: [
     "Increase Revenue",
     "Enhance Experience",
@@ -37,28 +31,53 @@ export const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "First-Party Identity Spine",
               description:
                 "Build a unified first-party identity framework storing and organizing PII data at household, person, and device levels.",
-              typicalDataEntities: ["Household Profiles", "Person Identity Records", "Device Identifiers", "Identity Link Graph"],
+              typicalDataEntities: [
+                "Household Profiles",
+                "Person Identity Records",
+                "Device Identifiers",
+                "Identity Link Graph",
+              ],
               typicalSourceSystems: ["CDP", "Website Analytics", "App Analytics", "CRM"],
             },
             {
               name: "Household Device Graphing",
               description:
                 "Link multiple devices to individual households using first-party signals to dramatically augment identity coverage.",
-              typicalDataEntities: ["Device Fingerprints", "Household Clusters", "Cross-Device Signals", "Login Graph"],
-              typicalSourceSystems: ["CDP", "Ad Server", "Streaming Platform", "Analytics Platform"],
+              typicalDataEntities: [
+                "Device Fingerprints",
+                "Household Clusters",
+                "Cross-Device Signals",
+                "Login Graph",
+              ],
+              typicalSourceSystems: [
+                "CDP",
+                "Ad Server",
+                "Streaming Platform",
+                "Analytics Platform",
+              ],
             },
             {
               name: "Customer Profile Enrichment",
               description:
                 "Aggregate data from multiple touchpoints to create rich profiles of audience interests, preferences, demographics, and psychographics.",
-              typicalDataEntities: ["Customer Profiles", "Engagement History", "Demographic Attributes", "Interest Signals"],
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Engagement History",
+                "Demographic Attributes",
+                "Interest Signals",
+              ],
               typicalSourceSystems: ["CDP", "Content CMS", "Analytics Platform", "CRM"],
             },
             {
               name: "Audience Segmentation",
               description:
                 "ML-driven algorithms to create dynamic audience segments based on behavioral patterns, content preferences, and demographics.",
-              typicalDataEntities: ["Audience Segments", "Behavioral Events", "Content Preferences", "Demographic Attributes"],
+              typicalDataEntities: [
+                "Audience Segments",
+                "Behavioral Events",
+                "Content Preferences",
+                "Demographic Attributes",
+              ],
               typicalSourceSystems: ["CDP", "Content CMS", "Analytics Platform", "Ad Server"],
             },
           ],
@@ -67,11 +86,7 @@ export const MEDIA_ADVERTISING: IndustryOutcome = {
             "Cross-device match rate",
             "Customer profile completeness",
           ],
-          personas: [
-            "Chief Data Officer",
-            "Head of Ad Sales",
-            "Head of Audience Insights",
-          ],
+          personas: ["Chief Data Officer", "Head of Ad Sales", "Head of Audience Insights"],
         },
       ],
     },
@@ -97,20 +112,22 @@ export const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "Campaign Attribution & Optimization",
               description:
                 "Measure marketing campaign effectiveness across channels with multi-touch attribution modeling.",
-              typicalDataEntities: ["Campaign Events", "Touchpoint Data", "Conversion Events", "Channel Performance"],
-              typicalSourceSystems: ["Marketing Platform", "Ad Server", "Analytics Platform", "CRM"],
+              typicalDataEntities: [
+                "Campaign Events",
+                "Touchpoint Data",
+                "Conversion Events",
+                "Channel Performance",
+              ],
+              typicalSourceSystems: [
+                "Marketing Platform",
+                "Ad Server",
+                "Analytics Platform",
+                "CRM",
+              ],
             },
           ],
-          kpis: [
-            "Subscriber retention rate",
-            "Content engagement time",
-            "Marketing ROI",
-          ],
-          personas: [
-            "Chief Marketing Officer",
-            "Head of Growth",
-            "VP Content Strategy",
-          ],
+          kpis: ["Subscriber retention rate", "Content engagement time", "Marketing ROI"],
+          personas: ["Chief Marketing Officer", "Head of Growth", "VP Content Strategy"],
         },
       ],
     },
@@ -126,34 +143,46 @@ export const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "Programmatic Ad Targeting",
               description:
                 "Enable precise, privacy-compliant ad targeting using first-party audience data and ML-driven lookalike modeling.",
-              typicalDataEntities: ["Audience Segments", "Ad Inventory", "Bid Data", "Conversion Events"],
+              typicalDataEntities: [
+                "Audience Segments",
+                "Ad Inventory",
+                "Bid Data",
+                "Conversion Events",
+              ],
               typicalSourceSystems: ["CDP", "Ad Server", "DSP", "Analytics Platform"],
             },
             {
               name: "Yield Optimization",
               description:
                 "Optimize ad inventory yield by predicting CPMs and dynamically adjusting pricing and placement strategies.",
-              typicalDataEntities: ["Ad Inventory", "CPM Forecasts", "Placement Performance", "Fill Rates"],
-              typicalSourceSystems: ["Ad Server", "SSP", "Analytics Platform", "Programmatic Platform"],
+              typicalDataEntities: [
+                "Ad Inventory",
+                "CPM Forecasts",
+                "Placement Performance",
+                "Fill Rates",
+              ],
+              typicalSourceSystems: [
+                "Ad Server",
+                "SSP",
+                "Analytics Platform",
+                "Programmatic Platform",
+              ],
             },
             {
               name: "Ad Measurement & Attribution",
               description:
                 "Provide advertisers with accurate cross-platform measurement and attribution to prove ad effectiveness.",
-              typicalDataEntities: ["Ad Impressions", "Viewability Data", "Conversion Events", "Attribution Models"],
+              typicalDataEntities: [
+                "Ad Impressions",
+                "Viewability Data",
+                "Conversion Events",
+                "Attribution Models",
+              ],
               typicalSourceSystems: ["Ad Server", "Analytics Platform", "DMP", "CRM"],
             },
           ],
-          kpis: [
-            "CPM growth",
-            "Ad fill rate",
-            "Ad revenue per user",
-          ],
-          personas: [
-            "Head of Ad Sales",
-            "VP Ad Operations",
-            "Chief Revenue Officer",
-          ],
+          kpis: ["CPM growth", "Ad fill rate", "Ad revenue per user"],
+          personas: ["Head of Ad Sales", "VP Ad Operations", "Chief Revenue Officer"],
         },
         {
           name: "Content Supply Chain",
@@ -162,27 +191,39 @@ export const MEDIA_ADVERTISING: IndustryOutcome = {
               name: "Content Performance Analytics",
               description:
                 "Analyze content performance across platforms to optimize content investment, scheduling, and licensing decisions.",
-              typicalDataEntities: ["Content Catalog", "Viewership Metrics", "Platform Performance", "Licensing Data"],
-              typicalSourceSystems: ["Content CMS", "Streaming Platform", "Analytics Platform", "Rights Management"],
+              typicalDataEntities: [
+                "Content Catalog",
+                "Viewership Metrics",
+                "Platform Performance",
+                "Licensing Data",
+              ],
+              typicalSourceSystems: [
+                "Content CMS",
+                "Streaming Platform",
+                "Analytics Platform",
+                "Rights Management",
+              ],
             },
             {
               name: "AI-Powered Content Metadata",
               description:
                 "Use AI to automatically tag, classify, and enrich content metadata for improved discoverability and recommendations.",
-              typicalDataEntities: ["Content Catalog", "Raw Media Assets", "Tag Taxonomy", "Enriched Metadata"],
-              typicalSourceSystems: ["Content CMS", "MAM", "Transcription Service", "Analytics Platform"],
+              typicalDataEntities: [
+                "Content Catalog",
+                "Raw Media Assets",
+                "Tag Taxonomy",
+                "Enriched Metadata",
+              ],
+              typicalSourceSystems: [
+                "Content CMS",
+                "MAM",
+                "Transcription Service",
+                "Analytics Platform",
+              ],
             },
           ],
-          kpis: [
-            "Content ROI",
-            "Content discovery rate",
-            "Production efficiency",
-          ],
-          personas: [
-            "VP Content Strategy",
-            "Head of Programming",
-            "Chief Content Officer",
-          ],
+          kpis: ["Content ROI", "Content discovery rate", "Production efficiency"],
+          personas: ["VP Content Strategy", "Head of Programming", "Chief Content Officer"],
         },
       ],
     },

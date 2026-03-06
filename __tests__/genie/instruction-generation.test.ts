@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { applyInstructionCharBudget, sanitizeInstructionText } from "@/lib/genie/passes/instruction-generation";
+import {
+  applyInstructionCharBudget,
+  sanitizeInstructionText,
+} from "@/lib/genie/passes/instruction-generation";
 import { defaultGenieEngineConfig } from "@/lib/genie/types";
 
 describe("instruction-generation", () => {

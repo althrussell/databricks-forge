@@ -6,20 +6,10 @@ import Link from "next/link";
 import { resilientFetch } from "@/lib/resilient-fetch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
   SelectContent,
@@ -40,7 +30,13 @@ import {
   Hash,
 } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
-import type { RunComparisonResult, PromptDiff, RunMetrics, UseCaseAlignmentEntry, StepMetrics } from "@/lib/lakebase/run-comparison";
+import type {
+  RunComparisonResult,
+  PromptDiff,
+  RunMetrics,
+  UseCaseAlignmentEntry,
+  StepMetrics,
+} from "@/lib/lakebase/run-comparison";
 import { InfoTip } from "@/components/ui/info-tip";
 import { COMPARE } from "@/lib/help-text";
 import { SemanticOverlap } from "@/components/compare/semantic-overlap";
@@ -69,9 +65,7 @@ function ComparePageInner() {
     resilientFetch("/api/runs?limit=100")
       .then((r) => r.json())
       .then((data) => {
-        const completedRuns = (data.runs as PipelineRun[]).filter(
-          (r) => r.status === "completed"
-        );
+        const completedRuns = (data.runs as PipelineRun[]).filter((r) => r.status === "completed");
         setRuns(completedRuns);
       })
       .catch(() => setRuns([]))
@@ -82,9 +76,7 @@ function ComparePageInner() {
     if (!runA || !runB || runA === runB) return;
     setLoading(true);
     try {
-      const res = await resilientFetch(
-        `/api/runs/compare?runA=${runA}&runB=${runB}`
-      );
+      const res = await resilientFetch(`/api/runs/compare?runA=${runA}&runB=${runB}`);
       if (res.ok) {
         setCompareData(await res.json());
       }
@@ -161,57 +153,53 @@ function ComparePageInner() {
           </CardContent>
         </Card>
       ) : (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                Run A (baseline)
-              </p>
-              {runsLoading ? (
-                <Skeleton className="h-10" />
-              ) : (
-                <Select value={runA} onValueChange={setRunA}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a run..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {runs.map((r) => (
-                      <SelectItem key={r.runId} value={r.runId}>
-                        {r.config.businessName} (
-                        {new Date(r.createdAt).toLocaleDateString()})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Run A (baseline)</p>
+                {runsLoading ? (
+                  <Skeleton className="h-10" />
+                ) : (
+                  <Select value={runA} onValueChange={setRunA}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a run..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {runs.map((r) => (
+                        <SelectItem key={r.runId} value={r.runId}>
+                          {r.config.businessName} ({new Date(r.createdAt).toLocaleDateString()})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <ArrowLeftRight className="h-5 w-5 text-muted-foreground" />
+              <div className="flex-1 min-w-[200px]">
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Run B (comparison)
+                </p>
+                {runsLoading ? (
+                  <Skeleton className="h-10" />
+                ) : (
+                  <Select value={runB} onValueChange={setRunB}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a run..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {runs.map((r) => (
+                        <SelectItem key={r.runId} value={r.runId}>
+                          {r.config.businessName} ({new Date(r.createdAt).toLocaleDateString()})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
-            <ArrowLeftRight className="h-5 w-5 text-muted-foreground" />
-            <div className="flex-1 min-w-[200px]">
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                Run B (comparison)
-              </p>
-              {runsLoading ? (
-                <Skeleton className="h-10" />
-              ) : (
-                <Select value={runB} onValueChange={setRunB}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a run..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {runs.map((r) => (
-                      <SelectItem key={r.runId} value={r.runId}>
-                        {r.config.businessName} (
-                        {new Date(r.createdAt).toLocaleDateString()})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
       )}
 
       {loading && (
@@ -224,9 +212,7 @@ function ComparePageInner() {
       {!loading && runA && runB && runA === runB && (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">
-              Please select two different runs to compare.
-            </p>
+            <p className="text-muted-foreground">Please select two different runs to compare.</p>
           </CardContent>
         </Card>
       )}
@@ -321,9 +307,7 @@ function ComparePageInner() {
                 Use Case Overlap
                 <InfoTip tip={COMPARE.useCaseOverlap} />
               </CardTitle>
-              <CardDescription>
-                Matched by exact name comparison
-              </CardDescription>
+              <CardDescription>Matched by exact name comparison</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -331,9 +315,7 @@ function ComparePageInner() {
                   <p className="text-2xl font-bold text-blue-600">
                     {compareData.overlap.uniqueACount}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Unique to Run A
-                  </p>
+                  <p className="text-xs text-muted-foreground">Unique to Run A</p>
                 </div>
                 <div className="rounded-md border p-4">
                   <p className="text-2xl font-bold text-green-600">
@@ -345,9 +327,7 @@ function ComparePageInner() {
                   <p className="text-2xl font-bold text-violet-600">
                     {compareData.overlap.uniqueBCount}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Unique to Run B
-                  </p>
+                  <p className="text-xs text-muted-foreground">Unique to Run B</p>
                 </div>
               </div>
               {compareData.overlap.sharedNames.length > 0 && (
@@ -440,15 +420,10 @@ function RunSummaryCard({
           <Badge variant="secondary">{run.status}</Badge>
         </div>
         <CardDescription>
-          <Link
-            href={`/runs/${run.runId}`}
-            className="hover:underline"
-          >
+          <Link href={`/runs/${run.runId}`} className="hover:underline">
             {run.config.businessName}
           </Link>
-          <span className="ml-2 text-xs">
-            {new Date(run.createdAt).toLocaleDateString()}
-          </span>
+          <span className="ml-2 text-xs">{new Date(run.createdAt).toLocaleDateString()}</span>
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -462,7 +437,9 @@ function RunSummaryCard({
             label="Tokens"
           />
           <MetricCell
-            value={metrics.totalDurationMs > 0 ? `${Math.round(metrics.totalDurationMs / 1000)}s` : "—"}
+            value={
+              metrics.totalDurationMs > 0 ? `${Math.round(metrics.totalDurationMs / 1000)}s` : "—"
+            }
             label="Duration"
           />
         </div>
@@ -502,7 +479,8 @@ function CompareRow({
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm font-mono">
-          {valueA.toLocaleString()}{suffix}
+          {valueA.toLocaleString()}
+          {suffix}
         </span>
         <div className="flex items-center gap-1">
           {diff > 0 ? (
@@ -514,18 +492,15 @@ function CompareRow({
           )}
           <span
             className={`text-xs font-medium ${
-              diff > 0
-                ? "text-green-600"
-                : diff < 0
-                  ? "text-red-600"
-                  : "text-muted-foreground"
+              diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-muted-foreground"
             }`}
           >
             {diff > 0 ? `+${diff.toLocaleString()}` : diff === 0 ? "=" : diff.toLocaleString()}
           </span>
         </div>
         <span className="text-sm font-mono">
-          {valueB.toLocaleString()}{suffix}
+          {valueB.toLocaleString()}
+          {suffix}
         </span>
       </div>
     </div>
@@ -541,9 +516,7 @@ function StepMetricsCard({ steps }: { steps: StepMetrics[] }) {
           Step-Level Comparison
           <InfoTip tip={COMPARE.stepComparison} />
         </CardTitle>
-        <CardDescription>
-          Per-pipeline-step duration, token usage, and success rate
-        </CardDescription>
+        <CardDescription>Per-pipeline-step duration, token usage, and success rate</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-1.5">
@@ -556,10 +529,8 @@ function StepMetricsCard({ steps }: { steps: StepMetrics[] }) {
           </div>
           <Separator />
           {steps.map((step) => {
-            const fmtDur = (ms: number | null) =>
-              ms != null ? `${(ms / 1000).toFixed(1)}s` : "—";
-            const fmtTok = (t: number) =>
-              t > 0 ? `${(t / 1000).toFixed(1)}k` : "—";
+            const fmtDur = (ms: number | null) => (ms != null ? `${(ms / 1000).toFixed(1)}s` : "—");
+            const fmtTok = (t: number) => (t > 0 ? `${(t / 1000).toFixed(1)}k` : "—");
             const durDiff =
               step.durationMsA != null && step.durationMsB != null
                 ? step.durationMsB - step.durationMsA
@@ -608,19 +579,11 @@ function StepMetricsCard({ steps }: { steps: StepMetrics[] }) {
                   {step.callsB}
                 </div>
                 <div className="text-center text-xs font-mono">
-                  <span
-                    className={
-                      step.successRateA < 100 ? "text-red-600" : ""
-                    }
-                  >
+                  <span className={step.successRateA < 100 ? "text-red-600" : ""}>
                     {step.successRateA}%
                   </span>
                   <span className="text-muted-foreground mx-0.5">/</span>
-                  <span
-                    className={
-                      step.successRateB < 100 ? "text-red-600" : ""
-                    }
-                  >
+                  <span className={step.successRateB < 100 ? "text-red-600" : ""}>
                     {step.successRateB}%
                   </span>
                 </div>
@@ -662,9 +625,7 @@ function PromptDiffsCard({ diffs }: { diffs: PromptDiff[] }) {
           <FileCode2 className="h-4 w-4 text-amber-500" />
           Prompt Version Changes ({diffs.length})
         </CardTitle>
-        <CardDescription>
-          Prompt templates that differ between Run A and Run B
-        </CardDescription>
+        <CardDescription>Prompt templates that differ between Run A and Run B</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {diffs.map((diff) => (
@@ -697,9 +658,7 @@ function PromptDiffItem({ diff }: { diff: PromptDiff }) {
           {diff.templateA && diff.templateB ? (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="mb-1 text-xs font-semibold text-blue-600">
-                  Run A ({diff.versionA})
-                </p>
+                <p className="mb-1 text-xs font-semibold text-blue-600">Run A ({diff.versionA})</p>
                 <pre className="max-h-64 overflow-auto rounded-md bg-blue-50 p-2 font-mono text-xs leading-relaxed dark:bg-blue-950/30">
                   {diff.templateA.length > 3000
                     ? diff.templateA.slice(0, 3000) + "\n... (truncated)"
@@ -719,8 +678,8 @@ function PromptDiffItem({ diff }: { diff: PromptDiff }) {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground italic">
-              Template text not available for one or both versions.
-              Templates are archived from runs created after the prompt versioning feature was enabled.
+              Template text not available for one or both versions. Templates are archived from runs
+              created after the prompt versioning feature was enabled.
             </p>
           )}
         </div>
@@ -729,11 +688,7 @@ function PromptDiffItem({ diff }: { diff: PromptDiff }) {
   );
 }
 
-function UseCaseAlignmentCard({
-  entries,
-}: {
-  entries: UseCaseAlignmentEntry[];
-}) {
+function UseCaseAlignmentCard({ entries }: { entries: UseCaseAlignmentEntry[] }) {
   return (
     <Card>
       <CardHeader>
@@ -762,22 +717,17 @@ function UseCaseAlignmentCard({
                 className="grid grid-cols-[1fr_80px_80px_80px_1fr] gap-2 items-center rounded-md border px-2 py-1.5"
               >
                 <span className="truncate text-xs">{entry.nameA}</span>
-                <span className="text-center text-xs font-mono">
-                  {entry.scoreA}%
-                </span>
+                <span className="text-center text-xs font-mono">{entry.scoreA}%</span>
                 <span
                   className={`text-center text-xs font-mono font-medium ${
-                    scoreDiff > 0
-                      ? "text-green-600"
-                      : scoreDiff < 0
-                        ? "text-red-600"
-                        : ""
+                    scoreDiff > 0 ? "text-green-600" : scoreDiff < 0 ? "text-red-600" : ""
                   }`}
                 >
                   {entry.scoreB}%
                   {scoreDiff !== 0 && (
                     <span className="ml-0.5 text-[10px]">
-                      ({scoreDiff > 0 ? "+" : ""}{scoreDiff})
+                      ({scoreDiff > 0 ? "+" : ""}
+                      {scoreDiff})
                     </span>
                   )}
                 </span>
@@ -810,20 +760,14 @@ function UseCaseAlignmentCard({
   );
 }
 
-function ConfigDiffRow({
-  label,
-  a,
-  b,
-}: {
-  label: string;
-  a: string;
-  b: string;
-}) {
+function ConfigDiffRow({ label, a, b }: { label: string; a: string; b: string }) {
   const isDifferent = a !== b;
   return (
     <div
       className={`rounded-md border p-2.5 ${
-        isDifferent ? "border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10" : ""
+        isDifferent
+          ? "border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10"
+          : ""
       }`}
     >
       <p className="text-xs font-semibold text-muted-foreground">{label}</p>

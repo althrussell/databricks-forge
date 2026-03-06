@@ -57,11 +57,7 @@ function styleHeaderRow(sheet: ExcelJS.Worksheet): void {
 }
 
 /** Apply alternating row colours and borders to data rows */
-function styleDataRows(
-  sheet: ExcelJS.Worksheet,
-  startRow: number,
-  endRow: number
-): void {
+function styleDataRows(sheet: ExcelJS.Worksheet, startRow: number, endRow: number): void {
   for (let r = startRow; r <= endRow; r++) {
     const row = sheet.getRow(r);
     row.eachCell((cell) => {
@@ -117,7 +113,7 @@ function annotateTableFqn(fqn: string, lineageFqns: Set<string>): string {
 export async function generateExcel(
   run: PipelineRun,
   useCases: UseCase[],
-  lineageDiscoveredFqns: string[] = []
+  lineageDiscoveredFqns: string[] = [],
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const workbook = new ExcelJS.Workbook();
@@ -138,9 +134,7 @@ export async function generateExcel(
   const statsCount = useCases.length - aiCount;
   const avgScore = useCases.length
     ? Math.round(
-        (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
-          useCases.length) *
-          100
+        (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / useCases.length) * 100,
       )
     : 0;
 
@@ -165,12 +159,16 @@ export async function generateExcel(
   const bc = run.businessContext;
   if (bc) {
     if (bc.industries) summaryRows.push({ property: "Industries", value: bc.industries });
-    if (bc.strategicGoals) summaryRows.push({ property: "Strategic Goals (AI)", value: bc.strategicGoals });
+    if (bc.strategicGoals)
+      summaryRows.push({ property: "Strategic Goals (AI)", value: bc.strategicGoals });
     if (bc.valueChain) summaryRows.push({ property: "Value Chain", value: bc.valueChain });
     if (bc.revenueModel) summaryRows.push({ property: "Revenue Model", value: bc.revenueModel });
-    if (bc.businessPriorities) summaryRows.push({ property: "Business Priorities (AI)", value: bc.businessPriorities });
-    if (bc.strategicInitiative) summaryRows.push({ property: "Strategic Initiative", value: bc.strategicInitiative });
-    if (bc.additionalContext) summaryRows.push({ property: "Additional Context", value: bc.additionalContext });
+    if (bc.businessPriorities)
+      summaryRows.push({ property: "Business Priorities (AI)", value: bc.businessPriorities });
+    if (bc.strategicInitiative)
+      summaryRows.push({ property: "Strategic Initiative", value: bc.strategicInitiative });
+    if (bc.additionalContext)
+      summaryRows.push({ property: "Additional Context", value: bc.additionalContext });
   }
 
   summaryRows.push({ property: "", value: "" }); // spacer
@@ -201,7 +199,7 @@ export async function generateExcel(
       uc.userPriorityScore != null ||
       uc.userFeasibilityScore != null ||
       uc.userImpactScore != null ||
-      uc.userOverallScore != null
+      uc.userOverallScore != null,
   );
 
   const baseColumns: Partial<ExcelJS.Column>[] = [
@@ -237,7 +235,7 @@ export async function generateExcel(
   ucSheet.columns = baseColumns;
 
   const sortedUseCases = [...useCases].sort(
-    (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
+    (a, b) => effectiveScores(b).overall - effectiveScores(a).overall,
   );
 
   sortedUseCases.forEach((uc) => {

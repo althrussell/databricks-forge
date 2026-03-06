@@ -42,9 +42,7 @@ interface DashboardListResponse {
  * List all Lakeview (AI/BI) dashboards in the workspace.
  * Paginates automatically, returning all non-trashed dashboards.
  */
-export async function listDashboards(
-  pageSize = 100
-): Promise<DashboardListItem[]> {
+export async function listDashboards(pageSize = 100): Promise<DashboardListItem[]> {
   const config = getConfig();
   const headers = await getAppHeaders();
   const all: DashboardListItem[] = [];
@@ -55,11 +53,7 @@ export async function listDashboards(
     if (pageToken) params.set("page_token", pageToken);
 
     const url = `${config.host}/api/2.0/lakeview/dashboards?${params}`;
-    const response = await fetchWithTimeout(
-      url,
-      { method: "GET", headers },
-      TIMEOUTS.WORKSPACE
-    );
+    const response = await fetchWithTimeout(url, { method: "GET", headers }, TIMEOUTS.WORKSPACE);
 
     if (!response.ok) {
       const text = await response.text();
@@ -84,18 +78,12 @@ export async function listDashboards(
 // Get
 // ---------------------------------------------------------------------------
 
-export async function getDashboard(
-  dashboardId: string
-): Promise<LakeviewDashboardResponse> {
+export async function getDashboard(dashboardId: string): Promise<LakeviewDashboardResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/lakeview/dashboards/${dashboardId}`;
   const headers = await getAppHeaders();
 
-  const response = await fetchWithTimeout(
-    url,
-    { method: "GET", headers },
-    TIMEOUTS.WORKSPACE
-  );
+  const response = await fetchWithTimeout(url, { method: "GET", headers }, TIMEOUTS.WORKSPACE);
 
   if (!response.ok) {
     const text = await response.text();
@@ -137,7 +125,7 @@ export async function createDashboard(opts: {
   let response = await fetchWithTimeout(
     url,
     { method: "POST", headers, body: JSON.stringify(body) },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
   );
 
   if (!response.ok) {
@@ -149,7 +137,7 @@ export async function createDashboard(opts: {
       response = await fetchWithTimeout(
         url,
         { method: "POST", headers, body: JSON.stringify(body) },
-        TIMEOUTS.WORKSPACE
+        TIMEOUTS.WORKSPACE,
       );
       if (!response.ok) {
         const retryText = await response.text();
@@ -173,7 +161,7 @@ export async function updateDashboard(
     displayName?: string;
     serializedDashboard?: string;
     warehouseId?: string;
-  }
+  },
 ): Promise<LakeviewDashboardResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/lakeview/dashboards/${dashboardId}`;
@@ -187,7 +175,7 @@ export async function updateDashboard(
   const response = await fetchWithTimeout(
     url,
     { method: "PATCH", headers, body: JSON.stringify(body) },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
   );
 
   if (!response.ok) {
@@ -202,10 +190,7 @@ export async function updateDashboard(
 // Publish
 // ---------------------------------------------------------------------------
 
-export async function publishDashboard(
-  dashboardId: string,
-  warehouseId: string
-): Promise<void> {
+export async function publishDashboard(dashboardId: string, warehouseId: string): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/lakeview/dashboards/${dashboardId}/published`;
   const headers = await getAppHeaders();
@@ -220,7 +205,7 @@ export async function publishDashboard(
         embed_credentials: false,
       }),
     },
-    TIMEOUTS.WORKSPACE
+    TIMEOUTS.WORKSPACE,
   );
 
   if (!response.ok) {
@@ -233,18 +218,12 @@ export async function publishDashboard(
 // Unpublish
 // ---------------------------------------------------------------------------
 
-export async function unpublishDashboard(
-  dashboardId: string
-): Promise<void> {
+export async function unpublishDashboard(dashboardId: string): Promise<void> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/lakeview/dashboards/${dashboardId}/published`;
   const headers = await getAppHeaders();
 
-  const response = await fetchWithTimeout(
-    url,
-    { method: "DELETE", headers },
-    TIMEOUTS.WORKSPACE
-  );
+  const response = await fetchWithTimeout(url, { method: "DELETE", headers }, TIMEOUTS.WORKSPACE);
 
   if (!response.ok) {
     const text = await response.text();
@@ -263,11 +242,7 @@ export async function trashDashboard(dashboardId: string): Promise<void> {
   const url = `${config.host}/api/2.0/lakeview/dashboards/${dashboardId}`;
   const headers = await getAppHeaders();
 
-  const response = await fetchWithTimeout(
-    url,
-    { method: "DELETE", headers },
-    TIMEOUTS.WORKSPACE
-  );
+  const response = await fetchWithTimeout(url, { method: "DELETE", headers }, TIMEOUTS.WORKSPACE);
 
   if (!response.ok) {
     const text = await response.text();

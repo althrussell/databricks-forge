@@ -102,17 +102,12 @@ async function callEmbeddingEndpoint(texts: string[]): Promise<number[][]> {
 
   if (!resp.ok) {
     const body = await resp.text();
-    throw new EmbeddingError(
-      `Embedding request failed (${resp.status}): ${body}`,
-      resp.status,
-    );
+    throw new EmbeddingError(`Embedding request failed (${resp.status}): ${body}`, resp.status);
   }
 
   const data: EmbeddingResponse = await resp.json();
 
-  return data.data
-    .sort((a, b) => a.index - b.index)
-    .map((d) => d.embedding);
+  return data.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
 }
 
 // ---------------------------------------------------------------------------
@@ -179,11 +174,7 @@ function isRetryableError(error: unknown): boolean {
   if (isRateLimitError(error)) return true;
   if (error instanceof EmbeddingError) return error.statusCode >= 500;
   const msg = error instanceof Error ? error.message : String(error);
-  return (
-    msg.includes("ETIMEDOUT") ||
-    msg.includes("ECONNRESET") ||
-    msg.includes("fetch failed")
-  );
+  return msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") || msg.includes("fetch failed");
 }
 
 function sleep(ms: number): Promise<void> {

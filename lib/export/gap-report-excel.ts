@@ -42,11 +42,7 @@ function styleHeaderRow(sheet: ExcelJS.Worksheet): void {
   });
 }
 
-function styleDataRows(
-  sheet: ExcelJS.Worksheet,
-  startRow: number,
-  endRow: number
-): void {
+function styleDataRows(sheet: ExcelJS.Worksheet, startRow: number, endRow: number): void {
   for (let r = startRow; r <= endRow; r++) {
     const row = sheet.getRow(r);
     row.eachCell((cell) => {
@@ -66,7 +62,7 @@ function styleDataRows(
 export async function generateGapReportExcel(
   coverage: CoverageResult,
   industryName: string,
-  businessName: string
+  businessName: string,
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Databricks Forge AI";
@@ -111,11 +107,7 @@ export async function generateGapReportExcel(
     },
   ];
 
-  for (const {
-    entity,
-    useCaseCount,
-    refUseCases,
-  } of coverage.missingDataEntities.slice(0, 15)) {
+  for (const { entity, useCaseCount, refUseCases } of coverage.missingDataEntities.slice(0, 15)) {
     rows.push({
       metric: entity,
       value: String(useCaseCount),
@@ -130,11 +122,7 @@ export async function generateGapReportExcel(
     linked: "Use Cases Linked",
   });
 
-  for (const {
-    system,
-    useCaseCount,
-    refUseCases,
-  } of coverage.missingSourceSystems.slice(0, 10)) {
+  for (const { system, useCaseCount, refUseCases } of coverage.missingSourceSystems.slice(0, 10)) {
     rows.push({
       metric: system,
       value: String(useCaseCount),

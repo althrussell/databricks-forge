@@ -12,15 +12,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Accordion,
   AccordionContent,
@@ -127,8 +120,8 @@ export default function MetadataGeniePage() {
           setPermissionError(
             err.error ??
               "Insufficient permissions to access system.information_schema. " +
-              "Ensure the service principal or user running this app has been granted " +
-              "SELECT on system.information_schema tables."
+                "Ensure the service principal or user running this app has been granted " +
+                "SELECT on system.information_schema tables.",
           );
           return;
         }
@@ -139,9 +132,7 @@ export default function MetadataGeniePage() {
       setDraft(data);
       setState("summary");
       toast.success("Analysis complete", {
-        description: data.industryName
-          ? `Detected: ${data.industryName}`
-          : "Ready for deployment",
+        description: data.industryName ? `Detected: ${data.industryName}` : "Ready for deployment",
       });
     } catch (err) {
       setState("list");
@@ -190,7 +181,7 @@ export default function MetadataGeniePage() {
         setTrashTargetId(null);
       }
     },
-    [draft]
+    [draft],
   );
 
   // -------------------------------------------------------------------
@@ -204,12 +195,10 @@ export default function MetadataGeniePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Meta Data Genie
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">Meta Data Genie</h1>
           <p className="mt-1 text-muted-foreground">
-            Ask natural language questions about your data estate using a
-            Databricks Genie Space backed by curated metadata views.
+            Ask natural language questions about your data estate using a Databricks Genie Space
+            backed by curated metadata views.
           </p>
         </div>
         {state === "list" && !draft && deployedSpaces.length === 0 && (
@@ -226,12 +215,8 @@ export default function MetadataGeniePage() {
           <CardContent className="flex items-start gap-3 pt-4">
             <ShieldAlert className="mt-0.5 h-5 w-5 text-destructive" />
             <div>
-              <p className="text-sm font-medium text-destructive">
-                Permission Denied
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {permissionError}
-              </p>
+              <p className="text-sm font-medium text-destructive">Permission Denied</p>
+              <p className="mt-1 text-sm text-muted-foreground">{permissionError}</p>
               <Button
                 variant="ghost"
                 size="sm"
@@ -266,8 +251,8 @@ export default function MetadataGeniePage() {
               <Card className="mt-2">
                 <CardContent className="pt-4 pb-3">
                   <p className="text-xs text-muted-foreground mb-2">
-                    Restrict the Metadata Genie to specific catalogs. Leave
-                    empty to include all catalogs.
+                    Restrict the Metadata Genie to specific catalogs. Leave empty to include all
+                    catalogs.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {availableCatalogs.map((cat) => {
@@ -279,9 +264,7 @@ export default function MetadataGeniePage() {
                           className="cursor-pointer select-none text-xs"
                           onClick={() =>
                             setSelectedCatalogs((prev) =>
-                              selected
-                                ? prev.filter((c) => c !== cat)
-                                : [...prev, cat]
+                              selected ? prev.filter((c) => c !== cat) : [...prev, cat],
                             )
                           }
                         >
@@ -314,16 +297,12 @@ export default function MetadataGeniePage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="mt-4 font-medium">
-              Analyzing your data estate...
-            </p>
+            <p className="mt-4 font-medium">Analyzing your data estate...</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Scanning system.information_schema, detecting industry context,
-              and generating tailored questions.
+              Scanning system.information_schema, detecting industry context, and generating
+              tailored questions.
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This typically takes 5-10 seconds
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">This typically takes 5-10 seconds</p>
           </CardContent>
         </Card>
       )}
@@ -359,9 +338,7 @@ export default function MetadataGeniePage() {
                   <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                     Tables Scanned
                   </p>
-                  <p className="mt-0.5 text-sm font-medium">
-                    {draft.tableCount.toLocaleString()}
-                  </p>
+                  <p className="mt-0.5 text-sm font-medium">{draft.tableCount.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -372,11 +349,7 @@ export default function MetadataGeniePage() {
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {draft.domains.map((d) => (
-                      <Badge
-                        key={d}
-                        variant="secondary"
-                        className="text-[10px] font-normal"
-                      >
+                      <Badge key={d} variant="secondary" className="text-[10px] font-normal">
                         {d}
                       </Badge>
                     ))}
@@ -387,7 +360,8 @@ export default function MetadataGeniePage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 {draft.catalogScope && draft.catalogScope.length > 0 && (
                   <Badge variant="outline" className="text-[10px]">
-                    Scoped to {draft.catalogScope.length} catalog{draft.catalogScope.length !== 1 && "s"}
+                    Scoped to {draft.catalogScope.length} catalog
+                    {draft.catalogScope.length !== 1 && "s"}
                   </Badge>
                 )}
                 <Badge
@@ -401,9 +375,7 @@ export default function MetadataGeniePage() {
           </Card>
 
           {/* Space content preview */}
-          {draft.serializedSpace && (
-            <SpaceContentPreview serializedSpace={draft.serializedSpace} />
-          )}
+          {draft.serializedSpace && <SpaceContentPreview serializedSpace={draft.serializedSpace} />}
 
           {/* Deploy button */}
           <div className="flex items-center gap-3">
@@ -411,10 +383,7 @@ export default function MetadataGeniePage() {
               <Rocket className="mr-2 h-4 w-4" />
               Deploy
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setTrashTargetId(draft.id)}
-            >
+            <Button variant="ghost" onClick={() => setTrashTargetId(draft.id)}>
               Discard
             </Button>
           </div>
@@ -441,11 +410,9 @@ export default function MetadataGeniePage() {
                 <Database className="mx-auto h-10 w-10 text-muted-foreground/50" />
                 <p className="mt-4 font-medium">No Metadata Genie spaces yet</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Generate a Meta Data Genie to create a Genie Space backed by
-                  curated views over{" "}
-                  <code className="text-xs">system.information_schema</code>.
-                  Your team can then ask natural language questions about what
-                  data exists in your environment.
+                  Generate a Meta Data Genie to create a Genie Space backed by curated views over{" "}
+                  <code className="text-xs">system.information_schema</code>. Your team can then ask
+                  natural language questions about what data exists in your environment.
                 </p>
                 <Button className="mt-6" onClick={handleGenerate}>
                   <Sparkles className="mr-2 h-4 w-4" />
@@ -461,9 +428,7 @@ export default function MetadataGeniePage() {
                 <Collapsible
                   key={space.id}
                   open={expandedId === space.id}
-                  onOpenChange={(open) =>
-                    setExpandedId(open ? space.id : null)
-                  }
+                  onOpenChange={(open) => setExpandedId(open ? space.id : null)}
                 >
                   {/* Row */}
                   <div className="flex items-center gap-3 rounded-md border px-4 py-3">
@@ -478,22 +443,14 @@ export default function MetadataGeniePage() {
                     </CollapsibleTrigger>
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                     <span className="font-medium">{space.title}</span>
-                    {space.industryName && (
-                      <Badge variant="secondary">
-                        {space.industryName}
-                      </Badge>
-                    )}
+                    {space.industryName && <Badge variant="secondary">{space.industryName}</Badge>}
                     <span className="text-xs text-muted-foreground">
                       {space.tableCount.toLocaleString()} tables
                     </span>
                     <div className="ml-auto flex items-center gap-2">
                       {space.spaceUrl && (
                         <Button variant="outline" size="sm" asChild>
-                          <a
-                            href={space.spaceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
+                          <a href={space.spaceUrl} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                             Open
                           </a>
@@ -517,18 +474,12 @@ export default function MetadataGeniePage() {
                   <CollapsibleContent>
                     <div className="rounded-b-md border border-t-0 bg-muted/30 px-4 py-4">
                       <div className="grid gap-4 md:grid-cols-4">
-                        <DetailItem
-                          label="Industry"
-                          value={space.industryName ?? "Not detected"}
-                        />
+                        <DetailItem label="Industry" value={space.industryName ?? "Not detected"} />
                         <DetailItem
                           label="Tables Scanned"
                           value={space.tableCount.toLocaleString()}
                         />
-                        <DetailItem
-                          label="Domains"
-                          value={space.domains?.join(", ") ?? "N/A"}
-                        />
+                        <DetailItem label="Domains" value={space.domains?.join(", ") ?? "N/A"} />
                         <DetailItem
                           label="View Schema"
                           value={
@@ -540,14 +491,11 @@ export default function MetadataGeniePage() {
                       </div>
 
                       <div className="mt-4">
-                        <SpaceContentPreview
-                          serializedSpace={space.serializedSpace}
-                        />
+                        <SpaceContentPreview serializedSpace={space.serializedSpace} />
                       </div>
 
                       <p className="mt-4 text-xs text-muted-foreground">
-                        Created{" "}
-                        {new Date(space.createdAt).toLocaleDateString()}
+                        Created {new Date(space.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </CollapsibleContent>
@@ -578,8 +526,8 @@ export default function MetadataGeniePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Metadata Genie Space?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will trash the Genie Space and drop all curated metadata views
-              from the target schema. This action cannot be undone.
+              This will trash the Genie Space and drop all curated metadata views from the target
+              schema. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -621,11 +569,7 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SpaceContentPreview({
-  serializedSpace,
-}: {
-  serializedSpace: string;
-}) {
+function SpaceContentPreview({ serializedSpace }: { serializedSpace: string }) {
   const sp: SerializedSpace | null = useMemo(() => {
     if (!serializedSpace) return null;
     try {
@@ -671,13 +615,8 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="max-h-48 space-y-1 overflow-auto">
                 {tables.map((t) => (
-                  <div
-                    key={t.identifier}
-                    className="flex items-baseline gap-2 text-xs"
-                  >
-                    <span className="truncate font-mono text-muted-foreground">
-                      {t.identifier}
-                    </span>
+                  <div key={t.identifier} className="flex items-baseline gap-2 text-xs">
+                    <span className="truncate font-mono text-muted-foreground">{t.identifier}</span>
                   </div>
                 ))}
               </div>
@@ -693,10 +632,7 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="space-y-1">
                 {questions.map((q) => (
-                  <div
-                    key={q.id}
-                    className="py-0.5 text-xs text-muted-foreground"
-                  >
+                  <div key={q.id} className="py-0.5 text-xs text-muted-foreground">
                     {q.question.join(" ")}
                   </div>
                 ))}
@@ -714,9 +650,7 @@ function SpaceContentPreview({
               <div className="max-h-64 space-y-3 overflow-auto">
                 {sqls.map((ex) => (
                   <div key={ex.id}>
-                    <p className="text-xs font-medium">
-                      {ex.question.join(" ")}
-                    </p>
+                    <p className="text-xs font-medium">{ex.question.join(" ")}</p>
                     <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
                       {ex.sql.join("\n")}
                     </pre>
@@ -735,16 +669,9 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="space-y-1">
                 {measures.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-baseline gap-2 py-0.5 text-xs"
-                  >
-                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
-                      {m.alias}
-                    </code>
-                    <span className="text-muted-foreground">
-                      {m.sql.join(" ")}
-                    </span>
+                  <div key={m.id} className="flex items-baseline gap-2 py-0.5 text-xs">
+                    <code className="rounded bg-muted px-1 font-mono text-[10px]">{m.alias}</code>
+                    <span className="text-muted-foreground">{m.sql.join(" ")}</span>
                   </div>
                 ))}
               </div>
@@ -760,16 +687,11 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="space-y-1">
                 {filters.map((f) => (
-                  <div
-                    key={f.id}
-                    className="flex items-baseline gap-2 py-0.5 text-xs"
-                  >
+                  <div key={f.id} className="flex items-baseline gap-2 py-0.5 text-xs">
                     <code className="rounded bg-muted px-1 font-mono text-[10px]">
                       {f.display_name}
                     </code>
-                    <span className="text-muted-foreground">
-                      {f.sql.join(" ")}
-                    </span>
+                    <span className="text-muted-foreground">{f.sql.join(" ")}</span>
                   </div>
                 ))}
               </div>
@@ -785,16 +707,9 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="space-y-1">
                 {expressions.map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex items-baseline gap-2 py-0.5 text-xs"
-                  >
-                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
-                      {e.alias}
-                    </code>
-                    <span className="text-muted-foreground">
-                      {e.sql.join(" ")}
-                    </span>
+                  <div key={e.id} className="flex items-baseline gap-2 py-0.5 text-xs">
+                    <code className="rounded bg-muted px-1 font-mono text-[10px]">{e.alias}</code>
+                    <span className="text-muted-foreground">{e.sql.join(" ")}</span>
                   </div>
                 ))}
               </div>
@@ -810,14 +725,9 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="space-y-1 text-xs">
                 {joins.map((j) => (
-                  <div
-                    key={j.id}
-                    className="flex items-baseline gap-2 py-0.5"
-                  >
+                  <div key={j.id} className="flex items-baseline gap-2 py-0.5">
                     <span className="truncate font-mono text-muted-foreground">
-                      {j.sql
-                        .filter((s: string) => !s.startsWith("--rt="))
-                        .join(" ")}
+                      {j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ")}
                     </span>
                   </div>
                 ))}
@@ -834,10 +744,7 @@ function SpaceContentPreview({
             <AccordionContent>
               <div className="space-y-2">
                 {instructions.map((ti) => (
-                  <div
-                    key={ti.id}
-                    className="whitespace-pre-line text-xs text-muted-foreground"
-                  >
+                  <div key={ti.id} className="whitespace-pre-line text-xs text-muted-foreground">
                     {ti.content.join("\n")}
                   </div>
                 ))}

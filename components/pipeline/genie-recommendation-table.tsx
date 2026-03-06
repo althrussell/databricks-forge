@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { GenieEngineRecommendation, TrackedGenieSpace } from "@/lib/genie/types";
 import { GenieIcon } from "./genie-spaces-icons";
@@ -59,8 +53,7 @@ export function GenieRecommendationTable({
           Recommended Genie Spaces ({recommendations.length})
         </CardTitle>
         <CardDescription>
-          One space per business domain. Select spaces and deploy them to your
-          Databricks workspace.
+          One space per business domain. Select spaces and deploy them to your Databricks workspace.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
@@ -78,9 +71,7 @@ export function GenieRecommendationTable({
                 </th>
                 <th className="px-3 py-2.5 text-left font-medium">Domain</th>
                 <th className="px-3 py-2.5 text-left font-medium">Subdomains</th>
-                <th className="px-3 py-2.5 text-center font-medium">
-                  Knowledge Store
-                </th>
+                <th className="px-3 py-2.5 text-center font-medium">Knowledge Store</th>
                 <th className="px-3 py-2.5 text-center font-medium">Status</th>
                 <th className="w-10 px-3 py-2.5" />
               </tr>

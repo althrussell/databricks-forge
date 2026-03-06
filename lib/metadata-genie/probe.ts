@@ -16,12 +16,9 @@ const EXCLUDED_SCHEMAS = ["information_schema"];
  */
 export async function probeSystemInformationSchema(): Promise<ProbeResult> {
   try {
-    await executeSQL(
-      "SELECT 1 FROM system.information_schema.catalogs LIMIT 1"
-    );
+    await executeSQL("SELECT 1 FROM system.information_schema.catalogs LIMIT 1");
   } catch (err) {
-    const msg =
-      err instanceof Error ? err.message : "Unknown error probing access";
+    const msg = err instanceof Error ? err.message : "Unknown error probing access";
     logger.warn("system.information_schema access denied", { error: msg });
     return {
       accessible: false,
@@ -42,7 +39,7 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
   try {
     const catalogs = await executeSQLMapped<string>(
       "SELECT catalog_name FROM system.information_schema.catalogs ORDER BY catalog_name",
-      (row) => row[0]
+      (row) => row[0],
     );
 
     const excludedCatSet = new Set(EXCLUDED_CATALOGS);
@@ -57,7 +54,7 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
          AND table_schema NOT IN (${schemaExclusion})
          AND table_name NOT LIKE '!_%' ESCAPE '!'
        LIMIT 2000`,
-      (row) => row[0]
+      (row) => row[0],
     );
 
     return {
@@ -67,8 +64,7 @@ export async function probeSystemInformationSchema(): Promise<ProbeResult> {
       tableNames: tableRows,
     };
   } catch (err) {
-    const msg =
-      err instanceof Error ? err.message : "Unknown error fetching metadata";
+    const msg = err instanceof Error ? err.message : "Unknown error fetching metadata";
     logger.error("Failed to fetch catalogs/tables from system IS", {
       error: msg,
     });

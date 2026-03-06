@@ -4,13 +4,7 @@ import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Accordion,
   AccordionContent,
@@ -32,7 +26,12 @@ import {
   GitFork,
   Package,
 } from "lucide-react";
-import type { FabricScanDetail, FabricDataset, FabricTable, FabricMeasure } from "@/lib/fabric/types";
+import type {
+  FabricScanDetail,
+  FabricDataset,
+  FabricTable,
+  FabricMeasure,
+} from "@/lib/fabric/types";
 
 interface PageProps {
   params: Promise<{ scanId: string }>;
@@ -67,7 +66,12 @@ export default function ScanDetailPage({ params }: PageProps) {
     return (
       <div className="space-y-4">
         <p className="text-muted-foreground">Scan not found.</p>
-        <Link href="/fabric"><Button variant="outline"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button></Link>
+        <Link href="/fabric">
+          <Button variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -78,9 +82,21 @@ export default function ScanDetailPage({ params }: PageProps) {
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Link href="/fabric"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+            <Link href="/fabric">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
             <h1 className="text-2xl font-bold tracking-tight">Scan Detail</h1>
-            <Badge variant={scan.status === "completed" ? "default" : scan.status === "failed" ? "destructive" : "secondary"}>
+            <Badge
+              variant={
+                scan.status === "completed"
+                  ? "default"
+                  : scan.status === "failed"
+                    ? "destructive"
+                    : "secondary"
+              }
+            >
               {scan.status}
             </Badge>
           </div>
@@ -119,7 +135,9 @@ export default function ScanDetailPage({ params }: PageProps) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Workspaces</CardTitle>
-          <CardDescription>Explore discovered workspaces, datasets, tables, measures, and reports.</CardDescription>
+          <CardDescription>
+            Explore discovered workspaces, datasets, tables, measures, and reports.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {scan.workspaces.length === 0 ? (
@@ -150,15 +168,22 @@ export default function ScanDetailPage({ params }: PageProps) {
                         {/* Reports */}
                         {wsReports.length > 0 && (
                           <div className="space-y-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reports</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                              Reports
+                            </h4>
                             {wsReports.map((r) => (
                               <div key={r.reportId} className="flex items-center gap-2 text-sm">
                                 <FileBarChart className="h-3.5 w-3.5 text-muted-foreground" />
                                 <span>{r.name}</span>
-                                {r.reportType && <Badge variant="outline" className="text-xs">{r.reportType}</Badge>}
+                                {r.reportType && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {r.reportType}
+                                  </Badge>
+                                )}
                                 {r.sensitivityLabel && (
                                   <Badge variant="secondary" className="text-xs">
-                                    <ShieldAlert className="h-3 w-3 mr-1" />{r.sensitivityLabel}
+                                    <ShieldAlert className="h-3 w-3 mr-1" />
+                                    {r.sensitivityLabel}
                                   </Badge>
                                 )}
                               </div>
@@ -168,12 +193,16 @@ export default function ScanDetailPage({ params }: PageProps) {
                         {/* Fabric artifacts */}
                         {wsArtifacts.length > 0 && (
                           <div className="space-y-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fabric Artifacts</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                              Fabric Artifacts
+                            </h4>
                             {wsArtifacts.map((a) => (
                               <div key={a.artifactId} className="flex items-center gap-2 text-sm">
                                 <Package className="h-3.5 w-3.5 text-muted-foreground" />
                                 <span>{a.name}</span>
-                                <Badge variant="outline" className="text-xs">{a.artifactType}</Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {a.artifactType}
+                                </Badge>
                               </div>
                             ))}
                           </div>
@@ -195,7 +224,15 @@ export default function ScanDetailPage({ params }: PageProps) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatCard({ icon: Icon, label, value }: { icon: typeof Layers; label: string; value: number }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Layers;
+  label: string;
+  value: number;
+}) {
   return (
     <Card>
       <CardContent className="pt-4 pb-4">
@@ -221,7 +258,8 @@ function DatasetTree({ dataset: ds }: { dataset: FabricDataset }) {
             <span className="font-medium">{ds.name}</span>
             {ds.sensitivityLabel && (
               <Badge variant="secondary" className="text-xs">
-                <ShieldAlert className="h-3 w-3 mr-1" />{ds.sensitivityLabel}
+                <ShieldAlert className="h-3 w-3 mr-1" />
+                {ds.sensitivityLabel}
               </Badge>
             )}
             <Badge variant="outline" className="text-xs">
@@ -237,21 +275,33 @@ function DatasetTree({ dataset: ds }: { dataset: FabricDataset }) {
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Table2 className="h-3.5 w-3.5 text-muted-foreground" />
                   {t.name}
-                  {t.isHidden && <Badge variant="outline" className="text-xs">hidden</Badge>}
+                  {t.isHidden && (
+                    <Badge variant="outline" className="text-xs">
+                      hidden
+                    </Badge>
+                  )}
                 </div>
                 <div className="pl-5 space-y-0.5">
                   {t.columns.map((c) => (
-                    <div key={c.name} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div
+                      key={c.name}
+                      className="flex items-center gap-2 text-xs text-muted-foreground"
+                    >
                       <Columns3 className="h-3 w-3" />
                       <span>{c.name}</span>
                       <span className="text-muted-foreground/60">{c.dataType}</span>
                     </div>
                   ))}
                   {t.measures.map((m: FabricMeasure) => (
-                    <div key={m.name} className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                    <div
+                      key={m.name}
+                      className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400"
+                    >
                       <Calculator className="h-3 w-3" />
                       <span>{m.name}</span>
-                      <span className="text-muted-foreground/60 font-mono text-[10px] truncate max-w-[200px]">{m.expression}</span>
+                      <span className="text-muted-foreground/60 font-mono text-[10px] truncate max-w-[200px]">
+                        {m.expression}
+                      </span>
                     </div>
                   ))}
                 </div>

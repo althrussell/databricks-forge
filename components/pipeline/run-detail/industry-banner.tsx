@@ -10,11 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 
 interface IndustryOption {
@@ -88,12 +84,7 @@ export function IndustryBanner({
                 Remove
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onCancelEdit}
-            >
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onCancelEdit}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -108,8 +99,7 @@ export function IndustryBanner({
         <Target className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
         <div className="flex-1">
           <p className="text-sm font-medium text-violet-900 dark:text-violet-200">
-            Matched Industry Outcome Map:{" "}
-            <span className="font-semibold">{outcome.name}</span>
+            Matched Industry Outcome Map: <span className="font-semibold">{outcome.name}</span>
           </p>
           <p className="text-xs text-violet-700 dark:text-violet-400">
             {industryAutoDetected
@@ -119,20 +109,11 @@ export function IndustryBanner({
             {outcome.objectives.length} strategic objective
             {outcome.objectives.length !== 1 ? "s" : ""}
             {" \u2022 "}
-            {outcome.objectives.reduce(
-              (sum, o) => sum + o.priorities.length,
-              0
-            )}{" "}
-            priorities
+            {outcome.objectives.reduce((sum, o) => sum + o.priorities.length, 0)} priorities
             {" \u2022 "}
             {outcome.objectives.reduce(
-              (sum, o) =>
-                sum +
-                o.priorities.reduce(
-                  (s, p) => s + p.useCases.length,
-                  0
-                ),
-              0
+              (sum, o) => sum + o.priorities.reduce((s, p) => s + p.useCases.length, 0),
+              0,
             )}{" "}
             reference use cases
           </p>
@@ -173,8 +154,8 @@ export function IndustryBanner({
             No industry outcome map detected
           </p>
           <p className="text-xs text-violet-600 dark:text-violet-500">
-            Assign one to unlock coverage analysis, gap report, and
-            strategic priority mapping for your use cases.
+            Assign one to unlock coverage analysis, gap report, and strategic priority mapping for
+            your use cases.
           </p>
         </div>
         <Button

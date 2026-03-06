@@ -52,21 +52,36 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Classify and locate leakage using sensor, DMA flow, and pressure data to prioritise repair and pressure management interventions.",
               businessValue:
                 "Typical 10-15% reduction in leakage volumes, saving millions in treatment and pumping costs.",
-              typicalDataEntities: ["Pressure Sensor Data", "Flow Meter Readings", "DMA Flow Data", "Pipe Network GIS"],
+              typicalDataEntities: [
+                "Pressure Sensor Data",
+                "Flow Meter Readings",
+                "DMA Flow Data",
+                "Pipe Network GIS",
+              ],
               typicalSourceSystems: ["SCADA", "GIS Platform", "Asset Management System"],
             },
             {
               name: "Pipe Burst Prediction",
               description:
                 "Predict burst risk from pipe age, material, soil conditions, weather, and historical failure patterns to enable proactive intervention.",
-              typicalDataEntities: ["Pipe Asset Register", "Soil Condition Data", "Weather Records", "Historical Failure Logs"],
+              typicalDataEntities: [
+                "Pipe Asset Register",
+                "Soil Condition Data",
+                "Weather Records",
+                "Historical Failure Logs",
+              ],
               typicalSourceSystems: ["Asset Management System", "GIS Platform", "CMMS"],
             },
             {
               name: "Demand Forecasting",
               description:
                 "Forecast water demand by DMA using weather, seasonality, population, and consumption patterns to optimise pumping schedules and reservoir levels.",
-              typicalDataEntities: ["Historical Consumption by DMA", "Weather Forecasts", "Population Data", "Reservoir Levels"],
+              typicalDataEntities: [
+                "Historical Consumption by DMA",
+                "Weather Forecasts",
+                "Population Data",
+                "Reservoir Levels",
+              ],
               typicalSourceSystems: ["SCADA", "Billing System", "Meter Data Management"],
             },
           ],
@@ -76,11 +91,7 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Burst rate per km of mains",
             "Non-revenue water (%)",
           ],
-          personas: [
-            "Head of Leakage",
-            "VP Network Operations",
-            "Chief Operating Officer",
-          ],
+          personas: ["Head of Leakage", "VP Network Operations", "Chief Operating Officer"],
         },
         {
           name: "Asset Management & Investment Planning",
@@ -89,7 +100,12 @@ export const WATER_UTILITIES: IndustryOutcome = {
               name: "Asset Deterioration Modelling",
               description:
                 "Model remaining useful life of pipes, pumps, and treatment assets using age, material, condition, and operational history.",
-              typicalDataEntities: ["Asset Register", "Condition Assessment Records", "Operational History", "Maintenance Logs"],
+              typicalDataEntities: [
+                "Asset Register",
+                "Condition Assessment Records",
+                "Operational History",
+                "Maintenance Logs",
+              ],
               typicalSourceSystems: ["Asset Management System", "CMMS", "SCADA"],
             },
             {
@@ -111,11 +127,7 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Unplanned outage rate",
             "Capital efficiency ratio",
           ],
-          personas: [
-            "Head of Asset Strategy",
-            "VP Engineering",
-            "Chief Asset Officer",
-          ],
+          personas: ["Head of Asset Strategy", "VP Engineering", "Chief Asset Officer"],
         },
         {
           name: "Bulk Water & Scheme Operations",
@@ -172,11 +184,7 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Consequence category rating",
             "Major asset condition score",
           ],
-          personas: [
-            "Head of Dam Safety",
-            "Chief Risk Officer",
-            "VP Engineering",
-          ],
+          personas: ["Head of Dam Safety", "Chief Risk Officer", "VP Engineering"],
         },
       ],
     },
@@ -195,22 +203,49 @@ export const WATER_UTILITIES: IndustryOutcome = {
               name: "Water Quality Anomaly Detection",
               description:
                 "Detect quality exceedances at treatment works and in-network using continuous monitoring data, triggering early intervention before compliance breaches.",
-              typicalDataEntities: ["Continuous Monitoring Data", "Quality Thresholds", "Treatment Works Parameters", "Compliance Limits"],
-              typicalSourceSystems: ["SCADA", "Laboratory Information System", "Water Quality Monitoring"],
+              typicalDataEntities: [
+                "Continuous Monitoring Data",
+                "Quality Thresholds",
+                "Treatment Works Parameters",
+                "Compliance Limits",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "Laboratory Information System",
+                "Water Quality Monitoring",
+              ],
             },
             {
               name: "Chemical Dosing Optimisation",
               description:
                 "Optimise coagulant, chlorine, and pH dosing using source water quality and flow data to reduce chemical costs while maintaining compliance.",
-              typicalDataEntities: ["Source Water Quality", "Flow Rates", "Chemical Dosage Records", "Compliance Results"],
-              typicalSourceSystems: ["SCADA", "Laboratory Information System", "Treatment Plant DCS"],
+              typicalDataEntities: [
+                "Source Water Quality",
+                "Flow Rates",
+                "Chemical Dosage Records",
+                "Compliance Results",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "Laboratory Information System",
+                "Treatment Plant DCS",
+              ],
             },
             {
               name: "Catchment Risk Assessment",
               description:
                 "Assess raw water quality risk from agricultural run-off, industrial discharges, and climate factors to inform catchment management programmes.",
-              typicalDataEntities: ["Land Use Data", "Discharge Permits", "Rainfall Patterns", "Raw Water Quality Trends"],
-              typicalSourceSystems: ["GIS Platform", "Environmental Compliance System", "Laboratory Information System"],
+              typicalDataEntities: [
+                "Land Use Data",
+                "Discharge Permits",
+                "Rainfall Patterns",
+                "Raw Water Quality Trends",
+              ],
+              typicalSourceSystems: [
+                "GIS Platform",
+                "Environmental Compliance System",
+                "Laboratory Information System",
+              ],
             },
           ],
           kpis: [
@@ -219,11 +254,7 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Taste and odour complaints",
             "Treatment cost per Ml",
           ],
-          personas: [
-            "Head of Water Quality",
-            "Chief Scientist",
-            "Regulatory Director",
-          ],
+          personas: ["Head of Water Quality", "Chief Scientist", "Regulatory Director"],
         },
         {
           name: "Integrated Catchment & Source Management",
@@ -234,15 +265,33 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Integrate satellite imagery, land-use data, rainfall patterns, and water quality trends to monitor catchment health and prioritise intervention programmes across source water areas.",
               businessValue:
                 "Proactive source protection reduces treatment complexity and cost while safeguarding long-term water quality.",
-              typicalDataEntities: ["Satellite Imagery", "Land Use Data", "Rainfall Records", "Water Quality Trends"],
-              typicalSourceSystems: ["GIS Platform", "Environmental Monitoring", "Laboratory Information System"],
+              typicalDataEntities: [
+                "Satellite Imagery",
+                "Land Use Data",
+                "Rainfall Records",
+                "Water Quality Trends",
+              ],
+              typicalSourceSystems: [
+                "GIS Platform",
+                "Environmental Monitoring",
+                "Laboratory Information System",
+              ],
             },
             {
               name: "Source Water Quality Trend Analysis",
               description:
                 "Analyse long-term trends in raw water quality across reservoirs and river abstractions, correlating with land-use change, climate patterns, and upstream activity to anticipate emerging risks.",
-              typicalDataEntities: ["Raw Water Quality Records", "Land Use Change Data", "Climate Patterns", "Upstream Discharge Records"],
-              typicalSourceSystems: ["Laboratory Information System", "GIS Platform", "Environmental Monitoring"],
+              typicalDataEntities: [
+                "Raw Water Quality Records",
+                "Land Use Change Data",
+                "Climate Patterns",
+                "Upstream Discharge Records",
+              ],
+              typicalSourceSystems: [
+                "Laboratory Information System",
+                "GIS Platform",
+                "Environmental Monitoring",
+              ],
             },
           ],
           kpis: [
@@ -265,29 +314,59 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Predict sewer overflow events from rainfall forecasts, network level sensors, and flow data to enable proactive spill prevention.",
               businessValue:
                 "Reduce overflow spill frequency and duration, directly impacting regulatory performance commitments.",
-              typicalDataEntities: ["Rainfall Forecasts", "Network Level Sensors", "Flow Data", "CSO Event History"],
+              typicalDataEntities: [
+                "Rainfall Forecasts",
+                "Network Level Sensors",
+                "Flow Data",
+                "CSO Event History",
+              ],
               typicalSourceSystems: ["SCADA", "Weather Services", "Wastewater Management System"],
             },
             {
               name: "Carbon Emissions Tracking",
               description:
                 "Automate Scope 1, 2, and 3 emissions reporting across pumping, treatment, transport, and fleet operations.",
-              typicalDataEntities: ["Energy Consumption", "Fleet Fuel Records", "Treatment Process Data", "Supply Chain Emissions"],
-              typicalSourceSystems: ["SCADA", "Fleet Management System", "ERP", "Energy Management System"],
+              typicalDataEntities: [
+                "Energy Consumption",
+                "Fleet Fuel Records",
+                "Treatment Process Data",
+                "Supply Chain Emissions",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "Fleet Management System",
+                "ERP",
+                "Energy Management System",
+              ],
             },
             {
               name: "Pollution Incident Prevention",
               description:
                 "Identify high-risk discharge points using telemetry, event history, and network hydraulic models to prevent significant pollution incidents.",
-              typicalDataEntities: ["Discharge Telemetry", "Event History", "Network Hydraulic Model", "Risk Assessments"],
+              typicalDataEntities: [
+                "Discharge Telemetry",
+                "Event History",
+                "Network Hydraulic Model",
+                "Risk Assessments",
+              ],
               typicalSourceSystems: ["SCADA", "Wastewater Management System", "GIS Platform"],
             },
             {
               name: "Climate Variability & Drought Scenario Modelling",
               description:
                 "Model the impact of climate change scenarios on rainfall patterns, inflow projections, and demand to inform long-term infrastructure planning and drought response strategies.",
-              typicalDataEntities: ["Climate Scenarios", "Rainfall Projections", "Inflow Forecasts", "Demand Projections"],
-              typicalSourceSystems: ["Climate Modelling", "Hydrological Modelling", "Billing System", "Bulk Water Planning"],
+              typicalDataEntities: [
+                "Climate Scenarios",
+                "Rainfall Projections",
+                "Inflow Forecasts",
+                "Demand Projections",
+              ],
+              typicalSourceSystems: [
+                "Climate Modelling",
+                "Hydrological Modelling",
+                "Billing System",
+                "Bulk Water Planning",
+              ],
             },
             {
               name: "Emissions Reduction & Net-Zero Pathway Analytics",
@@ -346,11 +425,7 @@ export const WATER_UTILITIES: IndustryOutcome = {
             "Billing accuracy (%)",
             "Customer contacts per 1000 connections",
           ],
-          personas: [
-            "VP Customer Experience",
-            "Head of Retail",
-            "Chief Commercial Officer",
-          ],
+          personas: ["VP Customer Experience", "Head of Retail", "Chief Commercial Officer"],
         },
         {
           name: "Wholesale & Irrigation Customer Outcomes",
@@ -404,28 +479,48 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Model drought scenarios against storage trajectories, demand forecasts, and supply augmentation options to inform restriction trigger levels and contingency planning.",
               businessValue:
                 "Earlier, evidence-based restriction decisions that balance community impact with supply security.",
-              typicalDataEntities: ["Storage Trajectories", "Demand Forecasts", "Supply Augmentation Options", "Restriction Triggers"],
+              typicalDataEntities: [
+                "Storage Trajectories",
+                "Demand Forecasts",
+                "Supply Augmentation Options",
+                "Restriction Triggers",
+              ],
               typicalSourceSystems: ["Bulk Water Planning", "SCADA", "Hydrological Modelling"],
             },
             {
               name: "Desalination Optimisation",
               description:
                 "Optimise desalination plant dispatch, energy consumption, and maintenance scheduling based on grid demand, storage levels, and energy market conditions.",
-              typicalDataEntities: ["Grid Demand", "Storage Levels", "Energy Market Prices", "Plant Capacity"],
+              typicalDataEntities: [
+                "Grid Demand",
+                "Storage Levels",
+                "Energy Market Prices",
+                "Plant Capacity",
+              ],
               typicalSourceSystems: ["SCADA", "Desalination Plant DCS", "Energy Market Data"],
             },
             {
               name: "Inter-connected Scheme Optimisation",
               description:
                 "Model transfers and balancing across multiple dams, treatment plants, and distribution zones within a regional water grid to maximise whole-of-system reliability.",
-              typicalDataEntities: ["Transfer Capacity", "Treatment Output", "Storage Levels", "Zone Demand"],
+              typicalDataEntities: [
+                "Transfer Capacity",
+                "Treatment Output",
+                "Storage Levels",
+                "Zone Demand",
+              ],
               typicalSourceSystems: ["SCADA", "Bulk Water Planning", "Asset Management System"],
             },
             {
               name: "Water Security Index Forecasting",
               description:
                 "Calculate and forecast a composite water security index per scheme incorporating storage, inflow trends, demand growth, climate outlook, and supply augmentation capacity.",
-              typicalDataEntities: ["Storage Levels", "Inflow Trends", "Demand Growth", "Climate Outlook"],
+              typicalDataEntities: [
+                "Storage Levels",
+                "Inflow Trends",
+                "Demand Growth",
+                "Climate Outlook",
+              ],
               typicalSourceSystems: ["SCADA", "Bulk Water Planning", "Climate Modelling"],
             },
           ],
@@ -460,14 +555,28 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Monitor smart meter deployment progress, communication reliability, and data quality to ensure the AMI programme delivers full network visibility on schedule.",
               businessValue:
                 "Accelerated realisation of smart metering benefits through early detection of telemetry gaps and meter faults.",
-              typicalDataEntities: ["Deployment Progress", "Communication Reliability", "Data Quality Metrics", "Meter Fault Records"],
-              typicalSourceSystems: ["AMI Head-End", "Meter Data Management", "Asset Management System"],
+              typicalDataEntities: [
+                "Deployment Progress",
+                "Communication Reliability",
+                "Data Quality Metrics",
+                "Meter Fault Records",
+              ],
+              typicalSourceSystems: [
+                "AMI Head-End",
+                "Meter Data Management",
+                "Asset Management System",
+              ],
             },
             {
               name: "Smart Network Event Correlation",
               description:
                 "Correlate events across pressure, flow, acoustic, and meter telemetry to automatically detect, classify, and locate network anomalies such as bursts, leaks, and pressure transients.",
-              typicalDataEntities: ["Pressure Telemetry", "Flow Data", "Acoustic Logs", "Meter Events"],
+              typicalDataEntities: [
+                "Pressure Telemetry",
+                "Flow Data",
+                "Acoustic Logs",
+                "Meter Events",
+              ],
               typicalSourceSystems: ["SCADA", "AMI Head-End", "GIS Platform"],
             },
             {
@@ -497,15 +606,33 @@ export const WATER_UTILITIES: IndustryOutcome = {
                 "Operate a shared analytics platform and data hub that enables smaller regional councils and utilities to access smart water capabilities without building bespoke infrastructure.",
               businessValue:
                 "Economies of scale for smaller utilities and consistent data standards across the region.",
-              typicalDataEntities: ["Operational Metrics", "Asset Data", "Customer Data", "Quality Standards"],
-              typicalSourceSystems: ["Data Hub", "Shared Analytics Platform", "Participating Utility Systems"],
+              typicalDataEntities: [
+                "Operational Metrics",
+                "Asset Data",
+                "Customer Data",
+                "Quality Standards",
+              ],
+              typicalSourceSystems: [
+                "Data Hub",
+                "Shared Analytics Platform",
+                "Participating Utility Systems",
+              ],
             },
             {
               name: "Cross-utility Benchmarking Analytics",
               description:
                 "Aggregate anonymised operational, financial, and customer metrics across participating utilities to enable peer benchmarking and identify best-practice improvement opportunities.",
-              typicalDataEntities: ["Operational KPIs", "Financial Metrics", "Customer Satisfaction", "Asset Performance"],
-              typicalSourceSystems: ["Data Hub", "Participating Utility Systems", "Regulatory Reporting"],
+              typicalDataEntities: [
+                "Operational KPIs",
+                "Financial Metrics",
+                "Customer Satisfaction",
+                "Asset Performance",
+              ],
+              typicalSourceSystems: [
+                "Data Hub",
+                "Participating Utility Systems",
+                "Regulatory Reporting",
+              ],
             },
           ],
           kpis: [
@@ -543,8 +670,17 @@ export const WATER_UTILITIES: IndustryOutcome = {
               name: "Biosolids Reuse & Energy Recovery Analytics",
               description:
                 "Track biosolids production, quality, and beneficial reuse pathways (agriculture, land rehabilitation, energy generation) to optimise resource recovery and regulatory compliance.",
-              typicalDataEntities: ["Biosolids Production", "Quality Test Results", "Reuse Pathways", "Energy Recovery"],
-              typicalSourceSystems: ["Treatment Plant DCS", "Laboratory Information System", "Waste Management System"],
+              typicalDataEntities: [
+                "Biosolids Production",
+                "Quality Test Results",
+                "Reuse Pathways",
+                "Energy Recovery",
+              ],
+              typicalSourceSystems: [
+                "Treatment Plant DCS",
+                "Laboratory Information System",
+                "Waste Management System",
+              ],
             },
             {
               name: "Precinct-scale Water Recycling Feasibility",

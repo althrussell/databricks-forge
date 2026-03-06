@@ -5,7 +5,11 @@
 
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import type { SpaceHealthReport, UserCheckOverride, UserCustomCheck } from "@/lib/genie/health-checks/types";
+import type {
+  SpaceHealthReport,
+  UserCheckOverride,
+  UserCustomCheck,
+} from "@/lib/genie/health-checks/types";
 
 // ---------------------------------------------------------------------------
 // Health Scores

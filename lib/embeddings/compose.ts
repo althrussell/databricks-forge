@@ -7,7 +7,6 @@
  * but not so long that it dilutes the embedding signal.
  */
 
-
 // ---------------------------------------------------------------------------
 // 1. table_detail
 // ---------------------------------------------------------------------------
@@ -54,8 +53,12 @@ export function composeTableDetail(t: TableDetailInput): string {
     colNames.length > 0 ? `Columns: ${colNames.join(", ")}` : null,
     t.owner ? `Owner: ${t.owner}` : null,
     tags.length > 0 ? `Tags: ${tags.join(", ")}` : null,
-    t.partitionColumns ? `Partitioned by: ${Array.isArray(t.partitionColumns) ? t.partitionColumns.join(", ") : t.partitionColumns}` : null,
-    t.clusteringColumns ? `Clustered by: ${Array.isArray(t.clusteringColumns) ? t.clusteringColumns.join(", ") : t.clusteringColumns}` : null,
+    t.partitionColumns
+      ? `Partitioned by: ${Array.isArray(t.partitionColumns) ? t.partitionColumns.join(", ") : t.partitionColumns}`
+      : null,
+    t.clusteringColumns
+      ? `Clustered by: ${Array.isArray(t.clusteringColumns) ? t.clusteringColumns.join(", ") : t.clusteringColumns}`
+      : null,
     t.sensitivityLevel ? `Sensitivity: ${t.sensitivityLevel}` : null,
     t.sizeInBytes ? `Size: ${formatBytes(Number(t.sizeInBytes))}` : null,
     t.numRows ? `Rows: ${Number(t.numRows).toLocaleString()}` : null,
@@ -151,10 +154,7 @@ interface BusinessContextInput {
   additionalContext?: string;
 }
 
-export function composeBusinessContext(
-  ctx: BusinessContextInput,
-  businessName?: string,
-): string {
+export function composeBusinessContext(ctx: BusinessContextInput, businessName?: string): string {
   const name = businessName || ctx.businessName || "Unknown";
   return lines([
     `Business: ${name}`,
@@ -205,11 +205,7 @@ export function composeGenieQuestion(
   domain: string,
   sql?: string | null,
 ): string {
-  return lines([
-    `Question: ${question}`,
-    `Domain: ${domain}`,
-    sql ? `SQL: ${sql}` : null,
-  ]);
+  return lines([`Question: ${question}`, `Domain: ${domain}`, sql ? `SQL: ${sql}` : null]);
 }
 
 // ---------------------------------------------------------------------------
@@ -387,9 +383,7 @@ interface LineageInput {
 export function composeLineageContext(l: LineageInput): string {
   return lines([
     `Lineage: ${l.sourceTableFqn} → ${l.targetTableFqn}`,
-    l.sourceType || l.targetType
-      ? `Types: ${l.sourceType || "?"} → ${l.targetType || "?"}`
-      : null,
+    l.sourceType || l.targetType ? `Types: ${l.sourceType || "?"} → ${l.targetType || "?"}` : null,
     l.entityType ? `Via: ${l.entityType}` : null,
     l.eventCount && l.eventCount > 1 ? `Events: ${l.eventCount}` : null,
   ]);
@@ -405,10 +399,7 @@ export function composeDocumentChunk(
   category: string,
   chunkIndex: number,
 ): string {
-  return lines([
-    `Source: ${filename} (${category}, chunk ${chunkIndex + 1})`,
-    text,
-  ]);
+  return lines([`Source: ${filename} (${category}, chunk ${chunkIndex + 1})`, text]);
 }
 
 // ---------------------------------------------------------------------------
@@ -463,8 +454,17 @@ interface FabricDatasetInput {
   datasetId: string;
   name: string;
   workspaceName?: string;
-  tables: Array<{ name: string; columns: Array<{ name: string; dataType: string }>; measures: Array<{ name: string; expression: string }> }>;
-  relationships: Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }>;
+  tables: Array<{
+    name: string;
+    columns: Array<{ name: string; dataType: string }>;
+    measures: Array<{ name: string; expression: string }>;
+  }>;
+  relationships: Array<{
+    fromTable: string;
+    fromColumn: string;
+    toTable: string;
+    toColumn: string;
+  }>;
   sensitivityLabel?: string | null;
 }
 
@@ -476,7 +476,9 @@ export function composeFabricDataset(ds: FabricDatasetInput): string {
     `[Power BI Dataset] ${ds.name}`,
     ds.workspaceName ? `Workspace: ${ds.workspaceName}` : null,
     `Tables: ${tableNames.join(", ")}`,
-    allCols.length > 0 ? `Columns: ${allCols.slice(0, 30).join(", ")}${allCols.length > 30 ? "..." : ""}` : null,
+    allCols.length > 0
+      ? `Columns: ${allCols.slice(0, 30).join(", ")}${allCols.length > 30 ? "..." : ""}`
+      : null,
     allMeasures.length > 0 ? `Measures: ${allMeasures.join(", ")}` : null,
     ds.relationships.length > 0
       ? `Relationships: ${ds.relationships.map((r) => `${r.fromTable}.${r.fromColumn} → ${r.toTable}.${r.toColumn}`).join("; ")}`

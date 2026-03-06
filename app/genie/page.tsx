@@ -5,13 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,12 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
@@ -43,10 +32,7 @@ import {
   FlaskConical,
   RefreshCw,
 } from "lucide-react";
-import type {
-  GenieSpaceResponse,
-  TrackedGenieSpace,
-} from "@/lib/genie/types";
+import type { GenieSpaceResponse, TrackedGenieSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
@@ -128,7 +114,10 @@ export default function GenieSpacesPage() {
         body: JSON.stringify({ spaceIds }),
       });
       if (res.ok) {
-        const data: Record<string, { metadata: SpaceMetadata | null; healthReport: SpaceHealthReport | null }> = await res.json();
+        const data: Record<
+          string,
+          { metadata: SpaceMetadata | null; healthReport: SpaceHealthReport | null }
+        > = await res.json();
 
         setSpaces((prev) =>
           prev.map((s) => {
@@ -166,7 +155,9 @@ export default function GenieSpacesPage() {
       setSpaces(merged);
 
       if ((data.staleCount ?? 0) > 0) {
-        toast.info(`${data.staleCount} space${data.staleCount !== 1 ? "s" : ""} no longer found in workspace`);
+        toast.info(
+          `${data.staleCount} space${data.staleCount !== 1 ? "s" : ""} no longer found in workspace`,
+        );
       }
 
       const activeIds = merged.filter((s) => s.status !== "trashed").map((s) => s.spaceId);
@@ -258,7 +249,7 @@ export default function GenieSpacesPage() {
             onClick={handleRefresh}
             disabled={loading || discovering}
           >
-            {(loading || discovering) ? (
+            {loading || discovering ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
               <RefreshCw className="mr-2 size-4" />
@@ -295,13 +286,9 @@ export default function GenieSpacesPage() {
       ) : (
         <Tabs defaultValue="active">
           <TabsList>
-            <TabsTrigger value="active">
-              Active ({activeSpaces.length})
-            </TabsTrigger>
+            <TabsTrigger value="active">Active ({activeSpaces.length})</TabsTrigger>
             {trashedSpaces.length > 0 && (
-              <TabsTrigger value="trashed">
-                Trashed ({trashedSpaces.length})
-              </TabsTrigger>
+              <TabsTrigger value="trashed">Trashed ({trashedSpaces.length})</TabsTrigger>
             )}
           </TabsList>
 
@@ -335,11 +322,7 @@ export default function GenieSpacesPage() {
             <TabsContent value="trashed" className="mt-4">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {trashedSpaces.map((space) => (
-                  <SpaceCard
-                    key={space.spaceId}
-                    space={space}
-                    databricksHost={databricksHost}
-                  />
+                  <SpaceCard key={space.spaceId} space={space} databricksHost={databricksHost} />
                 ))}
               </div>
             </TabsContent>
@@ -369,8 +352,8 @@ export default function GenieSpacesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Trash Genie Space</AlertDialogTitle>
             <AlertDialogDescription>
-              This will trash &quot;{trashTarget?.title}&quot; in Databricks.
-              The space can be recovered from the Databricks workspace trash.
+              This will trash &quot;{trashTarget?.title}&quot; in Databricks. The space can be
+              recovered from the Databricks workspace trash.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -380,7 +363,11 @@ export default function GenieSpacesPage() {
               disabled={trashing}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {trashing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Trash2 className="mr-2 size-4" />}
+              {trashing ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 size-4" />
+              )}
               Trash
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -393,7 +380,7 @@ export default function GenieSpacesPage() {
         onOpenChange={setHealthSheetOpen}
         spaceId={healthSheetTarget?.spaceId ?? ""}
         spaceTitle={healthSheetTarget?.title ?? ""}
-        report={healthSheetTarget ? healthScores[healthSheetTarget.spaceId] ?? null : null}
+        report={healthSheetTarget ? (healthScores[healthSheetTarget.spaceId] ?? null) : null}
         loading={discovering}
         onFix={() => {
           if (healthSheetTarget) {
@@ -457,9 +444,7 @@ function SpaceCard({
   onHealthClick?: () => void;
 }) {
   const isTrashed = space.status === "trashed";
-  const genieUrl = databricksHost
-    ? `${databricksHost}/genie/rooms/${space.spaceId}`
-    : "";
+  const genieUrl = databricksHost ? `${databricksHost}/genie/rooms/${space.spaceId}` : "";
 
   return (
     <Card
@@ -485,7 +470,11 @@ function SpaceCard({
               />
             )}
             <SourceBadge source={space.source} />
-            {isTrashed && <Badge variant="outline" className="text-xs">Trashed</Badge>}
+            {isTrashed && (
+              <Badge variant="outline" className="text-xs">
+                Trashed
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -580,10 +569,22 @@ function SpaceCard({
 function SourceBadge({ source }: { source: SpaceCardData["source"] }) {
   switch (source) {
     case "pipeline":
-      return <Badge variant="secondary" className="text-xs">Pipeline</Badge>;
+      return (
+        <Badge variant="secondary" className="text-xs">
+          Pipeline
+        </Badge>
+      );
     case "metadata":
-      return <Badge variant="secondary" className="text-xs">Metadata</Badge>;
+      return (
+        <Badge variant="secondary" className="text-xs">
+          Metadata
+        </Badge>
+      );
     case "workspace":
-      return <Badge variant="outline" className="text-xs">Workspace</Badge>;
+      return (
+        <Badge variant="outline" className="text-xs">
+          Workspace
+        </Badge>
+      );
   }
 }

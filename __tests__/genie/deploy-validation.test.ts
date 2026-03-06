@@ -23,10 +23,12 @@ describe("genie deploy validation", () => {
   });
 
   it("fails with structured no-table error", async () => {
-    const result = await revalidateSerializedSpace(JSON.stringify({
-      data_sources: { tables: [] },
-      instructions: { join_specs: [], example_question_sqls: [] },
-    }));
+    const result = await revalidateSerializedSpace(
+      JSON.stringify({
+        data_sources: { tables: [] },
+        instructions: { join_specs: [], example_question_sqls: [] },
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe("no_tables");
@@ -34,15 +36,14 @@ describe("genie deploy validation", () => {
   });
 
   it("fails multi-table payloads without joins", async () => {
-    const result = await revalidateSerializedSpace(JSON.stringify({
-      data_sources: {
-        tables: [
-          { identifier: "main.sales.orders" },
-          { identifier: "main.sales.customers" },
-        ],
-      },
-      instructions: { join_specs: [], example_question_sqls: [] },
-    }));
+    const result = await revalidateSerializedSpace(
+      JSON.stringify({
+        data_sources: {
+          tables: [{ identifier: "main.sales.orders" }, { identifier: "main.sales.customers" }],
+        },
+        instructions: { join_specs: [], example_question_sqls: [] },
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe("missing_multitable_joins");
@@ -52,20 +53,22 @@ describe("genie deploy validation", () => {
 
   it("returns join-level diagnostics when join SQL is invalid", async () => {
     vi.mocked(validateSqlExpression).mockReturnValue(false);
-    const result = await revalidateSerializedSpace(JSON.stringify({
-      data_sources: { tables: [{ identifier: "main.sales.orders" }] },
-      instructions: {
-        join_specs: [
-          {
-            id: "join-1",
-            left: { identifier: "main.sales.orders" },
-            right: { identifier: "main.sales.customers" },
-            sql: ["main.sales.orders.customer_id = main.sales.customers.customer_id"],
-          },
-        ],
-        example_question_sqls: [],
-      },
-    }));
+    const result = await revalidateSerializedSpace(
+      JSON.stringify({
+        data_sources: { tables: [{ identifier: "main.sales.orders" }] },
+        instructions: {
+          join_specs: [
+            {
+              id: "join-1",
+              left: { identifier: "main.sales.orders" },
+              right: { identifier: "main.sales.customers" },
+              sql: ["main.sales.orders.customer_id = main.sales.customers.customer_id"],
+            },
+          ],
+          example_question_sqls: [],
+        },
+      }),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe("invalid_join_sql");

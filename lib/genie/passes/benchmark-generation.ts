@@ -12,7 +12,11 @@ import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type { BenchmarkInput, EntityMatchingCandidate, JoinSpecInput } from "../types";
-import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import {
+  buildSchemaContextBlock,
+  validateSqlExpression,
+  type SchemaAllowlist,
+} from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
@@ -40,20 +44,28 @@ export interface BenchmarkGenerationOutput {
 }
 
 export async function runBenchmarkGeneration(
-  input: BenchmarkGenerationInput
+  input: BenchmarkGenerationInput,
 ): Promise<BenchmarkGenerationOutput> {
   const {
-    tableFqns, metadata, allowlist, useCases,
-    entityCandidates, customerBenchmarks, joinSpecs, endpoint, signal,
+    tableFqns,
+    metadata,
+    allowlist,
+    useCases,
+    entityCandidates,
+    customerBenchmarks,
+    joinSpecs,
+    endpoint,
+    signal,
   } = input;
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
-  const joinBlock = joinSpecs.length > 0
-    ? `### TABLE RELATIONSHIPS (use these exact join conditions in expectedSql)\n${
-        joinSpecs.map((j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql} (${j.relationshipType})`).join("\n")
-      }`
-    : "";
+  const joinBlock =
+    joinSpecs.length > 0
+      ? `### TABLE RELATIONSHIPS (use these exact join conditions in expectedSql)\n${joinSpecs
+          .map((j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql} (${j.relationshipType})`)
+          .join("\n")}`
+      : "";
 
   const entityBlock = entityCandidates
     .filter((c) => c.sampleValues.length > 0)
@@ -83,7 +95,13 @@ export async function runBenchmarkGeneration(
     batches.map((batch) => async () => {
       try {
         return await processBenchmarkBatch(
-          batch, schemaBlock, entityBlock, joinBlock, allowlist, endpoint, signal
+          batch,
+          schemaBlock,
+          entityBlock,
+          joinBlock,
+          allowlist,
+          endpoint,
+          signal,
         );
       } catch (err) {
         logger.warn("Benchmark batch failed, continuing with remaining batches", {
@@ -120,9 +138,10 @@ async function processBenchmarkBatch(
   const MAX_SQL_CHARS = 3000;
   const useCaseContext = batch
     .map((uc) => {
-      const sql = (uc.sqlCode ?? "").length > MAX_SQL_CHARS
-        ? uc.sqlCode!.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
-        : uc.sqlCode;
+      const sql =
+        (uc.sqlCode ?? "").length > MAX_SQL_CHARS
+          ? uc.sqlCode!.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
+          : uc.sqlCode;
       return `Use case: ${uc.name}\nQuestion: ${uc.statement}\nGROUND TRUTH SQL (use this as the expectedSql, do NOT simplify):\n${sql}`;
     })
     .join("\n\n---\n\n");
@@ -182,7 +201,9 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
   const parsed = parseLLMJson(content, "genie:benchmark-generation") as Record<string, unknown>;
   const items: Record<string, unknown>[] = Array.isArray(parsed.benchmarks)
     ? parsed.benchmarks
-    : Array.isArray(parsed) ? parsed : [];
+    : Array.isArray(parsed)
+      ? parsed
+      : [];
 
   const MAX_BENCHMARK_SQL_CHARS = 3000;
 
@@ -191,7 +212,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
       question: String(b.question ?? ""),
       expectedSql: String(b.expectedSql ?? b.expected_sql ?? ""),
       alternatePhrasings: Array.isArray(b.alternatePhrasings ?? b.alternate_phrasings)
-        ? (b.alternatePhrasings as string[] ?? b.alternate_phrasings as string[]).map(String)
+        ? ((b.alternatePhrasings as string[]) ?? (b.alternate_phrasings as string[])).map(String)
         : [],
     }))
     .filter((b) => b.question.length > 0 && b.expectedSql.length > 0)
@@ -205,7 +226,9 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
       }
       return true;
     })
-    .filter((b) => validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`, true));
+    .filter((b) =>
+      validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`, true),
+    );
 
   // LLM review gate: review + fix each benchmark's expected SQL
   if (isReviewEnabled("genie-benchmarks") && benchmarks.length > 0) {
@@ -216,7 +239,9 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
           surface: "genie-benchmarks",
         });
         if (review.fixedSql) {
-          if (validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)) {
+          if (
+            validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)
+          ) {
             return { ...b, expectedSql: review.fixedSql };
           }
           logger.warn("Benchmark review fix failed schema validation, keeping original", {

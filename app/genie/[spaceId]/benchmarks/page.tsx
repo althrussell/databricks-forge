@@ -5,19 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,7 +76,10 @@ function SqlPreviewTable({ preview, label }: { preview: SqlResultPreview; label:
     <div className="mt-2 space-y-1">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="font-medium">{label}</span>
-        <span>{preview.rowCount} row{preview.rowCount !== 1 ? "s" : ""}{preview.truncated ? " (truncated)" : ""}</span>
+        <span>
+          {preview.rowCount} row{preview.rowCount !== 1 ? "s" : ""}
+          {preview.truncated ? " (truncated)" : ""}
+        </span>
       </div>
       <div className="max-h-40 overflow-auto rounded border">
         <table className="w-full text-xs">
@@ -259,15 +251,11 @@ export default function BenchmarkPage() {
   };
 
   const setLabel = (index: number, isCorrect: boolean) => {
-    setResults((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, isCorrect } : r)),
-    );
+    setResults((prev) => prev.map((r, i) => (i === index ? { ...r, isCorrect } : r)));
   };
 
   const setFeedbackText = (index: number, text: string) => {
-    setResults((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, feedbackText: text } : r)),
-    );
+    setResults((prev) => prev.map((r, i) => (i === index ? { ...r, feedbackText: text } : r)));
   };
 
   const submitFeedback = async () => {
@@ -359,12 +347,14 @@ export default function BenchmarkPage() {
 
       setImproveResult({
         updatedSerializedSpace: mergeData.mergedSerializedSpace,
-        changes: data.suggestions.map((s: { category: string; rationale: string; priority: string }) => ({
-          section: s.category,
-          description: s.rationale,
-          added: 0,
-          modified: 1,
-        })),
+        changes: data.suggestions.map(
+          (s: { category: string; rationale: string; priority: string }) => ({
+            section: s.category,
+            description: s.rationale,
+            added: 0,
+            modified: 1,
+          }),
+        ),
         strategiesRun: ["llm_field_optimization"],
         originalSerializedSpace: data.originalSerializedSpace,
       });
@@ -487,8 +477,8 @@ export default function BenchmarkPage() {
                 <FlaskConical className="mb-4 size-10 text-muted-foreground/50" />
                 <h2 className="text-lg font-semibold">No benchmark questions</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  This space has no benchmark questions configured. Run a health check
-                  and use the Fix workflow to generate them.
+                  This space has no benchmark questions configured. Run a health check and use the
+                  Fix workflow to generate them.
                 </p>
               </CardContent>
             </Card>
@@ -517,14 +507,19 @@ export default function BenchmarkPage() {
                 {results.length > 0 && !running && (
                   <>
                     <Badge variant={passedCount === results.length ? "default" : "secondary"}>
-                      {passedCount}/{results.length} passed ({Math.round((passedCount / results.length) * 100)}%)
+                      {passedCount}/{results.length} passed (
+                      {Math.round((passedCount / results.length) * 100)}%)
                     </Badge>
                     {previousRun && (
                       <span className="text-xs text-muted-foreground">
                         Previous: {previousRun.passRate}%
-                        {Math.round((passedCount / results.length) * 100) > previousRun.passRate && (
+                        {Math.round((passedCount / results.length) * 100) >
+                          previousRun.passRate && (
                           <span className="ml-1 text-green-600">
-                            +{Math.round((passedCount / results.length) * 100) - previousRun.passRate}%
+                            +
+                            {Math.round((passedCount / results.length) * 100) -
+                              previousRun.passRate}
+                            %
                           </span>
                         )}
                       </span>
@@ -535,7 +530,8 @@ export default function BenchmarkPage() {
 
               {rateLimitWarning && !running && (
                 <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
-                  Some questions hit Databricks API rate limits. Consider running fewer questions at a time or waiting between runs.
+                  Some questions hit Databricks API rate limits. Consider running fewer questions at
+                  a time or waiting between runs.
                 </div>
               )}
 
@@ -602,10 +598,16 @@ export default function BenchmarkPage() {
                                 <div className="mt-1 text-xs text-red-500">{result.error}</div>
                               )}
                               {result.actualSqlResult && (
-                                <SqlPreviewTable preview={result.actualSqlResult} label="Genie Result" />
+                                <SqlPreviewTable
+                                  preview={result.actualSqlResult}
+                                  label="Genie Result"
+                                />
                               )}
                               {result.expectedSqlResult && (
-                                <SqlPreviewTable preview={result.expectedSqlResult} label="Expected Result" />
+                                <SqlPreviewTable
+                                  preview={result.expectedSqlResult}
+                                  label="Expected Result"
+                                />
                               )}
                             </div>
                           </div>
@@ -648,7 +650,11 @@ export default function BenchmarkPage() {
                   <div className="flex gap-3 pt-2">
                     <Button
                       onClick={submitFeedback}
-                      disabled={submittingFeedback || !currentRunId || results.every((r) => r.isCorrect === undefined)}
+                      disabled={
+                        submittingFeedback ||
+                        !currentRunId ||
+                        results.every((r) => r.isCorrect === undefined)
+                      }
                       variant="outline"
                     >
                       {submittingFeedback ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
@@ -664,7 +670,11 @@ export default function BenchmarkPage() {
                           )}
                           Improve ({labeledIncorrect} issues)
                         </Button>
-                        <Button variant="outline" onClick={runOptimize} disabled={improving || optimizing}>
+                        <Button
+                          variant="outline"
+                          onClick={runOptimize}
+                          disabled={improving || optimizing}
+                        >
                           {optimizing ? (
                             <Loader2 className="mr-2 size-4 animate-spin" />
                           ) : (
@@ -700,11 +710,21 @@ export default function BenchmarkPage() {
                         {new Date(run.runAt).toLocaleString()}
                       </CardTitle>
                       <div className="flex gap-2">
-                        <Badge variant={run.passRate >= 80 ? "default" : run.passRate >= 50 ? "secondary" : "destructive"}>
+                        <Badge
+                          variant={
+                            run.passRate >= 80
+                              ? "default"
+                              : run.passRate >= 50
+                                ? "secondary"
+                                : "destructive"
+                          }
+                        >
                           {run.passRate}% pass rate
                         </Badge>
                         {run.improvementsApplied && (
-                          <Badge variant="outline" className="text-xs">Improved</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            Improved
+                          </Badge>
                         )}
                       </div>
                     </div>

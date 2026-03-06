@@ -93,9 +93,7 @@ async function acquireTokenRaw(
       status: res.status,
       body: text.slice(0, 500),
     });
-    throw new Error(
-      `Entra ID token acquisition failed (${res.status}): ${text.slice(0, 200)}`,
-    );
+    throw new Error(`Entra ID token acquisition failed (${res.status}): ${text.slice(0, 200)}`);
   }
 
   const data = (await res.json()) as {

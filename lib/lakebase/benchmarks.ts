@@ -199,16 +199,14 @@ export async function listBenchmarkRecords(
   );
 
   const now = new Date();
-  return rows
-    .map(toRecord)
-    .filter((r) => {
-      if (filters.includeExpired) return true;
-      const freshUntil = computeBenchmarkFreshUntil(
-        r.publishedAt ? new Date(r.publishedAt) : null,
-        r.ttlDays,
-      );
-      return freshUntil >= now;
-    });
+  return rows.map(toRecord).filter((r) => {
+    if (filters.includeExpired) return true;
+    const freshUntil = computeBenchmarkFreshUntil(
+      r.publishedAt ? new Date(r.publishedAt) : null,
+      r.ttlDays,
+    );
+    return freshUntil >= now;
+  });
 }
 
 export async function getBenchmarkById(benchmarkId: string): Promise<BenchmarkRecord | null> {
@@ -244,7 +242,11 @@ export async function updateBenchmarkLifecycle(
       });
       return toRecord(row);
     } catch (err) {
-      logger.warn("[benchmarks] Failed to update lifecycle", { benchmarkId, status, error: String(err) });
+      logger.warn("[benchmarks] Failed to update lifecycle", {
+        benchmarkId,
+        status,
+        error: String(err),
+      });
       return null;
     }
   });
@@ -271,7 +273,10 @@ export async function updateBenchmarkSourceContent(
       });
       return toRecord(row);
     } catch (err) {
-      logger.warn("[benchmarks] Failed to update source content", { benchmarkId, error: String(err) });
+      logger.warn("[benchmarks] Failed to update source content", {
+        benchmarkId,
+        error: String(err),
+      });
       return null;
     }
   });

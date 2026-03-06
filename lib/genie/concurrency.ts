@@ -47,10 +47,7 @@ export function createConcurrencyLimiter(concurrency: number) {
  * Run an array of async task factories with bounded concurrency.
  * Results are returned in the same order as the input tasks.
  */
-export function mapWithConcurrency<T>(
-  tasks: Array<AsyncFn<T>>,
-  concurrency: number,
-): Promise<T[]> {
+export function mapWithConcurrency<T>(tasks: Array<AsyncFn<T>>, concurrency: number): Promise<T[]> {
   const limit = createConcurrencyLimiter(concurrency);
   return Promise.all(tasks.map((fn) => limit(fn)));
 }

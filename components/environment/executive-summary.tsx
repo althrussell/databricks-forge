@@ -4,12 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { InfoTip } from "@/components/ui/info-tip";
 import { ENVIRONMENT } from "@/lib/help-text";
 import type { AggregateStats, InsightRow, TableDetailRow } from "@/app/environment/types";
-import {
-  AlertTriangle,
-  BarChart3,
-  FileSpreadsheet,
-  ShieldAlert,
-} from "lucide-react";
+import { AlertTriangle, BarChart3, FileSpreadsheet, ShieldAlert } from "lucide-react";
 
 export interface ExecutiveSummaryProps {
   stats: AggregateStats;
@@ -18,12 +13,7 @@ export interface ExecutiveSummaryProps {
   humanSize: (bytes: string | number | null) => string;
 }
 
-export function ExecutiveSummary({
-  stats,
-  details,
-  insights,
-  humanSize,
-}: ExecutiveSummaryProps) {
+export function ExecutiveSummary({ stats, details, insights, humanSize }: ExecutiveSummaryProps) {
   // -------------------------------------------------------------------
   // Derive signals
   // -------------------------------------------------------------------
@@ -42,11 +32,13 @@ export function ExecutiveSummary({
   }
 
   const piiTables = details.filter(
-    (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted"
+    (d) => d.sensitivityLevel === "confidential" || d.sensitivityLevel === "restricted",
   );
   const noOwner = details.filter((d) => !d.owner);
   const noDescription = details.filter((d) => !d.comment && !d.generatedDescription);
-  const govCritical = details.filter((d) => d.governancePriority === "critical" || d.governancePriority === "high");
+  const govCritical = details.filter(
+    (d) => d.governancePriority === "critical" || d.governancePriority === "high",
+  );
   const documented = tables - noDescription.length;
   const documentedPct = tables > 0 ? Math.round((documented / tables) * 100) : 0;
 
@@ -56,11 +48,19 @@ export function ExecutiveSummary({
   const govGaps = insights.filter((i) => i.insightType === "governance_gap");
 
   // Parse data product payloads for richer narrative
-  const dataProducts: Array<{ productName: string; description: string; primaryDomain: string; maturityLevel: string; tables: string[] }> = [];
+  const dataProducts: Array<{
+    productName: string;
+    description: string;
+    primaryDomain: string;
+    maturityLevel: string;
+    tables: string[];
+  }> = [];
   for (const dp of dataProductInsights) {
     try {
       dataProducts.push(JSON.parse(dp.payloadJson));
-    } catch { /* skip malformed */ }
+    } catch {
+      /* skip malformed */
+    }
   }
   const productisedProducts = dataProducts.filter((p) => p.maturityLevel === "productised");
   const curatedProducts = dataProducts.filter((p) => p.maturityLevel === "curated");
@@ -69,7 +69,12 @@ export function ExecutiveSummary({
   // -------------------------------------------------------------------
   // Build findings — BUSINESS first, then TECHNICAL
   // -------------------------------------------------------------------
-  type Finding = { label: string; body: string; severity: "info" | "warn" | "critical"; section: "business" | "technical" };
+  type Finding = {
+    label: string;
+    body: string;
+    severity: "info" | "warn" | "critical";
+    section: "business" | "technical";
+  };
   const findings: Finding[] = [];
 
   // ═══════════════════════════════════════════════════════════════════
@@ -87,11 +92,12 @@ export function ExecutiveSummary({
   // 2. Analytics readiness / self-service
   const selfServicePct = tables > 0 ? Math.round(((tiers.gold + tiers.silver) / tables) * 100) : 0;
   if (tables > 0) {
-    const readinessVerdict = selfServicePct >= 60
-      ? "Your estate is well-positioned for self-service analytics. Business teams can query and build dashboards on most data without engineering support."
-      : selfServicePct >= 30
-        ? "A moderate portion of data is ready for business consumption, but significant effort is needed to curate more datasets from bronze to silver/gold tiers to support self-service at scale."
-        : "Most of your data is in raw (bronze) form. Business teams cannot easily consume it without significant transformation. Prioritising a curation pipeline would directly reduce time-to-insight for stakeholders.";
+    const readinessVerdict =
+      selfServicePct >= 60
+        ? "Your estate is well-positioned for self-service analytics. Business teams can query and build dashboards on most data without engineering support."
+        : selfServicePct >= 30
+          ? "A moderate portion of data is ready for business consumption, but significant effort is needed to curate more datasets from bronze to silver/gold tiers to support self-service at scale."
+          : "Most of your data is in raw (bronze) form. Business teams cannot easily consume it without significant transformation. Prioritising a curation pipeline would directly reduce time-to-insight for stakeholders.";
     findings.push({
       label: "Self-Service Readiness",
       body: `${selfServicePct}% of your data assets are at silver or gold tier, meaning they are curated and ready for business consumption. ${readinessVerdict}`,
@@ -102,7 +108,10 @@ export function ExecutiveSummary({
 
   // 3. Data products = business capabilities
   if (dataProducts.length > 0) {
-    const productNames = dataProducts.slice(0, 3).map((p) => `"${p.productName}"`).join(", ");
+    const productNames = dataProducts
+      .slice(0, 3)
+      .map((p) => `"${p.productName}"`)
+      .join(", ");
     findings.push({
       label: "Business Data Products",
       body: `${dataProducts.length} data product${dataProducts.length !== 1 ? "s have" : " has"} been identified — reusable data assets that directly support business functions (${productNames}${dataProducts.length > 3 ? ` and ${dataProducts.length - 3} more` : ""}). ${productisedProducts.length > 0 ? `${productisedProducts.length} ${productisedProducts.length !== 1 ? "are" : "is"} already productised with defined consumers.` : ""} ${curatedProducts.length > 0 ? `${curatedProducts.length} ${curatedProducts.length !== 1 ? "are" : "is"} curated and near-ready for wider adoption.` : ""} ${rawProducts.length > 0 ? `${rawProducts.length} ${rawProducts.length !== 1 ? "are" : "is"} in early stages and would benefit from investment to become self-service ready.` : ""} Formalising these as named products with SLAs and owners accelerates time-to-value for downstream teams and AI initiatives.`,
@@ -140,11 +149,13 @@ export function ExecutiveSummary({
   // 5. Discoverability & time-to-insight
   findings.push({
     label: "Data Discoverability",
-    body: `${documentedPct}% of your data assets have descriptions (either human-authored or auto-generated). ${documentedPct >= 70
-      ? "Analysts and data scientists can find and understand most datasets quickly, reducing onboarding time and enabling faster project delivery."
-      : documentedPct >= 40
-        ? "Many datasets lack descriptions, which forces analysts to spend time asking data engineers what tables mean — a hidden cost that slows every analytics project."
-        : "The majority of datasets have no documentation. This means every new analytics initiative starts with a discovery phase that could take days or weeks. Improving documentation coverage would directly reduce the time from business question to actionable insight."}${noOwner.length > 0 ? ` Additionally, ${noOwner.length} asset${noOwner.length !== 1 ? "s have" : " has"} no assigned owner — when something breaks, there is no clear point of accountability.` : ""}`,
+    body: `${documentedPct}% of your data assets have descriptions (either human-authored or auto-generated). ${
+      documentedPct >= 70
+        ? "Analysts and data scientists can find and understand most datasets quickly, reducing onboarding time and enabling faster project delivery."
+        : documentedPct >= 40
+          ? "Many datasets lack descriptions, which forces analysts to spend time asking data engineers what tables mean — a hidden cost that slows every analytics project."
+          : "The majority of datasets have no documentation. This means every new analytics initiative starts with a discovery phase that could take days or weeks. Improving documentation coverage would directly reduce the time from business question to actionable insight."
+    }${noOwner.length > 0 ? ` Additionally, ${noOwner.length} asset${noOwner.length !== 1 ? "s have" : " has"} no assigned owner — when something breaks, there is no clear point of accountability.` : ""}`,
     severity: documentedPct >= 70 ? "info" : "warn",
     section: "business",
   });
@@ -216,7 +227,9 @@ export function ExecutiveSummary({
 
   const critCount = govGaps.filter((g) => g.severity === "critical").length;
   const highCount = govGaps.filter((g) => g.severity === "high").length;
-  const actionCount = findings.filter((f) => f.severity === "critical" || f.severity === "warn").length;
+  const actionCount = findings.filter(
+    (f) => f.severity === "critical" || f.severity === "warn",
+  ).length;
 
   return (
     <Card className="border-primary/20 bg-primary/[0.02]">

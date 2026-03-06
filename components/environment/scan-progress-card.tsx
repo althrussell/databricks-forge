@@ -3,21 +3,9 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ScanProgressData } from "@/app/environment/types";
-import {
-  BarChart3,
-  Database,
-  Globe,
-  Loader2,
-  Search,
-  ShieldAlert,
-  Workflow,
-} from "lucide-react";
+import { BarChart3, Database, Globe, Loader2, Search, ShieldAlert, Workflow } from "lucide-react";
 
 const PHASE_LABELS: Record<string, string> = {
   starting: "Initialising",
@@ -102,11 +90,9 @@ export function ScanProgressCard({ progress }: ScanProgressCardProps) {
       95,
       progress.phase === "enriching" && progress.enrichTotal > 0
         ? // During enrichment, interpolate within the enriching phase
-          ((currentPhaseIdx + progress.enrichedCount / progress.enrichTotal) /
-            totalPhases) *
-          100
-        : ((currentPhaseIdx + 0.5) / totalPhases) * 100
-    )
+          ((currentPhaseIdx + progress.enrichedCount / progress.enrichTotal) / totalPhases) * 100
+        : ((currentPhaseIdx + 0.5) / totalPhases) * 100,
+    ),
   );
 
   const elapsed = progress.elapsedMs;
@@ -115,7 +101,10 @@ export function ScanProgressCard({ progress }: ScanProgressCardProps) {
   const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
   return (
-    <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10" aria-live="polite">
+    <Card
+      className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10"
+      aria-live="polite"
+    >
       <CardContent className="pt-5 pb-4 space-y-4">
         {/* Phase + elapsed */}
         <div className="flex items-center justify-between">

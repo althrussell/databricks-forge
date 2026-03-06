@@ -19,7 +19,7 @@ import { isSafeId, validateFqn } from "@/lib/validation";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ spaceId: string }> }
+  { params }: { params: Promise<{ spaceId: string }> },
 ) {
   try {
     const { spaceId } = await params;
@@ -54,7 +54,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ spaceId: string }> }
+  { params }: { params: Promise<{ spaceId: string }> },
 ) {
   try {
     const { spaceId } = await params;
@@ -87,7 +87,11 @@ export async function DELETE(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           dropResults.push({ fqn, type: "metric_view", success: false, error: msg });
-          logger.warn("Failed to drop metric view during space cleanup", { spaceId, fqn, error: msg });
+          logger.warn("Failed to drop metric view during space cleanup", {
+            spaceId,
+            fqn,
+            error: msg,
+          });
         }
       }
     }

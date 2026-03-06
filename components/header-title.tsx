@@ -20,15 +20,9 @@ const PAGE_TITLES: Record<string, string> = {
 export function HeaderPageTitle() {
   const pathname = usePathname();
 
-  const title =
-    PAGE_TITLES[pathname] ??
-    (pathname.startsWith("/runs/") ? "Run Detail" : null);
+  const title = PAGE_TITLES[pathname] ?? (pathname.startsWith("/runs/") ? "Run Detail" : null);
 
   if (!title) return null;
 
-  return (
-    <span className="hidden text-sm font-medium text-muted-foreground md:block">
-      {title}
-    </span>
-  );
+  return <span className="hidden text-sm font-medium text-muted-foreground md:block">{title}</span>;
 }

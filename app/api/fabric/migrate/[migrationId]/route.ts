@@ -38,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to get migration" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -67,15 +67,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json(state);
       }
       default:
-        return NextResponse.json(
-          { error: `Unknown action: ${body.action}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: `Unknown action: ${body.action}` }, { status: 400 });
     }
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to execute migration step" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

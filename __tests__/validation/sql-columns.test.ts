@@ -91,7 +91,8 @@ describe("extractSqlAliases", () => {
   });
 
   it("includes all alias types in the all set", () => {
-    const sql = "WITH cte AS (SELECT SUM(x) AS total FROM catalog.schema.t1 t) SELECT t.total FROM cte";
+    const sql =
+      "WITH cte AS (SELECT SUM(x) AS total FROM catalog.schema.t1 t) SELECT t.total FROM cte";
     const aliases = extractSqlAliases(sql);
     expect(aliases.all.has("cte")).toBe(true);
     expect(aliases.all.has("t")).toBe(true);
@@ -150,7 +151,14 @@ describe("extractColumnReferences", () => {
 // ---------------------------------------------------------------------------
 
 describe("validateColumnReferences", () => {
-  const knownColumns = new Set(["id", "name", "amount", "customer_id", "client age group", "total complaint events"]);
+  const knownColumns = new Set([
+    "id",
+    "name",
+    "amount",
+    "customer_id",
+    "client age group",
+    "total complaint events",
+  ]);
 
   it("passes when all columns are known", () => {
     const sql = "SELECT t.id, t.name FROM table1 t";
@@ -270,8 +278,13 @@ describe("validateColumnReferences", () => {
       "FROM segment s",
     ].join("\n");
     const dashboardKnown = new Set([
-      "client age group", "client gender", "total complaint events",
-      "complaint_rate", "disputed", "late", "relief",
+      "client age group",
+      "client gender",
+      "total complaint events",
+      "complaint_rate",
+      "disputed",
+      "late",
+      "relief",
     ]);
     const result = validateColumnReferences(sql, dashboardKnown);
     expect(result.valid).toBe(true);

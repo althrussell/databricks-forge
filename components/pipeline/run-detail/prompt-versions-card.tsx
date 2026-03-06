@@ -3,13 +3,7 @@
 import { useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileCode2, AlertTriangle, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { PROMPT_VERSIONS } from "@/lib/ai/templates";
@@ -38,11 +32,7 @@ export function PromptVersionsCard({
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const fetchTemplate = useCallback(
-    async (
-      promptKey: string,
-      runHash: string,
-      currentHash: string | undefined
-    ) => {
+    async (promptKey: string, runHash: string, currentHash: string | undefined) => {
       if (templateCache[promptKey]) return;
       setLoadingKey(promptKey);
       try {
@@ -58,9 +48,7 @@ export function PromptVersionsCard({
             ...prev,
             [promptKey]: {
               run: templates[runHash]?.templateText ?? null,
-              current: currentHash
-                ? (templates[currentHash]?.templateText ?? null)
-                : null,
+              current: currentHash ? (templates[currentHash]?.templateText ?? null) : null,
             },
           }));
         } else {
@@ -78,7 +66,7 @@ export function PromptVersionsCard({
         setLoadingKey(null);
       }
     },
-    [templateCache]
+    [templateCache],
   );
 
   const handleToggle = (key: string, hash: string, currentHash: string | undefined) => {
@@ -107,10 +95,7 @@ export function PromptVersionsCard({
             <FileCode2 className="h-4 w-4 text-violet-500" />
             Prompt Versions
             {changedCount > 0 && (
-              <Badge
-                variant="outline"
-                className="ml-1 border-amber-300 text-amber-700"
-              >
+              <Badge variant="outline" className="ml-1 border-amber-300 text-amber-700">
                 {changedCount} changed since this run
               </Badge>
             )}
@@ -144,28 +129,17 @@ export function PromptVersionsCard({
                   onClick={() => handleToggle(key, hash, currentHash)}
                 >
                   <div className="flex items-center gap-2">
-                    {hasDiff && (
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                    )}
+                    {hasDiff && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
                     <span className="text-xs font-medium">{key}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <code className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
-                      {hash}
-                    </code>
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{hash}</code>
                     {isStale && (
                       <span className="text-[10px] text-amber-600">
-                        now:{" "}
-                        <code className="rounded bg-muted px-1">
-                          {currentHash}
-                        </code>
+                        now: <code className="rounded bg-muted px-1">{currentHash}</code>
                       </span>
                     )}
-                    {isRemoved && (
-                      <span className="text-[10px] text-amber-600">
-                        removed
-                      </span>
-                    )}
+                    {isRemoved && <span className="text-[10px] text-amber-600">removed</span>}
                     {isExpanded ? (
                       <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : (
@@ -174,7 +148,9 @@ export function PromptVersionsCard({
                   </div>
                 </button>
                 {isExpanded && (
-                  <div className={`border-t px-3 py-3 ${hasDiff ? "bg-amber-50/30 dark:bg-amber-900/5" : ""}`}>
+                  <div
+                    className={`border-t px-3 py-3 ${hasDiff ? "bg-amber-50/30 dark:bg-amber-900/5" : ""}`}
+                  >
                     {loadingKey === key && <Skeleton className="h-24" />}
                     {cached ? (
                       hasDiff ? (
@@ -277,7 +253,9 @@ function TemplatePanel({
         )}
       </div>
       {text ? (
-        <pre className={`max-h-64 overflow-auto rounded-md ${bgClass} p-2 font-mono text-[11px] leading-relaxed`}>
+        <pre
+          className={`max-h-64 overflow-auto rounded-md ${bgClass} p-2 font-mono text-[11px] leading-relaxed`}
+        >
           {text}
         </pre>
       ) : (

@@ -7,13 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   Accordion,
@@ -172,7 +166,6 @@ that are driving this objective. Two to three sentences.
 - Regulatory findings per audit cycle
 `;
 
-
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
@@ -185,9 +178,7 @@ export default function IngestOutcomeMapPage() {
   const [step, setStep] = useState<Step>("upload");
   const [rawMarkdown, setRawMarkdown] = useState("");
   const [fileName, setFileName] = useState("");
-  const [parsedOutcome, setParsedOutcome] = useState<IndustryOutcome | null>(
-    null
-  );
+  const [parsedOutcome, setParsedOutcome] = useState<IndustryOutcome | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -196,24 +187,16 @@ export default function IngestOutcomeMapPage() {
   const stats = useMemo(() => {
     if (!parsedOutcome) return null;
     const objectives = parsedOutcome.objectives.length;
-    const priorities = parsedOutcome.objectives.reduce(
-      (acc, o) => acc + o.priorities.length,
-      0
-    );
+    const priorities = parsedOutcome.objectives.reduce((acc, o) => acc + o.priorities.length, 0);
     const useCases = parsedOutcome.objectives.reduce(
-      (acc, o) =>
-        acc + o.priorities.reduce((pacc, p) => pacc + p.useCases.length, 0),
-      0
+      (acc, o) => acc + o.priorities.reduce((pacc, p) => pacc + p.useCases.length, 0),
+      0,
     );
     const personas = new Set(
-      parsedOutcome.objectives.flatMap((o) =>
-        o.priorities.flatMap((p) => p.personas)
-      )
+      parsedOutcome.objectives.flatMap((o) => o.priorities.flatMap((p) => p.personas)),
     ).size;
     const kpis = new Set(
-      parsedOutcome.objectives.flatMap((o) =>
-        o.priorities.flatMap((p) => p.kpis)
-      )
+      parsedOutcome.objectives.flatMap((o) => o.priorities.flatMap((p) => p.kpis)),
     ).size;
     return { objectives, priorities, useCases, personas, kpis };
   }, [parsedOutcome]);
@@ -258,7 +241,7 @@ export default function IngestOutcomeMapPage() {
       const file = e.dataTransfer.files[0];
       if (file) readFile(file);
     },
-    [readFile]
+    [readFile],
   );
 
   const handleFileSelect = useCallback(
@@ -266,7 +249,7 @@ export default function IngestOutcomeMapPage() {
       const file = e.target.files?.[0];
       if (file) readFile(file);
     },
-    [readFile]
+    [readFile],
   );
 
   // -------------------------------------------------------------------------
@@ -295,9 +278,7 @@ export default function IngestOutcomeMapPage() {
       setParsedOutcome(data.outcome);
       setStep("review");
     } catch (err) {
-      setParseError(
-        err instanceof Error ? err.message : "Failed to reach parse endpoint"
-      );
+      setParseError(err instanceof Error ? err.message : "Failed to reach parse endpoint");
       setStep("upload");
     }
   }
@@ -327,9 +308,7 @@ export default function IngestOutcomeMapPage() {
 
       setStep("done");
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to save outcome map"
-      );
+      setSaveError(err instanceof Error ? err.message : "Failed to save outcome map");
       setStep("review");
     }
   }
@@ -343,23 +322,14 @@ export default function IngestOutcomeMapPage() {
     setParsedOutcome({ ...parsedOutcome, [field]: value });
   }
 
-  function updateObjective(
-    objIdx: number,
-    field: string,
-    value: unknown
-  ) {
+  function updateObjective(objIdx: number, field: string, value: unknown) {
     if (!parsedOutcome) return;
     const objectives = [...parsedOutcome.objectives];
     objectives[objIdx] = { ...objectives[objIdx], [field]: value };
     setParsedOutcome({ ...parsedOutcome, objectives });
   }
 
-  function updatePriority(
-    objIdx: number,
-    priIdx: number,
-    field: string,
-    value: unknown
-  ) {
+  function updatePriority(objIdx: number, priIdx: number, field: string, value: unknown) {
     if (!parsedOutcome) return;
     const objectives = [...parsedOutcome.objectives];
     const priorities = [...objectives[objIdx].priorities];
@@ -372,9 +342,7 @@ export default function IngestOutcomeMapPage() {
     if (!parsedOutcome) return;
     const objectives = [...parsedOutcome.objectives];
     const priorities = [...objectives[objIdx].priorities];
-    const useCases = priorities[priIdx].useCases.filter(
-      (_, i) => i !== ucIdx
-    );
+    const useCases = priorities[priIdx].useCases.filter((_, i) => i !== ucIdx);
     priorities[priIdx] = { ...priorities[priIdx], useCases };
     objectives[objIdx] = { ...objectives[objIdx], priorities };
     setParsedOutcome({ ...parsedOutcome, objectives });
@@ -398,7 +366,7 @@ export default function IngestOutcomeMapPage() {
     priIdx: number,
     ucIdx: number,
     field: string,
-    value: string
+    value: string,
   ) {
     if (!parsedOutcome) return;
     const objectives = [...parsedOutcome.objectives];
@@ -415,27 +383,25 @@ export default function IngestOutcomeMapPage() {
   // -------------------------------------------------------------------------
 
   return (
-      <div className="flex flex-col gap-6 p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/outcomes">
-              <Button variant="ghost" size="icon" aria-label="Back to outcome maps">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Ingest Outcome Map
-                </h1>
-                <InfoTip tip={OUTCOMES.ingestDescription} />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Upload a markdown outcome map and let AI extract structured data
-              </p>
+    <div className="flex flex-col gap-6 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/outcomes">
+            <Button variant="ghost" size="icon" aria-label="Back to outcome maps">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">Ingest Outcome Map</h1>
+              <InfoTip tip={OUTCOMES.ingestDescription} />
             </div>
+            <p className="text-sm text-muted-foreground">
+              Upload a markdown outcome map and let AI extract structured data
+            </p>
           </div>
+        </div>
 
         {/* Step indicator */}
         <div className="hidden md:flex items-center gap-2">
@@ -444,10 +410,7 @@ export default function IngestOutcomeMapPage() {
             stepNum={1}
             active={step === "upload"}
             completed={
-              step === "parsing" ||
-              step === "review" ||
-              step === "saving" ||
-              step === "done"
+              step === "parsing" || step === "review" || step === "saving" || step === "done"
             }
           />
           <ChevronSep />
@@ -455,9 +418,7 @@ export default function IngestOutcomeMapPage() {
             label="AI Parse"
             stepNum={2}
             active={step === "parsing"}
-            completed={
-              step === "review" || step === "saving" || step === "done"
-            }
+            completed={step === "review" || step === "saving" || step === "done"}
           />
           <ChevronSep />
           <StepIndicator
@@ -491,17 +452,14 @@ export default function IngestOutcomeMapPage() {
                   <Upload className="h-4 w-4 text-primary" />
                   Upload Markdown File
                 </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownloadTemplate}
-                >
+                <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                   <Download className="mr-2 h-3 w-3" />
                   Download Template
                 </Button>
               </div>
               <CardDescription>
-                Drop your industry outcome map document (.md) here, or download the template to get started
+                Drop your industry outcome map document (.md) here, or download the template to get
+                started
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -540,12 +498,8 @@ export default function IngestOutcomeMapPage() {
                   <>
                     <Upload className="h-10 w-10 text-muted-foreground/50" />
                     <div className="text-center">
-                      <p className="font-medium">
-                        Drop your .md file here
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        or click to browse
-                      </p>
+                      <p className="font-medium">Drop your .md file here</p>
+                      <p className="text-sm text-muted-foreground">or click to browse</p>
                     </div>
                   </>
                 )}
@@ -574,9 +528,7 @@ export default function IngestOutcomeMapPage() {
                 <Pencil className="h-4 w-4 text-primary" />
                 Or Paste Markdown
               </CardTitle>
-              <CardDescription>
-                Paste the outcome map content directly
-              </CardDescription>
+              <CardDescription>Paste the outcome map content directly</CardDescription>
             </CardHeader>
             <CardContent>
               <Textarea
@@ -606,26 +558,54 @@ export default function IngestOutcomeMapPage() {
                 </p>
                 <div className="grid gap-x-8 gap-y-1 text-blue-800 dark:text-blue-400 sm:grid-cols-2">
                   <div>
-                    <p className="font-medium text-xs uppercase tracking-wide text-blue-600 dark:text-blue-500 mb-1">Required</p>
+                    <p className="font-medium text-xs uppercase tracking-wide text-blue-600 dark:text-blue-500 mb-1">
+                      Required
+                    </p>
                     <ul className="space-y-0.5 text-xs">
-                      <li><span className="font-mono"># Industry Name</span> -- top-level heading</li>
-                      <li><span className="font-mono">## Objective:</span> -- strategic objectives (e.g. Drive Growth)</li>
-                      <li><span className="font-mono">### Strategic Priority:</span> -- priorities per objective</li>
-                      <li><span className="font-mono">- **Use Case Name**</span> -- use cases with descriptions</li>
+                      <li>
+                        <span className="font-mono"># Industry Name</span> -- top-level heading
+                      </li>
+                      <li>
+                        <span className="font-mono">## Objective:</span> -- strategic objectives
+                        (e.g. Drive Growth)
+                      </li>
+                      <li>
+                        <span className="font-mono">### Strategic Priority:</span> -- priorities per
+                        objective
+                      </li>
+                      <li>
+                        <span className="font-mono">- **Use Case Name**</span> -- use cases with
+                        descriptions
+                      </li>
                     </ul>
                   </div>
                   <div>
-                    <p className="font-medium text-xs uppercase tracking-wide text-blue-600 dark:text-blue-500 mb-1">Recommended</p>
+                    <p className="font-medium text-xs uppercase tracking-wide text-blue-600 dark:text-blue-500 mb-1">
+                      Recommended
+                    </p>
                     <ul className="space-y-0.5 text-xs">
-                      <li><span className="font-mono">**Why Change:**</span> -- narrative per objective</li>
-                      <li><span className="font-mono">#### Key Personas</span> -- job titles per priority</li>
-                      <li><span className="font-mono">#### KPIs</span> -- measurable metrics per priority</li>
-                      <li><span className="font-mono">_Business Value:_</span> -- per use case</li>
+                      <li>
+                        <span className="font-mono">**Why Change:**</span> -- narrative per
+                        objective
+                      </li>
+                      <li>
+                        <span className="font-mono">#### Key Personas</span> -- job titles per
+                        priority
+                      </li>
+                      <li>
+                        <span className="font-mono">#### KPIs</span> -- measurable metrics per
+                        priority
+                      </li>
+                      <li>
+                        <span className="font-mono">_Business Value:_</span> -- per use case
+                      </li>
                     </ul>
                   </div>
                 </div>
                 <p className="text-xs text-blue-700 dark:text-blue-500">
-                  Accepts <span className="font-mono">.md</span> or <span className="font-mono">.markdown</span> files. Minimum 100 characters. The AI parser is flexible with heading styles and layout variations.
+                  Accepts <span className="font-mono">.md</span> or{" "}
+                  <span className="font-mono">.markdown</span> files. Minimum 100 characters. The AI
+                  parser is flexible with heading styles and layout variations.
                 </p>
               </div>
             </div>
@@ -654,12 +634,9 @@ export default function IngestOutcomeMapPage() {
           <CardContent className="flex flex-col items-center justify-center gap-4 py-16">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <div className="text-center">
-              <p className="text-lg font-medium">
-                AI is analyzing your outcome map...
-              </p>
+              <p className="text-lg font-medium">AI is analyzing your outcome map...</p>
               <p className="text-sm text-muted-foreground">
-                Extracting objectives, priorities, use cases, KPIs, and
-                personas
+                Extracting objectives, priorities, use cases, KPIs, and personas
               </p>
             </div>
           </CardContent>
@@ -680,9 +657,7 @@ export default function IngestOutcomeMapPage() {
                     {editMode ? (
                       <Input
                         value={parsedOutcome.name}
-                        onChange={(e) =>
-                          updateOutcomeField("name", e.target.value)
-                        }
+                        onChange={(e) => updateOutcomeField("name", e.target.value)}
                         className="text-xl font-bold"
                       />
                     ) : (
@@ -693,15 +668,11 @@ export default function IngestOutcomeMapPage() {
                     {editMode ? (
                       <Input
                         value={parsedOutcome.id}
-                        onChange={(e) =>
-                          updateOutcomeField("id", e.target.value)
-                        }
+                        onChange={(e) => updateOutcomeField("id", e.target.value)}
                         className="font-mono text-xs"
                       />
                     ) : (
-                      <span className="font-mono text-xs">
-                        ID: {parsedOutcome.id}
-                      </span>
+                      <span className="font-mono text-xs">ID: {parsedOutcome.id}</span>
                     )}
                   </CardDescription>
                 </div>
@@ -757,21 +728,18 @@ export default function IngestOutcomeMapPage() {
               )}
 
               {/* Sub-verticals */}
-              {parsedOutcome.subVerticals &&
-                parsedOutcome.subVerticals.length > 0 && (
-                  <div className="mt-4">
-                    <Label className="text-xs text-muted-foreground">
-                      Sub-verticals
-                    </Label>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {parsedOutcome.subVerticals.map((sv, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs">
-                          {sv}
-                        </Badge>
-                      ))}
-                    </div>
+              {parsedOutcome.subVerticals && parsedOutcome.subVerticals.length > 0 && (
+                <div className="mt-4">
+                  <Label className="text-xs text-muted-foreground">Sub-verticals</Label>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {parsedOutcome.subVerticals.map((sv, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {sv}
+                      </Badge>
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
 
               {/* Suggested domains & priorities */}
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -788,9 +756,7 @@ export default function IngestOutcomeMapPage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">
-                    Suggested Priorities
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">Suggested Priorities</Label>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {parsedOutcome.suggestedPriorities.map((p, i) => (
                       <Badge key={i} variant="outline" className="text-xs">
@@ -811,9 +777,7 @@ export default function IngestOutcomeMapPage() {
                   {editMode ? (
                     <Input
                       value={objective.name}
-                      onChange={(e) =>
-                        updateObjective(objIdx, "name", e.target.value)
-                      }
+                      onChange={(e) => updateObjective(objIdx, "name", e.target.value)}
                     />
                   ) : (
                     <span className="flex items-center gap-2">
@@ -827,13 +791,7 @@ export default function IngestOutcomeMapPage() {
                     {editMode ? (
                       <Textarea
                         value={objective.whyChange}
-                        onChange={(e) =>
-                          updateObjective(
-                            objIdx,
-                            "whyChange",
-                            e.target.value
-                          )
-                        }
+                        onChange={(e) => updateObjective(objIdx, "whyChange", e.target.value)}
                         className="text-xs"
                         rows={3}
                       />
@@ -846,10 +804,7 @@ export default function IngestOutcomeMapPage() {
               <CardContent>
                 <Accordion type="multiple" className="w-full">
                   {objective.priorities.map((priority, priIdx) => (
-                    <AccordionItem
-                      key={priIdx}
-                      value={`${objIdx}-${priIdx}`}
-                    >
+                    <AccordionItem key={priIdx} value={`${objIdx}-${priIdx}`}>
                       <AccordionTrigger className="text-sm">
                         <div className="flex items-center gap-2">
                           {editMode ? (
@@ -857,12 +812,7 @@ export default function IngestOutcomeMapPage() {
                               value={priority.name}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) =>
-                                updatePriority(
-                                  objIdx,
-                                  priIdx,
-                                  "name",
-                                  e.target.value
-                                )
+                                updatePriority(objIdx, priIdx, "name", e.target.value)
                               }
                               className="text-sm"
                             />
@@ -891,13 +841,7 @@ export default function IngestOutcomeMapPage() {
                                     <Input
                                       value={uc.name}
                                       onChange={(e) =>
-                                        updateUseCase(
-                                          objIdx,
-                                          priIdx,
-                                          ucIdx,
-                                          "name",
-                                          e.target.value
-                                        )
+                                        updateUseCase(objIdx, priIdx, ucIdx, "name", e.target.value)
                                       }
                                       className="text-sm font-medium"
                                       placeholder="Use case name"
@@ -910,7 +854,7 @@ export default function IngestOutcomeMapPage() {
                                           priIdx,
                                           ucIdx,
                                           "description",
-                                          e.target.value
+                                          e.target.value,
                                         )
                                       }
                                       className="text-xs"
@@ -920,9 +864,7 @@ export default function IngestOutcomeMapPage() {
                                   </div>
                                 ) : (
                                   <>
-                                    <p className="text-sm font-medium">
-                                      {uc.name}
-                                    </p>
+                                    <p className="text-sm font-medium">{uc.name}</p>
                                     <p className="mt-1 text-xs text-muted-foreground">
                                       {uc.description}
                                     </p>
@@ -939,9 +881,7 @@ export default function IngestOutcomeMapPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 shrink-0 text-destructive"
-                                  onClick={() =>
-                                    removeUseCase(objIdx, priIdx, ucIdx)
-                                  }
+                                  onClick={() => removeUseCase(objIdx, priIdx, ucIdx)}
                                   aria-label="Remove use case"
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -964,16 +904,10 @@ export default function IngestOutcomeMapPage() {
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             {priority.kpis.length > 0 && (
                               <div>
-                                <Label className="text-xs text-muted-foreground">
-                                  KPIs
-                                </Label>
+                                <Label className="text-xs text-muted-foreground">KPIs</Label>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {priority.kpis.map((kpi, i) => (
-                                    <Badge
-                                      key={i}
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
+                                    <Badge key={i} variant="outline" className="text-xs">
                                       {kpi}
                                     </Badge>
                                   ))}
@@ -982,16 +916,10 @@ export default function IngestOutcomeMapPage() {
                             )}
                             {priority.personas.length > 0 && (
                               <div>
-                                <Label className="text-xs text-muted-foreground">
-                                  Personas
-                                </Label>
+                                <Label className="text-xs text-muted-foreground">Personas</Label>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {priority.personas.map((p, i) => (
-                                    <Badge
-                                      key={i}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
+                                    <Badge key={i} variant="secondary" className="text-xs">
                                       {p}
                                     </Badge>
                                   ))}
@@ -1043,9 +971,7 @@ export default function IngestOutcomeMapPage() {
           <CardContent className="flex flex-col items-center justify-center gap-4 py-16">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <div className="text-center">
-              <p className="text-lg font-medium">
-                Saving outcome map to Lakebase...
-              </p>
+              <p className="text-lg font-medium">Saving outcome map to Lakebase...</p>
             </div>
           </CardContent>
         </Card>
@@ -1063,13 +989,11 @@ export default function IngestOutcomeMapPage() {
             <div className="text-center">
               <p className="text-xl font-bold">Outcome Map Ingested!</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                <strong>{parsedOutcome.name}</strong> with{" "}
-                {stats?.useCases ?? 0} use cases is now part of the Forge AI
-                engine.
+                <strong>{parsedOutcome.name}</strong> with {stats?.useCases ?? 0} use cases is now
+                part of the Forge AI engine.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                It will appear in the industry dropdown when configuring new
-                pipeline runs.
+                It will appear in the industry dropdown when configuring new pipeline runs.
               </p>
             </div>
             <div className="flex gap-3">
@@ -1093,7 +1017,7 @@ export default function IngestOutcomeMapPage() {
           </CardContent>
         </Card>
       )}
-      </div>
+    </div>
   );
 }
 
@@ -1135,9 +1059,7 @@ function StepIndicator({
 }
 
 function ChevronSep() {
-  return (
-    <div className="h-px w-4 bg-muted-foreground/25" />
-  );
+  return <div className="h-px w-4 bg-muted-foreground/25" />;
 }
 
 function StatBadge({

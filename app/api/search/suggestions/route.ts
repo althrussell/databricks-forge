@@ -25,10 +25,7 @@ export async function GET(request: NextRequest) {
     const q = params.get("q");
 
     if (!q || q.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Query parameter 'q' is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Query parameter 'q' is required" }, { status: 400 });
     }
 
     const excludeRunId = params.get("excludeRunId") || undefined;
@@ -45,9 +42,6 @@ export async function GET(request: NextRequest) {
     logger.error("[api/search/suggestions] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

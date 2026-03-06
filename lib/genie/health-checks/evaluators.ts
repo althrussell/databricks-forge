@@ -85,7 +85,8 @@ function hasNonEmptyField(item: unknown, field: string): boolean {
   if (val == null) return false;
   if (typeof val === "boolean") return val === true;
   if (typeof val === "string") return val.trim().length > 0;
-  if (Array.isArray(val)) return val.length > 0 && val.some((v) => v != null && String(v).trim().length > 0);
+  if (Array.isArray(val))
+    return val.length > 0 && val.some((v) => v != null && String(v).trim().length > 0);
   return true;
 }
 
@@ -217,9 +218,10 @@ function evaluatePattern(space: SpaceJson, check: CheckDefinition): CheckResult 
   const regexStr = check.params.regex as string;
   const regex = new RegExp(regexStr);
 
-  const values = check.path === "__all_ids__"
-    ? collectAllIds(space)
-    : resolvePath(space, check.path!).filter((v): v is string => typeof v === "string");
+  const values =
+    check.path === "__all_ids__"
+      ? collectAllIds(space)
+      : resolvePath(space, check.path!).filter((v): v is string => typeof v === "string");
 
   if (values.length === 0) {
     return buildResult(check, true, "No values to check");
@@ -233,14 +235,18 @@ function evaluatePattern(space: SpaceJson, check: CheckDefinition): CheckResult 
     passed,
     passed
       ? `All ${values.length} values match pattern`
-      : `${invalid.length} invalid: ${invalid.slice(0, 3).map((v) => `"${v}"`).join(", ")}${invalid.length > 3 ? "..." : ""}`,
+      : `${invalid.length} invalid: ${invalid
+          .slice(0, 3)
+          .map((v) => `"${v}"`)
+          .join(", ")}${invalid.length > 3 ? "..." : ""}`,
   );
 }
 
 function evaluateUnique(space: SpaceJson, check: CheckDefinition): CheckResult {
-  const values = check.path === "__all_ids__"
-    ? collectAllIds(space)
-    : resolvePath(space, check.path!).filter((v): v is string => typeof v === "string");
+  const values =
+    check.path === "__all_ids__"
+      ? collectAllIds(space)
+      : resolvePath(space, check.path!).filter((v): v is string => typeof v === "string");
 
   if (values.length === 0) {
     return buildResult(check, true, "No values to check");
@@ -259,7 +265,10 @@ function evaluateUnique(space: SpaceJson, check: CheckDefinition): CheckResult {
     passed,
     passed
       ? `All ${values.length} values unique`
-      : `${duplicates.length} duplicate(s): ${[...new Set(duplicates)].slice(0, 3).map((v) => `"${v}"`).join(", ")}`,
+      : `${duplicates.length} duplicate(s): ${[...new Set(duplicates)]
+          .slice(0, 3)
+          .map((v) => `"${v}"`)
+          .join(", ")}`,
   );
 }
 
@@ -286,9 +295,7 @@ function evaluateNoEmptyField(space: SpaceJson, check: CheckDefinition): CheckRe
   return buildResult(
     check,
     passed,
-    passed
-      ? `All ${totalChecked} SQL fields populated`
-      : `${emptyCount} empty SQL field(s) found`,
+    passed ? `All ${totalChecked} SQL fields populated` : `${emptyCount} empty SQL field(s) found`,
   );
 }
 
@@ -298,7 +305,11 @@ function evaluateConditionalCount(space: SpaceJson, check: CheckDefinition): Che
 
   const conditionArr = resolveArray(space, conditionPath);
   if (conditionArr.length < conditionMin) {
-    return buildResult(check, true, `Condition not met (${conditionArr.length} < ${conditionMin}), skipped`);
+    return buildResult(
+      check,
+      true,
+      `Condition not met (${conditionArr.length} < ${conditionMin}), skipped`,
+    );
   }
 
   return evaluateCount(space, check);
@@ -324,7 +335,11 @@ function evaluateJsonpath(space: SpaceJson, check: CheckDefinition): CheckResult
   if (values.length >= minCount) {
     return buildResult(check, true, `JSONPath resolved ${values.length} value(s)`);
   }
-  return buildResult(check, false, `JSONPath resolved ${values.length} value(s), need at least ${minCount}`);
+  return buildResult(
+    check,
+    false,
+    `JSONPath resolved ${values.length} value(s), need at least ${minCount}`,
+  );
 }
 
 /**
@@ -346,9 +361,7 @@ export function clearPendingSqlQualityChecks() {
   _pendingSqlQualityChecks = [];
 }
 
-export async function resolveSqlQualityChecks(
-  _space: SpaceJson,
-): Promise<CheckResult[]> {
+export async function resolveSqlQualityChecks(_space: SpaceJson): Promise<CheckResult[]> {
   const pending = [..._pendingSqlQualityChecks];
   _pendingSqlQualityChecks = [];
   if (pending.length === 0) return [];

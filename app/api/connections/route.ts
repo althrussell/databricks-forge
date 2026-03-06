@@ -7,10 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureMigrated } from "@/lib/lakebase/schema";
-import {
-  listConnections,
-  createConnection,
-} from "@/lib/lakebase/connections";
+import { listConnections, createConnection } from "@/lib/lakebase/connections";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import type { CreateConnectionInput } from "@/lib/connections/types";
 
@@ -22,7 +19,7 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to list connections" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -33,27 +30,24 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CreateConnectionInput;
 
     if (!body.name?.trim()) {
-      return NextResponse.json(
-        { error: "name is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
     if (!body.tenantId?.trim() || !body.clientId?.trim() || !body.clientSecret?.trim()) {
       return NextResponse.json(
         { error: "tenantId, clientId, and clientSecret are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     if (!["fabric"].includes(body.connectorType)) {
       return NextResponse.json(
         { error: `Unsupported connector type: ${body.connectorType}` },
-        { status: 400 }
+        { status: 400 },
       );
     }
     if (!["admin", "workspace"].includes(body.accessLevel)) {
       return NextResponse.json(
         { error: `accessLevel must be "admin" or "workspace"` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -63,7 +57,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to create connection" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

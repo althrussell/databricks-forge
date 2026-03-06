@@ -112,24 +112,31 @@ export function SourceCard({ index, label, kind, sourceId, score, metadata }: So
         <div className="flex items-center gap-1.5">
           {icon}
           <span className="truncate font-medium">{sourceId}</span>
-          <Badge variant="outline" className={`shrink-0 px-1 py-0 text-[9px] leading-tight ${PROVENANCE_STYLE[prov] ?? ""}`}>
+          <Badge
+            variant="outline"
+            className={`shrink-0 px-1 py-0 text-[9px] leading-tight ${PROVENANCE_STYLE[prov] ?? ""}`}
+          >
             {getProvenanceLabel(prov)}
           </Badge>
           <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
             {(score * 100).toFixed(0)}%
           </span>
-          <ChevronDown className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <ChevronDown
+            className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
         </div>
         {expanded && (
           <div className="mt-1.5 space-y-1 text-muted-foreground">
             <p className="break-words">{label}</p>
             {metadata && Object.keys(metadata).length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {Object.entries(metadata).slice(0, 6).map(([k, v]) => (
-                  <Badge key={k} variant="secondary" className="text-[9px]">
-                    {k}: {String(v).slice(0, 40)}
-                  </Badge>
-                ))}
+                {Object.entries(metadata)
+                  .slice(0, 6)
+                  .map(([k, v]) => (
+                    <Badge key={k} variant="secondary" className="text-[9px]">
+                      {k}: {String(v).slice(0, 40)}
+                    </Badge>
+                  ))}
               </div>
             )}
           </div>

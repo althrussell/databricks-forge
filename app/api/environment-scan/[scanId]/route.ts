@@ -14,7 +14,7 @@ import { toJsonSafe } from "@/lib/json-safe";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ scanId: string }> }
+  { params }: { params: Promise<{ scanId: string }> },
 ) {
   try {
     const { scanId } = await params;
@@ -35,16 +35,13 @@ export async function GET(
     logger.error("[api/environment-scan/detail] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to get scan details" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to get scan details" }, { status: 500 });
   }
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ scanId: string }> }
+  { params }: { params: Promise<{ scanId: string }> },
 ) {
   try {
     const { scanId } = await params;
@@ -63,7 +60,7 @@ export async function DELETE(
     if (progress && progress.phase !== "complete" && progress.phase !== "failed") {
       return NextResponse.json(
         { error: "Cannot delete a scan that is still in progress" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -74,9 +71,6 @@ export async function DELETE(
     logger.error("[api/environment-scan/detail] DELETE failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to delete scan" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to delete scan" }, { status: 500 });
   }
 }

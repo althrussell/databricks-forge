@@ -12,10 +12,7 @@ import { logger } from "@/lib/logger";
 
 import { BUSINESS_CONTEXT_WORKER_PROMPT } from "./templates-business-context";
 import { FILTER_BUSINESS_TABLES_PROMPT } from "./templates-filtering";
-import {
-  AI_USE_CASE_GEN_PROMPT,
-  STATS_USE_CASE_GEN_PROMPT,
-} from "./templates-usecase-gen";
+import { AI_USE_CASE_GEN_PROMPT, STATS_USE_CASE_GEN_PROMPT } from "./templates-usecase-gen";
 import {
   DOMAIN_FINDER_PROMPT,
   DOMAINS_MERGER_PROMPT,
@@ -27,10 +24,7 @@ import {
   GLOBAL_SCORE_CALIBRATION_PROMPT,
   CROSS_DOMAIN_DEDUP_PROMPT,
 } from "./templates-scoring";
-import {
-  USE_CASE_SQL_GEN_PROMPT,
-  USE_CASE_SQL_FIX_PROMPT,
-} from "./templates-sql-gen";
+import { USE_CASE_SQL_GEN_PROMPT, USE_CASE_SQL_FIX_PROMPT } from "./templates-sql-gen";
 import {
   ENV_DOMAIN_CATEGORISATION_PROMPT,
   ENV_PII_DETECTION_PROMPT,
@@ -159,7 +153,7 @@ export const PROMPT_VERSIONS: Record<PromptKey, string> = Object.fromEntries(
   Object.entries(PROMPT_TEMPLATES).map(([key, tmpl]) => [
     key,
     createHash("sha256").update(tmpl).digest("hex").slice(0, 8),
-  ])
+  ]),
 ) as Record<PromptKey, string>;
 
 /**
@@ -201,20 +195,12 @@ function sanitiseUserInput(value: string): string {
  *
  * User-supplied variables are wrapped with delimiter markers for safety.
  */
-export function formatPrompt(
-  key: PromptKey,
-  variables: Record<string, string>
-): string {
+export function formatPrompt(key: PromptKey, variables: Record<string, string>): string {
   let prompt: string = PROMPT_TEMPLATES[key];
 
   for (const [varName, value] of Object.entries(variables)) {
-    const safeValue = USER_INPUT_VARIABLES.has(varName)
-      ? sanitiseUserInput(value)
-      : value;
-    prompt = prompt.replace(
-      new RegExp(`\\{${varName}\\}`, "g"),
-      safeValue
-    );
+    const safeValue = USER_INPUT_VARIABLES.has(varName) ? sanitiseUserInput(value) : value;
+    prompt = prompt.replace(new RegExp(`\\{${varName}\\}`, "g"), safeValue);
   }
 
   // Warn on any remaining {placeholder} patterns that were not substituted.

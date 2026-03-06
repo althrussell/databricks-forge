@@ -1,27 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Sparkles,
-  LayoutDashboard,
-  Search,
-  ChevronRight,
-  ExternalLink,
-} from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Sparkles, LayoutDashboard, Search, ChevronRight, ExternalLink } from "lucide-react";
 
 interface DiscoveredSpace {
   spaceId: string;
@@ -94,7 +78,8 @@ export function ExistingAssetsTab({ runId }: { runId: string }) {
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
         <Search className="h-8 w-8 text-muted-foreground/50" />
         <p className="text-sm text-muted-foreground">
-          No existing assets discovered for this run. Enable Asset Discovery in settings to scan for existing Genie spaces, dashboards, and metric views.
+          No existing assets discovered for this run. Enable Asset Discovery in settings to scan for
+          existing Genie spaces, dashboards, and metric views.
         </p>
       </div>
     );
@@ -192,7 +177,9 @@ function SpaceRow({ space, host }: { space: DiscoveredSpace; host: string | null
           <button className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-muted/50 transition-colors">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+                <ChevronRight
+                  className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                />
                 <p className="text-sm font-medium truncate">{space.title}</p>
               </div>
               <div className="ml-5.5 mt-1 flex flex-wrap gap-1.5">
@@ -243,7 +230,9 @@ function SpaceRow({ space, host }: { space: DiscoveredSpace; host: string | null
             )}
             {space.tables.length > 0 && (
               <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Tables</p>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Tables
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {space.tables.map((t) => (
                     <Badge key={t} variant="outline" className="text-[10px] font-mono">
@@ -255,7 +244,9 @@ function SpaceRow({ space, host }: { space: DiscoveredSpace; host: string | null
             )}
             {space.metricViews.length > 0 && (
               <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Metric Views</p>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Metric Views
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {space.metricViews.map((m) => (
                     <Badge key={m} variant="outline" className="text-[10px] font-mono">
@@ -283,7 +274,9 @@ function DashboardRow({ dashboard, host }: { dashboard: DiscoveredDash; host: st
           <button className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-muted/50 transition-colors">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+                <ChevronRight
+                  className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                />
                 <p className="text-sm font-medium truncate">{dashboard.displayName}</p>
                 {dashboard.isPublished && (
                   <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
@@ -327,7 +320,9 @@ function DashboardRow({ dashboard, host }: { dashboard: DiscoveredDash; host: st
             )}
             {dashboard.tables.length > 0 && (
               <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Tables</p>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Tables
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {dashboard.tables.map((t) => (
                     <Badge key={t} variant="outline" className="text-[10px] font-mono">

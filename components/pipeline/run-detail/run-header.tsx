@@ -17,15 +17,11 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  pending:
-    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  running:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  completed:
-    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  running: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  cancelled:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  cancelled: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
 export function RunHeader({
@@ -49,19 +45,12 @@ export function RunHeader({
     <div className="flex items-start justify-between">
       <div>
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {run.config.businessName}
-          </h1>
-          <Badge
-            variant="secondary"
-            className={STATUS_STYLES[run.status] ?? ""}
-          >
+          <h1 className="text-2xl font-bold tracking-tight">{run.config.businessName}</h1>
+          <Badge variant="secondary" className={STATUS_STYLES[run.status] ?? ""}>
             {STATUS_LABELS[run.status]}
           </Badge>
         </div>
-        <p className="mt-1 font-mono text-sm text-muted-foreground">
-          {run.config.ucMetadata}
-        </p>
+        <p className="mt-1 font-mono text-sm text-muted-foreground">{run.config.ucMetadata}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Created{" "}
           {new Date(run.createdAt).toLocaleDateString(undefined, {
@@ -72,9 +61,7 @@ export function RunHeader({
             minute: "2-digit",
           })}
           {run.completedAt &&
-            ` \u2022 Completed ${new Date(
-              run.completedAt
-            ).toLocaleDateString(undefined, {
+            ` \u2022 Completed ${new Date(run.completedAt).toLocaleDateString(undefined, {
               month: "short",
               day: "numeric",
               hour: "2-digit",
@@ -91,11 +78,7 @@ export function RunHeader({
               scanId={scanId}
             />
             <Separator orientation="vertical" className="mx-1 h-6" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDuplicate}
-            >
+            <Button variant="outline" size="sm" onClick={onDuplicate}>
               <Copy className="mr-1.5 h-3.5 w-3.5" />
               Duplicate
             </Button>

@@ -61,10 +61,7 @@ export default function GlobalError({
             >
               Application Error
             </h1>
-            <p
-              className="ge-message"
-              style={{ color: "#666", marginBottom: "1.5rem" }}
-            >
+            <p className="ge-message" style={{ color: "#666", marginBottom: "1.5rem" }}>
               A critical error occurred. Please try refreshing the page.
             </p>
             <p

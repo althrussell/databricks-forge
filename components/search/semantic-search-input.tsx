@@ -128,12 +128,16 @@ export function SemanticSearchInput({
           {mode === "semantic" ? (
             <>
               <Sparkles className="size-3 text-purple-500" />
-              <Badge variant="secondary" className="px-1 py-0 text-[9px]">Semantic</Badge>
+              <Badge variant="secondary" className="px-1 py-0 text-[9px]">
+                Semantic
+              </Badge>
             </>
           ) : (
             <>
               <Type className="size-3 text-muted-foreground" />
-              <Badge variant="outline" className="px-1 py-0 text-[9px]">Exact</Badge>
+              <Badge variant="outline" className="px-1 py-0 text-[9px]">
+                Exact
+              </Badge>
             </>
           )}
         </button>

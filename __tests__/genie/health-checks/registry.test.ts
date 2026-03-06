@@ -26,9 +26,7 @@ describe("resolveRegistry", () => {
   });
 
   it("override disables a built-in check", () => {
-    const overrides: UserCheckOverride[] = [
-      { checkId: "tables-configured", enabled: false },
-    ];
+    const overrides: UserCheckOverride[] = [{ checkId: "tables-configured", enabled: false }];
     const reg = resolveRegistry(overrides);
     const check = reg.checks.find((c) => c.id === "tables-configured");
     expect(check?.enabled).toBe(false);
@@ -107,7 +105,12 @@ describe("resolveRegistry", () => {
   });
 
   it("applies category weight overrides", () => {
-    const reg = resolveRegistry(undefined, undefined, { data_sources: 50, instructions: 50, semantic_richness: 0, quality_assurance: 0 });
+    const reg = resolveRegistry(undefined, undefined, {
+      data_sources: 50,
+      instructions: 50,
+      semantic_richness: 0,
+      quality_assurance: 0,
+    });
     expect(reg.categories.data_sources.weight).toBe(50);
     expect(reg.categories.semantic_richness.weight).toBe(0);
   });

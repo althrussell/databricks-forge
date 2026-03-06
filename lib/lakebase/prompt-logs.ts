@@ -99,10 +99,7 @@ export async function getPromptLogsByRunId(runId: string): Promise<PromptLogEntr
 /**
  * Get prompt log entries for a specific pipeline step within a run.
  */
-export async function getPromptLogsByStep(
-  runId: string,
-  step: string
-): Promise<PromptLogEntry[]> {
+export async function getPromptLogsByStep(runId: string, step: string): Promise<PromptLogEntry[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgePromptLog.findMany({
       where: { runId, step },

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -59,10 +53,7 @@ export function TypeSplitChart({
               fontSize={11}
             >
               {data.map((entry) => (
-                <Cell
-                  key={entry.name}
-                  fill={TYPE_COLORS[entry.name] ?? "oklch(0.50 0.10 240)"}
-                />
+                <Cell key={entry.name} fill={TYPE_COLORS[entry.name] ?? "oklch(0.50 0.10 240)"} />
               ))}
             </Pie>
             <Tooltip

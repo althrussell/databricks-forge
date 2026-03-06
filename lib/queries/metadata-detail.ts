@@ -9,12 +9,7 @@
 import { executeSQL } from "@/lib/dbx/sql";
 import { validateIdentifier } from "@/lib/validation";
 import { logger } from "@/lib/logger";
-import type {
-  TableDetail,
-  TableHistorySummary,
-  TableTag,
-  ColumnTag,
-} from "@/lib/domain/types";
+import type { TableDetail, TableHistorySummary, TableTag, ColumnTag } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
 // DESCRIBE DETAIL
@@ -26,7 +21,7 @@ import type {
  */
 export async function describeDetail(
   tableFqn: string,
-  discoveredVia: "selected" | "lineage" = "selected"
+  discoveredVia: "selected" | "lineage" = "selected",
 ): Promise<TableDetail | null> {
   const [catalog, schema, table] = splitFqn(tableFqn);
   const safeCat = validateIdentifier(catalog, "catalog");
@@ -40,10 +35,8 @@ export async function describeDetail(
 
     const row = result.rows[0];
     const col = (name: string): string | null => {
-      const idx = result.columns.findIndex(
-        (c) => c.name.toLowerCase() === name.toLowerCase()
-      );
-      return idx >= 0 ? row[idx] ?? null : null;
+      const idx = result.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase());
+      return idx >= 0 ? (row[idx] ?? null) : null;
     };
 
     const location = col("location");
@@ -66,7 +59,11 @@ export async function describeDetail(
       location,
       owner: col("owner"),
       provider: col("provider"),
-      isManaged: location ? !location.startsWith("s3://") && !location.startsWith("gs://") && !location.startsWith("abfss://") : true,
+      isManaged: location
+        ? !location.startsWith("s3://") &&
+          !location.startsWith("gs://") &&
+          !location.startsWith("abfss://")
+        : true,
       deltaMinReaderVersion: parseIntSafe(col("minReaderVersion") ?? col("min_reader_version")),
       deltaMinWriterVersion: parseIntSafe(col("minWriterVersion") ?? col("min_writer_version")),
       createdAt: col("createdAt") ?? col("created_at"),
@@ -89,7 +86,12 @@ export async function describeDetail(
       logger.debug("[metadata-detail] Skipping DESCRIBE DETAIL for view", { tableFqn });
       return null;
     }
-    if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("does not exist") || msg.includes("(403)") || msg.includes("(404)")) {
+    if (
+      msg.includes("INSUFFICIENT_PERMISSIONS") ||
+      msg.includes("does not exist") ||
+      msg.includes("(403)") ||
+      msg.includes("(404)")
+    ) {
       logger.warn("[metadata-detail] Permission denied for DESCRIBE DETAIL", { tableFqn });
       return null;
     }
@@ -105,7 +107,7 @@ export async function describeDetail(
 export function createFallbackDetail(
   fqn: string,
   discoveredVia: "selected" | "lineage",
-  tableType = "VIEW"
+  tableType = "VIEW",
 ): TableDetail {
   const [catalog, schema, tableName] = splitFqn(fqn);
   return {
@@ -153,7 +155,7 @@ export function createFallbackDetail(
  */
 export async function describeHistory(
   tableFqn: string,
-  limit = 100
+  limit = 100,
 ): Promise<TableHistorySummary | null> {
   const [catalog, schema, table] = splitFqn(tableFqn);
   const safeCat = validateIdentifier(catalog, "catalog");
@@ -172,12 +174,12 @@ export async function describeHistory(
 
     const timestampIdx = colIdx("timestamp");
     const operationIdx = colIdx("operation");
-    const operationParamsIdx = colIdx("operationParameters") >= 0
-      ? colIdx("operationParameters")
-      : colIdx("operation_parameters");
-    const operationMetricsIdx = colIdx("operationMetrics") >= 0
-      ? colIdx("operationMetrics")
-      : colIdx("operation_metrics");
+    const operationParamsIdx =
+      colIdx("operationParameters") >= 0
+        ? colIdx("operationParameters")
+        : colIdx("operation_parameters");
+    const operationMetricsIdx =
+      colIdx("operationMetrics") >= 0 ? colIdx("operationMetrics") : colIdx("operation_metrics");
 
     const opCounts: Record<string, number> = {};
     let lastWriteTimestamp: string | null = null;
@@ -196,9 +198,9 @@ export async function describeHistory(
 
     for (const row of result.rows) {
       const ts = timestampIdx >= 0 ? row[timestampIdx] : null;
-      const op = operationIdx >= 0 ? row[operationIdx] ?? "" : "";
-      const opParams = operationParamsIdx >= 0 ? row[operationParamsIdx] ?? "" : "";
-      const opMetrics = operationMetricsIdx >= 0 ? row[operationMetricsIdx] ?? "" : "";
+      const op = operationIdx >= 0 ? (row[operationIdx] ?? "") : "";
+      const opParams = operationParamsIdx >= 0 ? (row[operationParamsIdx] ?? "") : "";
+      const opMetrics = operationMetricsIdx >= 0 ? (row[operationMetricsIdx] ?? "") : "";
 
       opCounts[op] = (opCounts[op] ?? 0) + 1;
 
@@ -207,7 +209,17 @@ export async function describeHistory(
         if (!earliestTimestamp || ts < earliestTimestamp) earliestTimestamp = ts;
       }
 
-      const isWrite = ["WRITE", "APPEND", "OVERWRITE", "DELETE", "UPDATE", "MERGE", "CREATE TABLE", "REPLACE TABLE", "STREAMING UPDATE"].includes(op);
+      const isWrite = [
+        "WRITE",
+        "APPEND",
+        "OVERWRITE",
+        "DELETE",
+        "UPDATE",
+        "MERGE",
+        "CREATE TABLE",
+        "REPLACE TABLE",
+        "STREAMING UPDATE",
+      ].includes(op);
       const isStreaming = op === "STREAMING UPDATE" || opParams.includes('"outputMode"');
 
       if (isWrite) {
@@ -219,9 +231,15 @@ export async function describeHistory(
           if (opMetrics) {
             try {
               const metrics = typeof opMetrics === "string" ? JSON.parse(opMetrics) : opMetrics;
-              lastWriteRows = parseIntSafe(metrics.numOutputRows ?? metrics.numTargetRowsInserted ?? null);
-              lastWriteBytes = parseIntSafe(metrics.numOutputBytes ?? metrics.numAddedBytes ?? null);
-            } catch { /* skip malformed metrics */ }
+              lastWriteRows = parseIntSafe(
+                metrics.numOutputRows ?? metrics.numTargetRowsInserted ?? null,
+              );
+              lastWriteBytes = parseIntSafe(
+                metrics.numOutputBytes ?? metrics.numAddedBytes ?? null,
+              );
+            } catch {
+              /* skip malformed metrics */
+            }
           }
         }
       }
@@ -238,9 +256,16 @@ export async function describeHistory(
       if (op === "MERGE") totalMerge++;
     }
 
-    const historyDays = earliestTimestamp && latestTimestamp
-      ? Math.max(1, Math.round((new Date(latestTimestamp).getTime() - new Date(earliestTimestamp).getTime()) / 86_400_000))
-      : 0;
+    const historyDays =
+      earliestTimestamp && latestTimestamp
+        ? Math.max(
+            1,
+            Math.round(
+              (new Date(latestTimestamp).getTime() - new Date(earliestTimestamp).getTime()) /
+                86_400_000,
+            ),
+          )
+        : 0;
 
     return {
       tableFqn,
@@ -285,9 +310,7 @@ export async function describeHistory(
 /**
  * Run SHOW TBLPROPERTIES and return a key-value map.
  */
-export async function getTableProperties(
-  tableFqn: string
-): Promise<Record<string, string>> {
+export async function getTableProperties(tableFqn: string): Promise<Record<string, string>> {
   const [catalog, schema, table] = splitFqn(tableFqn);
   const safeCat = validateIdentifier(catalog, "catalog");
   const safeSch = validateIdentifier(schema, "schema");
@@ -353,9 +376,7 @@ const EMPTY_EXTENDED: ExtendedTableInfo = {
  * Returns a structured `ExtendedTableInfo` with properties, statistics,
  * and additional metadata fields not available from DESCRIBE DETAIL.
  */
-export async function describeTableExtended(
-  tableFqn: string
-): Promise<ExtendedTableInfo> {
+export async function describeTableExtended(tableFqn: string): Promise<ExtendedTableInfo> {
   const [catalog, schema, table] = splitFqn(tableFqn);
   const safeCat = validateIdentifier(catalog, "catalog");
   const safeSch = validateIdentifier(schema, "schema");
@@ -367,9 +388,7 @@ export async function describeTableExtended(
     if (result.rows.length === 0) return { ...EMPTY_EXTENDED };
 
     const colIdx = (name: string) =>
-      result.columns.findIndex(
-        (c) => c.name.toLowerCase() === name.toLowerCase()
-      );
+      result.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase());
     const nameIdx = colIdx("col_name");
     const valueIdx = colIdx("data_type");
 
@@ -432,7 +451,12 @@ export async function describeTableExtended(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes("INSUFFICIENT_PERMISSIONS") || msg.includes("does not exist") || msg.includes("(403)") || msg.includes("(404)")) {
+    if (
+      msg.includes("INSUFFICIENT_PERMISSIONS") ||
+      msg.includes("does not exist") ||
+      msg.includes("(403)") ||
+      msg.includes("(404)")
+    ) {
       logger.warn("[metadata-detail] Permission denied for DESCRIBE TABLE EXTENDED", { tableFqn });
     } else {
       logger.error("[metadata-detail] DESCRIBE TABLE EXTENDED failed", { tableFqn, error: msg });
@@ -472,10 +496,7 @@ function parseTablePropertiesString(raw: string): Record<string, string> {
  * Query table tags from information_schema.table_tags.
  * Graceful fallback to empty array.
  */
-export async function getTableTags(
-  catalog: string,
-  schema?: string
-): Promise<TableTag[]> {
+export async function getTableTags(catalog: string, schema?: string): Promise<TableTag[]> {
   const safeCat = validateIdentifier(catalog, "catalog");
   try {
     let sql = `
@@ -504,10 +525,7 @@ export async function getTableTags(
  * Query column tags from information_schema.column_tags.
  * Graceful fallback to empty array.
  */
-export async function getColumnTags(
-  catalog: string,
-  schema?: string
-): Promise<ColumnTag[]> {
+export async function getColumnTags(catalog: string, schema?: string): Promise<ColumnTag[]> {
   const safeCat = validateIdentifier(catalog, "catalog");
   try {
     let sql = `
@@ -588,9 +606,14 @@ const DELTA_TABLE_TYPES = new Set([
  * @param onProgress - optional callback for progress updates
  */
 export async function enrichTablesInBatches(
-  tables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType?: string; dataSourceFormat?: string | null }>,
+  tables: Array<{
+    fqn: string;
+    discoveredVia: "selected" | "lineage";
+    tableType?: string;
+    dataSourceFormat?: string | null;
+  }>,
   concurrency = 5,
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<Map<string, EnrichmentResult>> {
   const results = new Map<string, EnrichmentResult>();
   let completed = 0;
@@ -608,8 +631,7 @@ export async function enrichTablesInBatches(
         // A table is eligible for DESCRIBE DETAIL / EXTENDED / HISTORY when
         // its type is a known Delta-backed physical type, or when the type
         // is unknown (lineage-discovered tables that haven't been resolved).
-        const isPhysicalTable =
-          knownType === null || DELTA_TABLE_TYPES.has(knownType);
+        const isPhysicalTable = knownType === null || DELTA_TABLE_TYPES.has(knownType);
 
         if (!isPhysicalTable) {
           enrichmentSkipped++;
@@ -618,12 +640,13 @@ export async function enrichTablesInBatches(
             tableType: knownType,
           });
 
-          const fallback = createFallbackDetail(
-            t.fqn,
-            t.discoveredVia,
-            t.tableType ?? "VIEW"
-          );
-          return { fqn: t.fqn, detail: fallback, history: null as TableHistorySummary | null, properties: {} as Record<string, string> };
+          const fallback = createFallbackDetail(t.fqn, t.discoveredVia, t.tableType ?? "VIEW");
+          return {
+            fqn: t.fqn,
+            detail: fallback,
+            history: null as TableHistorySummary | null,
+            properties: {} as Record<string, string>,
+          };
         }
 
         const skipHistoryUpfront = knownFormat !== null && knownFormat !== "DELTA";
@@ -651,11 +674,8 @@ export async function enrichTablesInBatches(
         }
 
         // If DESCRIBE DETAIL returned null (inaccessible), create a fallback
-        const effectiveDetail = detail ?? createFallbackDetail(
-          t.fqn,
-          t.discoveredVia,
-          t.tableType ?? "VIEW"
-        );
+        const effectiveDetail =
+          detail ?? createFallbackDetail(t.fqn, t.discoveredVia, t.tableType ?? "VIEW");
 
         // Merge EXTENDED metadata into detail
         if (properties && Object.keys(properties).length > 0) {
@@ -688,7 +708,7 @@ export async function enrichTablesInBatches(
         }
 
         return { fqn: t.fqn, detail: effectiveDetail, history, properties };
-      })
+      }),
     );
 
     for (const r of batchResults) {
@@ -752,7 +772,10 @@ function parseStringArray(value: string | null | undefined): string[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     // Try comma-separated fallback
-    return value.split(",").map((s) => s.trim()).filter(Boolean);
+    return value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 }
 

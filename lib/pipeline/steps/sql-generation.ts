@@ -15,11 +15,10 @@ import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
   generateGeospatialFunctionsSummary,
+  generateWindowFunctionsSummary,
+  generateLambdaFunctionsSummary,
 } from "@/lib/ai/functions";
-import {
-  buildSchemaMarkdown,
-  buildForeignKeyMarkdown,
-} from "@/lib/queries/metadata";
+import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import { groupByDomain } from "@/lib/domain/scoring";
@@ -43,19 +42,13 @@ const MAX_CONCURRENT_SQL = Math.max(
   parseInt(process.env.SQL_GEN_MAX_CONCURRENT ?? "3", 10) || 3,
 );
 
-const WAVE_DELAY_MS = Math.max(
-  0,
-  parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "2000", 10) || 0,
-);
+const WAVE_DELAY_MS = Math.max(0, parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "2000", 10) || 0);
 
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function runSqlGeneration(
-  ctx: PipelineContext,
-  runId?: string
-): Promise<UseCase[]> {
+export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, metadata } = ctx;
   if (!metadata) throw new Error("Metadata not available");
   if (!run.businessContext) throw new Error("Business context not available");
@@ -81,9 +74,7 @@ export async function runSqlGeneration(
 
   // Group use cases by domain, smallest domains first
   const grouped = groupByDomain(useCases);
-  const sortedDomains = Object.entries(grouped).sort(
-    ([, a], [, b]) => a.length - b.length
-  );
+  const sortedDomains = Object.entries(grouped).sort(([, a], [, b]) => a.length - b.length);
 
   const totalUseCases = useCases.length;
   let completed = 0;
@@ -105,15 +96,16 @@ export async function runSqlGeneration(
   const aiFunctionsSummary = generateAIFunctionsSummary();
   const statisticalFunctionsSummary = generateStatisticalFunctionsSummary();
   const geospatialFunctionsSummary = generateGeospatialFunctionsSummary();
+  const windowFunctionsSummary = generateWindowFunctionsSummary();
+  const lambdaFunctionsSummary = generateLambdaFunctionsSummary();
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 
   // Progress interpolation: SQL generation spans 67% → 95% of overall pipeline
   const PROGRESS_START = 67;
   const PROGRESS_END = 95;
-  const progressPerUseCase = totalUseCases > 0
-    ? (PROGRESS_END - PROGRESS_START) / totalUseCases
-    : 0;
+  const progressPerUseCase =
+    totalUseCases > 0 ? (PROGRESS_END - PROGRESS_START) / totalUseCases : 0;
 
   function currentProgress(): number {
     return Math.round(PROGRESS_START + completed * progressPerUseCase);
@@ -130,7 +122,7 @@ export async function runSqlGeneration(
       await updateRunMessage(
         runId,
         `Generating SQL for domain "${domain}" (${domainCases.length} use cases, ${completed}/${totalUseCases} done)...`,
-        currentProgress()
+        currentProgress(),
       );
     }
 
@@ -146,6 +138,8 @@ export async function runSqlGeneration(
             aiFunctionsSummary,
             statisticalFunctionsSummary,
             geospatialFunctionsSummary,
+            windowFunctionsSummary,
+            lambdaFunctionsSummary,
             columnsByTable,
             tableByFqn,
             metadata.foreignKeys,
@@ -153,8 +147,8 @@ export async function runSqlGeneration(
             sampleRows,
             runId,
             run.createdBy,
-          )
-        )
+          ),
+        ),
       );
 
       for (let j = 0; j < results.length; j++) {
@@ -171,7 +165,11 @@ export async function runSqlGeneration(
                 ? result.reason.message
                 : String(result.reason)
               : "empty response";
-          logger.warn("SQL generation failed for use case", { useCaseId: uc.id, name: uc.name, reason });
+          logger.warn("SQL generation failed for use case", {
+            useCaseId: uc.id,
+            name: uc.name,
+            reason,
+          });
           uc.sqlCode = null;
           uc.sqlStatus = "failed";
           failed++;
@@ -183,7 +181,7 @@ export async function runSqlGeneration(
         await updateRunMessage(
           runId,
           `SQL generation: ${completed}/${totalUseCases} complete (${failed} failed)`,
-          currentProgress()
+          currentProgress(),
         );
       }
 
@@ -209,6 +207,8 @@ async function generateSqlForUseCase(
   aiFunctionsSummary: string,
   statisticalFunctionsSummary: string,
   geospatialFunctionsSummary: string,
+  windowFunctionsSummary: string,
+  lambdaFunctionsSummary: string,
   columnsByTable: Map<string, ColumnInfo[]>,
   tableByFqn: Map<string, TableInfo>,
   allForeignKeys: ForeignKey[],
@@ -259,13 +259,11 @@ async function generateSqlForUseCase(
       : uc.tablesInvolved.map((t) => `### ${t}\n  (schema not available)`).join("\n\n");
 
   // Filter foreign keys to only those involving this use case's tables
-  const involvedFqns = new Set(
-    uc.tablesInvolved.map((t) => t.replace(/`/g, ""))
-  );
+  const involvedFqns = new Set(uc.tablesInvolved.map((t) => t.replace(/`/g, "")));
   const relevantFKs = allForeignKeys.filter(
     (fk) =>
       involvedFqns.has(fk.tableFqn.replace(/`/g, "")) ||
-      involvedFqns.has(fk.referencedTableFqn.replace(/`/g, ""))
+      involvedFqns.has(fk.referencedTableFqn.replace(/`/g, "")),
   );
   const fkMarkdown = buildForeignKeyMarkdown(relevantFKs);
 
@@ -273,7 +271,9 @@ async function generateSqlForUseCase(
   let sampleDataSection = "";
   if (sampleRowsPerTable > 0 && uc.tablesInvolved.length > 0) {
     const sampleResult = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable, {
-      runId, userEmail, step: "sql-generation",
+      runId,
+      userEmail,
+      step: "sql-generation",
     });
     sampleDataSection = sampleResult.markdown;
   }
@@ -292,12 +292,15 @@ async function generateSqlForUseCase(
     directly_involved_schema: schemaMarkdown,
     foreign_key_relationships: fkMarkdown,
     sample_data_section: sampleDataSection,
-    ai_functions_summary:
-      uc.type === "AI" ? aiFunctionsSummary : "",
-    statistical_functions_detailed:
-      uc.type === "Statistical" ? statisticalFunctionsSummary : "",
-    geospatial_functions_summary:
-      uc.type === "Geospatial" ? geospatialFunctionsSummary : "",
+    ai_functions_summary: uc.type === "AI" ? aiFunctionsSummary : "",
+    statistical_functions_detailed: uc.type === "Statistical" ? statisticalFunctionsSummary : "",
+    geospatial_functions_summary: uc.type === "Geospatial" ? geospatialFunctionsSummary : "",
+    window_functions_summary: isWindowRelevant(uc.type, uc.analyticsTechnique)
+      ? windowFunctionsSummary
+      : "",
+    lambda_functions_summary: isLambdaRelevant(uc.type, uc.analyticsTechnique, involvedColumns)
+      ? lambdaFunctionsSummary
+      : "",
   };
 
   // Use streaming for SQL generation -- it's the longest-running LLM call
@@ -318,7 +321,9 @@ async function generateSqlForUseCase(
 
   // Detect truncated SQL (LLM ran out of tokens mid-query)
   if (isTruncatedSql(sql)) {
-    logger.warn("SQL appears truncated (output token limit hit), attempting fix", { useCaseId: uc.id });
+    logger.warn("SQL appears truncated (output token limit hit), attempting fix", {
+      useCaseId: uc.id,
+    });
     const fixedSql = await attemptSqlFix(
       uc,
       sql,
@@ -326,7 +331,7 @@ async function generateSqlForUseCase(
       schemaMarkdown,
       fkMarkdown,
       aiModel,
-      runId
+      runId,
     );
     if (fixedSql) return fixedSql;
     return null;
@@ -362,7 +367,7 @@ async function generateSqlForUseCase(
       fkMarkdown,
       aiModel,
       runId,
-      sampleDataSection
+      sampleDataSection,
     );
 
     if (!fixedSql) {
@@ -388,7 +393,10 @@ async function generateSqlForUseCase(
   // Attempt to execute the SQL to catch runtime errors; if it fails, try fix prompt
   const executionError = await trySqlExecution(currentSql);
   if (executionError) {
-    logger.info("SQL execution failed, attempting fix", { useCaseId: uc.id, error: executionError });
+    logger.info("SQL execution failed, attempting fix", {
+      useCaseId: uc.id,
+      error: executionError,
+    });
     const fixedSql = await attemptSqlFix(
       uc,
       currentSql,
@@ -397,7 +405,7 @@ async function generateSqlForUseCase(
       fkMarkdown,
       aiModel,
       runId,
-      sampleDataSection
+      sampleDataSection,
     );
     if (fixedSql) {
       currentSql = fixedSql;
@@ -468,7 +476,7 @@ async function attemptSqlFix(
   fkMarkdown: string,
   aiModel: string,
   runId?: string,
-  sampleDataSection?: string
+  sampleDataSection?: string,
 ): Promise<string | null> {
   try {
     const result = await executeAIQuery({
@@ -513,13 +521,49 @@ async function attemptSqlFix(
 }
 
 // ---------------------------------------------------------------------------
+// Use-case-type relevance checks for function summaries
+// ---------------------------------------------------------------------------
+
+const WINDOW_RELEVANT_TYPES = new Set([
+  "Statistical",
+  "Descriptive",
+  "Predictive",
+  "Diagnostic",
+  "Comparative",
+]);
+
+const WINDOW_RELEVANT_TECHNIQUES = /\b(time.?series|trend|ranking|segmentat|cohort|cumulative|running|moving.?average|period.?over|month.?over|year.?over|churn|retention|growth|lag|lead|percentile|distribution)/i;
+
+function isWindowRelevant(ucType: string, technique: string): boolean {
+  if (WINDOW_RELEVANT_TYPES.has(ucType)) return true;
+  return WINDOW_RELEVANT_TECHNIQUES.test(technique);
+}
+
+function isLambdaRelevant(
+  ucType: string,
+  technique: string,
+  columns: ColumnInfo[],
+): boolean {
+  const hasArrayOrMapCol = columns.some(
+    (c) =>
+      /^(ARRAY|MAP|STRUCT)/i.test(c.dataType) ||
+      c.dataType.toLowerCase().includes("array") ||
+      c.dataType.toLowerCase().includes("map"),
+  );
+  if (hasArrayOrMapCol) return true;
+  return /\b(array|transform|tag|categor|multi.?value|complex.?type|nested|json|parse)/i.test(
+    technique,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Column violation error message builder
 // ---------------------------------------------------------------------------
 
 function buildColumnViolationMessage(
   unknownColumns: string[],
   knownColumns: ColumnInfo[],
-  tablesInvolved: string[]
+  tablesInvolved: string[],
 ): string {
   const columnsByTable = new Map<string, string[]>();
   for (const col of knownColumns) {
@@ -528,13 +572,15 @@ function buildColumnViolationMessage(
     columnsByTable.set(col.tableFqn, existing);
   }
 
-  const validColLines = tablesInvolved.map((fqn) => {
-    const cleanFqn = fqn.replace(/`/g, "");
-    const cols = columnsByTable.get(fqn) ?? columnsByTable.get(cleanFqn) ?? [];
-    return `  ${cleanFqn}: ${cols.join(", ")}`;
-  }).join("\n");
+  const validColLines = tablesInvolved
+    .map((fqn) => {
+      const cleanFqn = fqn.replace(/`/g, "");
+      const cols = columnsByTable.get(fqn) ?? columnsByTable.get(cleanFqn) ?? [];
+      return `  ${cleanFqn}: ${cols.join(", ")}`;
+    })
+    .join("\n");
 
-  const bareNames = unknownColumns.map((c) => c.includes(".") ? c.split(".").pop()! : c);
+  const bareNames = unknownColumns.map((c) => (c.includes(".") ? c.split(".").pop()! : c));
   return [
     `SCHEMA VIOLATION: SQL references columns that do not exist in the schema: ${bareNames.join(", ")}.`,
     `These columns are hallucinated -- they do NOT exist in any of the involved tables.`,
@@ -567,7 +613,7 @@ interface SqlValidationResult {
 function validateSqlOutput(
   sql: string,
   tablesInvolved: string[],
-  columns: ColumnInfo[]
+  columns: ColumnInfo[],
 ): SqlValidationResult {
   const warnings: string[] = [];
   const upperSql = sql.toUpperCase();
@@ -585,24 +631,17 @@ function validateSqlOutput(
       const cleanFqn = fqn.replace(/`/g, "");
       const parts = cleanFqn.split(".");
       const tableName = parts[parts.length - 1];
-      return (
-        normalizedSql.includes(cleanFqn) ||
-        upperSql.includes(tableName.toUpperCase())
-      );
+      return normalizedSql.includes(cleanFqn) || upperSql.includes(tableName.toUpperCase());
     });
     if (!hasTableRef) {
-      warnings.push(
-        `SQL does not reference any expected table: ${tablesInvolved.join(", ")}`
-      );
+      warnings.push(`SQL does not reference any expected table: ${tablesInvolved.join(", ")}`);
     }
   }
 
   // Check 3: Validate column references against known schema using the
   // shared validation module (handles both plain and backtick-quoted columns).
   if (columns.length > 0) {
-    const knownColumns = new Set(
-      columns.map((c) => c.columnName.toLowerCase())
-    );
+    const knownColumns = new Set(columns.map((c) => c.columnName.toLowerCase()));
 
     const colResult = validateColumnReferences(sql, knownColumns, {
       tablesInvolved,
@@ -649,7 +688,12 @@ function isTruncatedSql(sql: string): boolean {
   // If it ends mid-expression (after a comma, operator, or incomplete keyword),
   // it's likely truncated
   if (/[,(+\-*/=<>]\s*$/.test(trimmed)) return true;
-  if (/\b(AND|OR|ON|FROM|JOIN|WHERE|SELECT|GROUP|ORDER|HAVING|BY|AS|CASE|WHEN|THEN)\s*$/i.test(trimmed)) return true;
+  if (
+    /\b(AND|OR|ON|FROM|JOIN|WHERE|SELECT|GROUP|ORDER|HAVING|BY|AS|CASE|WHEN|THEN)\s*$/i.test(
+      trimmed,
+    )
+  )
+    return true;
 
   // If the query is very long (200+ lines) and doesn't end cleanly, likely truncated
   const lineCount = trimmed.split("\n").length;

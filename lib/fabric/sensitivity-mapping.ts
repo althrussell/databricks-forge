@@ -19,7 +19,12 @@ const DEFAULT_MAPPINGS: SensitivityLabelMapping[] = [
   { labelId: "", labelName: "Public", ucTagKey: "sensitivity", ucTagValue: "public" },
   { labelId: "", labelName: "General", ucTagKey: "sensitivity", ucTagValue: "general" },
   { labelId: "", labelName: "Confidential", ucTagKey: "sensitivity", ucTagValue: "confidential" },
-  { labelId: "", labelName: "Highly Confidential", ucTagKey: "sensitivity", ucTagValue: "highly_confidential" },
+  {
+    labelId: "",
+    labelName: "Highly Confidential",
+    ucTagKey: "sensitivity",
+    ucTagValue: "highly_confidential",
+  },
 ];
 
 /**
@@ -48,10 +53,7 @@ export function resolveLabelTag(
 /**
  * Generates ALTER TABLE ... SET TAGS DDL for a sensitivity label mapping.
  */
-export function buildTagDdl(
-  fqn: string,
-  tag: { key: string; value: string },
-): string {
+export function buildTagDdl(fqn: string, tag: { key: string; value: string }): string {
   return `ALTER TABLE ${fqn} SET TAGS ('${tag.key}' = '${tag.value}');`;
 }
 

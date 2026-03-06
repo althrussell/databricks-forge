@@ -16,7 +16,7 @@ import { isSafeId, validateDdl } from "@/lib/validation";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string; domain: string }> }
+  { params }: { params: Promise<{ runId: string; domain: string }> },
 ) {
   try {
     const { runId, domain } = await params;
@@ -37,10 +37,7 @@ export async function POST(
     };
 
     if (!body.ddl || !body.name) {
-      return NextResponse.json(
-        { error: "Missing required fields: ddl, name" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required fields: ddl, name" }, { status: 400 });
     }
 
     try {
@@ -48,7 +45,7 @@ export async function POST(
     } catch {
       return NextResponse.json(
         { error: "DDL does not appear to be a valid CREATE VIEW statement" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -62,11 +59,9 @@ export async function POST(
 
     // Extract the FQN from the DDL (CREATE OR REPLACE VIEW catalog.schema.name)
     const fqnMatch = body.ddl.match(
-      /VIEW\s+(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i
+      /VIEW\s+(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
     );
-    const metricViewFqn = fqnMatch
-      ? fqnMatch[1].replace(/`/g, "")
-      : body.name;
+    const metricViewFqn = fqnMatch ? fqnMatch[1].replace(/`/g, "") : body.name;
 
     // Add the metric view to the domain's serialized space
     await withPrisma(async (prisma) => {
@@ -86,7 +81,7 @@ export async function POST(
             }>;
 
             const alreadyExists = metricViews.some(
-              (mv) => mv.identifier.toLowerCase() === metricViewFqn.toLowerCase()
+              (mv) => mv.identifier.toLowerCase() === metricViewFqn.toLowerCase(),
             );
 
             if (!alreadyExists) {

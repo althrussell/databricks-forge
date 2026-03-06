@@ -28,7 +28,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({
         scanId,
         status: detail.status,
-        message: detail.status === "completed" ? "Scan complete" : detail.errorMessage ?? "Unknown",
+        message:
+          detail.status === "completed" ? "Scan complete" : (detail.errorMessage ?? "Unknown"),
         percent: detail.status === "completed" ? 100 : 0,
         phase: detail.status,
       });
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to get scan" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -59,7 +60,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to delete scan" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

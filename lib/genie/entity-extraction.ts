@@ -14,7 +14,8 @@ import { logger } from "@/lib/logger";
 const MAX_DISTINCT_FOR_ENTITY = 100;
 const MAX_VALUE_LENGTH = 127;
 const STRING_TYPE_PATTERNS = /^(string|varchar|char|text)/i;
-const ENTITY_NAME_HINTS = /(_code|_status|_type|_category|_class|_level|_tier|_region|_state|_country|_dept|_group)$/i;
+const ENTITY_NAME_HINTS =
+  /(_code|_status|_type|_category|_class|_level|_tier|_region|_state|_country|_dept|_group)$/i;
 
 export interface EntityExtractionOptions {
   tableFqns: string[];
@@ -66,7 +67,10 @@ export function extractEntityCandidates(opts: EntityExtractionOptions): EntityMa
         if (val === null || val === undefined) continue;
         const s = String(val).trim();
         if (s.length === 0) continue;
-        if (s.length > MAX_VALUE_LENGTH) { hasLongValues = true; continue; }
+        if (s.length > MAX_VALUE_LENGTH) {
+          hasLongValues = true;
+          continue;
+        }
         values.add(s);
       }
 
@@ -85,8 +89,7 @@ export function extractEntityCandidates(opts: EntityExtractionOptions): EntityMa
         const nameHint = ENTITY_NAME_HINTS.test(colName);
         const ratio = values.size / Math.max(entry.rows.length, 1);
         const confidence: EntityMatchingCandidate["confidence"] =
-          nameHint && ratio < 0.3 ? "high" :
-          ratio < 0.5 ? "medium" : "low";
+          nameHint && ratio < 0.3 ? "high" : ratio < 0.5 ? "medium" : "low";
 
         candidates.push({
           tableFqn: fqn,
@@ -114,7 +117,7 @@ export function extractEntityCandidates(opts: EntityExtractionOptions): EntityMa
  */
 export function extractEntityCandidatesFromSchema(
   columns: Array<{ tableFqn: string; columnName: string; dataType: string }>,
-  tableFqns: string[]
+  tableFqns: string[],
 ): EntityMatchingCandidate[] {
   const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
   const candidates: EntityMatchingCandidate[] = [];

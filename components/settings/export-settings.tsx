@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,9 +34,7 @@ export function ExportSettings({
           <FileText className="h-5 w-5" />
           Export Preferences
         </CardTitle>
-        <CardDescription>
-          Default settings for exporting discovery results
-        </CardDescription>
+        <CardDescription>Default settings for exporting discovery results</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
@@ -51,10 +43,7 @@ export function ExportSettings({
               <Label htmlFor="defaultExport">Default export format</Label>
               <InfoTip tip={SETTINGS.exportFormat} />
             </div>
-            <Select
-              value={defaultExportFormat}
-              onValueChange={onDefaultExportFormatChange}
-            >
+            <Select value={defaultExportFormat} onValueChange={onDefaultExportFormatChange}>
               <SelectTrigger id="defaultExport" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -62,17 +51,13 @@ export function ExportSettings({
                 <SelectItem value="excel">Excel (.xlsx)</SelectItem>
                 <SelectItem value="pdf">PDF</SelectItem>
                 <SelectItem value="pptx">PowerPoint (.pptx)</SelectItem>
-                <SelectItem value="notebooks">
-                  Databricks Notebooks
-                </SelectItem>
+                <SelectItem value="notebooks">Databricks Notebooks</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-1.5">
-              <Label htmlFor="notebookPath">
-                Notebook deployment path
-              </Label>
+              <Label htmlFor="notebookPath">Notebook deployment path</Label>
               <InfoTip tip={SETTINGS.notebookPath} />
             </div>
             <div className="flex items-center gap-2">

@@ -33,10 +33,7 @@ function escapeCsvField(value: string): string {
   return value;
 }
 
-export function generateCsv(
-  _run: PipelineRun,
-  useCases: UseCase[]
-): Buffer {
+export function generateCsv(_run: PipelineRun, useCases: UseCase[]): Buffer {
   const rows = [CSV_HEADERS.join(",")];
 
   for (const uc of useCases) {
@@ -61,7 +58,7 @@ export function generateCsv(
         escapeCsvField((uc.enrichmentTags ?? []).join(", ")),
         uc.sqlStatus ?? "",
         uc.feedback ?? "",
-      ].join(",")
+      ].join(","),
     );
   }
 

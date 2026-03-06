@@ -51,7 +51,8 @@ export async function POST(
     return NextResponse.json({
       success: false,
       sourceFetchStatus: "failed",
-      message: "Could not fetch source URL. The page may require JavaScript or authentication. Use manual paste instead.",
+      message:
+        "Could not fetch source URL. The page may require JavaScript or authentication. Use manual paste instead.",
     });
   } catch (err) {
     logger.warn("[fetch-source] Unexpected error", {
@@ -62,12 +63,14 @@ export async function POST(
     if (benchmarkId) {
       await updateBenchmarkSourceContent(benchmarkId, {
         sourceFetchStatus: "failed",
-      }).catch((e) => logger.warn("[fetch-source] Failed to mark source as failed", { benchmarkId, error: String(e) }));
+      }).catch((e) =>
+        logger.warn("[fetch-source] Failed to mark source as failed", {
+          benchmarkId,
+          error: String(e),
+        }),
+      );
     }
 
-    return NextResponse.json(
-      { error: "Source fetch failed unexpectedly" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Source fetch failed unexpectedly" }, { status: 500 });
   }
 }

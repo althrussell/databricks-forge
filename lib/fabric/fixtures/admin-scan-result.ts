@@ -32,10 +32,27 @@ export const MOCK_ADMIN_SCAN_RESULT = {
                 { name: "Region", dataType: "String", isHidden: false },
               ],
               measures: [
-                { name: "Total Revenue", expression: "SUM(Sales[Revenue])", description: "Sum of all revenue" },
-                { name: "Total Orders", expression: "COUNTROWS(Sales)", description: "Count of order rows" },
-                { name: "Avg Order Value", expression: "DIVIDE([Total Revenue], [Total Orders], 0)", description: "Average revenue per order" },
-                { name: "YoY Growth", expression: "VAR CurrentYear = [Total Revenue]\nVAR PriorYear = CALCULATE([Total Revenue], DATEADD(Calendar[Date], -1, YEAR))\nRETURN DIVIDE(CurrentYear - PriorYear, PriorYear, 0)", description: "Year over year revenue growth" },
+                {
+                  name: "Total Revenue",
+                  expression: "SUM(Sales[Revenue])",
+                  description: "Sum of all revenue",
+                },
+                {
+                  name: "Total Orders",
+                  expression: "COUNTROWS(Sales)",
+                  description: "Count of order rows",
+                },
+                {
+                  name: "Avg Order Value",
+                  expression: "DIVIDE([Total Revenue], [Total Orders], 0)",
+                  description: "Average revenue per order",
+                },
+                {
+                  name: "YoY Growth",
+                  expression:
+                    "VAR CurrentYear = [Total Revenue]\nVAR PriorYear = CALCULATE([Total Revenue], DATEADD(Calendar[Date], -1, YEAR))\nRETURN DIVIDE(CurrentYear - PriorYear, PriorYear, 0)",
+                  description: "Year over year revenue growth",
+                },
               ],
               isHidden: false,
             },
@@ -80,23 +97,62 @@ export const MOCK_ADMIN_SCAN_RESULT = {
             },
           ],
           relationships: [
-            { fromTable: "Sales", fromColumn: "OrderDate", toTable: "Calendar", toColumn: "Date", crossFilteringBehavior: "OneDirection" },
-            { fromTable: "Sales", fromColumn: "CustomerId", toTable: "Customers", toColumn: "CustomerId", crossFilteringBehavior: "OneDirection" },
-            { fromTable: "Sales", fromColumn: "ProductId", toTable: "Products", toColumn: "ProductId", crossFilteringBehavior: "OneDirection" },
+            {
+              fromTable: "Sales",
+              fromColumn: "OrderDate",
+              toTable: "Calendar",
+              toColumn: "Date",
+              crossFilteringBehavior: "OneDirection",
+            },
+            {
+              fromTable: "Sales",
+              fromColumn: "CustomerId",
+              toTable: "Customers",
+              toColumn: "CustomerId",
+              crossFilteringBehavior: "OneDirection",
+            },
+            {
+              fromTable: "Sales",
+              fromColumn: "ProductId",
+              toTable: "Products",
+              toColumn: "ProductId",
+              crossFilteringBehavior: "OneDirection",
+            },
           ],
           expressions: [
-            { name: "Source", expression: "let\n  Source = Sql.Database(\"sqlserver.database.windows.net\", \"SalesDB\")\nin\n  Source" },
+            {
+              name: "Source",
+              expression:
+                'let\n  Source = Sql.Database("sqlserver.database.windows.net", "SalesDB")\nin\n  Source',
+            },
           ],
           roles: [
-            { name: "Regional Manager", members: [{ memberName: "managers@contoso.com" }], tablePermissions: [{ name: "Sales", filterExpression: "[Region] = USERPRINCIPALNAME()" }] },
+            {
+              name: "Regional Manager",
+              members: [{ memberName: "managers@contoso.com" }],
+              tablePermissions: [
+                { name: "Sales", filterExpression: "[Region] = USERPRINCIPALNAME()" },
+              ],
+            },
           ],
           datasourceUsages: [],
           sensitivityLabel: { labelId: "general" },
         },
       ],
       reports: [
-        { id: "rpt-001-exec", name: "Executive Revenue Dashboard", datasetId: "ds-001-revenue", reportType: "PowerBIReport", sensitivityLabel: { labelId: "general" } },
-        { id: "rpt-002-regional", name: "Regional Sales Breakdown", datasetId: "ds-001-revenue", reportType: "PowerBIReport" },
+        {
+          id: "rpt-001-exec",
+          name: "Executive Revenue Dashboard",
+          datasetId: "ds-001-revenue",
+          reportType: "PowerBIReport",
+          sensitivityLabel: { labelId: "general" },
+        },
+        {
+          id: "rpt-002-regional",
+          name: "Regional Sales Breakdown",
+          datasetId: "ds-001-revenue",
+          reportType: "PowerBIReport",
+        },
       ],
       dashboards: [
         {
@@ -134,9 +190,20 @@ export const MOCK_ADMIN_SCAN_RESULT = {
                 { name: "CostCenter", dataType: "String", isHidden: false },
               ],
               measures: [
-                { name: "Net Income", expression: "CALCULATE(SUM(GeneralLedger[Amount]), GeneralLedger[AccountCode] >= \"4000\" && GeneralLedger[AccountCode] < \"9000\")" },
-                { name: "Total Expenses", expression: "CALCULATE(SUM(GeneralLedger[Amount]), GeneralLedger[AccountCode] >= \"5000\")" },
-                { name: "Budget Variance", expression: "DIVIDE([Net Income] - [Budget Amount], [Budget Amount], 0)" },
+                {
+                  name: "Net Income",
+                  expression:
+                    'CALCULATE(SUM(GeneralLedger[Amount]), GeneralLedger[AccountCode] >= "4000" && GeneralLedger[AccountCode] < "9000")',
+                },
+                {
+                  name: "Total Expenses",
+                  expression:
+                    'CALCULATE(SUM(GeneralLedger[Amount]), GeneralLedger[AccountCode] >= "5000")',
+                },
+                {
+                  name: "Budget Variance",
+                  expression: "DIVIDE([Net Income] - [Budget Amount], [Budget Amount], 0)",
+                },
               ],
               isHidden: false,
             },
@@ -148,14 +215,18 @@ export const MOCK_ADMIN_SCAN_RESULT = {
                 { name: "BudgetAmount", dataType: "Decimal", isHidden: false },
                 { name: "Department", dataType: "String", isHidden: false },
               ],
-              measures: [
-                { name: "Budget Amount", expression: "SUM(Budget[BudgetAmount])" },
-              ],
+              measures: [{ name: "Budget Amount", expression: "SUM(Budget[BudgetAmount])" }],
               isHidden: false,
             },
           ],
           relationships: [
-            { fromTable: "GeneralLedger", fromColumn: "AccountCode", toTable: "Budget", toColumn: "AccountCode", crossFilteringBehavior: "OneDirection" },
+            {
+              fromTable: "GeneralLedger",
+              fromColumn: "AccountCode",
+              toTable: "Budget",
+              toColumn: "AccountCode",
+              crossFilteringBehavior: "OneDirection",
+            },
           ],
           expressions: [],
           roles: [],
@@ -164,11 +235,22 @@ export const MOCK_ADMIN_SCAN_RESULT = {
         },
       ],
       reports: [
-        { id: "rpt-003-pnl", name: "P&L Report", datasetId: "ds-002-finance", reportType: "PowerBIReport", sensitivityLabel: { labelId: "confidential" } },
+        {
+          id: "rpt-003-pnl",
+          name: "P&L Report",
+          datasetId: "ds-002-finance",
+          reportType: "PowerBIReport",
+          sensitivityLabel: { labelId: "confidential" },
+        },
       ],
       dashboards: [],
       dataflows: [
-        { objectId: "df-001", name: "Finance ETL", configuredBy: "finance@contoso.com", description: "Daily refresh of GL data" },
+        {
+          objectId: "df-001",
+          name: "Finance ETL",
+          configuredBy: "finance@contoso.com",
+          description: "Daily refresh of GL data",
+        },
       ],
       datamarts: [],
     },

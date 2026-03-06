@@ -40,8 +40,19 @@ const MAX_GLOSSARY_ENTRIES = 10;
 const MAX_CLARIFICATION_RULES = 5;
 
 const MONTH_NAMES = [
-  "", "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 export interface InstructionGenerationInput {
@@ -66,7 +77,7 @@ export interface InstructionGenerationOutput {
 }
 
 export async function runInstructionGeneration(
-  input: InstructionGenerationInput
+  input: InstructionGenerationInput,
 ): Promise<InstructionGenerationOutput> {
   const {
     domain,
@@ -93,7 +104,7 @@ export async function runInstructionGeneration(
   if (entityCandidates.some((c) => c.sampleValues.length > 0)) {
     instructions.push(
       "When users refer to coded values by their full names or descriptions, " +
-      "use the column synonyms and descriptions in the table metadata to map to stored codes."
+        "use the column synonyms and descriptions in the table metadata to map to stored codes.",
     );
   }
 
@@ -102,8 +113,8 @@ export async function runInstructionGeneration(
     const fyMonth = MONTH_NAMES[config.fiscalYearStartMonth] || "January";
     instructions.push(
       `Fiscal year starts in ${fyMonth}. ` +
-      `When users say "this year", "YTD", or "last quarter", use the fiscal calendar. ` +
-      `Calendar periods (last 7/30/90 days) are also available.`
+        `When users say "this year", "YTD", or "last quarter", use the fiscal calendar. ` +
+        `Calendar periods (last 7/30/90 days) are also available.`,
     );
   }
 
@@ -114,18 +125,19 @@ export async function runInstructionGeneration(
   // 5. Summary customisation
   if (config.summaryInstructions.trim()) {
     instructions.push(
-      `Instructions you must follow when providing summaries:\n${config.summaryInstructions}`
+      `Instructions you must follow when providing summaries:\n${config.summaryInstructions}`,
     );
   }
 
   // 6. Glossary / business terminology
   if (config.glossary.length > 0) {
-    const glossaryLines = config.glossary.slice(0, MAX_GLOSSARY_ENTRIES).map(
-      (g) => `- "${g.term}": ${g.definition}${g.synonyms.length > 0 ? ` (aka ${g.synonyms.join(", ")})` : ""}`
-    );
-    instructions.push(
-      `Business terminology:\n${glossaryLines.join("\n")}`
-    );
+    const glossaryLines = config.glossary
+      .slice(0, MAX_GLOSSARY_ENTRIES)
+      .map(
+        (g) =>
+          `- "${g.term}": ${g.definition}${g.synonyms.length > 0 ? ` (aka ${g.synonyms.join(", ")})` : ""}`,
+      );
+    instructions.push(`Business terminology:\n${glossaryLines.join("\n")}`);
   }
 
   // 7. Customer global instructions
@@ -173,7 +185,9 @@ export async function runInstructionGeneration(
         signal,
       );
       if (llmRefined) {
-        instructions.push("Instruction generation degraded: fast endpoint unavailable; used fallback endpoint.");
+        instructions.push(
+          "Instruction generation degraded: fast endpoint unavailable; used fallback endpoint.",
+        );
       }
     } catch (err) {
       logger.warn("Fallback LLM instruction generation failed", {
@@ -201,7 +215,7 @@ function totalChars(blocks: string[]): number {
 export function applyInstructionCharBudget(
   instructions: string[],
   llmRefined: string | null,
-  config: GenieEngineConfig
+  config: GenieEngineConfig,
 ): string[] {
   if (totalChars(instructions) <= MAX_INSTRUCTION_CHARS) return instructions;
 
@@ -211,29 +225,37 @@ export function applyInstructionCharBudget(
   if (llmRefined) {
     optional = optional.filter((s) => s !== llmRefined);
     logger.debug("Instruction budget: dropped LLM-refined block");
-    if (totalChars([...alwaysKeep, ...optional]) <= MAX_INSTRUCTION_CHARS) return [...alwaysKeep, ...optional];
+    if (totalChars([...alwaysKeep, ...optional]) <= MAX_INSTRUCTION_CHARS)
+      return [...alwaysKeep, ...optional];
   }
 
   if (config.glossary.length > 5) {
-    const reducedGlossary = config.glossary.slice(0, 5).map(
-      (g) => `- "${g.term}": ${g.definition}${g.synonyms.length > 0 ? ` (aka ${g.synonyms.join(", ")})` : ""}`
-    );
+    const reducedGlossary = config.glossary
+      .slice(0, 5)
+      .map(
+        (g) =>
+          `- "${g.term}": ${g.definition}${g.synonyms.length > 0 ? ` (aka ${g.synonyms.join(", ")})` : ""}`,
+      );
     const header = "Business terminology:";
     optional = optional.map((s) =>
-      s.startsWith(header) ? `${header}\n${reducedGlossary.join("\n")}` : s
+      s.startsWith(header) ? `${header}\n${reducedGlossary.join("\n")}` : s,
     );
     logger.debug("Instruction budget: reduced glossary to 5 entries");
-    if (totalChars([...alwaysKeep, ...optional]) <= MAX_INSTRUCTION_CHARS) return [...alwaysKeep, ...optional];
+    if (totalChars([...alwaysKeep, ...optional]) <= MAX_INSTRUCTION_CHARS)
+      return [...alwaysKeep, ...optional];
   }
 
   if (config.clarificationRules.length > 3) {
-    const reducedRules = config.clarificationRules.slice(0, 3).map((r) =>
-      `When users ask about ${r.topic} but don't include ${r.missingDetails.join(" or ")}, ` +
-      `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`
-    );
+    const reducedRules = config.clarificationRules
+      .slice(0, 3)
+      .map(
+        (r) =>
+          `When users ask about ${r.topic} but don't include ${r.missingDetails.join(" or ")}, ` +
+          `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`,
+      );
     const header = "Clarification rules:";
     optional = optional.map((s) =>
-      s.startsWith(header) ? `${header}\n${reducedRules.join("\n")}` : s
+      s.startsWith(header) ? `${header}\n${reducedRules.join("\n")}` : s,
     );
     logger.debug("Instruction budget: reduced clarification rules to 3");
   }
@@ -264,11 +286,9 @@ function buildDomainIdentity(
   domain: string,
   subdomains: string[],
   businessName: string,
-  bc: BusinessContext | null
+  bc: BusinessContext | null,
 ): string {
-  const parts: string[] = [
-    `This space serves the ${domain} domain for ${businessName}.`,
-  ];
+  const parts: string[] = [`This space serves the ${domain} domain for ${businessName}.`];
 
   if (bc?.industries) parts.push(`Industry: ${bc.industries}.`);
   if (subdomains.length > 0) parts.push(`Covers: ${subdomains.join(", ")}.`);
@@ -279,10 +299,13 @@ function buildDomainIdentity(
 function buildClarificationInstruction(rules: ClarificationRule[]): string | null {
   if (rules.length === 0) return null;
 
-  const ruleLines = rules.slice(0, MAX_CLARIFICATION_RULES).map((r) =>
-    `When users ask about ${r.topic} but don't include ${r.missingDetails.join(" or ")}, ` +
-    `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`
-  );
+  const ruleLines = rules
+    .slice(0, MAX_CLARIFICATION_RULES)
+    .map(
+      (r) =>
+        `When users ask about ${r.topic} but don't include ${r.missingDetails.join(" or ")}, ` +
+        `you must ask a clarification question first. Example: "${r.clarificationQuestion}"`,
+    );
 
   return `Clarification rules:\n${ruleLines.join("\n")}`;
 }
@@ -307,7 +330,9 @@ async function generateLLMInstruction(
     "Do not include dataset marketing language, product pitch text, or generic platform instructions.",
     "Do not include SQL syntax lessons; keep this analyst-facing and operational.",
   ].join(" ");
-  const compactColumns = metadata ? buildCompactColumnsBlock(metadata, tableFqns).slice(0, 1600) : "";
+  const compactColumns = metadata
+    ? buildCompactColumnsBlock(metadata, tableFqns).slice(0, 1600)
+    : "";
   const joinHints = joins
     .slice(0, 6)
     .map((j) => `${j.leftTable} <-> ${j.rightTable}`)

@@ -14,13 +14,22 @@ import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { runGenieEngine, EngineCancelledError } from "@/lib/genie/engine";
-import { startJob, getJobController, updateJob, updateJobDomainProgress, addCompletedDomainName, completeJob, failJob, getJobStatus } from "@/lib/genie/engine-status";
+import {
+  startJob,
+  getJobController,
+  updateJob,
+  updateJobDomainProgress,
+  addCompletedDomainName,
+  completeJob,
+  failJob,
+  getJobStatus,
+} from "@/lib/genie/engine-status";
 import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
 import { logger } from "@/lib/logger";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -47,7 +56,7 @@ export async function POST(
     if (run.status !== "completed") {
       return NextResponse.json(
         { error: "Run must be completed to generate Genie spaces" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -65,7 +74,7 @@ export async function POST(
     if (existingJob?.status === "generating") {
       return NextResponse.json(
         { error: "Genie generation already in progress", status: "generating" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -88,7 +97,9 @@ export async function POST(
           instructionLength: 0,
         }));
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     await startJob(runId);
     const controller = getJobController(runId);

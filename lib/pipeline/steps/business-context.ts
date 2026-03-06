@@ -44,8 +44,7 @@ function toReadableString(value: unknown, fallback: string): string {
       if (typeof item === "object" && item !== null) {
         // Object with a "name", "goal", "title", "description", or "label" key
         const obj = item as Record<string, unknown>;
-        const label =
-          obj.name ?? obj.goal ?? obj.title ?? obj.label ?? obj.description;
+        const label = obj.name ?? obj.goal ?? obj.title ?? obj.label ?? obj.description;
         if (typeof label === "string") return label;
         // Fallback: join all values
         return Object.values(obj)
@@ -74,12 +73,13 @@ function toReadableString(value: unknown, fallback: string): string {
 
 export async function runBusinessContext(
   ctx: PipelineContext,
-  runId?: string
+  runId?: string,
 ): Promise<BusinessContext> {
   const { config } = ctx.run;
 
   try {
-    if (runId) await updateRunMessage(runId, `Researching business context for ${config.businessName}...`);
+    if (runId)
+      await updateRunMessage(runId, `Researching business context for ${config.businessName}...`);
     // Inject industry context from outcome maps when an industry is selected
     const industryContext = config.industry
       ? await buildIndustryContextPrompt(config.industry)
@@ -95,7 +95,8 @@ export async function runBusinessContext(
     let docKinds: string[] = [];
     let docChunkCount = 0;
     try {
-      const { retrieveContext, formatRetrievedContext } = await import("@/lib/embeddings/retriever");
+      const { retrieveContext, formatRetrievedContext } =
+        await import("@/lib/embeddings/retriever");
       const chunks = await retrieveContext(
         `Business context for ${config.businessName}: ${config.businessDomains || ""} ${config.businessPriorities?.join(", ") || ""} ${config.strategicGoals || ""} ${config.additionalContext || ""}`,
         { kinds: ["document_chunk", "business_context"], topK: 5, minScore: 0.4 },
@@ -164,23 +165,17 @@ export async function runBusinessContext(
 
     const context: BusinessContext = {
       industries: toReadableString(parsed.industries, DEFAULT_CONTEXT.industries),
-      strategicGoals: toReadableString(
-        parsed.strategic_goals,
-        DEFAULT_CONTEXT.strategicGoals
-      ),
+      strategicGoals: toReadableString(parsed.strategic_goals, DEFAULT_CONTEXT.strategicGoals),
       businessPriorities: toReadableString(
         parsed.business_priorities,
-        config.businessPriorities.join(", ")
+        config.businessPriorities.join(", "),
       ),
       strategicInitiative: toReadableString(
         parsed.strategic_initiative,
-        DEFAULT_CONTEXT.strategicInitiative
+        DEFAULT_CONTEXT.strategicInitiative,
       ),
       valueChain: toReadableString(parsed.value_chain, DEFAULT_CONTEXT.valueChain),
-      revenueModel: toReadableString(
-        parsed.revenue_model,
-        DEFAULT_CONTEXT.revenueModel
-      ),
+      revenueModel: toReadableString(parsed.revenue_model, DEFAULT_CONTEXT.revenueModel),
       additionalContext: toReadableString(parsed.additional_context, ""),
     };
 
@@ -202,8 +197,7 @@ export async function runBusinessContext(
     return {
       ...DEFAULT_CONTEXT,
       businessPriorities: config.businessPriorities.join(", "),
-      strategicGoals:
-        config.strategicGoals || DEFAULT_CONTEXT.strategicGoals,
+      strategicGoals: config.strategicGoals || DEFAULT_CONTEXT.strategicGoals,
     };
   }
 }

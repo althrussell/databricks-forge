@@ -19,16 +19,13 @@ export async function POST(request: NextRequest) {
     };
 
     if (!markdown || typeof markdown !== "string") {
-      return NextResponse.json(
-        { error: "markdown field is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "markdown field is required" }, { status: 400 });
     }
 
     if (markdown.length < 100) {
       return NextResponse.json(
         { error: "Document is too short to be a valid outcome map" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -42,7 +39,7 @@ export async function POST(request: NextRequest) {
         outcome: null,
         error: err instanceof Error ? err.message : "Parse request failed",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

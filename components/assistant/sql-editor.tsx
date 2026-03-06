@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+} from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { sql, StandardSQL } from "@codemirror/lang-sql";
@@ -22,7 +28,10 @@ const readOnlyCompartment = new Compartment();
 
 const baseTheme = EditorView.theme({
   "&": { height: "100%", fontSize: "13px" },
-  ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace" },
+  ".cm-scroller": {
+    overflow: "auto",
+    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  },
   ".cm-gutters": { borderRight: "1px solid var(--border)", backgroundColor: "transparent" },
   ".cm-activeLineGutter": { backgroundColor: "transparent" },
 });

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import packageJson from "@/package.json";
@@ -26,23 +20,17 @@ export function AboutSettings({ profile }: AboutSettingsProps) {
           <Info className="h-5 w-5" />
           About
         </CardTitle>
-        <CardDescription>
-          Application version and build information
-        </CardDescription>
+        <CardDescription>Application version and build information</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <Label className="text-xs text-muted-foreground">Version</Label>
-            <p className="mt-0.5 text-sm font-medium font-mono">
-              v{packageJson.version}
-            </p>
+            <p className="mt-0.5 text-sm font-medium font-mono">v{packageJson.version}</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Application</Label>
-            <p className="mt-0.5 text-sm font-medium">
-              Databricks Forge AI
-            </p>
+            <p className="mt-0.5 text-sm font-medium">Databricks Forge AI</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Runtime</Label>

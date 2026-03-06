@@ -7,14 +7,50 @@ import { PIPELINE_STEPS } from "@/lib/help-text";
 import { useMemo } from "react";
 
 const BASE_STEPS = [
-  { key: PipelineStep.BusinessContext, label: "Business Context", pct: 10, tip: PIPELINE_STEPS["business-context"] },
-  { key: PipelineStep.MetadataExtraction, label: "Metadata Extraction", pct: 18, tip: PIPELINE_STEPS["metadata-extraction"] },
-  { key: PipelineStep.AssetDiscovery, label: "Asset Discovery", pct: 22, tip: PIPELINE_STEPS["asset-discovery"], optional: true },
-  { key: PipelineStep.TableFiltering, label: "Table Filtering", pct: 30, tip: PIPELINE_STEPS["table-filtering"] },
-  { key: PipelineStep.UsecaseGeneration, label: "Use Case Generation", pct: 45, tip: PIPELINE_STEPS["usecase-generation"] },
-  { key: PipelineStep.DomainClustering, label: "Domain Clustering", pct: 55, tip: PIPELINE_STEPS["domain-clustering"] },
+  {
+    key: PipelineStep.BusinessContext,
+    label: "Business Context",
+    pct: 10,
+    tip: PIPELINE_STEPS["business-context"],
+  },
+  {
+    key: PipelineStep.MetadataExtraction,
+    label: "Metadata Extraction",
+    pct: 18,
+    tip: PIPELINE_STEPS["metadata-extraction"],
+  },
+  {
+    key: PipelineStep.AssetDiscovery,
+    label: "Asset Discovery",
+    pct: 22,
+    tip: PIPELINE_STEPS["asset-discovery"],
+    optional: true,
+  },
+  {
+    key: PipelineStep.TableFiltering,
+    label: "Table Filtering",
+    pct: 30,
+    tip: PIPELINE_STEPS["table-filtering"],
+  },
+  {
+    key: PipelineStep.UsecaseGeneration,
+    label: "Use Case Generation",
+    pct: 45,
+    tip: PIPELINE_STEPS["usecase-generation"],
+  },
+  {
+    key: PipelineStep.DomainClustering,
+    label: "Domain Clustering",
+    pct: 55,
+    tip: PIPELINE_STEPS["domain-clustering"],
+  },
   { key: PipelineStep.Scoring, label: "Scoring & Dedup", pct: 65, tip: PIPELINE_STEPS["scoring"] },
-  { key: PipelineStep.SqlGeneration, label: "SQL Generation", pct: 100, tip: PIPELINE_STEPS["sql-generation"] },
+  {
+    key: PipelineStep.SqlGeneration,
+    label: "SQL Generation",
+    pct: 100,
+    tip: PIPELINE_STEPS["sql-generation"],
+  },
 ];
 
 interface RunProgressProps {
@@ -35,12 +71,10 @@ export function RunProgress({
 }: RunProgressProps) {
   const STEPS = useMemo(
     () => BASE_STEPS.filter((s) => !("optional" in s && s.optional) || assetDiscoveryEnabled),
-    [assetDiscoveryEnabled]
+    [assetDiscoveryEnabled],
   );
 
-  const currentIdx = currentStep
-    ? STEPS.findIndex((s) => s.key === currentStep)
-    : -1;
+  const currentIdx = currentStep ? STEPS.findIndex((s) => s.key === currentStep) : -1;
 
   return (
     <div className="space-y-3" role="list" aria-label="Pipeline steps" aria-live="polite">
@@ -55,20 +89,20 @@ export function RunProgress({
         const isPending = !isCompleted && !isActive && !isFailed && !isCancelled;
 
         return (
-          <div key={step.key} role="listitem" aria-current={isActive ? "step" : undefined} className="flex items-center gap-3">
+          <div
+            key={step.key}
+            role="listitem"
+            aria-current={isActive ? "step" : undefined}
+            className="flex items-center gap-3"
+          >
             <div
               className={cn(
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors",
-                isCompleted &&
-                  "border-green-500 bg-green-500 text-white",
-                isActive &&
-                  "border-blue-500 bg-blue-50 text-blue-600 animate-pulse",
-                isFailed &&
-                  "border-red-500 bg-red-50 text-red-600",
-                isCancelled &&
-                  "border-amber-500 bg-amber-50 text-amber-600",
-                isPending &&
-                  "border-muted-foreground/30 text-muted-foreground/50"
+                isCompleted && "border-green-500 bg-green-500 text-white",
+                isActive && "border-blue-500 bg-blue-50 text-blue-600 animate-pulse",
+                isFailed && "border-red-500 bg-red-50 text-red-600",
+                isCancelled && "border-amber-500 bg-amber-50 text-amber-600",
+                isPending && "border-muted-foreground/30 text-muted-foreground/50",
               )}
             >
               {isCompleted ? (
@@ -90,7 +124,7 @@ export function RunProgress({
                       isPending && "text-muted-foreground/50",
                       isActive && "text-blue-600",
                       isFailed && "text-red-600",
-                      isCancelled && "text-amber-600"
+                      isCancelled && "text-amber-600",
                     )}
                   >
                     {step.label}

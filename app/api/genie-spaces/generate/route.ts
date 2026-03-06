@@ -48,7 +48,7 @@ function evictStale(): void {
 function validateTables(tables: unknown): string[] | null {
   if (!Array.isArray(tables) || tables.length === 0) return null;
   const invalid = (tables as string[]).filter(
-    (t) => typeof t !== "string" || t.split(".").length < 3
+    (t) => typeof t !== "string" || t.split(".").length < 3,
   );
   if (invalid.length > 0) return null;
   return tables as string[];
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     if (!tables) {
       return NextResponse.json(
         { error: "At least one valid table FQN (catalog.schema.table) is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -126,11 +126,12 @@ export async function POST(request: NextRequest) {
           job.status = "completed";
           const gateDecision = result.recommendation.quality?.gateDecision ?? "allow";
           const qualityWarnings = result.recommendation.quality?.degradedReasons.length ?? 0;
-          job.message = gateDecision === "block"
-            ? "Generation complete: deployment blocked by quality gate"
-            : qualityWarnings > 0
-              ? `Generation complete with ${qualityWarnings} warning${qualityWarnings === 1 ? "" : "s"}`
-              : "Generation complete";
+          job.message =
+            gateDecision === "block"
+              ? "Generation complete: deployment blocked by quality gate"
+              : qualityWarnings > 0
+                ? `Generation complete with ${qualityWarnings} warning${qualityWarnings === 1 ? "" : "s"}`
+                : "Generation complete";
           job.percent = 100;
           job.completedAt = Date.now();
           job.result = { recommendation: result.recommendation, mode: "full" };

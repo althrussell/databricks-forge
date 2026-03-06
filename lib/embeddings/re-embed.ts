@@ -92,9 +92,7 @@ export async function deltaReEmbed(
 
   // Identify removed records
   const newSourceIds = new Set(newRecords.map((r) => r.sourceId));
-  const removedSourceIds = Array.from(existingHashes.keys()).filter(
-    (id) => !newSourceIds.has(id),
-  );
+  const removedSourceIds = Array.from(existingHashes.keys()).filter((id) => !newSourceIds.has(id));
 
   if (toEmbed.length === 0 && removedSourceIds.length === 0) {
     logger.info("[re-embed] No changes detected, skipping re-embed", {
@@ -173,12 +171,18 @@ export async function getEmbeddingStats(): Promise<EmbeddingStats> {
     total += count;
   }
 
-  const estateKinds = ["table_detail", "column_profile", "environment_insight", "table_health", "data_product", "lineage_context"];
+  const estateKinds = [
+    "table_detail",
+    "column_profile",
+    "environment_insight",
+    "table_health",
+    "data_product",
+    "lineage_context",
+  ];
   const pipelineKinds = ["use_case", "business_context"];
   const genieKinds = ["genie_recommendation", "genie_question"];
 
-  const sumKinds = (kinds: string[]) =>
-    kinds.reduce((sum, k) => sum + (byKind[k] ?? 0), 0);
+  const sumKinds = (kinds: string[]) => kinds.reduce((sum, k) => sum + (byKind[k] ?? 0), 0);
 
   return {
     totalRecords: total,

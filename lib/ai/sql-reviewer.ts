@@ -14,22 +14,14 @@
 import { getReviewEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
-import {
-  DATABRICKS_SQL_RULES,
-  DATABRICKS_SQL_REVIEW_CHECKLIST,
-} from "./sql-rules";
+import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "./sql-rules";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface ReviewIssue {
-  category:
-    | "correctness"
-    | "performance"
-    | "readability"
-    | "security"
-    | "databricks_idiom";
+  category: "correctness" | "performance" | "readability" | "security" | "databricks_idiom";
   severity: "error" | "warning" | "info";
   message: string;
   lineRef?: string;
@@ -69,10 +61,7 @@ export interface BatchReviewResult {
 // Prompts
 // ---------------------------------------------------------------------------
 
-function buildReviewPrompt(
-  sql: string,
-  opts: ReviewOptions,
-): string {
+function buildReviewPrompt(sql: string, opts: ReviewOptions): string {
   const schemaBlock = opts.schemaContext
     ? `\n## Available Schema\n\`\`\`\n${opts.schemaContext}\n\`\`\`\n`
     : "";
@@ -131,10 +120,7 @@ Output ONLY valid JSON with this structure (no markdown fences, no explanation):
 }`;
 }
 
-function buildBatchReviewPrompt(
-  items: BatchReviewItem[],
-  schemaContext?: string,
-): string {
+function buildBatchReviewPrompt(items: BatchReviewItem[], schemaContext?: string): string {
   const sqlBlocks = items
     .map(
       (item, i) =>
@@ -332,10 +318,7 @@ const PASS_THROUGH_RESULT: ReviewResult = {
  * If the review endpoint is not configured or disabled for this surface,
  * returns a pass-through result.
  */
-export async function reviewSql(
-  sql: string,
-  opts: ReviewOptions = {},
-): Promise<ReviewResult> {
+export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<ReviewResult> {
   if (!isReviewEnabled(opts.surface)) return PASS_THROUGH_RESULT;
   if (!sql || sql.trim().length < 10) return PASS_THROUGH_RESULT;
 

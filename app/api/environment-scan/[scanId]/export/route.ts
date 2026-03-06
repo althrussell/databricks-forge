@@ -12,7 +12,7 @@ import { logger } from "@/lib/logger";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ scanId: string }> }
+  { params }: { params: Promise<{ scanId: string }> },
 ) {
   try {
     const { scanId } = await params;
@@ -28,10 +28,7 @@ export async function GET(
         scanId,
         format,
       });
-      return NextResponse.json(
-        { error: "Only excel format is supported" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Only excel format is supported" }, { status: 400 });
     }
 
     const scan = await getEnvironmentScan(scanId);
@@ -46,8 +43,7 @@ export async function GET(
     return new NextResponse(uint8, {
       status: 200,
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="environment-report-${scanId.slice(0, 8)}.xlsx"`,
       },
     });
@@ -55,9 +51,6 @@ export async function GET(
     logger.error("[api/environment-scan/export] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Failed to export environment report" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to export environment report" }, { status: 500 });
   }
 }

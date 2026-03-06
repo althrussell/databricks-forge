@@ -12,10 +12,7 @@ import { executeSQL } from "@/lib/dbx/sql";
 import { createGenieSpace, updateGenieSpace } from "@/lib/dbx/genie";
 import { buildMetadataGenieSpace } from "@/lib/metadata-genie/space-builder";
 import { generateViewDDL, getViewFqns } from "@/lib/metadata-genie/view-ddl";
-import {
-  getMetadataGenieSpace,
-  updateMetadataGenieOnDeploy,
-} from "@/lib/lakebase/metadata-genie";
+import { getMetadataGenieSpace, updateMetadataGenieOnDeploy } from "@/lib/lakebase/metadata-genie";
 import { logger } from "@/lib/logger";
 import { validateIdentifier } from "@/lib/validation";
 import { DeployBodySchema } from "@/lib/metadata-genie/schemas";
@@ -26,9 +23,14 @@ export async function POST(request: NextRequest) {
     const raw = await request.json();
     const parsed = DeployBodySchema.safeParse(raw);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid request body" },
+        { status: 400 },
+      );
     }
-    const { id, viewTarget, authMode } = parsed.data as typeof parsed.data & { authMode?: GenieAuthMode };
+    const { id, viewTarget, authMode } = parsed.data as typeof parsed.data & {
+      authMode?: GenieAuthMode;
+    };
 
     try {
       validateIdentifier(viewTarget.catalog, "viewTarget.catalog");
@@ -36,22 +38,19 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json(
         { error: "viewTarget.catalog or viewTarget.schema contains invalid characters" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const space = await getMetadataGenieSpace(id);
     if (!space) {
-      return NextResponse.json(
-        { error: "Metadata Genie space not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Metadata Genie space not found" }, { status: 404 });
     }
 
     if (!space.detection) {
       return NextResponse.json(
         { error: "Space has no detection data -- regenerate first" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -59,9 +58,7 @@ export async function POST(request: NextRequest) {
     let outcomeMap = null;
     if (space.industryId) {
       try {
-        const { getIndustryOutcomeAsync } = await import(
-          "@/lib/domain/industry-outcomes-server"
-        );
+        const { getIndustryOutcomeAsync } = await import("@/lib/domain/industry-outcomes-server");
         outcomeMap = (await getIndustryOutcomeAsync(space.industryId)) ?? null;
       } catch {
         // Fall through with detection-only space
@@ -82,9 +79,7 @@ export async function POST(request: NextRequest) {
     // 2. Deploy views (identifiers already validated above)
     const safeCat = validateIdentifier(viewTarget.catalog, "viewTarget.catalog");
     const safeSch = validateIdentifier(viewTarget.schema, "viewTarget.schema");
-    await executeSQL(
-      `CREATE SCHEMA IF NOT EXISTS \`${safeCat}\`.\`${safeSch}\``
-    );
+    await executeSQL(`CREATE SCHEMA IF NOT EXISTS \`${safeCat}\`.\`${safeSch}\``);
 
     const ddlStatements = generateViewDDL({
       target: viewTarget,
@@ -93,17 +88,14 @@ export async function POST(request: NextRequest) {
       lineageAccessible: space.lineageAccessible,
     });
 
-    const viewResults: { view: string; success: boolean; error?: string }[] =
-      [];
+    const viewResults: { view: string; success: boolean; error?: string }[] = [];
     for (const ddl of ddlStatements) {
       try {
         await executeSQL(ddl);
-        const viewName =
-          ddl.match(/VIEW\s+[^.]+\.[^.]+\.`([^`]+)`/)?.[1] ?? "unknown";
+        const viewName = ddl.match(/VIEW\s+[^.]+\.[^.]+\.`([^`]+)`/)?.[1] ?? "unknown";
         viewResults.push({ view: viewName, success: true });
       } catch (err) {
-        const viewName =
-          ddl.match(/VIEW\s+[^.]+\.[^.]+\.`([^`]+)`/)?.[1] ?? "unknown";
+        const viewName = ddl.match(/VIEW\s+[^.]+\.[^.]+\.`([^`]+)`/)?.[1] ?? "unknown";
         const errMsg = err instanceof Error ? err.message : String(err);
         viewResults.push({ view: viewName, success: false, error: errMsg });
         logger.warn("Failed to deploy view", {

@@ -64,7 +64,13 @@ interface TableNodeData {
   columnCount: number;
   rowCount: number | null;
   size: number | null;
-  columns: Array<{ name: string; type: string; description: string | null; isPK: boolean; isFK: boolean }>;
+  columns: Array<{
+    name: string;
+    type: string;
+    description: string | null;
+    isPK: boolean;
+    isFK: boolean;
+  }>;
   expanded: boolean;
   onToggle: () => void;
   [key: string]: unknown;
@@ -131,9 +137,7 @@ function TableNode({ data }: { data: TableNodeData }) {
             </div>
           ))}
           {data.columns.length > 20 && (
-            <div className="text-muted-foreground opacity-60">
-              +{data.columns.length - 20} more
-            </div>
+            <div className="text-muted-foreground opacity-60">+{data.columns.length - 20} more</div>
           )}
         </div>
       ) : (
@@ -162,9 +166,7 @@ function TableNode({ data }: { data: TableNodeData }) {
             {data.rowCount != null && data.rowCount > 0 && (
               <span>{humanizeCount(data.rowCount)} rows</span>
             )}
-            {data.size != null && data.size > 0 && (
-              <span>{humanizeBytes(data.size)}</span>
-            )}
+            {data.size != null && data.size > 0 && <span>{humanizeBytes(data.size)}</span>}
           </div>
 
           {/* Column list (shown first so it's always visible) */}
@@ -173,15 +175,9 @@ function TableNode({ data }: { data: TableNodeData }) {
               {data.columns.slice(0, 30).map((col) => (
                 <div key={col.name} className="py-0.5">
                   <div className="flex items-center gap-1">
-                    {col.isPK && (
-                      <span className="text-yellow-600 font-bold text-[10px]">PK</span>
-                    )}
-                    {col.isFK && (
-                      <span className="text-blue-600 font-bold text-[10px]">FK</span>
-                    )}
-                    <span className="font-mono text-foreground truncate">
-                      {col.name}
-                    </span>
+                    {col.isPK && <span className="text-yellow-600 font-bold text-[10px]">PK</span>}
+                    {col.isFK && <span className="text-blue-600 font-bold text-[10px]">FK</span>}
+                    <span className="font-mono text-foreground truncate">{col.name}</span>
                     <span className="ml-auto text-[10px] text-muted-foreground/70 shrink-0">
                       {col.type}
                     </span>
@@ -222,7 +218,7 @@ function TableNode({ data }: { data: TableNodeData }) {
 function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
-  direction: "LR" | "TB" = "LR"
+  direction: "LR" | "TB" = "LR",
 ): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
@@ -352,7 +348,7 @@ export function ERDViewer({ graph }: ERDViewerProps) {
   // Apply auto-layout
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
     () => getLayoutedElements(rfNodes, rfEdges),
-    [rfNodes, rfEdges]
+    [rfNodes, rfEdges],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
@@ -368,7 +364,7 @@ export function ERDViewer({ graph }: ERDViewerProps) {
   const handleCopyMermaid = useCallback(async () => {
     try {
       const resp = await fetch(
-        `/api/environment-scan/${encodeURIComponent("")}/erd?format=mermaid`
+        `/api/environment-scan/${encodeURIComponent("")}/erd?format=mermaid`,
       );
       const data = await resp.json();
       await navigator.clipboard.writeText(data.erd + "\n\n" + data.lineage);
@@ -384,19 +380,30 @@ export function ERDViewer({ graph }: ERDViewerProps) {
         <div className="flex items-center gap-2">
           <Checkbox id="showFK" checked={showFK} onCheckedChange={(v) => setShowFK(!!v)} />
           <Label htmlFor="showFK" className="text-sm">
-            <span className="inline-block w-4 h-0.5 bg-blue-500 mr-1 align-middle" /> FKs ({graph.stats.fkCount})
+            <span className="inline-block w-4 h-0.5 bg-blue-500 mr-1 align-middle" /> FKs (
+            {graph.stats.fkCount})
           </Label>
         </div>
         <div className="flex items-center gap-2">
-          <Checkbox id="showImplicit" checked={showImplicit} onCheckedChange={(v) => setShowImplicit(!!v)} />
+          <Checkbox
+            id="showImplicit"
+            checked={showImplicit}
+            onCheckedChange={(v) => setShowImplicit(!!v)}
+          />
           <Label htmlFor="showImplicit" className="text-sm">
-            <span className="inline-block w-4 h-0.5 border-t-2 border-orange-500 border-dashed mr-1 align-middle" /> Implicit ({graph.stats.implicitCount})
+            <span className="inline-block w-4 h-0.5 border-t-2 border-orange-500 border-dashed mr-1 align-middle" />{" "}
+            Implicit ({graph.stats.implicitCount})
           </Label>
         </div>
         <div className="flex items-center gap-2">
-          <Checkbox id="showLineage" checked={showLineage} onCheckedChange={(v) => setShowLineage(!!v)} />
+          <Checkbox
+            id="showLineage"
+            checked={showLineage}
+            onCheckedChange={(v) => setShowLineage(!!v)}
+          />
           <Label htmlFor="showLineage" className="text-sm">
-            <span className="inline-block w-4 h-0.5 border-t-2 border-gray-400 border-dotted mr-1 align-middle" /> Lineage ({graph.stats.lineageCount})
+            <span className="inline-block w-4 h-0.5 border-t-2 border-gray-400 border-dotted mr-1 align-middle" />{" "}
+            Lineage ({graph.stats.lineageCount})
           </Label>
         </div>
 
@@ -408,7 +415,9 @@ export function ERDViewer({ graph }: ERDViewerProps) {
           >
             <option value="">All domains</option>
             {graph.domains.map((d) => (
-              <option key={d} value={d}>{d}</option>
+              <option key={d} value={d}>
+                {d}
+              </option>
             ))}
           </select>
         )}
@@ -435,11 +444,7 @@ export function ERDViewer({ graph }: ERDViewerProps) {
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
           <Controls />
-          <MiniMap
-            nodeStrokeWidth={3}
-            zoomable
-            pannable
-          />
+          <MiniMap nodeStrokeWidth={3} zoomable pannable />
         </ReactFlow>
       </div>
 

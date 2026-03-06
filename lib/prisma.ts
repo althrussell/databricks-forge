@@ -52,16 +52,10 @@ function logConnectionInfo(connectionString: string): void {
   });
 }
 
-type AuthErrorClass =
-  | "sasl_auth"
-  | "password_auth"
-  | "rate_limit"
-  | "network"
-  | "unknown";
+type AuthErrorClass = "sasl_auth" | "password_auth" | "rate_limit" | "network" | "unknown";
 
 function classifyDbError(err: unknown): AuthErrorClass {
-  const msg =
-    err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
   if (msg.includes("sasl")) return "sasl_auth";
   if (msg.includes("password authentication failed")) return "password_auth";
   if (isRateLimitError(err)) return "rate_limit";
@@ -120,10 +114,9 @@ const POOL_WARM_TARGET = 2;
 const LAKEBASE_AUTH_MODE = getLakebaseAuthMode();
 const REQUIRE_POOLER = process.env.LAKEBASE_REQUIRE_POOLER === "true";
 const RUNTIME_MODE = process.env.LAKEBASE_RUNTIME_MODE ?? "oauth_direct_only";
-const ENABLE_POOLER_EXPERIMENT =
-  process.env.LAKEBASE_ENABLE_POOLER_EXPERIMENT === "true";
+const ENABLE_POOLER_EXPERIMENT = process.env.LAKEBASE_ENABLE_POOLER_EXPERIMENT === "true";
 const POOLER_READINESS_SUCCESS_TARGET = Number(
-  process.env.LAKEBASE_POOLER_READINESS_SUCCESS_TARGET ?? "3"
+  process.env.LAKEBASE_POOLER_READINESS_SUCCESS_TARGET ?? "3",
 );
 const DATABASE_NAME = process.env.LAKEBASE_DATABASE ?? "databricks_postgres";
 
@@ -133,7 +126,7 @@ function getNativePoolerConnectionUrl(): string {
   const password = process.env.LAKEBASE_NATIVE_PASSWORD;
   if (!host || !user || !password) {
     throw new Error(
-      "LAKEBASE_AUTH_MODE=native_password requires LAKEBASE_POOLER_HOST, LAKEBASE_NATIVE_USER, and LAKEBASE_NATIVE_PASSWORD"
+      "LAKEBASE_AUTH_MODE=native_password requires LAKEBASE_POOLER_HOST, LAKEBASE_NATIVE_USER, and LAKEBASE_NATIVE_PASSWORD",
     );
   }
   return (
@@ -187,8 +180,7 @@ async function createAndWarmPool(
         attempt: i,
         maxAttempts: verifyRetries + 1,
         nextDelayMs: retryDelayMs,
-        error:
-          lastError instanceof Error ? lastError.message : String(lastError),
+        error: lastError instanceof Error ? lastError.message : String(lastError),
       });
       await new Promise((r) => setTimeout(r, retryDelayMs));
     }
@@ -216,11 +208,10 @@ async function createAndWarmPool(
       Array.from({ length: POOL_WARM_TARGET - 1 }, () =>
         pool.connect().then((c) => {
           c.release();
-        })
-      )
+        }),
+      ),
     );
-    const warmed =
-      results.filter((r) => r.status === "fulfilled").length + 1;
+    const warmed = results.filter((r) => r.status === "fulfilled").length + 1;
     const rejected = results.filter((r) => r.status === "rejected");
     if (rejected.length > 0) {
       const firstReason = rejected[0];
@@ -352,7 +343,7 @@ async function getAutoProvisionedPrisma(): Promise<PrismaClient> {
 
 async function buildAutoProvisionedClient(
   tokenId: string,
-  generation: number
+  generation: number,
 ): Promise<PrismaClient> {
   // Clean up previous client + pool
   if (globalForPrisma.__prisma) {
@@ -392,12 +383,8 @@ async function buildAutoProvisionedClient(
       await refreshDbCredential();
     }
 
-    const {
-      poolerUrl,
-      directUrl,
-      tokenGeneration,
-      tokenExpiresAt,
-    } = await getLakebaseConnectionUrls();
+    const { poolerUrl, directUrl, tokenGeneration, tokenExpiresAt } =
+      await getLakebaseConnectionUrls();
 
     const poolerAttemptEnabled = shouldAttemptPooler();
     const probeResults: Record<"pooler" | "direct", "ok" | "error" | "skipped"> = {
@@ -407,7 +394,7 @@ async function buildAutoProvisionedClient(
     const endpointProbe = async (
       endpointKind: "pooler" | "direct",
       host: string,
-      connectionString: string
+      connectionString: string,
     ): Promise<void> => {
       const probePool = new pg.Pool({
         connectionString,
@@ -439,9 +426,7 @@ async function buildAutoProvisionedClient(
     }
     await endpointProbe("direct", endpointInfo.directHost, directUrl);
     const fastFailoverTriggered =
-      !REQUIRE_POOLER &&
-      probeResults.pooler === "error" &&
-      probeResults.direct === "ok";
+      !REQUIRE_POOLER && probeResults.pooler === "error" && probeResults.direct === "ok";
     if (fastFailoverTriggered) {
       poolerFailureObserved = true;
     }
@@ -547,19 +532,15 @@ async function buildAutoProvisionedClient(
     selectedEndpointKind === "direct" && poolerAttempted && poolerFailureObserved;
   if (selectedEndpointKind === "direct") {
     if (fallbackTriggered) {
-      globalForPrisma.__poolerFailoverCount =
-        (globalForPrisma.__poolerFailoverCount ?? 0) + 1;
+      globalForPrisma.__poolerFailoverCount = (globalForPrisma.__poolerFailoverCount ?? 0) + 1;
     }
     globalForPrisma.__poolerConsecutiveSuccesses = 0;
     globalForPrisma.__lastSelectedEndpointKind = "direct";
     if (fallbackTriggered) {
-      logger.warn(
-        "[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime",
-        {
-          fallbackTriggered: true,
-          poolerFailoverCount: globalForPrisma.__poolerFailoverCount,
-        }
-      );
+      logger.warn("[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime", {
+        fallbackTriggered: true,
+        poolerFailoverCount: globalForPrisma.__poolerFailoverCount,
+      });
     } else {
       logger.info("[prisma] Direct endpoint selected by runtime policy", {
         runtimeMode: RUNTIME_MODE,
@@ -660,14 +641,11 @@ async function getStaticPrisma(): Promise<PrismaClient> {
   if (!url) {
     throw new Error(
       "DATABASE_URL is not set and Lakebase auto-provisioning is not available. " +
-        "Set DATABASE_URL in .env for local dev, or deploy as a Databricks App."
+        "Set DATABASE_URL in .env for local dev, or deploy as a Databricks App.",
     );
   }
 
-  if (
-    globalForPrisma.__prisma &&
-    globalForPrisma.__prismaTokenId === "__static__"
-  ) {
+  if (globalForPrisma.__prisma && globalForPrisma.__prismaTokenId === "__static__") {
     return globalForPrisma.__prisma;
   }
 
@@ -706,10 +684,7 @@ async function getStaticPrisma(): Promise<PrismaClient> {
 }
 
 async function getNativePasswordPrisma(): Promise<PrismaClient> {
-  if (
-    globalForPrisma.__prisma &&
-    globalForPrisma.__prismaTokenId === "__native_password__"
-  ) {
+  if (globalForPrisma.__prisma && globalForPrisma.__prismaTokenId === "__native_password__") {
     return globalForPrisma.__prisma;
   }
 
@@ -778,9 +753,7 @@ const RETRY_DELAY_MS = 2_000;
  * before returning and enforces a cooldown to prevent callers from
  * disconnecting each other's working pools.
  */
-export async function withPrisma<T>(
-  fn: (prisma: PrismaClient) => Promise<T>
-): Promise<T> {
+export async function withPrisma<T>(fn: (prisma: PrismaClient) => Promise<T>): Promise<T> {
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= MAX_AUTH_RETRIES; attempt++) {

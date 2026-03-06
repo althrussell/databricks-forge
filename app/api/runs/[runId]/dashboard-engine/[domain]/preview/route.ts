@@ -11,7 +11,7 @@ import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string; domain: string }> }
+  { params }: { params: Promise<{ runId: string; domain: string }> },
 ) {
   try {
     const { runId, domain } = await params;
@@ -21,14 +21,12 @@ export async function GET(
     const decodedDomain = decodeURIComponent(domain);
 
     const recs = await getDashboardRecommendationsByRunId(runId);
-    const rec = recs.find(
-      (r) => r.domain.toLowerCase() === decodedDomain.toLowerCase()
-    );
+    const rec = recs.find((r) => r.domain.toLowerCase() === decodedDomain.toLowerCase());
 
     if (!rec) {
       return NextResponse.json(
         { error: `No dashboard recommendation found for domain "${decodedDomain}"` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 

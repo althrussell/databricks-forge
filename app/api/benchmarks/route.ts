@@ -21,9 +21,19 @@ export async function GET(request: NextRequest) {
     const kind = searchParams.get("kind") ?? undefined;
     const includeExpired = searchParams.get("includeExpired") === "true";
     const items = await listBenchmarkRecords({
-      lifecycleStatus: lifecycleStatus as "draft" | "reviewed" | "published" | "deprecated" | undefined,
+      lifecycleStatus: lifecycleStatus as
+        | "draft"
+        | "reviewed"
+        | "published"
+        | "deprecated"
+        | undefined,
       industry,
-      kind: kind as "kpi" | "benchmark_principle" | "advisory_theme" | "platform_best_practice" | undefined,
+      kind: kind as
+        | "kpi"
+        | "benchmark_principle"
+        | "advisory_theme"
+        | "platform_best_practice"
+        | undefined,
       includeExpired,
       limit: 400,
     });

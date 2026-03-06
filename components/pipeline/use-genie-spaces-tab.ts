@@ -114,7 +114,9 @@ export function useGenieSpacesTab({
         if (!cancelled) setLoadingUseCases(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [detailDomain, runId, useCaseCache]);
 
   function getTracking(domain: string): TrackedGenieSpace | undefined {
@@ -139,10 +141,18 @@ export function useGenieSpacesTab({
     if (!engineEnabled) return { allowed: true, warn: false };
     if (engineGenerating) {
       if (completedDomainNames.includes(rec.domain)) return { allowed: true, warn: false };
-      return { allowed: false, warn: false, reason: "Waiting for AI Engine to process this domain…" };
+      return {
+        allowed: false,
+        warn: false,
+        reason: "Waiting for AI Engine to process this domain…",
+      };
     }
     if (isV1Domain(rec)) {
-      return { allowed: true, warn: true, reason: "This space has not been AI-enriched. Run the Genie Engine for better results." };
+      return {
+        allowed: true,
+        warn: true,
+        reason: "This space has not been AI-enriched. Run the Genie Engine for better results.",
+      };
     }
     return { allowed: true, warn: false };
   }
@@ -152,7 +162,9 @@ export function useGenieSpacesTab({
     !engineGenerating &&
     recommendations.some((r) => isV1Domain(r) && !isDeployed(r.domain) && r.tableCount > 0);
 
-  const enhancementCount = recommendations.filter((r) => r.recommendationType === "enhancement").length;
+  const enhancementCount = recommendations.filter(
+    (r) => r.recommendationType === "enhancement",
+  ).length;
 
   const selectableDomains = recommendations
     .filter((r) => !isDeployed(r.domain) && r.tableCount > 0 && getDeployStatus(r).allowed)
@@ -177,14 +189,14 @@ export function useGenieSpacesTab({
 
   function handleBulkDeploy() {
     const toDeploy = recommendations.filter(
-      (r) => selected.has(r.domain) && !isDeployed(r.domain) && getDeployStatus(r).allowed
+      (r) => selected.has(r.domain) && !isDeployed(r.domain) && getDeployStatus(r).allowed,
     );
     if (toDeploy.length === 0) return;
     const v1Count = toDeploy.filter((r) => engineEnabled && isV1Domain(r)).length;
     if (v1Count > 0) {
       toast.warning(
         `${v1Count} space${v1Count !== 1 ? "s have" : " has"} not been AI-enriched. Consider running the Genie Engine first for better results.`,
-        { duration: 6000 }
+        { duration: 6000 },
       );
     }
     setDeployModalDomains(toDeploy);
@@ -259,7 +271,9 @@ export function useGenieSpacesTab({
     try {
       const parsed = JSON.parse(rec.serializedSpace) as SerializedSpace;
       sampleQuestions = parsed.config.sample_questions.slice(0, 5).map((q) => q.question.join(" "));
-    } catch { /* use empty */ }
+    } catch {
+      /* use empty */
+    }
     if (sampleQuestions.length === 0) {
       toast.error("No sample questions available to test");
       return;
@@ -273,7 +287,7 @@ export function useGenieSpacesTab({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ spaceId: tracking.spaceId, questions: sampleQuestions }),
-        }
+        },
       );
       const data = await res.json();
       if (!res.ok) {
@@ -322,7 +336,9 @@ export function useGenieSpacesTab({
             setRegeneratingDomain(null);
             toast.error(sd.error || `"${domain}" regeneration failed`);
           }
-        } catch { /* retry */ }
+        } catch {
+          /* retry */
+        }
       }, 2000);
     } catch {
       toast.error("Failed to start regeneration");
@@ -331,7 +347,7 @@ export function useGenieSpacesTab({
   }
 
   const detailRec = detailDomain
-    ? recommendations.find((r) => r.domain === detailDomain) ?? null
+    ? (recommendations.find((r) => r.domain === detailDomain) ?? null)
     : null;
 
   const detailParsed: SerializedSpace | null = detailRec

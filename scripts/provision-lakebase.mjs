@@ -19,9 +19,8 @@ const PROJECT_ID_BASE = process.env.FORGE_APP_NAME || "databricks-forge";
 const BRANCH_ID = "production";
 const DATABASE_NAME = "databricks_postgres";
 const PG_VERSION = "17";
-const DISPLAY_NAME = PROJECT_ID_BASE === "databricks-forge"
-  ? "Databricks Forge AI"
-  : `Forge AI (${PROJECT_ID_BASE})`;
+const DISPLAY_NAME =
+  PROJECT_ID_BASE === "databricks-forge" ? "Databricks Forge AI" : `Forge AI (${PROJECT_ID_BASE})`;
 const API_TIMEOUT = 30_000;
 const LRO_TIMEOUT = 120_000;
 const LRO_POLL = 5_000;
@@ -128,11 +127,9 @@ async function ensureProject() {
   }
 
   log(`Creating Lakebase project '${projectId}'...`);
-  const createResp = await api(
-    "POST",
-    `projects?project_id=${encodeURIComponent(projectId)}`,
-    { spec: { display_name: DISPLAY_NAME, pg_version: PG_VERSION } }
-  );
+  const createResp = await api("POST", `projects?project_id=${encodeURIComponent(projectId)}`, {
+    spec: { display_name: DISPLAY_NAME, pg_version: PG_VERSION },
+  });
 
   if (createResp.status === 409) {
     log("Project already exists (409).");
@@ -175,10 +172,7 @@ async function pollOp(name) {
 
 async function getEndpointHost() {
   const projectId = getProjectId();
-  const listResp = await api(
-    "GET",
-    `projects/${projectId}/branches/${BRANCH_ID}/endpoints`
-  );
+  const listResp = await api("GET", `projects/${projectId}/branches/${BRANCH_ID}/endpoints`);
   if (!listResp.ok) {
     const text = await listResp.text();
     throw new Error(`List endpoints failed (${listResp.status}): ${text}`);
@@ -221,7 +215,9 @@ async function getUsername() {
 
     if (resp.status === 429 && attempt < maxRetries - 1) {
       const delaySec = Math.pow(2, attempt + 1);
-      log(`SCIM /Me rate-limited (429), retrying in ${delaySec}s... (attempt ${attempt + 1}/${maxRetries})`);
+      log(
+        `SCIM /Me rate-limited (429), retrying in ${delaySec}s... (attempt ${attempt + 1}/${maxRetries})`,
+      );
       await new Promise((r) => setTimeout(r, delaySec * 1000));
       continue;
     }
@@ -273,10 +269,14 @@ async function verifyCredential(url) {
         return true;
       } catch (err) {
         if (attempt < VERIFY_MAX_ATTEMPTS) {
-          log(`Credential not yet usable (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}), waiting ${VERIFY_INTERVAL_MS / 1_000}s...`);
+          log(
+            `Credential not yet usable (attempt ${attempt}/${VERIFY_MAX_ATTEMPTS}), waiting ${VERIFY_INTERVAL_MS / 1_000}s...`,
+          );
           await new Promise((r) => setTimeout(r, VERIFY_INTERVAL_MS));
         } else {
-          log(`Credential verification failed after ${VERIFY_MAX_ATTEMPTS} attempts: ${err.message}`);
+          log(
+            `Credential verification failed after ${VERIFY_MAX_ATTEMPTS} attempts: ${err.message}`,
+          );
         }
       }
     }

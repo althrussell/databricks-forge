@@ -10,12 +10,7 @@ import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
-export type AssistantIntent =
-  | "business"
-  | "technical"
-  | "dashboard"
-  | "navigation"
-  | "exploration";
+export type AssistantIntent = "business" | "technical" | "dashboard" | "navigation" | "exploration";
 
 export interface IntentClassification {
   intent: AssistantIntent;
@@ -41,9 +36,7 @@ Respond with a JSON object: { "intent": "<intent>", "confidence": <0.0-1.0>, "re
  * Falls back to "exploration" with a heuristic when the LLM call fails
  * or when the fast endpoint is unavailable.
  */
-export async function classifyIntent(
-  question: string,
-): Promise<IntentClassification> {
+export async function classifyIntent(question: string): Promise<IntentClassification> {
   try {
     const messages: ChatMessage[] = [
       { role: "system", content: INTENT_SYSTEM_PROMPT },
@@ -59,7 +52,13 @@ export async function classifyIntent(
 
     const parsed = JSON.parse(resp.content);
     const intent = parsed.intent as AssistantIntent;
-    const valid: AssistantIntent[] = ["business", "technical", "dashboard", "navigation", "exploration"];
+    const valid: AssistantIntent[] = [
+      "business",
+      "technical",
+      "dashboard",
+      "navigation",
+      "exploration",
+    ];
     if (!valid.includes(intent)) throw new Error(`Invalid intent: ${intent}`);
 
     return {
@@ -68,7 +67,9 @@ export async function classifyIntent(
       reasoning: parsed.reasoning ?? "",
     };
   } catch (err) {
-    logger.warn("[assistant/intent] LLM classification failed, using heuristic", { error: String(err) });
+    logger.warn("[assistant/intent] LLM classification failed, using heuristic", {
+      error: String(err),
+    });
     return heuristicClassify(question);
   }
 }
@@ -76,12 +77,14 @@ export async function classifyIntent(
 function heuristicClassify(question: string): IntentClassification {
   const q = question.toLowerCase();
 
-  const dashboardPatterns = /\b(show me|chart|trend|dashboard|visuali[sz]e|compare .+ (by|across|over)|plot|graph)\b/;
+  const dashboardPatterns =
+    /\b(show me|chart|trend|dashboard|visuali[sz]e|compare .+ (by|across|over)|plot|graph)\b/;
   if (dashboardPatterns.test(q)) {
     return { intent: "dashboard", confidence: 0.6, reasoning: "Heuristic: dashboard pattern" };
   }
 
-  const technicalPatterns = /\b(optimize|vacuum|health|pii|governance|stale|freshness|partition|cluster|delta|maintenance|schema|column|type|format)\b/;
+  const technicalPatterns =
+    /\b(optimize|vacuum|health|pii|governance|stale|freshness|partition|cluster|delta|maintenance|schema|column|type|format)\b/;
   if (technicalPatterns.test(q)) {
     return { intent: "technical", confidence: 0.6, reasoning: "Heuristic: technical pattern" };
   }
@@ -91,12 +94,14 @@ function heuristicClassify(question: string): IntentClassification {
     return { intent: "navigation", confidence: 0.6, reasoning: "Heuristic: navigation pattern" };
   }
 
-  const businessPatterns = /\b(calculate|kpi|metric|revenue|roi|churn|lifetime value|clv|ltv|forecast|predict|analytics|insight)\b/;
+  const businessPatterns =
+    /\b(calculate|kpi|metric|revenue|roi|churn|lifetime value|clv|ltv|forecast|predict|analytics|insight)\b/;
   if (businessPatterns.test(q)) {
     return { intent: "business", confidence: 0.6, reasoning: "Heuristic: business pattern" };
   }
 
-  const fabricPatterns = /\b(power\s*bi|fabric|dax|pbi|powerbi|measure|pbix|dataset|report\s+tile)\b/;
+  const fabricPatterns =
+    /\b(power\s*bi|fabric|dax|pbi|powerbi|measure|pbix|dataset|report\s+tile)\b/;
   if (fabricPatterns.test(q)) {
     return { intent: "business", confidence: 0.6, reasoning: "Heuristic: Fabric/Power BI pattern" };
   }

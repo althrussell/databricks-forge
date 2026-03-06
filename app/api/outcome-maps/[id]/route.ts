@@ -8,17 +8,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureMigrated } from "@/lib/lakebase/schema";
-import {
-  getOutcomeMap,
-  deleteOutcomeMap,
-  updateOutcomeMap,
-} from "@/lib/lakebase/outcome-maps";
+import { getOutcomeMap, deleteOutcomeMap, updateOutcomeMap } from "@/lib/lakebase/outcome-maps";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await ensureMigrated();
     const { id } = await params;
@@ -30,14 +23,14 @@ export async function GET(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch outcome map" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -50,15 +43,12 @@ export async function DELETE(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to delete outcome map" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await ensureMigrated();
     const { id } = await params;
@@ -84,7 +74,7 @@ export async function PATCH(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to update outcome map" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

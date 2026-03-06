@@ -18,7 +18,7 @@ import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -33,26 +33,20 @@ export async function GET(
     }
 
     if (run.status !== "completed") {
-      return NextResponse.json(
-        { error: "Run not completed" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Run not completed" }, { status: 400 });
     }
 
     if (!run.config.industry) {
       return NextResponse.json(
         { error: "No industry outcome map configured for this run" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const outcomes = await getAllIndustryOutcomes();
     const industry = outcomes.find((o: { id: string }) => o.id === run.config.industry);
     if (!industry) {
-      return NextResponse.json(
-        { error: "Industry outcome map not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Industry outcome map not found" }, { status: 404 });
     }
 
     const useCases = await getUseCasesByRunId(runId);
@@ -61,15 +55,11 @@ export async function GET(
     if (coverage.gapCount === 0) {
       return NextResponse.json(
         { error: "No gaps identified -- full coverage achieved" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const buffer = await generateGapReportExcel(
-      coverage,
-      industry.name,
-      run.config.businessName
-    );
+    const buffer = await generateGapReportExcel(coverage, industry.name, run.config.businessName);
 
     const safeBusinessName = run.config.businessName
       .replace(/[^a-zA-Z0-9-_ ]/g, "")
@@ -77,8 +67,7 @@ export async function GET(
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${safeBusinessName}_gap_report.xlsx"`,
       },
     });
@@ -86,9 +75,6 @@ export async function GET(
     logger.error("[api/runs/runId/gap-report] Failed to generate gap report", {
       error: err instanceof Error ? err.message : String(err),
     });
-    return NextResponse.json(
-      { error: "Failed to generate gap report" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to generate gap report" }, { status: 500 });
   }
 }

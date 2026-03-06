@@ -61,7 +61,18 @@ const PII_RULES: PIIRule[] = [
   },
   // Names
   {
-    patterns: [/first_name/, /last_name/, /full_name/, /given_name/, /surname/, /family_name/, /^name$/, /customer_name/, /patient_name/, /employee_name/],
+    patterns: [
+      /first_name/,
+      /last_name/,
+      /full_name/,
+      /given_name/,
+      /surname/,
+      /family_name/,
+      /^name$/,
+      /customer_name/,
+      /patient_name/,
+      /employee_name/,
+    ],
     classification: "PII",
     confidence: "high",
     reason: "Column name indicates personal name",
@@ -69,7 +80,15 @@ const PII_RULES: PIIRule[] = [
   },
   // Physical address
   {
-    patterns: [/street_address/, /home_address/, /mailing_address/, /postal_code/, /zip_code/, /\baddress_line/, /\baddr\b/],
+    patterns: [
+      /street_address/,
+      /home_address/,
+      /mailing_address/,
+      /postal_code/,
+      /zip_code/,
+      /\baddress_line/,
+      /\baddr\b/,
+    ],
     classification: "PII",
     confidence: "high",
     reason: "Column name indicates physical address",
@@ -93,7 +112,14 @@ const PII_RULES: PIIRule[] = [
   },
   // Bank account
   {
-    patterns: [/bank_account/, /\biban\b/, /routing_number/, /account_number/, /sort_code/, /\bswift\b/],
+    patterns: [
+      /bank_account/,
+      /\biban\b/,
+      /routing_number/,
+      /account_number/,
+      /sort_code/,
+      /\bswift\b/,
+    ],
     classification: "Financial",
     confidence: "high",
     reason: "Column name indicates banking details",
@@ -101,7 +127,16 @@ const PII_RULES: PIIRule[] = [
   },
   // Health / Medical
   {
-    patterns: [/diagnosis/, /medical_record/, /\bmrn\b/, /patient_id/, /health_condition/, /prescription/, /icd_code/, /medication/],
+    patterns: [
+      /diagnosis/,
+      /medical_record/,
+      /\bmrn\b/,
+      /patient_id/,
+      /health_condition/,
+      /prescription/,
+      /icd_code/,
+      /medication/,
+    ],
     classification: "Health",
     confidence: "high",
     reason: "Column name indicates health/medical data",
@@ -117,7 +152,15 @@ const PII_RULES: PIIRule[] = [
   },
   // Passwords / Auth
   {
-    patterns: [/password/, /\bpasswd\b/, /secret_key/, /api_key/, /access_token/, /auth_token/, /\bhash\b.*pass/],
+    patterns: [
+      /password/,
+      /\bpasswd\b/,
+      /secret_key/,
+      /api_key/,
+      /access_token/,
+      /auth_token/,
+      /\bhash\b.*pass/,
+    ],
     classification: "Authentication",
     confidence: "high",
     reason: "Column name indicates authentication credential",
@@ -157,9 +200,7 @@ const PII_RULES: PIIRule[] = [
  * Run deterministic PII rules against table/column names.
  * Returns classifications for columns that match known PII patterns.
  */
-export function detectPIIDeterministic(
-  tables: TableInput[]
-): SensitivityClassification[] {
+export function detectPIIDeterministic(tables: TableInput[]): SensitivityClassification[] {
   const results: SensitivityClassification[] = [];
 
   for (const table of tables) {

@@ -64,7 +64,13 @@ export interface GenieEngineInput {
   domainFilter?: string[];
   /** Abort signal for user-initiated cancellation. */
   signal?: AbortSignal;
-  onProgress?: (message: string, percent: number, completedDomains: number, totalDomains: number, completedDomainName?: string) => void;
+  onProgress?: (
+    message: string,
+    percent: number,
+    completedDomains: number,
+    totalDomains: number,
+    completedDomainName?: string,
+  ) => void;
 }
 
 export interface GenieEngineResult {
@@ -86,7 +92,9 @@ export interface GenieEngineResult {
  */
 export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngineResult> {
   const {
-    run, useCases, metadata,
+    run,
+    useCases,
+    metadata,
     config = defaultGenieEngineConfig(),
     sampleData = null,
     piiClassifications,
@@ -120,9 +128,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     : allDomainGroups;
 
   // Apply maxAutoSpaces cap (0 = unlimited)
-  const domainGroups = config.maxAutoSpaces > 0
-    ? filteredGroups.slice(0, config.maxAutoSpaces)
-    : filteredGroups;
+  const domainGroups =
+    config.maxAutoSpaces > 0 ? filteredGroups.slice(0, config.maxAutoSpaces) : filteredGroups;
 
   if (domainGroups.length === 0) {
     logger.warn("No domain groups produced", { runId: run.runId, domainFilter });
@@ -157,7 +164,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       totalExisting: existingSpaces.length,
       domainsWithExisting: existingSpaceByDomain.size,
       mapped: Array.from(existingSpaceByDomain.entries()).map(
-        ([d, s]) => `${d} -> ${s.title} (${s.spaceId})`
+        ([d, s]) => `${d} -> ${s.title} (${s.spaceId})`,
       ),
     });
   }
@@ -192,9 +199,23 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
       try {
         const outputs = await processDomain(
-          group, run, metadata, allowlist, config,
-          sampleData, piiClassifications, premiumEndpoint, fastEndpoint, signal,
-          (msg) => onProgress?.(`[${group.domain}] ${msg}`, domainPct, completedDomainCount, totalDomainCount)
+          group,
+          run,
+          metadata,
+          allowlist,
+          config,
+          sampleData,
+          piiClassifications,
+          premiumEndpoint,
+          fastEndpoint,
+          signal,
+          (msg) =>
+            onProgress?.(
+              `[${group.domain}] ${msg}`,
+              domainPct,
+              completedDomainCount,
+              totalDomainCount,
+            ),
         );
 
         const space = assembleSerializedSpace(outputs, {
@@ -215,8 +236,12 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
           signal,
         });
         const degradedReasons: string[] = [];
-        if (outputs.tables.length > 1 && space.instructions.join_specs.length === 0) degradedReasons.push("no_validated_joins");
-        if (space.instructions.join_specs.length > 0 && space.instructions.example_question_sqls.length < 2) {
+        if (outputs.tables.length > 1 && space.instructions.join_specs.length === 0)
+          degradedReasons.push("no_validated_joins");
+        if (
+          space.instructions.join_specs.length > 0 &&
+          space.instructions.example_question_sqls.length < 2
+        ) {
           degradedReasons.push("insufficient_sample_sql");
         }
         if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
@@ -240,7 +265,13 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         }
 
         completedDomainCount++;
-        onProgress?.(`[${group.domain}] Complete`, domainPct, completedDomainCount, totalDomainCount, group.domain);
+        onProgress?.(
+          `[${group.domain}] Complete`,
+          domainPct,
+          completedDomainCount,
+          totalDomainCount,
+          group.domain,
+        );
 
         logger.info("Domain processed", {
           domain: group.domain,
@@ -311,17 +342,18 @@ async function processDomain(
   premiumEndpoint: string,
   fastEndpoint: string,
   signal: AbortSignal | undefined,
-  onProgress: (msg: string) => void
+  onProgress: (msg: string) => void,
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
   const normalizedDomain = normalizeDomainLabel(domain);
   const sensitiveColumns = new Set(
     (piiClassifications ?? [])
-      .filter((p) =>
-        tables.some((t) => t.toLowerCase() === p.tableFqn.toLowerCase()) &&
-        p.classification !== "Public"
+      .filter(
+        (p) =>
+          tables.some((t) => t.toLowerCase() === p.tableFqn.toLowerCase()) &&
+          p.classification !== "Public",
       )
-      .map((p) => p.columnName.toLowerCase())
+      .map((p) => p.columnName.toLowerCase()),
   );
 
   // Pass 1 (fast) + Pass 2 (premium) run in parallel -- no shared dependencies
@@ -353,9 +385,10 @@ async function processDomain(
   // Computed before Passes 3-5 so all downstream passes have join context.
   const tableSet = new Set(tables.map((t) => t.toLowerCase()));
   const fkJoins = metadata.foreignKeys
-    .filter((fk) =>
-      tableSet.has(fk.tableFqn.toLowerCase()) &&
-      tableSet.has(fk.referencedTableFqn.toLowerCase())
+    .filter(
+      (fk) =>
+        tableSet.has(fk.tableFqn.toLowerCase()) &&
+        tableSet.has(fk.referencedTableFqn.toLowerCase()),
     )
     .map((fk) => ({
       leftTable: fk.tableFqn,
@@ -365,15 +398,17 @@ async function processDomain(
     }));
 
   const joinOverrides = config.joinOverrides.filter(
-    (j) => tableSet.has(j.leftTable.toLowerCase()) && tableSet.has(j.rightTable.toLowerCase())
+    (j) => tableSet.has(j.leftTable.toLowerCase()) && tableSet.has(j.rightTable.toLowerCase()),
   );
   const overrideKeys = new Set(
-    joinOverrides.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
+    joinOverrides.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`),
   );
 
   const fkAndOverrideJoins = [
     ...fkJoins
-      .filter((j) => !overrideKeys.has(`${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`))
+      .filter(
+        (j) => !overrideKeys.has(`${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`),
+      )
       .map((j) => ({ ...j, source: "fk" as const, confidence: "high" as const })),
     ...joinOverrides
       .filter((j) => j.enabled)
@@ -388,10 +423,14 @@ async function processDomain(
   ];
 
   const existingJoinKeys = new Set(
-    fkAndOverrideJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
+    fkAndOverrideJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`),
   );
-  const sqlInferredJoins = inferJoinsFromUseCaseSql(useCases, tableSet, existingJoinKeys, allowlist)
-    .map((j) => ({ ...j, source: "sql_mined" as const, confidence: "medium" as const }));
+  const sqlInferredJoins = inferJoinsFromUseCaseSql(
+    useCases,
+    tableSet,
+    existingJoinKeys,
+    allowlist,
+  ).map((j) => ({ ...j, source: "sql_mined" as const, confidence: "medium" as const }));
 
   let llmInferredJoins: Array<{
     leftTable: string;
@@ -401,12 +440,14 @@ async function processDomain(
     source: "llm";
     confidence: "medium";
   }> = [];
-  if (config.llmRefinement && (fkAndOverrideJoins.length + sqlInferredJoins.length) < 3) {
+  if (config.llmRefinement && fkAndOverrideJoins.length + sqlInferredJoins.length < 3) {
     try {
       onProgress("Inferring table relationships...");
       const allExistingKeys = new Set([
         ...existingJoinKeys,
-        ...sqlInferredJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`),
+        ...sqlInferredJoins.map(
+          (j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
+        ),
       ]);
       const llmResult = await runJoinInference({
         tableFqns: tables,
@@ -416,8 +457,11 @@ async function processDomain(
         endpoint: fastEndpoint,
         signal,
       });
-      llmInferredJoins = llmResult.joins
-        .map((j) => ({ ...j, source: "llm" as const, confidence: "medium" as const }));
+      llmInferredJoins = llmResult.joins.map((j) => ({
+        ...j,
+        source: "llm" as const,
+        confidence: "medium" as const,
+      }));
     } catch (err) {
       logger.warn("LLM join inference failed, continuing with FK + SQL-inferred joins", {
         error: err instanceof Error ? err.message : String(err),
@@ -429,12 +473,16 @@ async function processDomain(
     [...fkAndOverrideJoins, ...sqlInferredJoins, ...llmInferredJoins].flatMap((j) => [
       `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
       `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`,
-    ])
+    ]),
   );
   const heuristicJoins =
-    tables.length > 1 && fkAndOverrideJoins.length + sqlInferredJoins.length + llmInferredJoins.length === 0
-      ? inferHeuristicJoins(metadata, tables, existingHeuristicKeys)
-        .map((j) => ({ ...j, source: "heuristic" as const, confidence: "low" as const }))
+    tables.length > 1 &&
+    fkAndOverrideJoins.length + sqlInferredJoins.length + llmInferredJoins.length === 0
+      ? inferHeuristicJoins(metadata, tables, existingHeuristicKeys).map((j) => ({
+          ...j,
+          source: "heuristic" as const,
+          confidence: "low" as const,
+        }))
       : [];
   const { accepted: allJoins, diagnostics: joinDiagnostics } = evaluateJoinCandidates(
     allowlist,
@@ -544,10 +592,7 @@ async function processDomain(
   const fallbackQuestions = useCases
     .slice(0, 5)
     .map((uc) => statementToQuestion(uc.statement, config.questionComplexity));
-  const sampleQuestions = [
-    ...trustedQuestionTexts.slice(0, 5),
-    ...fallbackQuestions,
-  ]
+  const sampleQuestions = [...trustedQuestionTexts.slice(0, 5), ...fallbackQuestions]
     .filter((q, i, arr) => arr.indexOf(q) === i)
     .slice(0, 5);
 
@@ -581,13 +626,14 @@ function inferJoinsFromUseCaseSql(
   useCases: UseCase[],
   tableSet: Set<string>,
   existingJoinKeys: Set<string>,
-  allowlist: ReturnType<typeof buildSchemaAllowlist>
+  allowlist: ReturnType<typeof buildSchemaAllowlist>,
 ): Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> {
   const discovered = new Map<string, { leftTable: string; rightTable: string; sql: string }>();
 
   // Match: JOIN `catalog.schema.table` alias ON condition
   // Handles optional backticks/quotes and multi-word aliases
-  const joinRegex = /JOIN\s+[`"]?([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)[`"]?\s+(?:AS\s+)?(\w+)\s+ON\s+([^\n;]+)/gi;
+  const joinRegex =
+    /JOIN\s+[`"]?([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)[`"]?\s+(?:AS\s+)?(\w+)\s+ON\s+([^\n;]+)/gi;
   const fromRegex = /FROM\s+[`"]?([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)[`"]?/gi;
 
   for (const uc of useCases) {
@@ -608,9 +654,10 @@ function inferJoinsFromUseCaseSql(
       const onCondition = joinMatch[3].trim();
 
       // Find the most likely left table from FROM clauses
-      const leftTable = fromTables.find((ft) =>
-        onCondition.toLowerCase().includes(ft.split(".").pop()!.toLowerCase())
-      ) ?? fromTables[0];
+      const leftTable =
+        fromTables.find((ft) =>
+          onCondition.toLowerCase().includes(ft.split(".").pop()!.toLowerCase()),
+        ) ?? fromTables[0];
 
       if (!leftTable) continue;
 
@@ -620,7 +667,8 @@ function inferJoinsFromUseCaseSql(
         !tableSet.has(rightTable.toLowerCase()) ||
         !isValidTable(allowlist, leftTable) ||
         !isValidTable(allowlist, rightTable)
-      ) continue;
+      )
+        continue;
 
       const pairKey = `${leftTable.toLowerCase()}|${rightTable.toLowerCase()}`;
       const reversePairKey = `${rightTable.toLowerCase()}|${leftTable.toLowerCase()}`;
@@ -695,16 +743,15 @@ export function statementToQuestion(statement: string, complexity?: QuestionComp
 /**
  * Build a human-readable change summary comparing an existing space with a new recommendation.
  */
-function buildChangeSummary(
-  existing: DiscoveredGenieSpace,
-  rec: GenieSpaceRecommendation
-): string {
+function buildChangeSummary(existing: DiscoveredGenieSpace, rec: GenieSpaceRecommendation): string {
   const changes: string[] = [];
 
   const existingTableSet = new Set(existing.tables.map((t) => t.toLowerCase()));
   const newTables = rec.tables.filter((t) => !existingTableSet.has(t.toLowerCase()));
   if (newTables.length > 0) {
-    changes.push(`+${newTables.length} new tables: ${newTables.slice(0, 5).join(", ")}${newTables.length > 5 ? "..." : ""}`);
+    changes.push(
+      `+${newTables.length} new tables: ${newTables.slice(0, 5).join(", ")}${newTables.length > 5 ? "..." : ""}`,
+    );
   }
 
   const recTableSet = new Set(rec.tables.map((t) => t.toLowerCase()));
@@ -744,7 +791,12 @@ function inferHeuristicJoins(
     cols.add(c.columnName.toLowerCase());
     byTable.set(key, cols);
   }
-  const joins: Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> = [];
+  const joins: Array<{
+    leftTable: string;
+    rightTable: string;
+    sql: string;
+    relationshipType: "many_to_one";
+  }> = [];
   for (let i = 0; i < tableFqns.length; i++) {
     for (let j = i + 1; j < tableFqns.length; j++) {
       const left = tableFqns[i];
