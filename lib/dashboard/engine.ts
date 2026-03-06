@@ -256,7 +256,9 @@ function buildMetricViewSchemaContext(metricViews: MetricViewForDashboard[]): st
   for (const mv of metricViews) {
     lines.push(`${mv.fqn} [METRIC VIEW]`);
     lines.push(`  Dimensions: ${mv.dimensions.map((d) => d.name).join(", ")}`);
-    lines.push(`  Measures (MUST use MEASURE(col) AS col): ${mv.measures.map((m) => m.name).join(", ")}`);
+    lines.push(
+      `  Measures (MUST use MEASURE(col) AS col): ${mv.measures.map((m) => m.name).join(", ")}`,
+    );
   }
   return lines.join("\n");
 }

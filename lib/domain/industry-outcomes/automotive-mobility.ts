@@ -10,6 +10,7 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
     "Fleet & Leasing",
     "Mobility Services (Car Share, Subscription)",
     "Aftermarket & Service",
+    "Used Vehicle Superstores & Independents",
   ],
   suggestedDomains: [
     "Sales & Marketing",
@@ -19,6 +20,8 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
     "Supply Chain & Manufacturing",
     "Finance & Risk",
     "Customer Experience",
+    "Workforce & People",
+    "Used Vehicle Operations",
   ],
   suggestedPriorities: [
     "Increase Revenue",
@@ -28,6 +31,8 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
     "Accelerate Digital & Direct-to-Consumer",
     "Improve Asset Utilization",
     "Achieve ESG Targets",
+    "Drive Operational Excellence",
+    "Scale Multi-Franchise Operations",
   ],
   objectives: [
     {
@@ -65,6 +70,20 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
               businessValue:
                 "20% increase in trade-in capture rate; reduced customer negotiation time.",
             },
+            {
+              name: "Conversational AI & Virtual Sales Assistants",
+              description:
+                "Deploy AI-powered chatbots, SMS/WhatsApp commerce, and voice assistants that handle inventory inquiries, financing questions, appointment scheduling, and lead qualification 24/7. Complex interactions are seamlessly escalated to human sales consultants with full conversation context, ensuring no lead is lost outside business hours.",
+              businessValue:
+                "20–30% improvement in lead response time; 15–25% increase in after-hours lead capture.",
+              typicalDataEntities: [
+                "Inventory",
+                "CRM Profiles",
+                "Finance Products",
+                "Appointment Calendar",
+              ],
+              typicalSourceSystems: ["DMS", "CRM", "Chat Platform", "Telephony"],
+            },
           ],
           kpis: [
             "Online sales penetration (%)",
@@ -101,9 +120,39 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
             {
               name: "Conquest & Retention Campaign Targeting",
               description:
-                "Build lookalike and propensity models that identify high-value conquest prospects from competitor brands and flag existing customers approaching contract end or service milestones, enabling precision marketing spend.",
+                "Build lookalike and propensity models that identify high-value conquest prospects from competitor brands and score existing customers by predicted in-market probability within 30–90 days using vehicle age, mileage trajectory, equity position, service visit frequency, and digital engagement signals. Generate predictive vehicle recommendations (make/model/trim) for highest-propensity prospects and trigger precision marketing campaigns timed to individual purchase readiness.",
               businessValue:
-                "15–25% improvement in marketing ROI; 5–8% increase in retention rate.",
+                "30–40% improvement in marketing ROI; industry leaders achieve 80% accuracy predicting next vehicle purchase make/model/trim.",
+              typicalDataEntities: [
+                "Customer Purchase History",
+                "Vehicle Age & Mileage",
+                "Equity Position",
+                "Service Visit Frequency",
+                "Digital Engagement Signals",
+              ],
+              typicalSourceSystems: ["CDP", "CRM", "DMS", "Marketing Platform", "Web Analytics"],
+            },
+            {
+              name: "Customer Data Platform & Unified Customer 360",
+              description:
+                "Consolidate identity resolution, transactional, behavioural, and demographic data from every dealership, brand, and channel into a single customer profile. Enable cross-brand engagement, equity position tracking, and lifecycle stage classification for 360-degree customer visibility that powers personalisation, retention, and conquest strategies across the entire network.",
+              businessValue:
+                "15–25% increase in customer lifetime value; 20–30% improvement in marketing efficiency through targeted vs. mass campaigns.",
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Transaction History",
+                "Behavioural Events",
+                "Identity Graph",
+                "Vehicle Ownership",
+              ],
+              typicalSourceSystems: [
+                "DMS",
+                "CRM",
+                "CDP",
+                "E-Commerce Platform",
+                "Marketing Platform",
+                "Service Scheduling",
+              ],
             },
           ],
           kpis: [
@@ -112,12 +161,15 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
             "Marketing cost per sale",
             "Demand forecast accuracy (%)",
             "Conquest-to-total sales ratio",
+            "Customer 360 profile completeness (%)",
+            "In-market prediction accuracy (%)",
           ],
           personas: [
             "Chief Marketing Officer",
             "Head of Sales Performance",
             "Regional Sales Director",
             "CRM Manager",
+            "Head of Customer Data",
           ],
         },
         {
@@ -243,6 +295,21 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
               typicalDataEntities: ["Vehicle Age", "Mileage", "Warranty Status", "Service History"],
               typicalSourceSystems: ["DMS", "CRM", "Marketing Platform", "Warranty System"],
             },
+            {
+              name: "Service Loyalty & Prepaid Maintenance Plans",
+              description:
+                "Operate points-based loyalty programmes incentivising service frequency, referrals, and repurchase behaviour. Offer prepaid maintenance packages with transparent pricing that compete against independent workshops on value while guaranteeing OEM-quality parts and certified technicians, targeting the critical post-warranty retention window.",
+              businessValue:
+                "8–12% improvement in post-warranty retention rate; 5–10% increase in customer repurchase likelihood.",
+              typicalDataEntities: [
+                "Loyalty Accounts",
+                "Points Balances",
+                "Prepaid Plan Enrolments",
+                "Redemption History",
+                "Competitive Pricing",
+              ],
+              typicalSourceSystems: ["Loyalty Platform", "DMS", "CRM", "Marketing Platform"],
+            },
           ],
           kpis: [
             "Service retention rate (%)",
@@ -250,6 +317,8 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
             "Service bay utilization (%)",
             "Customer satisfaction index (CSI) — service",
             "Effective labour rate",
+            "Loyalty programme active membership (%)",
+            "Prepaid plan penetration rate (%)",
           ],
           personas: [
             "Head of Aftersales",
@@ -384,6 +453,68 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
             "Warranty Manager",
             "VP Aftersales",
             "Chief Safety Officer",
+          ],
+        },
+        {
+          name: "Fixed Operations Analytics",
+          useCases: [
+            {
+              name: "Fixed Absorption & Departmental Profitability Tracking",
+              description:
+                "Calculate and monitor fixed absorption rate — the ratio of parts and service gross profit to total fixed operating expenses — in real time across every location. Benchmark each dealership against industry targets (45–50%) and flag sites requiring intervention, enabling leadership to prioritise improvement actions where profit impact is greatest.",
+              businessValue:
+                "3–5 percentage point improvement in fixed absorption rate; earlier identification of underperforming locations.",
+              typicalDataEntities: [
+                "Parts Gross Profit",
+                "Service Gross Profit",
+                "Fixed Operating Expenses",
+                "Departmental P&L",
+              ],
+              typicalSourceSystems: ["DMS", "ERP", "Financial System"],
+            },
+            {
+              name: "Labour Rate Realisation & Technician Efficiency Analytics",
+              description:
+                "Compare quoted versus billed hours, track effective labour rate, unapplied time, and comeback rates by individual technician. Identify coaching opportunities, top-performer patterns, and scheduling inefficiencies that erode labour productivity across the service network.",
+              businessValue:
+                "2–3 percentage point improvement in labour rate realisation; 5% reduction in unapplied time as cost of sales.",
+              typicalDataEntities: [
+                "Quoted Hours",
+                "Billed Hours",
+                "Effective Labour Rate",
+                "Unapplied Time",
+                "Comeback Records",
+              ],
+              typicalSourceSystems: ["DMS", "Service Scheduling", "HR System"],
+            },
+            {
+              name: "Service Mix & Revenue Optimisation",
+              description:
+                "Analyse service type distribution (maintenance, warranty, internal, customer-pay) across each location to identify margin improvement opportunities. Recommend menu pricing adjustments, upsell strategies, and high-margin service promotions that shift the revenue mix toward more profitable work categories.",
+              businessValue:
+                "10% shift toward high-margin service categories; $3–4M incremental gross profit for a large dealer network.",
+              typicalDataEntities: [
+                "Service Type Distribution",
+                "Margin by Category",
+                "Menu Pricing",
+                "Upsell Conversion Rates",
+              ],
+              typicalSourceSystems: ["DMS", "Service Scheduling", "Financial System"],
+            },
+          ],
+          kpis: [
+            "Fixed absorption rate (%)",
+            "Effective labour rate",
+            "Labour hours per repair order",
+            "Unapplied time (%)",
+            "Service gross profit per location",
+          ],
+          personas: [
+            "Head of Aftersales",
+            "Fixed Operations Director",
+            "Service Manager",
+            "Dealer Principal",
+            "Chief Financial Officer",
           ],
         },
       ],
@@ -577,6 +708,27 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
               businessValue:
                 "Higher CPO volume and penetration; improved customer retention into the brand ecosystem.",
             },
+            {
+              name: "Used Vehicle Digital Retailing & Superstore Operations",
+              description:
+                "Operate consumer-grade online used vehicle purchasing with 360-degree vehicle tours, transparent condition reporting, instant finance applications, home delivery logistics, and click-and-collect scheduling. Manage multi-location used inventory allocation, reconditioning workflows, and quality assurance across the superstore network to maximise retail conversion of trade-in and acquisition stock.",
+              businessValue:
+                "15–20% higher retail conversion vs. wholesale auction; 10–15% faster inventory turn through digital merchandising.",
+              typicalDataEntities: [
+                "Vehicle Condition Reports",
+                "360-Degree Media",
+                "Finance Applications",
+                "Delivery Routes",
+                "Reconditioning Tasks",
+              ],
+              typicalSourceSystems: [
+                "Inventory Platform",
+                "Digital Retailing",
+                "Logistics System",
+                "Finance Aggregator",
+                "Quality Control",
+              ],
+            },
           ],
           kpis: [
             "Residual value forecast accuracy (% variance)",
@@ -584,6 +736,8 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
             "Used vehicle gross profit per unit",
             "CPO penetration rate (%)",
             "Book-to-market value ratio",
+            "Used vehicle digital retailing conversion rate (%)",
+            "Reconditioning cycle time (days)",
           ],
           personas: [
             "Head of Remarketing",
@@ -684,6 +838,158 @@ export const AUTOMOTIVE_MOBILITY: IndustryOutcome = {
             "Head of Supply Chain",
             "ESG Reporting Manager",
             "Chief Financial Officer",
+          ],
+        },
+      ],
+    },
+    {
+      name: "Drive Operational Excellence & Workforce Productivity",
+      whyChange:
+        "Labour costs represent 35–45% of gross profit in automotive retail, and multi-location dealer groups face compounding workforce complexity: inconsistent training across brands, chronic technician shortages, scheduling inefficiency, and high turnover that erodes institutional knowledge. Groups executing rapid M&A expansion must standardise processes across disparate DMS platforms, franchise requirements, and regional operations while maintaining service quality. Organisations that master workforce productivity and operational standardisation gain decisive cost advantages in a margin-compressed market.",
+      priorities: [
+        {
+          name: "Workforce Management & Capability Building",
+          useCases: [
+            {
+              name: "Multi-Location Workforce Scheduling & Optimisation",
+              description:
+                "Forecast staffing needs by department — sales floor, service lane, parts counter, BDC — using historical sales patterns, service bookings, seasonal demand, and local events. Optimise rosters across the dealership network to minimise labour cost while maintaining coverage targets and compliance with award/union requirements.",
+              businessValue:
+                "5–10% reduction in labour cost as a percentage of gross profit; improved roster accuracy and employee satisfaction.",
+              typicalDataEntities: [
+                "Sales Patterns",
+                "Service Bookings",
+                "Employee Availability",
+                "Award/Union Rules",
+                "Seasonal Demand",
+              ],
+              typicalSourceSystems: [
+                "Workforce Management",
+                "DMS",
+                "HR System",
+                "Service Scheduling",
+              ],
+            },
+            {
+              name: "Learning Management & Competency Tracking",
+              description:
+                "Deliver standardised training across product knowledge, sales techniques, customer service, compliance, and technical skills via a centralised LMS. Track certifications, skill levels, and training completion across the entire workforce, ensuring consistent capability development regardless of location or franchise brand.",
+              businessValue:
+                "20–30% reduction in training time through standardised digital content; improved compliance with OEM certification requirements.",
+              typicalDataEntities: [
+                "Training Courses",
+                "Certifications",
+                "Skill Assessments",
+                "Completion Records",
+                "OEM Requirements",
+              ],
+              typicalSourceSystems: ["LMS", "HR System", "OEM Training Portal", "DMS"],
+            },
+            {
+              name: "Employee Engagement & Retention Analytics",
+              description:
+                "Monitor employee engagement through pulse surveys, sentiment analysis, and behavioural signals such as absenteeism and productivity trends. Identify retention risks at individual and team level, predict turnover, and trigger proactive interventions before high-value employees leave.",
+              businessValue:
+                "3–5 percentage point reduction in employee turnover; $2–3M annual savings in recruitment and training costs for a large dealer group.",
+              typicalDataEntities: [
+                "Survey Responses",
+                "Absenteeism Records",
+                "Productivity Metrics",
+                "Tenure Data",
+                "Exit Interview Themes",
+              ],
+              typicalSourceSystems: ["HR System", "Survey Platform", "DMS", "Payroll System"],
+            },
+            {
+              name: "Technician Recruitment Pipeline & Skill Gap Analysis",
+              description:
+                "Analyse workforce demographics, certification coverage, and upcoming retirements to forecast technician and specialist hiring needs by location. Match apprentice and graduate pipelines with projected demand, prioritising EV/hybrid technical skills as the powertrain mix shifts.",
+              businessValue:
+                "Reduced time-to-fill for critical technician roles; proactive pipeline development aligned with electrification skill requirements.",
+              typicalDataEntities: [
+                "Workforce Demographics",
+                "Certification Coverage",
+                "Retirement Projections",
+                "Apprentice Pipeline",
+                "EV Skill Requirements",
+              ],
+              typicalSourceSystems: ["HR System", "Training Platform", "OEM Certification Portal"],
+            },
+          ],
+          kpis: [
+            "Labour cost as % of gross profit",
+            "Employee turnover rate (%)",
+            "Training completion rate (%)",
+            "Gross profit per employee per month",
+            "Technician fill rate (%)",
+          ],
+          personas: [
+            "Chief Operating Officer",
+            "Head of People & Culture",
+            "Regional Operations Director",
+            "Service Manager",
+            "Head of Learning & Development",
+          ],
+        },
+        {
+          name: "Multi-Franchise Integration & Standardisation",
+          useCases: [
+            {
+              name: "Post-Acquisition DMS & Data Integration",
+              description:
+                "Consolidate disparate dealer management systems, data models, and reporting structures into a unified enterprise platform following acquisitions. Establish consistent KPI definitions, chart of accounts, and data governance across all locations and brands to enable group-wide performance visibility.",
+              businessValue:
+                "50–70% reduction in time-to-integrate post-acquisition; consistent reporting across the entire network within months rather than years.",
+              typicalDataEntities: [
+                "DMS Data Models",
+                "Chart of Accounts",
+                "KPI Definitions",
+                "Data Governance Rules",
+                "Migration Logs",
+              ],
+              typicalSourceSystems: ["Legacy DMS", "Target DMS", "ERP", "Data Warehouse"],
+            },
+            {
+              name: "Multi-Location Performance Benchmarking",
+              description:
+                "Normalise and compare operational metrics across dealerships by brand, region, size, and maturity. Identify top performers, surface transferable best practices, and flag underperforming locations for targeted intervention using automated variance analysis and peer-group ranking.",
+              businessValue:
+                "5–8% improvement in bottom-quartile dealership performance through best-practice transfer; faster identification of operational issues.",
+              typicalDataEntities: [
+                "Dealership KPIs",
+                "Peer Group Definitions",
+                "Variance Analysis",
+                "Best Practice Library",
+              ],
+              typicalSourceSystems: ["DMS", "Financial System", "Data Warehouse", "BI Platform"],
+            },
+            {
+              name: "Shared Services Automation",
+              description:
+                "Centralise and automate back-office functions — financial reconciliation, payroll processing, procurement, compliance reporting — across all locations to reduce duplication, improve consistency, and free dealership staff for customer-facing activities.",
+              businessValue:
+                "15–25% reduction in back-office cost per dealership; improved processing accuracy and compliance audit readiness.",
+              typicalDataEntities: [
+                "Financial Transactions",
+                "Payroll Records",
+                "Procurement Orders",
+                "Compliance Documents",
+              ],
+              typicalSourceSystems: ["ERP", "Payroll System", "Procurement Platform", "DMS"],
+            },
+          ],
+          kpis: [
+            "Process standardisation rate (%)",
+            "Time-to-integrate post-acquisition (months)",
+            "Shared services cost per transaction",
+            "Inter-dealership reporting consistency score",
+            "Back-office cost per dealership",
+          ],
+          personas: [
+            "Chief Operating Officer",
+            "Chief Information Officer",
+            "Chief Financial Officer",
+            "Integration Programme Director",
           ],
         },
       ],

@@ -45,9 +45,7 @@ describe("validateDatasetSql", () => {
 
 const MV_FQN = "retail_banking.demo_data.transaction_anomaly_metrics";
 const mvFqns = new Set([MV_FQN]);
-const mvMeasures = new Map([
-  [MV_FQN, ["total_txn_amount", "total_txn_count", "avg_txn_amount"]],
-]);
+const mvMeasures = new Map([[MV_FQN, ["total_txn_amount", "total_txn_count", "avg_txn_amount"]]]);
 
 describe("validateMetricViewSql", () => {
   it("returns valid when SQL does not reference a metric view", () => {
@@ -77,18 +75,14 @@ describe("validateMetricViewSql", () => {
     const sql = `SELECT * FROM ${MV_FQN}`;
     const result = validateMetricViewSql(sql, mvFqns, mvMeasures);
     expect(result.valid).toBe(false);
-    expect(result.issues).toContainEqual(
-      expect.stringContaining("SELECT *"),
-    );
+    expect(result.issues).toContainEqual(expect.stringContaining("SELECT *"));
   });
 
   it("detects missing GROUP BY", () => {
     const sql = `SELECT MEASURE(total_txn_amount) AS total_txn_amount FROM ${MV_FQN}`;
     const result = validateMetricViewSql(sql, mvFqns, mvMeasures);
     expect(result.valid).toBe(false);
-    expect(result.issues).toContainEqual(
-      expect.stringContaining("GROUP BY"),
-    );
+    expect(result.issues).toContainEqual(expect.stringContaining("GROUP BY"));
   });
 
   it("detects bare measure references without MEASURE() wrapper", () => {
@@ -113,9 +107,7 @@ describe("validateMetricViewSql", () => {
 
     const result = validateMetricViewSql(sql, mvFqns, mvMeasures);
     expect(result.valid).toBe(false);
-    expect(result.issues).toContainEqual(
-      expect.stringContaining("missing AS alias"),
-    );
+    expect(result.issues).toContainEqual(expect.stringContaining("missing AS alias"));
   });
 
   it("passes when all MEASURE() calls have AS aliases", () => {

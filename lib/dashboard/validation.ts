@@ -44,10 +44,7 @@ export interface MetricViewValidationResult {
  * Detect which metric view FQN (if any) is referenced in a SQL string's
  * FROM clause. Returns the FQN lowercased, or null if none found.
  */
-function detectMetricViewInSql(
-  sql: string,
-  metricViewFqns: Set<string>,
-): string | null {
+function detectMetricViewInSql(sql: string, metricViewFqns: Set<string>): string | null {
   const upper = sql.toUpperCase();
   for (const fqn of metricViewFqns) {
     const fqnUpper = fqn.toUpperCase();
