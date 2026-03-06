@@ -25,11 +25,7 @@ import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
 import { useRunDetail } from "@/lib/hooks/use-run-detail";
 import { useUseCaseUpdate } from "@/lib/hooks/use-usecase-update";
 
-export default function RunDetailPage({
-  params,
-}: {
-  params: Promise<{ runId: string }>;
-}) {
+export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params);
   const router = useRouter();
   const {
@@ -129,7 +125,8 @@ export default function RunDetailPage({
   const isCompleted = run.status === "completed";
   const isActive = run.status === "running" || run.status === "pending";
   const domainStats = isCompleted ? computeDomainStats(useCases) : [];
-  const hasFabricTag = run.contextSources?.fabric?.scanId != null || run.config.fabricScanId != null;
+  const hasFabricTag =
+    run.contextSources?.fabric?.scanId != null || run.config.fabricScanId != null;
   const industryOutcome = run.config.industry ? getIndustryOutcome(run.config.industry) : null;
   const coverageData =
     industryOutcome && useCases.length > 0

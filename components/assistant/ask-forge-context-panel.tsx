@@ -5,11 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import type { TableEnrichmentData, SourceData } from "./ask-forge-chat";
 import {
   Database,
@@ -148,7 +144,8 @@ export function AskForgeContextPanel({
         <div>
           <p className="text-sm font-medium text-muted-foreground">Context Panel</p>
           <p className="mt-1 text-xs text-muted-foreground/70">
-            Referenced tables, health scores, lineage, and freshness will appear here when Forge responds.
+            Referenced tables, health scores, lineage, and freshness will appear here when Forge
+            responds.
           </p>
         </div>
       </div>
@@ -164,9 +161,8 @@ export function AskForgeContextPanel({
     });
   };
 
-  const tableFqns = referencedTables.length > 0
-    ? referencedTables
-    : enrichments.map((e) => e.tableFqn);
+  const tableFqns =
+    referencedTables.length > 0 ? referencedTables : enrichments.map((e) => e.tableFqn);
 
   return (
     <div className="h-full w-full overflow-y-auto overflow-x-hidden">
@@ -223,54 +219,55 @@ export function AskForgeContextPanel({
         )}
 
         {/* Lineage Overview */}
-        {tableFqns.length > 0 && (() => {
-          const lineageCount = tableFqns.filter((fqn) => {
-            const d = tableDetails.get(fqn);
-            const e = enrichments.find((en) => en.tableFqn === fqn);
-            if (!d && !e) return false;
-            const up = d ? d.lineage.upstream.length : (e?.upstreamTables?.length ?? 0);
-            const down = d ? d.lineage.downstream.length : (e?.downstreamTables?.length ?? 0);
-            return up > 0 || down > 0;
-          }).length;
+        {tableFqns.length > 0 &&
+          (() => {
+            const lineageCount = tableFqns.filter((fqn) => {
+              const d = tableDetails.get(fqn);
+              const e = enrichments.find((en) => en.tableFqn === fqn);
+              if (!d && !e) return false;
+              const up = d ? d.lineage.upstream.length : (e?.upstreamTables?.length ?? 0);
+              const down = d ? d.lineage.downstream.length : (e?.downstreamTables?.length ?? 0);
+              return up > 0 || down > 0;
+            }).length;
 
-          if (lineageCount === 0) return null;
+            if (lineageCount === 0) return null;
 
-          return (
-            <CollapsibleSection
-              icon={<GitBranch className="size-4 text-primary" />}
-              title="Lineage"
-              count={lineageCount}
-              open={openSections.lineage}
-              onToggle={() => setOpenSections((s) => ({ ...s, lineage: !s.lineage }))}
-            >
-              <div className="mt-2 space-y-1.5">
-                {tableFqns.map((fqn) => {
-                  const detail = tableDetails.get(fqn);
-                  const enrichment = enrichments.find((e) => e.tableFqn === fqn);
-                  if (!detail && !enrichment) return null;
+            return (
+              <CollapsibleSection
+                icon={<GitBranch className="size-4 text-primary" />}
+                title="Lineage"
+                count={lineageCount}
+                open={openSections.lineage}
+                onToggle={() => setOpenSections((s) => ({ ...s, lineage: !s.lineage }))}
+              >
+                <div className="mt-2 space-y-1.5">
+                  {tableFqns.map((fqn) => {
+                    const detail = tableDetails.get(fqn);
+                    const enrichment = enrichments.find((e) => e.tableFqn === fqn);
+                    if (!detail && !enrichment) return null;
 
-                  const upstream = detail
-                    ? detail.lineage.upstream.map((l) => l.sourceTableFqn)
-                    : enrichment?.upstreamTables ?? [];
-                  const downstream = detail
-                    ? detail.lineage.downstream.map((l) => l.targetTableFqn)
-                    : enrichment?.downstreamTables ?? [];
+                    const upstream = detail
+                      ? detail.lineage.upstream.map((l) => l.sourceTableFqn)
+                      : (enrichment?.upstreamTables ?? []);
+                    const downstream = detail
+                      ? detail.lineage.downstream.map((l) => l.targetTableFqn)
+                      : (enrichment?.downstreamTables ?? []);
 
-                  if (upstream.length === 0 && downstream.length === 0) return null;
+                    if (upstream.length === 0 && downstream.length === 0) return null;
 
-                  return (
-                    <LineageSummary
-                      key={fqn}
-                      fqn={fqn}
-                      upstream={upstream}
-                      downstream={downstream}
-                    />
-                  );
-                })}
-              </div>
-            </CollapsibleSection>
-          );
-        })()}
+                    return (
+                      <LineageSummary
+                        key={fqn}
+                        fqn={fqn}
+                        upstream={upstream}
+                        downstream={downstream}
+                      />
+                    );
+                  })}
+                </div>
+              </CollapsibleSection>
+            );
+          })()}
 
         {/* Sources */}
         {sources.length > 0 && (
@@ -291,10 +288,7 @@ export function AskForgeContextPanel({
       </div>
 
       {showErdModal && (
-        <ErdModalLazy
-          tableFqns={tableFqns}
-          onClose={() => setShowErdModal(false)}
-        />
+        <ErdModalLazy tableFqns={tableFqns} onClose={() => setShowErdModal(false)} />
       )}
     </div>
   );
@@ -337,9 +331,8 @@ function RichTableCard({
   const governanceScore = d?.governanceScore ?? null;
   const description = d?.generatedDescription ?? d?.comment ?? null;
 
-  const aiSummary = !description && detail?.insights?.[0]
-    ? parseInsightSummary(detail.insights[0])
-    : null;
+  const aiSummary =
+    !description && detail?.insights?.[0] ? parseInsightSummary(detail.insights[0]) : null;
 
   const piiColumns = detail?.columns.filter((c) => c.is_pii) ?? [];
   const columnCount = detail?.columns.length ?? 0;
@@ -365,9 +358,7 @@ function RichTableCard({
             </Link>
             <ExternalLink className="size-3 text-muted-foreground" />
           </div>
-          {schemaPath && (
-            <p className="truncate text-muted-foreground">{schemaPath}</p>
-          )}
+          {schemaPath && <p className="truncate text-muted-foreground">{schemaPath}</p>}
           {!isExpanded && description && (
             <p className="mt-1 line-clamp-1 text-muted-foreground">{description}</p>
           )}
@@ -394,7 +385,8 @@ function RichTableCard({
         {domain && (
           <span className="flex items-center gap-1">
             <FolderTree className="size-3" />
-            {domain}{tier ? ` (${tier})` : ""}
+            {domain}
+            {tier ? ` (${tier})` : ""}
           </span>
         )}
         {numRows && (
@@ -420,14 +412,20 @@ function RichTableCard({
       {/* Expanded detail */}
       {isExpanded && (
         <div className="space-y-3 border-t px-3 py-3">
-          {description && (
-            <p className="text-muted-foreground">{description}</p>
-          )}
+          {description && <p className="text-muted-foreground">{description}</p>}
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
             {owner && <Detail icon={User} label="Owner" value={owner} />}
-            {sizeInBytes && <Detail icon={Database} label="Size" value={formatBytes(Number(sizeInBytes))} />}
-            {governanceScore !== null && <Detail icon={ShieldAlert} label="Governance" value={`${governanceScore.toFixed(0)}/100`} />}
+            {sizeInBytes && (
+              <Detail icon={Database} label="Size" value={formatBytes(Number(sizeInBytes))} />
+            )}
+            {governanceScore !== null && (
+              <Detail
+                icon={ShieldAlert}
+                label="Governance"
+                value={`${governanceScore.toFixed(0)}/100`}
+              />
+            )}
             {h?.lastWriteTimestamp && (
               <Detail
                 icon={Clock}
@@ -436,11 +434,13 @@ function RichTableCard({
               />
             )}
             {h && (
-              <Detail icon={Database} label="Writes" value={`${h.totalWriteOps} writes, ${h.totalMergeOps} merges`} />
+              <Detail
+                icon={Database}
+                label="Writes"
+                value={`${h.totalWriteOps} writes, ${h.totalMergeOps} merges`}
+              />
             )}
-            {h?.hasStreamingWrites && (
-              <Detail icon={Sparkles} label="Streaming" value="Active" />
-            )}
+            {h?.hasStreamingWrites && <Detail icon={Sparkles} label="Streaming" value="Active" />}
           </div>
 
           {/* Columns preview */}
@@ -475,7 +475,10 @@ function RichTableCard({
             <div className="space-y-1">
               <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400">Issues</p>
               {issues.slice(0, 3).map((issue, i) => (
-                <div key={i} className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                <div
+                  key={i}
+                  className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400"
+                >
                   <AlertTriangle className="mt-0.5 size-3 shrink-0" />
                   <span className="text-[11px]">{issue}</span>
                 </div>
@@ -492,7 +495,10 @@ function RichTableCard({
               </p>
               <div className="space-y-1">
                 {useCases.slice(0, 4).map((uc) => (
-                  <div key={uc.id} className="flex items-center justify-between rounded border bg-muted/30 px-2 py-1">
+                  <div
+                    key={uc.id}
+                    className="flex items-center justify-between rounded border bg-muted/30 px-2 py-1"
+                  >
                     <Link
                       href={`/runs/${uc.runId}?usecase=${uc.id}`}
                       className="flex-1 truncate text-[11px] font-medium text-primary hover:underline"
@@ -500,7 +506,9 @@ function RichTableCard({
                       {uc.name}
                     </Link>
                     {uc.overallScore !== null && (
-                      <Badge variant="outline" className="ml-1 text-[9px]">{uc.overallScore.toFixed(0)}</Badge>
+                      <Badge variant="outline" className="ml-1 text-[9px]">
+                        {uc.overallScore.toFixed(0)}
+                      </Badge>
                     )}
                   </div>
                 ))}
@@ -518,12 +526,7 @@ function RichTableCard({
             </div>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full gap-1.5 text-xs"
-            onClick={onAskAbout}
-          >
+          <Button variant="ghost" size="sm" className="w-full gap-1.5 text-xs" onClick={onAskAbout}>
             <MessageCircleQuestion className="size-3.5" />
             Ask Forge about this table
           </Button>
@@ -568,9 +571,7 @@ function CollapsibleSection({
               {count}
             </Badge>
           )}
-          {loading && (
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-          )}
+          {loading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>{children}</CollapsibleContent>
@@ -578,7 +579,11 @@ function CollapsibleSection({
   );
 }
 
-function InsightRow({ insight }: { insight: { insightType: string; payloadJson: string; severity: string } }) {
+function InsightRow({
+  insight,
+}: {
+  insight: { insightType: string; payloadJson: string; severity: string };
+}) {
   let summary = insight.insightType;
   try {
     const payload = JSON.parse(insight.payloadJson);
@@ -589,9 +594,11 @@ function InsightRow({ insight }: { insight: { insightType: string; payloadJson: 
   }
 
   const severityColor =
-    insight.severity === "critical" ? "text-red-600 dark:text-red-400" :
-    insight.severity === "warning" ? "text-amber-600 dark:text-amber-400" :
-    "text-blue-600 dark:text-blue-400";
+    insight.severity === "critical"
+      ? "text-red-600 dark:text-red-400"
+      : insight.severity === "warning"
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-blue-600 dark:text-blue-400";
 
   return (
     <div className={`flex items-start gap-1.5 text-[11px] ${severityColor}`}>
@@ -670,24 +677,38 @@ function SourceRow({ source }: { source: SourceData }) {
     >
       <div className="flex w-full min-w-0 items-center gap-1.5">
         {icon}
-        <Badge variant="outline" className={`shrink-0 text-[9px] ${offPlatform ? "border-yellow-400 text-yellow-700 dark:text-yellow-400" : ""}`}>{kindLabel}</Badge>
+        <Badge
+          variant="outline"
+          className={`shrink-0 text-[9px] ${offPlatform ? "border-yellow-400 text-yellow-700 dark:text-yellow-400" : ""}`}
+        >
+          {kindLabel}
+        </Badge>
         {offPlatform && (
-          <span className="shrink-0 text-[9px] text-yellow-600 dark:text-yellow-400" title="Off-platform resource (Power BI)">⚡ PBI</span>
+          <span
+            className="shrink-0 text-[9px] text-yellow-600 dark:text-yellow-400"
+            title="Off-platform resource (Power BI)"
+          >
+            ⚡ PBI
+          </span>
         )}
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.sourceId}</span>
         <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
-        <ChevronDown className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
       </div>
       {expanded && (
         <div className="mt-2 space-y-1.5 border-t pt-2">
           <p className="break-words text-muted-foreground">{source.label}</p>
           {metadata && Object.keys(metadata).length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {Object.entries(metadata).slice(0, 8).map(([k, v]) => (
-                <Badge key={k} variant="secondary" className="text-[9px]">
-                  {k}: {String(v).slice(0, 50)}
-                </Badge>
-              ))}
+              {Object.entries(metadata)
+                .slice(0, 8)
+                .map(([k, v]) => (
+                  <Badge key={k} variant="secondary" className="text-[9px]">
+                    {k}: {String(v).slice(0, 50)}
+                  </Badge>
+                ))}
             </div>
           )}
         </div>
@@ -704,9 +725,7 @@ function HealthBadge({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-1">
       <Heart className="size-3" />
-      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${color}`}>
-        {score}
-      </span>
+      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${color}`}>{score}</span>
     </div>
   );
 }
@@ -735,13 +754,7 @@ function Detail({
 // ERD Modal (lazy loaded)
 // ---------------------------------------------------------------------------
 
-function ErdModalLazy({
-  tableFqns,
-  onClose,
-}: {
-  tableFqns: string[];
-  onClose: () => void;
-}) {
+function ErdModalLazy({ tableFqns, onClose }: { tableFqns: string[]; onClose: () => void }) {
   const [ErdModal, setErdModal] = React.useState<React.ComponentType<{
     tableFqns: string[];
     onClose: () => void;
@@ -829,9 +842,7 @@ function parseJsonArray(json: string | null | undefined): string[] {
   }
 }
 
-function parseInsightSummary(
-  insight: { insightType: string; payloadJson: string },
-): string {
+function parseInsightSummary(insight: { insightType: string; payloadJson: string }): string {
   try {
     const payload = JSON.parse(insight.payloadJson);
     return payload.summary ?? payload.description ?? insight.insightType;

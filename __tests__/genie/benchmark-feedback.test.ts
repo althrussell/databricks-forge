@@ -16,7 +16,11 @@ describe("analyzeFeedbackForFixes", () => {
 
   it("detects join issues from feedback text", () => {
     const feedback: FeedbackEntry[] = [
-      { question: "Q1", isCorrect: false, feedbackText: "Missing join between orders and customers" },
+      {
+        question: "Q1",
+        isCorrect: false,
+        feedbackText: "Missing join between orders and customers",
+      },
     ];
     const fixes = analyzeFeedbackForFixes(feedback);
     expect(fixes).toContain("join-specs-for-multi-table");
@@ -58,9 +62,7 @@ describe("analyzeFeedbackForFixes", () => {
   });
 
   it("falls back to general improvement for unspecified failures", () => {
-    const feedback: FeedbackEntry[] = [
-      { question: "Q1", isCorrect: false },
-    ];
+    const feedback: FeedbackEntry[] = [{ question: "Q1", isCorrect: false }];
     const fixes = analyzeFeedbackForFixes(feedback);
     expect(fixes.length).toBeGreaterThan(0);
     expect(fixes).toContain("measures-defined");

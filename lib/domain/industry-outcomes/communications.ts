@@ -50,15 +50,13 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Address-Level Broadband Availability Targeting",
               description:
                 "Use address-level NBN/fibre availability data, competitor pricing, and demographic propensity models to target high-value prospects with digital ads and landing pages. Marketing teams use this to maximise conversion per acquisition dollar.",
-              businessValue:
-                "Reduce cost per acquisition by 20-30% through precision targeting.",
+              businessValue: "Reduce cost per acquisition by 20-30% through precision targeting.",
             },
             {
               name: "Flip-to-Fibre Migration Campaigns",
               description:
                 "Identify customers on fixed wireless or HFC who can upgrade to fibre (FTTP/FTTC) and trigger automated migration offers with speed-tier upsell. Product and marketing teams use this to shift mix toward higher-ARPU fibre plans.",
-              businessValue:
-                "Increase ARPU by $5-10/month per migrated customer.",
+              businessValue: "Increase ARPU by $5-10/month per migrated customer.",
             },
             {
               name: "Digital Funnel Conversion Analytics",
@@ -70,8 +68,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Competitive Pricing Intelligence",
               description:
                 "Monitor competitor plan pricing, speed tiers, and promotional offers across the broadband market. Product and pricing teams use this to position plans competitively and respond to market moves within hours.",
-              businessValue:
-                "Maintain competitive pricing position while protecting margin.",
+              businessValue: "Maintain competitive pricing position while protecting margin.",
             },
           ],
           kpis: [
@@ -95,31 +92,32 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Broadband Churn & Save-Offer Analytics",
               description:
                 "Predict churn risk at the subscriber level using billing, usage, speed-test, complaint, and NPS data, then trigger personalised save offers (speed upgrade, price lock, bundle) through the optimal channel. Retention teams use this to intercept at-risk customers before they port out.",
-              businessValue:
-                "Reduce monthly churn by 15-25% in high-risk segments.",
+              businessValue: "Reduce monthly churn by 15-25% in high-risk segments.",
             },
             {
               name: "Speed-Tier Upsell Propensity",
               description:
                 "Identify customers consistently using capacity close to their plan limit and recommend speed-tier upgrades via app notification or email. Product teams use this to drive ARPU growth organically.",
-              businessValue:
-                "Drive 5-10% ARPU uplift through targeted upsell.",
+              businessValue: "Drive 5-10% ARPU uplift through targeted upsell.",
             },
             {
               name: "Customer Lifetime Value Segmentation",
               description:
                 "Calculate and segment customers by predicted CLV using tenure, ARPU, product mix, and engagement data. Finance and marketing teams use this to allocate retention spend and tailor service levels.",
-              businessValue:
-                "Optimise retention investment by focusing on highest-CLV segments.",
-              typicalDataEntities: ["Tenure Data", "ARPU History", "Product Mix", "Engagement Metrics"],
+              businessValue: "Optimise retention investment by focusing on highest-CLV segments.",
+              typicalDataEntities: [
+                "Tenure Data",
+                "ARPU History",
+                "Product Mix",
+                "Engagement Metrics",
+              ],
               typicalSourceSystems: ["BSS/OSS", "Billing Platform", "CRM", "Product Analytics"],
             },
             {
               name: "Win-Back & Re-Acquisition Targeting",
               description:
                 "Score churned customers for win-back probability based on reason-for-leaving, tenure, and competitive landscape, then trigger timed re-acquisition campaigns. Marketing teams use this to recover high-value customers at lower cost than new acquisition.",
-              businessValue:
-                "Recover 8-12% of churned high-value customers within 90 days.",
+              businessValue: "Recover 8-12% of churned high-value customers within 90 days.",
             },
           ],
           kpis: [
@@ -129,12 +127,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
             "Save-offer acceptance rate (%)",
             "Win-back conversion rate (%)",
           ],
-          personas: [
-            "Head of Consumer Broadband",
-            "Head of Retention",
-            "CFO",
-            "Head of Product",
-          ],
+          personas: ["Head of Consumer Broadband", "Head of Retention", "CFO", "Head of Product"],
         },
         {
           name: "SMB Growth & Bundling",
@@ -149,8 +142,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Business Bundle Recommendation Engine",
               description:
                 "Recommend optimal product bundles (broadband + security + VoIP + static IP) to SMB customers based on usage patterns and industry benchmarks. Self-service portal and account managers use this to increase attach rates.",
-              businessValue:
-                "Improve bundle attach rate by 20-30%, lifting SMB ARPU.",
+              businessValue: "Improve bundle attach rate by 20-30%, lifting SMB ARPU.",
             },
             {
               name: "SMB Onboarding & Activation Analytics",
@@ -167,12 +159,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
             "Time to activate (days)",
             "SMB early-life churn (%)",
           ],
-          personas: [
-            "Head of SMB",
-            "Head of Product",
-            "Head of Growth & Digital",
-            "CEO",
-          ],
+          personas: ["Head of SMB", "Head of Product", "Head of Growth & Digital", "CEO"],
         },
       ],
     },
@@ -191,9 +178,13 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Predictive Scripts for Contact Center",
               description:
                 "Use AI to analyze customer communications, understand context and sentiment, and prepare tailored responses for first-point resolution.",
-              businessValue:
-                "20%+ reduction in care call volume, 10%+ reduction in handling time.",
-              typicalDataEntities: ["Customer Communications", "Interaction History", "Product Holdings", "Resolution Scripts"],
+              businessValue: "20%+ reduction in care call volume, 10%+ reduction in handling time.",
+              typicalDataEntities: [
+                "Customer Communications",
+                "Interaction History",
+                "Product Holdings",
+                "Resolution Scripts",
+              ],
               typicalSourceSystems: ["Contact Center Platform", "CRM", "BSS/OSS"],
             },
             {
@@ -202,15 +193,19 @@ export const COMMUNICATIONS: IndustryOutcome = {
                 "Advanced ML models to predict churn by analyzing behavior, complaints, billing issues, renewal dates, and NPS scores.",
               businessValue:
                 "1% churn reduction can increase profits by tens of millions annually.",
-              typicalDataEntities: ["Usage Records", "Billing History", "Customer Interactions", "Service Tickets"],
+              typicalDataEntities: [
+                "Usage Records",
+                "Billing History",
+                "Customer Interactions",
+                "Service Tickets",
+              ],
               typicalSourceSystems: ["BSS/OSS", "CRM", "Billing Platform"],
             },
             {
               name: "Intelligent Bill Analysis",
               description:
                 "AI compares bills over time, explaining variations to customers and automating credit adjustments within designated limits.",
-              businessValue:
-                "Reduce billing-related support contacts by 25-35%.",
+              businessValue: "Reduce billing-related support contacts by 25-35%.",
               typicalDataEntities: ["Bill History", "Usage Records", "Rate Plans", "Credit Rules"],
               typicalSourceSystems: ["Billing Platform", "BSS/OSS", "CRM"],
             },
@@ -220,17 +215,31 @@ export const COMMUNICATIONS: IndustryOutcome = {
                 "Create hyper-personalized offers including cybersecurity products, network slicing, and additional bandwidth based on usage insights.",
               businessValue:
                 "Increase offer acceptance rates by 20-30% compared to untargeted campaigns.",
-              typicalDataEntities: ["Usage Patterns", "Product Holdings", "Customer Segments", "Offer Catalog"],
+              typicalDataEntities: [
+                "Usage Patterns",
+                "Product Holdings",
+                "Customer Segments",
+                "Offer Catalog",
+              ],
               typicalSourceSystems: ["BSS/OSS", "CRM", "Product Catalog", "Marketing Platform"],
             },
             {
               name: "Self-Service Diagnostics & Speed-Test Intelligence",
               description:
                 "Enable customers to run in-app diagnostics (speed test, latency check, WiFi optimisation) with AI-driven root cause analysis and automated remediation suggestions. Reduces inbound support contacts and improves perceived control.",
-              businessValue:
-                "Deflect 15-20% of support contacts through self-service resolution.",
-              typicalDataEntities: ["Speed Test Results", "Network Diagnostics", "CPE Data", "Service Configuration"],
-              typicalSourceSystems: ["Network Analytics", "BSS/OSS", "CPE Management", "Customer App"],
+              businessValue: "Deflect 15-20% of support contacts through self-service resolution.",
+              typicalDataEntities: [
+                "Speed Test Results",
+                "Network Diagnostics",
+                "CPE Data",
+                "Service Configuration",
+              ],
+              typicalSourceSystems: [
+                "Network Analytics",
+                "BSS/OSS",
+                "CPE Management",
+                "Customer App",
+              ],
             },
             {
               name: "Proactive Outage Detection & Customer Comms",
@@ -238,8 +247,18 @@ export const COMMUNICATIONS: IndustryOutcome = {
                 "Detect localised outages from network telemetry and customer-reported symptoms, automatically notify affected customers with ETA and status updates via app/SMS. CX teams use this to get ahead of complaint spikes.",
               businessValue:
                 "Reduce inbound outage calls by 30-40% and improve NPS during incidents.",
-              typicalDataEntities: ["Network Telemetry", "Fault Records", "Customer Service Links", "Outage Status"],
-              typicalSourceSystems: ["NOC/Network OSS", "Fault Management", "CRM", "Notification Platform"],
+              typicalDataEntities: [
+                "Network Telemetry",
+                "Fault Records",
+                "Customer Service Links",
+                "Outage Status",
+              ],
+              typicalSourceSystems: [
+                "NOC/Network OSS",
+                "Fault Management",
+                "CRM",
+                "Notification Platform",
+              ],
             },
             {
               name: "Agent Support Copilot",
@@ -247,7 +266,12 @@ export const COMMUNICATIONS: IndustryOutcome = {
                 "Equip contact centre agents with an AI copilot that surfaces customer history, diagnoses issues from network data, recommends next-best-action, and drafts responses. Support teams use this to improve first-call resolution and reduce handle time.",
               businessValue:
                 "Improve first-call resolution by 20% and reduce average handle time by 25%.",
-              typicalDataEntities: ["Customer History", "Network Diagnostics", "Product Configuration", "Resolution Knowledge"],
+              typicalDataEntities: [
+                "Customer History",
+                "Network Diagnostics",
+                "Product Configuration",
+                "Resolution Knowledge",
+              ],
               typicalSourceSystems: ["Contact Center Platform", "CRM", "BSS/OSS", "Network OSS"],
             },
           ],
@@ -273,17 +297,20 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "NPS Driver Analysis & Action Engine",
               description:
                 "Analyse NPS survey responses with NLP to identify key satisfaction drivers and detractors, then route actionable insights to responsible teams with SLA for follow-up. CX leadership uses this to close the loop on experience issues systematically.",
-              businessValue:
-                "Improve NPS by 10-15 points through systematic driver resolution.",
-              typicalDataEntities: ["NPS Survey Responses", "Driver Themes", "Action Items", "Follow-up Status"],
+              businessValue: "Improve NPS by 10-15 points through systematic driver resolution.",
+              typicalDataEntities: [
+                "NPS Survey Responses",
+                "Driver Themes",
+                "Action Items",
+                "Follow-up Status",
+              ],
               typicalSourceSystems: ["Survey Platform", "CRM", "Contact Center Platform"],
             },
             {
               name: "Customer Journey Analytics",
               description:
                 "Map end-to-end customer journeys (sign-up, activation, first bill, first support contact) and identify friction points using event data. Product and CX teams use this to prioritise UX improvements with highest retention impact.",
-              businessValue:
-                "Reduce journey drop-off by 15-20% at key friction points.",
+              businessValue: "Reduce journey drop-off by 15-20% at key friction points.",
             },
             {
               name: "Voice of Customer Text Mining",
@@ -321,8 +348,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Automated MACs Processing",
               description:
                 "AI monitors and automates Moves, Adds, and Changes requests (25-35% of B2B service requests) across channels.",
-              businessValue:
-                "Reduce MACs processing time by 60% and error rates by 80%.",
+              businessValue: "Reduce MACs processing time by 60% and error rates by 80%.",
             },
             {
               name: "Proactive SMB Offers",
@@ -351,8 +377,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Automated Order Entry & Activation",
               description:
                 "Use AI to automate order entry across systems, reducing error rates from 40% to near-zero and enabling 24/7 activation.",
-              businessValue:
-                "Reduce order errors by 90% and enable 24/7 self-service activation.",
+              businessValue: "Reduce order errors by 90% and enable 24/7 self-service activation.",
             },
             {
               name: "Intelligent Provisioning",
@@ -375,11 +400,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
             "Order-to-cash cycle (20% reduction)",
             "Provisioning time (hours)",
           ],
-          personas: [
-            "Head of Service Delivery",
-            "VP Operations",
-            "Chief Information Officer",
-          ],
+          personas: ["Head of Service Delivery", "VP Operations", "Chief Information Officer"],
         },
       ],
     },
@@ -398,29 +419,25 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Fibre & SD-WAN Quote-to-Activate Acceleration",
               description:
                 "Automate feasibility, pricing, and provisioning for enterprise fibre and SD-WAN orders using address-level network data, cost models, and capacity checks. Sales and pre-sales teams use this to reduce quote turnaround from days to minutes.",
-              businessValue:
-                "Reduce enterprise quote-to-activate cycle by 50-60%.",
+              businessValue: "Reduce enterprise quote-to-activate cycle by 50-60%.",
             },
             {
               name: "Cloud Interconnect Demand Forecasting",
               description:
                 "Predict enterprise demand for cloud interconnect (AWS, Azure, GCP) by region and capacity tier to pre-provision capacity and reduce lead times. Network planning and enterprise sales teams use this to stay ahead of demand.",
-              businessValue:
-                "Reduce cloud interconnect provisioning time by 40%.",
+              businessValue: "Reduce cloud interconnect provisioning time by 40%.",
             },
             {
               name: "Enterprise SLA Performance Dashboard",
               description:
                 "Real-time monitoring of SLA metrics (uptime, latency, jitter, packet loss) per enterprise customer with automated breach alerting and root cause analysis. Account managers and NOC teams use this to maintain trust and reduce penalties.",
-              businessValue:
-                "Achieve 99.95%+ SLA attainment across enterprise portfolio.",
+              businessValue: "Achieve 99.95%+ SLA attainment across enterprise portfolio.",
             },
             {
               name: "Managed Security Attach Analytics",
               description:
                 "Identify enterprise and SMB customers most likely to purchase managed security services (DDoS protection, firewall, threat monitoring) based on industry, traffic patterns, and risk profile. Sales teams use this to grow the security revenue stream.",
-              businessValue:
-                "Increase managed security attach rate by 25-35%.",
+              businessValue: "Increase managed security attach rate by 25-35%.",
             },
           ],
           kpis: [
@@ -444,15 +461,13 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Wholesale Partner Performance Cockpit",
               description:
                 "Provide RSPs and wholesale partners with self-service analytics on order volumes, provisioning times, fault rates, and SLA performance across their customer base. Head of Wholesale uses this to drive partner satisfaction and retention.",
-              businessValue:
-                "Improve wholesale partner NPS by 20+ points.",
+              businessValue: "Improve wholesale partner NPS by 20+ points.",
             },
             {
               name: "NBN Aggregation Utilisation & Margin Analytics",
               description:
                 "Track bandwidth utilisation, CVC costs, and margin per POI across the NBN aggregation portfolio. Finance and wholesale teams use this to optimise CVC provisioning and identify under/over-provisioned POIs.",
-              businessValue:
-                "Improve NBN aggregation margin by 5-10% through CVC optimisation.",
+              businessValue: "Improve NBN aggregation margin by 5-10% through CVC optimisation.",
             },
             {
               name: "Automated Wholesale Provisioning & Fault Triage",
@@ -465,8 +480,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Partner Revenue & Growth Analytics",
               description:
                 "Track revenue, growth trajectory, and product mix per wholesale partner to identify upsell opportunities, at-risk partners, and whitespace. Wholesale account managers use this for data-driven partner engagement.",
-              businessValue:
-                "Identify 15-20% more upsell opportunities across the partner base.",
+              businessValue: "Identify 15-20% more upsell opportunities across the partner base.",
             },
           ],
           kpis: [
@@ -500,8 +514,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Network Performance Monitoring",
               description:
                 "Monitor network and service performance in real-time using AI to detect anomalies and predict capacity needs across access, metro, and backbone layers.",
-              businessValue:
-                "Reduce network-related customer complaints by 20-30%.",
+              businessValue: "Reduce network-related customer complaints by 20-30%.",
             },
             {
               name: "Predictive Network Demand",
@@ -514,8 +527,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Network Capacity Planning",
               description:
                 "Track network capacity in real-time with proactive planning based on usage patterns, subscriber growth projections, and traffic trends.",
-              businessValue:
-                "Reduce over-provisioning costs by 10-15% while maintaining headroom.",
+              businessValue: "Reduce over-provisioning costs by 10-15% while maintaining headroom.",
             },
             {
               name: "Backbone & Subsea Link Utilisation Optimisation",
@@ -568,8 +580,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Outage Impact Radius & Customer Notification",
               description:
                 "When a fault occurs, automatically map the blast radius to affected services and customers, prioritise restoration by customer impact, and trigger proactive communications. NOC and CX teams use this to manage incidents transparently.",
-              businessValue:
-                "Reduce inbound fault calls by 30% through proactive notification.",
+              businessValue: "Reduce inbound fault calls by 30% through proactive notification.",
             },
             {
               name: "Network Resilience & Redundancy Analysis",
@@ -600,16 +611,19 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "AI-Powered Field Tech Support",
               description:
                 "Equip field technicians with AI assistants for real-time troubleshooting guidance and knowledge access during fibre installs, repairs, and network builds.",
-              businessValue:
-                "Improve first-time fix rate by 15-20% and reduce repeat visits.",
+              businessValue: "Improve first-time fix rate by 15-20% and reduce repeat visits.",
             },
             {
               name: "Predictive Field Service",
               description:
                 "Predict equipment failures and dispatch field technicians proactively before service is affected, using telemetry from CPE, ONTs, and network equipment.",
-              businessValue:
-                "Reduce truck rolls by 20-25% through predictive dispatch.",
-              typicalDataEntities: ["CPE Telemetry", "ONT Data", "Equipment Health", "Failure Predictions"],
+              businessValue: "Reduce truck rolls by 20-25% through predictive dispatch.",
+              typicalDataEntities: [
+                "CPE Telemetry",
+                "ONT Data",
+                "Equipment Health",
+                "Failure Predictions",
+              ],
               typicalSourceSystems: ["Network OSS", "CPE Management", "Field Service Management"],
             },
           ],
@@ -619,11 +633,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
             "Truck roll reduction (%)",
             "Field technician utilisation (%)",
           ],
-          personas: [
-            "Head of Field Operations",
-            "VP Engineering",
-            "Chief Operating Officer",
-          ],
+          personas: ["Head of Field Operations", "VP Engineering", "Chief Operating Officer"],
         },
       ],
     },
@@ -642,17 +652,25 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Fraud Detection & Prevention",
               description:
                 "Detect and prevent fraud including subscription fraud, international revenue share fraud, and account takeover using ML pattern detection across billing, usage, and identity data.",
-              businessValue:
-                "Reduce fraud losses by 40-60% through real-time detection.",
-              typicalDataEntities: ["Usage Records", "Billing History", "Identity Data", "Fraud Patterns"],
-              typicalSourceSystems: ["BSS/OSS", "Billing Platform", "Identity Verification", "Fraud Detection Engine"],
+              businessValue: "Reduce fraud losses by 40-60% through real-time detection.",
+              typicalDataEntities: [
+                "Usage Records",
+                "Billing History",
+                "Identity Data",
+                "Fraud Patterns",
+              ],
+              typicalSourceSystems: [
+                "BSS/OSS",
+                "Billing Platform",
+                "Identity Verification",
+                "Fraud Detection Engine",
+              ],
             },
             {
               name: "Robo-calling & Bot Detection",
               description:
                 "Use AI to monitor and detect robocalling, bot activities, and SIM swap attempts in real-time, protecting customers and network integrity.",
-              businessValue:
-                "Block 95%+ of automated fraud attempts in real-time.",
+              businessValue: "Block 95%+ of automated fraud attempts in real-time.",
             },
           ],
           kpis: [
@@ -674,8 +692,7 @@ export const COMMUNICATIONS: IndustryOutcome = {
               name: "Network Security Posture Monitoring",
               description:
                 "Continuously assess the security posture of network infrastructure (DDoS exposure, misconfiguration, vulnerability scanning) using AI-driven analysis of logs and threat intelligence feeds. CISO and security operations teams use this to maintain a hardened network perimeter.",
-              businessValue:
-                "Reduce critical vulnerability exposure window by 60-70%.",
+              businessValue: "Reduce critical vulnerability exposure window by 60-70%.",
             },
             {
               name: "Customer-Facing Threat Intelligence",
@@ -690,8 +707,18 @@ export const COMMUNICATIONS: IndustryOutcome = {
                 "Automate compliance monitoring and reporting for telecommunications obligations, privacy regulations, and critical infrastructure requirements. Compliance and legal teams use this to reduce manual audit burden and ensure continuous compliance.",
               businessValue:
                 "Reduce compliance reporting effort by 50-60% and eliminate overdue findings.",
-              typicalDataEntities: ["Compliance Obligations", "Audit Evidence", "Policy State", "Finding Records"],
-              typicalSourceSystems: ["GRC Platform", "BSS/OSS", "Network OSS", "Document Management"],
+              typicalDataEntities: [
+                "Compliance Obligations",
+                "Audit Evidence",
+                "Policy State",
+                "Finding Records",
+              ],
+              typicalSourceSystems: [
+                "GRC Platform",
+                "BSS/OSS",
+                "Network OSS",
+                "Document Management",
+              ],
             },
           ],
           kpis: [

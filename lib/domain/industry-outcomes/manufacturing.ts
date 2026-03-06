@@ -40,21 +40,35 @@ export const MANUFACTURING: IndustryOutcome = {
                 "Use sensor data to predict equipment failures and schedule proactive maintenance, reducing downtime and extending asset life.",
               businessValue:
                 "$30-35M bottom line impact through real-time machine data access for predicting issues.",
-              typicalDataEntities: ["IoT Sensor Readings", "Equipment Maintenance History", "Asset Registry"],
+              typicalDataEntities: [
+                "IoT Sensor Readings",
+                "Equipment Maintenance History",
+                "Asset Registry",
+              ],
               typicalSourceSystems: ["SCADA/Historian", "CMMS", "ERP"],
             },
             {
               name: "Remote Monitoring and Diagnostics",
               description:
                 "Enable real-time monitoring and diagnostics of products in the field, reducing service costs and improving uptime.",
-              typicalDataEntities: ["Telemetry Data", "Fault Codes", "Asset Configuration", "Service History"],
+              typicalDataEntities: [
+                "Telemetry Data",
+                "Fault Codes",
+                "Asset Configuration",
+                "Service History",
+              ],
               typicalSourceSystems: ["IoT Platform", "Product Cloud", "CMMS"],
             },
             {
               name: "Product Feature Usage Analytics",
               description:
                 "Analyze how customers use products to inform design improvements and tailor offerings.",
-              typicalDataEntities: ["Feature Usage Events", "Product Configuration", "Customer Segments", "Usage Aggregates"],
+              typicalDataEntities: [
+                "Feature Usage Events",
+                "Product Configuration",
+                "Customer Segments",
+                "Usage Aggregates",
+              ],
               typicalSourceSystems: ["Product Cloud", "IoT Platform", "CRM"],
             },
             {
@@ -89,9 +103,13 @@ export const MANUFACTURING: IndustryOutcome = {
               name: "Predictive Quality Control",
               description:
                 "Detect and mitigate product defects in real-time during manufacturing using advanced analytics and computer vision.",
-              businessValue:
-                "20-40% reduction in defect rate.",
-              typicalDataEntities: ["In-Line Sensor Data", "Quality Inspections", "Process Parameters", "Defect Classifications"],
+              businessValue: "20-40% reduction in defect rate.",
+              typicalDataEntities: [
+                "In-Line Sensor Data",
+                "Quality Inspections",
+                "Process Parameters",
+                "Defect Classifications",
+              ],
               typicalSourceSystems: ["MES", "SCADA", "Quality Management System"],
             },
             {
@@ -143,9 +161,13 @@ export const MANUFACTURING: IndustryOutcome = {
               name: "Demand Forecasting",
               description:
                 "Analyze historical data and market trends to accurately predict future product demand using ML models.",
-              businessValue:
-                "30-50% improvement in forecast accuracy.",
-              typicalDataEntities: ["Sales History", "Order Book", "Market Indicators", "Seasonality"],
+              businessValue: "30-50% improvement in forecast accuracy.",
+              typicalDataEntities: [
+                "Sales History",
+                "Order Book",
+                "Market Indicators",
+                "Seasonality",
+              ],
               typicalSourceSystems: ["ERP", "Demand Planning System", "CRM"],
             },
             {
@@ -179,11 +201,7 @@ export const MANUFACTURING: IndustryOutcome = {
             "Order cycle time (50% reduction)",
             "Demand forecast accuracy (30-50% improvement)",
           ],
-          personas: [
-            "Chief Supply Chain Officer",
-            "VP Demand Planning",
-            "VP Procurement",
-          ],
+          personas: ["Chief Supply Chain Officer", "VP Demand Planning", "VP Procurement"],
         },
       ],
     },
@@ -199,14 +217,24 @@ export const MANUFACTURING: IndustryOutcome = {
               name: "Design Space Exploration",
               description:
                 "Optimize product design by evaluating multiple parameters and constraints using simulations, generative design, and predictive analytics.",
-              typicalDataEntities: ["Design Parameters", "Simulation Results", "Material Properties", "Constraints"],
+              typicalDataEntities: [
+                "Design Parameters",
+                "Simulation Results",
+                "Material Properties",
+                "Constraints",
+              ],
               typicalSourceSystems: ["PLM", "CAD", "Simulation Platform"],
             },
             {
               name: "Product Testing Optimization",
               description:
                 "Use ML to optimize testing strategies, reduce test cycles, and predict product performance from simulated data.",
-              typicalDataEntities: ["Test Results", "Test Plans", "Simulation Outputs", "Performance Specs"],
+              typicalDataEntities: [
+                "Test Results",
+                "Test Plans",
+                "Simulation Outputs",
+                "Performance Specs",
+              ],
               typicalSourceSystems: ["PLM", "Test Management System", "Simulation Platform"],
             },
             {
@@ -215,16 +243,8 @@ export const MANUFACTURING: IndustryOutcome = {
                 "Deploy AI-powered tools to assist R&D teams in coding tasks, improving developer productivity.",
             },
           ],
-          kpis: [
-            "Time to market",
-            "R&D cost efficiency",
-            "Design iteration speed",
-          ],
-          personas: [
-            "VP Engineering",
-            "Head of R&D",
-            "Chief Technology Officer",
-          ],
+          kpis: ["Time to market", "R&D cost efficiency", "Design iteration speed"],
+          personas: ["VP Engineering", "Head of R&D", "Chief Technology Officer"],
         },
       ],
     },
@@ -240,34 +260,41 @@ export const MANUFACTURING: IndustryOutcome = {
               name: "Customer 360 for Manufacturing",
               description:
                 "Build unified customer profiles combining product, transaction, service, and engagement data beyond just CRM.",
-              typicalDataEntities: ["Customer Profiles", "Order History", "Service Records", "Product Usage"],
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Order History",
+                "Service Records",
+                "Product Usage",
+              ],
               typicalSourceSystems: ["CRM", "ERP", "Service Management", "IoT Platform"],
             },
             {
               name: "Next Best Commercial Offer",
               description:
                 "Use AI to identify the optimal offer for each customer based on purchase history, product usage, and lifecycle stage.",
-              typicalDataEntities: ["Customer Profiles", "Purchase History", "Product Catalog", "Propensity Scores"],
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Purchase History",
+                "Product Catalog",
+                "Propensity Scores",
+              ],
               typicalSourceSystems: ["CRM", "ERP", "Product Cloud"],
             },
             {
               name: "Churn Modeling",
               description:
                 "Predict customer churn and implement proactive retention strategies based on engagement patterns.",
-              typicalDataEntities: ["Customer Profiles", "Engagement Metrics", "Contract Data", "Churn Risk Scores"],
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Engagement Metrics",
+                "Contract Data",
+                "Churn Risk Scores",
+              ],
               typicalSourceSystems: ["CRM", "ERP", "Service Management"],
             },
           ],
-          kpis: [
-            "Customer satisfaction (NPS)",
-            "Customer retention rate",
-            "Cross-sell revenue",
-          ],
-          personas: [
-            "VP Sales",
-            "Head of Customer Experience",
-            "Chief Marketing Officer",
-          ],
+          kpis: ["Customer satisfaction (NPS)", "Customer retention rate", "Cross-sell revenue"],
+          personas: ["VP Sales", "Head of Customer Experience", "Chief Marketing Officer"],
         },
       ],
     },

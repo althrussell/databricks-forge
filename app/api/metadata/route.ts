@@ -20,10 +20,7 @@ import {
   ensureWarehouseReady,
   MetadataError,
 } from "@/lib/queries/metadata";
-import {
-  validateIdentifier,
-  IdentifierValidationError,
-} from "@/lib/validation";
+import { validateIdentifier, IdentifierValidationError } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,7 +52,7 @@ export async function GET(request: NextRequest) {
           });
           return NextResponse.json(
             { error: "catalog query param is required", code: "INVALID_REQUEST" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         const catalog = validateIdentifier(catalogRaw, "catalog");
@@ -70,13 +67,11 @@ export async function GET(request: NextRequest) {
           });
           return NextResponse.json(
             { error: "catalog query param is required", code: "INVALID_REQUEST" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         const catalog = validateIdentifier(catalogRaw, "catalog");
-        const schema = schemaRaw
-          ? validateIdentifier(schemaRaw, "schema")
-          : undefined;
+        const schema = schemaRaw ? validateIdentifier(schemaRaw, "schema") : undefined;
         const tables = await listTables(catalog, schema);
         return NextResponse.json({ tables });
       }
@@ -86,8 +81,11 @@ export async function GET(request: NextRequest) {
           allowedTypes: ["warmup", "catalogs", "schemas", "tables"],
         });
         return NextResponse.json(
-          { error: `Unknown type: ${type}. Use warmup, catalogs, schemas, or tables.`, code: "INVALID_REQUEST" },
-          { status: 400 }
+          {
+            error: `Unknown type: ${type}. Use warmup, catalogs, schemas, or tables.`,
+            code: "INVALID_REQUEST",
+          },
+          { status: 400 },
         );
     }
   } catch (error) {
@@ -96,17 +94,11 @@ export async function GET(request: NextRequest) {
         error: error.message,
         errorCode: "INVALID_REQUEST",
       });
-      return NextResponse.json(
-        { error: error.message, code: "INVALID_REQUEST" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.message, code: "INVALID_REQUEST" }, { status: 400 });
     }
     if (error instanceof MetadataError) {
       const status = error.code === "INSUFFICIENT_PERMISSIONS" ? 403 : 502;
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        { status }
-      );
+      return NextResponse.json({ error: error.message, code: error.code }, { status });
     }
     logger.error("Failed to fetch metadata", {
       error: error instanceof Error ? error.message : String(error),
@@ -114,7 +106,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(
       { error: safeErrorMessage(error), code: "WAREHOUSE_UNAVAILABLE" },
-      { status: 502 }
+      { status: 502 },
     );
   }
 }

@@ -66,9 +66,7 @@ function parseJson<T>(json: string | null): T | null {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export async function listMetadataGenieSpaces(): Promise<
-  MetadataGenieSpace[]
-> {
+export async function listMetadataGenieSpaces(): Promise<MetadataGenieSpace[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeMetadataGenieSpace.findMany({
       orderBy: { createdAt: "desc" },
@@ -77,9 +75,7 @@ export async function listMetadataGenieSpaces(): Promise<
   });
 }
 
-export async function getMetadataGenieSpace(
-  id: string
-): Promise<MetadataGenieSpace | null> {
+export async function getMetadataGenieSpace(id: string): Promise<MetadataGenieSpace | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeMetadataGenieSpace.findUnique({
       where: { id },
@@ -106,19 +102,13 @@ export async function saveMetadataGenieSpace(opts: {
   return withPrisma(async (prisma) => {
     const shared = {
       title: opts.title,
-      catalogScope: opts.catalogScope
-        ? JSON.stringify(opts.catalogScope)
-        : null,
+      catalogScope: opts.catalogScope ? JSON.stringify(opts.catalogScope) : null,
       industryId: opts.industryId ?? null,
       industryName: opts.industryName ?? null,
       domains: opts.domains ? JSON.stringify(opts.domains) : null,
       detection: opts.detection ? JSON.stringify(opts.detection) : null,
-      sampleQuestions: opts.sampleQuestions
-        ? JSON.stringify(opts.sampleQuestions)
-        : null,
-      aiDescriptions: opts.aiDescriptions
-        ? JSON.stringify(opts.aiDescriptions)
-        : null,
+      sampleQuestions: opts.sampleQuestions ? JSON.stringify(opts.sampleQuestions) : null,
+      aiDescriptions: opts.aiDescriptions ? JSON.stringify(opts.aiDescriptions) : null,
       lineageAccessible: opts.lineageAccessible ?? false,
       serializedSpace: opts.serializedSpace ?? null,
       tableCount: opts.tableCount,
@@ -162,7 +152,7 @@ export async function updateMetadataGenieOnDeploy(opts: {
 
 export async function updateMetadataGenieStatus(
   id: string,
-  status: MetadataGenieStatus
+  status: MetadataGenieStatus,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeMetadataGenieSpace.update({

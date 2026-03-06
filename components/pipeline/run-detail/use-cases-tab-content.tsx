@@ -18,9 +18,7 @@ export function UseCasesTabContent({
     return (
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center justify-center py-12">
-          <p className="text-muted-foreground">
-            No use cases were generated.
-          </p>
+          <p className="text-muted-foreground">No use cases were generated.</p>
         </CardContent>
       </Card>
     );

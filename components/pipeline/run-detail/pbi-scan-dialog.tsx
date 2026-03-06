@@ -48,7 +48,9 @@ export function PbiScanDialog({
         </DialogHeader>
         <div className="space-y-4 py-2">
           {scans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No completed Fabric scans found. Run a scan from the Fabric Hub first.</p>
+            <p className="text-sm text-muted-foreground">
+              No completed Fabric scans found. Run a scan from the Fabric Hub first.
+            </p>
           ) : (
             <Select
               value={selectedScanId ?? "__none__"}
@@ -58,9 +60,13 @@ export function PbiScanDialog({
                 <SelectValue placeholder="Select a scan..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__" disabled>Select a scan...</SelectItem>
+                <SelectItem value="__none__" disabled>
+                  Select a scan...
+                </SelectItem>
                 {scans.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -69,11 +75,7 @@ export function PbiScanDialog({
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              size="sm"
-              disabled={!selectedScanId || enriching}
-              onClick={onEnrich}
-            >
+            <Button size="sm" disabled={!selectedScanId || enriching} onClick={onEnrich}>
               {enriching ? (
                 <>
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

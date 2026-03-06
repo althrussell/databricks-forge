@@ -141,13 +141,17 @@ export function buildAssistantMessages(
   persona: AssistantPersona = "business",
 ): { system: string; user: string } {
   const overlay =
-    persona === "tech" ? TECH_PERSONA_OVERLAY
-    : persona === "analyst" ? ANALYST_PERSONA_OVERLAY
-    : BUSINESS_PERSONA_OVERLAY;
+    persona === "tech"
+      ? TECH_PERSONA_OVERLAY
+      : persona === "analyst"
+        ? ANALYST_PERSONA_OVERLAY
+        : BUSINESS_PERSONA_OVERLAY;
   const system = ASSISTANT_SYSTEM_PROMPT + "\n" + overlay;
 
-  const user = CONTEXT_INJECTION_TEMPLATE
-    .replace("{ragContext}", ragContext || "No relevant context was retrieved.")
+  const user = CONTEXT_INJECTION_TEMPLATE.replace(
+    "{ragContext}",
+    ragContext || "No relevant context was retrieved.",
+  )
     .replace("{conversationHistory}", conversationHistory || "No previous conversation.")
     .replace("{question}", sanitiseQuestion(question));
 

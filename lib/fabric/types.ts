@@ -77,7 +77,11 @@ export interface FabricDataset {
   measures: FabricMeasure[];
   relationships: FabricRelationship[];
   expressions: Array<{ name: string; expression: string; description?: string }>;
-  roles: Array<{ name: string; members: string[]; tablePermissions: Array<{ name: string; filterExpression: string }> }>;
+  roles: Array<{
+    name: string;
+    members: string[];
+    tablePermissions: Array<{ name: string; filterExpression: string }>;
+  }>;
   datasources: FabricDatasource[];
   sensitivityLabel: string | null;
 }

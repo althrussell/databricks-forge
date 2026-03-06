@@ -10,15 +10,7 @@
 
 import * as React from "react";
 import { loadSettings } from "@/lib/settings";
-import {
-  FileText,
-  Upload,
-  Trash2,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  FileUp,
-} from "lucide-react";
+import { FileText, Upload, Trash2, CheckCircle2, Clock, AlertCircle, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -56,7 +48,11 @@ const CATEGORIES = [
 ];
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
-  processing: { icon: <Clock className="size-3.5" />, label: "Processing", color: "text-amber-600" },
+  processing: {
+    icon: <Clock className="size-3.5" />,
+    label: "Processing",
+    color: "text-amber-600",
+  },
   ready: { icon: <CheckCircle2 className="size-3.5" />, label: "Ready", color: "text-green-600" },
   failed: { icon: <AlertCircle className="size-3.5" />, label: "Failed", color: "text-red-600" },
   empty: { icon: <AlertCircle className="size-3.5" />, label: "Empty", color: "text-gray-500" },
@@ -111,9 +107,15 @@ export default function KnowledgeBasePage() {
           <CardHeader className="text-center">
             <CardTitle className="text-lg">Knowledge Base Unavailable</CardTitle>
             <CardDescription>
-              {disabledReason === "setting"
-                ? "Semantic search and knowledge base have been disabled in Settings. Re-enable the toggle to use this feature."
-                : <>The embedding endpoint (<code>serving-endpoint-embedding</code>) is not configured. Deploy with the embedding resource binding to enable document uploads and semantic search.</>}
+              {disabledReason === "setting" ? (
+                "Semantic search and knowledge base have been disabled in Settings. Re-enable the toggle to use this feature."
+              ) : (
+                <>
+                  The embedding endpoint (<code>serving-endpoint-embedding</code>) is not
+                  configured. Deploy with the embedding resource binding to enable document uploads
+                  and semantic search.
+                </>
+              )}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -188,7 +190,8 @@ export default function KnowledgeBasePage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Knowledge Base</h1>
         <p className="text-muted-foreground mt-1">
-          Upload strategy documents, data dictionaries, and governance policies to enhance AI analysis.
+          Upload strategy documents, data dictionaries, and governance policies to enhance AI
+          analysis.
         </p>
       </div>
 
@@ -277,7 +280,8 @@ export default function KnowledgeBasePage() {
               <FileText className="mb-3 size-12 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">No documents uploaded yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Upload strategy packs, data dictionaries, or governance policies to enhance AI analysis
+                Upload strategy packs, data dictionaries, or governance policies to enhance AI
+                analysis
               </p>
             </div>
           ) : (

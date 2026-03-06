@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScanLine, Search, Target } from "lucide-react";
 
 interface EstateScanSettingsProps {
@@ -69,18 +63,15 @@ export function EstateScanSettings({
           Estate Scan
         </CardTitle>
         <CardDescription>
-          Run environment intelligence (domain classification, PII detection,
-          health scoring, lineage enrichment) during pipeline runs. This
-          increases run time but provides a comprehensive estate view alongside
-          use case discovery.
+          Run environment intelligence (domain classification, PII detection, health scoring,
+          lineage enrichment) during pipeline runs. This increases run time but provides a
+          comprehensive estate view alongside use case discovery.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div
           className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-            estateScanEnabled
-              ? "border-emerald-500/50 bg-emerald-500/5"
-              : "border-muted"
+            estateScanEnabled ? "border-emerald-500/50 bg-emerald-500/5" : "border-muted"
           }`}
         >
           <div>
@@ -99,13 +90,13 @@ export function EstateScanSettings({
 
         <div
           className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-            assetDiscoveryEnabled
-              ? "border-sky-500/50 bg-sky-500/5"
-              : "border-muted"
+            assetDiscoveryEnabled ? "border-sky-500/50 bg-sky-500/5" : "border-muted"
           }`}
         >
           <div className="flex items-start gap-3">
-            <Search className={`mt-0.5 h-4 w-4 shrink-0 ${assetDiscoveryEnabled ? "text-sky-500" : "text-muted-foreground"}`} />
+            <Search
+              className={`mt-0.5 h-4 w-4 shrink-0 ${assetDiscoveryEnabled ? "text-sky-500" : "text-muted-foreground"}`}
+            />
             <div>
               <p className="text-sm font-medium">Asset Discovery during pipeline runs</p>
               <p className="text-xs text-muted-foreground">
@@ -130,7 +121,9 @@ export function EstateScanSettings({
           }`}
         >
           <div className="flex items-start gap-3">
-            <Target className={`mt-0.5 h-4 w-4 shrink-0 ${benchmarksEnabled && benchmarksServerEnabled ? "text-amber-500" : "text-muted-foreground"}`} />
+            <Target
+              className={`mt-0.5 h-4 w-4 shrink-0 ${benchmarksEnabled && benchmarksServerEnabled ? "text-amber-500" : "text-muted-foreground"}`}
+            />
             <div>
               <p className="text-sm font-medium">Benchmark Catalog</p>
               <p className="text-xs text-muted-foreground">

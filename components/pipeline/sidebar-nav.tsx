@@ -6,17 +6,8 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { loadSettings } from "@/lib/settings";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Menu, PanelLeftClose, PanelLeft } from "lucide-react";
 import { VersionBadge } from "@/components/version-badge";
@@ -56,15 +47,18 @@ const navSections: NavSection[] = [
   },
   {
     label: "Migrate",
-    items: [
-      { href: "/fabric", label: "Fabric / PBI", icon: FabricIcon },
-    ],
+    items: [{ href: "/fabric", label: "Fabric / PBI", icon: FabricIcon }],
   },
   {
     label: "Admin",
     items: [
       { href: "/connections", label: "Connections", icon: ConnectionsIcon },
-      { href: "/knowledge-base", label: "Knowledge Base", icon: KnowledgeBaseIcon, requiresEmbedding: true },
+      {
+        href: "/knowledge-base",
+        label: "Knowledge Base",
+        icon: KnowledgeBaseIcon,
+        requiresEmbedding: true,
+      },
       { href: "/settings", label: "Settings", icon: SettingsIcon },
       { href: "/help", label: "Help", icon: HelpIcon },
     ],
@@ -134,9 +128,7 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
           <div className="space-y-0.5">
             {section.items.map((item) => {
               const isActive =
-                item.href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(item.href);
+                item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 
               const link = (
                 <Link
@@ -148,7 +140,7 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
                     collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
@@ -200,7 +192,12 @@ export function SidebarNav() {
         collapsed ? "w-14" : "w-64",
       )}
     >
-      <div className={cn("flex h-16 shrink-0 items-center border-b", collapsed ? "justify-center px-2" : "px-6")}>
+      <div
+        className={cn(
+          "flex h-16 shrink-0 items-center border-b",
+          collapsed ? "justify-center px-2" : "px-6",
+        )}
+      >
         <Link href="/" className="flex items-center gap-2.5 font-semibold">
           <Image
             src="/databricks-icon.svg"

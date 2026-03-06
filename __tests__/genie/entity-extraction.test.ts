@@ -5,7 +5,9 @@ import {
 } from "@/lib/genie/entity-extraction";
 import type { SampleDataCache } from "@/lib/genie/types";
 
-function makeSampleCache(entries: Record<string, { columns: string[]; columnTypes: string[]; rows: unknown[][] }>): SampleDataCache {
+function makeSampleCache(
+  entries: Record<string, { columns: string[]; columnTypes: string[]; rows: unknown[][] }>,
+): SampleDataCache {
   const cache = new Map() as SampleDataCache;
   for (const [fqn, data] of Object.entries(entries)) {
     cache.set(fqn, data);
@@ -77,7 +79,14 @@ describe("extractEntityCandidates", () => {
       tableFqns: ["cat.schema.customers"],
       sampleData,
       piiClassifications: [
-        { tableFqn: "cat.schema.customers", columnName: "email", classification: "PII" as const, confidence: "high" as const, reason: "email", regulation: null },
+        {
+          tableFqn: "cat.schema.customers",
+          columnName: "email",
+          classification: "PII" as const,
+          confidence: "high" as const,
+          reason: "email",
+          regulation: null,
+        },
       ],
     });
 
@@ -90,7 +99,10 @@ describe("extractEntityCandidates", () => {
       "cat.schema.metrics": {
         columns: ["metric_id", "value"],
         columnTypes: ["int", "double"],
-        rows: [[1, 100.5], [2, 200.3]],
+        rows: [
+          [1, 100.5],
+          [2, 200.3],
+        ],
       },
     });
 

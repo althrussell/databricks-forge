@@ -10,10 +10,7 @@ import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { validateFqn, IdentifierValidationError } from "@/lib/validation";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ fqn: string }> },
-) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ fqn: string }> }) {
   try {
     const { fqn: encodedFqn } = await params;
     const fqn = decodeURIComponent(encodedFqn);
@@ -105,9 +102,6 @@ export async function GET(
     return Response.json(data);
   } catch (err) {
     logger.error("[api/environment/table] Error", { error: String(err) });
-    return Response.json(
-      { error: "Failed to load table detail" },
-      { status: 500 },
-    );
+    return Response.json({ error: "Failed to load table detail" }, { status: 500 });
   }
 }

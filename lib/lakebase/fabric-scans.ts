@@ -69,7 +69,7 @@ export async function updateFabricScan(
     errorMessage?: string | null;
     rawResultJson?: string;
     completedAt?: Date;
-  }
+  },
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeFabricScan.update({ where: { id: scanId }, data });
@@ -82,7 +82,7 @@ export async function updateFabricScan(
 
 export async function insertScanWorkspaces(
   scanId: string,
-  workspaces: FabricWorkspace[]
+  workspaces: FabricWorkspace[],
 ): Promise<void> {
   if (!workspaces.length) return;
   await withPrisma(async (prisma) => {
@@ -99,10 +99,7 @@ export async function insertScanWorkspaces(
   });
 }
 
-export async function insertScanDatasets(
-  scanId: string,
-  datasets: FabricDataset[]
-): Promise<void> {
+export async function insertScanDatasets(scanId: string, datasets: FabricDataset[]): Promise<void> {
   if (!datasets.length) return;
   await withPrisma(async (prisma) => {
     await prisma.forgeFabricDataset.createMany({
@@ -125,10 +122,7 @@ export async function insertScanDatasets(
   });
 }
 
-export async function insertScanReports(
-  scanId: string,
-  reports: FabricReport[]
-): Promise<void> {
+export async function insertScanReports(scanId: string, reports: FabricReport[]): Promise<void> {
   if (!reports.length) return;
   await withPrisma(async (prisma) => {
     await prisma.forgeFabricReport.createMany({
@@ -149,7 +143,7 @@ export async function insertScanReports(
 
 export async function insertScanArtifacts(
   scanId: string,
-  artifacts: FabricArtifact[]
+  artifacts: FabricArtifact[],
 ): Promise<void> {
   if (!artifacts.length) return;
   await withPrisma(async (prisma) => {
@@ -171,9 +165,7 @@ export async function insertScanArtifacts(
 // Read -- list
 // ---------------------------------------------------------------------------
 
-export async function listFabricScans(
-  connectionId?: string
-): Promise<FabricScanSummary[]> {
+export async function listFabricScans(connectionId?: string): Promise<FabricScanSummary[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeFabricScan.findMany({
       where: connectionId ? { connectionId } : undefined,
@@ -202,9 +194,7 @@ export async function listFabricScans(
 // Read -- detail (with children)
 // ---------------------------------------------------------------------------
 
-export async function getFabricScanDetail(
-  scanId: string
-): Promise<FabricScanDetail | null> {
+export async function getFabricScanDetail(scanId: string): Promise<FabricScanDetail | null> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeFabricScan.findUnique({
       where: { id: scanId },

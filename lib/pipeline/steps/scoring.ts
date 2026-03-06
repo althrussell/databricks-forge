@@ -71,7 +71,11 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   for (let di = 0; di < domains.length; di++) {
     const domain = domains[di];
     const domainCases = scored.filter((uc) => uc.domain === domain);
-    if (runId) await updateRunMessage(runId, `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`);
+    if (runId)
+      await updateRunMessage(
+        runId,
+        `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`,
+      );
     try {
       await scoreDomain(
         domainCases,
@@ -84,7 +88,10 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
       );
     } catch (error) {
-      logger.warn("Scoring failed for domain", { domain, error: error instanceof Error ? error.message : String(error) });
+      logger.warn("Scoring failed for domain", {
+        domain,
+        error: error instanceof Error ? error.message : String(error),
+      });
       failedScoringDomains++;
       // Assign default scores
       domainCases.forEach((uc) => {
@@ -98,23 +105,34 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   if (failedScoringDomains > 0) {
     const failureRate = failedScoringDomains / Math.max(domains.length, 1);
     if (failureRate >= 0.4) {
-      throw new Error(`Scoring failed for ${failedScoringDomains}/${domains.length} domains (>=40%). Failing closed to prevent low-quality output.`);
+      throw new Error(
+        `Scoring failed for ${failedScoringDomains}/${domains.length} domains (>=40%). Failing closed to prevent low-quality output.`,
+      );
     }
   }
 
   // Step 6b: Deduplicate per domain
-  if (runId) await updateRunMessage(runId, `Deduplicating: reviewing ${scored.length} use cases...`);
+  if (runId)
+    await updateRunMessage(runId, `Deduplicating: reviewing ${scored.length} use cases...`);
   let removedCount = 0;
   for (const domain of domains) {
     const domainCases = scored.filter((uc) => uc.domain === domain);
     if (domainCases.length <= 2) continue;
 
     try {
-      const toRemove = await deduplicateDomain(domainCases, bcRecord, getFastServingEndpoint(), runId);
+      const toRemove = await deduplicateDomain(
+        domainCases,
+        bcRecord,
+        getFastServingEndpoint(),
+        runId,
+      );
       removedCount += toRemove.size;
       scored = scored.filter((uc) => !toRemove.has(uc.useCaseNo));
     } catch (error) {
-      logger.warn("Dedup failed for domain", { domain, error: error instanceof Error ? error.message : String(error) });
+      logger.warn("Dedup failed for domain", {
+        domain,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -124,28 +142,49 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
 
   // Step 6c: Cross-domain deduplication
   if (scored.length > 5) {
-    if (runId) await updateRunMessage(runId, `Cross-domain dedup: reviewing ${scored.length} use cases...`);
+    if (runId)
+      await updateRunMessage(runId, `Cross-domain dedup: reviewing ${scored.length} use cases...`);
     try {
-      const crossDomainRemoved = await deduplicateCrossDomain(scored, bcRecord, getFastServingEndpoint(), runId);
+      const crossDomainRemoved = await deduplicateCrossDomain(
+        scored,
+        bcRecord,
+        getFastServingEndpoint(),
+        runId,
+      );
       if (crossDomainRemoved.size > 0) {
         scored = scored.filter((uc) => !crossDomainRemoved.has(uc.useCaseNo));
         if (runId) {
-          await updateRunMessage(runId, `Cross-domain dedup: removed ${crossDomainRemoved.size} duplicates`);
+          await updateRunMessage(
+            runId,
+            `Cross-domain dedup: removed ${crossDomainRemoved.size} duplicates`,
+          );
         }
-        logger.info("Cross-domain dedup removed use cases", { removedCount: crossDomainRemoved.size });
+        logger.info("Cross-domain dedup removed use cases", {
+          removedCount: crossDomainRemoved.size,
+        });
       }
     } catch (error) {
-      logger.warn("Cross-domain dedup failed", { error: error instanceof Error ? error.message : String(error) });
+      logger.warn("Cross-domain dedup failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
   // Step 6d: Global score calibration (chunked for full coverage)
   if (scored.length > 10) {
-    if (runId) await updateRunMessage(runId, `Calibrating scores across ${domains.length} domains...`);
+    if (runId)
+      await updateRunMessage(runId, `Calibrating scores across ${domains.length} domains...`);
     try {
-      await calibrateScoresChunked(scored, bc as unknown as Record<string, string>, run.config.aiModel, runId);
+      await calibrateScoresChunked(
+        scored,
+        bc as unknown as Record<string, string>,
+        run.config.aiModel,
+        runId,
+      );
     } catch (error) {
-      logger.warn("Global calibration failed", { error: error instanceof Error ? error.message : String(error) });
+      logger.warn("Global calibration failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -176,7 +215,11 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   if (scored.length < beforeFloor) {
     const removed = beforeFloor - scored.length;
     logger.info("Quality floor applied", { floor, removed, remaining: scored.length });
-    if (runId) await updateRunMessage(runId, `Quality floor (${floor}): removed ${removed} low-scoring use cases`);
+    if (runId)
+      await updateRunMessage(
+        runId,
+        `Quality floor (${floor}): removed ${removed} low-scoring use cases`,
+      );
   }
 
   // Step 6g: Adaptive volume cap
@@ -187,9 +230,17 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   }
 
   const finalDomains = [...new Set(scored.map((uc) => uc.domain))].length;
-  if (runId) await updateRunMessage(runId, `Final: ${scored.length} use cases across ${finalDomains} domains`);
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Final: ${scored.length} use cases across ${finalDomains} domains`,
+    );
 
-  logger.info("Scoring complete", { useCaseCount: scored.length, domainCount: finalDomains, depth });
+  logger.info("Scoring complete", {
+    useCaseCount: scored.length,
+    domainCount: finalDomains,
+    depth,
+  });
 
   return scored;
 }
@@ -282,7 +333,7 @@ async function deduplicateDomain(
   domainCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<Set<number>> {
   const renderDedupRow = (uc: UseCase) =>
     `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} |`;
@@ -322,7 +373,9 @@ async function deduplicateDomain(
 
     const items = validateLLMArray(rawItems, DedupItemSchema, "deduplicateDomain");
     for (const item of items) {
-      const action = String(item.action ?? "").trim().toLowerCase();
+      const action = String(item.action ?? "")
+        .trim()
+        .toLowerCase();
       if (!isNaN(item.no) && action === "remove") {
         toRemove.add(item.no);
       }
@@ -349,7 +402,7 @@ async function calibrateScoresChunked(
   useCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<void> {
   const domains = [...new Set(useCases.map((uc) => uc.domain))];
   const candidates: UseCase[] = [];
@@ -374,7 +427,7 @@ async function calibrateScoresChunked(
     const useCaseMarkdown = chunk
       .map(
         (uc) =>
-          `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`
+          `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`,
       )
       .join("\n");
 
@@ -441,7 +494,7 @@ async function deduplicateCrossDomain(
   useCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
-  runId?: string
+  runId?: string,
 ): Promise<Set<number>> {
   const renderCrossDedupRow = (uc: UseCase) =>
     `| ${uc.useCaseNo} | ${uc.domain} | ${uc.name} | ${uc.type} | ${uc.statement} | ${uc.overallScore.toFixed(2)} |`;

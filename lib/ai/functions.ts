@@ -30,50 +30,43 @@ export const AI_FUNCTIONS: Record<string, AIFunction> = {
     function: "ai_classify",
     businessValue:
       "Classifies text into predefined categories for automated routing, segmentation, and prioritization. Array MUST have max 20 items, each <50 characters.",
-    exampleUseCases:
-      "Support ticket routing, document classification, lead scoring",
+    exampleUseCases: "Support ticket routing, document classification, lead scoring",
   },
   ai_extract: {
     function: "ai_extract",
     businessValue:
       "Extracts specified entities from unstructured text to structure data for analysis and automation. Array MUST have max 20 items, each <50 characters.",
-    exampleUseCases:
-      "Invoice data extraction, contract term extraction, resume parsing",
+    exampleUseCases: "Invoice data extraction, contract term extraction, resume parsing",
   },
   ai_fix_grammar: {
     function: "ai_fix_grammar",
     businessValue:
       "Corrects grammatical errors in text to improve communication quality and professionalism.",
-    exampleUseCases:
-      "Customer communication cleanup, report generation, template standardization",
+    exampleUseCases: "Customer communication cleanup, report generation, template standardization",
   },
   ai_mask: {
     function: "ai_mask",
     businessValue:
       "Masks sensitive information (PII, PHI, financial data) for compliance and secure data sharing. MUST be combined with ai_query for compliance documentation.",
-    exampleUseCases:
-      "GDPR compliance, data anonymization, secure sharing",
+    exampleUseCases: "GDPR compliance, data anonymization, secure sharing",
   },
   ai_parse_document: {
     function: "ai_parse_document",
     businessValue:
       "Extracts structured text, layout, tables, and figures from unstructured document files (PDF, images, Word, PowerPoint). MUST ONLY be used with binary files from Unity Catalog volumes via READ_FILES().",
-    exampleUseCases:
-      "Invoice processing, contract analysis, report digitization",
+    exampleUseCases: "Invoice processing, contract analysis, report digitization",
   },
   ai_similarity: {
     function: "ai_similarity",
     businessValue:
       "Computes semantic similarity score (0-1) between two text strings for deduplication, matching, and record linkage. MUST be combined with ai_query for merge strategies.",
-    exampleUseCases:
-      "Duplicate detection, customer matching, product deduplication",
+    exampleUseCases: "Duplicate detection, customer matching, product deduplication",
   },
   ai_summarize: {
     function: "ai_summarize",
     businessValue:
       "Creates concise summaries of long text to improve information accessibility and decision-making speed.",
-    exampleUseCases:
-      "Meeting notes summarization, news digest generation, report condensation",
+    exampleUseCases: "Meeting notes summarization, news digest generation, report condensation",
   },
   ai_translate: {
     function: "ai_translate",
@@ -86,8 +79,7 @@ export const AI_FUNCTIONS: Record<string, AIFunction> = {
     function: "ai_gen",
     businessValue:
       "Generates text from a prompt using a built-in LLM (no endpoint required). Simpler alternative to ai_query for straightforward text generation.",
-    exampleUseCases:
-      "Product description generation, email drafting, simple text enrichment",
+    exampleUseCases: "Product description generation, email drafting, simple text enrichment",
   },
   ai_query: {
     function: "ai_query",
@@ -100,22 +92,19 @@ export const AI_FUNCTIONS: Record<string, AIFunction> = {
     function: "ai_forecast",
     businessValue:
       "Time series forecasting with prediction intervals for demand planning, capacity optimization, and trend prediction. MUST be combined with ai_query for strategic recommendations.",
-    exampleUseCases:
-      "Demand forecasting, revenue prediction, capacity planning",
+    exampleUseCases: "Demand forecasting, revenue prediction, capacity planning",
   },
   vector_search: {
     function: "vector_search",
     businessValue:
       "Semantic search using vector embeddings for intelligent information retrieval and recommendation systems. Table-valued function requiring named arguments: `index =>`, `query_text =>`, `num_results =>`.",
-    exampleUseCases:
-      "Similar product recommendations, knowledge base search, semantic matching",
+    exampleUseCases: "Similar product recommendations, knowledge base search, semantic matching",
   },
   http_request: {
     function: "http_request",
     businessValue:
       "Makes HTTP requests to external services from SQL using Unity Catalog HTTP connections. Returns `STRUCT<status_code: INT, text: STRING>`. Requires a pre-configured CONNECTION.",
-    exampleUseCases:
-      "External API enrichment, webhook notifications, third-party data validation",
+    exampleUseCases: "External API enrichment, webhook notifications, third-party data validation",
   },
   remote_query: {
     function: "remote_query",
@@ -307,58 +296,46 @@ export const GEOSPATIAL_FUNCTIONS: Record<string, GeospatialFunction> = {
     function: "h3_longlatash3(lon, lat, resolution)",
     businessValue:
       "Convert longitude/latitude to H3 hexagonal cell ID for spatial indexing and efficient proximity joins",
-    useCases:
-      "Store catchment areas, delivery zone mapping, customer-to-location assignment",
+    useCases: "Store catchment areas, delivery zone mapping, customer-to-location assignment",
     category: "H3 Indexing",
   },
   "h3_polyfillash3(geometry, resolution)": {
     function: "h3_polyfillash3(geometry, resolution)",
-    businessValue:
-      "Fill a polygon with H3 cells for area coverage and density analysis",
-    useCases:
-      "Service area coverage, zone density heatmaps, territory planning",
+    businessValue: "Fill a polygon with H3 cells for area coverage and density analysis",
+    useCases: "Service area coverage, zone density heatmaps, territory planning",
     category: "H3 Indexing",
   },
   "h3_toparent(h3CellId, resolution)": {
     function: "h3_toparent(h3CellId, resolution)",
-    businessValue:
-      "Roll up H3 cells to coarser resolution for multi-level spatial aggregation",
-    useCases:
-      "Regional rollups, zoom-level aggregation, hierarchical spatial analysis",
+    businessValue: "Roll up H3 cells to coarser resolution for multi-level spatial aggregation",
+    useCases: "Regional rollups, zoom-level aggregation, hierarchical spatial analysis",
     category: "H3 Indexing",
   },
   "h3_kring(h3CellId, k)": {
     function: "h3_kring(h3CellId, k)",
-    businessValue:
-      "Get all H3 cells within grid distance k for neighbourhood analysis",
-    useCases:
-      "Nearby store lookup, local competitor analysis, proximity-based alerts",
+    businessValue: "Get all H3 cells within grid distance k for neighbourhood analysis",
+    useCases: "Nearby store lookup, local competitor analysis, proximity-based alerts",
     category: "H3 Indexing",
   },
   "h3_distance(h3CellId1, h3CellId2)": {
     function: "h3_distance(h3CellId1, h3CellId2)",
     businessValue:
       "Compute grid distance between two H3 cells for fast approximate proximity checks",
-    useCases:
-      "Distance-based filtering, nearest-neighbour approximation, logistics routing",
+    useCases: "Distance-based filtering, nearest-neighbour approximation, logistics routing",
     category: "H3 Indexing",
   },
 
   // Spatial Constructors
   "ST_Point(x, y)": {
     function: "ST_Point(x, y)",
-    businessValue:
-      "Create point geometry from longitude/latitude for spatial operations",
-    useCases:
-      "Geocoding results, sensor locations, event coordinates",
+    businessValue: "Create point geometry from longitude/latitude for spatial operations",
+    useCases: "Geocoding results, sensor locations, event coordinates",
     category: "Spatial Constructors",
   },
   "ST_MakeLine(point1, point2)": {
     function: "ST_MakeLine(point1, point2)",
-    businessValue:
-      "Create line geometry connecting two points for route and path analysis",
-    useCases:
-      "Delivery routes, travel paths, network edges",
+    businessValue: "Create line geometry connecting two points for route and path analysis",
+    useCases: "Delivery routes, travel paths, network edges",
     category: "Spatial Constructors",
   },
 
@@ -367,76 +344,59 @@ export const GEOSPATIAL_FUNCTIONS: Record<string, GeospatialFunction> = {
     function: "ST_Distance(geom1, geom2)",
     businessValue:
       "Calculate exact distance between two geometries in metres for proximity analysis",
-    useCases:
-      "Store proximity, delivery radius, nearest-facility calculation",
+    useCases: "Store proximity, delivery radius, nearest-facility calculation",
     category: "Spatial Measurements",
   },
   "ST_Area(geometry)": {
     function: "ST_Area(geometry)",
-    businessValue:
-      "Calculate the area of a polygon for coverage and capacity analysis",
-    useCases:
-      "Territory sizing, warehouse footprint, coverage area measurement",
+    businessValue: "Calculate the area of a polygon for coverage and capacity analysis",
+    useCases: "Territory sizing, warehouse footprint, coverage area measurement",
     category: "Spatial Measurements",
   },
   "ST_Length(geometry)": {
     function: "ST_Length(geometry)",
-    businessValue:
-      "Calculate length of a line for route and network analysis",
-    useCases:
-      "Route distance, pipeline length, road segment measurement",
+    businessValue: "Calculate length of a line for route and network analysis",
+    useCases: "Route distance, pipeline length, road segment measurement",
     category: "Spatial Measurements",
   },
 
   // Spatial Relationships
   "ST_Contains(geom1, geom2)": {
     function: "ST_Contains(geom1, geom2)",
-    businessValue:
-      "Test if one geometry fully contains another for containment queries",
-    useCases:
-      "Point-in-polygon, zone assignment, boundary containment checks",
+    businessValue: "Test if one geometry fully contains another for containment queries",
+    useCases: "Point-in-polygon, zone assignment, boundary containment checks",
     category: "Spatial Relationships",
   },
   "ST_Intersects(geom1, geom2)": {
     function: "ST_Intersects(geom1, geom2)",
-    businessValue:
-      "Test if two geometries overlap for spatial join and overlap detection",
-    useCases:
-      "Zone overlap detection, coverage gap analysis, spatial joins",
+    businessValue: "Test if two geometries overlap for spatial join and overlap detection",
+    useCases: "Zone overlap detection, coverage gap analysis, spatial joins",
     category: "Spatial Relationships",
   },
   "ST_Within(geom1, geom2)": {
     function: "ST_Within(geom1, geom2)",
-    businessValue:
-      "Test if a geometry is inside another for inclusion filtering",
-    useCases:
-      "Geofencing, region-based filtering, boundary compliance",
+    businessValue: "Test if a geometry is inside another for inclusion filtering",
+    useCases: "Geofencing, region-based filtering, boundary compliance",
     category: "Spatial Relationships",
   },
   "ST_DWithin(geom1, geom2, distance)": {
     function: "ST_DWithin(geom1, geom2, distance)",
-    businessValue:
-      "Test if two geometries are within a specified distance for radius queries",
-    useCases:
-      "Radius search, proximity alerts, nearby entity detection",
+    businessValue: "Test if two geometries are within a specified distance for radius queries",
+    useCases: "Radius search, proximity alerts, nearby entity detection",
     category: "Spatial Relationships",
   },
 
   // Spatial Transformations
   "ST_Buffer(geometry, distance)": {
     function: "ST_Buffer(geometry, distance)",
-    businessValue:
-      "Create a buffer zone around a geometry for catchment and exclusion analysis",
-    useCases:
-      "Delivery zones, exclusion perimeters, service area buffers",
+    businessValue: "Create a buffer zone around a geometry for catchment and exclusion analysis",
+    useCases: "Delivery zones, exclusion perimeters, service area buffers",
     category: "Spatial Transformations",
   },
   "ST_Union(geom1, geom2)": {
     function: "ST_Union(geom1, geom2)",
-    businessValue:
-      "Merge two geometries into a single shape for territory consolidation",
-    useCases:
-      "Territory merging, coverage union, boundary consolidation",
+    businessValue: "Merge two geometries into a single shape for territory consolidation",
+    useCases: "Territory merging, coverage union, boundary consolidation",
     category: "Spatial Transformations",
   },
 };
@@ -450,8 +410,7 @@ export const GEOSPATIAL_FUNCTIONS: Record<string, GeospatialFunction> = {
  */
 export function generateAIFunctionsSummary(): string {
   const lines = Object.values(AI_FUNCTIONS).map(
-    (f) =>
-      `- **${f.function}**: ${f.businessValue}\n  Examples: ${f.exampleUseCases}`
+    (f) => `- **${f.function}**: ${f.businessValue}\n  Examples: ${f.exampleUseCases}`,
   );
   return `## Available AI Functions\n\n${lines.join("\n\n")}`;
 }
@@ -467,9 +426,7 @@ export function generateStatisticalFunctionsSummary(): string {
   }
 
   const sections = Object.entries(byCategory).map(([cat, funcs]) => {
-    const items = funcs
-      .map((f) => `  - **${f.function}**: ${f.businessValue}`)
-      .join("\n");
+    const items = funcs.map((f) => `  - **${f.function}**: ${f.businessValue}`).join("\n");
     return `### ${cat}\n${items}`;
   });
 
@@ -487,9 +444,7 @@ export function generateGeospatialFunctionsSummary(): string {
   }
 
   const sections = Object.entries(byCategory).map(([cat, funcs]) => {
-    const items = funcs
-      .map((f) => `  - **${f.function}**: ${f.businessValue}`)
-      .join("\n");
+    const items = funcs.map((f) => `  - **${f.function}**: ${f.businessValue}`).join("\n");
     return `### ${cat}\n${items}`;
   });
 

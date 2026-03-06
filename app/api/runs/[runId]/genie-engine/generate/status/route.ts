@@ -11,7 +11,7 @@ import { isValidUUID } from "@/lib/validation";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -40,9 +40,7 @@ export async function GET(
       completedDomainNames: job.completedDomainNames,
       error: job.error,
       errorType: job.errorType,
-      elapsedMs: job.completedAt
-        ? job.completedAt - job.startedAt
-        : Date.now() - job.startedAt,
+      elapsedMs: job.completedAt ? job.completedAt - job.startedAt : Date.now() - job.startedAt,
     });
   } catch (error) {
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });

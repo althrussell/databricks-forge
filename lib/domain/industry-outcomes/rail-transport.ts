@@ -44,8 +44,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Use ML-based conflict resolution to generate optimised timetables that maximise path utilisation across complex network topologies while respecting infrastructure and rolling stock constraints.",
               businessValue:
                 "5-10% increase in train paths utilised per hour on constrained corridors.",
-              typicalDataEntities: ["Network Topology", "Path Constraints", "Rolling Stock Availability", "Conflict Matrix"],
-              typicalSourceSystems: ["Timetabling System", "Asset Management System", "SCADA", "ERP"],
+              typicalDataEntities: [
+                "Network Topology",
+                "Path Constraints",
+                "Rolling Stock Availability",
+                "Conflict Matrix",
+              ],
+              typicalSourceSystems: [
+                "Timetabling System",
+                "Asset Management System",
+                "SCADA",
+                "ERP",
+              ],
             },
             {
               name: "Real-Time Delay Prediction & Management",
@@ -53,8 +63,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Predict knock-on delays across the network using real-time train positions, infrastructure status, and historical delay propagation patterns, recommending recovery actions to controllers.",
               businessValue:
                 "20-30% reduction in secondary delay minutes through proactive intervention.",
-              typicalDataEntities: ["Train Positions", "Infrastructure Status", "Delay History", "Recovery Actions"],
-              typicalSourceSystems: ["SCADA", "TMS", "Signalling System", "Asset Management System"],
+              typicalDataEntities: [
+                "Train Positions",
+                "Infrastructure Status",
+                "Delay History",
+                "Recovery Actions",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "TMS",
+                "Signalling System",
+                "Asset Management System",
+              ],
             },
             {
               name: "Heavy-Haul Train Dynamics & Pathing",
@@ -62,7 +82,12 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise consist length, distributed power configuration, and speed profiles for long heavy-haul coal and bulk routes using gradient data, axle load limits, and corridor capacity models.",
               businessValue:
                 "3-5% improvement in gross tonnage per train path through optimised consist planning.",
-              typicalDataEntities: ["Gradient Data", "Axle Load Limits", "Corridor Capacity", "Consist Configuration"],
+              typicalDataEntities: [
+                "Gradient Data",
+                "Axle Load Limits",
+                "Corridor Capacity",
+                "Consist Configuration",
+              ],
               typicalSourceSystems: ["Asset Management System", "TMS", "Track Database", "SCADA"],
             },
             {
@@ -71,8 +96,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise speed profiles using gradient data, timetable slack, and rolling stock characteristics to reduce traction energy consumption while maintaining punctuality.",
               businessValue:
                 "10-15% traction energy savings through optimised coasting and braking strategies.",
-              typicalDataEntities: ["Gradient Profiles", "Timetable Slack", "Rolling Stock Specs", "Energy Consumption"],
-              typicalSourceSystems: ["TMS", "Track Database", "Asset Management System", "Energy Management System"],
+              typicalDataEntities: [
+                "Gradient Profiles",
+                "Timetable Slack",
+                "Rolling Stock Specs",
+                "Energy Consumption",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "Track Database",
+                "Asset Management System",
+                "Energy Management System",
+              ],
             },
             {
               name: "Port Interface & Terminal Coordination",
@@ -80,7 +115,12 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Integrate ship schedules, stockpile levels, and corridor train plans to optimise the handoff between rail network and export terminals, reducing demurrage and improving port throughput.",
               businessValue:
                 "10-20% reduction in port demurrage costs through coordinated rail-terminal scheduling.",
-              typicalDataEntities: ["Ship Schedules", "Stockpile Levels", "Train Plans", "Berth Availability"],
+              typicalDataEntities: [
+                "Ship Schedules",
+                "Stockpile Levels",
+                "Train Plans",
+                "Berth Availability",
+              ],
               typicalSourceSystems: ["Port Management System", "TMS", "Terminal SCADA", "ERP"],
             },
           ],
@@ -90,11 +130,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Train paths utilised per hour",
             "Energy consumption per train-km",
           ],
-          personas: [
-            "Head of Operations",
-            "VP Train Planning",
-            "Chief Operating Officer",
-          ],
+          personas: ["Head of Operations", "VP Train Planning", "Chief Operating Officer"],
         },
         {
           name: "Freight Operations & Yard Management",
@@ -103,8 +139,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Freight Train Scheduling Optimization",
               description:
                 "Balance freight and passenger train paths across capacity-constrained corridors using AI to maximise freight throughput without degrading passenger performance.",
-              typicalDataEntities: ["Path Allocations", "Corridor Capacity", "Freight Demand", "Passenger Timetables"],
-              typicalSourceSystems: ["TMS", "Timetabling System", "Freight Management System", "SCADA"],
+              typicalDataEntities: [
+                "Path Allocations",
+                "Corridor Capacity",
+                "Freight Demand",
+                "Passenger Timetables",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "Timetabling System",
+                "Freight Management System",
+                "SCADA",
+              ],
             },
             {
               name: "Yard Operations Automation",
@@ -136,11 +182,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Terminal throughput (lifts per hour)",
             "Take-or-pay compliance (%)",
           ],
-          personas: [
-            "Head of Freight",
-            "VP Terminal Operations",
-            "Chief Operating Officer",
-          ],
+          personas: ["Head of Freight", "VP Terminal Operations", "Chief Operating Officer"],
         },
         {
           name: "Regulated Network Capacity & Access Management",
@@ -151,15 +193,35 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Model multi-user capacity on regulated corridors, queue and prioritise access requests, and report utilisation transparently to access holders and regulators.",
               businessValue:
                 "Improved access request turnaround and 10-15% better capacity utilisation on constrained coal systems.",
-              typicalDataEntities: ["Corridor Capacity", "Access Requests", "Utilisation Reports", "Queue Priorities"],
-              typicalSourceSystems: ["TMS", "Access Management System", "SCADA", "Regulatory Reporting"],
+              typicalDataEntities: [
+                "Corridor Capacity",
+                "Access Requests",
+                "Utilisation Reports",
+                "Queue Priorities",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "Access Management System",
+                "SCADA",
+                "Regulatory Reporting",
+              ],
             },
             {
               name: "Performance Rebate & Access Charge Optimization",
               description:
                 "Track corridor performance against access undertaking benchmarks, calculate rebate and penalty exposure in real time, and identify operational levers to optimise outcomes for network and above-rail operators.",
-              typicalDataEntities: ["Performance Benchmarks", "Rebate Calculations", "Penalty Exposure", "Access Charges"],
-              typicalSourceSystems: ["TMS", "Access Management System", "ERP", "Regulatory Reporting"],
+              typicalDataEntities: [
+                "Performance Benchmarks",
+                "Rebate Calculations",
+                "Penalty Exposure",
+                "Access Charges",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "Access Management System",
+                "ERP",
+                "Regulatory Reporting",
+              ],
             },
             {
               name: "Maintenance Window vs Throughput Scenario Planning",
@@ -167,8 +229,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Simulate the throughput impact of planned possessions and maintenance windows across coal systems and port interfaces, balancing asset renewal needs with contractual throughput obligations.",
               businessValue:
                 "5-8% reduction in throughput loss during planned maintenance through optimised possession scheduling.",
-              typicalDataEntities: ["Possession Schedule", "Throughput Models", "Contract Obligations", "Asset Renewal Plan"],
-              typicalSourceSystems: ["Asset Management System", "TMS", "Maintenance Planning", "ERP"],
+              typicalDataEntities: [
+                "Possession Schedule",
+                "Throughput Models",
+                "Contract Obligations",
+                "Asset Renewal Plan",
+              ],
+              typicalSourceSystems: [
+                "Asset Management System",
+                "TMS",
+                "Maintenance Planning",
+                "ERP",
+              ],
             },
           ],
           kpis: [
@@ -177,11 +249,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Access request lead time (days)",
             "Rebate / penalty exposure ($)",
           ],
-          personas: [
-            "Head of Network",
-            "VP Regulatory & Access",
-            "Network Capacity Manager",
-          ],
+          personas: ["Head of Network", "VP Regulatory & Access", "Network Capacity Manager"],
         },
         {
           name: "Workforce & Remote Operations",
@@ -192,15 +260,35 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Optimise crew rosters for long-distance heavy-haul corridors, modelling fatigue risk, remote changeover logistics, and regulatory hours-of-work limits to maintain safety and crew wellbeing.",
               businessValue:
                 "15-20% reduction in fatigue-related risk events through data-driven roster optimisation.",
-              typicalDataEntities: ["Crew Rosters", "Fatigue Risk Scores", "Hours of Work", "Changeover Locations"],
-              typicalSourceSystems: ["Crew Management System", "HR System", "TMS", "Safety Management System"],
+              typicalDataEntities: [
+                "Crew Rosters",
+                "Fatigue Risk Scores",
+                "Hours of Work",
+                "Changeover Locations",
+              ],
+              typicalSourceSystems: [
+                "Crew Management System",
+                "HR System",
+                "TMS",
+                "Safety Management System",
+              ],
             },
             {
               name: "Remote Operations Centre Decision Support",
               description:
                 "Provide AI copilots for train controllers and dispatchers managing remote corridors, surfacing real-time alerts, recommending recovery plans, and reducing cognitive load during complex operational scenarios.",
-              typicalDataEntities: ["Real-Time Alerts", "Recovery Plans", "Network State", "Incident History"],
-              typicalSourceSystems: ["SCADA", "TMS", "Signalling System", "Asset Management System"],
+              typicalDataEntities: [
+                "Real-Time Alerts",
+                "Recovery Plans",
+                "Network State",
+                "Incident History",
+              ],
+              typicalSourceSystems: [
+                "SCADA",
+                "TMS",
+                "Signalling System",
+                "Asset Management System",
+              ],
             },
           ],
           kpis: [
@@ -231,15 +319,35 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Predict component failures from onboard sensors, SCADA telemetry, and maintenance history using ML models, shifting from time-based to condition-based maintenance regimes.",
               businessValue:
                 "$30-50M annual savings for major operators through reduced unplanned maintenance and improved fleet availability.",
-              typicalDataEntities: ["Asset Condition Data", "Maintenance History", "IoT Sensor Feeds", "Failure Predictions"],
-              typicalSourceSystems: ["Asset Management System", "SCADA", "ERP", "Onboard Telemetry"],
+              typicalDataEntities: [
+                "Asset Condition Data",
+                "Maintenance History",
+                "IoT Sensor Feeds",
+                "Failure Predictions",
+              ],
+              typicalSourceSystems: [
+                "Asset Management System",
+                "SCADA",
+                "ERP",
+                "Onboard Telemetry",
+              ],
             },
             {
               name: "Wheel & Bogie Condition Monitoring",
               description:
                 "Detect wheel flats, bearing degradation, and bogie faults using wayside acoustic and vibration monitoring systems, triggering maintenance before failures cause service disruption.",
-              typicalDataEntities: ["Wayside Sensor Data", "Acoustic Signatures", "Vibration Patterns", "Bearing Condition"],
-              typicalSourceSystems: ["Wayside Monitoring Systems", "Asset Management System", "SCADA", "ERP"],
+              typicalDataEntities: [
+                "Wayside Sensor Data",
+                "Acoustic Signatures",
+                "Vibration Patterns",
+                "Bearing Condition",
+              ],
+              typicalSourceSystems: [
+                "Wayside Monitoring Systems",
+                "Asset Management System",
+                "SCADA",
+                "ERP",
+              ],
             },
             {
               name: "Fleet Availability Optimization",
@@ -253,11 +361,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Unplanned maintenance ratio",
             "Mean distance between failures",
           ],
-          personas: [
-            "Head of Fleet Engineering",
-            "VP Rolling Stock",
-            "Chief Mechanical Officer",
-          ],
+          personas: ["Head of Fleet Engineering", "VP Rolling Stock", "Chief Mechanical Officer"],
         },
         {
           name: "Infrastructure & Track",
@@ -289,11 +393,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Temporary speed restrictions (count)",
             "Infrastructure cost per track-km",
           ],
-          personas: [
-            "Head of Infrastructure",
-            "VP Asset Strategy",
-            "Chief Engineer",
-          ],
+          personas: ["Head of Infrastructure", "VP Asset Strategy", "Chief Engineer"],
         },
       ],
     },
@@ -311,7 +411,12 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Provide shipper-facing dashboards with live train position, consignment status, and corridor disruption alerts via API and web portal, giving freight customers full visibility of their shipments.",
               businessValue:
                 "30-40% reduction in shipper enquiries through self-service tracking and proactive notifications.",
-              typicalDataEntities: ["Train Positions", "Consignment Status", "Disruption Alerts", "ETA History"],
+              typicalDataEntities: [
+                "Train Positions",
+                "Consignment Status",
+                "Disruption Alerts",
+                "ETA History",
+              ],
               typicalSourceSystems: ["TMS", "Freight Management System", "SCADA", "Shipper Portal"],
             },
             {
@@ -323,17 +428,36 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Disruption Alerting & Recovery Communication",
               description:
                 "Deliver proactive, automated notifications to freight customers with ETA revisions, alternative routing options, and recovery timelines when corridor disruptions occur.",
-              businessValue:
-                "50%+ improvement in average disruption notification lead time.",
-              typicalDataEntities: ["Disruption Events", "ETA Revisions", "Alternative Routes", "Recovery Timelines"],
-              typicalSourceSystems: ["TMS", "SCADA", "Freight Management System", "Notification Service"],
+              businessValue: "50%+ improvement in average disruption notification lead time.",
+              typicalDataEntities: [
+                "Disruption Events",
+                "ETA Revisions",
+                "Alternative Routes",
+                "Recovery Timelines",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "SCADA",
+                "Freight Management System",
+                "Notification Service",
+              ],
             },
             {
               name: "Shipper Performance Dashboard",
               description:
                 "Provide per-customer views of on-time delivery, volume trends, SLA compliance, and ESG metrics, enabling shippers to monitor and report on their rail freight performance.",
-              typicalDataEntities: ["Delivery Performance", "Volume Trends", "SLA Metrics", "ESG Data"],
-              typicalSourceSystems: ["Freight Management System", "TMS", "CRM", "Carbon Calculator"],
+              typicalDataEntities: [
+                "Delivery Performance",
+                "Volume Trends",
+                "SLA Metrics",
+                "ESG Data",
+              ],
+              typicalSourceSystems: [
+                "Freight Management System",
+                "TMS",
+                "CRM",
+                "Carbon Calculator",
+              ],
             },
           ],
           kpis: [
@@ -357,15 +481,30 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Track contracted vs actual volumes across long-term haulage agreements, flag under/over-utilisation risks, and model rebate and penalty scenarios to optimise contract performance.",
               businessValue:
                 "5-10% improvement in contract utilisation through proactive volume management.",
-              typicalDataEntities: ["Contract Volumes", "Actual Volumes", "Rebate Models", "Penalty Scenarios"],
+              typicalDataEntities: [
+                "Contract Volumes",
+                "Actual Volumes",
+                "Rebate Models",
+                "Penalty Scenarios",
+              ],
               typicalSourceSystems: ["Freight Management System", "CRM", "ERP", "TMS"],
             },
             {
               name: "SLA & On-Time Performance Cockpit",
               description:
                 "Provide real-time contract performance by lane with drill-down to root-cause delays, enabling proactive account management and data-driven SLA negotiations.",
-              typicalDataEntities: ["Lane Performance", "Root-Cause Delays", "SLA Status", "Contract Benchmarks"],
-              typicalSourceSystems: ["TMS", "Freight Management System", "CRM", "Incident Database"],
+              typicalDataEntities: [
+                "Lane Performance",
+                "Root-Cause Delays",
+                "SLA Status",
+                "Contract Benchmarks",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "Freight Management System",
+                "CRM",
+                "Incident Database",
+              ],
             },
             {
               name: "Modal Shift & Revenue Growth Analytics",
@@ -373,8 +512,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Identify road-to-rail conversion opportunities by corridor, commodity, and customer segment using freight market data, emissions comparisons, and capacity availability.",
               businessValue:
                 "Target 2-5% incremental modal shift to rail through data-driven commercial targeting.",
-              typicalDataEntities: ["Market Data", "Emissions Comparisons", "Capacity Availability", "Customer Segments"],
-              typicalSourceSystems: ["Freight Management System", "Market Data", "Carbon Calculator", "TMS"],
+              typicalDataEntities: [
+                "Market Data",
+                "Emissions Comparisons",
+                "Capacity Availability",
+                "Customer Segments",
+              ],
+              typicalSourceSystems: [
+                "Freight Management System",
+                "Market Data",
+                "Carbon Calculator",
+                "TMS",
+              ],
             },
           ],
           kpis: [
@@ -383,11 +532,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Revenue per NTK",
             "Modal shift conversion rate (%)",
           ],
-          personas: [
-            "Chief Commercial Officer",
-            "Head of Freight Sales",
-            "VP Customer Success",
-          ],
+          personas: ["Chief Commercial Officer", "Head of Freight Sales", "VP Customer Success"],
         },
       ],
     },
@@ -403,22 +548,52 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "SPAD Risk Prediction",
               description:
                 "Predict Signal Passed at Danger likelihood from driver behaviour patterns, route geometry, signalling layout, and environmental conditions to target interventions at highest-risk locations.",
-              typicalDataEntities: ["Driver Behaviour", "Route Geometry", "Signalling Layout", "Environmental Data"],
-              typicalSourceSystems: ["Signalling System", "Driver Monitoring", "Track Database", "Weather Service"],
+              typicalDataEntities: [
+                "Driver Behaviour",
+                "Route Geometry",
+                "Signalling Layout",
+                "Environmental Data",
+              ],
+              typicalSourceSystems: [
+                "Signalling System",
+                "Driver Monitoring",
+                "Track Database",
+                "Weather Service",
+              ],
             },
             {
               name: "Level Crossing Risk Assessment",
               description:
                 "Score level crossing risk using road traffic volumes, sighting distances, near-miss history, and population density to prioritise upgrades and closures.",
-              typicalDataEntities: ["Traffic Volumes", "Sighting Distances", "Near-Miss History", "Population Data"],
-              typicalSourceSystems: ["Asset Management System", "Incident Database", "Traffic Data", "GIS Platform"],
+              typicalDataEntities: [
+                "Traffic Volumes",
+                "Sighting Distances",
+                "Near-Miss History",
+                "Population Data",
+              ],
+              typicalSourceSystems: [
+                "Asset Management System",
+                "Incident Database",
+                "Traffic Data",
+                "GIS Platform",
+              ],
             },
             {
               name: "Worker Safety & Track Access Monitoring",
               description:
                 "Track possessions, safe systems of work compliance, and near-miss events to prevent workforce injuries and improve track access planning.",
-              typicalDataEntities: ["Possession Records", "Safe Work Compliance", "Near-Miss Events", "Track Access Plans"],
-              typicalSourceSystems: ["Possession Management", "Safety Management System", "TMS", "HR System"],
+              typicalDataEntities: [
+                "Possession Records",
+                "Safe Work Compliance",
+                "Near-Miss Events",
+                "Track Access Plans",
+              ],
+              typicalSourceSystems: [
+                "Possession Management",
+                "Safety Management System",
+                "TMS",
+                "HR System",
+              ],
             },
             {
               name: "Fatigue & Human Factors Analytics",
@@ -483,8 +658,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Corridor Decarbonisation Planning",
               description:
                 "Model traction energy mix, renewable sourcing, locomotive idling reduction, and electrification or hydrogen scenarios at the corridor level to support net-zero operational emissions targets.",
-              typicalDataEntities: ["Energy Mix", "Renewable Sourcing", "Idling Data", "Electrification Scenarios"],
-              typicalSourceSystems: ["Energy Management System", "TMS", "Asset Management System", "ERP"],
+              typicalDataEntities: [
+                "Energy Mix",
+                "Renewable Sourcing",
+                "Idling Data",
+                "Electrification Scenarios",
+              ],
+              typicalSourceSystems: [
+                "Energy Management System",
+                "TMS",
+                "Asset Management System",
+                "ERP",
+              ],
             },
             {
               name: "Climate Resilience Analytics",
@@ -492,8 +677,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Assess flood, extreme heat, and cyclone exposure across network sections using climate projection models and historical event data, prioritising adaptation capex for long linear assets.",
               businessValue:
                 "Reduce climate-related disruption costs by 15-25% through targeted infrastructure hardening.",
-              typicalDataEntities: ["Climate Projections", "Historical Events", "Network Sections", "Asset Exposure"],
-              typicalSourceSystems: ["Climate Data Service", "Asset Management System", "Incident Database", "GIS Platform"],
+              typicalDataEntities: [
+                "Climate Projections",
+                "Historical Events",
+                "Network Sections",
+                "Asset Exposure",
+              ],
+              typicalSourceSystems: [
+                "Climate Data Service",
+                "Asset Management System",
+                "Incident Database",
+                "GIS Platform",
+              ],
             },
           ],
           kpis: [
@@ -524,8 +719,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "End-to-End Shipment Tracking",
               description:
                 "Provide real-time consignment visibility from origin to destination across rail and intermodal legs using GPS, RFID, and network event data.",
-              typicalDataEntities: ["Consignment Events", "GPS Positions", "RFID Reads", "Network Events"],
-              typicalSourceSystems: ["TMS", "Freight Management System", "Terminal Operating System", "Port Management System"],
+              typicalDataEntities: [
+                "Consignment Events",
+                "GPS Positions",
+                "RFID Reads",
+                "Network Events",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "Freight Management System",
+                "Terminal Operating System",
+                "Port Management System",
+              ],
             },
             {
               name: "ETA Prediction for Freight",
@@ -533,8 +738,18 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Predict freight train arrival times using current network state, weather conditions, and historical performance data to provide shippers with reliable delivery windows.",
               businessValue:
                 "90%+ ETA accuracy, reducing shipper buffer stock and improving supply chain planning.",
-              typicalDataEntities: ["Network State", "Weather Data", "Historical Performance", "Train Positions"],
-              typicalSourceSystems: ["TMS", "SCADA", "Weather Service", "Freight Management System"],
+              typicalDataEntities: [
+                "Network State",
+                "Weather Data",
+                "Historical Performance",
+                "Train Positions",
+              ],
+              typicalSourceSystems: [
+                "TMS",
+                "SCADA",
+                "Weather Service",
+                "Freight Management System",
+              ],
             },
             {
               name: "Route & Mode Optimization",
@@ -545,7 +760,12 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Freight Demand Forecasting",
               description:
                 "Forecast commodity and lane-level freight demand using economic indicators, trade flows, and seasonal patterns to optimise capacity allocation and pricing.",
-              typicalDataEntities: ["Economic Indicators", "Trade Flows", "Historical Demand", "Seasonal Patterns"],
+              typicalDataEntities: [
+                "Economic Indicators",
+                "Trade Flows",
+                "Historical Demand",
+                "Seasonal Patterns",
+              ],
               typicalSourceSystems: ["Freight Management System", "ERP", "Market Data", "TMS"],
             },
             {
@@ -554,7 +774,12 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
                 "Monitor NTK throughput, train cycle times, and bottleneck dwell by corridor to optimise end-to-end coal and bulk supply chain velocity from mine to port.",
               businessValue:
                 "5-10% improvement in corridor throughput through data-driven bottleneck identification and resolution.",
-              typicalDataEntities: ["NTK Throughput", "Cycle Times", "Bottleneck Dwell", "Corridor Metrics"],
+              typicalDataEntities: [
+                "NTK Throughput",
+                "Cycle Times",
+                "Bottleneck Dwell",
+                "Corridor Metrics",
+              ],
               typicalSourceSystems: ["TMS", "Freight Management System", "SCADA", "ERP"],
             },
           ],
@@ -565,11 +790,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "Freight revenue per train-km",
             "Corridor NTK throughput",
           ],
-          personas: [
-            "Head of Freight Commercial",
-            "VP Logistics",
-            "Chief Operating Officer",
-          ],
+          personas: ["Head of Freight Commercial", "VP Logistics", "Chief Operating Officer"],
         },
         {
           name: "Customer & Commercial Analytics",
@@ -578,21 +799,36 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
               name: "Freight Customer Segmentation",
               description:
                 "Segment shippers by volume, profitability, modal shift potential, and service requirements to tailor commercial strategies and account management.",
-              typicalDataEntities: ["Customer Profiles", "Volume History", "Profitability", "Service Requirements"],
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Volume History",
+                "Profitability",
+                "Service Requirements",
+              ],
               typicalSourceSystems: ["Freight Management System", "CRM", "ERP", "Billing System"],
             },
             {
               name: "Dynamic Freight Pricing",
               description:
                 "Optimise freight rates by corridor, commodity type, and demand intensity using ML-driven pricing models that respond to market conditions in real time.",
-              typicalDataEntities: ["Pricing History", "Demand Intensity", "Capacity", "Market Rates"],
+              typicalDataEntities: [
+                "Pricing History",
+                "Demand Intensity",
+                "Capacity",
+                "Market Rates",
+              ],
               typicalSourceSystems: ["Freight Management System", "ERP", "TMS", "Market Data"],
             },
             {
               name: "Contract & SLA Performance Analytics",
               description:
                 "Track contract performance, SLA compliance, and penalty exposure across the freight customer portfolio to improve commercial outcomes and retention.",
-              typicalDataEntities: ["Contract Terms", "SLA Metrics", "Penalty Exposure", "Performance History"],
+              typicalDataEntities: [
+                "Contract Terms",
+                "SLA Metrics",
+                "Penalty Exposure",
+                "Performance History",
+              ],
               typicalSourceSystems: ["Freight Management System", "CRM", "TMS", "ERP"],
             },
           ],
@@ -602,11 +838,7 @@ export const RAIL_TRANSPORT: IndustryOutcome = {
             "SLA compliance rate (%)",
             "Revenue growth per account",
           ],
-          personas: [
-            "Head of Freight Sales",
-            "Chief Commercial Officer",
-            "VP Customer Success",
-          ],
+          personas: ["Head of Freight Sales", "Chief Commercial Officer", "VP Customer Success"],
         },
       ],
     },

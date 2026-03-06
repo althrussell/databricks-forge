@@ -60,7 +60,7 @@ export async function proposeGoldSchema(
   datasets: FabricDataset[],
   targetCatalog: string,
   targetSchema: string,
-  options?: { useLLM?: boolean; sensitivityMappings?: SensitivityLabelMapping[] }
+  options?: { useLLM?: boolean; sensitivityMappings?: SensitivityLabelMapping[] },
 ): Promise<GoldSchemaProposal> {
   const allTables: FabricTable[] = [];
   const allRelationships: FabricRelationship[] = [];
@@ -128,7 +128,7 @@ export async function proposeGoldSchema(
       }));
 
     const dataSource = expressions.find(
-      (e) => e.tableName.toLowerCase() === table.name.toLowerCase()
+      (e) => e.tableName.toLowerCase() === table.name.toLowerCase(),
     )?.source;
 
     const label = tableSensitivity.get(table.name) ?? null;
@@ -151,7 +151,8 @@ export async function proposeGoldSchema(
     try {
       const enhancedDDL = await generateDDLWithLLM(proposals, targetCatalog, targetSchema);
       for (const proposal of proposals) {
-        proposal.ddl = enhancedDDL[proposal.ucTableName] ?? buildBasicDDL(proposal, targetCatalog, targetSchema);
+        proposal.ddl =
+          enhancedDDL[proposal.ucTableName] ?? buildBasicDDL(proposal, targetCatalog, targetSchema);
       }
     } catch (err) {
       logger.warn("[gold-proposer] LLM DDL generation failed, using basic DDL", {
@@ -204,16 +205,12 @@ export async function proposeGoldSchema(
 // Basic DDL (deterministic fallback)
 // ---------------------------------------------------------------------------
 
-function buildBasicDDL(
-  proposal: GoldTableProposal,
-  catalog: string,
-  schema: string
-): string {
+function buildBasicDDL(proposal: GoldTableProposal, catalog: string, schema: string): string {
   const fqn = `${catalog}.${schema}.${proposal.ucTableName}`;
   const colDefs = proposal.columns.map((c) => `  ${c.ucName} ${c.sparkType}`);
 
   const relComments = proposal.relationships.map(
-    (r) => `-- FK: ${r.fromColumn} -> ${r.toTable}.${r.toColumn}`
+    (r) => `-- FK: ${r.fromColumn} -> ${r.toTable}.${r.toColumn}`,
   );
 
   const parts = [`CREATE TABLE IF NOT EXISTS ${fqn} (`];
@@ -241,16 +238,20 @@ function buildBasicDDL(
 async function generateDDLWithLLM(
   proposals: GoldTableProposal[],
   catalog: string,
-  schema: string
+  schema: string,
 ): Promise<Record<string, string>> {
-  const tableDescriptions = proposals.map((p) => {
-    const cols = p.columns.map((c) => `  ${c.ucName} ${c.sparkType} -- (was PBI: ${c.pbiName} ${c.pbiType})`).join("\n");
-    const rels = p.relationships.length
-      ? `\n  Relationships: ${p.relationships.map((r) => `${r.fromColumn} -> ${r.toTable}.${r.toColumn}`).join(", ")}`
-      : "";
-    const source = p.dataSource ? `\n  Source: ${p.dataSource.slice(0, 200)}` : "";
-    return `Table: ${catalog}.${schema}.${p.ucTableName} (was PBI: ${p.pbiTableName})\nColumns:\n${cols}${rels}${source}`;
-  }).join("\n\n");
+  const tableDescriptions = proposals
+    .map((p) => {
+      const cols = p.columns
+        .map((c) => `  ${c.ucName} ${c.sparkType} -- (was PBI: ${c.pbiName} ${c.pbiType})`)
+        .join("\n");
+      const rels = p.relationships.length
+        ? `\n  Relationships: ${p.relationships.map((r) => `${r.fromColumn} -> ${r.toTable}.${r.toColumn}`).join(", ")}`
+        : "";
+      const source = p.dataSource ? `\n  Source: ${p.dataSource.slice(0, 200)}` : "";
+      return `Table: ${catalog}.${schema}.${p.ucTableName} (was PBI: ${p.pbiTableName})\nColumns:\n${cols}${rels}${source}`;
+    })
+    .join("\n\n");
 
   const prompt = `You are a Databricks SQL expert. Given the following table proposals migrated from Power BI, generate optimal CREATE TABLE DDL for each table.
 

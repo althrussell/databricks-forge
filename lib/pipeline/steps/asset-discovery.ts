@@ -20,7 +20,7 @@ import { logger } from "@/lib/logger";
 
 export async function runAssetDiscovery(
   ctx: PipelineContext,
-  runId?: string
+  runId?: string,
 ): Promise<DiscoveryResult | null> {
   if (!ctx.run.config.assetDiscoveryEnabled) {
     logger.info("[asset-discovery] Disabled -- skipping");
@@ -35,17 +35,13 @@ export async function runAssetDiscovery(
   if (runId) {
     await updateRunMessage(
       runId,
-      "Discovering existing Genie spaces, dashboards, and metric views..."
+      "Discovering existing Genie spaces, dashboards, and metric views...",
     );
   }
 
   const tableFqns = ctx.metadata.tables.map((t) => t.fqn);
 
-  const scopeStrings = [
-    ...new Set(
-      ctx.metadata.tables.map((t) => `${t.catalog}.${t.schema}`)
-    ),
-  ];
+  const scopeStrings = [...new Set(ctx.metadata.tables.map((t) => `${t.catalog}.${t.schema}`))];
 
   const discoveryResult = await discoverExistingAssets({
     scopeTables: tableFqns,

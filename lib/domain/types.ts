@@ -64,9 +64,27 @@ export interface DiscoveryDepthConfig {
 
 /** Factory defaults -- used when no user override is stored. */
 export const DEFAULT_DEPTH_CONFIGS: Record<DiscoveryDepth, DiscoveryDepthConfig> = {
-  focused:       { batchTargetMin: 8,  batchTargetMax: 12, qualityFloor: 0.4, adaptiveCap: 75,  lineageDepth: 3  },
-  balanced:      { batchTargetMin: 12, batchTargetMax: 18, qualityFloor: 0.3, adaptiveCap: 150, lineageDepth: 5  },
-  comprehensive: { batchTargetMin: 15, batchTargetMax: 22, qualityFloor: 0.2, adaptiveCap: 250, lineageDepth: 10 },
+  focused: {
+    batchTargetMin: 8,
+    batchTargetMax: 12,
+    qualityFloor: 0.4,
+    adaptiveCap: 75,
+    lineageDepth: 3,
+  },
+  balanced: {
+    batchTargetMin: 12,
+    batchTargetMax: 18,
+    qualityFloor: 0.3,
+    adaptiveCap: 150,
+    lineageDepth: 5,
+  },
+  comprehensive: {
+    batchTargetMin: 15,
+    batchTargetMax: 22,
+    qualityFloor: 0.2,
+    adaptiveCap: 250,
+    lineageDepth: 10,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -454,7 +472,14 @@ export interface GovernanceGap {
   tableFqn: string;
   overallScore: number; // 0-100
   gaps: Array<{
-    category: "documentation" | "ownership" | "sensitivity" | "access_control" | "maintenance" | "lineage" | "tagging";
+    category:
+      | "documentation"
+      | "ownership"
+      | "sensitivity"
+      | "access_control"
+      | "maintenance"
+      | "lineage"
+      | "tagging";
     severity: "critical" | "high" | "medium" | "low";
     detail: string;
     recommendation: string;

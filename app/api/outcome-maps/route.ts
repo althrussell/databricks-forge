@@ -7,10 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureMigrated } from "@/lib/lakebase/schema";
-import {
-  listOutcomeMaps,
-  createOutcomeMap,
-} from "@/lib/lakebase/outcome-maps";
+import { listOutcomeMaps, createOutcomeMap } from "@/lib/lakebase/outcome-maps";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 
@@ -22,7 +19,7 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to list outcome maps" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -40,15 +37,12 @@ export async function POST(request: NextRequest) {
     if (!parsedOutcome?.id || !parsedOutcome?.name) {
       return NextResponse.json(
         { error: "parsedOutcome must include at least id and name" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!rawMarkdown || typeof rawMarkdown !== "string") {
-      return NextResponse.json(
-        { error: "rawMarkdown is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "rawMarkdown is required" }, { status: 400 });
     }
 
     const userEmail = await getCurrentUserEmail();
@@ -66,8 +60,10 @@ export async function POST(request: NextRequest) {
     // Handle unique constraint violation on industryId
     if (msg.includes("Unique constraint")) {
       return NextResponse.json(
-        { error: `An outcome map with this industry ID already exists. Please use a different ID or delete the existing one first.` },
-        { status: 409 }
+        {
+          error: `An outcome map with this industry ID already exists. Please use a different ID or delete the existing one first.`,
+        },
+        { status: 409 },
       );
     }
     return NextResponse.json({ error: msg }, { status: 500 });

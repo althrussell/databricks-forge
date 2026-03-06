@@ -56,24 +56,22 @@ export interface ScanTrendResult {
 // Computation
 // ---------------------------------------------------------------------------
 
-export function computeScanTrends(
-  previous: ScanSnapshot,
-  current: ScanSnapshot
-): ScanTrendResult {
+export function computeScanTrends(previous: ScanSnapshot, current: ScanSnapshot): ScanTrendResult {
   const prevSet = new Set(previous.tableFqns);
   const currSet = new Set(current.tableFqns);
   const newTables = current.tableFqns.filter((t) => !prevSet.has(t));
   const removedTables = previous.tableFqns.filter((t) => !currSet.has(t));
 
   const daysBetween = Math.round(
-    (new Date(current.createdAt).getTime() - new Date(previous.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+    (new Date(current.createdAt).getTime() - new Date(previous.createdAt).getTime()) /
+      (1000 * 60 * 60 * 24),
   );
 
   function metric(
     label: string,
     prev: number,
     curr: number,
-    opts?: { invertSentiment?: boolean; suffix?: string }
+    opts?: { invertSentiment?: boolean; suffix?: string },
   ): TrendMetric {
     const change = curr - prev;
     const pct = prev > 0 ? Math.round((change / prev) * 100) : curr > 0 ? 100 : 0;
@@ -89,7 +87,10 @@ export function computeScanTrends(
       previous: `${prev}${suffix}`,
       current: `${curr}${suffix}`,
       change,
-      changeLabel: change === 0 ? "No change" : `${change > 0 ? "+" : ""}${change} (${pct > 0 ? "+" : ""}${pct}%)`,
+      changeLabel:
+        change === 0
+          ? "No change"
+          : `${change > 0 ? "+" : ""}${change} (${pct > 0 ? "+" : ""}${pct}%)`,
       direction,
       sentiment,
     };
@@ -100,14 +101,29 @@ export function computeScanTrends(
     metric("Total Size (bytes)", previous.totalSizeBytes, current.totalSizeBytes),
     metric("Total Rows", previous.totalRows, current.totalRows),
     metric("Business Domains", previous.domainCount, current.domainCount),
-    metric("Avg Governance Score", Math.round(previous.avgGovernanceScore), Math.round(current.avgGovernanceScore)),
-    metric("PII Tables", previous.piiTablesCount, current.piiTablesCount, { invertSentiment: true }),
-    metric("Redundancy Pairs", previous.redundancyPairsCount, current.redundancyPairsCount, { invertSentiment: true }),
+    metric(
+      "Avg Governance Score",
+      Math.round(previous.avgGovernanceScore),
+      Math.round(current.avgGovernanceScore),
+    ),
+    metric("PII Tables", previous.piiTablesCount, current.piiTablesCount, {
+      invertSentiment: true,
+    }),
+    metric("Redundancy Pairs", previous.redundancyPairsCount, current.redundancyPairsCount, {
+      invertSentiment: true,
+    }),
     metric("Data Products", previous.dataProductCount, current.dataProductCount),
     metric("Tables with Streaming", previous.tablesWithStreaming, current.tablesWithStreaming),
     metric("Tables with CDF", previous.tablesWithCDF, current.tablesWithCDF),
-    metric("Tables Needing OPTIMIZE", previous.tablesNeedingOptimize, current.tablesNeedingOptimize, { invertSentiment: true }),
-    metric("Tables Needing VACUUM", previous.tablesNeedingVacuum, current.tablesNeedingVacuum, { invertSentiment: true }),
+    metric(
+      "Tables Needing OPTIMIZE",
+      previous.tablesNeedingOptimize,
+      current.tablesNeedingOptimize,
+      { invertSentiment: true },
+    ),
+    metric("Tables Needing VACUUM", previous.tablesNeedingVacuum, current.tablesNeedingVacuum, {
+      invertSentiment: true,
+    }),
   ];
 
   return {

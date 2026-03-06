@@ -1,4 +1,8 @@
-export { AIObservabilityTab, type PromptLogEntry, type PromptLogStats } from "./ai-observability-tab";
+export {
+  AIObservabilityTab,
+  type PromptLogEntry,
+  type PromptLogStats,
+} from "./ai-observability-tab";
 export { BusinessContextCard } from "./business-context-card";
 export { ConfigField } from "./config-field";
 export { CoverageGapCard } from "./coverage-gap-card";

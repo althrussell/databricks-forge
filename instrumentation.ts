@@ -23,7 +23,7 @@ export function register() {
       const list = missing.map(([k, desc]) => `  - ${k} (${desc})`).join("\n");
       console.warn(
         `[startup] Expected environment variables not yet available:\n${list}\n` +
-          "These are normally injected by the Databricks Apps platform or set in .env.local for local dev."
+          "These are normally injected by the Databricks Apps platform or set in .env.local for local dev.",
       );
     } else {
       console.log("[instrumentation] Environment variables validated.");
@@ -66,13 +66,14 @@ export function register() {
       } catch (err) {
         console.warn(
           "[instrumentation] Database warm-up failed (will retry on first request):",
-          err instanceof Error ? err.message : String(err)
+          err instanceof Error ? err.message : String(err),
         );
         return;
       }
 
       try {
-        const { markOrphanedJobsFailed, markOrphanCheckComplete } = await import("@/lib/lakebase/background-jobs");
+        const { markOrphanedJobsFailed, markOrphanCheckComplete } =
+          await import("@/lib/lakebase/background-jobs");
         await markOrphanedJobsFailed();
         markOrphanCheckComplete();
       } catch {
@@ -80,6 +81,8 @@ export function register() {
       }
     };
 
-    setTimeout(() => { void warmupAndOrphanCheck(); }, 500);
+    setTimeout(() => {
+      void warmupAndOrphanCheck();
+    }, 500);
   }
 }

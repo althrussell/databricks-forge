@@ -29,23 +29,20 @@ export const CREDENTIAL_PROPAGATION_PATTERNS = [
 ] as const;
 
 export function isAuthError(err: unknown): boolean {
-  const msg =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "";
   const lower = msg.toLowerCase();
   return AUTH_ERROR_PATTERNS.some((p) => lower.includes(p));
 }
 
 export function isRateLimitError(err: unknown): boolean {
-  const msg =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "";
   const lower = msg.toLowerCase();
   return RATE_LIMIT_ERROR_PATTERNS.some((p) => lower.includes(p));
 }
 
 export function isCredentialPropagationError(err: unknown): boolean {
   if (!isAuthError(err)) return false;
-  const msg =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "";
   const lower = msg.toLowerCase();
   return CREDENTIAL_PROPAGATION_PATTERNS.some((p) => lower.includes(p));
 }

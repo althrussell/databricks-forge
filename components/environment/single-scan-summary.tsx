@@ -3,13 +3,7 @@
 import { StatCard } from "@/components/environment/stat-card";
 import { ExecutiveSummary } from "@/components/environment/executive-summary";
 import type { SingleScanData } from "@/app/environment/types";
-import {
-  AlertTriangle,
-  BarChart3,
-  Database,
-  ShieldAlert,
-  Workflow,
-} from "lucide-react";
+import { AlertTriangle, BarChart3, Database, ShieldAlert, Workflow } from "lucide-react";
 
 export interface SingleScanSummaryProps {
   scan: SingleScanData;
@@ -17,11 +11,7 @@ export interface SingleScanSummaryProps {
   humanNumber: (value: string | number | null) => string;
 }
 
-export function SingleScanSummary({
-  scan,
-  humanSize,
-  humanNumber,
-}: SingleScanSummaryProps) {
+export function SingleScanSummary({ scan, humanSize, humanNumber }: SingleScanSummaryProps) {
   return (
     <div className="space-y-4">
       {/* Executive Summary (reuses the same component as aggregate) */}

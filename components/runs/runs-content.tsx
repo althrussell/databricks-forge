@@ -35,29 +35,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import {
-  Trash2,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  Square,
-} from "lucide-react";
+import { Trash2, Search, ChevronLeft, ChevronRight, ArrowUpDown, Square } from "lucide-react";
 import { LabelWithTip } from "@/components/ui/info-tip";
 import { RUNS_LIST } from "@/lib/help-text";
 import type { PipelineRun } from "@/lib/domain/types";
 
 const STATUS_STYLES: Record<string, string> = {
-  pending:
-    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  running:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  completed:
-    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  failed:
-    "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  cancelled:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  running: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  cancelled: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
 const PAGE_SIZE = 15;
@@ -109,9 +97,7 @@ export function RunsContent({
   }, []);
 
   useEffect(() => {
-    const hasActiveRuns = runs.some(
-      (r) => r.status === "running" || r.status === "pending"
-    );
+    const hasActiveRuns = runs.some((r) => r.status === "running" || r.status === "pending");
     if (!hasActiveRuns) return;
     const interval = setInterval(fetchRuns, 5000);
     return () => clearInterval(interval);
@@ -154,19 +140,13 @@ export function RunsContent({
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === "name")
-        return a.config.businessName.localeCompare(b.config.businessName);
-      return (
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      if (sortBy === "name") return a.config.businessName.localeCompare(b.config.businessName);
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
-  const paginated = filtered.slice(
-    currentPage * PAGE_SIZE,
-    (currentPage + 1) * PAGE_SIZE
-  );
+  const paginated = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   if (error) {
     return (
@@ -231,10 +211,7 @@ export function RunsContent({
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
-        <Select
-          value={sortBy}
-          onValueChange={(v) => setSortBy(v as typeof sortBy)}
-        >
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
           <SelectTrigger className="w-[140px]">
             <ArrowUpDown className="mr-2 h-3 w-3" />
             <SelectValue placeholder="Sort" />
@@ -251,9 +228,7 @@ export function RunsContent({
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-          <p className="text-muted-foreground">
-            No runs match your filters
-          </p>
+          <p className="text-muted-foreground">No runs match your filters</p>
           <Button
             variant="outline"
             className="mt-4"
@@ -271,12 +246,22 @@ export function RunsContent({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead><LabelWithTip label="Business Name" tip={RUNS_LIST.businessName} /></TableHead>
-                  <TableHead><LabelWithTip label="UC Metadata" tip={RUNS_LIST.ucMetadata} /></TableHead>
-                  <TableHead><LabelWithTip label="Status" tip={RUNS_LIST.status} /></TableHead>
-                  <TableHead><LabelWithTip label="Progress" tip={RUNS_LIST.progress} /></TableHead>
+                  <TableHead>
+                    <LabelWithTip label="Business Name" tip={RUNS_LIST.businessName} />
+                  </TableHead>
+                  <TableHead>
+                    <LabelWithTip label="UC Metadata" tip={RUNS_LIST.ucMetadata} />
+                  </TableHead>
+                  <TableHead>
+                    <LabelWithTip label="Status" tip={RUNS_LIST.status} />
+                  </TableHead>
+                  <TableHead>
+                    <LabelWithTip label="Progress" tip={RUNS_LIST.progress} />
+                  </TableHead>
                   <TableHead>Activity</TableHead>
-                  <TableHead><LabelWithTip label="Created" tip={RUNS_LIST.created} /></TableHead>
+                  <TableHead>
+                    <LabelWithTip label="Created" tip={RUNS_LIST.created} />
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -287,17 +272,12 @@ export function RunsContent({
                     className="cursor-pointer transition-colors hover:bg-row-hover"
                     onClick={() => router.push(`/runs/${run.runId}`)}
                   >
-                    <TableCell className="font-medium">
-                      {run.config.businessName}
-                    </TableCell>
+                    <TableCell className="font-medium">{run.config.businessName}</TableCell>
                     <TableCell className="max-w-[200px] truncate font-mono text-xs">
                       {run.config.ucMetadata}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={STATUS_STYLES[run.status] ?? ""}
-                      >
+                      <Badge variant="secondary" className={STATUS_STYLES[run.status] ?? ""}>
                         {run.status}
                       </Badge>
                     </TableCell>
@@ -318,9 +298,7 @@ export function RunsContent({
                                     : undefined
                           }
                         />
-                        <span className="text-xs text-muted-foreground">
-                          {run.progressPct}%
-                        </span>
+                        <span className="text-xs text-muted-foreground">{run.progressPct}%</span>
                       </div>
                     </TableCell>
                     <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
@@ -361,27 +339,18 @@ export function RunsContent({
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Delete this run?
-                              </AlertDialogTitle>
+                              <AlertDialogTitle>Delete this run?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will permanently delete the pipeline run
-                                for{" "}
-                                <strong>{run.config.businessName}</strong> and
-                                all associated use cases and exports. This
-                                action cannot be undone.
+                                This will permanently delete the pipeline run for{" "}
+                                <strong>{run.config.businessName}</strong> and all associated use
+                                cases and exports. This action cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                onClick={() =>
-                                  handleDelete(
-                                    run.runId,
-                                    run.config.businessName
-                                  )
-                                }
+                                onClick={() => handleDelete(run.runId, run.config.businessName)}
                               >
                                 Delete
                               </AlertDialogAction>

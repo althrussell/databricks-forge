@@ -24,22 +24,16 @@ export interface SpaceMetadata {
  * Parse a serialized_space JSON string and extract metadata counts.
  * Returns null if parsing fails.
  */
-export function extractSpaceMetadata(
-  serializedSpace: string,
-): SpaceMetadata | null {
+export function extractSpaceMetadata(serializedSpace: string): SpaceMetadata | null {
   const parsed = parseSerializedSpace(serializedSpace);
   if (!parsed) return null;
   return extractMetadataFromParsed(parsed);
 }
 
 /** Extract metadata from an already-parsed SerializedSpace. */
-export function extractMetadataFromParsed(
-  space: SerializedSpace,
-): SpaceMetadata {
-  const tables =
-    space.data_sources?.tables?.map((t) => t.identifier) ?? [];
-  const metricViews =
-    space.data_sources?.metric_views?.map((m) => m.identifier) ?? [];
+export function extractMetadataFromParsed(space: SerializedSpace): SpaceMetadata {
+  const tables = space.data_sources?.tables?.map((t) => t.identifier) ?? [];
+  const metricViews = space.data_sources?.metric_views?.map((m) => m.identifier) ?? [];
   const snippets = space.instructions?.sql_snippets;
 
   return {
@@ -62,9 +56,7 @@ export function extractMetadataFromParsed(
   };
 }
 
-export function parseSerializedSpace(
-  raw: string,
-): SerializedSpace | null {
+export function parseSerializedSpace(raw: string): SerializedSpace | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as SerializedSpace;

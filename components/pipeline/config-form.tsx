@@ -16,21 +16,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Keyboard, X, Plus, Building2, Target, Scale, Layers, ScanLine, ChevronDown, Search, Zap } from "lucide-react";
+  Keyboard,
+  X,
+  Plus,
+  Building2,
+  Target,
+  Scale,
+  Layers,
+  ScanLine,
+  ChevronDown,
+  Search,
+  Zap,
+} from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   BUSINESS_PRIORITIES,
@@ -84,8 +86,9 @@ const SUGGESTED_DOMAINS = [
   "Sustainability",
 ];
 
-
-export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (name: string) => void } = {}) {
+export function ConfigForm({
+  onBusinessNameChange,
+}: { onBusinessNameChange?: (name: string) => void } = {}) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -110,8 +113,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
   const [businessDomains, setBusinessDomains] = useState<string[]>([]);
   const [domainInput, setDomainInput] = useState("");
 
-  const { getOptions: getIndustryOptions, getOutcome: getIndustryOutcome } =
-    useIndustryOutcomes();
+  const { getOptions: getIndustryOptions, getOutcome: getIndustryOutcome } = useIndustryOutcomes();
   const industryOptions = getIndustryOptions();
 
   const handleIndustryChange = (value: string) => {
@@ -126,12 +128,9 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
           setBusinessDomains(outcome.suggestedDomains);
         }
         // Auto-suggest priorities from the industry outcome map
-        if (
-          selectedPriorities.length <= 1 &&
-          selectedPriorities[0] === "Increase Revenue"
-        ) {
+        if (selectedPriorities.length <= 1 && selectedPriorities[0] === "Increase Revenue") {
           const mapped = outcome.suggestedPriorities.filter((p) =>
-            (BUSINESS_PRIORITIES as readonly string[]).includes(p)
+            (BUSINESS_PRIORITIES as readonly string[]).includes(p),
           ) as BusinessPriority[];
           if (mapped.length > 0) {
             setSelectedPriorities(mapped);
@@ -142,9 +141,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
   };
 
   // Derive ucMetadata from browser selection or manual input
-  const ucMetadata = manualMode
-    ? manualInput.trim()
-    : selectedSources.join(", ");
+  const ucMetadata = manualMode ? manualInput.trim() : selectedSources.join(", ");
   const [fabricScanId, setFabricScanId] = useState<string | null>(null);
   const [fabricScans, setFabricScans] = useState<Array<{ id: string; label: string }>>([]);
 
@@ -155,23 +152,36 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
         const completed = (data.scans ?? [])
           .filter((s: { status: string }) => s.status === "completed")
           .slice(0, 20)
-          .map((s: { id: string; datasetCount?: number; reportCount?: number; createdAt?: string }) => ({
-            id: s.id,
-            label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
-          }));
+          .map(
+            (s: {
+              id: string;
+              datasetCount?: number;
+              reportCount?: number;
+              createdAt?: string;
+            }) => ({
+              id: s.id,
+              label: `${s.datasetCount ?? 0} datasets, ${s.reportCount ?? 0} reports (${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "unknown"})`,
+            }),
+          );
         setFabricScans(completed);
       })
       .catch(() => {});
   }, []);
 
-  const [selectedPriorities, setSelectedPriorities] = useState<
-    BusinessPriority[]
-  >(["Increase Revenue"]);
+  const [selectedPriorities, setSelectedPriorities] = useState<BusinessPriority[]>([
+    "Increase Revenue",
+  ]);
   const [strategicGoals, setStrategicGoals] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
-  const [customerMaturity, setCustomerMaturity] = useState<"nascent" | "developing" | "advanced">("developing");
-  const [riskPosture, setRiskPosture] = useState<"conservative" | "balanced" | "aggressive">("balanced");
-  const [transformationHorizon, setTransformationHorizon] = useState<"quarter" | "half-year" | "year-plus">("half-year");
+  const [customerMaturity, setCustomerMaturity] = useState<"nascent" | "developing" | "advanced">(
+    "developing",
+  );
+  const [riskPosture, setRiskPosture] = useState<"conservative" | "balanced" | "aggressive">(
+    "balanced",
+  );
+  const [transformationHorizon, setTransformationHorizon] = useState<
+    "quarter" | "half-year" | "year-plus"
+  >("half-year");
 
   // Hydrate from sessionStorage (for "Duplicate Config" flow)
   useEffect(() => {
@@ -180,7 +190,8 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
       if (!raw) return;
       sessionStorage.removeItem("forge:duplicate-config");
       const cfg = JSON.parse(raw);
-      if (cfg.discoveryDepth && DISCOVERY_DEPTHS.includes(cfg.discoveryDepth)) setDiscoveryDepth(cfg.discoveryDepth);
+      if (cfg.discoveryDepth && DISCOVERY_DEPTHS.includes(cfg.discoveryDepth))
+        setDiscoveryDepth(cfg.discoveryDepth);
       if (cfg.businessName) setBusinessName(cfg.businessName);
       if (cfg.industry) setIndustry(cfg.industry);
       if (cfg.ucMetadata) {
@@ -190,7 +201,10 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
       if (cfg.businessDomains?.length) {
         const domains = Array.isArray(cfg.businessDomains)
           ? cfg.businessDomains
-          : cfg.businessDomains.split(",").map((d: string) => d.trim()).filter(Boolean);
+          : cfg.businessDomains
+              .split(",")
+              .map((d: string) => d.trim())
+              .filter(Boolean);
         setBusinessDomains(domains);
       }
       if (cfg.businessPriorities?.length) setSelectedPriorities(cfg.businessPriorities);
@@ -206,12 +220,9 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
 
   const togglePriority = (priority: BusinessPriority) => {
     setSelectedPriorities((prev) =>
-      prev.includes(priority)
-        ? prev.filter((p) => p !== priority)
-        : [...prev, priority]
+      prev.includes(priority) ? prev.filter((p) => p !== priority) : [...prev, priority],
     );
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,8 +232,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
       errors.businessName = "Business Name is required";
     }
     if (!ucMetadata) {
-      errors.ucMetadata =
-        "Select at least one catalog or schema from Unity Catalog";
+      errors.ucMetadata = "Select at least one catalog or schema from Unity Catalog";
     }
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -282,9 +292,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
       toast.success("Pipeline started! Redirecting to run details...");
       router.push(`/runs/${runId}`);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Something went wrong"
-      );
+      toast.error(error instanceof Error ? error.message : "Something went wrong");
     } finally {
       setIsSubmitting(false);
     }
@@ -300,8 +308,8 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
             <InfoTip tip={CONFIG.discoveryDepth} />
           </CardTitle>
           <CardDescription>
-            Choose how broadly to search for use cases. This affects how many
-            use cases are generated and the quality threshold applied.
+            Choose how broadly to search for use cases. This affects how many use cases are
+            generated and the quality threshold applied.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -321,7 +329,9 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${selected ? "text-primary" : "text-muted-foreground"}`} />
+                    <Icon
+                      className={`h-4 w-4 ${selected ? "text-primary" : "text-muted-foreground"}`}
+                    />
                     <span className={`text-sm font-medium ${selected ? "text-primary" : ""}`}>
                       {opt.label}
                     </span>
@@ -331,9 +341,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {opt.description}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{opt.description}</p>
                 </button>
               );
             })}
@@ -346,9 +354,8 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
         <CardHeader>
           <CardTitle>Required Configuration</CardTitle>
           <CardDescription>
-            These fields are needed to start a discovery run. The AI uses your
-            business name to generate industry context and tailor use case
-            recommendations.
+            These fields are needed to start a discovery run. The AI uses your business name to
+            generate industry context and tailor use case recommendations.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -363,18 +370,25 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
               onChange={(e) => {
                 setBusinessName(e.target.value);
                 onBusinessNameChange?.(e.target.value);
-                if (fieldErrors.businessName) setFieldErrors((prev) => { const next = { ...prev }; delete next.businessName; return next; });
+                if (fieldErrors.businessName)
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.businessName;
+                    return next;
+                  });
               }}
               aria-invalid={!!fieldErrors.businessName}
-              className={fieldErrors.businessName ? "border-destructive focus-visible:ring-destructive" : ""}
+              className={
+                fieldErrors.businessName ? "border-destructive focus-visible:ring-destructive" : ""
+              }
               required
             />
             {fieldErrors.businessName ? (
               <p className="text-xs text-destructive">{fieldErrors.businessName}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Your organisation or project name -- the AI derives industry
-                context, value chain, and revenue model from this.
+                Your organisation or project name -- the AI derives industry context, value chain,
+                and revenue model from this.
               </p>
             )}
           </div>
@@ -383,10 +397,7 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
             <Label htmlFor="industry">
               <LabelWithTip label="Industry (optional)" tip={CONFIG.industry} />
             </Label>
-            <Select
-              value={industry || "__none__"}
-              onValueChange={handleIndustryChange}
-            >
+            <Select value={industry || "__none__"} onValueChange={handleIndustryChange}>
               <SelectTrigger id="industry">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -405,13 +416,13 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
             <p className="text-xs text-muted-foreground">
               {industry ? (
                 <span className="text-primary">
-                  Industry context will be injected into prompts with curated
-                  use cases, KPIs, and strategic context.
+                  Industry context will be injected into prompts with curated use cases, KPIs, and
+                  strategic context.
                 </span>
               ) : (
                 <>
-                  If left empty, the system will auto-detect the best matching
-                  industry from the business context generated in Step 1.
+                  If left empty, the system will auto-detect the best matching industry from the
+                  business context generated in Step 1.
                 </>
               )}
             </p>
@@ -430,10 +441,19 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
                   value={manualInput}
                   onChange={(e) => {
                     setManualInput(e.target.value);
-                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const next = { ...prev }; delete next.ucMetadata; return next; });
+                    if (fieldErrors.ucMetadata)
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.ucMetadata;
+                        return next;
+                      });
                   }}
                   aria-invalid={!!fieldErrors.ucMetadata}
-                  className={fieldErrors.ucMetadata ? "border-destructive focus-visible:ring-destructive" : ""}
+                  className={
+                    fieldErrors.ucMetadata
+                      ? "border-destructive focus-visible:ring-destructive"
+                      : ""
+                  }
                 />
                 <p className="text-xs text-muted-foreground">
                   Comma-separated list: catalog, catalog.schema, or mix
@@ -453,7 +473,12 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
                   selectedSources={selectedSources}
                   onSelectionChange={(sources) => {
                     setSelectedSources(sources);
-                    if (fieldErrors.ucMetadata) setFieldErrors((prev) => { const next = { ...prev }; delete next.ucMetadata; return next; });
+                    if (fieldErrors.ucMetadata)
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.ucMetadata;
+                        return next;
+                      });
                   }}
                 />
                 <button
@@ -481,18 +506,15 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
             <InfoTip tip={CONFIG.priorities} />
           </CardTitle>
           <CardDescription>
-            Select the priorities that matter most to your organisation. These
-            directly influence how use cases are scored -- higher weight is given
-            to use cases aligned with your selected priorities.
+            Select the priorities that matter most to your organisation. These directly influence
+            how use cases are scored -- higher weight is given to use cases aligned with your
+            selected priorities.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
             {BUSINESS_PRIORITIES.map((priority) => (
-              <label
-                key={priority}
-                className="flex items-center gap-2 text-sm"
-              >
+              <label key={priority} className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={selectedPriorities.includes(priority)}
                   onCheckedChange={() => togglePriority(priority)}
@@ -514,280 +536,285 @@ export function ConfigForm({ onBusinessNameChange }: { onBusinessNameChange?: (n
                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
               </div>
               <CardDescription>
-                Optional settings -- defaults are auto-detected by the AI. Only
-                override these if you want to constrain the analysis to specific
-                business domains or use a particular AI model.
+                Optional settings -- defaults are auto-detected by the AI. Only override these if
+                you want to constrain the analysis to specific business domains or use a particular
+                AI model.
               </CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <LabelWithTip label="Business Domains (optional)" tip={CONFIG.domains} />
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <LabelWithTip label="Business Domains (optional)" tip={CONFIG.domains} />
 
-            {/* Selected domains */}
-            {businessDomains.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {businessDomains.map((domain) => (
-                  <Badge
-                    key={domain}
-                    variant="secondary"
-                    className="gap-1 pr-1"
-                  >
-                    {domain}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setBusinessDomains((prev) =>
-                          prev.filter((d) => d !== domain)
-                        )
-                      }
-                      className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
-                      aria-label={`Remove ${domain}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* Quick-add suggestions */}
-            <div>
-              <p className="mb-1.5 text-xs text-muted-foreground">
-                Quick add:
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {SUGGESTED_DOMAINS.filter(
-                  (d) => !businessDomains.includes(d)
-                ).map((domain) => (
-                  <button
-                    key={domain}
-                    type="button"
-                    onClick={() =>
-                      setBusinessDomains((prev) => [...prev, domain])
-                    }
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                  >
-                    <Plus className="h-3 w-3" />
-                    {domain}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom domain input */}
-            <div className="flex gap-2">
-              <Input
-                id="businessDomains"
-                placeholder="Add a custom domain..."
-                value={domainInput}
-                onChange={(e) => setDomainInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && domainInput.trim()) {
-                    e.preventDefault();
-                    const val = domainInput.trim();
-                    if (!businessDomains.includes(val)) {
-                      setBusinessDomains((prev) => [...prev, val]);
-                    }
-                    setDomainInput("");
-                  }
-                }}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!domainInput.trim()}
-                onClick={() => {
-                  const val = domainInput.trim();
-                  if (val && !businessDomains.includes(val)) {
-                    setBusinessDomains((prev) => [...prev, val]);
-                  }
-                  setDomainInput("");
-                }}
-              >
-                Add
-              </Button>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Leave empty for AI auto-detection
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="strategicGoals">
-              <LabelWithTip label="Strategic Goals (optional)" tip={CONFIG.strategicGoals} />
-            </Label>
-            <Textarea
-              id="strategicGoals"
-              placeholder="Custom strategic goals for use case prioritisation..."
-              value={strategicGoals}
-              onChange={(e) => setStrategicGoals(e.target.value)}
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">
-              Leave blank for AI-generated goals
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="additionalContext">
-              <LabelWithTip label="Additional Context (optional)" tip="Provide KPI targets, constraints, regulatory context, and must-win initiatives." />
-            </Label>
-            <Textarea
-              id="additionalContext"
-              placeholder="e.g. Reduce claim leakage by 15% in 2 quarters, prioritize regulatory reporting readiness, avoid high-change architecture..."
-              value={additionalContext}
-              onChange={(e) => setAdditionalContext(e.target.value)}
-              rows={4}
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Customer Maturity</Label>
-              <Select value={customerMaturity} onValueChange={(v) => setCustomerMaturity(v as typeof customerMaturity)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nascent">Nascent</SelectItem>
-                  <SelectItem value="developing">Developing</SelectItem>
-                  <SelectItem value="advanced">Advanced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Risk Posture</Label>
-              <Select value={riskPosture} onValueChange={(v) => setRiskPosture(v as typeof riskPosture)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="conservative">Conservative</SelectItem>
-                  <SelectItem value="balanced">Balanced</SelectItem>
-                  <SelectItem value="aggressive">Aggressive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Transformation Horizon</Label>
-              <Select value={transformationHorizon} onValueChange={(v) => setTransformationHorizon(v as typeof transformationHorizon)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="quarter">Quarter</SelectItem>
-                  <SelectItem value="half-year">Half-Year</SelectItem>
-                  <SelectItem value="year-plus">Year Plus</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div
-            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-              estateScanEnabled
-                ? "border-emerald-500/50 bg-emerald-500/5"
-                : "border-muted"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <ScanLine className={`mt-0.5 h-4 w-4 shrink-0 ${estateScanEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
-              <div>
-                <p className="text-sm font-medium flex items-center gap-1">
-                  Estate Scan
-                  <InfoTip tip={CONFIG.estateScan} />
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Run environment intelligence (domain classification, PII
-                  detection, health scoring, lineage) during this run
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setEstateScanEnabled((prev) => !prev)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                estateScanEnabled ? "bg-emerald-500" : "bg-muted"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
-                  estateScanEnabled ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-
-          <div
-            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-              assetDiscoveryEnabled
-                ? "border-sky-500/50 bg-sky-500/5"
-                : "border-muted"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <Search className={`mt-0.5 h-4 w-4 shrink-0 ${assetDiscoveryEnabled ? "text-sky-500" : "text-muted-foreground"}`} />
-              <div>
-                <p className="text-sm font-medium flex items-center gap-1">
-                  Asset Discovery
-                  <InfoTip tip={CONFIG.assetDiscovery} />
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Discover existing Genie spaces, dashboards, and metric views
-                  to avoid duplicate recommendations and identify gaps
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAssetDiscoveryEnabled((prev) => !prev)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                assetDiscoveryEnabled ? "bg-sky-500" : "bg-muted"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
-                  assetDiscoveryEnabled ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-
-          {fabricScans.length > 0 && (
-          <div
-            className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
-              fabricScanId
-                ? "border-violet-500/50 bg-violet-500/5"
-                : "border-muted"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <Zap className={`mt-0.5 h-4 w-4 shrink-0 ${fabricScanId ? "text-violet-500" : "text-muted-foreground"}`} />
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Link Power BI Scan</p>
-                <p className="text-xs text-muted-foreground">
-                  Use case generation will be aware of your PBI estate and propose replacements
-                </p>
-                <Select
-                  value={fabricScanId ?? "__none__"}
-                  onValueChange={(v) => setFabricScanId(v === "__none__" ? null : v)}
-                >
-                  <SelectTrigger className="w-full max-w-sm">
-                    <SelectValue placeholder="No scan linked" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No scan linked</SelectItem>
-                    {fabricScans.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label}
-                      </SelectItem>
+                {/* Selected domains */}
+                {businessDomains.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {businessDomains.map((domain) => (
+                      <Badge key={domain} variant="secondary" className="gap-1 pr-1">
+                        {domain}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBusinessDomains((prev) => prev.filter((d) => d !== domain))
+                          }
+                          className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                          aria-label={`Remove ${domain}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                )}
+
+                {/* Quick-add suggestions */}
+                <div>
+                  <p className="mb-1.5 text-xs text-muted-foreground">Quick add:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTED_DOMAINS.filter((d) => !businessDomains.includes(d)).map((domain) => (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => setBusinessDomains((prev) => [...prev, domain])}
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                      >
+                        <Plus className="h-3 w-3" />
+                        {domain}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom domain input */}
+                <div className="flex gap-2">
+                  <Input
+                    id="businessDomains"
+                    placeholder="Add a custom domain..."
+                    value={domainInput}
+                    onChange={(e) => setDomainInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && domainInput.trim()) {
+                        e.preventDefault();
+                        const val = domainInput.trim();
+                        if (!businessDomains.includes(val)) {
+                          setBusinessDomains((prev) => [...prev, val]);
+                        }
+                        setDomainInput("");
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!domainInput.trim()}
+                    onClick={() => {
+                      const val = domainInput.trim();
+                      if (val && !businessDomains.includes(val)) {
+                        setBusinessDomains((prev) => [...prev, val]);
+                      }
+                      setDomainInput("");
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground">Leave empty for AI auto-detection</p>
               </div>
-            </div>
-          </div>
-          )}
-        </CardContent>
+
+              <div className="space-y-2">
+                <Label htmlFor="strategicGoals">
+                  <LabelWithTip label="Strategic Goals (optional)" tip={CONFIG.strategicGoals} />
+                </Label>
+                <Textarea
+                  id="strategicGoals"
+                  placeholder="Custom strategic goals for use case prioritisation..."
+                  value={strategicGoals}
+                  onChange={(e) => setStrategicGoals(e.target.value)}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">Leave blank for AI-generated goals</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="additionalContext">
+                  <LabelWithTip
+                    label="Additional Context (optional)"
+                    tip="Provide KPI targets, constraints, regulatory context, and must-win initiatives."
+                  />
+                </Label>
+                <Textarea
+                  id="additionalContext"
+                  placeholder="e.g. Reduce claim leakage by 15% in 2 quarters, prioritize regulatory reporting readiness, avoid high-change architecture..."
+                  value={additionalContext}
+                  onChange={(e) => setAdditionalContext(e.target.value)}
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Customer Maturity</Label>
+                  <Select
+                    value={customerMaturity}
+                    onValueChange={(v) => setCustomerMaturity(v as typeof customerMaturity)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nascent">Nascent</SelectItem>
+                      <SelectItem value="developing">Developing</SelectItem>
+                      <SelectItem value="advanced">Advanced</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Risk Posture</Label>
+                  <Select
+                    value={riskPosture}
+                    onValueChange={(v) => setRiskPosture(v as typeof riskPosture)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="conservative">Conservative</SelectItem>
+                      <SelectItem value="balanced">Balanced</SelectItem>
+                      <SelectItem value="aggressive">Aggressive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Transformation Horizon</Label>
+                  <Select
+                    value={transformationHorizon}
+                    onValueChange={(v) =>
+                      setTransformationHorizon(v as typeof transformationHorizon)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quarter">Quarter</SelectItem>
+                      <SelectItem value="half-year">Half-Year</SelectItem>
+                      <SelectItem value="year-plus">Year Plus</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div
+                className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+                  estateScanEnabled ? "border-emerald-500/50 bg-emerald-500/5" : "border-muted"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <ScanLine
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${estateScanEnabled ? "text-emerald-500" : "text-muted-foreground"}`}
+                  />
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-1">
+                      Estate Scan
+                      <InfoTip tip={CONFIG.estateScan} />
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Run environment intelligence (domain classification, PII detection, health
+                      scoring, lineage) during this run
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEstateScanEnabled((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                    estateScanEnabled ? "bg-emerald-500" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                      estateScanEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div
+                className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+                  assetDiscoveryEnabled ? "border-sky-500/50 bg-sky-500/5" : "border-muted"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <Search
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${assetDiscoveryEnabled ? "text-sky-500" : "text-muted-foreground"}`}
+                  />
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-1">
+                      Asset Discovery
+                      <InfoTip tip={CONFIG.assetDiscovery} />
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Discover existing Genie spaces, dashboards, and metric views to avoid
+                      duplicate recommendations and identify gaps
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssetDiscoveryEnabled((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                    assetDiscoveryEnabled ? "bg-sky-500" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${
+                      assetDiscoveryEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {fabricScans.length > 0 && (
+                <div
+                  className={`flex items-center justify-between rounded-lg border-2 p-4 transition-colors ${
+                    fabricScanId ? "border-violet-500/50 bg-violet-500/5" : "border-muted"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <Zap
+                      className={`mt-0.5 h-4 w-4 shrink-0 ${fabricScanId ? "text-violet-500" : "text-muted-foreground"}`}
+                    />
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Link Power BI Scan</p>
+                      <p className="text-xs text-muted-foreground">
+                        Use case generation will be aware of your PBI estate and propose
+                        replacements
+                      </p>
+                      <Select
+                        value={fabricScanId ?? "__none__"}
+                        onValueChange={(v) => setFabricScanId(v === "__none__" ? null : v)}
+                      >
+                        <SelectTrigger className="w-full max-w-sm">
+                          <SelectValue placeholder="No scan linked" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">No scan linked</SelectItem>
+                          {fabricScans.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>

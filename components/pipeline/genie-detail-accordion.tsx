@@ -51,103 +51,101 @@ export function GenieDetailAccordion({
       {/* Metric Views */}
       {(rec.metricViews.length > 0 ||
         mvProposals.length > 0 ||
-        (parsed.data_sources?.metric_views &&
-          parsed.data_sources.metric_views.length > 0)) && (
+        (parsed.data_sources?.metric_views && parsed.data_sources.metric_views.length > 0)) && (
         <AccordionItem value="metric-views">
           <AccordionTrigger className="text-xs font-medium">
             Metric Views ({rec.metricViewCount})
           </AccordionTrigger>
           <AccordionContent>
             <div className="max-h-80 space-y-3 overflow-auto text-xs">
-              {mvProposals.length > 0 ? (
-                mvProposals.map((mv, i) => (
-                  <div key={i} className="space-y-1.5 rounded border p-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold text-violet-500">{mv.name}</span>
-                      <Badge
-                        variant="outline"
-                        className={
-                          mv.validationStatus === "valid"
-                            ? "border-green-500/50 text-green-600 text-[9px]"
-                            : mv.validationStatus === "warning"
-                              ? "border-amber-500/50 text-amber-600 text-[9px]"
-                              : "border-red-500/50 text-red-600 text-[9px]"
-                        }
-                      >
-                        {mv.validationStatus}
-                      </Badge>
-                    </div>
-                    {mv.description && (
-                      <p className="text-muted-foreground">{mv.description}</p>
-                    )}
-                    <div className="flex flex-wrap gap-1">
-                      {mv.sourceTables.map((t) => (
-                        <Badge key={t} variant="outline" className="font-mono text-[9px]">
-                          {t}
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {mv.hasJoins && (
-                        <Badge className="bg-blue-500/10 text-blue-600 text-[9px]">joins</Badge>
-                      )}
-                      {mv.hasFilteredMeasures && (
-                        <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">filtered</Badge>
-                      )}
-                      {mv.hasWindowMeasures && (
-                        <Badge className="bg-purple-500/10 text-purple-600 text-[9px]">window</Badge>
-                      )}
-                      {mv.hasMaterialization && (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px]">
-                          materialized
-                        </Badge>
-                      )}
-                    </div>
-                    {mv.validationIssues && mv.validationIssues.length > 0 && (
-                      <div
-                        className={`rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}
-                      >
-                        <p
-                          className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}
+              {mvProposals.length > 0
+                ? mvProposals.map((mv, i) => (
+                    <div key={i} className="space-y-1.5 rounded border p-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold text-violet-500">{mv.name}</span>
+                        <Badge
+                          variant="outline"
+                          className={
+                            mv.validationStatus === "valid"
+                              ? "border-green-500/50 text-green-600 text-[9px]"
+                              : mv.validationStatus === "warning"
+                                ? "border-amber-500/50 text-amber-600 text-[9px]"
+                                : "border-red-500/50 text-red-600 text-[9px]"
+                          }
                         >
-                          {mv.validationStatus === "error"
-                            ? "Validation errors:"
-                            : "Validation issues:"}
-                        </p>
-                        {mv.validationIssues.map((issue, idx) => (
-                          <p
-                            key={idx}
-                            className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}
-                          >
-                            - {issue}
-                          </p>
+                          {mv.validationStatus}
+                        </Badge>
+                      </div>
+                      {mv.description && <p className="text-muted-foreground">{mv.description}</p>}
+                      <div className="flex flex-wrap gap-1">
+                        {mv.sourceTables.map((t) => (
+                          <Badge key={t} variant="outline" className="font-mono text-[9px]">
+                            {t}
+                          </Badge>
                         ))}
                       </div>
-                    )}
-                    {mv.ddl && (
-                      <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
-                        {mv.ddl}
-                      </pre>
-                    )}
-                  </div>
-                ))
-              ) : parsed.data_sources?.metric_views &&
-                parsed.data_sources.metric_views.length > 0 ? (
-                parsed.data_sources.metric_views.map((mv) => (
-                  <div key={mv.identifier} className="space-y-0.5">
-                    <span className="truncate font-mono text-violet-500">{mv.identifier}</span>
-                    {mv.description && mv.description.length > 0 && (
-                      <p className="text-muted-foreground">{mv.description.join(" ")}</p>
-                    )}
-                  </div>
-                ))
-              ) : (
-                rec.metricViews.map((mv) => (
-                  <div key={mv} className="truncate font-mono text-violet-500">
-                    {mv}
-                  </div>
-                ))
-              )}
+                      <div className="flex flex-wrap gap-1">
+                        {mv.hasJoins && (
+                          <Badge className="bg-blue-500/10 text-blue-600 text-[9px]">joins</Badge>
+                        )}
+                        {mv.hasFilteredMeasures && (
+                          <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">
+                            filtered
+                          </Badge>
+                        )}
+                        {mv.hasWindowMeasures && (
+                          <Badge className="bg-purple-500/10 text-purple-600 text-[9px]">
+                            window
+                          </Badge>
+                        )}
+                        {mv.hasMaterialization && (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px]">
+                            materialized
+                          </Badge>
+                        )}
+                      </div>
+                      {mv.validationIssues && mv.validationIssues.length > 0 && (
+                        <div
+                          className={`rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}
+                        >
+                          <p
+                            className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}
+                          >
+                            {mv.validationStatus === "error"
+                              ? "Validation errors:"
+                              : "Validation issues:"}
+                          </p>
+                          {mv.validationIssues.map((issue, idx) => (
+                            <p
+                              key={idx}
+                              className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}
+                            >
+                              - {issue}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {mv.ddl && (
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
+                          {mv.ddl}
+                        </pre>
+                      )}
+                    </div>
+                  ))
+                : parsed.data_sources?.metric_views && parsed.data_sources.metric_views.length > 0
+                  ? parsed.data_sources.metric_views.map((mv) => (
+                      <div key={mv.identifier} className="space-y-0.5">
+                        <span className="truncate font-mono text-violet-500">{mv.identifier}</span>
+                        {mv.description && mv.description.length > 0 && (
+                          <p className="text-muted-foreground">{mv.description.join(" ")}</p>
+                        )}
+                      </div>
+                    ))
+                  : rec.metricViews.map((mv) => (
+                      <div key={mv} className="truncate font-mono text-violet-500">
+                        {mv}
+                      </div>
+                    ))}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -232,24 +230,23 @@ export function GenieDetailAccordion({
       {(parsed.instructions?.example_question_sqls?.length ?? 0) > 0 && (
         <AccordionItem value="sql">
           <AccordionTrigger className="text-xs font-medium">
-            SQL Examples (
-            {parsed.instructions?.example_question_sqls?.length ?? 0})
+            SQL Examples ({parsed.instructions?.example_question_sqls?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="max-h-64 space-y-3 overflow-auto">
               {(parsed.instructions?.example_question_sqls ?? []).map((ex) => (
-                  <div key={ex.id}>
-                    <p className="text-xs font-medium">{ex.question.join(" ")}</p>
-                    <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
-                      {ex.sql.join("\n")}
-                    </pre>
-                    {ex.usage_guidance && ex.usage_guidance.length > 0 && (
-                      <p className="mt-1 text-[10px] italic text-muted-foreground">
-                        {ex.usage_guidance.join("; ")}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                <div key={ex.id}>
+                  <p className="text-xs font-medium">{ex.question.join(" ")}</p>
+                  <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
+                    {ex.sql.join("\n")}
+                  </pre>
+                  {ex.usage_guidance && ex.usage_guidance.length > 0 && (
+                    <p className="mt-1 text-[10px] italic text-muted-foreground">
+                      {ex.usage_guidance.join("; ")}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -259,28 +256,25 @@ export function GenieDetailAccordion({
       {(parsed.instructions?.sql_snippets?.measures?.length ?? 0) > 0 && (
         <AccordionItem value="measures">
           <AccordionTrigger className="text-xs font-medium">
-            Measures (
-            {parsed.instructions?.sql_snippets?.measures?.length ?? 0})
+            Measures ({parsed.instructions?.sql_snippets?.measures?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-0.5 text-xs">
               {(parsed.instructions?.sql_snippets?.measures ?? []).map((m) => (
-                  <div key={m.id} className="flex items-baseline gap-2 py-0.5">
-                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
-                      {m.alias}
-                    </code>
-                    <span className="text-muted-foreground">{m.sql.join(" ")}</span>
-                    {m.synonyms && m.synonyms.length > 0 && (
-                      <span className="flex gap-0.5">
-                        {m.synonyms.map((s, si) => (
-                          <Badge key={si} variant="outline" className="text-[9px]">
-                            {s}
-                          </Badge>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                <div key={m.id} className="flex items-baseline gap-2 py-0.5">
+                  <code className="rounded bg-muted px-1 font-mono text-[10px]">{m.alias}</code>
+                  <span className="text-muted-foreground">{m.sql.join(" ")}</span>
+                  {m.synonyms && m.synonyms.length > 0 && (
+                    <span className="flex gap-0.5">
+                      {m.synonyms.map((s, si) => (
+                        <Badge key={si} variant="outline" className="text-[9px]">
+                          {s}
+                        </Badge>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -290,28 +284,27 @@ export function GenieDetailAccordion({
       {(parsed.instructions?.sql_snippets?.filters?.length ?? 0) > 0 && (
         <AccordionItem value="filters">
           <AccordionTrigger className="text-xs font-medium">
-            Filters (
-            {parsed.instructions?.sql_snippets?.filters?.length ?? 0})
+            Filters ({parsed.instructions?.sql_snippets?.filters?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-0.5 text-xs">
               {(parsed.instructions?.sql_snippets?.filters ?? []).map((f) => (
-                  <div key={f.id} className="flex items-baseline gap-2 py-0.5">
-                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
-                      {f.display_name}
-                    </code>
-                    <span className="text-muted-foreground">{f.sql.join(" ")}</span>
-                    {f.synonyms && f.synonyms.length > 0 && (
-                      <span className="flex gap-0.5">
-                        {f.synonyms.map((s, si) => (
-                          <Badge key={si} variant="outline" className="text-[9px]">
-                            {s}
-                          </Badge>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                <div key={f.id} className="flex items-baseline gap-2 py-0.5">
+                  <code className="rounded bg-muted px-1 font-mono text-[10px]">
+                    {f.display_name}
+                  </code>
+                  <span className="text-muted-foreground">{f.sql.join(" ")}</span>
+                  {f.synonyms && f.synonyms.length > 0 && (
+                    <span className="flex gap-0.5">
+                      {f.synonyms.map((s, si) => (
+                        <Badge key={si} variant="outline" className="text-[9px]">
+                          {s}
+                        </Badge>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -321,28 +314,25 @@ export function GenieDetailAccordion({
       {(parsed.instructions?.sql_snippets?.expressions?.length ?? 0) > 0 && (
         <AccordionItem value="dimensions">
           <AccordionTrigger className="text-xs font-medium">
-            Dimensions (
-            {parsed.instructions?.sql_snippets?.expressions?.length ?? 0})
+            Dimensions ({parsed.instructions?.sql_snippets?.expressions?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-0.5 text-xs">
               {(parsed.instructions?.sql_snippets?.expressions ?? []).map((e) => (
-                  <div key={e.id} className="flex items-baseline gap-2 py-0.5">
-                    <code className="rounded bg-muted px-1 font-mono text-[10px]">
-                      {e.alias}
-                    </code>
-                    <span className="text-muted-foreground">{e.sql.join(" ")}</span>
-                    {e.synonyms && e.synonyms.length > 0 && (
-                      <span className="flex gap-0.5">
-                        {e.synonyms.map((s, si) => (
-                          <Badge key={si} variant="outline" className="text-[9px]">
-                            {s}
-                          </Badge>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                <div key={e.id} className="flex items-baseline gap-2 py-0.5">
+                  <code className="rounded bg-muted px-1 font-mono text-[10px]">{e.alias}</code>
+                  <span className="text-muted-foreground">{e.sql.join(" ")}</span>
+                  {e.synonyms && e.synonyms.length > 0 && (
+                    <span className="flex gap-0.5">
+                      {e.synonyms.map((s, si) => (
+                        <Badge key={si} variant="outline" className="text-[9px]">
+                          {s}
+                        </Badge>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -352,8 +342,7 @@ export function GenieDetailAccordion({
       {(parsed.instructions?.join_specs?.length ?? 0) > 0 && (
         <AccordionItem value="joins">
           <AccordionTrigger className="text-xs font-medium">
-            Join Relationships (
-            {parsed.instructions?.join_specs?.length ?? 0})
+            Join Relationships ({parsed.instructions?.join_specs?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-1 text-xs">
@@ -361,17 +350,11 @@ export function GenieDetailAccordion({
                 const rtMatch = j.sql
                   .find((s) => s.startsWith("--rt="))
                   ?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
-                const rt = rtMatch
-                  ? rtMatch[1].toLowerCase().replace(/_/g, " ")
-                  : null;
-                const sqlDisplay = j.sql
-                  .filter((s) => !s.startsWith("--rt="))
-                  .join(" ");
+                const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
+                const sqlDisplay = j.sql.filter((s) => !s.startsWith("--rt=")).join(" ");
                 return (
                   <div key={j.id} className="flex items-baseline gap-2 py-0.5">
-                    <span className="truncate font-mono text-muted-foreground">
-                      {sqlDisplay}
-                    </span>
+                    <span className="truncate font-mono text-muted-foreground">{sqlDisplay}</span>
                     {rt && (
                       <Badge variant="outline" className="shrink-0 text-[9px]">
                         {rt}
@@ -389,8 +372,7 @@ export function GenieDetailAccordion({
       {(parsed.instructions?.text_instructions?.length ?? 0) > 0 && (
         <AccordionItem value="instructions">
           <AccordionTrigger className="text-xs font-medium">
-            Text Instructions (
-            {parsed.instructions?.text_instructions?.length ?? 0})
+            Text Instructions ({parsed.instructions?.text_instructions?.length ?? 0})
           </AccordionTrigger>
           <AccordionContent>
             <div className="space-y-2 text-xs text-muted-foreground">
@@ -413,15 +395,15 @@ export function GenieDetailAccordion({
           <AccordionContent>
             <div className="max-h-64 space-y-2 overflow-auto">
               {(parsed.benchmarks?.questions ?? []).map((b) => (
-                  <div key={b.id} className="rounded border p-2">
-                    <p className="text-xs font-medium">{b.question.join(" ")}</p>
-                    {b.answer && b.answer.length > 0 && (
-                      <pre className="mt-1 rounded bg-muted/50 p-1 text-[10px] font-mono">
-                        {b.answer[0].content.join("\n")}
-                      </pre>
-                    )}
-                  </div>
-                ))}
+                <div key={b.id} className="rounded border p-2">
+                  <p className="text-xs font-medium">{b.question.join(" ")}</p>
+                  {b.answer && b.answer.length > 0 && (
+                    <pre className="mt-1 rounded bg-muted/50 p-1 text-[10px] font-mono">
+                      {b.answer[0].content.join("\n")}
+                    </pre>
+                  )}
+                </div>
+              ))}
             </div>
           </AccordionContent>
         </AccordionItem>

@@ -13,7 +13,11 @@ import { Sun, Moon, Monitor } from "lucide-react";
 
 const subscribe = () => () => {};
 function useMounted() {
-  return useSyncExternalStore(subscribe, () => true, () => false);
+  return useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
 }
 
 export function ThemeToggle() {

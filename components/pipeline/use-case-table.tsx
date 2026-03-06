@@ -21,12 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
@@ -72,7 +67,11 @@ interface UseCaseTableProps {
   lineageDiscoveredFqns?: string[];
 }
 
-export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }: UseCaseTableProps) {
+export function UseCaseTable({
+  useCases,
+  onUpdate,
+  lineageDiscoveredFqns = [],
+}: UseCaseTableProps) {
   const [search, setSearch] = useState("");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -89,10 +88,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
   const [adjFeasibility, setAdjFeasibility] = useState(0);
   const [adjImpact, setAdjImpact] = useState(0);
 
-  const domains = useMemo(
-    () => [...new Set(useCases.map((uc) => uc.domain))].sort(),
-    [useCases]
-  );
+  const domains = useMemo(() => [...new Set(useCases.map((uc) => uc.domain))].sort(), [useCases]);
 
   const filtered = useMemo(() => {
     let result = [...useCases];
@@ -103,7 +99,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
         (uc) =>
           uc.name.toLowerCase().includes(q) ||
           uc.statement.toLowerCase().includes(q) ||
-          uc.domain.toLowerCase().includes(q)
+          uc.domain.toLowerCase().includes(q),
       );
     }
 
@@ -138,8 +134,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
     return useCases
       .filter(
         (uc) =>
-          uc.id !== selectedUseCase.id &&
-          uc.tablesInvolved.some((t) => selectedTables.has(t))
+          uc.id !== selectedUseCase.id && uc.tablesInvolved.some((t) => selectedTables.has(t)),
       )
       .slice(0, 5);
   }, [selectedUseCase, useCases]);
@@ -147,7 +142,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
   // Computed user overall from sliders
   const adjOverall = useMemo(
     () => computeOverallScore(adjPriority / 100, adjFeasibility / 100),
-    [adjPriority, adjFeasibility]
+    [adjPriority, adjFeasibility],
   );
 
   const hasUserScoreChanges = useCallback(
@@ -158,7 +153,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
       const sysImp = Math.round(uc.impactScore * 100);
       return adjPriority !== sysPri || adjFeasibility !== sysFea || adjImpact !== sysImp;
     },
-    [adjustingScores, adjPriority, adjFeasibility, adjImpact]
+    [adjustingScores, adjPriority, adjFeasibility, adjImpact],
   );
 
   // Begin score adjustment mode
@@ -249,10 +244,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
               <SelectItem value="Statistical">Statistical</SelectItem>
             </SelectContent>
           </Select>
-          <Select
-            value={sortBy}
-            onValueChange={(v) => setSortBy(v as typeof sortBy)}
-          >
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
@@ -283,10 +275,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="h-24 text-center text-muted-foreground"
-                  >
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     No use cases match your filters
                   </TableCell>
                 </TableRow>
@@ -308,9 +297,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                       <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">{uc.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {uc.statement}
-                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{uc.statement}</p>
                         </div>
                         {hasAnyUserScore(uc) && (
                           <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-violet-500" />
@@ -325,15 +312,22 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                         <Layers className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-sm">{uc.domain}</span>
                         {uc.subdomain && (
-                          <span className="text-xs text-muted-foreground">
-                            / {uc.subdomain}
-                          </span>
+                          <span className="text-xs text-muted-foreground">/ {uc.subdomain}</span>
                         )}
                         {uc.enrichmentTags && uc.enrichmentTags.length > 0 && (
-                          <span className="ml-1 flex gap-0.5" title={`Enriched via: ${uc.enrichmentTags.join(", ")}`}>
-                            {uc.enrichmentTags.includes("benchmark") && <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                            {uc.enrichmentTags.includes("outcome_map") && <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />}
-                            {uc.enrichmentTags.includes("document") && <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-500" />}
+                          <span
+                            className="ml-1 flex gap-0.5"
+                            title={`Enriched via: ${uc.enrichmentTags.join(", ")}`}
+                          >
+                            {uc.enrichmentTags.includes("benchmark") && (
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            )}
+                            {uc.enrichmentTags.includes("outcome_map") && (
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+                            )}
+                            {uc.enrichmentTags.includes("document") && (
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-500" />
+                            )}
                           </span>
                         )}
                       </div>
@@ -388,9 +382,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                     className="text-lg font-semibold"
                   />
                 ) : (
-                  <SheetTitle className="text-lg leading-snug">
-                    {selectedUseCase.name}
-                  </SheetTitle>
+                  <SheetTitle className="text-lg leading-snug">{selectedUseCase.name}</SheetTitle>
                 )}
               </SheetHeader>
 
@@ -424,11 +416,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                         <Check className="mr-1 h-3.5 w-3.5" />
                         Save
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditing(false)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
                         <X className="mr-1 h-3.5 w-3.5" />
                         Cancel
                       </Button>
@@ -465,7 +453,10 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                   </Badge>
                 )}
                 {hasAnyUserScore(selectedUseCase) && (
-                  <Badge variant="outline" className="gap-1 border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300">
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300"
+                  >
                     <SlidersHorizontal className="h-3 w-3" />
                     User Adjusted
                   </Badge>
@@ -483,8 +474,12 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                     feasibility={selectedUseCase.feasibilityScore}
                     impact={selectedUseCase.impactScore}
                     overall={selectedUseCase.overallScore}
-                    userPriority={adjustingScores ? adjPriority / 100 : selectedUseCase.userPriorityScore}
-                    userFeasibility={adjustingScores ? adjFeasibility / 100 : selectedUseCase.userFeasibilityScore}
+                    userPriority={
+                      adjustingScores ? adjPriority / 100 : selectedUseCase.userPriorityScore
+                    }
+                    userFeasibility={
+                      adjustingScores ? adjFeasibility / 100 : selectedUseCase.userFeasibilityScore
+                    }
                     userImpact={adjustingScores ? adjImpact / 100 : selectedUseCase.userImpactScore}
                     userOverall={adjustingScores ? adjOverall : selectedUseCase.userOverallScore}
                     size={200}
@@ -495,7 +490,12 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                 <div className="grid grid-cols-4 gap-3">
                   {(() => {
                     const eff = adjustingScores
-                      ? { priority: adjPriority / 100, feasibility: adjFeasibility / 100, impact: adjImpact / 100, overall: adjOverall }
+                      ? {
+                          priority: adjPriority / 100,
+                          feasibility: adjFeasibility / 100,
+                          impact: adjImpact / 100,
+                          overall: adjOverall,
+                        }
                       : effectiveScores(selectedUseCase);
                     return (
                       <>
@@ -503,25 +503,41 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                           icon={<Target className="h-4 w-4" />}
                           label="Priority"
                           score={eff.priority}
-                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.priorityScore : undefined}
+                          systemScore={
+                            hasAnyUserScore(selectedUseCase) || adjustingScores
+                              ? selectedUseCase.priorityScore
+                              : undefined
+                          }
                         />
                         <ScoreCard
                           icon={<Gauge className="h-4 w-4" />}
                           label="Feasibility"
                           score={eff.feasibility}
-                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.feasibilityScore : undefined}
+                          systemScore={
+                            hasAnyUserScore(selectedUseCase) || adjustingScores
+                              ? selectedUseCase.feasibilityScore
+                              : undefined
+                          }
                         />
                         <ScoreCard
                           icon={<Zap className="h-4 w-4" />}
                           label="Impact"
                           score={eff.impact}
-                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.impactScore : undefined}
+                          systemScore={
+                            hasAnyUserScore(selectedUseCase) || adjustingScores
+                              ? selectedUseCase.impactScore
+                              : undefined
+                          }
                         />
                         <ScoreCard
                           icon={<Trophy className="h-4 w-4" />}
                           label="Overall"
                           score={eff.overall}
-                          systemScore={hasAnyUserScore(selectedUseCase) || adjustingScores ? selectedUseCase.overallScore : undefined}
+                          systemScore={
+                            hasAnyUserScore(selectedUseCase) || adjustingScores
+                              ? selectedUseCase.overallScore
+                              : undefined
+                          }
                         />
                       </>
                     );
@@ -580,21 +596,27 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                         </div>
 
                         <ScoreSlider
-                          icon={<Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                          icon={
+                            <Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                          }
                           label="Priority"
                           value={adjPriority}
                           systemValue={Math.round(selectedUseCase.priorityScore * 100)}
                           onChange={setAdjPriority}
                         />
                         <ScoreSlider
-                          icon={<Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                          icon={
+                            <Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                          }
                           label="Feasibility"
                           value={adjFeasibility}
                           systemValue={Math.round(selectedUseCase.feasibilityScore * 100)}
                           onChange={setAdjFeasibility}
                         />
                         <ScoreSlider
-                          icon={<Zap className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                          icon={
+                            <Zap className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                          }
                           label="Impact"
                           value={adjImpact}
                           systemValue={Math.round(selectedUseCase.impactScore * 100)}
@@ -614,8 +636,8 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                         </div>
 
                         <p className="text-[11px] text-violet-700 dark:text-violet-400">
-                          Overall = Priority (30%) + Feasibility (20%) + Impact (50%).
-                          System scores are preserved and both will appear in exports.
+                          Overall = Priority (30%) + Feasibility (20%) + Impact (50%). System scores
+                          are preserved and both will appear in exports.
                         </p>
 
                         {hasAnyUserScore(selectedUseCase) && (
@@ -639,7 +661,9 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                   <>
                     <Separator />
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-muted-foreground mr-1">Feedback:</span>
+                      <span className="text-sm font-medium text-muted-foreground mr-1">
+                        Feedback:
+                      </span>
                       {(["accepted", "rejected", "dismissed"] as const).map((fb) => (
                         <Button
                           key={fb}
@@ -647,7 +671,11 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                           size="sm"
                           onClick={async () => {
                             const newFb = selectedUseCase.feedback === fb ? null : fb;
-                            const updated = { ...selectedUseCase, feedback: newFb, feedbackAt: newFb ? new Date().toISOString() : null };
+                            const updated = {
+                              ...selectedUseCase,
+                              feedback: newFb,
+                              feedbackAt: newFb ? new Date().toISOString() : null,
+                            };
                             const result = await onUpdate(updated);
                             if (result && "ok" in result && result.ok) {
                               setSelectedUseCase(updated);
@@ -717,9 +745,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                     value={selectedUseCase.beneficiary}
                   />
                   <MetaField
-                    icon={
-                      <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
-                    }
+                    icon={<UserCheck className="h-3.5 w-3.5 text-emerald-500" />}
                     label="Sponsor"
                     value={selectedUseCase.sponsor}
                   />
@@ -736,19 +762,28 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
                         {selectedUseCase.enrichmentTags.includes("benchmark") && (
-                          <Badge variant="outline" className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400">
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400"
+                          >
                             <BarChart3 className="h-2.5 w-2.5" />
                             Benchmark
                           </Badge>
                         )}
                         {selectedUseCase.enrichmentTags.includes("outcome_map") && (
-                          <Badge variant="outline" className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400">
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400"
+                          >
                             <Target className="h-2.5 w-2.5" />
                             Outcome Map
                           </Badge>
                         )}
                         {selectedUseCase.enrichmentTags.includes("document") && (
-                          <Badge variant="outline" className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400">
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400"
+                          >
                             <FileText className="h-2.5 w-2.5" />
                             Document
                           </Badge>
@@ -763,9 +798,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                   <>
                     <Separator />
                     <DetailSection
-                      icon={
-                        <Database className="h-4 w-4 text-orange-500" />
-                      }
+                      icon={<Database className="h-4 w-4 text-orange-500" />}
                       title="Tables Involved"
                     >
                       {editing ? (
@@ -788,7 +821,11 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                                 key={t}
                                 variant="outline"
                                 className={`gap-1 font-mono text-[11px] font-normal ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
-                                title={isLineage ? "This table was automatically discovered via data lineage — it was not in your original catalog/schema selection." : undefined}
+                                title={
+                                  isLineage
+                                    ? "This table was automatically discovered via data lineage — it was not in your original catalog/schema selection."
+                                    : undefined
+                                }
                               >
                                 {isLineage ? (
                                   <Link2 className="h-2.5 w-2.5 text-blue-500" />
@@ -823,9 +860,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                           size="sm"
                           className="h-7 gap-1 text-xs"
                           onClick={() => {
-                            navigator.clipboard.writeText(
-                              selectedUseCase.sqlCode!
-                            );
+                            navigator.clipboard.writeText(selectedUseCase.sqlCode!);
                             toast.success("SQL copied to clipboard");
                           }}
                         >
@@ -847,9 +882,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                     <div>
                       <div className="mb-2 flex items-center gap-2">
                         <Link2 className="h-4 w-4 text-indigo-500" />
-                        <p className="text-sm font-semibold">
-                          Related Use Cases
-                        </p>
+                        <p className="text-sm font-semibold">Related Use Cases</p>
                       </div>
                       <p className="mb-3 text-xs text-muted-foreground">
                         Other use cases sharing the same tables
@@ -867,9 +900,7 @@ export function UseCaseTable({ useCases, onUpdate, lineageDiscoveredFqns = [] }:
                           >
                             <div>
                               <p className="text-sm font-medium">{uc.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {uc.domain}
-                              </p>
+                              <p className="text-xs text-muted-foreground">{uc.domain}</p>
                             </div>
                             <ScoreBadge
                               score={uc.userOverallScore ?? uc.overallScore}
@@ -918,22 +949,16 @@ function ScoreSlider({
         </div>
         <div className="flex items-center gap-2">
           {changed && (
-            <span className="text-xs text-muted-foreground line-through">
-              {systemValue}%
-            </span>
+            <span className="text-xs text-muted-foreground line-through">{systemValue}%</span>
           )}
-          <span className={`text-sm font-bold ${changed ? "text-violet-700 dark:text-violet-300" : "text-foreground"}`}>
+          <span
+            className={`text-sm font-bold ${changed ? "text-violet-700 dark:text-violet-300" : "text-foreground"}`}
+          >
             {value}%
           </span>
         </div>
       </div>
-      <Slider
-        value={[value]}
-        min={0}
-        max={100}
-        step={1}
-        onValueChange={([v]) => onChange(v)}
-      />
+      <Slider value={[value]} min={0} max={100} step={1} onValueChange={([v]) => onChange(v)} />
     </div>
   );
 }
@@ -998,9 +1023,7 @@ function DetailSection({
           </Button>
         )}
       </div>
-      <div className="pl-6 text-sm leading-relaxed text-foreground/90">
-        {children}
-      </div>
+      <div className="pl-6 text-sm leading-relaxed text-foreground/90">{children}</div>
     </div>
   );
 }
@@ -1067,19 +1090,13 @@ function ScoreCard({
         : "border-red-200 bg-red-50/50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400";
 
   return (
-    <div
-      className={`flex flex-col items-center gap-1 rounded-lg border p-3 ${colorClasses}`}
-    >
+    <div className={`flex flex-col items-center gap-1 rounded-lg border p-3 ${colorClasses}`}>
       <div className="opacity-60">{icon}</div>
       <p className="text-xl font-bold">{pct}%</p>
       {isAdjusted && (
-        <p className="text-[10px] text-muted-foreground line-through">
-          System: {sysPct}%
-        </p>
+        <p className="text-[10px] text-muted-foreground line-through">System: {sysPct}%</p>
       )}
-      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">
-        {label}
-      </p>
+      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</p>
     </div>
   );
 }

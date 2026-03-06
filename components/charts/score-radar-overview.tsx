@@ -20,7 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+  CommandEmpty,
+} from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
@@ -34,12 +40,12 @@ import { effectiveScores } from "@/lib/domain/scoring";
 const PALETTE = [
   "oklch(0.65 0.22 160)", // teal-green
   "oklch(0.65 0.22 280)", // violet
-  "oklch(0.70 0.20 40)",  // orange
+  "oklch(0.70 0.20 40)", // orange
   "oklch(0.60 0.22 330)", // magenta-pink
   "oklch(0.70 0.18 200)", // sky-blue
-  "oklch(0.68 0.20 90)",  // lime-gold
+  "oklch(0.68 0.20 90)", // lime-gold
   "oklch(0.58 0.18 250)", // indigo
-  "oklch(0.72 0.16 15)",  // coral
+  "oklch(0.72 0.16 15)", // coral
   "oklch(0.62 0.20 140)", // emerald
   "oklch(0.66 0.22 310)", // purple-rose
 ];
@@ -51,9 +57,7 @@ interface ScoreRadarOverviewProps {
 }
 
 export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    useCases.length <= 10 ? "all" : "top10"
-  );
+  const [viewMode, setViewMode] = useState<ViewMode>(useCases.length <= 10 ? "all" : "top10");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -78,11 +82,8 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
 
   // Sorted use cases for the filter picker list
   const sortedUseCases = useMemo(
-    () =>
-      [...useCases].sort(
-        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
-      ),
-    [useCases]
+    () => [...useCases].sort((a, b) => effectiveScores(b).overall - effectiveScores(a).overall),
+    [useCases],
   );
 
   // Single memo: series, filtered series, and colour map derived together
@@ -112,7 +113,14 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
       .sort((a, b) => b.overall - a.overall);
 
     // Series based on view mode
-    let allSeries: { key: string; label: string; priority: number; feasibility: number; impact: number; overall: number }[];
+    let allSeries: {
+      key: string;
+      label: string;
+      priority: number;
+      feasibility: number;
+      impact: number;
+      overall: number;
+    }[];
     if (viewMode === "domain-avg") {
       allSeries = domainAverages.slice(0, 10).map((d) => ({
         key: d.label,
@@ -124,7 +132,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
       }));
     } else {
       const sorted = [...useCases].sort(
-        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall
+        (a, b) => effectiveScores(b).overall - effectiveScores(a).overall,
       );
       const subset = viewMode === "top10" ? sorted.slice(0, 10) : sorted;
       allSeries = subset.map((uc) => {
@@ -179,15 +187,10 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle className="text-sm font-medium">
-            Score Landscape
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">Score Landscape</CardTitle>
           <CardDescription>
-            Compare score profiles across{" "}
-            {viewMode === "domain-avg" ? "domains" : "use cases"}
-            {isTruncated && (
-              <span className="text-muted-foreground"> (top 10 shown)</span>
-            )}
+            Compare score profiles across {viewMode === "domain-avg" ? "domains" : "use cases"}
+            {isTruncated && <span className="text-muted-foreground"> (top 10 shown)</span>}
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
@@ -198,10 +201,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                   <Filter className="size-3.5" />
                   Filter
                   {selectedIds.size > 0 && (
-                    <Badge
-                      variant="secondary"
-                      className="ml-0.5 h-5 px-1.5 text-[10px]"
-                    >
+                    <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px]">
                       {selectedIds.size}
                     </Badge>
                   )}
@@ -214,11 +214,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                     <button
                       type="button"
                       className="text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() =>
-                        setSelectedIds(
-                          new Set(useCases.map((uc) => uc.id))
-                        )
-                      }
+                      onClick={() => setSelectedIds(new Set(useCases.map((uc) => uc.id)))}
                     >
                       Select all
                     </button>
@@ -243,9 +239,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                           checked={selectedIds.has(uc.id)}
                           className="pointer-events-none"
                         />
-                        <span className="flex-1 truncate text-xs">
-                          {uc.name}
-                        </span>
+                        <span className="flex-1 truncate text-xs">{uc.name}</span>
                         <Badge
                           variant="outline"
                           className="ml-auto shrink-0 text-[10px] font-normal"
@@ -259,19 +253,14 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
               </PopoverContent>
             </Popover>
           )}
-          <Select
-            value={viewMode}
-            onValueChange={(v) => setViewMode(v as ViewMode)}
-          >
+          <Select value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <SelectTrigger className="w-[160px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="top10">Top 10 Use Cases</SelectItem>
               <SelectItem value="domain-avg">Domain Averages</SelectItem>
-              {useCases.length <= 20 && (
-                <SelectItem value="all">All Use Cases</SelectItem>
-              )}
+              {useCases.length <= 20 && <SelectItem value="all">All Use Cases</SelectItem>}
             </SelectContent>
           </Select>
         </div>
@@ -282,10 +271,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
           <div className="min-w-0 flex-[3]">
             <ResponsiveContainer width="100%" height={280}>
               <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-                <PolarGrid
-                  stroke="var(--color-border)"
-                  strokeOpacity={0.5}
-                />
+                <PolarGrid stroke="var(--color-border)" strokeOpacity={0.5} />
                 <PolarAngleAxis
                   dataKey="metric"
                   tick={{ fontSize: 12, fontWeight: 600, fill: "var(--color-foreground)" }}
@@ -334,8 +320,7 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
             <div className="flex flex-col gap-1.5">
               {series.slice(0, 10).map((s) => {
                 const color = seriesColorMap.get(s.key) ?? PALETTE[0];
-                const isActive =
-                  selectedIds.size === 0 || selectedIds.has(s.key);
+                const isActive = selectedIds.size === 0 || selectedIds.has(s.key);
                 return (
                   <button
                     key={s.key}
@@ -349,7 +334,9 @@ export function ScoreRadarOverview({ useCases }: ScoreRadarOverviewProps) {
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: color }}
                     />
-                    <span className="truncate text-left" title={s.label}>{s.label}</span>
+                    <span className="truncate text-left" title={s.label}>
+                      {s.label}
+                    </span>
                   </button>
                 );
               })}

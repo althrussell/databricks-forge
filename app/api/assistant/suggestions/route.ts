@@ -14,7 +14,9 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("persona") ?? "";
-  const persona: AssistantPersona = VALID_PERSONAS.has(raw as AssistantPersona) ? (raw as AssistantPersona) : "business";
+  const persona: AssistantPersona = VALID_PERSONAS.has(raw as AssistantPersona)
+    ? (raw as AssistantPersona)
+    : "business";
   const questions = await buildSuggestedQuestions(persona);
   return Response.json({ questions });
 }

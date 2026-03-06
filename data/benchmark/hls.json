@@ -120,7 +120,7 @@
       "industry": "hls",
       "region": "global",
       "license_class": "citation_required",
-      "confidence": 0.80,
+      "confidence": 0.8,
       "ttl_days": 365,
       "tags": ["outcome-measures", "reusability"]
     }

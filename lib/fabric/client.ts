@@ -55,9 +55,7 @@ export async function acquireToken(
       status: res.status,
       body: text.slice(0, 500),
     });
-    throw new Error(
-      `Entra ID token acquisition failed (${res.status}): ${text.slice(0, 200)}`,
-    );
+    throw new Error(`Entra ID token acquisition failed (${res.status}): ${text.slice(0, 200)}`);
   }
 
   const data = (await res.json()) as { access_token: string };
@@ -68,18 +66,11 @@ export async function acquireToken(
 // HTTP helpers with retry (401 + 429)
 // ---------------------------------------------------------------------------
 
-async function pbiGet(
-  url: string,
-  connectionId: string,
-): Promise<unknown> {
+async function pbiGet(url: string, connectionId: string): Promise<unknown> {
   return pbiRequest(url, connectionId, "GET");
 }
 
-async function pbiPost(
-  url: string,
-  connectionId: string,
-  body: unknown,
-): Promise<unknown> {
+async function pbiPost(url: string, connectionId: string, body: unknown): Promise<unknown> {
   return pbiRequest(url, connectionId, "POST", body);
 }
 
@@ -130,9 +121,7 @@ async function pbiRequest(
       status: res.status,
       body: text.slice(0, 500),
     });
-    throw new Error(
-      `Power BI API error (${res.status}): ${text.slice(0, 200)}`,
-    );
+    throw new Error(`Power BI API error (${res.status}): ${text.slice(0, 200)}`);
   }
 
   throw new Error(`Power BI API: max retries exceeded for ${url}`);
@@ -141,10 +130,7 @@ async function pbiRequest(
 /**
  * Follows OData `@odata.nextLink` pagination, collecting all `value` arrays.
  */
-async function pbiGetPaginated<T>(
-  url: string,
-  connectionId: string,
-): Promise<T[]> {
+async function pbiGetPaginated<T>(url: string, connectionId: string): Promise<T[]> {
   const all: T[] = [];
   let next: string | null = url;
 
@@ -195,14 +181,9 @@ export async function listWorkspaces(
   return listWorkspacesStandard(connectionId, workspaceFilter);
 }
 
-async function listWorkspacesAdmin(
-  connectionId: string,
-): Promise<FabricWorkspaceSummary[]> {
+async function listWorkspacesAdmin(connectionId: string): Promise<FabricWorkspaceSummary[]> {
   type WsRow = { id: string; name: string; state: string; type: string };
-  const rows = await pbiGetPaginated<WsRow>(
-    `${PBI_API_BASE}/admin/groups?$top=5000`,
-    connectionId,
-  );
+  const rows = await pbiGetPaginated<WsRow>(`${PBI_API_BASE}/admin/groups?$top=5000`, connectionId);
   return rows.map((g) => ({
     id: g.id,
     name: g.name,
@@ -216,10 +197,7 @@ async function listWorkspacesStandard(
   filter?: string[],
 ): Promise<FabricWorkspaceSummary[]> {
   type WsRow = { id: string; name: string; state: string; type: string };
-  const rows = await pbiGetPaginated<WsRow>(
-    `${PBI_API_BASE}/groups`,
-    connectionId,
-  );
+  const rows = await pbiGetPaginated<WsRow>(`${PBI_API_BASE}/groups`, connectionId);
   let workspaces = rows.map((g) => ({
     id: g.id,
     name: g.name,
@@ -328,10 +306,7 @@ export async function getWorkspaceDatasets(
   groupId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  return pbiGetPaginated(
-    `${PBI_API_BASE}/groups/${groupId}/datasets`,
-    connectionId,
-  );
+  return pbiGetPaginated(`${PBI_API_BASE}/groups/${groupId}/datasets`, connectionId);
 }
 
 export async function getWorkspaceReports(
@@ -339,10 +314,7 @@ export async function getWorkspaceReports(
   groupId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  return pbiGetPaginated(
-    `${PBI_API_BASE}/groups/${groupId}/reports`,
-    connectionId,
-  );
+  return pbiGetPaginated(`${PBI_API_BASE}/groups/${groupId}/reports`, connectionId);
 }
 
 export async function getWorkspaceDashboards(
@@ -350,10 +322,7 @@ export async function getWorkspaceDashboards(
   groupId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-  return pbiGetPaginated(
-    `${PBI_API_BASE}/groups/${groupId}/dashboards`,
-    connectionId,
-  );
+  return pbiGetPaginated(`${PBI_API_BASE}/groups/${groupId}/dashboards`, connectionId);
 }
 
 // ---------------------------------------------------------------------------
@@ -371,9 +340,7 @@ export async function listWorkspacesWithToken(
 ): Promise<FabricWorkspaceSummary[]> {
   type WsRow = { id: string; name: string; state: string; type: string };
   const url =
-    accessLevel === "admin"
-      ? `${PBI_API_BASE}/admin/groups?$top=5000`
-      : `${PBI_API_BASE}/groups`;
+    accessLevel === "admin" ? `${PBI_API_BASE}/admin/groups?$top=5000` : `${PBI_API_BASE}/groups`;
 
   const all: WsRow[] = [];
   let next: string | null = url;
@@ -383,9 +350,7 @@ export async function listWorkspacesWithToken(
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(
-        `Power BI API error (${res.status}): ${text.slice(0, 200)}`,
-      );
+      throw new Error(`Power BI API error (${res.status}): ${text.slice(0, 200)}`);
     }
     const data = (await res.json()) as {
       value: WsRow[];

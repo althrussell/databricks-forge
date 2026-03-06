@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     if (!runAId || !runBId || !isValidUUID(runAId) || !isValidUUID(runBId)) {
       return NextResponse.json(
         { error: "Both runA and runB query params (valid UUIDs) are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -36,8 +36,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="forge_comparison_${nameA}_vs_${nameB}.xlsx"`,
       },
     });
@@ -45,9 +44,6 @@ export async function GET(request: NextRequest) {
     logger.error("Failed to export comparison", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

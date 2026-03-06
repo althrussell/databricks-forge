@@ -8,7 +8,7 @@
 export async function resilientFetch(
   url: string,
   init?: RequestInit,
-  options?: { retries?: number; delayMs?: number }
+  options?: { retries?: number; delayMs?: number },
 ): Promise<Response> {
   const { retries = 2, delayMs = 1000 } = options ?? {};
   let lastError: unknown;
@@ -30,7 +30,5 @@ export async function resilientFetch(
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Fetch failed after retries");
+  throw lastError instanceof Error ? lastError : new Error("Fetch failed after retries");
 }

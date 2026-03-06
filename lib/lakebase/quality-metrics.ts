@@ -37,18 +37,20 @@ export async function listQualityMetrics(
     sinceHours?: number;
     limit?: number;
   } = {},
-): Promise<Array<{
-  metricId: string;
-  metricType: string;
-  metricName: string;
-  metricValue: number;
-  floorValue: number | null;
-  passed: boolean | null;
-  runId: string | null;
-  assistantLogId: string | null;
-  metadataJson: string | null;
-  createdAt: string;
-}>> {
+): Promise<
+  Array<{
+    metricId: string;
+    metricType: string;
+    metricName: string;
+    metricValue: number;
+    floorValue: number | null;
+    passed: boolean | null;
+    runId: string | null;
+    assistantLogId: string | null;
+    metadataJson: string | null;
+    createdAt: string;
+  }>
+> {
   const where: Record<string, unknown> = {};
   if (filter.metricType) where.metricType = filter.metricType;
   if (filter.metricName) where.metricName = filter.metricName;

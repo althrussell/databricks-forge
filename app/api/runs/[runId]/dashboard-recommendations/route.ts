@@ -15,7 +15,7 @@ import { getConfig } from "@/lib/dbx/client";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -29,8 +29,11 @@ export async function GET(
     }
     if (run.status !== "completed") {
       return NextResponse.json(
-        { error: "Run is not completed. Dashboard recommendations require a completed pipeline run." },
-        { status: 400 }
+        {
+          error:
+            "Run is not completed. Dashboard recommendations require a completed pipeline run.",
+        },
+        { status: 400 },
       );
     }
 
@@ -40,7 +43,9 @@ export async function GET(
     let databricksHost: string | null = null;
     try {
       databricksHost = getConfig().host;
-    } catch { /* host unavailable in some dev environments */ }
+    } catch {
+      /* host unavailable in some dev environments */
+    }
 
     return NextResponse.json({
       runId,

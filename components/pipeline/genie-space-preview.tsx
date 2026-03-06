@@ -1,10 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,7 +73,7 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(editAction),
-          }
+          },
         );
         if (res.ok) {
           toast.success("Edit saved");
@@ -89,7 +86,7 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
         toast.error("Edit failed");
       }
     },
-    [runId, fetchData]
+    [runId, fetchData],
   );
 
   if (loading) {
@@ -115,21 +112,44 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
 
   const rec = recommendations.find((r) => r.domain === selectedDomain);
   const parsed: SerializedSpace | null = rec
-    ? (() => { try { return JSON.parse(rec.serializedSpace) as SerializedSpace; } catch { return null; } })()
+    ? (() => {
+        try {
+          return JSON.parse(rec.serializedSpace) as SerializedSpace;
+        } catch {
+          return null;
+        }
+      })()
     : null;
 
   const enrichments: ColumnEnrichment[] = rec?.columnEnrichments
-    ? (() => { try { return JSON.parse(rec.columnEnrichments!) as ColumnEnrichment[]; } catch { return []; } })()
+    ? (() => {
+        try {
+          return JSON.parse(rec.columnEnrichments!) as ColumnEnrichment[];
+        } catch {
+          return [];
+        }
+      })()
     : [];
 
   const mvProposals: MetricViewProposal[] = rec?.metricViewProposals
-    ? (() => { try { return JSON.parse(rec.metricViewProposals!) as MetricViewProposal[]; } catch { return []; } })()
+    ? (() => {
+        try {
+          return JSON.parse(rec.metricViewProposals!) as MetricViewProposal[];
+        } catch {
+          return [];
+        }
+      })()
     : [];
 
   const benchmarks: BenchmarkInput[] = rec?.benchmarks
-    ? (() => { try { return JSON.parse(rec.benchmarks!) as BenchmarkInput[]; } catch { return []; } })()
+    ? (() => {
+        try {
+          return JSON.parse(rec.benchmarks!) as BenchmarkInput[];
+        } catch {
+          return [];
+        }
+      })()
     : [];
-
 
   return (
     <div className="space-y-4">
@@ -214,26 +234,33 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="max-h-64 space-y-1 overflow-auto">
-                    {enrichments.filter((e) => !e.hidden).slice(0, 50).map((e, i) => (
-                      <div key={i} className="flex items-baseline gap-2 py-0.5 text-xs">
-                        <code className="rounded bg-muted px-1 font-mono text-[10px]">
-                          {e.columnName}
-                        </code>
-                        {e.description && (
-                          <span className="text-muted-foreground">{e.description}</span>
-                        )}
-                        {e.synonyms.length > 0 && (
-                          <span className="flex gap-1">
-                            {e.synonyms.map((s, si) => (
-                              <Badge key={si} variant="outline" className="text-[9px]">{s}</Badge>
-                            ))}
-                          </span>
-                        )}
-                        {e.entityMatchingCandidate && (
-                          <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">entity</Badge>
-                        )}
-                      </div>
-                    ))}
+                    {enrichments
+                      .filter((e) => !e.hidden)
+                      .slice(0, 50)
+                      .map((e, i) => (
+                        <div key={i} className="flex items-baseline gap-2 py-0.5 text-xs">
+                          <code className="rounded bg-muted px-1 font-mono text-[10px]">
+                            {e.columnName}
+                          </code>
+                          {e.description && (
+                            <span className="text-muted-foreground">{e.description}</span>
+                          )}
+                          {e.synonyms.length > 0 && (
+                            <span className="flex gap-1">
+                              {e.synonyms.map((s, si) => (
+                                <Badge key={si} variant="outline" className="text-[9px]">
+                                  {s}
+                                </Badge>
+                              ))}
+                            </span>
+                          )}
+                          {e.entityMatchingCandidate && (
+                            <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">
+                              entity
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -254,11 +281,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                         label={m.alias}
                         sql={m.sql.join(" ")}
                         onSave={(alias, sql) =>
-                          applyEdit(rec.domain, { type: "update_measure", id: m.id, alias, sql: [sql] })
+                          applyEdit(rec.domain, {
+                            type: "update_measure",
+                            id: m.id,
+                            alias,
+                            sql: [sql],
+                          })
                         }
-                        onRemove={() =>
-                          applyEdit(rec.domain, { type: "remove_measure", id: m.id })
-                        }
+                        onRemove={() => applyEdit(rec.domain, { type: "remove_measure", id: m.id })}
                       />
                     ))}
                   </div>
@@ -281,11 +311,14 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                         label={f.display_name}
                         sql={f.sql.join(" ")}
                         onSave={(display_name, sql) =>
-                          applyEdit(rec.domain, { type: "update_filter", id: f.id, display_name, sql: [sql] })
+                          applyEdit(rec.domain, {
+                            type: "update_filter",
+                            id: f.id,
+                            display_name,
+                            sql: [sql],
+                          })
                         }
-                        onRemove={() =>
-                          applyEdit(rec.domain, { type: "remove_filter", id: f.id })
-                        }
+                        onRemove={() => applyEdit(rec.domain, { type: "remove_filter", id: f.id })}
                       />
                     ))}
                   </div>
@@ -308,7 +341,12 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                         label={e.alias}
                         sql={e.sql.join(" ")}
                         onSave={(alias, sql) =>
-                          applyEdit(rec.domain, { type: "update_expression", id: e.id, alias, sql: [sql] })
+                          applyEdit(rec.domain, {
+                            type: "update_expression",
+                            id: e.id,
+                            alias,
+                            sql: [sql],
+                          })
                         }
                         onRemove={() =>
                           applyEdit(rec.domain, { type: "remove_expression", id: e.id })
@@ -334,7 +372,11 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                         id={q.id}
                         text={q.question.join(" ")}
                         onSave={(text) =>
-                          applyEdit(rec.domain, { type: "update_question", id: q.id, question: [text] })
+                          applyEdit(rec.domain, {
+                            type: "update_question",
+                            id: q.id,
+                            question: [text],
+                          })
                         }
                         onRemove={() =>
                           applyEdit(rec.domain, { type: "remove_question", id: q.id })
@@ -376,14 +418,22 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                 <AccordionContent>
                   <div className="space-y-1 text-xs">
                     {(parsed.instructions?.join_specs ?? []).map((j) => {
-                      const rtMatch = j.sql.find((s: string) => s.startsWith("--rt="))?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
+                      const rtMatch = j.sql
+                        .find((s: string) => s.startsWith("--rt="))
+                        ?.match(/--rt=FROM_RELATIONSHIP_TYPE_(\w+)--/);
                       const rt = rtMatch ? rtMatch[1].toLowerCase().replace(/_/g, " ") : null;
-                      const sqlDisplay = j.sql.filter((s: string) => !s.startsWith("--rt=")).join(" ");
+                      const sqlDisplay = j.sql
+                        .filter((s: string) => !s.startsWith("--rt="))
+                        .join(" ");
                       return (
                         <div key={j.id} className="flex items-baseline gap-2 py-0.5">
-                          <span className="truncate font-mono text-muted-foreground">{sqlDisplay}</span>
+                          <span className="truncate font-mono text-muted-foreground">
+                            {sqlDisplay}
+                          </span>
                           {rt && (
-                            <Badge variant="outline" className="shrink-0 text-[9px]">{rt}</Badge>
+                            <Badge variant="outline" className="shrink-0 text-[9px]">
+                              {rt}
+                            </Badge>
                           )}
                         </div>
                       );
@@ -408,7 +458,11 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                         text={ti.content.join("\n")}
                         multiline
                         onSave={(text) =>
-                          applyEdit(rec.domain, { type: "update_instruction", id: ti.id, content: [text] })
+                          applyEdit(rec.domain, {
+                            type: "update_instruction",
+                            id: ti.id,
+                            content: [text],
+                          })
                         }
                         onRemove={() =>
                           applyEdit(rec.domain, { type: "remove_instruction", id: ti.id })
@@ -434,7 +488,9 @@ export function GenieSpacePreview({ runId }: GenieSpacePreviewProps) {
                         {b.alternatePhrasings.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {b.alternatePhrasings.map((ap, ai) => (
-                              <Badge key={ai} variant="outline" className="text-[9px]">{ap}</Badge>
+                              <Badge key={ai} variant="outline" className="text-[9px]">
+                                {ap}
+                              </Badge>
                             ))}
                           </div>
                         )}
@@ -665,7 +721,7 @@ function MetricViewProposalCard({
             name: proposal.name,
             description: proposal.description,
           }),
-        }
+        },
       );
       if (res.ok) {
         toast.success(`Metric view "${proposal.name}" created`);
@@ -688,7 +744,7 @@ function MetricViewProposalCard({
     hasFilteredMeasures: proposal.hasFilteredMeasures ?? false,
     hasWindowMeasures: proposal.hasWindowMeasures ?? false,
     hasMaterialization: proposal.hasMaterialization ?? false,
-    validationStatus: proposal.validationStatus ?? "valid" as const,
+    validationStatus: proposal.validationStatus ?? ("valid" as const),
     validationIssues: proposal.validationIssues ?? [],
   };
   const validationColor =
@@ -704,30 +760,45 @@ function MetricViewProposalCard({
         <span className="font-mono text-xs font-semibold">{mv.name}</span>
         <div className="flex items-center gap-1">
           {mv.hasJoins && (
-            <Badge variant="outline" className="text-[9px]">joins</Badge>
+            <Badge variant="outline" className="text-[9px]">
+              joins
+            </Badge>
           )}
           {mv.hasFilteredMeasures && (
-            <Badge variant="outline" className="text-[9px]">filtered</Badge>
+            <Badge variant="outline" className="text-[9px]">
+              filtered
+            </Badge>
           )}
           {mv.hasWindowMeasures && (
-            <Badge variant="outline" className="text-[9px]">window</Badge>
+            <Badge variant="outline" className="text-[9px]">
+              window
+            </Badge>
           )}
           {mv.hasMaterialization && (
-            <Badge variant="outline" className="text-[9px]">materialized</Badge>
+            <Badge variant="outline" className="text-[9px]">
+              materialized
+            </Badge>
           )}
-          <Badge className={`text-[9px] ${validationColor}`}>
-            {mv.validationStatus}
-          </Badge>
+          <Badge className={`text-[9px] ${validationColor}`}>{mv.validationStatus}</Badge>
         </div>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{mv.description}</p>
       {mv.validationIssues.length > 0 && (
-        <div className={`mt-1.5 rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}>
-          <p className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
-            {mv.validationStatus === "error" ? "Validation errors (deploy blocked):" : "Validation issues:"}
+        <div
+          className={`mt-1.5 rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}
+        >
+          <p
+            className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}
+          >
+            {mv.validationStatus === "error"
+              ? "Validation errors (deploy blocked):"
+              : "Validation issues:"}
           </p>
           {mv.validationIssues.map((issue, idx) => (
-            <p key={idx} className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}>
+            <p
+              key={idx}
+              className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}
+            >
               - {issue}
             </p>
           ))}

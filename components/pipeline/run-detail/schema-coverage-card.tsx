@@ -1,13 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Database } from "lucide-react";
 import type { UseCase } from "@/lib/domain/types";
@@ -35,9 +29,7 @@ export function SchemaCoverageCard({
     }
   }
 
-  const topTables = [...tableCounts.entries()]
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
+  const topTables = [...tableCounts.entries()].sort(([, a], [, b]) => b - a).slice(0, 10);
 
   if (allReferencedTables.size === 0) return null;
 
@@ -49,8 +41,8 @@ export function SchemaCoverageCard({
           Schema Coverage
         </CardTitle>
         <CardDescription>
-          Tables referenced by generated use cases -- most-referenced tables
-          represent your highest-value data assets
+          Tables referenced by generated use cases -- most-referenced tables represent your
+          highest-value data assets
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -61,10 +53,10 @@ export function SchemaCoverageCard({
             {lineageDiscoveredFqns.length > 0 &&
               (() => {
                 const selectedCount = [...allReferencedTables].filter(
-                  (fqn) => !lineageFqnSet.has(fqn)
+                  (fqn) => !lineageFqnSet.has(fqn),
                 ).length;
                 const lineageCount = [...allReferencedTables].filter((fqn) =>
-                  lineageFqnSet.has(fqn)
+                  lineageFqnSet.has(fqn),
                 ).length;
                 return lineageCount > 0 ? (
                   <p className="text-[10px] text-muted-foreground">
@@ -76,30 +68,21 @@ export function SchemaCoverageCard({
           <div>
             <p className="text-xs text-muted-foreground">Via Lineage</p>
             <p className="text-lg font-bold">
-              {
-                [...allReferencedTables].filter((fqn) =>
-                  lineageFqnSet.has(fqn)
-                ).length
-              }
+              {[...allReferencedTables].filter((fqn) => lineageFqnSet.has(fqn)).length}
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">
-              Unique Table-UC Links
-            </p>
+            <p className="text-xs text-muted-foreground">Unique Table-UC Links</p>
             <p className="text-lg font-bold">
               {[...tableCounts.values()].reduce((s, v) => s + v, 0)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">
-              Avg Use Cases per Table
-            </p>
+            <p className="text-xs text-muted-foreground">Avg Use Cases per Table</p>
             <p className="text-lg font-bold">
               {allReferencedTables.size > 0
                 ? (
-                    [...tableCounts.values()].reduce((s, v) => s + v, 0) /
-                    allReferencedTables.size
+                    [...tableCounts.values()].reduce((s, v) => s + v, 0) / allReferencedTables.size
                   ).toFixed(1)
                 : "0"}
             </p>

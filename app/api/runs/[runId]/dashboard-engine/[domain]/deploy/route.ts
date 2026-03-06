@@ -28,7 +28,7 @@ import { logger } from "@/lib/logger";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string; domain: string }> }
+  { params }: { params: Promise<{ runId: string; domain: string }> },
 ) {
   try {
     const { runId, domain } = await params;
@@ -43,28 +43,26 @@ export async function POST(
     }
 
     const recs = await getDashboardRecommendationsByRunId(runId);
-    const rec = recs.find(
-      (r) => r.domain.toLowerCase() === decodedDomain.toLowerCase()
-    );
+    const rec = recs.find((r) => r.domain.toLowerCase() === decodedDomain.toLowerCase());
 
     if (!rec) {
       return NextResponse.json(
         { error: `No dashboard recommendation found for domain "${decodedDomain}"` },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     const config = getConfig();
 
     // Parse optional body params
-    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const parentPath = (body.parentPath as string) ?? DEFAULT_DASHBOARD_PARENT_PATH;
     const shouldPublish = body.publish === true;
 
     // Check if there's already a tracked dashboard for this run+domain
     const tracked = await listTrackedDashboards(runId);
     const existing = tracked.find(
-      (t) => t.domain.toLowerCase() === decodedDomain.toLowerCase() && t.status !== "trashed"
+      (t) => t.domain.toLowerCase() === decodedDomain.toLowerCase() && t.status !== "trashed",
     );
 
     let dashboardId: string;
@@ -98,7 +96,7 @@ export async function POST(
         runId,
         rec.domain,
         rec.title,
-        dashboardUrl
+        dashboardUrl,
       );
     }
 

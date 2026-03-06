@@ -40,12 +40,20 @@ import { evaluateJoinCandidates } from "./join-diagnostics";
 import { extractEntityCandidatesFromSchema } from "./entity-extraction";
 import { generateTimePeriods } from "./time-periods";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
-import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "./schema-allowlist";
+import {
+  buildSchemaContextBlock,
+  validateSqlExpression,
+  type SchemaAllowlist,
+} from "./schema-allowlist";
 import { cachedChatCompletion } from "./llm-cache";
 import { parseLLMJson } from "./passes/parse-llm-json";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
-import { fetchTableInfoBatch, fetchColumnsBatch, fetchForeignKeysBatch } from "@/lib/queries/metadata";
+import {
+  fetchTableInfoBatch,
+  fetchColumnsBatch,
+  fetchForeignKeysBatch,
+} from "@/lib/queries/metadata";
 import { getServingEndpoint, getFastServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { logger } from "@/lib/logger";
@@ -104,13 +112,15 @@ function buildEngineConfig(adhoc?: AdHocGenieConfig): GenieEngineConfig {
   const base = defaultGenieEngineConfig();
   if (!adhoc) return base;
   if (adhoc.glossary) base.glossary = adhoc.glossary;
-  if (adhoc.fiscalYearStartMonth !== undefined) base.fiscalYearStartMonth = adhoc.fiscalYearStartMonth;
+  if (adhoc.fiscalYearStartMonth !== undefined)
+    base.fiscalYearStartMonth = adhoc.fiscalYearStartMonth;
   if (adhoc.autoTimePeriods !== undefined) base.autoTimePeriods = adhoc.autoTimePeriods;
   if (adhoc.llmRefinement !== undefined) base.llmRefinement = adhoc.llmRefinement;
   if (adhoc.globalInstructions) base.globalInstructions = adhoc.globalInstructions;
   if (adhoc.generateBenchmarks !== undefined) base.generateBenchmarks = adhoc.generateBenchmarks;
   if (adhoc.generateMetricViews !== undefined) base.generateMetricViews = adhoc.generateMetricViews;
-  if (adhoc.generateTrustedAssets !== undefined) base.generateTrustedAssets = adhoc.generateTrustedAssets;
+  if (adhoc.generateTrustedAssets !== undefined)
+    base.generateTrustedAssets = adhoc.generateTrustedAssets;
   if (adhoc.questionComplexity) base.questionComplexity = adhoc.questionComplexity;
   return base;
 }
@@ -148,7 +158,9 @@ function buildSchemaMarkdown(
   const parts: string[] = [];
   for (const t of tables) {
     const cols = colsByTable.get(t.fqn) ?? [];
-    const colLines = cols.map((c) => `  - ${c.columnName} (${c.dataType})${c.comment ? ` -- ${c.comment}` : ""}`);
+    const colLines = cols.map(
+      (c) => `  - ${c.columnName} (${c.dataType})${c.comment ? ` -- ${c.comment}` : ""}`,
+    );
     parts.push(`### ${t.fqn}${t.comment ? `\n${t.comment}` : ""}\n${colLines.join("\n")}`);
   }
   return parts.join("\n\n");
@@ -167,7 +179,10 @@ async function scrapeMetadata(tables: string[]): Promise<MetadataSnapshot> {
 
   return {
     cacheKey: `adhoc-${Date.now()}`,
-    ucPath: tables.map((t) => t.split(".").slice(0, 2).join(".")).filter((v, i, a) => a.indexOf(v) === i).join(", "),
+    ucPath: tables
+      .map((t) => t.split(".").slice(0, 2).join("."))
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .join(", "),
     tables: tableInfos,
     columns,
     foreignKeys,
@@ -180,14 +195,12 @@ async function scrapeMetadata(tables: string[]): Promise<MetadataSnapshot> {
   };
 }
 
-function buildFkJoins(
-  foreignKeys: MetadataSnapshot["foreignKeys"],
-  tableSet: Set<string>,
-) {
+function buildFkJoins(foreignKeys: MetadataSnapshot["foreignKeys"], tableSet: Set<string>) {
   return foreignKeys
-    .filter((fk) =>
-      tableSet.has(fk.tableFqn.toLowerCase()) &&
-      tableSet.has(fk.referencedTableFqn.toLowerCase())
+    .filter(
+      (fk) =>
+        tableSet.has(fk.tableFqn.toLowerCase()) &&
+        tableSet.has(fk.referencedTableFqn.toLowerCase()),
     )
     .map((fk) => ({
       leftTable: fk.tableFqn,
@@ -214,7 +227,12 @@ function inferHeuristicJoins(
     byTable.set(key, cols);
   }
 
-  const joins: Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> = [];
+  const joins: Array<{
+    leftTable: string;
+    rightTable: string;
+    sql: string;
+    relationshipType: "many_to_one";
+  }> = [];
   for (let i = 0; i < tableFqns.length; i++) {
     for (let j = i + 1; j < tableFqns.length; j++) {
       const left = tableFqns[i];
@@ -328,7 +346,9 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
   const parsed = parseLLMJson(content, "genie:fast-expressions") as Record<string, unknown>;
 
   const toArray = (val: unknown): Record<string, unknown>[] =>
-    Array.isArray(val) ? val.filter((v): v is Record<string, unknown> => typeof v === "object" && v !== null) : [];
+    Array.isArray(val)
+      ? val.filter((v): v is Record<string, unknown> => typeof v === "object" && v !== null)
+      : [];
 
   let measures = toArray(parsed.measures)
     .map((m) => ({
@@ -481,7 +501,7 @@ function buildRuleBasedInstructions(
   }
 
   instructions.push(
-    `This space covers the ${domain} domain with ${tableFqns.length} table${tableFqns.length !== 1 ? "s" : ""}.`
+    `This space covers the ${domain} domain with ${tableFqns.length} table${tableFqns.length !== 1 ? "s" : ""}.`,
   );
 
   for (const t of metadata.tables) {
@@ -527,16 +547,21 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     fkJoins.flatMap((j) => [
       `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
       `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`,
-    ])
+    ]),
   );
-  const heuristicJoins = fkJoins.length === 0 && validTableFqns.length > 1
-    ? inferHeuristicJoins(metadata.columns, validTableFqns, existingJoinKeys)
-    : [];
+  const heuristicJoins =
+    fkJoins.length === 0 && validTableFqns.length > 1
+      ? inferHeuristicJoins(metadata.columns, validTableFqns, existingJoinKeys)
+      : [];
   const { accepted: acceptedJoinCandidates, diagnostics: joinDiagnostics } = evaluateJoinCandidates(
     allowlist,
     [
       ...fkJoins.map((j) => ({ ...j, source: "fk" as const, confidence: "high" as const })),
-      ...heuristicJoins.map((j) => ({ ...j, source: "heuristic" as const, confidence: "low" as const })),
+      ...heuristicJoins.map((j) => ({
+        ...j,
+        source: "heuristic" as const,
+        confidence: "low" as const,
+      })),
     ],
     "adhoc_fast_join",
   );
@@ -559,14 +584,20 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
 
   try {
     const llmResult = await generateFastLLMExpressions(
-      validTableFqns, metadata, allowlist, domain,
-      adhocConfig?.conversationSummary, fastEndpoint,
+      validTableFqns,
+      metadata,
+      allowlist,
+      domain,
+      adhocConfig?.conversationSummary,
+      fastEndpoint,
     );
     llmMeasures = llmResult.measures;
     llmFilters = llmResult.filters;
     llmDimensions = llmResult.dimensions;
     logger.info("Fast LLM expressions generated", {
-      measures: llmMeasures.length, filters: llmFilters.length, dimensions: llmDimensions.length,
+      measures: llmMeasures.length,
+      filters: llmFilters.length,
+      dimensions: llmDimensions.length,
     });
   } catch (err) {
     logger.warn("Fast LLM expressions failed, falling back to rule-based", {
@@ -582,11 +613,9 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   let timePeriodDimensions: EnrichedSqlSnippetDimension[] = [];
 
   if (autoTimePeriods) {
-    const tpResult = generateTimePeriods(
-      metadata.columns,
-      validTableFqns,
-      { fiscalYearStartMonth },
-    );
+    const tpResult = generateTimePeriods(metadata.columns, validTableFqns, {
+      fiscalYearStartMonth,
+    });
     timePeriodFilters = tpResult.filters;
     timePeriodDimensions = tpResult.dimensions;
   }
@@ -607,9 +636,15 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     tableFqns: validTableFqns,
     conversationSummary: adhocConfig?.conversationSummary,
   });
-  const instructions = instructionResult.instructions.length > 0
-    ? instructionResult.instructions
-    : buildRuleBasedInstructions(metadata, validTableFqns, domain, adhocConfig?.conversationSummary);
+  const instructions =
+    instructionResult.instructions.length > 0
+      ? instructionResult.instructions
+      : buildRuleBasedInstructions(
+          metadata,
+          validTableFqns,
+          domain,
+          adhocConfig?.conversationSummary,
+        );
 
   const complexity = engineConfig.questionComplexity ?? "simple";
 
@@ -664,8 +699,10 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
         fallbackEndpoint: premiumEndpoint,
       });
   const degradedReasons: string[] = [];
-  if (validTableFqns.length > 1 && allJoins.length === 0) degradedReasons.push("no_validated_joins");
-  if (allJoins.length > 0 && exampleQueryResult.queries.length < 2) degradedReasons.push("insufficient_sample_sql");
+  if (validTableFqns.length > 1 && allJoins.length === 0)
+    degradedReasons.push("no_validated_joins");
+  if (allJoins.length > 0 && exampleQueryResult.queries.length < 2)
+    degradedReasons.push("insufficient_sample_sql");
   if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
 
   const space = assembleSerializedSpace(passOutputs, {
@@ -774,7 +811,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   const fkJoins = buildFkJoins(metadata.foreignKeys, tableSet);
 
   const existingJoinKeys = new Set(
-    fkJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`)
+    fkJoins.map((j) => `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`),
   );
 
   let llmJoins: typeof fkJoins = [];
@@ -800,7 +837,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     [...fkJoins, ...llmJoins].flatMap((j) => [
       `${j.leftTable.toLowerCase()}|${j.rightTable.toLowerCase()}`,
       `${j.rightTable.toLowerCase()}|${j.leftTable.toLowerCase()}`,
-    ])
+    ]),
   );
   const heuristicJoins =
     validTableFqns.length > 1 && fkJoins.length + llmJoins.length === 0
@@ -811,7 +848,11 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     [
       ...fkJoins.map((j) => ({ ...j, source: "fk" as const, confidence: "high" as const })),
       ...llmJoins.map((j) => ({ ...j, source: "llm" as const, confidence: "medium" as const })),
-      ...heuristicJoins.map((j) => ({ ...j, source: "heuristic" as const, confidence: "low" as const })),
+      ...heuristicJoins.map((j) => ({
+        ...j,
+        source: "heuristic" as const,
+        confidence: "low" as const,
+      })),
     ],
     "adhoc_full_join",
   );
@@ -913,10 +954,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   const entityFallbackQuestions = columnResult.entityCandidates
     .slice(0, 5)
     .map((ec) => buildEntityFallbackQuestion(ec.columnName, fullComplexity));
-  const sampleQuestions = [
-    ...trustedQuestionTexts.slice(0, 5),
-    ...entityFallbackQuestions,
-  ]
+  const sampleQuestions = [...trustedQuestionTexts.slice(0, 5), ...entityFallbackQuestions]
     .filter((q, i, arr) => arr.indexOf(q) === i)
     .slice(0, 5);
 
@@ -955,8 +993,10 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
         signal,
       });
   const degradedReasons: string[] = [];
-  if (validTableFqns.length > 1 && allJoins.length === 0) degradedReasons.push("no_validated_joins");
-  if (allJoins.length > 0 && trustedQueries.length < 2) degradedReasons.push("insufficient_sample_sql");
+  if (validTableFqns.length > 1 && allJoins.length === 0)
+    degradedReasons.push("no_validated_joins");
+  if (allJoins.length > 0 && trustedQueries.length < 2)
+    degradedReasons.push("insufficient_sample_sql");
   if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
 
   const space = assembleSerializedSpace(passOutputs, {

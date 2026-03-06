@@ -85,21 +85,17 @@ describe("parseJSONResponse", () => {
   });
 
   it("strips markdown code fences", () => {
-    const result = parseJSONResponse<{ a: number }>("```json\n{\"a\": 1}\n```");
+    const result = parseJSONResponse<{ a: number }>('```json\n{"a": 1}\n```');
     expect(result.a).toBe(1);
   });
 
   it("strips preamble text before JSON", () => {
-    const result = parseJSONResponse<{ a: number }>(
-      "Here is the result:\n{\"a\": 42}"
-    );
+    const result = parseJSONResponse<{ a: number }>('Here is the result:\n{"a": 42}');
     expect(result.a).toBe(42);
   });
 
   it("handles trailing text after JSON", () => {
-    const result = parseJSONResponse<{ x: string }>(
-      '{"x": "y"}\nHope this helps!'
-    );
+    const result = parseJSONResponse<{ x: string }>('{"x": "y"}\nHope this helps!');
     expect(result.x).toBe("y");
   });
 

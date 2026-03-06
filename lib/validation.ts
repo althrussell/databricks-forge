@@ -31,13 +31,11 @@ export function validateIdentifier(value: string, label: string): string {
     throw new IdentifierValidationError(`${label} cannot be empty`);
   }
   if (trimmed.length > 255) {
-    throw new IdentifierValidationError(
-      `${label} exceeds maximum length (255 chars)`
-    );
+    throw new IdentifierValidationError(`${label} exceeds maximum length (255 chars)`);
   }
   if (!SAFE_IDENTIFIER_RE.test(trimmed)) {
     throw new IdentifierValidationError(
-      `${label} contains invalid characters. Only alphanumeric, underscores, and hyphens are allowed.`
+      `${label} contains invalid characters. Only alphanumeric, underscores, and hyphens are allowed.`,
     );
   }
   return trimmed;
@@ -62,7 +60,7 @@ export function validateFqn(fqn: string, label = "FQN"): string {
   const parts = trimmed.split(".");
   if (parts.length < 1 || parts.length > 4) {
     throw new IdentifierValidationError(
-      `${label} must have 1-4 dot-separated parts, got ${parts.length}`
+      `${label} must have 1-4 dot-separated parts, got ${parts.length}`,
     );
   }
   for (const part of parts) {
@@ -78,20 +76,12 @@ export function validateFqn(fqn: string, label = "FQN"): string {
 const DDL_DANGEROUS_PATTERN =
   /\b(DROP\s+(?!FUNCTION\s+IF\s+EXISTS|VIEW\s+IF\s+EXISTS)|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|TRUNCATE|ALTER\s+TABLE|GRANT\s+|REVOKE\s+)/i;
 
-export function validateDdl(
-  ddl: string,
-  expectedPrefix: RegExp,
-  label = "DDL"
-): void {
+export function validateDdl(ddl: string, expectedPrefix: RegExp, label = "DDL"): void {
   if (!expectedPrefix.test(ddl)) {
-    throw new IdentifierValidationError(
-      `${label} must start with expected CREATE statement`
-    );
+    throw new IdentifierValidationError(`${label} must start with expected CREATE statement`);
   }
   if (DDL_DANGEROUS_PATTERN.test(ddl)) {
-    throw new IdentifierValidationError(
-      `${label} contains disallowed SQL statement`
-    );
+    throw new IdentifierValidationError(`${label} contains disallowed SQL statement`);
   }
 }
 
@@ -99,8 +89,7 @@ export function validateDdl(
 // UUID validation
 // ---------------------------------------------------------------------------
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isValidUUID(value: string): boolean {
   return UUID_RE.test(value);
@@ -138,7 +127,10 @@ export const CreateRunSchema = z.object({
   additionalContext: z.string().max(6000).optional().default(""),
   customerMaturity: z.enum(["nascent", "developing", "advanced"]).optional().default("developing"),
   riskPosture: z.enum(["conservative", "balanced", "aggressive"]).optional().default("balanced"),
-  transformationHorizon: z.enum(["quarter", "half-year", "year-plus"]).optional().default("half-year"),
+  transformationHorizon: z
+    .enum(["quarter", "half-year", "year-plus"])
+    .optional()
+    .default("half-year"),
   generationOptions: z.array(z.string()).optional().default(["SQL Code"]),
   generationPath: z.string().max(500).optional().default("./forge_gen/"),
   languages: z.array(z.literal("English")).optional().default(["English"]),
@@ -152,13 +144,15 @@ export const CreateRunSchema = z.object({
     }),
   industry: z.string().max(100).optional().default(""),
   discoveryDepth: z.enum(["focused", "balanced", "comprehensive"]).optional().default("balanced"),
-  depthConfig: z.object({
-    batchTargetMin: z.number().int().min(1).max(50),
-    batchTargetMax: z.number().int().min(1).max(100),
-    qualityFloor: z.number().min(0).max(1),
-    adaptiveCap: z.number().int().min(10).max(1000),
-    lineageDepth: z.number().int().min(1).max(10),
-  }).optional(),
+  depthConfig: z
+    .object({
+      batchTargetMin: z.number().int().min(1).max(50),
+      batchTargetMax: z.number().int().min(1).max(100),
+      qualityFloor: z.number().min(0).max(1),
+      adaptiveCap: z.number().int().min(10).max(1000),
+      lineageDepth: z.number().int().min(1).max(10),
+    })
+    .optional(),
   estateScanEnabled: z.boolean().optional().default(false),
   assetDiscoveryEnabled: z.boolean().optional().default(false),
   fabricScanId: z.string().uuid().optional().nullable(),
@@ -182,21 +176,25 @@ export const CreateBenchmarkSchema = z.object({
   confidence: z.number().min(0).max(1),
   ttl_days: z.number().int().min(1).max(3650),
   tags: z.array(z.string().min(1).max(80)).optional().default([]),
-  provenance: z.object({
-    source_class: z.string().min(2).max(80),
-    captured_at: z.string().datetime().optional(),
-    citation: z.string().min(8).max(500).optional(),
-    notes: z.string().max(1000).optional(),
-  }).passthrough().optional(),
+  provenance: z
+    .object({
+      source_class: z.string().min(2).max(80),
+      captured_at: z.string().datetime().optional(),
+      citation: z.string().min(8).max(500).optional(),
+      notes: z.string().max(1000).optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
-export const UpdateBenchmarkSchema = z.object({
-  lifecycle_status: z.enum(BENCHMARK_LIFECYCLE).optional(),
-  source_content: z.string().min(50).max(500_000).optional(),
-}).refine(
-  (d) => d.lifecycle_status !== undefined || d.source_content !== undefined,
-  { message: "Provide lifecycle_status or source_content" },
-);
+export const UpdateBenchmarkSchema = z
+  .object({
+    lifecycle_status: z.enum(BENCHMARK_LIFECYCLE).optional(),
+    source_content: z.string().min(50).max(500_000).optional(),
+  })
+  .refine((d) => d.lifecycle_status !== undefined || d.source_content !== undefined, {
+    message: "Provide lifecycle_status or source_content",
+  });
 
 export const MetadataQuerySchema = z.object({
   type: z.enum(["catalogs", "schemas", "tables"]).default("catalogs"),
@@ -209,19 +207,26 @@ export const MetadataQuerySchema = z.object({
 // ---------------------------------------------------------------------------
 
 /** Step 1: Business context JSON returned by BUSINESS_CONTEXT_WORKER_PROMPT */
-export const BusinessContextOutputSchema = z.object({
-  industries: z.unknown().transform(String),
-  strategic_goals: z.unknown().transform(String),
-  business_priorities: z.unknown().transform(String),
-  strategic_initiative: z.unknown().transform(String),
-  value_chain: z.unknown().transform(String),
-  revenue_model: z.unknown().transform(String),
-  additional_context: z.unknown().optional().transform((v) => String(v ?? "")),
-}).passthrough();
+export const BusinessContextOutputSchema = z
+  .object({
+    industries: z.unknown().transform(String),
+    strategic_goals: z.unknown().transform(String),
+    business_priorities: z.unknown().transform(String),
+    strategic_initiative: z.unknown().transform(String),
+    value_chain: z.unknown().transform(String),
+    revenue_model: z.unknown().transform(String),
+    additional_context: z
+      .unknown()
+      .optional()
+      .transform((v) => String(v ?? "")),
+  })
+  .passthrough();
 
 /** Step 6a: Score items returned by SCORE_USE_CASES_PROMPT */
 export const ScoreItemSchema = z.object({
-  no: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
+  no: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
   priority_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
   feasibility_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
   impact_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
@@ -231,7 +236,9 @@ export type ScoreItemOutput = z.infer<typeof ScoreItemSchema>;
 
 /** Step 6b: Dedup items returned by REVIEW_USE_CASES_PROMPT */
 export const DedupItemSchema = z.object({
-  no: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
+  no: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
   action: z.string(),
   reason: z.string().optional().default(""),
 });
@@ -239,29 +246,39 @@ export type DedupItemOutput = z.infer<typeof DedupItemSchema>;
 
 /** Step 6c: Cross-domain dedup returned by CROSS_DOMAIN_DEDUP_PROMPT */
 export const CrossDomainDedupItemSchema = z.object({
-  no: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
-  duplicate_of: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
+  no: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
+  duplicate_of: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
   reason: z.string().optional().default(""),
 });
 export type CrossDomainDedupItemOutput = z.infer<typeof CrossDomainDedupItemSchema>;
 
 /** Step 6d: Calibration items returned by GLOBAL_SCORE_CALIBRATION_PROMPT */
 export const CalibrationItemSchema = z.object({
-  no: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
+  no: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
   overall_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
 });
 export type CalibrationItemOutput = z.infer<typeof CalibrationItemSchema>;
 
 /** Step 5a: Domain assignment returned by DOMAIN_FINDER_PROMPT */
 export const DomainAssignmentSchema = z.object({
-  no: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
+  no: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
   domain: z.string().min(1),
 });
 export type DomainAssignmentOutput = z.infer<typeof DomainAssignmentSchema>;
 
 /** Step 5b: Subdomain assignment returned by SUBDOMAIN_DETECTOR_PROMPT */
 export const SubdomainAssignmentSchema = z.object({
-  no: z.union([z.number(), z.string()]).transform((v) => typeof v === "number" ? v : parseInt(String(v), 10)),
+  no: z
+    .union([z.number(), z.string()])
+    .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
   subdomain: z.string().min(1),
 });
 export type SubdomainAssignmentOutput = z.infer<typeof SubdomainAssignmentSchema>;
@@ -270,11 +287,7 @@ export type SubdomainAssignmentOutput = z.infer<typeof SubdomainAssignmentSchema
  * Validate an array of LLM output items against a Zod schema.
  * Returns only the valid items; invalid items are logged and skipped.
  */
-export function validateLLMArray<T>(
-  items: unknown[],
-  schema: z.ZodType<T>,
-  context: string
-): T[] {
+export function validateLLMArray<T>(items: unknown[], schema: z.ZodType<T>, context: string): T[] {
   const valid: T[] = [];
   for (let i = 0; i < items.length; i++) {
     const result = schema.safeParse(items[i]);
@@ -298,7 +311,7 @@ export function validateLLMArray<T>(
  */
 export async function safeParseBody<T>(
   request: Request,
-  schema: z.ZodType<T>
+  schema: z.ZodType<T>,
 ): Promise<{ success: true; data: T } | { success: false; error: string }> {
   let raw: unknown;
   try {

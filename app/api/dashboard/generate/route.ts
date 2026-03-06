@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
       sqlBlocks: Array.isArray(sqlBlocks)
         ? sqlBlocks.filter((s): s is string => typeof s === "string" && s.length > 0)
         : undefined,
-      conversationSummary: typeof conversationSummary === "string" ? conversationSummary : undefined,
+      conversationSummary:
+        typeof conversationSummary === "string" ? conversationSummary : undefined,
       widgetDescriptions: Array.isArray(widgetDescriptions)
         ? widgetDescriptions.filter((s): s is string => typeof s === "string")
         : undefined,

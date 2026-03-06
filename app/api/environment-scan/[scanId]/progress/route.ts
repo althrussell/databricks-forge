@@ -10,10 +10,7 @@ import { getScanProgress } from "@/lib/pipeline/scan-progress";
 import { isValidUUID } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ scanId: string }> }
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ scanId: string }> }) {
   try {
     const { scanId } = await params;
 
@@ -27,19 +24,13 @@ export async function GET(
       logger.warn("[api/environment-scan/progress] No progress data found for this scan", {
         scanId,
       });
-      return NextResponse.json(
-        { error: "No progress data found for this scan" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "No progress data found for this scan" }, { status: 404 });
     }
 
     return NextResponse.json(progress);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/environment-scan/progress] GET failed", { error: msg });
-    return NextResponse.json(
-      { error: "Failed to retrieve scan progress" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to retrieve scan progress" }, { status: 500 });
   }
 }

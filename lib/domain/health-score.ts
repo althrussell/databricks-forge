@@ -6,11 +6,7 @@
  * for identified issues and generates actionable recommendations.
  */
 
-import type {
-  TableDetail,
-  TableHistorySummary,
-  TableHealthInsight,
-} from "@/lib/domain/types";
+import type { TableDetail, TableHistorySummary, TableHealthInsight } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
 // Scoring rules
@@ -60,7 +56,8 @@ const HEALTH_RULES: HealthRule[] = [
       return daysSince(h.lastOptimizeTimestamp) > HEALTH_THRESHOLDS.optimizeWindowDays;
     },
     issue: `No OPTIMIZE run in the last ${HEALTH_THRESHOLDS.optimizeWindowDays} days`,
-    recommendation: "Schedule regular OPTIMIZE to compact small files and improve query performance.",
+    recommendation:
+      "Schedule regular OPTIMIZE to compact small files and improve query performance.",
   },
   {
     id: "no_vacuum_30d",
@@ -81,7 +78,8 @@ const HEALTH_RULES: HealthRule[] = [
       return avgFileSize < HEALTH_THRESHOLDS.smallFileBytes;
     },
     issue: `Small file problem detected (average file size < ${Math.round(HEALTH_THRESHOLDS.smallFileBytes / (1024 * 1024))}MB)`,
-    recommendation: "Run OPTIMIZE to compact small files. Consider enabling auto-optimize for streaming tables.",
+    recommendation:
+      "Run OPTIMIZE to compact small files. Consider enabling auto-optimize for streaming tables.",
   },
   {
     id: "no_comment",
@@ -95,7 +93,8 @@ const HEALTH_RULES: HealthRule[] = [
     deduction: 10,
     check: (d) => d.partitionColumns.length > HEALTH_THRESHOLDS.highPartitionCount,
     issue: `Extremely high partition column count (> ${HEALTH_THRESHOLDS.highPartitionCount})`,
-    recommendation: "Review partitioning strategy. Consider liquid clustering for better performance.",
+    recommendation:
+      "Review partitioning strategy. Consider liquid clustering for better performance.",
   },
   {
     id: "stale_data_90d",
@@ -105,7 +104,8 @@ const HEALTH_RULES: HealthRule[] = [
       return daysSince(h.lastWriteTimestamp) > HEALTH_THRESHOLDS.staleWriteDays;
     },
     issue: `Stale data: no writes in the last ${HEALTH_THRESHOLDS.staleWriteDays} days`,
-    recommendation: "Verify if this table is still actively used. Consider archiving or dropping if abandoned.",
+    recommendation:
+      "Verify if this table is still actively used. Consider archiving or dropping if abandoned.",
   },
   {
     id: "not_accessed_90d",
@@ -115,7 +115,8 @@ const HEALTH_RULES: HealthRule[] = [
       return daysSince(d.lastAccess) > HEALTH_THRESHOLDS.staleAccessDays;
     },
     issue: `Table not accessed in the last ${HEALTH_THRESHOLDS.staleAccessDays} days`,
-    recommendation: "This table has not been read or queried recently. Verify it is still needed or consider archiving.",
+    recommendation:
+      "This table has not been read or queried recently. Verify it is still needed or consider archiving.",
   },
   {
     id: "no_cdf_with_streaming",
@@ -125,7 +126,8 @@ const HEALTH_RULES: HealthRule[] = [
       return d.tableProperties["delta.enableChangeDataFeed"] !== "true";
     },
     issue: "Streaming writes detected but Change Data Feed (CDF) is not enabled",
-    recommendation: "Enable CDF with ALTER TABLE SET TBLPROPERTIES ('delta.enableChangeDataFeed' = true) for downstream consumers.",
+    recommendation:
+      "Enable CDF with ALTER TABLE SET TBLPROPERTIES ('delta.enableChangeDataFeed' = true) for downstream consumers.",
   },
   {
     id: "outdated_delta_protocol",
@@ -135,7 +137,8 @@ const HEALTH_RULES: HealthRule[] = [
       return d.deltaMinReaderVersion < 2;
     },
     issue: "Outdated Delta protocol version (reader version < 2)",
-    recommendation: "Upgrade Delta protocol to enable features like column mapping and deletion vectors.",
+    recommendation:
+      "Upgrade Delta protocol to enable features like column mapping and deletion vectors.",
   },
   {
     id: "empty_table",
@@ -145,7 +148,8 @@ const HEALTH_RULES: HealthRule[] = [
       return d.numRows === 0 && d.tableType !== "VIEW";
     },
     issue: "Table has zero rows",
-    recommendation: "Empty tables add clutter and may indicate failed ingestion or an abandoned asset. Verify data loads or consider dropping.",
+    recommendation:
+      "Empty tables add clutter and may indicate failed ingestion or an abandoned asset. Verify data loads or consider dropping.",
   },
   {
     id: "very_large_table",
@@ -155,7 +159,8 @@ const HEALTH_RULES: HealthRule[] = [
       return d.numRows > HEALTH_THRESHOLDS.veryLargeRowCount;
     },
     issue: `Very large table (> ${HEALTH_THRESHOLDS.veryLargeRowCount.toLocaleString()} rows)`,
-    recommendation: "Tables of this scale require careful partitioning, clustering, and maintenance scheduling. Review OPTIMIZE/VACUUM cadence and consider archiving old data.",
+    recommendation:
+      "Tables of this scale require careful partitioning, clustering, and maintenance scheduling. Review OPTIMIZE/VACUUM cadence and consider archiving old data.",
   },
 ];
 
@@ -168,7 +173,7 @@ const HEALTH_RULES: HealthRule[] = [
  */
 export function computeTableHealth(
   detail: TableDetail,
-  history: TableHistorySummary | null
+  history: TableHistorySummary | null,
 ): TableHealthInsight {
   let score = 100;
   const issues: string[] = [];
@@ -195,7 +200,7 @@ export function computeTableHealth(
  */
 export function computeAllTableHealth(
   details: TableDetail[],
-  histories: Map<string, TableHistorySummary>
+  histories: Map<string, TableHistorySummary>,
 ): Map<string, TableHealthInsight> {
   const results = new Map<string, TableHealthInsight>();
   for (const detail of details) {
@@ -211,9 +216,7 @@ export function computeAllTableHealth(
 
 function daysSince(isoTimestamp: string): number {
   try {
-    return Math.floor(
-      (Date.now() - new Date(isoTimestamp).getTime()) / 86_400_000
-    );
+    return Math.floor((Date.now() - new Date(isoTimestamp).getTime()) / 86_400_000);
   } catch {
     return 999;
   }

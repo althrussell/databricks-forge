@@ -12,11 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -134,17 +130,12 @@ export function AggregateSummary({
       </div>
 
       {/* Executive Summary */}
-      <ExecutiveSummary
-        stats={stats}
-        details={details}
-        insights={insights}
-        humanSize={humanSize}
-      />
+      <ExecutiveSummary stats={stats} details={details} insights={insights} humanSize={humanSize} />
 
       {stats.newestScanAt && (
         <p className="text-sm text-muted-foreground">
-          Last updated {timeAgo(stats.newestScanAt)} &middot;{" "}
-          {stats.totalScans} scan{stats.totalScans !== 1 ? "s" : ""} contributing
+          Last updated {timeAgo(stats.newestScanAt)} &middot; {stats.totalScans} scan
+          {stats.totalScans !== 1 ? "s" : ""} contributing
         </p>
       )}
 
@@ -178,17 +169,10 @@ export function AggregateSummary({
                   <TableBody>
                     {stats.coverageByScope.map((c) => (
                       <TableRow key={c.scanId}>
-                        <TableCell className="font-mono text-xs">
-                          {c.ucPath}
-                        </TableCell>
+                        <TableCell className="font-mono text-xs">{c.ucPath}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant={c.runId ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {c.runId
-                              ? `Run ${c.runId.slice(0, 8)}`
-                              : "Standalone"}
+                          <Badge variant={c.runId ? "default" : "secondary"} className="text-xs">
+                            {c.runId ? `Run ${c.runId.slice(0, 8)}` : "Standalone"}
                           </Badge>
                         </TableCell>
                         <TableCell>{c.tableCount}</TableCell>
@@ -200,11 +184,7 @@ export function AggregateSummary({
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onViewScan(c.scanId)}
-                            >
+                            <Button variant="ghost" size="sm" onClick={() => onViewScan(c.scanId)}>
                               View
                             </Button>
                             <Button
@@ -233,8 +213,9 @@ export function AggregateSummary({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete scan?</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete the scan for <span className="font-mono font-medium">{deleteTarget?.ucPath}</span>?
-              This permanently removes all table details, history, lineage, and insights for this scan.
+              Delete the scan for{" "}
+              <span className="font-mono font-medium">{deleteTarget?.ucPath}</span>? This
+              permanently removes all table details, history, lineage, and insights for this scan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

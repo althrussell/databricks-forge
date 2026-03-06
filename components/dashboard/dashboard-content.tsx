@@ -7,12 +7,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { DASHBOARD } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ScoreDistributionChart,
@@ -153,11 +148,7 @@ export function DashboardContent({
               ? `${Math.round((stats.completedRuns / stats.totalRuns) * 100)}%`
               : "N/A"
           }
-          detail={
-            stats.failedRuns > 0
-              ? `${stats.failedRuns} failed`
-              : "All runs successful"
-          }
+          detail={stats.failedRuns > 0 ? `${stats.failedRuns} failed` : "All runs successful"}
         />
       </div>
 
@@ -212,15 +203,12 @@ export function DashboardContent({
                         <div>
                           <p className="font-medium">{run.businessName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(run.createdAt).toLocaleDateString(
-                              undefined,
-                              {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
+                            {new Date(run.createdAt).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </p>
                         </div>
                       </div>
@@ -230,10 +218,7 @@ export function DashboardContent({
                             {run.useCaseCount} use cases
                           </span>
                         )}
-                        <Badge
-                          variant="secondary"
-                          className={STATUS_STYLES[run.status] ?? ""}
-                        >
+                        <Badge variant="secondary" className={STATUS_STYLES[run.status] ?? ""}>
                           {run.status}
                         </Badge>
                       </div>
@@ -250,9 +235,8 @@ export function DashboardContent({
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Forge reads <strong>metadata only</strong> -- schema names,
-        table names, and column names. No row-level data is accessed
-        unless data sampling is explicitly enabled.
+        Forge reads <strong>metadata only</strong> -- schema names, table names, and column names.
+        No row-level data is accessed unless data sampling is explicitly enabled.
       </p>
     </>
   );
@@ -282,9 +266,7 @@ function KPICard({
           </div>
         </div>
         <p className="mt-2 text-2xl font-bold">{value}</p>
-        {detail && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
-        )}
+        {detail && <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>}
       </CardContent>
     </Card>
   );
@@ -300,9 +282,8 @@ function EmptyDashboard() {
           </div>
           <h2 className="text-xl font-semibold">Welcome to Forge AI</h2>
           <p className="mt-2 max-w-md text-muted-foreground">
-            Discover high-value data use cases from your Unity Catalog metadata.
-            Start by configuring your business context and selecting your data
-            sources.
+            Discover high-value data use cases from your Unity Catalog metadata. Start by
+            configuring your business context and selecting your data sources.
           </p>
           <Button className="mt-6" asChild>
             <Link href="/configure">
@@ -323,8 +304,8 @@ function EmptyDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Set your business context, select catalogs and schemas, and choose
-              analysis priorities.
+              Set your business context, select catalogs and schemas, and choose analysis
+              priorities.
             </p>
           </CardContent>
         </Card>
@@ -338,8 +319,8 @@ function EmptyDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              AI analyses your metadata in 7 steps: context, filtering, use case
-              generation, scoring, and SQL.
+              AI analyses your metadata in 7 steps: context, filtering, use case generation,
+              scoring, and SQL.
             </p>
           </CardContent>
         </Card>
@@ -353,8 +334,8 @@ function EmptyDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Download results as Excel, PDF, PowerPoint, or deploy SQL
-              notebooks directly to your workspace.
+              Download results as Excel, PDF, PowerPoint, or deploy SQL notebooks directly to your
+              workspace.
             </p>
           </CardContent>
         </Card>

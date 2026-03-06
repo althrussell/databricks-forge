@@ -68,9 +68,15 @@ export async function revalidateSerializedSpace(
       if (!validateSqlExpression(allowlist, sql, `deploy_join:${join.id}`, true)) {
         return {
           ok: false,
-          error: "Schema drift detected: one or more join conditions are no longer valid. Regenerate before deploy.",
+          error:
+            "Schema drift detected: one or more join conditions are no longer valid. Regenerate before deploy.",
           code: "invalid_join_sql",
-          diagnostics: { joinId: join.id, joinLeft: join.left?.identifier, joinRight: join.right?.identifier, sql },
+          diagnostics: {
+            joinId: join.id,
+            joinLeft: join.left?.identifier,
+            joinRight: join.right?.identifier,
+            sql,
+          },
         };
       }
     }
@@ -79,7 +85,8 @@ export async function revalidateSerializedSpace(
   if (tableFqns.length > 1 && (parsed.instructions.join_specs?.length ?? 0) === 0) {
     return {
       ok: false,
-      error: "Quality gate: multi-table spaces must include at least one validated join before deploy.",
+      error:
+        "Quality gate: multi-table spaces must include at least one validated join before deploy.",
       code: "missing_multitable_joins",
       diagnostics: { tableCount: tableFqns.length, tables: tableFqns.slice(0, 20) },
     };
@@ -90,9 +97,14 @@ export async function revalidateSerializedSpace(
     if (sql && !validateSqlExpression(allowlist, sql, `deploy_example_sql:${ex.id}`, true)) {
       return {
         ok: false,
-        error: "Schema drift detected: one or more sample SQL queries are no longer valid. Regenerate before deploy.",
+        error:
+          "Schema drift detected: one or more sample SQL queries are no longer valid. Regenerate before deploy.",
         code: "invalid_example_sql",
-        diagnostics: { exampleId: ex.id, question: ex.question?.join(" "), sql: sql.slice(0, 1000) },
+        diagnostics: {
+          exampleId: ex.id,
+          question: ex.question?.join(" "),
+          sql: sql.slice(0, 1000),
+        },
       };
     }
   }

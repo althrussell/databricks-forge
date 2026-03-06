@@ -22,7 +22,10 @@ export async function DELETE(request: NextRequest) {
     const confirm = request.headers.get("x-confirm-delete");
     if (confirm !== CONFIRMATION_VALUE) {
       return NextResponse.json(
-        { error: "Missing or invalid confirmation header. Set x-confirm-delete: delete-all-data to proceed." },
+        {
+          error:
+            "Missing or invalid confirmation header. Set x-confirm-delete: delete-all-data to proceed.",
+        },
         { status: 400 },
       );
     }
@@ -48,9 +51,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

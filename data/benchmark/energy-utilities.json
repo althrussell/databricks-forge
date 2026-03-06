@@ -16,7 +16,7 @@
       "metric_definition": "Total duration of sustained customer interruptions divided by total customers served, in minutes per year.",
       "methodology_note": "Exclude major event days per IEEE 1366 standard.",
       "license_class": "citation_required",
-      "confidence": 0.80,
+      "confidence": 0.8,
       "ttl_days": 365,
       "tags": ["reliability", "grid"],
       "provenance": { "source_class": "public report", "citation": "IEA World Energy Outlook" }

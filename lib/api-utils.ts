@@ -18,11 +18,7 @@ import type { PipelineRun } from "@/lib/domain/types";
  * Standard catch-block handler for API routes.
  * Logs the raw error server-side and returns a sanitised message to the client.
  */
-export function handleApiError(
-  error: unknown,
-  context: string,
-  status = 500,
-): NextResponse {
+export function handleApiError(error: unknown, context: string, status = 500): NextResponse {
   const raw = error instanceof Error ? error.message : String(error);
   logger.error(`[${context}]`, { error: raw });
   return NextResponse.json({ error: safeErrorMessage(error) }, { status });
@@ -32,9 +28,7 @@ export function handleApiError(
  * Validate a run ID and fetch the run, returning an error response if invalid
  * or not found. Returns either the run or a NextResponse (error).
  */
-export async function requireRun(
-  runId: string,
-): Promise<PipelineRun | NextResponse> {
+export async function requireRun(runId: string): Promise<PipelineRun | NextResponse> {
   if (!isValidUUID(runId)) {
     return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
   }
@@ -49,15 +43,9 @@ export async function requireRun(
  * Validate a generic safe ID (alphanumeric + hyphens/underscores).
  * Returns null if valid, or a NextResponse error if invalid.
  */
-export function requireSafeId(
-  id: string,
-  label = "ID",
-): NextResponse | null {
+export function requireSafeId(id: string, label = "ID"): NextResponse | null {
   if (!isSafeId(id)) {
-    return NextResponse.json(
-      { error: `Invalid ${label}` },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: `Invalid ${label}` }, { status: 400 });
   }
   return null;
 }
@@ -67,10 +55,7 @@ export function requireSafeId(
  * Use in Databricks REST API call sites to replace repeated
  * `if (!response.ok) { ... throw ... }` blocks.
  */
-export async function assertOk(
-  response: Response,
-  context: string,
-): Promise<void> {
+export async function assertOk(response: Response, context: string): Promise<void> {
   if (!response.ok) {
     const text = await response.text().catch(() => "(unreadable body)");
     throw new Error(`${context} failed (${response.status}): ${text}`);
@@ -81,8 +66,6 @@ export async function assertOk(
  * Type guard: returns true if the value is a NextResponse (error).
  * Use after `requireRun()` or `requireSafeId()` to narrow the type.
  */
-export function isErrorResponse(
-  value: unknown,
-): value is NextResponse {
+export function isErrorResponse(value: unknown): value is NextResponse {
   return value instanceof NextResponse;
 }

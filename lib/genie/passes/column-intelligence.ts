@@ -18,10 +18,7 @@ import type {
   ColumnOverride,
 } from "../types";
 import { buildSchemaContextBlock, type SchemaAllowlist } from "../schema-allowlist";
-import {
-  extractEntityCandidates,
-  extractEntityCandidatesFromSchema,
-} from "../entity-extraction";
+import { extractEntityCandidates, extractEntityCandidatesFromSchema } from "../entity-extraction";
 import { mapWithConcurrency } from "../concurrency";
 
 const BATCH_SIZE = 15;
@@ -45,7 +42,7 @@ export interface ColumnIntelligenceOutput {
 }
 
 export async function runColumnIntelligence(
-  input: ColumnIntelligenceInput
+  input: ColumnIntelligenceInput,
 ): Promise<ColumnIntelligenceOutput> {
   const { tableFqns, metadata, config, sampleData, piiClassifications, endpoint, signal } = input;
 
@@ -60,10 +57,7 @@ export async function runColumnIntelligence(
       piiClassifications,
     });
   } else {
-    entityCandidates = extractEntityCandidatesFromSchema(
-      metadata.columns,
-      tableFqns
-    );
+    entityCandidates = extractEntityCandidatesFromSchema(metadata.columns, tableFqns);
   }
 
   // Apply entity matching overrides
@@ -71,7 +65,7 @@ export async function runColumnIntelligence(
     const key = `${override.tableFqn.toLowerCase()}.${override.columnName.toLowerCase()}`;
     if (!override.enabled) {
       entityCandidates = entityCandidates.filter(
-        (c) => `${c.tableFqn.toLowerCase()}.${c.columnName.toLowerCase()}` !== key
+        (c) => `${c.tableFqn.toLowerCase()}.${c.columnName.toLowerCase()}` !== key,
       );
     }
   }
@@ -92,7 +86,12 @@ export async function runColumnIntelligence(
     batches.map((batch) => async () => {
       try {
         return await processColumnBatch(
-          batch, metadata, sampleData, entityCandidates, endpoint, signal
+          batch,
+          metadata,
+          sampleData,
+          entityCandidates,
+          endpoint,
+          signal,
         );
       } catch (err) {
         logger.warn("Column intelligence batch failed, using basic enrichments", {
@@ -150,7 +149,9 @@ async function processColumnBatch(
   // Entity candidates for context
   const entitySection = entityCandidates
     .filter((c) => tableFqns.some((f) => f.toLowerCase() === c.tableFqn.toLowerCase()))
-    .map((c) => `  ${c.tableFqn}.${c.columnName}: values=[${c.sampleValues.slice(0, 10).join(", ")}]`)
+    .map(
+      (c) => `  ${c.tableFqn}.${c.columnName}: values=[${c.sampleValues.slice(0, 10).join(", ")}]`,
+    )
     .join("\n");
 
   const systemMessage = `You are a data catalog expert. Analyze the columns in the provided tables and generate enrichment metadata for a Databricks Genie space.
@@ -195,17 +196,17 @@ function parseColumnEnrichments(content: string, tableFqns: string[]): ColumnEnr
   try {
     const parsed = parseLLMJson(content, "genie:column-intelligence") as Record<string, unknown>;
     const items: unknown[] = Array.isArray(parsed)
-      ? parsed as unknown[]
-      : Array.isArray(parsed.columns) ? parsed.columns
-      : Array.isArray(parsed.enrichments) ? parsed.enrichments
-      : [];
+      ? (parsed as unknown[])
+      : Array.isArray(parsed.columns)
+        ? parsed.columns
+        : Array.isArray(parsed.enrichments)
+          ? parsed.enrichments
+          : [];
 
     const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
 
     return items
-      .filter((item): item is Record<string, unknown> =>
-        typeof item === "object" && item !== null
-      )
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
       .filter((item) => {
         const fqn = String(item.tableFqn ?? "").toLowerCase();
         return tableSet.has(fqn);
@@ -229,7 +230,7 @@ function parseColumnEnrichments(content: string, tableFqns: string[]): ColumnEnr
 function buildBasicEnrichments(
   metadata: MetadataSnapshot,
   tableFqns: string[],
-  overrides: ColumnOverride[]
+  overrides: ColumnOverride[],
 ): ColumnEnrichment[] {
   const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
   const overrideMap = new Map<string, ColumnOverride>();

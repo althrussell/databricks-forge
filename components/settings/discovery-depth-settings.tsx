@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -27,10 +21,30 @@ interface DiscoveryDepthSettingsProps {
   updateDepthParam: (depth: DiscoveryDepth, key: keyof DiscoveryDepthConfig, value: number) => void;
 }
 
-const DEPTH_OPTIONS: { value: DiscoveryDepth; label: string; icon: typeof Target; description: string }[] = [
-  { value: "focused", label: "Focused", icon: Target, description: "Fewer, highest-quality use cases" },
-  { value: "balanced", label: "Balanced", icon: Scale, description: "Good mix of breadth and quality" },
-  { value: "comprehensive", label: "Comprehensive", icon: Layers, description: "Maximum coverage across domains" },
+const DEPTH_OPTIONS: {
+  value: DiscoveryDepth;
+  label: string;
+  icon: typeof Target;
+  description: string;
+}[] = [
+  {
+    value: "focused",
+    label: "Focused",
+    icon: Target,
+    description: "Fewer, highest-quality use cases",
+  },
+  {
+    value: "balanced",
+    label: "Balanced",
+    icon: Scale,
+    description: "Good mix of breadth and quality",
+  },
+  {
+    value: "comprehensive",
+    label: "Comprehensive",
+    icon: Layers,
+    description: "Maximum coverage across domains",
+  },
 ];
 
 export function DiscoveryDepthSettings({
@@ -48,10 +62,9 @@ export function DiscoveryDepthSettings({
           Discovery Depth
         </CardTitle>
         <CardDescription>
-          Configure the parameters for each discovery depth level and choose
-          the default. Each level controls how many use cases are generated per
-          batch, the minimum quality threshold, and the maximum output volume.
-          You can still override the depth level per-run.
+          Configure the parameters for each discovery depth level and choose the default. Each level
+          controls how many use cases are generated per batch, the minimum quality threshold, and
+          the maximum output volume. You can still override the depth level per-run.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -91,7 +104,9 @@ export function DiscoveryDepthSettings({
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Icon className={`h-4 w-4 ${isDefault ? "text-primary" : "text-muted-foreground"}`} />
+                  <Icon
+                    className={`h-4 w-4 ${isDefault ? "text-primary" : "text-muted-foreground"}`}
+                  />
                   <span className="text-sm font-semibold">{opt.label}</span>
                   {isDefault && (
                     <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -113,7 +128,13 @@ export function DiscoveryDepthSettings({
                         min={1}
                         max={50}
                         value={cfg.batchTargetMin}
-                        onChange={(e) => updateDepthParam(opt.value, "batchTargetMin", parseInt(e.target.value) || defaults.batchTargetMin)}
+                        onChange={(e) =>
+                          updateDepthParam(
+                            opt.value,
+                            "batchTargetMin",
+                            parseInt(e.target.value) || defaults.batchTargetMin,
+                          )
+                        }
                         className="w-20 h-8 text-sm"
                       />
                       <span className="text-xs text-muted-foreground">to</span>
@@ -122,7 +143,13 @@ export function DiscoveryDepthSettings({
                         min={1}
                         max={100}
                         value={cfg.batchTargetMax}
-                        onChange={(e) => updateDepthParam(opt.value, "batchTargetMax", parseInt(e.target.value) || defaults.batchTargetMax)}
+                        onChange={(e) =>
+                          updateDepthParam(
+                            opt.value,
+                            "batchTargetMax",
+                            parseInt(e.target.value) || defaults.batchTargetMax,
+                          )
+                        }
                         className="w-20 h-8 text-sm"
                       />
                     </div>
@@ -139,7 +166,13 @@ export function DiscoveryDepthSettings({
                       max={1}
                       step={0.05}
                       value={cfg.qualityFloor}
-                      onChange={(e) => updateDepthParam(opt.value, "qualityFloor", parseFloat(e.target.value) || defaults.qualityFloor)}
+                      onChange={(e) =>
+                        updateDepthParam(
+                          opt.value,
+                          "qualityFloor",
+                          parseFloat(e.target.value) || defaults.qualityFloor,
+                        )
+                      }
                       className="w-24 h-8 text-sm"
                     />
                   </div>
@@ -155,7 +188,13 @@ export function DiscoveryDepthSettings({
                       max={1000}
                       step={5}
                       value={cfg.adaptiveCap}
-                      onChange={(e) => updateDepthParam(opt.value, "adaptiveCap", parseInt(e.target.value) || defaults.adaptiveCap)}
+                      onChange={(e) =>
+                        updateDepthParam(
+                          opt.value,
+                          "adaptiveCap",
+                          parseInt(e.target.value) || defaults.adaptiveCap,
+                        )
+                      }
                       className="w-24 h-8 text-sm"
                     />
                   </div>
@@ -170,7 +209,13 @@ export function DiscoveryDepthSettings({
                       min={1}
                       max={10}
                       value={cfg.lineageDepth}
-                      onChange={(e) => updateDepthParam(opt.value, "lineageDepth", parseInt(e.target.value) || defaults.lineageDepth)}
+                      onChange={(e) =>
+                        updateDepthParam(
+                          opt.value,
+                          "lineageDepth",
+                          parseInt(e.target.value) || defaults.lineageDepth,
+                        )
+                      }
                       className="w-24 h-8 text-sm"
                     />
                   </div>
@@ -178,7 +223,9 @@ export function DiscoveryDepthSettings({
 
                 <button
                   type="button"
-                  onClick={() => onDepthConfigsChange({ ...depthConfigs, [opt.value]: { ...defaults } })}
+                  onClick={() =>
+                    onDepthConfigsChange({ ...depthConfigs, [opt.value]: { ...defaults } })
+                  }
                   className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                 >
                   Reset to defaults

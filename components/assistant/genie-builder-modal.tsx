@@ -281,7 +281,8 @@ export function GenieBuilderModal({
     if (
       recommendation.quality?.gateDecision === "warn" &&
       !window.confirm("This space has quality warnings. Deploy anyway?")
-    ) return;
+    )
+      return;
     setPhase("deploying");
 
     try {
@@ -414,9 +415,7 @@ export function GenieBuilderModal({
             {/* Title + description */}
             <div>
               <h3 className="text-sm font-semibold">{recommendation.title}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {recommendation.description}
-              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{recommendation.description}</p>
             </div>
 
             {/* Stat row */}
@@ -424,27 +423,38 @@ export function GenieBuilderModal({
               <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
               <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
               <StatItem icon={Link2} label="Filters" value={recommendation.filterCount} />
-              <StatItem icon={MessageSquare} label="Dimensions" value={recommendation.dimensionCount} />
-              <StatItem icon={FileText} label="Instructions" value={recommendation.instructionCount} />
+              <StatItem
+                icon={MessageSquare}
+                label="Dimensions"
+                value={recommendation.dimensionCount}
+              />
+              <StatItem
+                icon={FileText}
+                label="Instructions"
+                value={recommendation.instructionCount}
+              />
               <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
-              <StatItem icon={MessageSquare} label="Questions" value={recommendation.sampleQuestionCount} />
+              <StatItem
+                icon={MessageSquare}
+                label="Questions"
+                value={recommendation.sampleQuestionCount}
+              />
             </div>
 
             {/* Quality warnings */}
-            {recommendation.quality &&
-              recommendation.quality.degradedReasons.length > 0 && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
-                  <div className="flex items-center gap-2 text-xs font-medium">
-                    <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
-                    Quality warnings
-                  </div>
-                  <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                    {recommendation.quality.degradedReasons.map((reason) => (
-                      <li key={reason}>- {reason.replace(/_/g, " ")}</li>
-                    ))}
-                  </ul>
+            {recommendation.quality && recommendation.quality.degradedReasons.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
+                <div className="flex items-center gap-2 text-xs font-medium">
+                  <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
+                  Quality warnings
                 </div>
-              )}
+                <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                  {recommendation.quality.degradedReasons.map((reason) => (
+                    <li key={reason}>- {reason.replace(/_/g, " ")}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Collapsible details */}
             <button
@@ -468,7 +478,10 @@ export function GenieBuilderModal({
                     </p>
                     <div className="space-y-0.5">
                       {parsedSpace.data_sources.tables.map((t) => (
-                        <div key={t.identifier} className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <div
+                          key={t.identifier}
+                          className="flex items-center gap-1.5 font-mono text-[11px]"
+                        >
                           <Table2 className="size-3 text-muted-foreground" />
                           {t.identifier}
                         </div>
@@ -536,7 +549,8 @@ export function GenieBuilderModal({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-medium">
-                        Metric Views ({mvProposals.filter((m) => m.validationStatus !== "error").length})
+                        Metric Views (
+                        {mvProposals.filter((m) => m.validationStatus !== "error").length})
                       </p>
                       <p className="text-[11px] text-muted-foreground">
                         Choose a target schema for metric view deployment.
@@ -588,9 +602,7 @@ export function GenieBuilderModal({
                 <p className="text-sm font-medium">
                   {recommendation?.title ?? "Genie Space"} is live
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Ready for natural language queries.
-                </p>
+                <p className="text-xs text-muted-foreground">Ready for natural language queries.</p>
               </div>
             </div>
             {databricksHost && (
@@ -612,12 +624,7 @@ export function GenieBuilderModal({
         {phase === "ready" && recommendation && (
           <DialogFooter className="flex-col gap-2 sm:flex-row">
             {resultMode === "fast" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={runFullGeneration}
-                className="gap-1.5"
-              >
+              <Button variant="outline" size="sm" onClick={runFullGeneration} className="gap-1.5">
                 <RefreshCw className="size-3.5" />
                 Enhance with Full Engine
               </Button>

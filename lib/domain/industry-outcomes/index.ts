@@ -96,9 +96,7 @@ export const INDUSTRY_OUTCOMES: IndustryOutcome[] = [
  * For server-side code that should also check custom maps, use
  * `getIndustryOutcomeAsync` instead.
  */
-export function getIndustryOutcome(
-  id: string
-): IndustryOutcome | undefined {
+export function getIndustryOutcome(id: string): IndustryOutcome | undefined {
   return INDUSTRY_OUTCOMES.find((i) => i.id === id);
 }
 

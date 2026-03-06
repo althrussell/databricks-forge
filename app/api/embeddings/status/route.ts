@@ -20,7 +20,7 @@ export async function GET() {
     if (!isDatabaseReady()) {
       return NextResponse.json(
         { enabled: false, error: "Database is warming up. Please retry shortly." },
-        { status: 503, headers: { "Retry-After": "3" } }
+        { status: 503, headers: { "Retry-After": "3" } },
       );
     }
 
@@ -58,9 +58,6 @@ export async function GET() {
     logger.error("[api/embeddings/status] GET failed", {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { enabled: false, error: safeErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ enabled: false, error: safeErrorMessage(error) }, { status: 500 });
   }
 }

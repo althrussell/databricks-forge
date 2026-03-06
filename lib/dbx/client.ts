@@ -59,14 +59,14 @@ export function getConfig(): DatabricksConfig {
 
   if (!host) {
     throw new Error(
-      "DATABRICKS_HOST is not set. Set it in .env.local or deploy as a Databricks App."
+      "DATABRICKS_HOST is not set. Set it in .env.local or deploy as a Databricks App.",
     );
   }
   if (!warehouseId) {
     throw new Error(
       "DATABRICKS_WAREHOUSE_ID is not set. " +
         "Ensure app.yaml maps the sql-warehouse resource to this env var, " +
-        "or set it in .env.local for local development."
+        "or set it in .env.local for local development.",
     );
   }
 
@@ -158,7 +158,10 @@ export function isReviewEnabled(surface?: string): boolean {
  */
 export function getEmbeddingEndpoint(): string {
   const ep = process.env.DATABRICKS_EMBEDDING_ENDPOINT;
-  if (!ep) throw new Error("Embedding endpoint not configured (serving-endpoint-embedding resource not bound)");
+  if (!ep)
+    throw new Error(
+      "Embedding endpoint not configured (serving-endpoint-embedding resource not bound)",
+    );
   return ep;
 }
 
@@ -201,8 +204,7 @@ async function getBearerToken(): Promise<string> {
   if (userToken) return userToken;
 
   // 2. PAT token (local dev)
-  const pat =
-    process.env.DATABRICKS_TOKEN ?? process.env.DATABRICKS_API_TOKEN;
+  const pat = process.env.DATABRICKS_TOKEN ?? process.env.DATABRICKS_API_TOKEN;
   if (pat) return pat;
 
   // 3. OAuth M2M (Databricks Apps — service principal fallback)
@@ -213,7 +215,7 @@ async function getBearerToken(): Promise<string> {
     throw new Error(
       "No authentication credentials found. " +
         "Set DATABRICKS_TOKEN for local dev, or deploy as a Databricks App " +
-        "(which injects DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET)."
+        "(which injects DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET).",
     );
   }
 
@@ -238,14 +240,12 @@ async function getBearerToken(): Promise<string> {
         scope: "all-apis",
       }),
     },
-    TIMEOUTS.AUTH
+    TIMEOUTS.AUTH,
   );
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(
-      `OAuth token exchange failed (${resp.status}): ${text}`
-    );
+    throw new Error(`OAuth token exchange failed (${resp.status}): ${text}`);
   }
 
   const data: { access_token: string; expires_in: number } = await resp.json();
@@ -265,11 +265,7 @@ async function getBearerToken(): Promise<string> {
 export async function getCurrentUserEmail(): Promise<string | null> {
   try {
     const hdrs = await nextHeaders();
-    return (
-      hdrs.get("x-forwarded-email") ??
-      hdrs.get("x-forwarded-preferred-username") ??
-      null
-    );
+    return hdrs.get("x-forwarded-email") ?? hdrs.get("x-forwarded-preferred-username") ?? null;
   } catch {
     return null;
   }
@@ -309,8 +305,7 @@ export async function getAppHeaders(): Promise<Record<string, string>> {
  */
 async function getAppBearerToken(): Promise<string> {
   // 1. PAT token (local dev)
-  const pat =
-    process.env.DATABRICKS_TOKEN ?? process.env.DATABRICKS_API_TOKEN;
+  const pat = process.env.DATABRICKS_TOKEN ?? process.env.DATABRICKS_API_TOKEN;
   if (pat) return pat;
 
   // 2. OAuth M2M (Databricks Apps — service principal)
@@ -321,7 +316,7 @@ async function getAppBearerToken(): Promise<string> {
     throw new Error(
       "No app-level credentials found. " +
         "Set DATABRICKS_TOKEN for local dev, or deploy as a Databricks App " +
-        "(which injects DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET)."
+        "(which injects DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET).",
     );
   }
 
@@ -346,14 +341,12 @@ async function getAppBearerToken(): Promise<string> {
         scope: "all-apis",
       }),
     },
-    TIMEOUTS.AUTH
+    TIMEOUTS.AUTH,
   );
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(
-      `OAuth token exchange failed (${resp.status}): ${text}`
-    );
+    throw new Error(`OAuth token exchange failed (${resp.status}): ${text}`);
   }
 
   const data: { access_token: string; expires_in: number } = await resp.json();

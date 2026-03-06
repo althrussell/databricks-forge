@@ -5,20 +5,14 @@
  * dashboards, and metric views -- and which are uncovered.
  */
 
-import type {
-  DiscoveryResult,
-  AssetCoverage,
-} from "./types";
+import type { DiscoveryResult, AssetCoverage } from "./types";
 
 /**
  * Compute table-level coverage from discovered assets.
  * @param allTables All table FQNs in scope (normalised to lowercase)
  * @param discovery The discovery scan result
  */
-export function computeCoverage(
-  allTables: string[],
-  discovery: DiscoveryResult
-): AssetCoverage {
+export function computeCoverage(allTables: string[], discovery: DiscoveryResult): AssetCoverage {
   const tableSet = new Set(allTables.map((t) => t.toLowerCase()));
 
   const coveredByGenieSpaces: Record<string, string[]> = {};
@@ -56,14 +50,10 @@ export function computeCoverage(
     ...Object.keys(coveredByMetricViews),
   ]);
 
-  const uncoveredTables = allTables.filter(
-    (t) => !coveredSet.has(t.toLowerCase())
-  );
+  const uncoveredTables = allTables.filter((t) => !coveredSet.has(t.toLowerCase()));
 
   const coveragePercent =
-    allTables.length > 0
-      ? Math.round((coveredSet.size / allTables.length) * 100)
-      : 0;
+    allTables.length > 0 ? Math.round((coveredSet.size / allTables.length) * 100) : 0;
 
   return {
     allTables,

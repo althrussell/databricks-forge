@@ -53,10 +53,7 @@ export interface MetricViewDeployResult {
  * from a SQL/YAML expression string.
  */
 export function stripFqnPrefixes(sql: string): string {
-  return sql.replace(
-    /\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g,
-    "$1"
-  );
+  return sql.replace(/\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*\.([a-zA-Z_]\w*)\b/g, "$1");
 }
 
 /**
@@ -70,7 +67,7 @@ export function rewriteDdlTarget(ddl: string, targetSchema: string): string {
       const parts = fqn.replace(/`/g, "").split(".");
       const objectName = parts[parts.length - 1];
       return `${prefix}${targetSchema}.${objectName}`;
-    }
+    },
   );
 }
 
@@ -83,7 +80,7 @@ export function rewriteDdlTarget(ddl: string, targetSchema: string): string {
 export function qualifyJoinCriteria(onExpr: string): string {
   return onExpr.replace(
     /^(\s*)(\b[a-zA-Z_]\w*\b)\s*=\s*(\b[a-zA-Z_]\w*\b)\.(\b[a-zA-Z_]\w*\b)\s*$/,
-    "$1source.$2 = $3.$4"
+    "$1source.$2 = $3.$4",
   );
 }
 
@@ -124,7 +121,8 @@ export function stripWindowBlocks(ddl: string): string {
   return result.join("\n");
 }
 
-const AI_FUNCTION_PATTERN = /\b(?:ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
+const AI_FUNCTION_PATTERN =
+  /\b(?:ai_analyze_sentiment|ai_classify|ai_extract|ai_gen|ai_query|ai_similarity|ai_forecast|ai_summarize)\s*\(/i;
 
 /**
  * Remove YAML dimension/measure entries whose expr: contains an AI function.
@@ -142,7 +140,7 @@ export function stripAiFunctionEntries(ddl: string): string {
         return "";
       }
       return nameLine + exprLine;
-    }
+    },
   );
 }
 
@@ -158,7 +156,7 @@ export function sanitizeMetricViewDdl(ddl: string): string {
   let result = ddl
     .replace(
       /^(\s*(?:expr|on):\s*)(.+)$/gm,
-      (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest)
+      (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
     )
     .replace(/^\s*comment:\s*"[^"]*"\s*$/gm, "")
     .replace(/^\s*comment:\s*'[^']*'\s*$/gm, "")
@@ -167,7 +165,7 @@ export function sanitizeMetricViewDdl(ddl: string): string {
   // Fix ambiguous join on: clauses
   result = result.replace(
     /^(\s*on:\s*)(.+)$/gm,
-    (_match, prefix: string, expr: string) => prefix + qualifyJoinCriteria(expr).trim()
+    (_match, prefix: string, expr: string) => prefix + qualifyJoinCriteria(expr).trim(),
   );
 
   // Remove window blocks that the YAML parser rejects
@@ -184,7 +182,7 @@ export function sanitizeMetricViewDdl(ddl: string): string {
  */
 export function extractObjectName(ddl: string): string | null {
   const match = ddl.match(
-    /(?:CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i
+    /(?:CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
   );
   if (!match) return null;
   const parts = match[1].replace(/`/g, "").split(".");
@@ -206,7 +204,11 @@ export function classifyDeployError(error: string): { category: string; treatAsS
   if (msg.includes("SCHEMA_NOT_FOUND") || msg.includes("CATALOG_NOT_FOUND")) {
     return { category: "schema_not_found", treatAsSuccess: false };
   }
-  if (msg.includes("PARSE_SYNTAX_ERROR") || msg.includes("PARSE ERROR") || msg.includes("PARSING ERROR")) {
+  if (
+    msg.includes("PARSE_SYNTAX_ERROR") ||
+    msg.includes("PARSE ERROR") ||
+    msg.includes("PARSING ERROR")
+  ) {
     return { category: "syntax", treatAsSuccess: false };
   }
   if (msg.includes("UNRESOLVED_COLUMN") || msg.includes("UNRESOLVED_ROUTINE")) {
@@ -222,7 +224,11 @@ export function classifyDeployError(error: string): { category: string; treatAsS
  * Try to auto-fix common DDL issues that cause deployment failures.
  * Returns the fixed DDL string, or null if no fix is applicable.
  */
-export function attemptDdlAutoFix(ddl: string, error: string, _assetType?: "metric_view"): string | null {
+export function attemptDdlAutoFix(
+  ddl: string,
+  error: string,
+  _assetType?: "metric_view",
+): string | null {
   const msg = error.toUpperCase();
 
   if (msg.includes("PARSE") || msg.includes("SYNTAX")) {
@@ -236,7 +242,7 @@ export function attemptDdlAutoFix(ddl: string, error: string, _assetType?: "metr
     // Fix aggregate keyword casing
     fixed = fixed.replace(
       /^(\s*agg:\s*)(.+)$/gm,
-      (_m, prefix: string, rest: string) => prefix + rest.toUpperCase()
+      (_m, prefix: string, rest: string) => prefix + rest.toUpperCase(),
     );
 
     // Strip label: lines (unsupported in some DBR versions)
@@ -273,7 +279,7 @@ export async function validatePreExistingMetricViews(mvFqns: string[]): Promise<
       validateFqn(fqn, "metric view");
       await executeSQL(`DESCRIBE TABLE ${fqn}`);
       return fqn;
-    })
+    }),
   );
 
   const valid = new Set<string>();
@@ -336,7 +342,7 @@ export function prepareSerializedSpace(
     if (!isValid) {
       // Only track as stripped if it wasn't already reported by validation
       const alreadyReported = strippedRefs.some(
-        (s) => s.identifier.toLowerCase() === mv.identifier.toLowerCase()
+        (s) => s.identifier.toLowerCase() === mv.identifier.toLowerCase(),
       );
       if (!alreadyReported) {
         strippedRefs.push({
@@ -350,16 +356,14 @@ export function prepareSerializedSpace(
   });
 
   const deployedMvEntries = deployedMetricViews
-    .filter(
-      (mv) => !retainedMvs.some((e) => e.identifier.toLowerCase() === mv.fqn.toLowerCase())
-    )
+    .filter((mv) => !retainedMvs.some((e) => e.identifier.toLowerCase() === mv.fqn.toLowerCase()))
     .map((mv) => ({
       identifier: mv.fqn,
       ...(mv.description ? { description: [mv.description] } : {}),
     }));
 
   const allMvs = [...retainedMvs, ...deployedMvEntries].sort((a, b) =>
-    a.identifier.localeCompare(b.identifier)
+    a.identifier.localeCompare(b.identifier),
   );
 
   if (allMvs.length > 0) {
@@ -377,10 +381,7 @@ export function prepareSerializedSpace(
  * Add deployed metric view FQNs to a serialized space's data_sources.metric_views.
  * Does not validate or strip; used for ad-hoc space creation.
  */
-export function patchSpaceWithMetricViews(
-  serializedSpace: string,
-  deployedFqns: string[],
-): string {
+export function patchSpaceWithMetricViews(serializedSpace: string, deployedFqns: string[]): string {
   if (deployedFqns.length === 0) return serializedSpace;
   try {
     const space = JSON.parse(serializedSpace) as Record<string, unknown>;
@@ -421,7 +422,10 @@ export async function waitForAssetVisibility(
     } catch {
       if (attempt < maxRetries - 1) {
         logger.debug("Asset not yet visible, waiting for propagation", {
-          fqn, attempt: attempt + 1, maxRetries, delayMs,
+          fqn,
+          attempt: attempt + 1,
+          maxRetries,
+          delayMs,
         });
         await new Promise((r) => setTimeout(r, delayMs));
       }
@@ -468,10 +472,18 @@ export async function deployAsset(
 
     const visible = await waitForAssetVisibility(fqn);
     if (!visible) {
-      logger.error("Asset DDL succeeded but asset not visible after retries", { fqn, type: "metric_view" });
+      logger.error("Asset DDL succeeded but asset not visible after retries", {
+        fqn,
+        type: "metric_view",
+      });
       return {
-        name: asset.name, type: "metric_view", success: false, fqn, deployed: false,
-        error: "DDL executed but metric view not found in Unity Catalog after waiting. The SQL warehouse may need more time to propagate.",
+        name: asset.name,
+        type: "metric_view",
+        success: false,
+        fqn,
+        deployed: false,
+        error:
+          "DDL executed but metric view not found in Unity Catalog after waiting. The SQL warehouse may need more time to propagate.",
       };
     }
 
@@ -485,8 +497,12 @@ export async function deployAsset(
       logger.info("Asset already exists, treating as success", { fqn, type: "metric_view" });
       await grantAccess(fqn);
       return {
-        name: asset.name, type: "metric_view", success: true, fqn,
-        deployed: true, errorCategory: classification.category,
+        name: asset.name,
+        type: "metric_view",
+        success: true,
+        fqn,
+        deployed: true,
+        errorCategory: classification.category,
       };
     }
 
@@ -497,10 +513,18 @@ export async function deployAsset(
 
         const visible = await waitForAssetVisibility(fqn);
         if (!visible) {
-          logger.error("Auto-fixed DDL succeeded but asset not visible", { fqn, type: "metric_view" });
+          logger.error("Auto-fixed DDL succeeded but asset not visible", {
+            fqn,
+            type: "metric_view",
+          });
           return {
-            name: asset.name, type: "metric_view", success: false, fqn, deployed: false,
-            error: "Auto-fixed DDL executed but metric view not found in Unity Catalog after waiting.",
+            name: asset.name,
+            type: "metric_view",
+            success: false,
+            fqn,
+            deployed: false,
+            error:
+              "Auto-fixed DDL executed but metric view not found in Unity Catalog after waiting.",
             errorCategory: classification.category,
           };
         }
@@ -508,8 +532,13 @@ export async function deployAsset(
         await grantAccess(fqn);
         logger.info("Asset deployed after auto-fix", { fqn, type: "metric_view" });
         return {
-          name: asset.name, type: "metric_view", success: true, fqn,
-          deployed: true, autoFixed: true, errorCategory: classification.category,
+          name: asset.name,
+          type: "metric_view",
+          success: true,
+          fqn,
+          deployed: true,
+          autoFixed: true,
+          errorCategory: classification.category,
         };
       } catch (retryErr) {
         const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
@@ -519,8 +548,13 @@ export async function deployAsset(
 
     logger.warn("Metric view deployment failed", { name: asset.name, error: errorMsg });
     return {
-      name: asset.name, type: "metric_view", success: false,
-      error: errorMsg, fqn, deployed: false, errorCategory: classification.category,
+      name: asset.name,
+      type: "metric_view",
+      success: false,
+      error: errorMsg,
+      fqn,
+      deployed: false,
+      errorCategory: classification.category,
     };
   }
 }
@@ -553,7 +587,10 @@ export async function deployMetricViews(
       deployedFqns.push(fqn);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toUpperCase().includes("ALREADY_EXISTS") || msg.toUpperCase().includes("ALREADY EXISTS")) {
+      if (
+        msg.toUpperCase().includes("ALREADY_EXISTS") ||
+        msg.toUpperCase().includes("ALREADY EXISTS")
+      ) {
         results.push({ name: mv.name, success: true, fqn });
         deployedFqns.push(fqn);
       } else {
@@ -638,7 +675,7 @@ export async function validateFinalSpace(
         validateFqn(mv.identifier, "metric_view");
         await executeSQL(`DESCRIBE TABLE ${mv.identifier}`);
         return mv.identifier;
-      })
+      }),
     );
     const validMvs: typeof mvs = [];
     for (let i = 0; i < results.length; i++) {

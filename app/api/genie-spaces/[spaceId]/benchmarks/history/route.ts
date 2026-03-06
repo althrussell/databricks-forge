@@ -28,7 +28,8 @@ export async function GET(
       passedCount: run.passedCount,
       failedCount: run.failedCount,
       errorCount: run.errorCount,
-      passRate: run.totalQuestions > 0 ? Math.round((run.passedCount / run.totalQuestions) * 100) : 0,
+      passRate:
+        run.totalQuestions > 0 ? Math.round((run.passedCount / run.totalQuestions) * 100) : 0,
       improvementsApplied: run.improvementsApplied,
       hasFeedback: !!run.feedbackJson,
     }));

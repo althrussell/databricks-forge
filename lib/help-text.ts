@@ -8,14 +8,11 @@
 // ── Dashboard KPIs ──────────────────────────────────────────────────
 export const DASHBOARD = {
   totalRuns: "Total discovery pipeline runs across all configurations.",
-  useCases:
-    "Unique AI, statistical, and geospatial use cases generated across all completed runs.",
+  useCases: "Unique AI, statistical, and geospatial use cases generated across all completed runs.",
   avgScore:
     "Mean composite score (0–100) across feasibility, business value, innovation, and data readiness.",
-  domains:
-    "Distinct business domains identified by the AI across all use cases.",
-  successRate:
-    "Percentage of pipeline runs that completed all 7 steps without failure.",
+  domains: "Distinct business domains identified by the AI across all use cases.",
+  successRate: "Percentage of pipeline runs that completed all 7 steps without failure.",
 } as const;
 
 // ── Configure (config form) ─────────────────────────────────────────
@@ -42,35 +39,26 @@ export const CONFIG = {
 
 // ── Runs list ───────────────────────────────────────────────────────
 export const RUNS_LIST = {
-  businessName:
-    "The organisation name used as context for this discovery run.",
+  businessName: "The organisation name used as context for this discovery run.",
   ucMetadata: "The Unity Catalog catalogs and schemas scanned for this run.",
   status: "Pipeline status: pending, running, completed, or failed.",
   progress: "Percentage of the 7 pipeline steps completed.",
-  useCases:
-    "Total use cases generated after deduplication and scoring.",
+  useCases: "Total use cases generated after deduplication and scoring.",
   activity: "Current pipeline step or status message.",
   created: "When the pipeline run was started.",
 } as const;
 
 // ── Run detail ──────────────────────────────────────────────────────
 export const RUN_DETAIL = {
-  totalUseCases:
-    "Unique use cases after deduplication, scoring, and quality filtering.",
-  domainCount:
-    "Business domains identified by the AI clustering step.",
-  aiUseCases:
-    "Use cases involving machine learning, NLP, or predictive analytics.",
-  avgScore:
-    "Mean composite score across all 4 scoring dimensions.",
+  totalUseCases: "Unique use cases after deduplication, scoring, and quality filtering.",
+  domainCount: "Business domains identified by the AI clustering step.",
+  aiUseCases: "Use cases involving machine learning, NLP, or predictive analytics.",
+  avgScore: "Mean composite score across all 4 scoring dimensions.",
   tabOverview: "Charts, scores, and business context for this run.",
   tabUseCases: "Browse, filter, and edit the generated use cases.",
-  tabGenie:
-    "AI-generated Databricks Genie Spaces for natural language SQL exploration.",
-  tabDashboards:
-    "AI-generated dashboard recommendations for BI visualisation.",
-  tabObservability:
-    "Prompt logs, token usage, and LLM performance metrics for this run.",
+  tabGenie: "AI-generated Databricks Genie Spaces for natural language SQL exploration.",
+  tabDashboards: "AI-generated dashboard recommendations for BI visualisation.",
+  tabObservability: "Prompt logs, token usage, and LLM performance metrics for this run.",
 } as const;
 
 // ── Pipeline steps ──────────────────────────────────────────────────
@@ -85,8 +73,7 @@ export const PIPELINE_STEPS = {
     "Classifies each table as business-relevant or technical/system using the LLM.",
   "usecase-generation":
     "Generates use cases in parallel batches, grounded in your metadata and business context.",
-  "domain-clustering":
-    "Assigns business domains and subdomains to each use case using the LLM.",
+  "domain-clustering": "Assigns business domains and subdomains to each use case using the LLM.",
   scoring:
     "Scores use cases on 4 dimensions, deduplicates similar ones, and applies quality calibration.",
   "sql-generation":
@@ -102,8 +89,7 @@ export const EXPORT = {
   json: "Structured data for API integration or custom processing.",
   notebooks:
     "Creates SQL notebooks in your Databricks workspace with generated SQL for each use case.",
-  briefing:
-    "Combined estate scan + discovery PPTX for stakeholder presentations.",
+  briefing: "Combined estate scan + discovery PPTX for stakeholder presentations.",
 } as const;
 
 // ── Settings ────────────────────────────────────────────────────────
@@ -112,26 +98,21 @@ export const SETTINGS = {
     "Number of sample rows fetched per table for column profiling. Higher values improve LLM accuracy but increase query time. Set to 0 for metadata only.",
   exportFormat: "Pre-selected format when exporting from a completed run.",
   notebookPath: "Workspace path prefix for deployed SQL notebooks.",
-  defaultDepth:
-    "Default depth for new runs. Can be overridden per-run in the configure form.",
+  defaultDepth: "Default depth for new runs. Can be overridden per-run in the configure form.",
   batchTarget:
     "Target number of use cases per LLM batch. Higher values mean fewer API calls but may reduce quality.",
-  qualityFloor:
-    "Minimum composite score (0–100) a use case must reach to be kept after scoring.",
-  adaptiveCap:
-    "Maximum total use cases. The pipeline stops generating once this cap is reached.",
+  qualityFloor: "Minimum composite score (0–100) a use case must reach to be kept after scoring.",
+  adaptiveCap: "Maximum total use cases. The pipeline stops generating once this cap is reached.",
   lineageDepth:
     "How many hops to walk in the lineage graph from each table. Higher values discover more upstream/downstream context.",
   genieEngine:
     "The Genie Engine analyses your use cases and metadata to produce ready-to-deploy Databricks Genie Spaces with natural language SQL access.",
-  maxTables:
-    "Upper limit of data objects (tables + metric views) in a single Genie Space.",
+  maxTables: "Upper limit of data objects (tables + metric views) in a single Genie Space.",
   fiscalYear:
     "Month your fiscal year begins. Affects auto-generated time period filters in Genie Spaces.",
   entityMatching:
     "Controls how the engine matches entity names to table data for parameterised queries.",
-  maxAutoSpaces:
-    "Maximum number of Genie Spaces to auto-generate. Set to 0 for manual control.",
+  maxAutoSpaces: "Maximum number of Genie Spaces to auto-generate. Set to 0 for manual control.",
 } as const;
 
 // ── Compare page ────────────────────────────────────────────────────
@@ -140,10 +121,8 @@ export const COMPARE = {
     "Side-by-side comparison of key metrics: use case count, average score, domain count, and type distribution.",
   useCaseOverlap:
     "Identifies semantically similar use cases across the two runs based on title and description matching.",
-  configDiff:
-    "Side-by-side comparison of the configuration parameters used for each run.",
-  stepComparison:
-    "Compares step-level execution times and output counts between the two runs.",
+  configDiff: "Side-by-side comparison of the configuration parameters used for each run.",
+  stepComparison: "Compares step-level execution times and output counts between the two runs.",
 } as const;
 
 // ── Environment page ────────────────────────────────────────────────

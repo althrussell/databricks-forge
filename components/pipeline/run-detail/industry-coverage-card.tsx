@@ -2,26 +2,12 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Eye,
   ChevronDown,
@@ -60,8 +46,7 @@ export function IndustryCoverageCard({
 
   const coverage = computeIndustryCoverage(industry, useCases);
   const hasGaps =
-    coverage.missingDataEntities.length > 0 ||
-    coverage.missingSourceSystems.length > 0;
+    coverage.missingDataEntities.length > 0 || coverage.missingSourceSystems.length > 0;
 
   return (
     <Card>
@@ -71,27 +56,22 @@ export function IndustryCoverageCard({
           Industry Outcome Map Coverage ({industry.name})
         </CardTitle>
         <CardDescription>
-          Comparison of generated use cases against{" "}
-          {coverage.totalRefUseCases} reference use cases from the{" "}
-          {industry.name} outcome map
+          Comparison of generated use cases against {coverage.totalRefUseCases} reference use cases
+          from the {industry.name} outcome map
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Overall coverage */}
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <Progress
-              value={Math.round(coverage.overallCoverage * 100)}
-              className="h-3"
-            />
+            <Progress value={Math.round(coverage.overallCoverage * 100)} className="h-3" />
           </div>
           <span className="min-w-[60px] text-right text-sm font-semibold">
             {Math.round(coverage.overallCoverage * 100)}% covered
           </span>
         </div>
         <p className="text-xs text-muted-foreground">
-          {coverage.coveredRefUseCases} of {coverage.totalRefUseCases}{" "}
-          reference use cases matched
+          {coverage.coveredRefUseCases} of {coverage.totalRefUseCases} reference use cases matched
           {coverage.gapCount > 0 && (
             <span className="ml-1 font-medium text-amber-600 dark:text-amber-400">
               &middot; {coverage.gapCount} gap
@@ -105,10 +85,7 @@ export function IndustryCoverageCard({
         {/* Per-priority breakdown with collapsible gap detail */}
         <div className="space-y-2">
           {coverage.priorities.map((pc) => (
-            <PriorityRow
-              key={`${pc.objective}-${pc.priority.name}`}
-              pc={pc}
-            />
+            <PriorityRow key={`${pc.objective}-${pc.priority.name}`} pc={pc} />
           ))}
         </div>
 
@@ -151,8 +128,7 @@ function PriorityRow({ pc }: { pc: PriorityCoverage }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{pc.priority.name}</p>
           <p className="text-xs text-muted-foreground">
-            {pc.objective} &middot; {pc.priority.useCases.length} reference
-            use cases
+            {pc.objective} &middot; {pc.priority.useCases.length} reference use cases
             {pc.unmatchedRefUseCases.length > 0 && (
               <span className="ml-1 text-amber-600 dark:text-amber-400">
                 &middot; {pc.unmatchedRefUseCases.length} gap
@@ -182,11 +158,7 @@ function PriorityRow({ pc }: { pc: PriorityCoverage }) {
               </p>
               <div className="flex flex-wrap gap-1">
                 {pc.matchedUseCases.map((uc) => (
-                  <Badge
-                    key={uc.id}
-                    variant="secondary"
-                    className="text-xs"
-                  >
+                  <Badge key={uc.id} variant="secondary" className="text-xs">
                     {uc.name}
                   </Badge>
                 ))}
@@ -250,12 +222,11 @@ function PriorityRow({ pc }: { pc: PriorityCoverage }) {
             </div>
           )}
 
-          {pc.matchedUseCases.length === 0 &&
-            pc.unmatchedRefUseCases.length === 0 && (
-              <p className="text-xs italic text-muted-foreground">
-                No reference use cases in this priority
-              </p>
-            )}
+          {pc.matchedUseCases.length === 0 && pc.unmatchedRefUseCases.length === 0 && (
+            <p className="text-xs italic text-muted-foreground">
+              No reference use cases in this priority
+            </p>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -291,9 +262,7 @@ function GapRefPopover({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-0">
         <div className="border-b px-3 py-2">
-          <p className="text-xs font-semibold">
-            Use cases unlocked by &ldquo;{label}&rdquo;
-          </p>
+          <p className="text-xs font-semibold">Use cases unlocked by &ldquo;{label}&rdquo;</p>
         </div>
         <ul className="max-h-60 overflow-y-auto px-3 py-2 space-y-1.5">
           {refUseCases.map((ref) => (
@@ -312,13 +281,7 @@ function GapRefPopover({
   );
 }
 
-function DataGapSummary({
-  coverage,
-  runId,
-}: {
-  coverage: CoverageResult;
-  runId: string;
-}) {
+function DataGapSummary({ coverage, runId }: { coverage: CoverageResult; runId: string }) {
   const topEntities = coverage.missingDataEntities.slice(0, 10);
   const topSystems = coverage.missingSourceSystems.slice(0, 8);
 
@@ -362,10 +325,7 @@ function DataGapSummary({
                   label={entity}
                   refUseCases={refUseCases}
                   badge={
-                    <Badge
-                      variant="secondary"
-                      className="ml-2 shrink-0 text-[10px]"
-                    >
+                    <Badge variant="secondary" className="ml-2 shrink-0 text-[10px]">
                       unlocks {useCaseCount} UC
                       {useCaseCount !== 1 ? "s" : ""}
                     </Badge>
@@ -392,10 +352,7 @@ function DataGapSummary({
                   label={system}
                   refUseCases={refUseCases}
                   badge={
-                    <Badge
-                      variant="secondary"
-                      className="ml-2 shrink-0 text-[10px]"
-                    >
+                    <Badge variant="secondary" className="ml-2 shrink-0 text-[10px]">
                       {useCaseCount} UC{useCaseCount !== 1 ? "s" : ""}
                     </Badge>
                   }

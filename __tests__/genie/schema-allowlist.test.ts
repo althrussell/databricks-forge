@@ -8,9 +8,7 @@ import {
 } from "@/lib/genie/schema-allowlist";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 
-function makeAllowlist(
-  tables: Record<string, string[]>,
-): SchemaAllowlist {
+function makeAllowlist(tables: Record<string, string[]>): SchemaAllowlist {
   const tableSet = new Set<string>();
   const columns = new Map<string, Set<string>>();
   const columnTypes = new Map<string, string>();
@@ -107,10 +105,34 @@ describe("buildCompactColumnsBlock", () => {
   const metadata: MetadataSnapshot = {
     cacheKey: "test",
     ucPath: "retail.demo",
-    tables: [{ fqn: "retail.demo.loans", catalog: "retail", schema: "demo", tableName: "loans", comment: null, tableType: "MANAGED", dataSourceFormat: "DELTA" }],
+    tables: [
+      {
+        fqn: "retail.demo.loans",
+        catalog: "retail",
+        schema: "demo",
+        tableName: "loans",
+        comment: null,
+        tableType: "MANAGED",
+        dataSourceFormat: "DELTA",
+      },
+    ],
     columns: [
-      { tableFqn: "retail.demo.loans", columnName: "amount", dataType: "double", ordinalPosition: 1, isNullable: true, comment: null },
-      { tableFqn: "retail.demo.loans", columnName: "Origination Quarter", dataType: "date", ordinalPosition: 2, isNullable: true, comment: null },
+      {
+        tableFqn: "retail.demo.loans",
+        columnName: "amount",
+        dataType: "double",
+        ordinalPosition: 1,
+        isNullable: true,
+        comment: null,
+      },
+      {
+        tableFqn: "retail.demo.loans",
+        columnName: "Origination Quarter",
+        dataType: "date",
+        ordinalPosition: 2,
+        isNullable: true,
+        comment: null,
+      },
     ],
     foreignKeys: [],
     metricViews: [],
@@ -133,10 +155,34 @@ describe("buildSchemaContextBlock", () => {
   const metadata: MetadataSnapshot = {
     cacheKey: "test",
     ucPath: "retail.demo",
-    tables: [{ fqn: "retail.demo.loans", catalog: "retail", schema: "demo", tableName: "loans", comment: null, tableType: "MANAGED", dataSourceFormat: "DELTA" }],
+    tables: [
+      {
+        fqn: "retail.demo.loans",
+        catalog: "retail",
+        schema: "demo",
+        tableName: "loans",
+        comment: null,
+        tableType: "MANAGED",
+        dataSourceFormat: "DELTA",
+      },
+    ],
     columns: [
-      { tableFqn: "retail.demo.loans", columnName: "amount", dataType: "double", ordinalPosition: 1, isNullable: true, comment: null },
-      { tableFqn: "retail.demo.loans", columnName: "Loan Duration (Months)", dataType: "int", ordinalPosition: 2, isNullable: true, comment: null },
+      {
+        tableFqn: "retail.demo.loans",
+        columnName: "amount",
+        dataType: "double",
+        ordinalPosition: 1,
+        isNullable: true,
+        comment: null,
+      },
+      {
+        tableFqn: "retail.demo.loans",
+        columnName: "Loan Duration (Months)",
+        dataType: "int",
+        ordinalPosition: 2,
+        isNullable: true,
+        comment: null,
+      },
     ],
     foreignKeys: [],
     metricViews: [],

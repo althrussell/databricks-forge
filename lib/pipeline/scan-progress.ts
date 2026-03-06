@@ -101,7 +101,7 @@ export function initScanProgress(scanId: string): void {
  */
 export function updateScanProgress(
   scanId: string,
-  update: Partial<Omit<ScanProgress, "scanId" | "elapsedMs" | "updatedAt">>
+  update: Partial<Omit<ScanProgress, "scanId" | "elapsedMs" | "updatedAt">>,
 ): void {
   const entry = store.get(scanId);
   if (!entry) return;

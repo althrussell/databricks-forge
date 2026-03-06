@@ -17,11 +17,7 @@ import {
   fetchTableInfoBatch,
   filterAccessibleScopes,
 } from "@/lib/queries/metadata";
-import {
-  enrichTablesInBatches,
-  getTableTags,
-  getColumnTags,
-} from "@/lib/queries/metadata-detail";
+import { enrichTablesInBatches, getTableTags, getColumnTags } from "@/lib/queries/metadata-detail";
 import { walkLineage } from "@/lib/queries/lineage";
 import { runIntelligenceLayer, buildTableInputs } from "@/lib/ai/environment-intelligence";
 import { computeAllTableHealth } from "@/lib/domain/health-score";
@@ -43,9 +39,7 @@ import type { DiscoveryResult } from "@/lib/discovery/types";
 /**
  * Parse the uc_metadata scope string.
  */
-function parseUCMetadata(
-  ucMetadata: string
-): Array<{ catalog: string; schema?: string }> {
+function parseUCMetadata(ucMetadata: string): Array<{ catalog: string; schema?: string }> {
   const parts = ucMetadata.split(",").map((p) => p.trim());
   return parts.map((part) => {
     const segments = part.split(".");
@@ -64,7 +58,7 @@ export async function runStandaloneEnrichment(
   scanId: string,
   ucMetadata: string,
   lineageDepth = 5,
-  assetDiscoveryEnabled = false
+  assetDiscoveryEnabled = false,
 ): Promise<void> {
   const startTime = Date.now();
   const scopes = parseUCMetadata(ucMetadata);
@@ -73,408 +67,481 @@ export async function runStandaloneEnrichment(
   logger.info("[standalone-scan] Starting", { scanId, ucMetadata, scopes: scopes.length });
 
   try {
-  // Phase 0: Permission pre-check -- filter out inaccessible scopes in parallel
-  updateScanProgress(scanId, {
-    phase: "listing-tables",
-    message: `Probing ${scopes.length} scope${scopes.length !== 1 ? "s" : ""} for access permissions...`,
-  });
-
-  const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
-
-  if (skipped.length > 0) {
-    logger.info("[standalone-scan] Filtered inaccessible scopes", {
-      skipped: skipped.map((s) => s.label),
-    });
+    // Phase 0: Permission pre-check -- filter out inaccessible scopes in parallel
     updateScanProgress(scanId, {
-      message: `Filtered ${skipped.length} inaccessible scope(s). Scanning ${accessibleScopes.length} accessible scope(s)...`,
+      phase: "listing-tables",
+      message: `Probing ${scopes.length} scope${scopes.length !== 1 ? "s" : ""} for access permissions...`,
     });
-  }
 
-  if (accessibleScopes.length === 0) {
-    logger.error("[standalone-scan] No accessible scopes", { scanId, ucMetadata });
-    updateScanProgress(scanId, {
-      phase: "failed",
-      message: "No accessible scopes found. Check permissions for the configured catalogs/schemas.",
-    });
-    return;
-  }
+    const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
 
-  // Phase 1: Basic metadata
-  updateScanProgress(scanId, {
-    message: `Scanning ${accessibleScopes.length} scope${accessibleScopes.length !== 1 ? "s" : ""} for tables and columns...`,
-  });
-
-  const allTables = [];
-  const allColumns = [];
-  const allFKs = [];
-
-  for (const scope of accessibleScopes) {
-    const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
-    try {
+    if (skipped.length > 0) {
+      logger.info("[standalone-scan] Filtered inaccessible scopes", {
+        skipped: skipped.map((s) => s.label),
+      });
       updateScanProgress(scanId, {
-        message: `Listing tables in ${scopeLabel}...`,
+        message: `Filtered ${skipped.length} inaccessible scope(s). Scanning ${accessibleScopes.length} accessible scope(s)...`,
       });
-      const tables = await listTables(scope.catalog, scope.schema);
-      const tableComments = await fetchTableComments(scope.catalog, scope.schema);
-      mergeTableComments(tables, tableComments);
-      const tableTypes = await fetchTableTypes(scope.catalog, scope.schema);
-      mergeTableTypes(tables, tableTypes);
-      allTables.push(...tables);
+    }
+
+    if (accessibleScopes.length === 0) {
+      logger.error("[standalone-scan] No accessible scopes", { scanId, ucMetadata });
       updateScanProgress(scanId, {
-        tablesFound: allTables.length,
-        message: `Found ${allTables.length} tables. Fetching columns from ${scopeLabel}...`,
+        phase: "failed",
+        message:
+          "No accessible scopes found. Check permissions for the configured catalogs/schemas.",
       });
-      const columns = await listColumns(scope.catalog, scope.schema);
-      allColumns.push(...columns);
-      updateScanProgress(scanId, { columnsFound: allColumns.length });
-      const fks = await listForeignKeys(scope.catalog, scope.schema);
-      allFKs.push(...fks);
-    } catch (error) {
-      logger.warn("[standalone-scan] Scope failed", {
-        scope,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return;
     }
-  }
 
-  if (allTables.length === 0) {
-    logger.error("[standalone-scan] No tables found", { scanId, ucMetadata });
+    // Phase 1: Basic metadata
     updateScanProgress(scanId, {
-      phase: "failed",
-      message: "No tables found. Check scope and permissions.",
-    });
-    return;
-  }
-
-  updateScanProgress(scanId, {
-    phase: "fetching-metadata",
-    tablesFound: allTables.length,
-    columnsFound: allColumns.length,
-    message: `Found ${allTables.length} tables and ${allColumns.length} columns.`,
-  });
-
-  // Build lookups from the original table list
-  const tableTypeLookup = new Map<string, string>();
-  const formatLookup = new Map<string, string | null>();
-  for (const t of allTables) {
-    tableTypeLookup.set(t.fqn, t.tableType);
-    if (t.dataSourceFormat) formatLookup.set(t.fqn, t.dataSourceFormat);
-  }
-
-  // Phase 2: Lineage walk
-  updateScanProgress(scanId, {
-    phase: "walking-lineage",
-    message: `Walking lineage from ${allTables.length} seed tables...`,
-  });
-  const seedFqns = allTables.map((t) => t.fqn);
-  const lineageGraph = await walkLineage(seedFqns, { maxDepth: lineageDepth });
-
-  const expandedTables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType: string; dataSourceFormat: string | null }> = [
-    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
-    ...lineageGraph.discoveredTables.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
-  ];
-
-  // Fetch metadata for lineage-discovered tables so they get correct
-  // tableType + dataSourceFormat (used to skip unnecessary DESCRIBE ops)
-  if (lineageGraph.discoveredTables.length > 0) {
-    try {
-      const [lineageInfos, lineageCols] = await Promise.all([
-        fetchTableInfoBatch(lineageGraph.discoveredTables),
-        fetchColumnsBatch(lineageGraph.discoveredTables),
-      ]);
-      allColumns.push(...lineageCols);
-
-      const infoLookup = new Map(lineageInfos.map((t) => [t.fqn, t]));
-      for (const entry of expandedTables) {
-        const info = infoLookup.get(entry.fqn);
-        if (info) {
-          entry.tableType = info.tableType;
-          entry.dataSourceFormat = info.dataSourceFormat ?? null;
-        }
-      }
-    } catch (error) {
-      logger.warn("[standalone-scan] Failed to fetch lineage-discovered metadata (non-fatal)", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  updateScanProgress(scanId, {
-    lineageTablesFound: lineageGraph.discoveredTables.length,
-    lineageEdgesFound: lineageGraph.edges.length,
-    tablesFound: expandedTables.length,
-    message: `Lineage walk discovered ${lineageGraph.discoveredTables.length} additional tables and ${lineageGraph.edges.length} edges.`,
-  });
-
-  // Phase 3: Enrichment
-  updateScanProgress(scanId, {
-    phase: "enriching",
-    enrichTotal: expandedTables.length,
-    enrichedCount: 0,
-    message: `Enriching ${expandedTables.length} tables (DESCRIBE DETAIL + HISTORY)...`,
-  });
-  const enrichmentResults = await enrichTablesInBatches(expandedTables, 5, (completed, total) => {
-    updateScanProgress(scanId, {
-      enrichedCount: completed,
-      enrichTotal: total,
-      message: `Enriching tables: ${completed}/${total}...`,
-    });
-  });
-
-  // Merge table comments into enrichment details
-  const commentLookup = new Map<string, string>();
-  for (const t of allTables) {
-    if (t.comment) commentLookup.set(t.fqn, t.comment);
-  }
-  for (const [fqn, result] of enrichmentResults) {
-    if (result.detail && !result.detail.comment) {
-      const comment = commentLookup.get(fqn);
-      if (comment) result.detail.comment = comment;
-    }
-  }
-
-  // Phase 4: Tags
-  updateScanProgress(scanId, {
-    phase: "fetching-tags",
-    message: "Fetching Unity Catalog tags...",
-  });
-  const allTableTags = [];
-  const allColumnTags = [];
-  for (const scope of accessibleScopes) {
-    allTableTags.push(...await getTableTags(scope.catalog, scope.schema));
-    allColumnTags.push(...await getColumnTags(scope.catalog, scope.schema));
-  }
-
-  // Phase 5: Health scoring
-  updateScanProgress(scanId, {
-    phase: "health-scoring",
-    message: "Computing table health scores...",
-  });
-  const details: TableDetail[] = [];
-  const histories = new Map<string, TableHistorySummary>();
-  for (const [fqn, result] of enrichmentResults) {
-    if (result.detail) details.push(result.detail);
-    if (result.history) histories.set(fqn, result.history);
-  }
-  const healthScores = computeAllTableHealth(details, histories);
-
-  // Phase 6a: Asset discovery (if enabled -- runs before LLM intelligence so results feed into analytics maturity pass)
-  let assetCoveragePercent = 0;
-  let genieSpaceCount = 0;
-  let dashboardCount = 0;
-  let metricViewCount = 0;
-  let discoveryResult: DiscoveryResult | null = null;
-
-  if (assetDiscoveryEnabled) {
-    updateScanProgress(scanId, {
-      phase: "asset-discovery",
-      message: "Discovering existing analytics assets (Genie spaces, dashboards, metric views)...",
+      message: `Scanning ${accessibleScopes.length} scope${accessibleScopes.length !== 1 ? "s" : ""} for tables and columns...`,
     });
 
-    try {
-      const scopeStrings = accessibleScopes.map(
-        (s) => s.schema ? `${s.catalog}.${s.schema}` : s.catalog
-      );
+    const allTables = [];
+    const allColumns = [];
+    const allFKs = [];
 
-      discoveryResult = await discoverExistingAssets({
-        scopeTables: allTables.map((t) => t.fqn),
-        metricViewScope: scopeStrings,
-      });
-
-      const coverage = computeCoverage(
-        allTables.map((t) => t.fqn),
-        discoveryResult
-      );
-
-      genieSpaceCount = discoveryResult.genieSpaces.length;
-      dashboardCount = discoveryResult.dashboards.length;
-      metricViewCount = discoveryResult.metricViews.length;
-      assetCoveragePercent = coverage.coveragePercent;
-
-      await saveDiscoveryResults(scanId, discoveryResult, coverage);
-
-      updateScanProgress(scanId, {
-        message: `Asset discovery: ${genieSpaceCount} Genie spaces, ${dashboardCount} dashboards, ${metricViewCount} metric views (${assetCoveragePercent}% coverage)`,
-      });
-    } catch (error) {
-      logger.warn("[standalone-scan] Asset discovery failed (non-fatal)", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Phase 6b: LLM intelligence (passes 1-8 + optional pass 9 analytics maturity when discovery data is available)
-  updateScanProgress(scanId, {
-    phase: "llm-intelligence",
-    message: "Running LLM intelligence analysis (domains, PII, governance)...",
-  });
-  let intelligenceResult;
-  try {
-    const endpoint = getFastServingEndpoint();
-    const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
-    intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
-      endpoint,
-      discoveryResult,
-      onProgress: (pass) => {
+    for (const scope of accessibleScopes) {
+      const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
+      try {
         updateScanProgress(scanId, {
-          llmPass: pass,
-          message: `LLM analysis: ${pass}...`,
+          message: `Listing tables in ${scopeLabel}...`,
         });
-      },
+        const tables = await listTables(scope.catalog, scope.schema);
+        const tableComments = await fetchTableComments(scope.catalog, scope.schema);
+        mergeTableComments(tables, tableComments);
+        const tableTypes = await fetchTableTypes(scope.catalog, scope.schema);
+        mergeTableTypes(tables, tableTypes);
+        allTables.push(...tables);
+        updateScanProgress(scanId, {
+          tablesFound: allTables.length,
+          message: `Found ${allTables.length} tables. Fetching columns from ${scopeLabel}...`,
+        });
+        const columns = await listColumns(scope.catalog, scope.schema);
+        allColumns.push(...columns);
+        updateScanProgress(scanId, { columnsFound: allColumns.length });
+        const fks = await listForeignKeys(scope.catalog, scope.schema);
+        allFKs.push(...fks);
+      } catch (error) {
+        logger.warn("[standalone-scan] Scope failed", {
+          scope,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (allTables.length === 0) {
+      logger.error("[standalone-scan] No tables found", { scanId, ucMetadata });
+      updateScanProgress(scanId, {
+        phase: "failed",
+        message: "No tables found. Check scope and permissions.",
+      });
+      return;
+    }
+
+    updateScanProgress(scanId, {
+      phase: "fetching-metadata",
+      tablesFound: allTables.length,
+      columnsFound: allColumns.length,
+      message: `Found ${allTables.length} tables and ${allColumns.length} columns.`,
     });
 
-    // Apply results to details
-    for (const domain of intelligenceResult.domains) {
-      for (const fqn of domain.tables) {
-        const detail = details.find((d) => d.fqn === fqn);
-        if (detail) {
-          detail.dataDomain = domain.domain;
-          detail.dataSubdomain = domain.subdomain;
+    // Build lookups from the original table list
+    const tableTypeLookup = new Map<string, string>();
+    const formatLookup = new Map<string, string | null>();
+    for (const t of allTables) {
+      tableTypeLookup.set(t.fqn, t.tableType);
+      if (t.dataSourceFormat) formatLookup.set(t.fqn, t.dataSourceFormat);
+    }
+
+    // Phase 2: Lineage walk
+    updateScanProgress(scanId, {
+      phase: "walking-lineage",
+      message: `Walking lineage from ${allTables.length} seed tables...`,
+    });
+    const seedFqns = allTables.map((t) => t.fqn);
+    const lineageGraph = await walkLineage(seedFqns, { maxDepth: lineageDepth });
+
+    const expandedTables: Array<{
+      fqn: string;
+      discoveredVia: "selected" | "lineage";
+      tableType: string;
+      dataSourceFormat: string | null;
+    }> = [
+      ...seedFqns.map((fqn) => ({
+        fqn,
+        discoveredVia: "selected" as const,
+        tableType: tableTypeLookup.get(fqn) ?? "TABLE",
+        dataSourceFormat: formatLookup.get(fqn) ?? null,
+      })),
+      ...lineageGraph.discoveredTables.map((fqn) => ({
+        fqn,
+        discoveredVia: "lineage" as const,
+        tableType: "TABLE",
+        dataSourceFormat: null as string | null,
+      })),
+    ];
+
+    // Fetch metadata for lineage-discovered tables so they get correct
+    // tableType + dataSourceFormat (used to skip unnecessary DESCRIBE ops)
+    if (lineageGraph.discoveredTables.length > 0) {
+      try {
+        const [lineageInfos, lineageCols] = await Promise.all([
+          fetchTableInfoBatch(lineageGraph.discoveredTables),
+          fetchColumnsBatch(lineageGraph.discoveredTables),
+        ]);
+        allColumns.push(...lineageCols);
+
+        const infoLookup = new Map(lineageInfos.map((t) => [t.fqn, t]));
+        for (const entry of expandedTables) {
+          const info = infoLookup.get(entry.fqn);
+          if (info) {
+            entry.tableType = info.tableType;
+            entry.dataSourceFormat = info.dataSourceFormat ?? null;
+          }
+        }
+      } catch (error) {
+        logger.warn("[standalone-scan] Failed to fetch lineage-discovered metadata (non-fatal)", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    updateScanProgress(scanId, {
+      lineageTablesFound: lineageGraph.discoveredTables.length,
+      lineageEdgesFound: lineageGraph.edges.length,
+      tablesFound: expandedTables.length,
+      message: `Lineage walk discovered ${lineageGraph.discoveredTables.length} additional tables and ${lineageGraph.edges.length} edges.`,
+    });
+
+    // Phase 3: Enrichment
+    updateScanProgress(scanId, {
+      phase: "enriching",
+      enrichTotal: expandedTables.length,
+      enrichedCount: 0,
+      message: `Enriching ${expandedTables.length} tables (DESCRIBE DETAIL + HISTORY)...`,
+    });
+    const enrichmentResults = await enrichTablesInBatches(expandedTables, 5, (completed, total) => {
+      updateScanProgress(scanId, {
+        enrichedCount: completed,
+        enrichTotal: total,
+        message: `Enriching tables: ${completed}/${total}...`,
+      });
+    });
+
+    // Merge table comments into enrichment details
+    const commentLookup = new Map<string, string>();
+    for (const t of allTables) {
+      if (t.comment) commentLookup.set(t.fqn, t.comment);
+    }
+    for (const [fqn, result] of enrichmentResults) {
+      if (result.detail && !result.detail.comment) {
+        const comment = commentLookup.get(fqn);
+        if (comment) result.detail.comment = comment;
+      }
+    }
+
+    // Phase 4: Tags
+    updateScanProgress(scanId, {
+      phase: "fetching-tags",
+      message: "Fetching Unity Catalog tags...",
+    });
+    const allTableTags = [];
+    const allColumnTags = [];
+    for (const scope of accessibleScopes) {
+      allTableTags.push(...(await getTableTags(scope.catalog, scope.schema)));
+      allColumnTags.push(...(await getColumnTags(scope.catalog, scope.schema)));
+    }
+
+    // Phase 5: Health scoring
+    updateScanProgress(scanId, {
+      phase: "health-scoring",
+      message: "Computing table health scores...",
+    });
+    const details: TableDetail[] = [];
+    const histories = new Map<string, TableHistorySummary>();
+    for (const [fqn, result] of enrichmentResults) {
+      if (result.detail) details.push(result.detail);
+      if (result.history) histories.set(fqn, result.history);
+    }
+    const healthScores = computeAllTableHealth(details, histories);
+
+    // Phase 6a: Asset discovery (if enabled -- runs before LLM intelligence so results feed into analytics maturity pass)
+    let assetCoveragePercent = 0;
+    let genieSpaceCount = 0;
+    let dashboardCount = 0;
+    let metricViewCount = 0;
+    let discoveryResult: DiscoveryResult | null = null;
+
+    if (assetDiscoveryEnabled) {
+      updateScanProgress(scanId, {
+        phase: "asset-discovery",
+        message:
+          "Discovering existing analytics assets (Genie spaces, dashboards, metric views)...",
+      });
+
+      try {
+        const scopeStrings = accessibleScopes.map((s) =>
+          s.schema ? `${s.catalog}.${s.schema}` : s.catalog,
+        );
+
+        discoveryResult = await discoverExistingAssets({
+          scopeTables: allTables.map((t) => t.fqn),
+          metricViewScope: scopeStrings,
+        });
+
+        const coverage = computeCoverage(
+          allTables.map((t) => t.fqn),
+          discoveryResult,
+        );
+
+        genieSpaceCount = discoveryResult.genieSpaces.length;
+        dashboardCount = discoveryResult.dashboards.length;
+        metricViewCount = discoveryResult.metricViews.length;
+        assetCoveragePercent = coverage.coveragePercent;
+
+        await saveDiscoveryResults(scanId, discoveryResult, coverage);
+
+        updateScanProgress(scanId, {
+          message: `Asset discovery: ${genieSpaceCount} Genie spaces, ${dashboardCount} dashboards, ${metricViewCount} metric views (${assetCoveragePercent}% coverage)`,
+        });
+      } catch (error) {
+        logger.warn("[standalone-scan] Asset discovery failed (non-fatal)", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Phase 6b: LLM intelligence (passes 1-8 + optional pass 9 analytics maturity when discovery data is available)
+    updateScanProgress(scanId, {
+      phase: "llm-intelligence",
+      message: "Running LLM intelligence analysis (domains, PII, governance)...",
+    });
+    let intelligenceResult;
+    try {
+      const endpoint = getFastServingEndpoint();
+      const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
+      intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
+        endpoint,
+        discoveryResult,
+        onProgress: (pass) => {
+          updateScanProgress(scanId, {
+            llmPass: pass,
+            message: `LLM analysis: ${pass}...`,
+          });
+        },
+      });
+
+      // Apply results to details
+      for (const domain of intelligenceResult.domains) {
+        for (const fqn of domain.tables) {
+          const detail = details.find((d) => d.fqn === fqn);
+          if (detail) {
+            detail.dataDomain = domain.domain;
+            detail.dataSubdomain = domain.subdomain;
+          }
         }
       }
-    }
-    for (const [fqn, tier] of intelligenceResult.tierAssignments) {
-      const detail = details.find((d) => d.fqn === fqn);
-      if (detail) detail.dataTier = tier.tier;
-    }
-    for (const [fqn, desc] of intelligenceResult.generatedDescriptions) {
-      const detail = details.find((d) => d.fqn === fqn);
-      if (detail) detail.generatedDescription = desc;
-    }
-    const piiTables = new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn));
-    for (const detail of details) {
-      if (piiTables.has(detail.fqn)) detail.sensitivityLevel = "confidential";
-    }
-    for (const gap of intelligenceResult.governanceGaps) {
-      const detail = details.find((d) => d.fqn === gap.tableFqn);
-      if (detail) {
-        if (gap.overallScore < 30) detail.governancePriority = "critical";
-        else if (gap.overallScore < 50) detail.governancePriority = "high";
-        else if (gap.overallScore < 70) detail.governancePriority = "medium";
-        else detail.governancePriority = "low";
+      for (const [fqn, tier] of intelligenceResult.tierAssignments) {
+        const detail = details.find((d) => d.fqn === fqn);
+        if (detail) detail.dataTier = tier.tier;
       }
-    }
-    // Update progress with LLM results
-    updateScanProgress(scanId, {
-      domainsFound: intelligenceResult.domains.length,
-      piiDetected: new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size,
-      message: `LLM analysis complete: ${intelligenceResult.domains.length} domains, ${new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size} PII tables detected.`,
-    });
-  } catch (error) {
-    logger.warn("[standalone-scan] LLM intelligence failed (non-fatal)", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    updateScanProgress(scanId, {
-      message: "LLM analysis skipped (non-fatal error). Saving results...",
-    });
-  }
-
-  // Phase 7: Save
-  updateScanProgress(scanId, {
-    phase: "saving",
-    message: "Saving scan results to database...",
-  });
-  const historiesWithHealth: Array<TableHistorySummary & TableHealthInsight> = [];
-  for (const [fqn, history] of histories) {
-    const health = healthScores.get(fqn) ?? { tableFqn: fqn, healthScore: 100, issues: [], recommendations: [] };
-    historiesWithHealth.push({ ...history, ...health });
-  }
-
-  const scan: EnvironmentScan = {
-    scanId,
-    runId: null,
-    ucPath: ucMetadata,
-    scannedAt: new Date().toISOString(),
-    tableCount: expandedTables.length,
-    totalSizeBytes: details.reduce((sum, d) => sum + (d.sizeInBytes ?? 0), 0),
-    totalFiles: details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0),
-    totalRows: details.reduce((sum, d) => sum + (d.numRows ?? 0), 0),
-    tablesWithStreaming: Array.from(histories.values()).filter((h) => h.hasStreamingWrites).length,
-    tablesWithCDF: details.filter((d) => d.tableProperties["delta.enableChangeDataFeed"] === "true").length,
-    tablesNeedingOptimize: Array.from(healthScores.values()).filter((h) => h.issues.some((i) => i.includes("OPTIMIZE"))).length,
-    tablesNeedingVacuum: Array.from(healthScores.values()).filter((h) => h.issues.some((i) => i.includes("VACUUM"))).length,
-    lineageDiscoveredCount: lineageGraph.discoveredTables.length,
-    domainCount: intelligenceResult?.domains.length ?? 0,
-    piiTablesCount: intelligenceResult ? new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size : 0,
-    redundancyPairsCount: intelligenceResult?.redundancies.length ?? 0,
-    dataProductCount: intelligenceResult?.dataProducts.length ?? 0,
-    avgGovernanceScore: intelligenceResult?.governanceGaps.length
-      ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) / intelligenceResult.governanceGaps.length
-      : 0,
-    genieSpaceCount,
-    dashboardCount,
-    metricViewCount,
-    analyticsCoveragePercent: assetCoveragePercent,
-    scanDurationMs: Date.now() - startTime,
-    passResults: intelligenceResult?.passResults ?? {},
-  };
-
-  const insightRecords: InsightRecord[] = [];
-
-  // Persist explicit FKs as insights so the ERD viewer can render them
-  for (const fk of allFKs) {
-    insightRecords.push({
-      insightType: "foreign_key",
-      tableFqn: fk.tableFqn,
-      payloadJson: JSON.stringify(fk),
-      severity: "info",
-    });
-  }
-
-  if (intelligenceResult) {
-    for (const s of intelligenceResult.sensitivities) {
-      insightRecords.push({ insightType: "pii_detection", tableFqn: s.tableFqn, payloadJson: JSON.stringify(s), severity: s.classification === "PII" || s.classification === "Health" ? "critical" : "high" });
-    }
-    for (const r of intelligenceResult.redundancies) {
-      insightRecords.push({ insightType: "redundancy", tableFqn: r.tableA, payloadJson: JSON.stringify(r), severity: r.similarityPercent > 90 ? "high" : "medium" });
-    }
-    for (const rel of intelligenceResult.implicitRelationships) {
-      insightRecords.push({ insightType: "implicit_relationship", tableFqn: rel.sourceTableFqn, payloadJson: JSON.stringify(rel), severity: "info" });
-    }
-    for (const dp of intelligenceResult.dataProducts) {
-      insightRecords.push({ insightType: "data_product", tableFqn: null, payloadJson: JSON.stringify(dp), severity: "info" });
-    }
-    for (const gap of intelligenceResult.governanceGaps) {
-      insightRecords.push({ insightType: "governance_gap", tableFqn: gap.tableFqn, payloadJson: JSON.stringify(gap), severity: gap.overallScore < 30 ? "critical" : gap.overallScore < 50 ? "high" : "medium" });
-    }
-    if (intelligenceResult.analyticsMaturity) {
-      insightRecords.push({
-        insightType: "analytics_maturity",
-        tableFqn: null,
-        payloadJson: JSON.stringify(intelligenceResult.analyticsMaturity),
-        severity: intelligenceResult.analyticsMaturity.overallScore < 25 ? "critical" : intelligenceResult.analyticsMaturity.overallScore < 50 ? "high" : "info",
+      for (const [fqn, desc] of intelligenceResult.generatedDescriptions) {
+        const detail = details.find((d) => d.fqn === fqn);
+        if (detail) detail.generatedDescription = desc;
+      }
+      const piiTables = new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn));
+      for (const detail of details) {
+        if (piiTables.has(detail.fqn)) detail.sensitivityLevel = "confidential";
+      }
+      for (const gap of intelligenceResult.governanceGaps) {
+        const detail = details.find((d) => d.fqn === gap.tableFqn);
+        if (detail) {
+          if (gap.overallScore < 30) detail.governancePriority = "critical";
+          else if (gap.overallScore < 50) detail.governancePriority = "high";
+          else if (gap.overallScore < 70) detail.governancePriority = "medium";
+          else detail.governancePriority = "low";
+        }
+      }
+      // Update progress with LLM results
+      updateScanProgress(scanId, {
+        domainsFound: intelligenceResult.domains.length,
+        piiDetected: new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size,
+        message: `LLM analysis complete: ${intelligenceResult.domains.length} domains, ${new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size} PII tables detected.`,
+      });
+    } catch (error) {
+      logger.warn("[standalone-scan] LLM intelligence failed (non-fatal)", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      updateScanProgress(scanId, {
+        message: "LLM analysis skipped (non-fatal error). Saving results...",
       });
     }
-  }
 
-  await saveEnvironmentScan(
-    scan,
-    details,
-    historiesWithHealth,
-    lineageGraph.edges,
-    insightRecords,
-    allColumns,
-    allTableTags,
-    allColumnTags,
-  );
-
-  // Generate vector embeddings for semantic search (best-effort, non-blocking)
-  try {
-    const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
-    await embedScanResults(scanId, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
-  } catch (embedErr) {
-    logger.warn("[standalone-scan] Embedding generation failed (non-fatal)", {
-      scanId,
-      error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+    // Phase 7: Save
+    updateScanProgress(scanId, {
+      phase: "saving",
+      message: "Saving scan results to database...",
     });
-  }
+    const historiesWithHealth: Array<TableHistorySummary & TableHealthInsight> = [];
+    for (const [fqn, history] of histories) {
+      const health = healthScores.get(fqn) ?? {
+        tableFqn: fqn,
+        healthScore: 100,
+        issues: [],
+        recommendations: [],
+      };
+      historiesWithHealth.push({ ...history, ...health });
+    }
 
-  updateScanProgress(scanId, {
-    phase: "complete",
-    message: `Scan complete — ${details.length} tables, ${lineageGraph.edges.length} lineage edges, ${intelligenceResult?.domains.length ?? 0} domains.`,
-  });
-  logger.info("[standalone-scan] Complete", { scanId, tables: details.length, durationMs: Date.now() - startTime });
+    const scan: EnvironmentScan = {
+      scanId,
+      runId: null,
+      ucPath: ucMetadata,
+      scannedAt: new Date().toISOString(),
+      tableCount: expandedTables.length,
+      totalSizeBytes: details.reduce((sum, d) => sum + (d.sizeInBytes ?? 0), 0),
+      totalFiles: details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0),
+      totalRows: details.reduce((sum, d) => sum + (d.numRows ?? 0), 0),
+      tablesWithStreaming: Array.from(histories.values()).filter((h) => h.hasStreamingWrites)
+        .length,
+      tablesWithCDF: details.filter(
+        (d) => d.tableProperties["delta.enableChangeDataFeed"] === "true",
+      ).length,
+      tablesNeedingOptimize: Array.from(healthScores.values()).filter((h) =>
+        h.issues.some((i) => i.includes("OPTIMIZE")),
+      ).length,
+      tablesNeedingVacuum: Array.from(healthScores.values()).filter((h) =>
+        h.issues.some((i) => i.includes("VACUUM")),
+      ).length,
+      lineageDiscoveredCount: lineageGraph.discoveredTables.length,
+      domainCount: intelligenceResult?.domains.length ?? 0,
+      piiTablesCount: intelligenceResult
+        ? new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size
+        : 0,
+      redundancyPairsCount: intelligenceResult?.redundancies.length ?? 0,
+      dataProductCount: intelligenceResult?.dataProducts.length ?? 0,
+      avgGovernanceScore: intelligenceResult?.governanceGaps.length
+        ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) /
+          intelligenceResult.governanceGaps.length
+        : 0,
+      genieSpaceCount,
+      dashboardCount,
+      metricViewCount,
+      analyticsCoveragePercent: assetCoveragePercent,
+      scanDurationMs: Date.now() - startTime,
+      passResults: intelligenceResult?.passResults ?? {},
+    };
 
+    const insightRecords: InsightRecord[] = [];
+
+    // Persist explicit FKs as insights so the ERD viewer can render them
+    for (const fk of allFKs) {
+      insightRecords.push({
+        insightType: "foreign_key",
+        tableFqn: fk.tableFqn,
+        payloadJson: JSON.stringify(fk),
+        severity: "info",
+      });
+    }
+
+    if (intelligenceResult) {
+      for (const s of intelligenceResult.sensitivities) {
+        insightRecords.push({
+          insightType: "pii_detection",
+          tableFqn: s.tableFqn,
+          payloadJson: JSON.stringify(s),
+          severity:
+            s.classification === "PII" || s.classification === "Health" ? "critical" : "high",
+        });
+      }
+      for (const r of intelligenceResult.redundancies) {
+        insightRecords.push({
+          insightType: "redundancy",
+          tableFqn: r.tableA,
+          payloadJson: JSON.stringify(r),
+          severity: r.similarityPercent > 90 ? "high" : "medium",
+        });
+      }
+      for (const rel of intelligenceResult.implicitRelationships) {
+        insightRecords.push({
+          insightType: "implicit_relationship",
+          tableFqn: rel.sourceTableFqn,
+          payloadJson: JSON.stringify(rel),
+          severity: "info",
+        });
+      }
+      for (const dp of intelligenceResult.dataProducts) {
+        insightRecords.push({
+          insightType: "data_product",
+          tableFqn: null,
+          payloadJson: JSON.stringify(dp),
+          severity: "info",
+        });
+      }
+      for (const gap of intelligenceResult.governanceGaps) {
+        insightRecords.push({
+          insightType: "governance_gap",
+          tableFqn: gap.tableFqn,
+          payloadJson: JSON.stringify(gap),
+          severity: gap.overallScore < 30 ? "critical" : gap.overallScore < 50 ? "high" : "medium",
+        });
+      }
+      if (intelligenceResult.analyticsMaturity) {
+        insightRecords.push({
+          insightType: "analytics_maturity",
+          tableFqn: null,
+          payloadJson: JSON.stringify(intelligenceResult.analyticsMaturity),
+          severity:
+            intelligenceResult.analyticsMaturity.overallScore < 25
+              ? "critical"
+              : intelligenceResult.analyticsMaturity.overallScore < 50
+                ? "high"
+                : "info",
+        });
+      }
+    }
+
+    await saveEnvironmentScan(
+      scan,
+      details,
+      historiesWithHealth,
+      lineageGraph.edges,
+      insightRecords,
+      allColumns,
+      allTableTags,
+      allColumnTags,
+    );
+
+    // Generate vector embeddings for semantic search (best-effort, non-blocking)
+    try {
+      const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
+      await embedScanResults(
+        scanId,
+        details,
+        historiesWithHealth,
+        lineageGraph.edges,
+        insightRecords,
+        allColumns,
+      );
+    } catch (embedErr) {
+      logger.warn("[standalone-scan] Embedding generation failed (non-fatal)", {
+        scanId,
+        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+      });
+    }
+
+    updateScanProgress(scanId, {
+      phase: "complete",
+      message: `Scan complete — ${details.length} tables, ${lineageGraph.edges.length} lineage edges, ${intelligenceResult?.domains.length ?? 0} domains.`,
+    });
+    logger.info("[standalone-scan] Complete", {
+      scanId,
+      tables: details.length,
+      durationMs: Date.now() - startTime,
+    });
   } catch (error) {
     updateScanProgress(scanId, {
       phase: "failed",

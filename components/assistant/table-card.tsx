@@ -25,11 +25,20 @@ export function TableCard({ fqn, domain, tier, freshness, rowCount, size }: Tabl
       <div className="min-w-0 flex-1">
         <p className="truncate font-mono text-xs font-medium">{fqn}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {domain && <Badge variant="secondary" className="text-[9px]">{domain}</Badge>}
-          {tier && <Badge variant="outline" className="text-[9px]">{tier}</Badge>}
+          {domain && (
+            <Badge variant="secondary" className="text-[9px]">
+              {domain}
+            </Badge>
+          )}
+          {tier && (
+            <Badge variant="outline" className="text-[9px]">
+              {tier}
+            </Badge>
+          )}
           {freshness && (
             <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-              <Clock className="size-2.5" />{freshness}
+              <Clock className="size-2.5" />
+              {freshness}
             </span>
           )}
           {rowCount && <span className="text-[10px] text-muted-foreground">{rowCount} rows</span>}

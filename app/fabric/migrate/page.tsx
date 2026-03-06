@@ -7,13 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Accordion,
   AccordionContent,
@@ -83,8 +77,20 @@ interface MigrationState {
   currentStep: string | null;
   goldTables: GoldTableProposal[];
   metricViews: Array<{ name: string; yaml: string; deployStatus: ArtifactStatus; error?: string }>;
-  dashboards: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
-  genieSpaces: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
+  dashboards: Array<{
+    name: string;
+    id?: string;
+    url?: string;
+    deployStatus: ArtifactStatus;
+    error?: string;
+  }>;
+  genieSpaces: Array<{
+    name: string;
+    id?: string;
+    url?: string;
+    deployStatus: ArtifactStatus;
+    error?: string;
+  }>;
   daxTranslations: DaxTranslation[];
   nameMapping: Array<{ original: string; normalized: string; source: string }>;
   rlsWarnings: RlsWarning[];
@@ -96,10 +102,25 @@ interface MigrationState {
 // ---------------------------------------------------------------------------
 
 const STEPS = [
-  { key: "config", label: "Target", icon: Database, description: "Select target catalog and schema" },
-  { key: "gold", label: "Gold Tables", icon: Table2, description: "Propose and deploy Gold schema" },
+  {
+    key: "config",
+    label: "Target",
+    icon: Database,
+    description: "Select target catalog and schema",
+  },
+  {
+    key: "gold",
+    label: "Gold Tables",
+    icon: Table2,
+    description: "Propose and deploy Gold schema",
+  },
   { key: "metrics", label: "Metric Views", icon: BarChart3, description: "Translate DAX measures" },
-  { key: "dashboards", label: "Dashboards", icon: LayoutDashboard, description: "Generate Lakeview dashboards" },
+  {
+    key: "dashboards",
+    label: "Dashboards",
+    icon: LayoutDashboard,
+    description: "Generate Lakeview dashboards",
+  },
   { key: "genie", label: "Genie Spaces", icon: Sparkles, description: "Generate Genie spaces" },
 ] as const;
 
@@ -164,7 +185,9 @@ export default function MigrationWizardPage() {
 
   const handleMetricViews = async () => {
     if (!migration) return;
-    const state = await runAction(`/api/fabric/migrate/${migration.id}`, { action: "metric-views" });
+    const state = await runAction(`/api/fabric/migrate/${migration.id}`, {
+      action: "metric-views",
+    });
     if (state) setStep("metrics");
   };
 
@@ -184,11 +207,16 @@ export default function MigrationWizardPage() {
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Link href="/fabric"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+        <Link href="/fabric">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Migration Wizard</h1>
           <p className="text-muted-foreground text-sm">
-            Migrate Power BI artifacts to Databricks-native Gold tables, metric views, dashboards, and Genie spaces.
+            Migrate Power BI artifacts to Databricks-native Gold tables, metric views, dashboards,
+            and Genie spaces.
           </p>
         </div>
       </div>
@@ -201,12 +229,20 @@ export default function MigrationWizardPage() {
           const completed = i < currentStepIdx;
           return (
             <div key={s.key} className="flex items-center gap-1">
-              {i > 0 && <div className={`h-px w-6 ${completed ? "bg-primary" : "bg-muted-foreground/20"}`} />}
+              {i > 0 && (
+                <div
+                  className={`h-px w-6 ${completed ? "bg-primary" : "bg-muted-foreground/20"}`}
+                />
+              )}
               <div
                 className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors
                   ${active ? "bg-primary text-primary-foreground" : completed ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
               >
-                {completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+                {completed ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Icon className="h-3.5 w-3.5" />
+                )}
                 <span className="hidden sm:inline">{s.label}</span>
               </div>
             </div>
@@ -219,8 +255,12 @@ export default function MigrationWizardPage() {
         <Card className="border-yellow-300 dark:border-yellow-700">
           <CardContent className="pt-4 space-y-1">
             {migration.warnings.map((w, i) => (
-              <p key={i} className="text-xs text-yellow-700 dark:text-yellow-300 flex items-start gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />{w}
+              <p
+                key={i}
+                className="text-xs text-yellow-700 dark:text-yellow-300 flex items-start gap-1.5"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                {w}
               </p>
             ))}
           </CardContent>
@@ -232,22 +272,39 @@ export default function MigrationWizardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Target Catalog & Schema</CardTitle>
-            <CardDescription>All Gold tables and artifacts will be created in this location.</CardDescription>
+            <CardDescription>
+              All Gold tables and artifacts will be created in this location.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Catalog</Label>
-                <Input placeholder="e.g. main" value={targetCatalog} onChange={(e) => setTargetCatalog(e.target.value)} />
+                <Input
+                  placeholder="e.g. main"
+                  value={targetCatalog}
+                  onChange={(e) => setTargetCatalog(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Schema</Label>
-                <Input placeholder="e.g. gold" value={targetSchema} onChange={(e) => setTargetSchema(e.target.value)} />
+                <Input
+                  placeholder="e.g. gold"
+                  value={targetSchema}
+                  onChange={(e) => setTargetSchema(e.target.value)}
+                />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">Scan: {scanId || "Not specified"}</p>
-            <Button onClick={handleStartMigration} disabled={loading || !scanId || !targetCatalog.trim() || !targetSchema.trim()}>
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+            <Button
+              onClick={handleStartMigration}
+              disabled={loading || !scanId || !targetCatalog.trim() || !targetSchema.trim()}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ArrowRight className="h-4 w-4 mr-2" />
+              )}
               Propose Gold Schema
             </Button>
           </CardContent>
@@ -274,18 +331,11 @@ export default function MigrationWizardPage() {
       )}
 
       {step === "dashboards" && migration && (
-        <DashboardStep
-          dashboards={migration.dashboards}
-          loading={loading}
-          onNext={handleGenie}
-        />
+        <DashboardStep dashboards={migration.dashboards} loading={loading} onNext={handleGenie} />
       )}
 
       {step === "genie" && migration && (
-        <GenieStep
-          spaces={migration.genieSpaces}
-          completed={migration.status === "completed"}
-        />
+        <GenieStep spaces={migration.genieSpaces} completed={migration.status === "completed"} />
       )}
     </div>
   );
@@ -296,7 +346,10 @@ export default function MigrationWizardPage() {
 // ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: ArtifactStatus }) {
-  const variants: Record<ArtifactStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
+  const variants: Record<
+    ArtifactStatus,
+    { variant: "default" | "secondary" | "destructive" | "outline"; label: string }
+  > = {
     pending: { variant: "outline", label: "Pending" },
     proposed: { variant: "secondary", label: "Proposed" },
     deployed: { variant: "default", label: "Deployed" },
@@ -304,7 +357,11 @@ function StatusBadge({ status }: { status: ArtifactStatus }) {
     skipped: { variant: "outline", label: "Skipped" },
   };
   const cfg = variants[status];
-  return <Badge variant={cfg.variant} className="text-xs">{cfg.label}</Badge>;
+  return (
+    <Badge variant={cfg.variant} className="text-xs">
+      {cfg.label}
+    </Badge>
+  );
 }
 
 function GoldSchemaStep({
@@ -320,7 +377,9 @@ function GoldSchemaStep({
   onDeploy: () => void;
   onNext: () => void;
 }) {
-  const allDeployed = tables.every((t) => t.deployStatus === "deployed" || t.deployStatus === "skipped");
+  const allDeployed = tables.every(
+    (t) => t.deployStatus === "deployed" || t.deployStatus === "skipped",
+  );
   const hasSensitivityLabels = tables.some((t) => t.sensitivityLabel);
 
   return (
@@ -330,7 +389,9 @@ function GoldSchemaStep({
           <Table2 className="h-5 w-5" />
           Gold Schema ({tables.length} tables)
         </CardTitle>
-        <CardDescription>Review proposed CREATE TABLE DDL, then deploy to Unity Catalog.</CardDescription>
+        <CardDescription>
+          Review proposed CREATE TABLE DDL, then deploy to Unity Catalog.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {hasSensitivityLabels && (
@@ -338,8 +399,8 @@ function GoldSchemaStep({
             <CardContent className="pt-4">
               <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                Sensitivity labels detected. Tables with mapped labels will have UC tags applied on deployment.
-                Tables with unmapped labels are shown below.
+                Sensitivity labels detected. Tables with mapped labels will have UC tags applied on
+                deployment. Tables with unmapped labels are shown below.
               </p>
             </CardContent>
           </Card>
@@ -358,7 +419,11 @@ function GoldSchemaStep({
                       {t.tagDdl ? "Sensitivity: mapped" : "Sensitivity: unmapped"}
                     </Badge>
                   )}
-                  {t.error && <span className="text-xs text-destructive truncate max-w-[200px]">{t.error}</span>}
+                  {t.error && (
+                    <span className="text-xs text-destructive truncate max-w-[200px]">
+                      {t.error}
+                    </span>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -404,27 +469,32 @@ function GoldSchemaStep({
                 RLS Security Roles ({rlsWarnings.length})
               </CardTitle>
               <CardDescription className="text-xs">
-                The following Power BI row-level security roles were detected. These must be manually recreated as Unity Catalog row filters.
+                The following Power BI row-level security roles were detected. These must be
+                manually recreated as Unity Catalog row filters.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {rlsWarnings.map((rls, i) => (
-                <div key={i} className="border rounded p-3 text-xs space-y-1.5 bg-amber-50/50 dark:bg-amber-950/20">
+                <div
+                  key={i}
+                  className="border rounded p-3 text-xs space-y-1.5 bg-amber-50/50 dark:bg-amber-950/20"
+                >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{rls.roleName}</span>
-                    <Badge variant="outline" className="text-[10px]">{rls.ucTableName}</Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {rls.ucTableName}
+                    </Badge>
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-muted-foreground">
                       PBI table: <span className="font-mono">{rls.pbiTableName}</span>
                     </p>
                     <p className="text-muted-foreground">
-                      DAX filter: <code className="bg-muted px-1 py-0.5 rounded">{rls.filterExpression}</code>
+                      DAX filter:{" "}
+                      <code className="bg-muted px-1 py-0.5 rounded">{rls.filterExpression}</code>
                     </p>
                     {rls.members.length > 0 && (
-                      <p className="text-muted-foreground">
-                        Members: {rls.members.join(", ")}
-                      </p>
+                      <p className="text-muted-foreground">Members: {rls.members.join(", ")}</p>
                     )}
                   </div>
                   <p className="text-amber-700 dark:text-amber-300">{rls.suggestedAction}</p>
@@ -437,7 +507,11 @@ function GoldSchemaStep({
         <div className="flex items-center gap-3 pt-2">
           {!allDeployed && (
             <Button onClick={onDeploy} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
+              {loading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4 mr-2" />
+              )}
               Deploy Gold Tables
             </Button>
           )}
@@ -446,7 +520,11 @@ function GoldSchemaStep({
             disabled={loading || !tables.some((t) => t.deployStatus === "deployed")}
             variant={allDeployed ? "default" : "outline"}
           >
-            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+            {loading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <ArrowRight className="h-4 w-4 mr-2" />
+            )}
             Generate Metric Views
           </Button>
         </div>
@@ -473,12 +551,16 @@ function MetricViewStep({
           <BarChart3 className="h-5 w-5" />
           DAX Translations & Metric Views
         </CardTitle>
-        <CardDescription>DAX measures translated to Databricks SQL, then fed into the metric view engine.</CardDescription>
+        <CardDescription>
+          DAX measures translated to Databricks SQL, then fed into the metric view engine.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {translations.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">DAX → SQL Translations ({translations.length})</h3>
+            <h3 className="text-sm font-semibold">
+              DAX → SQL Translations ({translations.length})
+            </h3>
             <div className="space-y-2 max-h-96 overflow-auto">
               {translations.map((t, i) => (
                 <div key={i} className="border rounded p-3 text-xs space-y-1">
@@ -486,18 +568,30 @@ function MetricViewStep({
                     <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="font-medium">{t.measureName}</span>
                     <Badge
-                      variant={t.confidence === "high" ? "default" : t.confidence === "medium" ? "secondary" : "destructive"}
+                      variant={
+                        t.confidence === "high"
+                          ? "default"
+                          : t.confidence === "medium"
+                            ? "secondary"
+                            : "destructive"
+                      }
                       className="text-[10px]"
                     >
                       {t.confidence}
                     </Badge>
-                    <Badge variant="outline" className="text-[10px]">{t.method}</Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {t.method}
+                    </Badge>
                   </div>
                   <p className="text-muted-foreground font-mono">DAX: {t.daxExpression}</p>
                   <p className="font-mono text-primary">SQL: {t.sqlExpression}</p>
                   {t.warnings.map((w, wi) => (
-                    <p key={wi} className="text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />{w}
+                    <p
+                      key={wi}
+                      className="text-yellow-600 dark:text-yellow-400 flex items-center gap-1"
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      {w}
                     </p>
                   ))}
                 </div>
@@ -520,7 +614,11 @@ function MetricViewStep({
         )}
 
         <Button onClick={onNext} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+          {loading ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <ArrowRight className="h-4 w-4 mr-2" />
+          )}
           Generate Dashboards
         </Button>
       </CardContent>
@@ -533,7 +631,13 @@ function DashboardStep({
   loading,
   onNext,
 }: {
-  dashboards: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
+  dashboards: Array<{
+    name: string;
+    id?: string;
+    url?: string;
+    deployStatus: ArtifactStatus;
+    error?: string;
+  }>;
   loading: boolean;
   onNext: () => void;
 }) {
@@ -557,18 +661,29 @@ function DashboardStep({
                 <span className="font-medium">{d.name}</span>
                 <StatusBadge status={d.deployStatus} />
                 {d.url && (
-                  <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary underline"
+                  >
                     Open
                   </a>
                 )}
-                {d.error && <span className="text-xs text-destructive truncate max-w-[200px]">{d.error}</span>}
+                {d.error && (
+                  <span className="text-xs text-destructive truncate max-w-[200px]">{d.error}</span>
+                )}
               </div>
             ))}
           </div>
         )}
 
         <Button onClick={onNext} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+          {loading ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <ArrowRight className="h-4 w-4 mr-2" />
+          )}
           Generate Genie Spaces
         </Button>
       </CardContent>
@@ -580,7 +695,13 @@ function GenieStep({
   spaces,
   completed,
 }: {
-  spaces: Array<{ name: string; id?: string; url?: string; deployStatus: ArtifactStatus; error?: string }>;
+  spaces: Array<{
+    name: string;
+    id?: string;
+    url?: string;
+    deployStatus: ArtifactStatus;
+    error?: string;
+  }>;
   completed: boolean;
 }) {
   return (
@@ -590,7 +711,9 @@ function GenieStep({
           <Sparkles className="h-5 w-5" />
           Genie Spaces ({spaces.length})
         </CardTitle>
-        <CardDescription>Gold tables converted to Databricks Genie spaces for natural language exploration.</CardDescription>
+        <CardDescription>
+          Gold tables converted to Databricks Genie spaces for natural language exploration.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {spaces.length === 0 ? (
@@ -603,11 +726,18 @@ function GenieStep({
                 <span className="font-medium">{s.name}</span>
                 <StatusBadge status={s.deployStatus} />
                 {s.url && (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary underline"
+                  >
                     Open
                   </a>
                 )}
-                {s.error && <span className="text-xs text-destructive truncate max-w-[200px]">{s.error}</span>}
+                {s.error && (
+                  <span className="text-xs text-destructive truncate max-w-[200px]">{s.error}</span>
+                )}
               </div>
             ))}
           </div>
@@ -617,9 +747,12 @@ function GenieStep({
           <div className="flex items-center gap-2 p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-sm font-semibold text-green-700 dark:text-green-300">Migration Complete</p>
+              <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                Migration Complete
+              </p>
               <p className="text-xs text-green-600 dark:text-green-400">
-                All Databricks-native artifacts have been generated. Power BI assets can now be decommissioned.
+                All Databricks-native artifacts have been generated. Power BI assets can now be
+                decommissioned.
               </p>
             </div>
           </div>

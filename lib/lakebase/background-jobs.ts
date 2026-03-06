@@ -36,7 +36,7 @@ export async function upsertJobStatus(
     completedAt?: Date | null;
     error?: string | null;
     domainCount?: number;
-  }
+  },
 ): Promise<void> {
   try {
     const id = `${runId}_${engine}`;
@@ -106,7 +106,7 @@ export function markOrphanCheckComplete(): void {
  */
 export async function getPersistedJobStatus(
   runId: string,
-  engine: string
+  engine: string,
 ): Promise<PersistedJobStatus | null> {
   try {
     await ensureOrphanCheck();

@@ -56,14 +56,11 @@ export function useIndustryOutcomes(): UseIndustryOutcomesReturn {
     fetchRegistry();
   }, [fetchRegistry]);
 
-  const getOutcome = useCallback(
-    (id: string) => outcomes.find((o) => o.id === id),
-    [outcomes]
-  );
+  const getOutcome = useCallback((id: string) => outcomes.find((o) => o.id === id), [outcomes]);
 
   const getOptions = useCallback(
     () => outcomes.map((o) => ({ id: o.id, name: o.name })),
-    [outcomes]
+    [outcomes],
   );
 
   return {

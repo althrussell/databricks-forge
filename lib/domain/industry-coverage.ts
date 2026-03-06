@@ -53,7 +53,7 @@ export interface CoverageResult {
 
 export function computeIndustryCoverage(
   industry: IndustryOutcome,
-  useCases: UseCase[]
+  useCases: UseCase[],
 ): CoverageResult {
   const priorities: PriorityCoverage[] = [];
   let totalRef = 0;
@@ -66,7 +66,7 @@ export function computeIndustryCoverage(
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, "")
         .split(/\s+/)
-        .filter((w) => w.length > 3)
+        .filter((w) => w.length > 3),
     ),
   }));
 
@@ -85,7 +85,7 @@ export function computeIndustryCoverage(
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, "")
             .split(/\s+/)
-            .filter((w) => w.length > 3)
+            .filter((w) => w.length > 3),
         );
 
         let bestMatch: UseCase | null = null;
@@ -129,10 +129,7 @@ export function computeIndustryCoverage(
         objective: objective.name,
         matchedUseCases: matched,
         unmatchedRefUseCases: unmatched,
-        coverageRatio:
-          priority.useCases.length > 0
-            ? matched.length / priority.useCases.length
-            : 0,
+        coverageRatio: priority.useCases.length > 0 ? matched.length / priority.useCases.length : 0,
       });
     }
   }

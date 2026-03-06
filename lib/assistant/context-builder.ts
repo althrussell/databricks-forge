@@ -9,7 +9,11 @@
  * Both strategies are merged and deduplicated before injection into the LLM.
  */
 
-import { retrieveContext, formatRetrievedContext, provenanceLabel } from "@/lib/embeddings/retriever";
+import {
+  retrieveContext,
+  formatRetrievedContext,
+  provenanceLabel,
+} from "@/lib/embeddings/retriever";
 import type { RetrievedChunk } from "@/lib/embeddings/types";
 import type { AssistantIntent } from "./intent";
 import type { ConversationTurn } from "./engine";
@@ -49,14 +53,25 @@ export interface AssistantContext {
   lowConfidenceRetrieval: boolean;
 }
 
-const INTENT_SCOPES: Record<AssistantIntent, Array<{
-  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | "fabric" | undefined;
-  topK: number;
-  minScore: number;
-  useLatestRun?: boolean;
-  useLatestScan?: boolean;
-  useLatestFabricScan?: boolean;
-}>> = {
+const INTENT_SCOPES: Record<
+  AssistantIntent,
+  Array<{
+    scope:
+      | "estate"
+      | "usecases"
+      | "genie"
+      | "insights"
+      | "documents"
+      | "benchmarks"
+      | "fabric"
+      | undefined;
+    topK: number;
+    minScore: number;
+    useLatestRun?: boolean;
+    useLatestScan?: boolean;
+    useLatestFabricScan?: boolean;
+  }>
+> = {
   business: [
     { scope: "usecases", topK: 10, minScore: 0.4, useLatestRun: true },
     { scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true },
@@ -94,7 +109,15 @@ interface DirectContextResult {
 }
 
 interface RetrievalPlan {
-  scope: "estate" | "usecases" | "genie" | "insights" | "documents" | "benchmarks" | "fabric" | undefined;
+  scope:
+    | "estate"
+    | "usecases"
+    | "genie"
+    | "insights"
+    | "documents"
+    | "benchmarks"
+    | "fabric"
+    | undefined;
   topK: number;
   minScore: number;
   useLatestRun?: boolean;
@@ -128,7 +151,13 @@ export async function buildAssistantContext(
     const plans = isBenchmarksEnabled()
       ? allPlans
       : allPlans.filter((p) => p.scope !== "benchmarks");
-    chunks = await retrieveWithFallback(question, plans, directContext.latestRunId, directContext.latestScanId, directContext.latestFabricScanId);
+    chunks = await retrieveWithFallback(
+      question,
+      plans,
+      directContext.latestRunId,
+      directContext.latestScanId,
+      directContext.latestFabricScanId,
+    );
 
     ragContext = formatRetrievedContext(chunks, 12000);
 
@@ -163,7 +192,9 @@ export async function buildAssistantContext(
   const tableEnrichments = await fetchTableEnrichments(tables);
 
   // Backfill column data from schema snapshot for tables not covered by ForgeTableDetail
-  const tablesWithCols = new Set(tableEnrichments.filter((e) => e.columns.length > 0).map((e) => e.tableFqn));
+  const tablesWithCols = new Set(
+    tableEnrichments.filter((e) => e.columns.length > 0).map((e) => e.tableFqn),
+  );
   const missingColFqns = tables.filter((fqn) => !tablesWithCols.has(fqn));
   if (missingColFqns.length > 0) {
     const snapshotCols = await loadSchemaSnapshotColumns(missingColFqns);
@@ -181,10 +212,20 @@ export async function buildAssistantContext(
       if (!enrichedFqns.has(fqn) && snapshotCols.has(fqn)) {
         tableEnrichments.push({
           tableFqn: fqn,
-          owner: null, numRows: null, sizeInBytes: null, lastModified: null,
-          createdBy: null, dataDomain: null, dataTier: null, healthScore: null,
-          issues: [], recommendations: [], lastWriteTimestamp: null,
-          lastWriteOperation: null, upstreamTables: [], downstreamTables: [],
+          owner: null,
+          numRows: null,
+          sizeInBytes: null,
+          lastModified: null,
+          createdBy: null,
+          dataDomain: null,
+          dataTier: null,
+          healthScore: null,
+          issues: [],
+          recommendations: [],
+          lastWriteTimestamp: null,
+          lastWriteOperation: null,
+          upstreamTables: [],
+          downstreamTables: [],
           columns: snapshotCols.get(fqn)!.map((c) => ({ name: c.name, dataType: c.type })),
         });
       }
@@ -192,7 +233,8 @@ export async function buildAssistantContext(
   }
 
   if (tableEnrichments.length > 0) {
-    fullContext += "\n\n## Estate Metadata for Referenced Tables\n\n" + formatTableEnrichments(tableEnrichments);
+    fullContext +=
+      "\n\n## Estate Metadata for Referenced Tables\n\n" + formatTableEnrichments(tableEnrichments);
   } else if (tables.length > 0) {
     fullContext += "\n\n## Referenced Tables\n\n" + tables.map((t) => `- ${t}`).join("\n");
   }
@@ -200,9 +242,8 @@ export async function buildAssistantContext(
   const conversationHistory = formatConversationHistory(history);
 
   const retrievalTopScore = chunks.length > 0 ? chunks[0].score : null;
-  const retrievalAvgScore = chunks.length > 0
-    ? chunks.reduce((sum, c) => sum + c.score, 0) / chunks.length
-    : null;
+  const retrievalAvgScore =
+    chunks.length > 0 ? chunks.reduce((sum, c) => sum + c.score, 0) / chunks.length : null;
   const lowConfidenceRetrieval = retrievalTopScore !== null && retrievalTopScore < 0.5;
 
   if (lowConfidenceRetrieval) {
@@ -279,9 +320,12 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         latestRunId = latestRun.runId;
         const parts = ["## Business Context"];
         parts.push(`Organisation: ${latestRun.businessName}`);
-        if (latestRun.businessContext) parts.push(`Context: ${truncate(latestRun.businessContext, 800)}`);
-        if (latestRun.businessPriorities) parts.push(`Priorities: ${truncate(latestRun.businessPriorities, 400)}`);
-        if (latestRun.strategicGoals) parts.push(`Strategic Goals: ${truncate(latestRun.strategicGoals, 400)}`);
+        if (latestRun.businessContext)
+          parts.push(`Context: ${truncate(latestRun.businessContext, 800)}`);
+        if (latestRun.businessPriorities)
+          parts.push(`Priorities: ${truncate(latestRun.businessPriorities, 400)}`);
+        if (latestRun.strategicGoals)
+          parts.push(`Strategic Goals: ${truncate(latestRun.strategicGoals, 400)}`);
         if (latestRun.businessDomains) parts.push(`Business Domains: ${latestRun.businessDomains}`);
         sections.push(parts.join("\n"));
       }
@@ -306,8 +350,12 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         latestScanId = latestScan.scanId;
         const parts = ["## Data Estate Summary"];
         parts.push(`Scope: ${latestScan.ucPath}`);
-        parts.push(`Tables: ${latestScan.tableCount} | Domains: ${latestScan.domainCount} | PII tables: ${latestScan.piiTablesCount}`);
-        parts.push(`Lineage edges: ${latestScan.lineageDiscoveredCount} | Data products: ${latestScan.dataProductCount}`);
+        parts.push(
+          `Tables: ${latestScan.tableCount} | Domains: ${latestScan.domainCount} | PII tables: ${latestScan.piiTablesCount}`,
+        );
+        parts.push(
+          `Lineage edges: ${latestScan.lineageDiscoveredCount} | Data products: ${latestScan.dataProductCount}`,
+        );
         parts.push(`Avg governance score: ${latestScan.avgGovernanceScore.toFixed(0)}/100`);
         parts.push(`Last scanned: ${latestScan.createdAt.toISOString()}`);
         sections.push(parts.join("\n"));
@@ -367,7 +415,9 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
       };
     });
   } catch (err) {
-    logger.warn("[assistant/context] Failed to fetch direct Lakebase context", { error: String(err) });
+    logger.warn("[assistant/context] Failed to fetch direct Lakebase context", {
+      error: String(err),
+    });
     return { text: null, latestRunId: null, latestScanId: null, latestFabricScanId: null };
   }
 }
@@ -458,12 +508,21 @@ async function retrieveWithFallback(
   latestScanId: string | null,
   latestFabricScanId: string | null,
 ): Promise<RetrievedChunk[]> {
-  const strict = await retrieveForPlans(question, plans, latestRunId, latestScanId, latestFabricScanId, false);
+  const strict = await retrieveForPlans(
+    question,
+    plans,
+    latestRunId,
+    latestScanId,
+    latestFabricScanId,
+    false,
+  );
   if (strict.length > 0) {
     return strict;
   }
 
-  const hasStrictFilters = plans.some((plan) => plan.useLatestRun || plan.useLatestScan || plan.useLatestFabricScan);
+  const hasStrictFilters = plans.some(
+    (plan) => plan.useLatestRun || plan.useLatestScan || plan.useLatestFabricScan,
+  );
   if (!hasStrictFilters) {
     return strict;
   }
@@ -495,7 +554,7 @@ async function retrieveForPlans(
         topK: plan.topK,
         minScore: relaxed ? Math.max(0.25, plan.minScore - 0.1) : plan.minScore,
         enforceSourcePriority: true,
-        runId: !relaxed && plan.useLatestRun ? latestRunId ?? undefined : undefined,
+        runId: !relaxed && plan.useLatestRun ? (latestRunId ?? undefined) : undefined,
         scanId,
       });
     }),
@@ -550,10 +609,7 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
         }),
         prisma.forgeTableLineage.findMany({
           where: {
-            OR: [
-              { sourceTableFqn: { in: fqns } },
-              { targetTableFqn: { in: fqns } },
-            ],
+            OR: [{ sourceTableFqn: { in: fqns } }, { targetTableFqn: { in: fqns } }],
           },
         }),
       ]);
@@ -606,7 +662,9 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
           healthScore: h?.healthScore ?? null,
           issues,
           recommendations,
-          lastWriteTimestamp: h?.lastWriteTimestamp ? new Date(h.lastWriteTimestamp).toISOString() : null,
+          lastWriteTimestamp: h?.lastWriteTimestamp
+            ? new Date(h.lastWriteTimestamp).toISOString()
+            : null,
           lastWriteOperation: h?.lastWriteOperation ?? null,
           upstreamTables: upstreamByFqn.get(d.tableFqn) ?? [],
           downstreamTables: downstreamByFqn.get(d.tableFqn) ?? [],
@@ -667,9 +725,7 @@ function formatConversationHistory(history: ConversationTurn[]): string {
   return recent
     .map((turn) => {
       const role = turn.role === "user" ? "User" : "Assistant";
-      const content = turn.content.length > 500
-        ? turn.content.slice(0, 500) + "…"
-        : turn.content;
+      const content = turn.content.length > 500 ? turn.content.slice(0, 500) + "…" : turn.content;
       return `**${role}:** ${content}`;
     })
     .join("\n\n");
@@ -685,15 +741,20 @@ function formatTableEnrichments(enrichments: TableEnrichment[]): string {
       const parts = [`**${t.tableFqn}**`];
       if (t.owner) parts.push(`- Owner: ${t.owner}`);
       if (t.createdBy) parts.push(`- Created by: ${t.createdBy}`);
-      if (t.dataDomain) parts.push(`- Domain: ${t.dataDomain}${t.dataTier ? ` (${t.dataTier})` : ""}`);
+      if (t.dataDomain)
+        parts.push(`- Domain: ${t.dataDomain}${t.dataTier ? ` (${t.dataTier})` : ""}`);
       if (t.numRows) parts.push(`- Rows: ${Number(t.numRows).toLocaleString()}`);
       if (t.sizeInBytes) parts.push(`- Size: ${formatBytes(Number(t.sizeInBytes))}`);
       if (t.healthScore !== null) parts.push(`- Health score: ${t.healthScore}/100`);
       if (t.lastModified) parts.push(`- Last modified: ${t.lastModified}`);
-      if (t.lastWriteTimestamp) parts.push(`- Last write: ${t.lastWriteTimestamp} (${t.lastWriteOperation ?? "unknown op"})`);
+      if (t.lastWriteTimestamp)
+        parts.push(
+          `- Last write: ${t.lastWriteTimestamp} (${t.lastWriteOperation ?? "unknown op"})`,
+        );
       if (t.issues.length > 0) parts.push(`- Issues: ${t.issues.join("; ")}`);
       if (t.upstreamTables.length > 0) parts.push(`- Upstream: ${t.upstreamTables.join(", ")}`);
-      if (t.downstreamTables.length > 0) parts.push(`- Downstream: ${t.downstreamTables.join(", ")}`);
+      if (t.downstreamTables.length > 0)
+        parts.push(`- Downstream: ${t.downstreamTables.join(", ")}`);
       if (t.columns.length > 0) {
         parts.push(`- **Columns (USE ONLY THESE -- do NOT invent others):**`);
         for (const col of t.columns) {

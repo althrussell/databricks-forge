@@ -37,15 +37,30 @@ export const DIGITAL_NATIVES: IndustryOutcome = {
               name: "Customer Data Enrichment",
               description:
                 "Continuously update and enhance customer profiles with real-time behavioral and transactional data.",
-              typicalDataEntities: ["Customer Profiles", "Behavioral Events", "Transaction History", "Enrichment Attributes"],
+              typicalDataEntities: [
+                "Customer Profiles",
+                "Behavioral Events",
+                "Transaction History",
+                "Enrichment Attributes",
+              ],
               typicalSourceSystems: ["CDP", "Product Analytics", "Billing System", "CRM"],
             },
             {
               name: "Identity Resolution",
               description:
                 "Recognize users across multiple platforms and touchpoints to create a unified customer view.",
-              typicalDataEntities: ["Identity Graph", "Device Identifiers", "Cross-Platform Events", "User Profiles"],
-              typicalSourceSystems: ["CDP", "Product Analytics", "Auth System", "Marketing Platform"],
+              typicalDataEntities: [
+                "Identity Graph",
+                "Device Identifiers",
+                "Cross-Platform Events",
+                "User Profiles",
+              ],
+              typicalSourceSystems: [
+                "CDP",
+                "Product Analytics",
+                "Auth System",
+                "Marketing Platform",
+              ],
             },
             {
               name: "Real-Time Personalization",
@@ -63,11 +78,7 @@ export const DIGITAL_NATIVES: IndustryOutcome = {
             "Engineering team productivity",
             "Data processing cost reduction",
           ],
-          personas: [
-            "Chief Technology Officer",
-            "VP Engineering",
-            "Data Platform Owner",
-          ],
+          personas: ["Chief Technology Officer", "VP Engineering", "Data Platform Owner"],
         },
         {
           name: "Accelerate Production ML/AI",
@@ -88,16 +99,8 @@ export const DIGITAL_NATIVES: IndustryOutcome = {
                 "Build robust experimentation platforms for data-driven product decisions at scale.",
             },
           ],
-          kpis: [
-            "Model deployment frequency",
-            "Experiment velocity",
-            "ML infrastructure cost",
-          ],
-          personas: [
-            "Head of Data Science",
-            "VP Engineering",
-            "Chief AI Officer",
-          ],
+          kpis: ["Model deployment frequency", "Experiment velocity", "ML infrastructure cost"],
+          personas: ["Head of Data Science", "VP Engineering", "Chief AI Officer"],
         },
       ],
     },

@@ -46,7 +46,9 @@ export async function POST(req: NextRequest) {
 
     if (target === "dashboard" || target === "genie") {
       return Response.json(
-        { error: `${target} deployment from assistant requires additional context. Use the dedicated engines.` },
+        {
+          error: `${target} deployment from assistant requires additional context. Use the dedicated engines.`,
+        },
         { status: 400 },
       );
     }

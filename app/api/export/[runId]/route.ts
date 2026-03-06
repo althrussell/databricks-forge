@@ -29,7 +29,7 @@ import type { ExportFormat } from "@/lib/domain/types";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -48,7 +48,7 @@ export async function GET(
       });
       return NextResponse.json(
         { error: "format query param required: excel, pdf, pptx, notebooks, csv, or json" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -65,10 +65,7 @@ export async function GET(
         status: run.status,
         reason: "Run has not completed yet",
       });
-      return NextResponse.json(
-        { error: "Run has not completed yet" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Run has not completed yet" }, { status: 400 });
     }
 
     const useCases = await getUseCasesByRunId(runId);
@@ -92,12 +89,15 @@ export async function GET(
       case "excel": {
         const buffer = await generateExcel(run, useCases, lineageDiscoveredFqns);
         insertExportRecord(runId, "excel");
-        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "excel", businessName: run.config.businessName } });
+        logActivity("exported", {
+          userId: userEmail,
+          resourceId: runId,
+          metadata: { format: "excel", businessName: run.config.businessName },
+        });
         return new NextResponse(new Uint8Array(buffer), {
           status: 200,
           headers: {
-            "Content-Type":
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "Content-Disposition": `attachment; filename="forge_${run.config.businessName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.xlsx"`,
           },
         });
@@ -105,7 +105,11 @@ export async function GET(
       case "pptx": {
         const buffer = await generatePptx(run, useCases, lineageDiscoveredFqns, summaries);
         insertExportRecord(runId, "pptx");
-        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pptx", businessName: run.config.businessName } });
+        logActivity("exported", {
+          userId: userEmail,
+          resourceId: runId,
+          metadata: { format: "pptx", businessName: run.config.businessName },
+        });
         return new NextResponse(new Uint8Array(buffer), {
           status: 200,
           headers: {
@@ -118,7 +122,11 @@ export async function GET(
       case "pdf": {
         const pdfBuffer = await generatePdf(run, useCases, lineageDiscoveredFqns, summaries);
         insertExportRecord(runId, "pdf");
-        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "pdf", businessName: run.config.businessName } });
+        logActivity("exported", {
+          userId: userEmail,
+          resourceId: runId,
+          metadata: { format: "pdf", businessName: run.config.businessName },
+        });
         return new NextResponse(new Uint8Array(pdfBuffer), {
           status: 200,
           headers: {
@@ -130,7 +138,11 @@ export async function GET(
       case "csv": {
         const csvBuffer = generateCsv(run, useCases);
         insertExportRecord(runId, "csv");
-        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "csv", businessName: run.config.businessName } });
+        logActivity("exported", {
+          userId: userEmail,
+          resourceId: runId,
+          metadata: { format: "csv", businessName: run.config.businessName },
+        });
         return new NextResponse(new Uint8Array(csvBuffer), {
           status: 200,
           headers: {
@@ -142,7 +154,11 @@ export async function GET(
       case "json": {
         const jsonBuffer = generateJson(run, useCases);
         insertExportRecord(runId, "json");
-        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "json", businessName: run.config.businessName } });
+        logActivity("exported", {
+          userId: userEmail,
+          resourceId: runId,
+          metadata: { format: "json", businessName: run.config.businessName },
+        });
         return new NextResponse(new Uint8Array(jsonBuffer), {
           status: 200,
           headers: {
@@ -156,7 +172,15 @@ export async function GET(
         const { host } = getConfig();
         const workspaceUrl = `${host}/#workspace${result.path}`;
         insertExportRecord(runId, "notebooks", workspaceUrl);
-        logActivity("exported", { userId: userEmail, resourceId: runId, metadata: { format: "notebooks", businessName: run.config.businessName, path: result.path } });
+        logActivity("exported", {
+          userId: userEmail,
+          resourceId: runId,
+          metadata: {
+            format: "notebooks",
+            businessName: run.config.businessName,
+            path: result.path,
+          },
+        });
         return NextResponse.json({ ...result, url: workspaceUrl });
       }
       default:
@@ -165,17 +189,11 @@ export async function GET(
           format,
           reason: `Unsupported format: ${format}`,
         });
-        return NextResponse.json(
-          { error: `Unsupported format: ${format}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: `Unsupported format: ${format}` }, { status: 400 });
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/export/runId] GET failed", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

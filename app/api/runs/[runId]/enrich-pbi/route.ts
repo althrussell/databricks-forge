@@ -30,7 +30,10 @@ export async function POST(
     const body = await request.json();
     const fabricScanId = body.fabricScanId;
     if (!fabricScanId || !isValidUUID(fabricScanId)) {
-      return NextResponse.json({ error: "fabricScanId is required and must be a valid UUID" }, { status: 400 });
+      return NextResponse.json(
+        { error: "fabricScanId is required and must be a valid UUID" },
+        { status: 400 },
+      );
     }
 
     const run = await getRunById(runId);
@@ -38,7 +41,10 @@ export async function POST(
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
     if (run.status !== "completed") {
-      return NextResponse.json({ error: "Run must be completed before enrichment" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Run must be completed before enrichment" },
+        { status: 400 },
+      );
     }
 
     const scanDetail = await getFabricScanDetail(fabricScanId);
@@ -59,7 +65,7 @@ export async function POST(
     for (const ds of scanDetail.datasets) {
       for (const table of ds.tables) {
         pbiTableNames.add(normalize(table.name));
-        for (const measure of (table.measures ?? [])) {
+        for (const measure of table.measures ?? []) {
           pbiMeasureNames.add(normalize(measure.name));
         }
       }
@@ -69,7 +75,8 @@ export async function POST(
     }
 
     for (const report of scanDetail.reports) {
-      const dsName = scanDetail.datasets.find((ds) => ds.datasetId === report.datasetId)?.name ?? "unknown";
+      const dsName =
+        scanDetail.datasets.find((ds) => ds.datasetId === report.datasetId)?.name ?? "unknown";
       if (!pbiReportNames.has(dsName)) pbiReportNames.set(dsName, []);
       pbiReportNames.get(dsName)!.push(report.name);
     }
@@ -96,14 +103,15 @@ export async function POST(
       if (matchedTables.length > 0 || matchedMeasures.length > 0) {
         overlapCount++;
         const existingTags = uc.enrichmentTags ?? [];
-        const newTags = existingTags.includes("fabric") ? existingTags : [...existingTags, "fabric"];
+        const newTags = existingTags.includes("fabric")
+          ? existingTags
+          : [...existingTags, "fabric"];
 
         const overlap = {
           matchedTables,
           matchedMeasures,
-          pbiReports: matchedTables.length > 0
-            ? [...pbiReportNames.values()].flat().slice(0, 5)
-            : [],
+          pbiReports:
+            matchedTables.length > 0 ? [...pbiReportNames.values()].flat().slice(0, 5) : [],
         };
 
         updates.push({ id: uc.id, tags: newTags, overlap });

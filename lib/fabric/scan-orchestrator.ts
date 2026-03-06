@@ -43,7 +43,13 @@ import {
 } from "./parser";
 import { setScanProgress } from "./scan-progress";
 import { shouldUseFixtures, MOCK_ADMIN_SCAN_RESULT, MOCK_WORKSPACES } from "./fixtures";
-import type { FabricWorkspace, FabricDataset, FabricReport, FabricArtifact, FabricScanDetail } from "./types";
+import type {
+  FabricWorkspace,
+  FabricDataset,
+  FabricReport,
+  FabricArtifact,
+  FabricScanDetail,
+} from "./types";
 import { markConnectionScanned } from "@/lib/lakebase/connections";
 import type { ConnectionConfig } from "@/lib/connections/types";
 import { deleteEmbeddingsByScan } from "@/lib/embeddings/store";
@@ -58,7 +64,7 @@ export async function runFabricScan(
   createdBy?: string | null,
   incremental?: boolean,
 ): Promise<string> {
-  const scanMode = incremental ? "incremental" as const : "full" as const;
+  const scanMode = incremental ? ("incremental" as const) : ("full" as const);
 
   const scanId = await createFabricScan({
     connectionId: connection.id,
@@ -67,7 +73,12 @@ export async function runFabricScan(
     createdBy,
   });
 
-  setScanProgress(scanId, { status: "scanning", message: "Starting scan...", percent: 5, phase: "init" });
+  setScanProgress(scanId, {
+    status: "scanning",
+    message: "Starting scan...",
+    percent: 5,
+    phase: "init",
+  });
 
   const scanStartTime = new Date();
   runScanAsync(scanId, connection, incremental, scanStartTime).catch((err) => {
@@ -98,7 +109,12 @@ async function runScanAsync(
     await getToken(connId);
 
     if (connection.accessLevel === "admin") {
-      await runAdminScan(scanId, connId, connection.workspaceFilter, incremental ? connection.lastScanCompletedAt : undefined);
+      await runAdminScan(
+        scanId,
+        connId,
+        connection.workspaceFilter,
+        incremental ? connection.lastScanCompletedAt : undefined,
+      );
     } else {
       await runWorkspaceScan(scanId, connId, connection.workspaceFilter);
     }
@@ -135,7 +151,11 @@ async function runAdminScan(
   }
 
   if (lastScanCompletedAt) {
-    setScanProgress(scanId, { message: "Checking for modified workspaces...", percent: 17, phase: "incremental" });
+    setScanProgress(scanId, {
+      message: "Checking for modified workspaces...",
+      percent: 17,
+      phase: "incremental",
+    });
     const modifiedIds = await getModifiedWorkspaces(connectionId, new Date(lastScanCompletedAt));
 
     if (modifiedIds.length === 0) {
@@ -188,7 +208,11 @@ async function runAdminScan(
 
     let status = await getScanStatus(connectionId, apiScanId);
     let attempts = 0;
-    while (status.status !== "Succeeded" && status.status !== "Failed" && attempts < MAX_POLL_ATTEMPTS) {
+    while (
+      status.status !== "Succeeded" &&
+      status.status !== "Failed" &&
+      attempts < MAX_POLL_ATTEMPTS
+    ) {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
       status = await getScanStatus(connectionId, apiScanId);
       attempts++;
@@ -352,15 +376,19 @@ function transformFabricDetailForEmbedding(
             description: m.description,
           })),
         })),
-        ...(ds.measures.length > 0 ? [{
-          name: ds.name,
-          columns: [] as Array<{ name: string; dataType: string }>,
-          measures: ds.measures.map((m) => ({
-            name: m.name,
-            expression: m.expression,
-            description: m.description,
-          })),
-        }] : []),
+        ...(ds.measures.length > 0
+          ? [
+              {
+                name: ds.name,
+                columns: [] as Array<{ name: string; dataType: string }>,
+                measures: ds.measures.map((m) => ({
+                  name: m.name,
+                  expression: m.expression,
+                  description: m.description,
+                })),
+              },
+            ]
+          : []),
       ],
       relationships: ds.relationships.map((r) => ({
         fromTable: r.fromTable,

@@ -14,7 +14,7 @@ import { computeOverallScore } from "@/lib/domain/scoring";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string; usecaseId: string }> }
+  { params }: { params: Promise<{ runId: string; usecaseId: string }> },
 ) {
   try {
     const { runId, usecaseId } = await params;
@@ -128,7 +128,11 @@ export async function PATCH(
       }
 
       if (Object.keys(updateData).length === 0) {
-        logger.warn("[api/runs/usecases] No valid fields to update", { runId, usecaseId, bodyKeys: Object.keys(body) });
+        logger.warn("[api/runs/usecases] No valid fields to update", {
+          runId,
+          usecaseId,
+          bodyKeys: Object.keys(body),
+        });
         return { error: "No valid fields to update", status: 400 } as const;
       }
 
@@ -150,9 +154,6 @@ export async function PATCH(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs/usecases] PATCH failed", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

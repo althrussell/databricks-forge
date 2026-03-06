@@ -143,7 +143,11 @@ async function tryRagDistill(
     if (chunks.length === 0) return null;
 
     const recordIds = [...new Set(chunks.map((c) => c.sourceId))];
-    const sources: BenchmarkSourceMeta = { strategy: "rag_distill", recordIds, chunkCount: chunks.length };
+    const sources: BenchmarkSourceMeta = {
+      strategy: "rag_distill",
+      recordIds,
+      chunkCount: chunks.length,
+    };
     const contextText = formatRetrievedContext(chunks, 6000);
 
     try {
@@ -184,9 +188,7 @@ async function tryRagDistill(
   }
 }
 
-function formatChunksDirectly(
-  chunks: Array<{ content: string; kind: string }>,
-): string | null {
+function formatChunksDirectly(chunks: Array<{ content: string; kind: string }>): string | null {
   if (chunks.length === 0) return null;
   const lines = chunks.slice(0, 10).map((c) => `- ${c.content.split("\n")[0]}`);
   return lines.join("\n");
@@ -206,19 +208,30 @@ async function tryDbFallback(
     if (records.length === 0) return null;
 
     const recordIds = records.map((r) => r.benchmarkId);
-    const sources: BenchmarkSourceMeta = { strategy: "db_fallback", recordIds, chunkCount: records.length };
+    const sources: BenchmarkSourceMeta = {
+      strategy: "db_fallback",
+      recordIds,
+      chunkCount: records.length,
+    };
 
     const pack: BenchmarkPack = {
       kpis: dedupe(records.filter((r) => r.kind === "kpi").map((r) => r.title)).slice(0, 25),
-      benchmarks: dedupe(records.filter((r) => r.kind === "benchmark_principle").map((r) => r.summary)).slice(0, 20),
-      advisoryThemes: dedupe(records.filter((r) => r.kind === "advisory_theme").map((r) => r.summary)).slice(0, 20),
-      platformBestPractices: dedupe(records.filter((r) => r.kind === "platform_best_practice").map((r) => r.summary)).slice(0, 12),
+      benchmarks: dedupe(
+        records.filter((r) => r.kind === "benchmark_principle").map((r) => r.summary),
+      ).slice(0, 20),
+      advisoryThemes: dedupe(
+        records.filter((r) => r.kind === "advisory_theme").map((r) => r.summary),
+      ).slice(0, 20),
+      platformBestPractices: dedupe(
+        records.filter((r) => r.kind === "platform_best_practice").map((r) => r.summary),
+      ).slice(0, 12),
     };
 
     const effective = {
       kpis: pack.kpis.length > 0 ? pack.kpis : DEFAULT_PACK.kpis,
       benchmarks: pack.benchmarks.length > 0 ? pack.benchmarks : DEFAULT_PACK.benchmarks,
-      advisoryThemes: pack.advisoryThemes.length > 0 ? pack.advisoryThemes : DEFAULT_PACK.advisoryThemes,
+      advisoryThemes:
+        pack.advisoryThemes.length > 0 ? pack.advisoryThemes : DEFAULT_PACK.advisoryThemes,
       platformBestPractices:
         pack.platformBestPractices.length > 0
           ? pack.platformBestPractices

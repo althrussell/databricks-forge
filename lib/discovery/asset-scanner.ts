@@ -26,12 +26,10 @@ export interface AssetScanOptions {
  * are included.
  */
 export async function discoverExistingAssets(
-  options: AssetScanOptions = {}
+  options: AssetScanOptions = {},
 ): Promise<DiscoveryResult> {
   const startMs = Date.now();
-  const scopeSet = options.scopeTables
-    ? new Set(options.scopeTables)
-    : undefined;
+  const scopeSet = options.scopeTables ? new Set(options.scopeTables) : undefined;
 
   logger.info("[asset-discovery] Starting asset discovery scan", {
     scopeTableCount: scopeSet?.size ?? "all",

@@ -94,10 +94,7 @@ export async function updateDocumentStatus(
   });
 }
 
-export async function updateDocumentCategory(
-  id: string,
-  category: string,
-): Promise<void> {
+export async function updateDocumentCategory(id: string, category: string): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeDocument.update({
       where: { id },

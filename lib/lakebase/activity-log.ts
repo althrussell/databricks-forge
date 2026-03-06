@@ -45,7 +45,7 @@ export async function logActivity(
     userId?: string | null;
     resourceId?: string | null;
     metadata?: Record<string, unknown>;
-  } = {}
+  } = {},
 ): Promise<void> {
   try {
     await withPrisma(async (prisma) => {
@@ -74,9 +74,7 @@ export async function logActivity(
 /**
  * Get the most recent activity entries for the dashboard feed.
  */
-export async function getRecentActivity(
-  limit = 20
-): Promise<ActivityLogEntry[]> {
+export async function getRecentActivity(limit = 20): Promise<ActivityLogEntry[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeActivityLog.findMany({
       orderBy: { createdAt: "desc" },
@@ -89,9 +87,7 @@ export async function getRecentActivity(
 /**
  * Get activity entries for a specific resource (run).
  */
-export async function getActivityForResource(
-  resourceId: string
-): Promise<ActivityLogEntry[]> {
+export async function getActivityForResource(resourceId: string): Promise<ActivityLogEntry[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeActivityLog.findMany({
       where: { resourceId },

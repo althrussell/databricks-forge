@@ -40,28 +40,44 @@ describe("resolvePath", () => {
 
 describe("count evaluator", () => {
   it("passes when count >= min", () => {
-    const check = makeCheck({ evaluator: "count", path: "data_sources.tables", params: { min: 1 } });
+    const check = makeCheck({
+      evaluator: "count",
+      path: "data_sources.tables",
+      params: { min: 1 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(true);
     expect(result.detail).toContain("Found 2");
   });
 
   it("fails when count < min", () => {
-    const check = makeCheck({ evaluator: "count", path: "data_sources.tables", params: { min: 1 } });
+    const check = makeCheck({
+      evaluator: "count",
+      path: "data_sources.tables",
+      params: { min: 1 },
+    });
     const result = runEvaluator(emptySpace, check)!;
     expect(result.passed).toBe(false);
     expect(result.detail).toContain("need at least 1");
   });
 
   it("fails when count > max", () => {
-    const check = makeCheck({ evaluator: "count", path: "data_sources.tables", params: { min: 1, max: 1 } });
+    const check = makeCheck({
+      evaluator: "count",
+      path: "data_sources.tables",
+      params: { min: 1, max: 1 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(false);
     expect(result.detail).toContain("exceeds maximum");
   });
 
   it("passes on empty array when min is 0", () => {
-    const check = makeCheck({ evaluator: "count", path: "data_sources.tables", params: { min: 0 } });
+    const check = makeCheck({
+      evaluator: "count",
+      path: "data_sources.tables",
+      params: { min: 0 },
+    });
     const result = runEvaluator(emptySpace, check)!;
     expect(result.passed).toBe(true);
   });
@@ -69,19 +85,31 @@ describe("count evaluator", () => {
 
 describe("range evaluator", () => {
   it("passes when within range", () => {
-    const check = makeCheck({ evaluator: "range", path: "data_sources.tables", params: { min: 1, max: 30 } });
+    const check = makeCheck({
+      evaluator: "range",
+      path: "data_sources.tables",
+      params: { min: 1, max: 30 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(true);
   });
 
   it("fails below range", () => {
-    const check = makeCheck({ evaluator: "range", path: "data_sources.tables", params: { min: 5, max: 30 } });
+    const check = makeCheck({
+      evaluator: "range",
+      path: "data_sources.tables",
+      params: { min: 5, max: 30 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(false);
   });
 
   it("warns above threshold", () => {
-    const check = makeCheck({ evaluator: "range", path: "data_sources.tables", params: { min: 1, max: 30, warn_above: 1 } });
+    const check = makeCheck({
+      evaluator: "range",
+      path: "data_sources.tables",
+      params: { min: 1, max: 30, warn_above: 1 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(false);
     expect(result.detail).toContain("exceeds recommended");
@@ -104,21 +132,36 @@ describe("exists evaluator", () => {
 
 describe("ratio evaluator", () => {
   it("passes when all items have field (100%)", () => {
-    const check = makeCheck({ evaluator: "ratio", path: "data_sources.tables", field: "description", params: { min_ratio: 0.8 } });
+    const check = makeCheck({
+      evaluator: "ratio",
+      path: "data_sources.tables",
+      field: "description",
+      params: { min_ratio: 0.8 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(true);
     expect(result.detail).toContain("100%");
   });
 
   it("vacuously passes when no items exist", () => {
-    const check = makeCheck({ evaluator: "ratio", path: "data_sources.tables", field: "description", params: { min_ratio: 0.8 } });
+    const check = makeCheck({
+      evaluator: "ratio",
+      path: "data_sources.tables",
+      field: "description",
+      params: { min_ratio: 0.8 },
+    });
     const result = runEvaluator(emptySpace, check)!;
     expect(result.passed).toBe(true);
     expect(result.detail).toContain("vacuously");
   });
 
   it("handles partial coverage", () => {
-    const check = makeCheck({ evaluator: "ratio", path: "instructions.sql_snippets.measures", field: "display_name", params: { min_ratio: 0.8 } });
+    const check = makeCheck({
+      evaluator: "ratio",
+      path: "instructions.sql_snippets.measures",
+      field: "display_name",
+      params: { min_ratio: 0.8 },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(true);
   });
@@ -150,7 +193,11 @@ describe("nested_ratio evaluator", () => {
 
 describe("pattern evaluator", () => {
   it("passes when all IDs match hex pattern", () => {
-    const check = makeCheck({ evaluator: "pattern", path: "__all_ids__", params: { regex: "^[a-f0-9]{32}$" } });
+    const check = makeCheck({
+      evaluator: "pattern",
+      path: "__all_ids__",
+      params: { regex: "^[a-f0-9]{32}$" },
+    });
     const result = runEvaluator(perfectSpace, check)!;
     expect(result.passed).toBe(true);
   });
@@ -160,14 +207,22 @@ describe("pattern evaluator", () => {
       ...emptySpace,
       data_sources: { tables: [{ id: "not-a-hex-id", identifier: "cat.sch.t1" }] },
     };
-    const check = makeCheck({ evaluator: "pattern", path: "__all_ids__", params: { regex: "^[a-f0-9]{32}$" } });
+    const check = makeCheck({
+      evaluator: "pattern",
+      path: "__all_ids__",
+      params: { regex: "^[a-f0-9]{32}$" },
+    });
     const result = runEvaluator(badSpace, check)!;
     expect(result.passed).toBe(false);
     expect(result.detail).toContain("invalid");
   });
 
   it("passes on empty values (no IDs to check)", () => {
-    const check = makeCheck({ evaluator: "pattern", path: "__all_ids__", params: { regex: "^[a-f0-9]{32}$" } });
+    const check = makeCheck({
+      evaluator: "pattern",
+      path: "__all_ids__",
+      params: { regex: "^[a-f0-9]{32}$" },
+    });
     const noIdSpace = { version: 2, config: {}, data_sources: {}, instructions: {} };
     const result = runEvaluator(noIdSpace, check)!;
     expect(result.passed).toBe(true);
@@ -228,7 +283,9 @@ describe("conditional_count evaluator", () => {
     // Single table space -- condition not met, so check is skipped (passes)
     const singleTableSpace = {
       ...emptySpace,
-      data_sources: { tables: [{ id: "00000000000000000000000000000001", identifier: "cat.sch.t1" }] },
+      data_sources: {
+        tables: [{ id: "00000000000000000000000000000001", identifier: "cat.sch.t1" }],
+      },
     };
     const result = runEvaluator(singleTableSpace, check)!;
     expect(result.passed).toBe(true);

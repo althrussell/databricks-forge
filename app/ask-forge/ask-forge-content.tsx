@@ -8,11 +8,17 @@ import {
   type TableEnrichmentData,
   type SourceData,
 } from "@/components/assistant/ask-forge-chat";
-import { AskForgeContextPanel, type TableDetailData } from "@/components/assistant/ask-forge-context-panel";
+import {
+  AskForgeContextPanel,
+  type TableDetailData,
+} from "@/components/assistant/ask-forge-context-panel";
 import { ConversationHistory } from "@/components/assistant/conversation-history";
 import { EmbeddingStatus } from "@/components/assistant/embedding-status";
 import { SqlDialog } from "@/components/assistant/sql-dialog";
-import { DeployDashboardDialog, type DashboardDeployPayload } from "@/components/assistant/deploy-dashboard-dialog";
+import {
+  DeployDashboardDialog,
+  type DashboardDeployPayload,
+} from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -20,9 +26,13 @@ import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
 import { PanelRightClose, PanelRight, Target, Briefcase, Wrench } from "lucide-react";
 
 export default function AskForgeContent() {
-  const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(null);
+  const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(
+    null,
+  );
   const [deploySql, setDeploySql] = React.useState<string | null>(null);
-  const [dashboardPayload, setDashboardPayload] = React.useState<DashboardDeployPayload | null>(null);
+  const [dashboardPayload, setDashboardPayload] = React.useState<DashboardDeployPayload | null>(
+    null,
+  );
   const [tableEnrichments, setTableEnrichments] = React.useState<TableEnrichmentData[]>([]);
   const [tableDetails, setTableDetails] = React.useState<Map<string, TableDetailData>>(new Map());
   const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
@@ -41,7 +51,8 @@ export default function AskForgeContent() {
   const [persona, setPersona] = React.useState<AssistantPersona>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("askforge-persona");
-      if (stored && VALID_PERSONAS.has(stored as AssistantPersona)) return stored as AssistantPersona;
+      if (stored && VALID_PERSONAS.has(stored as AssistantPersona))
+        return stored as AssistantPersona;
     }
     return "business";
   });
@@ -115,29 +126,31 @@ export default function AskForgeContent() {
   );
 
   const handleAskAboutTable = React.useCallback((fqn: string) => {
-    chatRef.current?.submitQuestion(`Tell me everything about the table ${fqn} - its health, lineage, columns, data quality, and how it's used.`);
+    chatRef.current?.submitQuestion(
+      `Tell me everything about the table ${fqn} - its health, lineage, columns, data quality, and how it's used.`,
+    );
   }, []);
 
   const conversationAbortRef = React.useRef<AbortController | null>(null);
 
-  const handleSelectConversation = React.useCallback(async (conversationId: string) => {
-    if (conversationId === activeConversationId) return;
+  const handleSelectConversation = React.useCallback(
+    async (conversationId: string) => {
+      if (conversationId === activeConversationId) return;
 
-    conversationAbortRef.current?.abort();
-    const controller = new AbortController();
-    conversationAbortRef.current = controller;
+      conversationAbortRef.current?.abort();
+      const controller = new AbortController();
+      conversationAbortRef.current = controller;
 
-    try {
-      const resp = await fetch(`/api/assistant/conversations/${conversationId}`, {
-        signal: controller.signal,
-      });
-      if (!resp.ok || controller.signal.aborted) return;
-      const data = await resp.json();
+      try {
+        const resp = await fetch(`/api/assistant/conversations/${conversationId}`, {
+          signal: controller.signal,
+        });
+        if (!resp.ok || controller.signal.aborted) return;
+        const data = await resp.json();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawMessages: any[] = data.messages ?? [];
-      const msgs: ConversationMessage[] = rawMessages.map(
-        (m) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawMessages: any[] = data.messages ?? [];
+        const msgs: ConversationMessage[] = rawMessages.map((m) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
           content: m.content,
@@ -145,41 +158,44 @@ export default function AskForgeContent() {
           sqlBlocks: m.sqlGenerated ? [m.sqlGenerated] : undefined,
           sources: m.sources ?? undefined,
           logId: m.role === "assistant" ? m.logId : undefined,
-          feedback: m.feedbackRating as "up" | "down" | undefined ?? null,
+          feedback: (m.feedbackRating as "up" | "down" | undefined) ?? null,
           isStreaming: false,
-        }),
-      );
+        }));
 
-      // Restore context panel from the last assistant message that has context
-      const lastAssistantWithContext = [...msgs].reverse().find(
-        (m) => m.role === "assistant" && (m.sources?.length || false),
-      );
-      const restoredSources = lastAssistantWithContext?.sources ?? [];
-      const lastAssistantWithTables = [...rawMessages].reverse().find(
-        (m: { role: string; referencedTables?: string[] }) =>
-          m.role === "assistant" && m.referencedTables?.length,
-      );
-      const restoredTables: string[] = lastAssistantWithTables?.referencedTables ?? [];
+        // Restore context panel from the last assistant message that has context
+        const lastAssistantWithContext = [...msgs]
+          .reverse()
+          .find((m) => m.role === "assistant" && (m.sources?.length || false));
+        const restoredSources = lastAssistantWithContext?.sources ?? [];
+        const lastAssistantWithTables = [...rawMessages]
+          .reverse()
+          .find(
+            (m: { role: string; referencedTables?: string[] }) =>
+              m.role === "assistant" && m.referencedTables?.length,
+          );
+        const restoredTables: string[] = lastAssistantWithTables?.referencedTables ?? [];
 
-      if (VALID_PERSONAS.has(data.persona as AssistantPersona)) {
-        setPersona(data.persona as AssistantPersona);
+        if (VALID_PERSONAS.has(data.persona as AssistantPersona)) {
+          setPersona(data.persona as AssistantPersona);
+        }
+
+        setActiveConversationId(conversationId);
+        setChatSessionId(data.sessionId);
+        setInitialMessages(msgs);
+        setSources(restoredSources);
+        if (restoredTables.length > 0) {
+          handleReferencedTables(restoredTables);
+        } else {
+          setReferencedTables([]);
+          setTableDetails(new Map());
+        }
+        setTableEnrichments([]);
+      } catch {
+        // best-effort
       }
-
-      setActiveConversationId(conversationId);
-      setChatSessionId(data.sessionId);
-      setInitialMessages(msgs);
-      setSources(restoredSources);
-      if (restoredTables.length > 0) {
-        handleReferencedTables(restoredTables);
-      } else {
-        setReferencedTables([]);
-        setTableDetails(new Map());
-      }
-      setTableEnrichments([]);
-    } catch {
-      // best-effort
-    }
-  }, [activeConversationId, handleReferencedTables]);
+    },
+    [activeConversationId, handleReferencedTables],
+  );
 
   const handleNewConversation = React.useCallback(() => {
     setActiveConversationId(null);
@@ -190,7 +206,11 @@ export default function AskForgeContent() {
     setReferencedTables([]);
     setSources([]);
     const stored = localStorage.getItem("askforge-persona");
-    setPersona(stored && VALID_PERSONAS.has(stored as AssistantPersona) ? (stored as AssistantPersona) : "business");
+    setPersona(
+      stored && VALID_PERSONAS.has(stored as AssistantPersona)
+        ? (stored as AssistantPersona)
+        : "business",
+    );
   }, []);
 
   const handleClearOrDelete = React.useCallback(async () => {
@@ -299,7 +319,11 @@ export default function AskForgeContent() {
               onClick={() => setContextCollapsed((p) => !p)}
               title={contextCollapsed ? "Show context panel" : "Hide context panel"}
             >
-              {contextCollapsed ? <PanelRight className="size-4" /> : <PanelRightClose className="size-4" />}
+              {contextCollapsed ? (
+                <PanelRight className="size-4" />
+              ) : (
+                <PanelRightClose className="size-4" />
+              )}
             </Button>
           </div>
           {!contextCollapsed && (
@@ -321,7 +345,9 @@ export default function AskForgeContent() {
         open={!!activeSql}
         sqlBlocks={activeSql?.blocks ?? []}
         initialIndex={activeSql?.index ?? 0}
-        onOpenChange={(open) => { if (!open) setActiveSql(null); }}
+        onOpenChange={(open) => {
+          if (!open) setActiveSql(null);
+        }}
         onRequestFix={() => {
           setActiveSql(null);
         }}
@@ -346,7 +372,9 @@ export default function AskForgeContent() {
       <DeployDashboardDialog
         open={!!dashboardPayload}
         payload={dashboardPayload}
-        onOpenChange={(open) => { if (!open) setDashboardPayload(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDashboardPayload(null);
+        }}
       />
     </div>
   );

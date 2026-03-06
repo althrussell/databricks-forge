@@ -39,7 +39,7 @@ export async function getGenieEngineConfig(runId: string): Promise<StoredConfig>
 
 export async function saveGenieEngineConfig(
   runId: string,
-  config: GenieEngineConfig
+  config: GenieEngineConfig,
 ): Promise<number> {
   return withPrisma(async (prisma) => {
     const existing = await prisma.forgeGenieEngineConfig.findUnique({

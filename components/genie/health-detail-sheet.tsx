@@ -114,14 +114,14 @@ export function HealthDetailSheet({
           <div className="mt-6 space-y-6">
             {/* Score header */}
             <div className={`flex items-center gap-4 rounded-lg p-4 ${gradeBg(report.grade)}`}>
-              <div className={`text-4xl font-bold ${gradeColor(report.grade)}`}>
-                {report.grade}
-              </div>
+              <div className={`text-4xl font-bold ${gradeColor(report.grade)}`}>{report.grade}</div>
               <div>
                 <div className="text-2xl font-semibold">{report.overallScore}/100</div>
                 <div className="text-sm text-muted-foreground">
                   {report.fixableCount > 0 && (
-                    <span className="text-amber-600">{report.fixableCount} fixable issue{report.fixableCount !== 1 ? "s" : ""}</span>
+                    <span className="text-amber-600">
+                      {report.fixableCount} fixable issue{report.fixableCount !== 1 ? "s" : ""}
+                    </span>
                   )}
                 </div>
               </div>
@@ -162,7 +162,9 @@ export function HealthDetailSheet({
                   </Badge>
                 </div>
                 {report.synthesis.assessmentRationale && (
-                  <p className="text-xs text-muted-foreground">{report.synthesis.assessmentRationale}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {report.synthesis.assessmentRationale}
+                  </p>
                 )}
 
                 {report.synthesis.celebrationPoints.length > 0 && (
@@ -224,7 +226,9 @@ export function HealthDetailSheet({
                     <div className="min-w-0 flex-1">
                       <div className="text-sm">{finding.description}</div>
                       {finding.recommendation && (
-                        <div className="mt-0.5 text-xs text-muted-foreground">{finding.recommendation}</div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {finding.recommendation}
+                        </div>
                       )}
                     </div>
                     <Badge variant="secondary" className="shrink-0 text-[10px]">
@@ -243,7 +247,11 @@ export function HealthDetailSheet({
                   onClick={() => onFix(fixableChecks.map((c) => c.id))}
                   disabled={fixing}
                 >
-                  {fixing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Wrench className="mr-2 size-4" />}
+                  {fixing ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Wrench className="mr-2 size-4" />
+                  )}
                   Fix All ({fixableChecks.length})
                 </Button>
               )}
@@ -295,7 +303,9 @@ export function HealthDetailSheet({
                         <div className="min-w-0 flex-1">
                           <div className="text-sm">{check.description}</div>
                           {check.detail && (
-                            <div className="mt-0.5 text-xs text-muted-foreground">{check.detail}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {check.detail}
+                            </div>
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">

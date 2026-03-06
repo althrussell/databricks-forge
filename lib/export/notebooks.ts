@@ -104,7 +104,7 @@ export async function generateNotebooks(
   run: PipelineRun,
   useCases: UseCase[],
   userEmail?: string | null,
-  lineageDiscoveredFqns: string[] = []
+  lineageDiscoveredFqns: string[] = [],
 ): Promise<NotebookDeployResult> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const bizSlug = run.config.businessName.replace(/\s+/g, "_");
@@ -131,9 +131,7 @@ export async function generateNotebooks(
   const deployed: Array<{ name: string; path: string }> = [];
   let skipped = 0;
 
-  const sortedDomains = Object.entries(grouped).sort(
-    ([, a], [, b]) => a.length - b.length
-  );
+  const sortedDomains = Object.entries(grouped).sort(([, a], [, b]) => a.length - b.length);
 
   for (const [domain, cases] of sortedDomains) {
     const notebookName = sanitizeName(domain);
@@ -173,11 +171,7 @@ function buildIndexNotebook(run: PipelineRun, useCases: UseCase[]): string {
   const aiCount = useCases.filter((uc) => uc.type === "AI").length;
   const statsCount = useCases.length - aiCount;
   const avgScore = useCases.length
-    ? Math.round(
-        (useCases.reduce((s, uc) => s + uc.overallScore, 0) /
-          useCases.length) *
-          100
-      )
+    ? Math.round((useCases.reduce((s, uc) => s + uc.overallScore, 0) / useCases.length) * 100)
     : 0;
 
   const domainRows = domains
@@ -187,9 +181,7 @@ function buildIndexNotebook(run: PipelineRun, useCases: UseCase[]): string {
     })
     .join("");
 
-  const priorityList = run.config.businessPriorities
-    .map((p) => `- ${p}\n`)
-    .join("");
+  const priorityList = run.config.businessPriorities.map((p) => `- ${p}\n`).join("");
 
   const cells: JupyterCell[] = [
     mdCell([
@@ -230,16 +222,13 @@ function buildDomainNotebook(
   run: PipelineRun,
   domain: string,
   useCases: UseCase[],
-  lineageFqnSet: Set<string> = new Set()
+  lineageFqnSet: Set<string> = new Set(),
 ): string {
   const cells: JupyterCell[] = [];
 
   // ── Title cell ──────────────────────────────────────────────────────
   cells.push(
-    mdCell([
-      `# Databricks Forge AI\n\n`,
-      `## For ${run.config.businessName}: ${domain}\n\n`,
-    ])
+    mdCell([`# Databricks Forge AI\n\n`, `## For ${run.config.businessName}: ${domain}\n\n`]),
   );
 
   // ── Disclaimer cell ─────────────────────────────────────────────────
@@ -251,7 +240,7 @@ function buildDomainNotebook(
       `any production environment. Databricks is not liable for any issues `,
       `arising from the use of this code.\n\n`,
       `---\n`,
-    ])
+    ]),
   );
 
   // ── Summary tables grouped by subdomain ─────────────────────────────
@@ -276,7 +265,7 @@ function buildDomainNotebook(
     headerLines.push(`|---|---|---|---|\n`);
     for (const uc of sorted) {
       headerLines.push(
-        `| ${uc.id} | ${uc.name} | ${Math.round(uc.overallScore * 100)}% | ${safeStr(uc.businessValue).substring(0, 80)} |\n`
+        `| ${uc.id} | ${uc.name} | ${Math.round(uc.overallScore * 100)}% | ${safeStr(uc.businessValue).substring(0, 80)} |\n`,
       );
     }
     cells.push(mdCell(headerLines));
@@ -287,7 +276,7 @@ function buildDomainNotebook(
     mdCell([
       `<div style="background-color:#FFF3CD; color:#664D03; border: 1px solid #FFECB5; padding:10px; border-radius:5px; margin-top:10px;">`,
       `<b>Disclaimer:</b> All SQL is AI-generated and must be reviewed before production use.</div>\n`,
-    ])
+    ]),
   );
 
   // ── Section header ──────────────────────────────────────────────────
@@ -312,8 +301,8 @@ function buildDomainNotebook(
         `| **Business Value** | ${safeStr(uc.businessValue)} |\n`,
         `| **Beneficiary** | ${safeStr(uc.beneficiary)} |\n`,
         `| **Sponsor** | ${safeStr(uc.sponsor)} |\n`,
-        `| **Tables Involved** | ${uc.tablesInvolved.map((t) => lineageFqnSet.has(t) ? `${t} (via lineage)` : t).join(", ") || "N/A"} |\n`,
-      ])
+        `| **Tables Involved** | ${uc.tablesInvolved.map((t) => (lineageFqnSet.has(t) ? `${t} (via lineage)` : t)).join(", ") || "N/A"} |\n`,
+      ]),
     );
 
     // Explore cell (DESCRIBE tables — separate cell so it runs independently)
@@ -355,7 +344,9 @@ function buildSqlCell(uc: UseCase): string[] {
     lines.push(sql + "\n");
   } else {
     // SQL generation failed or was skipped for this use case
-    lines.push(`-- SQL generation ${uc.sqlStatus === "failed" ? "failed" : "pending"} for this use case.\n`);
+    lines.push(
+      `-- SQL generation ${uc.sqlStatus === "failed" ? "failed" : "pending"} for this use case.\n`,
+    );
     lines.push(`-- Re-run the pipeline or use "Re-generate SQL" to generate SQL.\n\n`);
     if (uc.tablesInvolved.length > 0) {
       lines.push(`SELECT * FROM ${uc.tablesInvolved[0]} LIMIT 10;\n`);
@@ -405,10 +396,7 @@ function stripDuplicateHeader(sql: string): string {
 // Jupyter notebook builder
 // ---------------------------------------------------------------------------
 
-function buildJupyterNotebook(
-  name: string,
-  cells: JupyterCell[]
-): Record<string, unknown> {
+function buildJupyterNotebook(name: string, cells: JupyterCell[]): Record<string, unknown> {
   return {
     cells,
     metadata: {

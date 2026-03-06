@@ -105,7 +105,8 @@ function buildGeneratedIndustryRecords(industry) {
     {
       kind: "platform_best_practice",
       title: `${titleIndustry} grounded source ordering`,
-      summary: "Treat customer metadata as source-of-truth and use benchmark priors as advisory context only.",
+      summary:
+        "Treat customer metadata as source-of-truth and use benchmark priors as advisory context only.",
       source_type: "databricks_doc",
       source_url: "https://docs.databricks.com/en/data-governance/unity-catalog/",
       publisher: "Databricks",
@@ -145,7 +146,8 @@ async function main() {
     .filter((f) => f.endsWith(".json"))
     .sort();
 
-  const seedAllIndustries = String(process.env.FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES || "").toLowerCase() === "true";
+  const seedAllIndustries =
+    String(process.env.FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES || "").toLowerCase() === "true";
   const selectedIndustries = parseIndustryFilter(process.env.FORGE_SEED_BENCHMARK_INDUSTRIES);
   const outcomeIndustryDir = path.join(root, "lib", "domain", "industry-outcomes");
   const outcomeIndustryIds = seedAllIndustries

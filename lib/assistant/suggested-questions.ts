@@ -112,23 +112,15 @@ export async function buildSuggestedQuestions(
       // --- Tech-specific questions ---
       if (scan) {
         if (scan.tableCount > 0) {
-          candidates.push(
-            `Which of our ${scan.tableCount} tables need VACUUM or OPTIMIZE?`,
-          );
-          candidates.push(
-            `Show me tables with the lowest health scores`,
-          );
+          candidates.push(`Which of our ${scan.tableCount} tables need VACUUM or OPTIMIZE?`);
+          candidates.push(`Show me tables with the lowest health scores`);
         }
         if (scan.piiTablesCount > 0) {
-          candidates.push(
-            `List the ${scan.piiTablesCount} tables with PII — who owns them?`,
-          );
+          candidates.push(`List the ${scan.piiTablesCount} tables with PII — who owns them?`);
         }
         if (scan.avgGovernanceScore > 0) {
           const score = Math.round(scan.avgGovernanceScore);
-          candidates.push(
-            `Governance score is ${score}/100 — what are the top technical gaps?`,
-          );
+          candidates.push(`Governance score is ${score}/100 — what are the top technical gaps?`);
         }
         candidates.push(`Which tables have stale data (no writes in 30+ days)?`);
         candidates.push(`Show me tables with the most downstream dependencies`);
@@ -219,28 +211,20 @@ export async function buildSuggestedQuestions(
         }
 
         if (run.goals) {
-          candidates.push(
-            `How can our data help us achieve our strategic goals?`,
-          );
+          candidates.push(`How can our data help us achieve our strategic goals?`);
         }
       }
 
       if (scan) {
         if (scan.tableCount > 0) {
-          candidates.push(
-            `Which of our ${scan.tableCount} tables have data quality issues?`,
-          );
+          candidates.push(`Which of our ${scan.tableCount} tables have data quality issues?`);
         }
         if (scan.piiTablesCount > 0) {
-          candidates.push(
-            `Show me the ${scan.piiTablesCount} tables that contain PII data`,
-          );
+          candidates.push(`Show me the ${scan.piiTablesCount} tables that contain PII data`);
         }
         if (scan.avgGovernanceScore > 0) {
           const score = Math.round(scan.avgGovernanceScore);
-          candidates.push(
-            `Our governance score is ${score}/100 — how can we improve it?`,
-          );
+          candidates.push(`Our governance score is ${score}/100 — how can we improve it?`);
         }
         candidates.push(`Give me an overview of our data estate`);
       }
@@ -285,11 +269,11 @@ async function fetchContext(): Promise<{
     if (latestRun) {
       let industry = "";
       try {
-        const opts = latestRun.generationOptions
-          ? JSON.parse(latestRun.generationOptions)
-          : {};
+        const opts = latestRun.generationOptions ? JSON.parse(latestRun.generationOptions) : {};
         industry = opts?.industry ?? "";
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       run = {
         businessName: latestRun.businessName,

@@ -7,7 +7,12 @@
  */
 
 import type { MetadataSnapshot, ColumnInfo } from "@/lib/domain/types";
-import { extractColumnReferences, extractSqlAliases, stripSqlComments, AI_FUNCTION_RETURN_FIELDS } from "@/lib/validation/sql-columns";
+import {
+  extractColumnReferences,
+  extractSqlAliases,
+  stripSqlComments,
+  AI_FUNCTION_RETURN_FIELDS,
+} from "@/lib/validation/sql-columns";
 import { logger } from "@/lib/logger";
 
 export interface SchemaAllowlist {
@@ -52,12 +57,20 @@ export function isValidTable(allowlist: SchemaAllowlist, fqn: string): boolean {
   return allowlist.tables.has(fqn.toLowerCase());
 }
 
-export function isValidColumn(allowlist: SchemaAllowlist, tableFqn: string, columnName: string): boolean {
+export function isValidColumn(
+  allowlist: SchemaAllowlist,
+  tableFqn: string,
+  columnName: string,
+): boolean {
   const cols = allowlist.columns.get(tableFqn.toLowerCase());
   return cols ? cols.has(columnName.toLowerCase()) : false;
 }
 
-export function getColumnType(allowlist: SchemaAllowlist, tableFqn: string, columnName: string): string | null {
+export function getColumnType(
+  allowlist: SchemaAllowlist,
+  tableFqn: string,
+  columnName: string,
+): string | null {
   return allowlist.columnTypes.get(`${tableFqn.toLowerCase()}.${columnName.toLowerCase()}`) ?? null;
 }
 
@@ -72,42 +85,219 @@ export function quoteIdent(name: string): string {
 // ---------------------------------------------------------------------------
 
 export const SQL_KEYWORDS = new Set([
-  "select", "from", "where", "and", "or", "not", "in", "is", "null",
-  "as", "on", "join", "left", "right", "inner", "outer", "full", "cross",
-  "group", "by", "order", "having", "limit", "offset", "union", "all",
-  "with", "case", "when", "then", "else", "end", "between", "like",
-  "exists", "distinct", "count", "sum", "avg", "min", "max", "over",
-  "partition", "row_number", "rank", "dense_rank", "ntile", "lead", "lag",
-  "first_value", "last_value", "coalesce", "cast", "concat", "substring",
-  "trim", "upper", "lower", "date", "timestamp", "int", "string", "float",
-  "double", "boolean", "decimal", "bigint", "array", "map", "struct",
-  "true", "false", "asc", "desc", "insert", "into", "values", "update",
-  "set", "delete", "create", "table", "view", "temp", "temporary",
-  "if", "replace", "drop", "alter", "add", "column", "named_struct",
-  "ai_query", "ai_gen", "ai_classify", "ai_forecast", "ai_summarize",
-  "ai_analyze_sentiment", "ai_extract", "ai_similarity", "ai_mask",
-  "ai_fix_grammar", "ai_translate", "ai_parse_document",
-  "temperature", "max_tokens", "modelparameters", "responseformat",
-  "failonerror", "response", "result", "qualify",
-  "h3_longlatash3", "h3_polyfillash3", "h3_toparent", "h3_kring",
-  "h3_distance", "h3_ischildof", "st_point", "st_distance",
-  "st_contains", "st_intersects", "st_within", "st_dwithin",
-  "st_buffer", "st_area", "st_length", "st_union", "st_makeline",
-  "http_request", "remote_query", "read_files", "vector_search",
-  "recursive", "depth", "filter", "measure", "percentile_approx",
-  "date_trunc", "year", "month", "day", "hour", "minute", "second",
-  "current_date", "current_timestamp", "datediff", "dateadd",
-  "to_date", "to_timestamp", "try_to_date", "try_to_timestamp", "format_number", "round", "abs", "ceil",
-  "floor", "power", "sqrt", "log", "exp", "mod", "greatest", "least",
-  "nullif", "ifnull", "nvl", "nvl2", "try_cast", "typeof",
-  "collect_list", "collect_set", "explode", "flatten", "size",
-  "element_at", "transform", "aggregate", "reduce",
-  "regexp_extract", "regexp_replace", "split", "length", "reverse",
-  "lpad", "rpad", "ltrim", "rtrim", "initcap", "translate",
-  "rows", "range", "unbounded", "preceding", "following", "current", "row",
-  "interval", "lateral", "tablesample", "pivot", "unpivot",
-  "rollup", "cube", "grouping", "sets",
-  "source", "version", "catalog", "schema", "language", "yaml",
+  "select",
+  "from",
+  "where",
+  "and",
+  "or",
+  "not",
+  "in",
+  "is",
+  "null",
+  "as",
+  "on",
+  "join",
+  "left",
+  "right",
+  "inner",
+  "outer",
+  "full",
+  "cross",
+  "group",
+  "by",
+  "order",
+  "having",
+  "limit",
+  "offset",
+  "union",
+  "all",
+  "with",
+  "case",
+  "when",
+  "then",
+  "else",
+  "end",
+  "between",
+  "like",
+  "exists",
+  "distinct",
+  "count",
+  "sum",
+  "avg",
+  "min",
+  "max",
+  "over",
+  "partition",
+  "row_number",
+  "rank",
+  "dense_rank",
+  "ntile",
+  "lead",
+  "lag",
+  "first_value",
+  "last_value",
+  "coalesce",
+  "cast",
+  "concat",
+  "substring",
+  "trim",
+  "upper",
+  "lower",
+  "date",
+  "timestamp",
+  "int",
+  "string",
+  "float",
+  "double",
+  "boolean",
+  "decimal",
+  "bigint",
+  "array",
+  "map",
+  "struct",
+  "true",
+  "false",
+  "asc",
+  "desc",
+  "insert",
+  "into",
+  "values",
+  "update",
+  "set",
+  "delete",
+  "create",
+  "table",
+  "view",
+  "temp",
+  "temporary",
+  "if",
+  "replace",
+  "drop",
+  "alter",
+  "add",
+  "column",
+  "named_struct",
+  "ai_query",
+  "ai_gen",
+  "ai_classify",
+  "ai_forecast",
+  "ai_summarize",
+  "ai_analyze_sentiment",
+  "ai_extract",
+  "ai_similarity",
+  "ai_mask",
+  "ai_fix_grammar",
+  "ai_translate",
+  "ai_parse_document",
+  "temperature",
+  "max_tokens",
+  "modelparameters",
+  "responseformat",
+  "failonerror",
+  "response",
+  "result",
+  "qualify",
+  "h3_longlatash3",
+  "h3_polyfillash3",
+  "h3_toparent",
+  "h3_kring",
+  "h3_distance",
+  "h3_ischildof",
+  "st_point",
+  "st_distance",
+  "st_contains",
+  "st_intersects",
+  "st_within",
+  "st_dwithin",
+  "st_buffer",
+  "st_area",
+  "st_length",
+  "st_union",
+  "st_makeline",
+  "http_request",
+  "remote_query",
+  "read_files",
+  "vector_search",
+  "recursive",
+  "depth",
+  "filter",
+  "measure",
+  "percentile_approx",
+  "date_trunc",
+  "year",
+  "month",
+  "day",
+  "hour",
+  "minute",
+  "second",
+  "current_date",
+  "current_timestamp",
+  "datediff",
+  "dateadd",
+  "to_date",
+  "to_timestamp",
+  "try_to_date",
+  "try_to_timestamp",
+  "format_number",
+  "round",
+  "abs",
+  "ceil",
+  "floor",
+  "power",
+  "sqrt",
+  "log",
+  "exp",
+  "mod",
+  "greatest",
+  "least",
+  "nullif",
+  "ifnull",
+  "nvl",
+  "nvl2",
+  "try_cast",
+  "typeof",
+  "collect_list",
+  "collect_set",
+  "explode",
+  "flatten",
+  "size",
+  "element_at",
+  "transform",
+  "aggregate",
+  "reduce",
+  "regexp_extract",
+  "regexp_replace",
+  "split",
+  "length",
+  "reverse",
+  "lpad",
+  "rpad",
+  "ltrim",
+  "rtrim",
+  "initcap",
+  "translate",
+  "rows",
+  "range",
+  "unbounded",
+  "preceding",
+  "following",
+  "current",
+  "row",
+  "interval",
+  "lateral",
+  "tablesample",
+  "pivot",
+  "unpivot",
+  "rollup",
+  "cube",
+  "grouping",
+  "sets",
+  "source",
+  "version",
+  "catalog",
+  "schema",
+  "language",
+  "yaml",
 ]);
 
 /**
@@ -137,7 +327,8 @@ export function findInvalidIdentifiers(
 
   // Collect FQNs that are targets of CREATE statements (these are being defined, not referenced)
   const createTargets = new Set<string>();
-  const createRegex = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
+  const createRegex =
+    /CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TABLE)\s+(?:`[^`]+`|[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/gi;
   let createMatch: RegExpExecArray | null;
   while ((createMatch = createRegex.exec(cleanSql)) !== null) {
     const fqnMatch = createMatch[0].match(/(?:`([^`]+)`|([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*))$/);
@@ -260,13 +451,8 @@ export function validateSqlExpression(
  * Build a compact one-line-per-table column listing for LLM grounding.
  * E.g. "catalog.schema.table: col1, col2, col3"
  */
-export function buildCompactColumnsBlock(
-  metadata: MetadataSnapshot,
-  tableFqns?: string[]
-): string {
-  const targetTables = tableFqns
-    ? new Set(tableFqns.map((f) => f.toLowerCase()))
-    : null;
+export function buildCompactColumnsBlock(metadata: MetadataSnapshot, tableFqns?: string[]): string {
+  const targetTables = tableFqns ? new Set(tableFqns.map((f) => f.toLowerCase())) : null;
 
   const columnsByTable = new Map<string, string[]>();
   for (const c of metadata.columns) {
@@ -296,13 +482,8 @@ export function buildCompactColumnsBlock(
  * Build a markdown schema context block for LLM prompts.
  * Lists every table with its columns and types.
  */
-export function buildSchemaContextBlock(
-  metadata: MetadataSnapshot,
-  tableFqns?: string[]
-): string {
-  const targetTables = tableFqns
-    ? new Set(tableFqns.map((f) => f.toLowerCase()))
-    : null;
+export function buildSchemaContextBlock(metadata: MetadataSnapshot, tableFqns?: string[]): string {
+  const targetTables = tableFqns ? new Set(tableFqns.map((f) => f.toLowerCase())) : null;
 
   const columnsByTable = new Map<string, ColumnInfo[]>();
   for (const c of metadata.columns) {
@@ -312,7 +493,9 @@ export function buildSchemaContextBlock(
     columnsByTable.get(key)!.push(c);
   }
 
-  const lines: string[] = ["### SCHEMA CONTEXT (you MUST only reference these tables and columns)\n"];
+  const lines: string[] = [
+    "### SCHEMA CONTEXT (you MUST only reference these tables and columns)\n",
+  ];
 
   for (const t of metadata.tables) {
     const key = t.fqn.toLowerCase();

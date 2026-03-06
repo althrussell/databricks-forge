@@ -1,17 +1,7 @@
 "use client";
 
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ScoreDistributionChart,
   DomainBreakdownChart,
@@ -102,17 +92,9 @@ export function OverviewTabContent({
                 title="Use Cases by Domain"
               />
               <TypeSplitChart
-                aiCount={
-                  useCases.filter((uc) => uc.type === "AI").length
-                }
-                statisticalCount={
-                  useCases.filter((uc) => uc.type === "Statistical")
-                    .length
-                }
-                geospatialCount={
-                  useCases.filter((uc) => uc.type === "Geospatial")
-                    .length
-                }
+                aiCount={useCases.filter((uc) => uc.type === "AI").length}
+                statisticalCount={useCases.filter((uc) => uc.type === "Statistical").length}
+                geospatialCount={useCases.filter((uc) => uc.type === "Geospatial").length}
                 title="Use Case Types"
               />
             </div>
@@ -120,10 +102,7 @@ export function OverviewTabContent({
 
           {/* Schema Coverage */}
           {useCases.length > 0 && (
-            <SchemaCoverageCard
-              useCases={useCases}
-              lineageDiscoveredFqns={lineageDiscoveredFqns}
-            />
+            <SchemaCoverageCard useCases={useCases} lineageDiscoveredFqns={lineageDiscoveredFqns} />
           )}
 
           {/* Industry Coverage + Gap Analysis */}
@@ -154,9 +133,7 @@ export function OverviewTabContent({
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-6 pt-4">
           {/* Business Context */}
-          {run.businessContext && (
-            <BusinessContextCard context={run.businessContext} />
-          )}
+          {run.businessContext && <BusinessContextCard context={run.businessContext} />}
 
           {/* Context Sources (Enrichment Provenance) */}
           {run.contextSources && (
@@ -184,7 +161,9 @@ export function OverviewTabContent({
                         : `${run.contextSources.benchmarks.recordIds.length} records via ${run.contextSources.benchmarks.strategy.replace("_", " ")}`}
                     </p>
                     {run.contextSources.benchmarks.chunkCount > 0 && (
-                      <p className="text-xs text-muted-foreground">{run.contextSources.benchmarks.chunkCount} chunks</p>
+                      <p className="text-xs text-muted-foreground">
+                        {run.contextSources.benchmarks.chunkCount} chunks
+                      </p>
                     )}
                   </div>
 
@@ -219,7 +198,8 @@ export function OverviewTabContent({
                     </p>
                     {run.contextSources.documents.chunkCount > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        {run.contextSources.documents.chunkCount} chunks ({run.contextSources.documents.kinds.join(", ")})
+                        {run.contextSources.documents.chunkCount} chunks (
+                        {run.contextSources.documents.kinds.join(", ")})
                       </p>
                     )}
                   </div>
@@ -232,7 +212,9 @@ export function OverviewTabContent({
                         <p className="text-xs font-semibold">Power BI / Fabric</p>
                       </div>
                       <p className="mt-1 text-sm">
-                        {run.contextSources.fabric.datasetCount} datasets, {run.contextSources.fabric.measureCount} measures, {run.contextSources.fabric.reportCount} reports
+                        {run.contextSources.fabric.datasetCount} datasets,{" "}
+                        {run.contextSources.fabric.measureCount} measures,{" "}
+                        {run.contextSources.fabric.reportCount} reports
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Scan: {run.contextSources.fabric.scanId.slice(0, 8)}...
@@ -252,30 +234,21 @@ export function OverviewTabContent({
           {/* Run Configuration */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">
-                Run Configuration
-              </CardTitle>
+              <CardTitle className="text-sm font-medium">Run Configuration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                 <ConfigField
                   label="Discovery Depth"
                   value={
-                    (run.config.discoveryDepth ?? "balanced")
-                      .charAt(0)
-                      .toUpperCase() +
-                    (run.config.discoveryDepth ?? "balanced").slice(
-                      1
-                    ) +
+                    (run.config.discoveryDepth ?? "balanced").charAt(0).toUpperCase() +
+                    (run.config.discoveryDepth ?? "balanced").slice(1) +
                     (run.config.depthConfig
                       ? ` (${run.config.depthConfig.batchTargetMin}-${run.config.depthConfig.batchTargetMax}/batch, floor ${run.config.depthConfig.qualityFloor}, cap ${run.config.depthConfig.adaptiveCap}, lineage ${run.config.depthConfig.lineageDepth} hops)`
                       : "")
                   }
                 />
-                <ConfigField
-                  label="AI Model"
-                  value={run.config.aiModel}
-                />
+                <ConfigField label="AI Model" value={run.config.aiModel} />
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Industry</p>
                   <p className="mt-0.5 text-sm">
@@ -311,20 +284,17 @@ export function OverviewTabContent({
                 <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
                   <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   <p className="text-sm text-blue-800 dark:text-blue-300">
-                    <span className="font-medium">
-                      Data sampling enabled
-                    </span>
+                    <span className="font-medium">Data sampling enabled</span>
                     {" \u2014 "}
-                    {run.config.sampleRowsPerTable} rows per table
-                    sampled during discovery and SQL generation
+                    {run.config.sampleRowsPerTable} rows per table sampled during discovery and SQL
+                    generation
                   </p>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-md border border-muted px-3 py-2">
                   <Database className="h-4 w-4 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    Data sampling disabled — metadata only (no
-                    row-level data read)
+                    Data sampling disabled — metadata only (no row-level data read)
                   </p>
                 </div>
               )}
@@ -335,9 +305,7 @@ export function OverviewTabContent({
           <EnvironmentScanCard runId={runId} />
 
           {/* Pipeline Timeline */}
-          {run.stepLog.length > 0 && (
-            <StepDurationChart steps={run.stepLog} />
-          )}
+          {run.stepLog.length > 0 && <StepDurationChart steps={run.stepLog} />}
         </CollapsibleContent>
       </Collapsible>
     </div>

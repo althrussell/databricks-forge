@@ -1,11 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
 import { DashboardsTab } from "@/components/pipeline/dashboards-tab";
 import { OverviewTabContent } from "./overview-tab-content";
@@ -89,9 +85,7 @@ export function RunCompletedTabs({
             <TooltipTrigger asChild>
               <TabsTrigger value="genie">
                 Genie Spaces{" "}
-                {genieGenerating && (
-                  <span className="ml-1 animate-pulse text-violet-500">●</span>
-                )}
+                {genieGenerating && <span className="ml-1 animate-pulse text-violet-500">●</span>}
               </TabsTrigger>
             </TooltipTrigger>
             <TooltipContent>{RUN_DETAIL.tabGenie}</TooltipContent>
@@ -102,9 +96,7 @@ export function RunCompletedTabs({
             <TooltipTrigger asChild>
               <TabsTrigger value="dashboards">
                 Dashboards{" "}
-                {dashboardGenerating && (
-                  <span className="ml-1 animate-pulse text-blue-500">●</span>
-                )}
+                {dashboardGenerating && <span className="ml-1 animate-pulse text-blue-500">●</span>}
               </TabsTrigger>
             </TooltipTrigger>
             <TooltipContent>{RUN_DETAIL.tabDashboards}</TooltipContent>
@@ -165,10 +157,7 @@ export function RunCompletedTabs({
           stepLog={run.stepLog}
           promptVersionsNode={
             run.promptVersions ? (
-              <PromptVersionsCard
-                runVersions={run.promptVersions}
-                runId={run.runId}
-              />
+              <PromptVersionsCard runVersions={run.promptVersions} runId={run.runId} />
             ) : undefined
           }
           onRerun={onRerun}

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     if (!hashesParam) {
       return NextResponse.json(
         { error: "hashes query param is required (comma-separated)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -29,10 +29,7 @@ export async function GET(request: NextRequest) {
       .filter(Boolean);
 
     if (hashes.length === 0 || hashes.length > 50) {
-      return NextResponse.json(
-        { error: "Provide 1-50 comma-separated hashes" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Provide 1-50 comma-separated hashes" }, { status: 400 });
     }
 
     const templates = await getPromptTemplatesBatch(hashes);
@@ -48,9 +45,6 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
       route: "/api/prompt-templates",
     });
-    return NextResponse.json(
-      { error: "Failed to fetch prompt templates" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch prompt templates" }, { status: 500 });
   }
 }

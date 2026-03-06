@@ -107,7 +107,7 @@ export function updateJob(runId: string, message: string, percent: number): void
 export function updateJobDomainProgress(
   runId: string,
   completedDomains: number,
-  totalDomains: number
+  totalDomains: number,
 ): void {
   const job = jobs.get(runId);
   if (job && job.status === "generating") {

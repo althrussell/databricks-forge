@@ -61,31 +61,33 @@ export async function POST(request: NextRequest) {
       categoryWeights: null,
     }));
 
-    const tasks = spaceIds.map((spaceId) => async (): Promise<[string, SpaceHealthReport | null]> => {
-      try {
-        let serializedSpace = getSpaceCache(spaceId);
-        if (!serializedSpace) {
-          const spaceResponse = await getGenieSpace(spaceId);
-          serializedSpace = spaceResponse.serialized_space ?? "{}";
-          setSpaceCache(spaceId, serializedSpace);
-        }
+    const tasks = spaceIds.map(
+      (spaceId) => async (): Promise<[string, SpaceHealthReport | null]> => {
+        try {
+          let serializedSpace = getSpaceCache(spaceId);
+          if (!serializedSpace) {
+            const spaceResponse = await getGenieSpace(spaceId);
+            serializedSpace = spaceResponse.serialized_space ?? "{}";
+            setSpaceCache(spaceId, serializedSpace);
+          }
 
-        const space = JSON.parse(serializedSpace);
-        let report = runHealthCheck(
-          space,
-          config.overrides.length > 0 ? config.overrides : undefined,
-          config.customChecks.length > 0 ? config.customChecks : undefined,
-          config.categoryWeights ?? undefined,
-        );
-        if (isReviewEnabled("health-check-sql-quality")) {
-          report = await enrichReportWithSqlQuality(space, report);
+          const space = JSON.parse(serializedSpace);
+          let report = runHealthCheck(
+            space,
+            config.overrides.length > 0 ? config.overrides : undefined,
+            config.customChecks.length > 0 ? config.customChecks : undefined,
+            config.categoryWeights ?? undefined,
+          );
+          if (isReviewEnabled("health-check-sql-quality")) {
+            report = await enrichReportWithSqlQuality(space, report);
+          }
+          return [spaceId, report];
+        } catch (err) {
+          logger.warn("Batch health check failed for space", { spaceId, error: String(err) });
+          return [spaceId, null];
         }
-        return [spaceId, report];
-      } catch (err) {
-        logger.warn("Batch health check failed for space", { spaceId, error: String(err) });
-        return [spaceId, null];
-      }
-    });
+      },
+    );
 
     const results = await runBounded(tasks, CONCURRENCY);
     const reports: Record<string, SpaceHealthReport | null> = {};

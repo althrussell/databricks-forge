@@ -27,7 +27,7 @@ import { getActivePipelineRunIds } from "@/lib/pipeline/engine";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -53,17 +53,14 @@ export async function GET(
     let lineageDiscoveredFqns: string[] = [];
     let scanId: string | null = null;
     if (run.status === "completed") {
-      const ucFetcher = summary
-        ? getUseCaseSummariesByRunId(runId)
-        : getUseCasesByRunId(runId);
+      const ucFetcher = summary ? getUseCaseSummariesByRunId(runId) : getUseCasesByRunId(runId);
       const [ucResult, fqnsResult, scanIdResult] = await Promise.allSettled([
         ucFetcher,
         loadLineageFqnsForRun(runId),
         getLatestScanIdForRun(runId, run.config.ucMetadata),
       ]);
       useCases = ucResult.status === "fulfilled" ? ucResult.value : undefined;
-      lineageDiscoveredFqns =
-        fqnsResult.status === "fulfilled" ? fqnsResult.value : [];
+      lineageDiscoveredFqns = fqnsResult.status === "fulfilled" ? fqnsResult.value : [];
       scanId = scanIdResult.status === "fulfilled" ? scanIdResult.value : null;
     }
 
@@ -72,25 +69,23 @@ export async function GET(
       { run, useCases, lineageDiscoveredFqns, scanId },
       {
         headers: {
-          "Cache-Control": cacheMaxAge > 0
-            ? `public, s-maxage=${cacheMaxAge}, stale-while-revalidate=60`
-            : "no-store",
+          "Cache-Control":
+            cacheMaxAge > 0
+              ? `public, s-maxage=${cacheMaxAge}, stale-while-revalidate=60`
+              : "no-store",
         },
-      }
+      },
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] GET failed", { runId: "unknown", error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -106,10 +101,7 @@ export async function PATCH(
     }
 
     if (run.status === "running") {
-      return NextResponse.json(
-        { error: "Cannot modify a running pipeline." },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Cannot modify a running pipeline." }, { status: 409 });
     }
 
     const body = await request.json();
@@ -118,7 +110,7 @@ export async function PATCH(
     if (industry === undefined) {
       return NextResponse.json(
         { error: "No updatable field provided. Supported: industry" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -128,7 +120,7 @@ export async function PATCH(
       if (!valid) {
         return NextResponse.json(
           { error: `Unknown industry outcome map: ${industry}` },
-          { status: 400 }
+          { status: 400 },
         );
       }
       await updateRunIndustry(runId, industry, false);
@@ -153,16 +145,13 @@ export async function PATCH(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] PATCH failed", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     await ensureMigrated();
@@ -184,7 +173,7 @@ export async function DELETE(
       logger.warn("[api/runs] DELETE blocked -- run still in progress", { runId });
       return NextResponse.json(
         { error: "Cannot delete a running pipeline. Wait for it to complete or fail." },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -202,9 +191,6 @@ export async function DELETE(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/runs] DELETE failed", { error: msg });
-    return NextResponse.json(
-      { error: safeErrorMessage(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

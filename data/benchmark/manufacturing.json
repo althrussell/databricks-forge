@@ -78,7 +78,7 @@
       "industry": "manufacturing",
       "region": "global",
       "license_class": "citation_required",
-      "confidence": 0.70,
+      "confidence": 0.7,
       "ttl_days": 365,
       "tags": ["servitization", "iot"]
     },
@@ -123,7 +123,7 @@
       "industry": "manufacturing",
       "region": "us",
       "license_class": "public_domain",
-      "confidence": 0.80,
+      "confidence": 0.8,
       "ttl_days": 730,
       "tags": ["closed-loop", "quality"]
     }

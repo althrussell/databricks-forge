@@ -13,9 +13,7 @@ import type { DiscoveredMetricView } from "./types";
  * Scan for metric views across the given catalog/schema pairs.
  * @param scope Array of "catalog" or "catalog.schema" strings
  */
-export async function scanMetricViews(
-  scope: string[]
-): Promise<DiscoveredMetricView[]> {
+export async function scanMetricViews(scope: string[]): Promise<DiscoveredMetricView[]> {
   const discovered: DiscoveredMetricView[] = [];
   const seen = new Set<string>();
 
@@ -44,6 +42,8 @@ export async function scanMetricViews(
     }
   }
 
-  logger.info(`[asset-discovery] Found ${discovered.length} metric views across ${scope.length} scope entries`);
+  logger.info(
+    `[asset-discovery] Found ${discovered.length} metric views across ${scope.length} scope entries`,
+  );
   return discovered;
 }

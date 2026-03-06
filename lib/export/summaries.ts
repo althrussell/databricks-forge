@@ -22,7 +22,7 @@ export interface ExportSummaries {
  */
 export async function generateExportSummaries(
   run: PipelineRun,
-  useCases: UseCase[]
+  useCases: UseCase[],
 ): Promise<ExportSummaries | null> {
   if (useCases.length === 0) return null;
 

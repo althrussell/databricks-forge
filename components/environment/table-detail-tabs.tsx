@@ -174,7 +174,11 @@ function SchemaTab({ columns }: { columns: Column[] }) {
                 {col.comment || "—"}
               </TableCell>
               <TableCell>
-                {col.is_pii && <Badge variant="destructive" className="text-[9px]">PII</Badge>}
+                {col.is_pii && (
+                  <Badge variant="destructive" className="text-[9px]">
+                    PII
+                  </Badge>
+                )}
               </TableCell>
             </TableRow>
           ))}
@@ -188,10 +192,16 @@ function SchemaTab({ columns }: { columns: Column[] }) {
 // Lineage tab
 // ---------------------------------------------------------------------------
 
-function LineageTab({ lineage }: { lineage: { upstream: LineageEdge[]; downstream: LineageEdge[] } }) {
+function LineageTab({
+  lineage,
+}: {
+  lineage: { upstream: LineageEdge[]; downstream: LineageEdge[] };
+}) {
   const total = lineage.upstream.length + lineage.downstream.length;
   if (total === 0) {
-    return <p className="text-sm text-muted-foreground">No lineage data discovered for this table.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">No lineage data discovered for this table.</p>
+    );
   }
 
   return (
@@ -202,12 +212,16 @@ function LineageTab({ lineage }: { lineage: { upstream: LineageEdge[]; downstrea
           <div className="space-y-1">
             {lineage.upstream.map((edge, i) => (
               <div key={i} className="flex items-center gap-2 rounded-md border p-2 text-xs">
-                <Badge variant="secondary" className="text-[9px]">Source</Badge>
+                <Badge variant="secondary" className="text-[9px]">
+                  Source
+                </Badge>
                 <span className="font-mono">{edge.sourceTableFqn}</span>
                 <span className="text-muted-foreground">→</span>
                 <span className="font-mono text-muted-foreground">{edge.targetTableFqn}</span>
                 {edge.eventCount && edge.eventCount > 1 && (
-                  <Badge variant="outline" className="ml-auto text-[9px]">{edge.eventCount} events</Badge>
+                  <Badge variant="outline" className="ml-auto text-[9px]">
+                    {edge.eventCount} events
+                  </Badge>
                 )}
               </div>
             ))}
@@ -223,7 +237,9 @@ function LineageTab({ lineage }: { lineage: { upstream: LineageEdge[]; downstrea
               <div key={i} className="flex items-center gap-2 rounded-md border p-2 text-xs">
                 <span className="font-mono text-muted-foreground">{edge.sourceTableFqn}</span>
                 <span className="text-muted-foreground">→</span>
-                <Badge variant="secondary" className="text-[9px]">Target</Badge>
+                <Badge variant="secondary" className="text-[9px]">
+                  Target
+                </Badge>
                 <span className="font-mono">{edge.targetTableFqn}</span>
               </div>
             ))}
@@ -241,23 +257,33 @@ function LineageTab({ lineage }: { lineage: { upstream: LineageEdge[]; downstrea
 function QualityTab({ history, insights }: { history: HistoryData | null; insights: Insight[] }) {
   const healthScore = history?.healthScore;
   const issues: string[] = history?.issuesJson ? JSON.parse(history.issuesJson) : [];
-  const recommendations: string[] = history?.recommendationsJson ? JSON.parse(history.recommendationsJson) : [];
+  const recommendations: string[] = history?.recommendationsJson
+    ? JSON.parse(history.recommendationsJson)
+    : [];
 
   return (
     <div className="space-y-4">
       {healthScore != null && (
         <div className="flex items-center gap-3">
-          <div className={`flex size-12 items-center justify-center rounded-full text-lg font-bold ${
-            healthScore >= 80 ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" :
-            healthScore >= 60 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" :
-            "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-          }`}>
+          <div
+            className={`flex size-12 items-center justify-center rounded-full text-lg font-bold ${
+              healthScore >= 80
+                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                : healthScore >= 60
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                  : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+            }`}
+          >
             {Math.round(healthScore)}
           </div>
           <div>
             <p className="text-sm font-medium">Health Score</p>
             <p className="text-xs text-muted-foreground">
-              {healthScore >= 80 ? "Healthy" : healthScore >= 60 ? "Needs attention" : "Critical issues"}
+              {healthScore >= 80
+                ? "Healthy"
+                : healthScore >= 60
+                  ? "Needs attention"
+                  : "Critical issues"}
             </p>
           </div>
         </div>
@@ -271,7 +297,9 @@ function QualityTab({ history, insights }: { history: HistoryData | null; insigh
           </h4>
           <ul className="space-y-1">
             {issues.map((issue, i) => (
-              <li key={i} className="text-xs text-muted-foreground">• {issue}</li>
+              <li key={i} className="text-xs text-muted-foreground">
+                • {issue}
+              </li>
             ))}
           </ul>
         </div>
@@ -285,7 +313,9 @@ function QualityTab({ history, insights }: { history: HistoryData | null; insigh
           </h4>
           <ul className="space-y-1">
             {recommendations.map((rec, i) => (
-              <li key={i} className="text-xs text-muted-foreground">• {rec}</li>
+              <li key={i} className="text-xs text-muted-foreground">
+                • {rec}
+              </li>
             ))}
           </ul>
         </div>
@@ -300,7 +330,10 @@ function QualityTab({ history, insights }: { history: HistoryData | null; insigh
               return (
                 <div key={insight.insightType} className="rounded-md border p-3">
                   <div className="flex items-center gap-2">
-                    <Badge variant={insight.severity === "high" ? "destructive" : "secondary"} className="text-[9px]">
+                    <Badge
+                      variant={insight.severity === "high" ? "destructive" : "secondary"}
+                      className="text-[9px]"
+                    >
                       {insight.severity}
                     </Badge>
                     <span className="text-xs font-medium">{insight.insightType}</span>
@@ -346,7 +379,9 @@ function RelatedTab({ useCases }: { useCases: RelatedUseCase[] }) {
             </p>
           </div>
           {uc.overallScore != null && (
-            <Badge variant="outline" className="text-xs">{(uc.overallScore * 100).toFixed(0)}%</Badge>
+            <Badge variant="outline" className="text-xs">
+              {(uc.overallScore * 100).toFixed(0)}%
+            </Badge>
           )}
         </a>
       ))}
@@ -360,7 +395,9 @@ function RelatedTab({ useCases }: { useCases: RelatedUseCase[] }) {
 
 function HistoryTab({ history }: { history: HistoryData | null }) {
   if (!history) {
-    return <p className="text-sm text-muted-foreground">No history data available for this table.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">No history data available for this table.</p>
+    );
   }
 
   const stats = [
@@ -387,7 +424,9 @@ function HistoryTab({ history }: { history: HistoryData | null }) {
         {history.lastWriteTimestamp && (
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Last Write</span>
-            <span>{history.lastWriteOperation} · {history.lastWriteTimestamp}</span>
+            <span>
+              {history.lastWriteOperation} · {history.lastWriteTimestamp}
+            </span>
           </div>
         )}
         {history.lastOptimizeTimestamp && (
@@ -403,7 +442,9 @@ function HistoryTab({ history }: { history: HistoryData | null }) {
           </div>
         )}
         {history.hasStreamingWrites && (
-          <Badge variant="secondary" className="text-xs">Streaming Writes Active</Badge>
+          <Badge variant="secondary" className="text-xs">
+            Streaming Writes Active
+          </Badge>
         )}
       </div>
     </div>

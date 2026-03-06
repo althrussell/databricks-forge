@@ -96,336 +96,474 @@ export async function startPipeline(runId: string): Promise<void> {
   const controller = new AbortController();
   activePipelineRuns.set(runId, controller);
   try {
-  const run = await getRunById(runId);
-  if (!run) throw new Error(`Run ${runId} not found`);
+    const run = await getRunById(runId);
+    if (!run) throw new Error(`Run ${runId} not found`);
 
-  const ctx: PipelineContext = {
-    run,
-    metadata: null,
-    filteredTables: [],
-    useCases: [],
-    lineageGraph: null,
-    sampleData: null,
-    discoveryResult: null,
-    signal: controller.signal,
-  };
+    const ctx: PipelineContext = {
+      run,
+      metadata: null,
+      filteredTables: [],
+      useCases: [],
+      lineageGraph: null,
+      sampleData: null,
+      discoveryResult: null,
+      signal: controller.signal,
+    };
 
-  /** Helper: record step start/end timing in the run's stepLog. */
-  async function logStep(
-    step: PipelineStep,
-    fn: () => Promise<void>
-  ): Promise<void> {
-    const startedAt = new Date().toISOString();
-    try {
-      await fn();
-      const completedAt = new Date().toISOString();
-      const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-      await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
-    } catch (err) {
-      const completedAt = new Date().toISOString();
-      const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs, error: errorMsg });
-      throw err;
-    }
-  }
-
-  try {
-    // Mark as running
-    await updateRunStatus(runId, "running", STEPS[0].step, 0, undefined, "Initialising pipeline...");
-    ctx.run = { ...ctx.run, status: "running" };
-
-    // Step 1: Business Context
-    checkCancelled(ctx.signal);
-    await logStep(PipelineStep.BusinessContext, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 5, undefined, `Generating business context for ${ctx.run.config.businessName}...`);
-      logger.info(`Step 1: ${STEPS[0].label}`, { runId, step: "business-context" });
-      const businessContext = await runBusinessContext(ctx, runId);
-      ctx.run = { ...ctx.run, businessContext };
-      await updateRunBusinessContext(runId, businessContext);
-      await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 10, undefined, "Business context generated");
-    });
-
-    // Auto-detect industry outcome map if not manually selected
-    const detectedIndustries = ctx.run.businessContext?.industries;
-    if (!ctx.run.config.industry && detectedIndustries) {
-      const detected = await detectIndustryFromContext(detectedIndustries);
-      if (detected) {
-        ctx.run = {
-          ...ctx.run,
-          config: { ...ctx.run.config, industry: detected },
-        };
-        await updateRunIndustry(runId, detected, true);
-        logger.info("Auto-detected industry outcome map", {
-          runId,
-          detected,
-          from: detectedIndustries,
-        });
-        await updateRunMessage(
-          runId,
-          `Auto-detected industry: ${detected}`
-        );
-      }
-    }
-
-    // Step 2: Metadata Extraction
-    checkCancelled(ctx.signal);
-    await logStep(PipelineStep.MetadataExtraction, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
-      logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
-      const extractionResult = await runMetadataExtraction(ctx, runId);
-      ctx.metadata = extractionResult.snapshot;
-      ctx.lineageGraph = extractionResult.lineageGraph;
-      if (ctx.metadata.cacheKey) {
-        await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
-        const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
-        await saveMetadataSnapshot(ctx.metadata);
-      }
-      await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 18, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
-    });
-
-    // Step 2b: Asset Discovery (conditional -- skipped when assetDiscoveryEnabled is false)
-    checkCancelled(ctx.signal);
-    if (ctx.run.config.assetDiscoveryEnabled) {
-      await logStep(PipelineStep.AssetDiscovery, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 19, undefined, "Discovering existing Genie spaces, dashboards, and metric views...");
-        logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
-        ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
-        const summary = ctx.discoveryResult
-          ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
-          : "Discovery skipped";
-        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 22, undefined, summary);
-      });
-    }
-
-    // Step 3: Table Filtering
-    checkCancelled(ctx.signal);
-    await logStep(PipelineStep.TableFiltering, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 24, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
-      logger.info(`Step 3: Table Filtering`, { runId, step: "table-filtering" });
-      ctx.filteredTables = await runTableFiltering(ctx, runId);
-      await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 30, undefined, `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`);
-    });
-
-    // Step 4: Use Case Generation
-    checkCancelled(ctx.signal);
-    await logStep(PipelineStep.UsecaseGeneration, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
-      logger.info(`Step 4: ${STEPS[3].label}`, { runId, step: "usecase-generation" });
-      ctx.useCases = await runUsecaseGeneration(ctx, runId);
-
-      // Post-generation validation: strip hallucinated table references
-      const validFqns = new Set([
-        ...ctx.filteredTables,
-        ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
-      ]);
-      let hallucinated = 0;
-      ctx.useCases = ctx.useCases.filter((uc) => {
-        uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
-          const clean = t.replace(/`/g, "");
-          return validFqns.has(t) || validFqns.has(clean);
-        });
-        if (uc.tablesInvolved.length === 0) {
-          hallucinated++;
-          return false;
-        }
-        return true;
-      });
-      if (hallucinated > 0) {
-        logger.warn("Removed use cases with hallucinated table references", {
-          runId,
-          removedCount: hallucinated,
-          remainingCount: ctx.useCases.length,
-        });
-      }
-
-      // Deterministic anti-slop quality gate (pre-scoring).
-      const qualityFilter = applyDeterministicQualityFilter(ctx.useCases, ctx.filteredTables);
-      if (qualityFilter.rejected.length > 0) {
-        logger.warn("Rejected low-quality use cases by deterministic gate", {
-          runId,
-          rejected: qualityFilter.rejected.length,
-          sampleReasons: qualityFilter.rejected.slice(0, 5).map((r) => r.reasons.join("; ")),
-        });
-      }
-      ctx.useCases = qualityFilter.accepted;
-
-      if (ctx.useCases.length === 0) {
-        throw new Error(
-          "Use case generation returned only invalid results after table validation. Please retry this run."
-        );
-      }
-
-      await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed — invalid table refs)` : ""}`);
-    });
-
-    // Step 5: Domain Clustering
-    checkCancelled(ctx.signal);
-    await logStep(PipelineStep.DomainClustering, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
-      logger.info(`Step 5: ${STEPS[4].label}`, { runId, step: "domain-clustering" });
-      ctx.useCases = await runDomainClustering(ctx, runId);
-      const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-      await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 55, undefined, `Organised use cases into ${domainCount} domains`);
-    });
-
-    // Step 6: Scoring & Deduplication
-    checkCancelled(ctx.signal);
-    await logStep(PipelineStep.Scoring, async () => {
-      const preScoringCount = ctx.useCases.length;
-      await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${preScoringCount} use cases...`);
-      logger.info(`Step 6: ${STEPS[5].label}`, { runId, step: "scoring" });
-      ctx.useCases = await runScoring(ctx, runId);
-      const baseline = computeRunQualityBaseline(ctx.useCases, ctx.filteredTables);
-      const minReadiness = Number(process.env.FORGE_MIN_CONSULTANT_READINESS ?? "0.55");
-      await insertQualityMetrics([
-        {
-          metricType: "run",
-          metricName: "consultant_readiness",
-          metricValue: baseline.consultantReadinessScore,
-          floorValue: minReadiness,
-          passed: baseline.consultantReadinessScore >= minReadiness,
-          runId,
-          metadata: { findings: baseline.findings },
-        },
-        {
-          metricType: "run",
-          metricName: "low_specificity_rate",
-          metricValue: baseline.lowSpecificityRate,
-          floorValue: 0.25,
-          passed: baseline.lowSpecificityRate <= 0.25,
-          runId,
-        },
-        {
-          metricType: "run",
-          metricName: "schema_coverage_pct",
-          metricValue: baseline.schemaCoveragePct,
-          floorValue: 0.3,
-          passed: baseline.schemaCoveragePct >= 0.3,
-          runId,
-        },
-        {
-          metricType: "run",
-          metricName: "sql_generated_rate",
-          metricValue: baseline.sqlGeneratedRate,
-          floorValue: 0.7,
-          passed: baseline.sqlGeneratedRate >= 0.7,
-          runId,
-        },
-      ]);
-      logger.info("Run quality baseline computed", {
-        runId,
-        consultantReadiness: baseline.consultantReadinessScore,
-        lowSpecificityRate: baseline.lowSpecificityRate,
-        schemaCoveragePct: baseline.schemaCoveragePct,
-        sqlGeneratedRate: baseline.sqlGeneratedRate,
-      });
-      if (baseline.consultantReadinessScore < minReadiness) {
-        throw new Error(
-          `Run quality gate failed (consultantReadiness=${baseline.consultantReadinessScore.toFixed(2)} < ${minReadiness.toFixed(2)}). ${baseline.findings.join(" | ") || "Insufficient quality for customer-facing output."}`,
-        );
-      }
-      await updateRunStatus(runId, "running", PipelineStep.Scoring, 65, undefined, `Scored ${ctx.useCases.length} use cases`);
-    });
-
-    // Step 7: SQL Generation
-    checkCancelled(ctx.signal);
-    let sqlOk = 0;
-    await logStep(PipelineStep.SqlGeneration, async () => {
-      await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
-      logger.info(`Step 7: ${STEPS[6].label}`, { runId, step: "sql-generation" });
-      ctx.useCases = await runSqlGeneration(ctx, runId);
-      sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
-      await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 85, undefined, `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`);
-    });
-
-    // Persist use cases atomically (delete old + insert new in a transaction)
-    logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
-    const { withPrisma } = await import("@/lib/prisma");
-    await withPrisma(async (prisma) => {
-      await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-        await tx.forgeUseCase.deleteMany({ where: { runId } });
-        if (ctx.useCases.length > 0) {
-          await tx.forgeUseCase.createMany({
-            data: ctx.useCases.map((uc) => ({
-              id: uc.id,
-              runId: uc.runId,
-              useCaseNo: uc.useCaseNo,
-              name: uc.name,
-              type: uc.type,
-              analyticsTechnique: uc.analyticsTechnique,
-              statement: uc.statement,
-              solution: uc.solution,
-              businessValue: uc.businessValue,
-              beneficiary: uc.beneficiary,
-              sponsor: uc.sponsor,
-              domain: uc.domain,
-              subdomain: uc.subdomain,
-              tablesInvolved: JSON.stringify(uc.tablesInvolved),
-              priorityScore: uc.priorityScore,
-              feasibilityScore: uc.feasibilityScore,
-              impactScore: uc.impactScore,
-              overallScore: uc.overallScore,
-              sqlCode: uc.sqlCode,
-              sqlStatus: uc.sqlStatus,
-            })),
-          });
-        }
-      });
-    });
-
-    // Generate vector embeddings for use cases + business context (best-effort)
-    try {
-      const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
-      const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
-      await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
-    } catch (embedErr) {
-      logger.warn("Use case embedding failed (non-fatal)", {
-        runId,
-        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
-      });
-    }
-
-    // Mark as completed -- Genie Engine runs in the background
-    const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-    await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
-    logger.info("Pipeline completed, starting Genie Engine in background", { runId, useCaseCount: ctx.useCases.length, sqlOk });
-
-    // Fire Genie Engine and Dashboard Engine concurrently in the background.
-    startBackgroundEngines(ctx, runId);
-  } catch (error) {
-    if (error instanceof PipelineCancelledError) {
-      logger.info("Pipeline cancelled by user", { runId });
+    /** Helper: record step start/end timing in the run's stepLog. */
+    async function logStep(step: PipelineStep, fn: () => Promise<void>): Promise<void> {
+      const startedAt = new Date().toISOString();
       try {
-        await updateRunStatus(runId, "cancelled", ctx.run.currentStep, ctx.run.progressPct, "Cancelled by user", "Pipeline cancelled");
-      } catch (statusError) {
-        logger.error("Failed to update run status after cancellation", {
-          runId,
-          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        await fn();
+        const completedAt = new Date().toISOString();
+        const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+        await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
+      } catch (err) {
+        const completedAt = new Date().toISOString();
+        const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        await updateRunStepLog(runId, {
+          step,
+          startedAt,
+          completedAt,
+          durationMs,
+          error: errorMsg,
         });
+        throw err;
       }
-    } else {
-      const message =
-        error instanceof Error ? error.message : "Unknown pipeline error";
-      logger.error(`Pipeline failed`, { runId, error: message });
-      try {
+    }
+
+    try {
+      // Mark as running
+      await updateRunStatus(
+        runId,
+        "running",
+        STEPS[0].step,
+        0,
+        undefined,
+        "Initialising pipeline...",
+      );
+      ctx.run = { ...ctx.run, status: "running" };
+
+      // Step 1: Business Context
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.BusinessContext, async () => {
         await updateRunStatus(
           runId,
-          "failed",
-          ctx.run.currentStep,
-          ctx.run.progressPct,
-          message,
-          `Pipeline failed: ${message}`
+          "running",
+          PipelineStep.BusinessContext,
+          5,
+          undefined,
+          `Generating business context for ${ctx.run.config.businessName}...`,
         );
-      } catch (statusError) {
-        logger.error("Failed to update run status after pipeline failure", {
+        logger.info(`Step 1: ${STEPS[0].label}`, { runId, step: "business-context" });
+        const businessContext = await runBusinessContext(ctx, runId);
+        ctx.run = { ...ctx.run, businessContext };
+        await updateRunBusinessContext(runId, businessContext);
+        await updateRunStatus(
           runId,
-          originalError: message,
-          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          "running",
+          PipelineStep.BusinessContext,
+          10,
+          undefined,
+          "Business context generated",
+        );
+      });
+
+      // Auto-detect industry outcome map if not manually selected
+      const detectedIndustries = ctx.run.businessContext?.industries;
+      if (!ctx.run.config.industry && detectedIndustries) {
+        const detected = await detectIndustryFromContext(detectedIndustries);
+        if (detected) {
+          ctx.run = {
+            ...ctx.run,
+            config: { ...ctx.run.config, industry: detected },
+          };
+          await updateRunIndustry(runId, detected, true);
+          logger.info("Auto-detected industry outcome map", {
+            runId,
+            detected,
+            from: detectedIndustries,
+          });
+          await updateRunMessage(runId, `Auto-detected industry: ${detected}`);
+        }
+      }
+
+      // Step 2: Metadata Extraction
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.MetadataExtraction, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.MetadataExtraction,
+          12,
+          undefined,
+          `Extracting metadata from ${ctx.run.config.ucMetadata}...`,
+        );
+        logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
+        const extractionResult = await runMetadataExtraction(ctx, runId);
+        ctx.metadata = extractionResult.snapshot;
+        ctx.lineageGraph = extractionResult.lineageGraph;
+        if (ctx.metadata.cacheKey) {
+          await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
+          const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
+          await saveMetadataSnapshot(ctx.metadata);
+        }
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.MetadataExtraction,
+          18,
+          undefined,
+          `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`,
+        );
+      });
+
+      // Step 2b: Asset Discovery (conditional -- skipped when assetDiscoveryEnabled is false)
+      checkCancelled(ctx.signal);
+      if (ctx.run.config.assetDiscoveryEnabled) {
+        await logStep(PipelineStep.AssetDiscovery, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.AssetDiscovery,
+            19,
+            undefined,
+            "Discovering existing Genie spaces, dashboards, and metric views...",
+          );
+          logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
+          ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
+          const summary = ctx.discoveryResult
+            ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
+            : "Discovery skipped";
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.AssetDiscovery,
+            22,
+            undefined,
+            summary,
+          );
         });
       }
+
+      // Step 3: Table Filtering
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.TableFiltering, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.TableFiltering,
+          24,
+          undefined,
+          `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`,
+        );
+        logger.info(`Step 3: Table Filtering`, { runId, step: "table-filtering" });
+        ctx.filteredTables = await runTableFiltering(ctx, runId);
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.TableFiltering,
+          30,
+          undefined,
+          `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`,
+        );
+      });
+
+      // Step 4: Use Case Generation
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.UsecaseGeneration, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.UsecaseGeneration,
+          32,
+          undefined,
+          `Generating AI use cases from ${ctx.filteredTables.length} tables...`,
+        );
+        logger.info(`Step 4: ${STEPS[3].label}`, { runId, step: "usecase-generation" });
+        ctx.useCases = await runUsecaseGeneration(ctx, runId);
+
+        // Post-generation validation: strip hallucinated table references
+        const validFqns = new Set([
+          ...ctx.filteredTables,
+          ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
+        ]);
+        let hallucinated = 0;
+        ctx.useCases = ctx.useCases.filter((uc) => {
+          uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
+            const clean = t.replace(/`/g, "");
+            return validFqns.has(t) || validFqns.has(clean);
+          });
+          if (uc.tablesInvolved.length === 0) {
+            hallucinated++;
+            return false;
+          }
+          return true;
+        });
+        if (hallucinated > 0) {
+          logger.warn("Removed use cases with hallucinated table references", {
+            runId,
+            removedCount: hallucinated,
+            remainingCount: ctx.useCases.length,
+          });
+        }
+
+        // Deterministic anti-slop quality gate (pre-scoring).
+        const qualityFilter = applyDeterministicQualityFilter(ctx.useCases, ctx.filteredTables);
+        if (qualityFilter.rejected.length > 0) {
+          logger.warn("Rejected low-quality use cases by deterministic gate", {
+            runId,
+            rejected: qualityFilter.rejected.length,
+            sampleReasons: qualityFilter.rejected.slice(0, 5).map((r) => r.reasons.join("; ")),
+          });
+        }
+        ctx.useCases = qualityFilter.accepted;
+
+        if (ctx.useCases.length === 0) {
+          throw new Error(
+            "Use case generation returned only invalid results after table validation. Please retry this run.",
+          );
+        }
+
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.UsecaseGeneration,
+          45,
+          undefined,
+          `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed — invalid table refs)` : ""}`,
+        );
+      });
+
+      // Step 5: Domain Clustering
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.DomainClustering, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.DomainClustering,
+          47,
+          undefined,
+          `Assigning domains to ${ctx.useCases.length} use cases...`,
+        );
+        logger.info(`Step 5: ${STEPS[4].label}`, { runId, step: "domain-clustering" });
+        ctx.useCases = await runDomainClustering(ctx, runId);
+        const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.DomainClustering,
+          55,
+          undefined,
+          `Organised use cases into ${domainCount} domains`,
+        );
+      });
+
+      // Step 6: Scoring & Deduplication
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.Scoring, async () => {
+        const preScoringCount = ctx.useCases.length;
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.Scoring,
+          57,
+          undefined,
+          `Scoring and deduplicating ${preScoringCount} use cases...`,
+        );
+        logger.info(`Step 6: ${STEPS[5].label}`, { runId, step: "scoring" });
+        ctx.useCases = await runScoring(ctx, runId);
+        const baseline = computeRunQualityBaseline(ctx.useCases, ctx.filteredTables);
+        const minReadiness = Number(process.env.FORGE_MIN_CONSULTANT_READINESS ?? "0.55");
+        await insertQualityMetrics([
+          {
+            metricType: "run",
+            metricName: "consultant_readiness",
+            metricValue: baseline.consultantReadinessScore,
+            floorValue: minReadiness,
+            passed: baseline.consultantReadinessScore >= minReadiness,
+            runId,
+            metadata: { findings: baseline.findings },
+          },
+          {
+            metricType: "run",
+            metricName: "low_specificity_rate",
+            metricValue: baseline.lowSpecificityRate,
+            floorValue: 0.25,
+            passed: baseline.lowSpecificityRate <= 0.25,
+            runId,
+          },
+          {
+            metricType: "run",
+            metricName: "schema_coverage_pct",
+            metricValue: baseline.schemaCoveragePct,
+            floorValue: 0.3,
+            passed: baseline.schemaCoveragePct >= 0.3,
+            runId,
+          },
+          {
+            metricType: "run",
+            metricName: "sql_generated_rate",
+            metricValue: baseline.sqlGeneratedRate,
+            floorValue: 0.7,
+            passed: baseline.sqlGeneratedRate >= 0.7,
+            runId,
+          },
+        ]);
+        logger.info("Run quality baseline computed", {
+          runId,
+          consultantReadiness: baseline.consultantReadinessScore,
+          lowSpecificityRate: baseline.lowSpecificityRate,
+          schemaCoveragePct: baseline.schemaCoveragePct,
+          sqlGeneratedRate: baseline.sqlGeneratedRate,
+        });
+        if (baseline.consultantReadinessScore < minReadiness) {
+          throw new Error(
+            `Run quality gate failed (consultantReadiness=${baseline.consultantReadinessScore.toFixed(2)} < ${minReadiness.toFixed(2)}). ${baseline.findings.join(" | ") || "Insufficient quality for customer-facing output."}`,
+          );
+        }
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.Scoring,
+          65,
+          undefined,
+          `Scored ${ctx.useCases.length} use cases`,
+        );
+      });
+
+      // Step 7: SQL Generation
+      checkCancelled(ctx.signal);
+      let sqlOk = 0;
+      await logStep(PipelineStep.SqlGeneration, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.SqlGeneration,
+          67,
+          undefined,
+          `Generating SQL for ${ctx.useCases.length} use cases...`,
+        );
+        logger.info(`Step 7: ${STEPS[6].label}`, { runId, step: "sql-generation" });
+        ctx.useCases = await runSqlGeneration(ctx, runId);
+        sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.SqlGeneration,
+          85,
+          undefined,
+          `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`,
+        );
+      });
+
+      // Persist use cases atomically (delete old + insert new in a transaction)
+      logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
+      const { withPrisma } = await import("@/lib/prisma");
+      await withPrisma(async (prisma) => {
+        await prisma.$transaction(
+          async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+            await tx.forgeUseCase.deleteMany({ where: { runId } });
+            if (ctx.useCases.length > 0) {
+              await tx.forgeUseCase.createMany({
+                data: ctx.useCases.map((uc) => ({
+                  id: uc.id,
+                  runId: uc.runId,
+                  useCaseNo: uc.useCaseNo,
+                  name: uc.name,
+                  type: uc.type,
+                  analyticsTechnique: uc.analyticsTechnique,
+                  statement: uc.statement,
+                  solution: uc.solution,
+                  businessValue: uc.businessValue,
+                  beneficiary: uc.beneficiary,
+                  sponsor: uc.sponsor,
+                  domain: uc.domain,
+                  subdomain: uc.subdomain,
+                  tablesInvolved: JSON.stringify(uc.tablesInvolved),
+                  priorityScore: uc.priorityScore,
+                  feasibilityScore: uc.feasibilityScore,
+                  impactScore: uc.impactScore,
+                  overallScore: uc.overallScore,
+                  sqlCode: uc.sqlCode,
+                  sqlStatus: uc.sqlStatus,
+                })),
+              });
+            }
+          },
+        );
+      });
+
+      // Generate vector embeddings for use cases + business context (best-effort)
+      try {
+        const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
+        const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
+        await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
+      } catch (embedErr) {
+        logger.warn("Use case embedding failed (non-fatal)", {
+          runId,
+          error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+        });
+      }
+
+      // Mark as completed -- Genie Engine runs in the background
+      const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
+      await updateRunStatus(
+        runId,
+        "completed",
+        null,
+        100,
+        undefined,
+        `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`,
+      );
+      logger.info("Pipeline completed, starting Genie Engine in background", {
+        runId,
+        useCaseCount: ctx.useCases.length,
+        sqlOk,
+      });
+
+      // Fire Genie Engine and Dashboard Engine concurrently in the background.
+      startBackgroundEngines(ctx, runId);
+    } catch (error) {
+      if (error instanceof PipelineCancelledError) {
+        logger.info("Pipeline cancelled by user", { runId });
+        try {
+          await updateRunStatus(
+            runId,
+            "cancelled",
+            ctx.run.currentStep,
+            ctx.run.progressPct,
+            "Cancelled by user",
+            "Pipeline cancelled",
+          );
+        } catch (statusError) {
+          logger.error("Failed to update run status after cancellation", {
+            runId,
+            statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          });
+        }
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown pipeline error";
+        logger.error(`Pipeline failed`, { runId, error: message });
+        try {
+          await updateRunStatus(
+            runId,
+            "failed",
+            ctx.run.currentStep,
+            ctx.run.progressPct,
+            message,
+            `Pipeline failed: ${message}`,
+          );
+        } catch (statusError) {
+          logger.error("Failed to update run status after pipeline failure", {
+            runId,
+            originalError: message,
+            statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          });
+        }
+      }
     }
-  }
   } finally {
     clearRunCancelled(runId);
     activePipelineRuns.delete(runId);
@@ -445,310 +583,476 @@ export async function resumePipeline(runId: string): Promise<void> {
   const controller = new AbortController();
   activePipelineRuns.set(runId, controller);
   try {
-  const run = await getRunById(runId);
-  if (!run) throw new Error(`Run ${runId} not found`);
-  if (run.status !== "failed" && run.status !== "cancelled") {
-    throw new Error(`Cannot resume run with status "${run.status}"`);
-  }
-
-  const completedSteps = new Set(
-    (run.stepLog ?? [])
-      .filter((e) => e.completedAt && !e.error)
-      .map((e) => e.step)
-  );
-
-  const resumeIndex = STEPS.findIndex((s) => !completedSteps.has(s.step));
-  if (resumeIndex < 0) {
-    throw new Error("All steps already completed — nothing to resume");
-  }
-
-  const ctx: PipelineContext = {
-    run,
-    metadata: null,
-    filteredTables: [],
-    useCases: [],
-    lineageGraph: null,
-    sampleData: null,
-    discoveryResult: null,
-    signal: controller.signal,
-  };
-
-  // Restore business context (persisted after step 1)
-  if (completedSteps.has(PipelineStep.BusinessContext) && run.businessContext) {
-    ctx.run = { ...ctx.run, businessContext: run.businessContext };
-  }
-
-  // Restore metadata snapshot (persisted after step 2)
-  if (completedSteps.has(PipelineStep.MetadataExtraction)) {
-    const { loadMetadataForRun } = await import("@/lib/lakebase/metadata-cache");
-    const snapshot = await loadMetadataForRun(runId);
-    if (snapshot) ctx.metadata = snapshot;
-  }
-
-  // Restore discovery result (persisted after step 2b)
-  if (completedSteps.has(PipelineStep.AssetDiscovery)) {
-    const { getDiscoveryResultsByRunId } = await import("@/lib/lakebase/discovered-assets");
-    const discoveryData = await getDiscoveryResultsByRunId(runId);
-    if (discoveryData) {
-      ctx.discoveryResult = {
-        genieSpaces: discoveryData.genieSpaces.map((s) => ({
-          ...s,
-          description: null,
-          instructionLength: 0,
-        })),
-        dashboards: discoveryData.dashboards.map((d) => ({
-          ...d,
-          creatorEmail: undefined,
-          updatedAt: undefined,
-          parentPath: undefined,
-        })),
-        metricViews: [],
-        discoveredAt: new Date().toISOString(),
-      };
+    const run = await getRunById(runId);
+    if (!run) throw new Error(`Run ${runId} not found`);
+    if (run.status !== "failed" && run.status !== "cancelled") {
+      throw new Error(`Cannot resume run with status "${run.status}"`);
     }
-  }
 
-  // Restore filtered tables (persisted after step 3)
-  if (completedSteps.has(PipelineStep.TableFiltering)) {
-    const tables = await getRunFilteredTables(runId);
-    if (tables) ctx.filteredTables = tables;
-  }
+    const completedSteps = new Set(
+      (run.stepLog ?? []).filter((e) => e.completedAt && !e.error).map((e) => e.step),
+    );
 
-  logger.info("Resuming pipeline", {
-    runId,
-    resumeFromStep: STEPS[resumeIndex].step,
-    completedSteps: [...completedSteps],
-  });
-
-  /** Helper: record step start/end timing in the run's stepLog. */
-  async function logStep(
-    step: PipelineStep,
-    fn: () => Promise<void>
-  ): Promise<void> {
-    const startedAt = new Date().toISOString();
-    try {
-      await fn();
-      const completedAt = new Date().toISOString();
-      const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-      await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
-    } catch (err) {
-      const completedAt = new Date().toISOString();
-      const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs, error: errorMsg });
-      throw err;
+    const resumeIndex = STEPS.findIndex((s) => !completedSteps.has(s.step));
+    if (resumeIndex < 0) {
+      throw new Error("All steps already completed — nothing to resume");
     }
-  }
 
-  try {
-    await updateRunStatus(runId, "running", STEPS[resumeIndex].step, STEPS[resumeIndex].progressPct, undefined, `Resuming from ${STEPS[resumeIndex].label}...`);
-    ctx.run = { ...ctx.run, status: "running" };
+    const ctx: PipelineContext = {
+      run,
+      metadata: null,
+      filteredTables: [],
+      useCases: [],
+      lineageGraph: null,
+      sampleData: null,
+      discoveryResult: null,
+      signal: controller.signal,
+    };
 
-    // Step 1: Business Context
-    if (resumeIndex <= 0) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.BusinessContext, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 5, undefined, `Generating business context for ${ctx.run.config.businessName}...`);
-        logger.info("Step 1: Generating business context", { runId, step: "business-context" });
-        const businessContext = await runBusinessContext(ctx, runId);
-        ctx.run = { ...ctx.run, businessContext };
-        await updateRunBusinessContext(runId, businessContext);
-        await updateRunStatus(runId, "running", PipelineStep.BusinessContext, 10, undefined, "Business context generated");
-      });
+    // Restore business context (persisted after step 1)
+    if (completedSteps.has(PipelineStep.BusinessContext) && run.businessContext) {
+      ctx.run = { ...ctx.run, businessContext: run.businessContext };
+    }
 
-      const detectedIndustries = ctx.run.businessContext?.industries;
-      if (!ctx.run.config.industry && detectedIndustries) {
-        const detected = await detectIndustryFromContext(detectedIndustries);
-        if (detected) {
-          ctx.run = { ...ctx.run, config: { ...ctx.run.config, industry: detected } };
-          await updateRunIndustry(runId, detected, true);
-          await updateRunMessage(runId, `Auto-detected industry: ${detected}`);
-        }
+    // Restore metadata snapshot (persisted after step 2)
+    if (completedSteps.has(PipelineStep.MetadataExtraction)) {
+      const { loadMetadataForRun } = await import("@/lib/lakebase/metadata-cache");
+      const snapshot = await loadMetadataForRun(runId);
+      if (snapshot) ctx.metadata = snapshot;
+    }
+
+    // Restore discovery result (persisted after step 2b)
+    if (completedSteps.has(PipelineStep.AssetDiscovery)) {
+      const { getDiscoveryResultsByRunId } = await import("@/lib/lakebase/discovered-assets");
+      const discoveryData = await getDiscoveryResultsByRunId(runId);
+      if (discoveryData) {
+        ctx.discoveryResult = {
+          genieSpaces: discoveryData.genieSpaces.map((s) => ({
+            ...s,
+            description: null,
+            instructionLength: 0,
+          })),
+          dashboards: discoveryData.dashboards.map((d) => ({
+            ...d,
+            creatorEmail: undefined,
+            updatedAt: undefined,
+            parentPath: undefined,
+          })),
+          metricViews: [],
+          discoveredAt: new Date().toISOString(),
+        };
       }
     }
 
-    // Step 2: Metadata Extraction
-    if (resumeIndex <= 1) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.MetadataExtraction, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 12, undefined, `Extracting metadata from ${ctx.run.config.ucMetadata}...`);
-        logger.info("Step 2: Extracting metadata", { runId, step: "metadata-extraction" });
-        const extractionResult = await runMetadataExtraction(ctx, runId);
-        ctx.metadata = extractionResult.snapshot;
-        ctx.lineageGraph = extractionResult.lineageGraph;
-        if (ctx.metadata.cacheKey) {
-          await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
-          const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
-          await saveMetadataSnapshot(ctx.metadata);
-        }
-        await updateRunStatus(runId, "running", PipelineStep.MetadataExtraction, 18, undefined, `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`);
-      });
+    // Restore filtered tables (persisted after step 3)
+    if (completedSteps.has(PipelineStep.TableFiltering)) {
+      const tables = await getRunFilteredTables(runId);
+      if (tables) ctx.filteredTables = tables;
     }
 
-    // Step 2b: Asset Discovery (conditional)
-    checkCancelled(ctx.signal);
-    if (resumeIndex <= 2 && ctx.run.config.assetDiscoveryEnabled) {
-      await logStep(PipelineStep.AssetDiscovery, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 19, undefined, "Discovering existing Genie spaces, dashboards, and metric views...");
-        logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
-        ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
-        const summary = ctx.discoveryResult
-          ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
-          : "Discovery skipped";
-        await updateRunStatus(runId, "running", PipelineStep.AssetDiscovery, 22, undefined, summary);
-      });
-    }
-
-    // Step 3: Table Filtering
-    if (resumeIndex <= 3) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.TableFiltering, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 24, undefined, `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`);
-        logger.info("Step 3: Filtering tables", { runId, step: "table-filtering" });
-        ctx.filteredTables = await runTableFiltering(ctx, runId);
-        await updateRunStatus(runId, "running", PipelineStep.TableFiltering, 30, undefined, `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`);
-      });
-    }
-
-    // Step 4: Use Case Generation
-    if (resumeIndex <= 4) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.UsecaseGeneration, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 32, undefined, `Generating AI use cases from ${ctx.filteredTables.length} tables...`);
-        logger.info("Step 4: Generating use cases", { runId, step: "usecase-generation" });
-        ctx.useCases = await runUsecaseGeneration(ctx, runId);
-
-        const validFqns = new Set([
-          ...ctx.filteredTables,
-          ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
-        ]);
-        let hallucinated = 0;
-        ctx.useCases = ctx.useCases.filter((uc) => {
-          uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
-            const clean = t.replace(/`/g, "");
-            return validFqns.has(t) || validFqns.has(clean);
-          });
-          if (uc.tablesInvolved.length === 0) { hallucinated++; return false; }
-          return true;
-        });
-        if (hallucinated > 0) {
-          logger.warn("Removed use cases with hallucinated table references", { runId, removedCount: hallucinated, remainingCount: ctx.useCases.length });
-        }
-        if (ctx.useCases.length === 0) {
-          throw new Error(
-            "Use case generation returned only invalid results after table validation. Please retry this run."
-          );
-        }
-        await updateRunStatus(runId, "running", PipelineStep.UsecaseGeneration, 45, undefined, `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed)` : ""}`);
-      });
-    }
-
-    // Step 5: Domain Clustering
-    if (resumeIndex <= 5) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.DomainClustering, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 47, undefined, `Assigning domains to ${ctx.useCases.length} use cases...`);
-        logger.info("Step 5: Clustering domains", { runId, step: "domain-clustering" });
-        ctx.useCases = await runDomainClustering(ctx, runId);
-        const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-        await updateRunStatus(runId, "running", PipelineStep.DomainClustering, 55, undefined, `Organised use cases into ${domainCount} domains`);
-      });
-    }
-
-    // Step 6: Scoring
-    if (resumeIndex <= 6) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.Scoring, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.Scoring, 57, undefined, `Scoring and deduplicating ${ctx.useCases.length} use cases...`);
-        logger.info("Step 6: Scoring", { runId, step: "scoring" });
-        ctx.useCases = await runScoring(ctx, runId);
-        await updateRunStatus(runId, "running", PipelineStep.Scoring, 65, undefined, `Scored ${ctx.useCases.length} use cases`);
-      });
-    }
-
-    // Step 7: SQL Generation
-    let sqlOk = 0;
-    if (resumeIndex <= 7) {
-      checkCancelled(ctx.signal);
-      await logStep(PipelineStep.SqlGeneration, async () => {
-        await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 67, undefined, `Generating SQL for ${ctx.useCases.length} use cases...`);
-        logger.info("Step 7: Generating SQL", { runId, step: "sql-generation" });
-        ctx.useCases = await runSqlGeneration(ctx, runId);
-        sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
-        await updateRunStatus(runId, "running", PipelineStep.SqlGeneration, 85, undefined, `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`);
-      });
-    }
-
-    // Persist use cases
-    logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
-    const { withPrisma } = await import("@/lib/prisma");
-    await withPrisma(async (prisma) => {
-      await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-        await tx.forgeUseCase.deleteMany({ where: { runId } });
-        if (ctx.useCases.length > 0) {
-          await tx.forgeUseCase.createMany({
-            data: ctx.useCases.map((uc) => ({
-              id: uc.id, runId: uc.runId, useCaseNo: uc.useCaseNo,
-              name: uc.name, type: uc.type, analyticsTechnique: uc.analyticsTechnique,
-              statement: uc.statement, solution: uc.solution, businessValue: uc.businessValue,
-              beneficiary: uc.beneficiary, sponsor: uc.sponsor, domain: uc.domain,
-              subdomain: uc.subdomain, tablesInvolved: JSON.stringify(uc.tablesInvolved),
-              priorityScore: uc.priorityScore, feasibilityScore: uc.feasibilityScore,
-              impactScore: uc.impactScore, overallScore: uc.overallScore,
-              sqlCode: uc.sqlCode, sqlStatus: uc.sqlStatus,
-            })),
-          });
-        }
-      });
+    logger.info("Resuming pipeline", {
+      runId,
+      resumeFromStep: STEPS[resumeIndex].step,
+      completedSteps: [...completedSteps],
     });
 
-    // Step 8: Genie Recommendations
-    if (resumeIndex <= 8) {
-      // Genie recommendations are handled by the background engine below
+    /** Helper: record step start/end timing in the run's stepLog. */
+    async function logStep(step: PipelineStep, fn: () => Promise<void>): Promise<void> {
+      const startedAt = new Date().toISOString();
+      try {
+        await fn();
+        const completedAt = new Date().toISOString();
+        const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+        await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
+      } catch (err) {
+        const completedAt = new Date().toISOString();
+        const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        await updateRunStepLog(runId, {
+          step,
+          startedAt,
+          completedAt,
+          durationMs,
+          error: errorMsg,
+        });
+        throw err;
+      }
     }
 
-    // Generate vector embeddings for use cases + business context (best-effort)
     try {
-      const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
-      const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
-      await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
-    } catch (embedErr) {
-      logger.warn("Use case embedding failed (non-fatal)", {
+      await updateRunStatus(
         runId,
-        error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+        "running",
+        STEPS[resumeIndex].step,
+        STEPS[resumeIndex].progressPct,
+        undefined,
+        `Resuming from ${STEPS[resumeIndex].label}...`,
+      );
+      ctx.run = { ...ctx.run, status: "running" };
+
+      // Step 1: Business Context
+      if (resumeIndex <= 0) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.BusinessContext, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessContext,
+            5,
+            undefined,
+            `Generating business context for ${ctx.run.config.businessName}...`,
+          );
+          logger.info("Step 1: Generating business context", { runId, step: "business-context" });
+          const businessContext = await runBusinessContext(ctx, runId);
+          ctx.run = { ...ctx.run, businessContext };
+          await updateRunBusinessContext(runId, businessContext);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessContext,
+            10,
+            undefined,
+            "Business context generated",
+          );
+        });
+
+        const detectedIndustries = ctx.run.businessContext?.industries;
+        if (!ctx.run.config.industry && detectedIndustries) {
+          const detected = await detectIndustryFromContext(detectedIndustries);
+          if (detected) {
+            ctx.run = { ...ctx.run, config: { ...ctx.run.config, industry: detected } };
+            await updateRunIndustry(runId, detected, true);
+            await updateRunMessage(runId, `Auto-detected industry: ${detected}`);
+          }
+        }
+      }
+
+      // Step 2: Metadata Extraction
+      if (resumeIndex <= 1) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.MetadataExtraction, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.MetadataExtraction,
+            12,
+            undefined,
+            `Extracting metadata from ${ctx.run.config.ucMetadata}...`,
+          );
+          logger.info("Step 2: Extracting metadata", { runId, step: "metadata-extraction" });
+          const extractionResult = await runMetadataExtraction(ctx, runId);
+          ctx.metadata = extractionResult.snapshot;
+          ctx.lineageGraph = extractionResult.lineageGraph;
+          if (ctx.metadata.cacheKey) {
+            await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
+            const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
+            await saveMetadataSnapshot(ctx.metadata);
+          }
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.MetadataExtraction,
+            18,
+            undefined,
+            `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`,
+          );
+        });
+      }
+
+      // Step 2b: Asset Discovery (conditional)
+      checkCancelled(ctx.signal);
+      if (resumeIndex <= 2 && ctx.run.config.assetDiscoveryEnabled) {
+        await logStep(PipelineStep.AssetDiscovery, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.AssetDiscovery,
+            19,
+            undefined,
+            "Discovering existing Genie spaces, dashboards, and metric views...",
+          );
+          logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
+          ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
+          const summary = ctx.discoveryResult
+            ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
+            : "Discovery skipped";
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.AssetDiscovery,
+            22,
+            undefined,
+            summary,
+          );
+        });
+      }
+
+      // Step 3: Table Filtering
+      if (resumeIndex <= 3) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.TableFiltering, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.TableFiltering,
+            24,
+            undefined,
+            `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`,
+          );
+          logger.info("Step 3: Filtering tables", { runId, step: "table-filtering" });
+          ctx.filteredTables = await runTableFiltering(ctx, runId);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.TableFiltering,
+            30,
+            undefined,
+            `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`,
+          );
+        });
+      }
+
+      // Step 4: Use Case Generation
+      if (resumeIndex <= 4) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.UsecaseGeneration, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.UsecaseGeneration,
+            32,
+            undefined,
+            `Generating AI use cases from ${ctx.filteredTables.length} tables...`,
+          );
+          logger.info("Step 4: Generating use cases", { runId, step: "usecase-generation" });
+          ctx.useCases = await runUsecaseGeneration(ctx, runId);
+
+          const validFqns = new Set([
+            ...ctx.filteredTables,
+            ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
+          ]);
+          let hallucinated = 0;
+          ctx.useCases = ctx.useCases.filter((uc) => {
+            uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
+              const clean = t.replace(/`/g, "");
+              return validFqns.has(t) || validFqns.has(clean);
+            });
+            if (uc.tablesInvolved.length === 0) {
+              hallucinated++;
+              return false;
+            }
+            return true;
+          });
+          if (hallucinated > 0) {
+            logger.warn("Removed use cases with hallucinated table references", {
+              runId,
+              removedCount: hallucinated,
+              remainingCount: ctx.useCases.length,
+            });
+          }
+          if (ctx.useCases.length === 0) {
+            throw new Error(
+              "Use case generation returned only invalid results after table validation. Please retry this run.",
+            );
+          }
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.UsecaseGeneration,
+            45,
+            undefined,
+            `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed)` : ""}`,
+          );
+        });
+      }
+
+      // Step 5: Domain Clustering
+      if (resumeIndex <= 5) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.DomainClustering, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.DomainClustering,
+            47,
+            undefined,
+            `Assigning domains to ${ctx.useCases.length} use cases...`,
+          );
+          logger.info("Step 5: Clustering domains", { runId, step: "domain-clustering" });
+          ctx.useCases = await runDomainClustering(ctx, runId);
+          const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.DomainClustering,
+            55,
+            undefined,
+            `Organised use cases into ${domainCount} domains`,
+          );
+        });
+      }
+
+      // Step 6: Scoring
+      if (resumeIndex <= 6) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.Scoring, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.Scoring,
+            57,
+            undefined,
+            `Scoring and deduplicating ${ctx.useCases.length} use cases...`,
+          );
+          logger.info("Step 6: Scoring", { runId, step: "scoring" });
+          ctx.useCases = await runScoring(ctx, runId);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.Scoring,
+            65,
+            undefined,
+            `Scored ${ctx.useCases.length} use cases`,
+          );
+        });
+      }
+
+      // Step 7: SQL Generation
+      let sqlOk = 0;
+      if (resumeIndex <= 7) {
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.SqlGeneration, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.SqlGeneration,
+            67,
+            undefined,
+            `Generating SQL for ${ctx.useCases.length} use cases...`,
+          );
+          logger.info("Step 7: Generating SQL", { runId, step: "sql-generation" });
+          ctx.useCases = await runSqlGeneration(ctx, runId);
+          sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.SqlGeneration,
+            85,
+            undefined,
+            `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`,
+          );
+        });
+      }
+
+      // Persist use cases
+      logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
+      const { withPrisma } = await import("@/lib/prisma");
+      await withPrisma(async (prisma) => {
+        await prisma.$transaction(
+          async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+            await tx.forgeUseCase.deleteMany({ where: { runId } });
+            if (ctx.useCases.length > 0) {
+              await tx.forgeUseCase.createMany({
+                data: ctx.useCases.map((uc) => ({
+                  id: uc.id,
+                  runId: uc.runId,
+                  useCaseNo: uc.useCaseNo,
+                  name: uc.name,
+                  type: uc.type,
+                  analyticsTechnique: uc.analyticsTechnique,
+                  statement: uc.statement,
+                  solution: uc.solution,
+                  businessValue: uc.businessValue,
+                  beneficiary: uc.beneficiary,
+                  sponsor: uc.sponsor,
+                  domain: uc.domain,
+                  subdomain: uc.subdomain,
+                  tablesInvolved: JSON.stringify(uc.tablesInvolved),
+                  priorityScore: uc.priorityScore,
+                  feasibilityScore: uc.feasibilityScore,
+                  impactScore: uc.impactScore,
+                  overallScore: uc.overallScore,
+                  sqlCode: uc.sqlCode,
+                  sqlStatus: uc.sqlStatus,
+                })),
+              });
+            }
+          },
+        );
       });
-    }
 
-    const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-    await updateRunStatus(runId, "completed", null, 100, undefined, `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`);
-    logger.info("Resumed pipeline completed", { runId, useCaseCount: ctx.useCases.length, sqlOk });
+      // Step 8: Genie Recommendations
+      if (resumeIndex <= 8) {
+        // Genie recommendations are handled by the background engine below
+      }
 
-    startBackgroundEngines(ctx, runId);
-  } catch (error) {
-    if (error instanceof PipelineCancelledError) {
-      logger.info("Resumed pipeline cancelled by user", { runId });
+      // Generate vector embeddings for use cases + business context (best-effort)
       try {
-        await updateRunStatus(runId, "cancelled", ctx.run.currentStep, ctx.run.progressPct, "Cancelled by user", "Pipeline cancelled");
-      } catch (statusError) {
-        logger.error("Failed to update run status after cancellation", {
+        const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
+        const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
+        await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
+      } catch (embedErr) {
+        logger.warn("Use case embedding failed (non-fatal)", {
           runId,
-          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          error: embedErr instanceof Error ? embedErr.message : String(embedErr),
         });
       }
-    } else {
-      const message = error instanceof Error ? error.message : "Unknown pipeline error";
-      logger.error("Resumed pipeline failed", { runId, error: message });
-      try {
-        await updateRunStatus(runId, "failed", ctx.run.currentStep, ctx.run.progressPct, message, `Pipeline failed: ${message}`);
-      } catch (statusError) {
-        logger.error("Failed to update run status after resume failure", {
-          runId,
-          originalError: message,
-          statusError: statusError instanceof Error ? statusError.message : String(statusError),
-        });
+
+      const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
+      await updateRunStatus(
+        runId,
+        "completed",
+        null,
+        100,
+        undefined,
+        `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`,
+      );
+      logger.info("Resumed pipeline completed", {
+        runId,
+        useCaseCount: ctx.useCases.length,
+        sqlOk,
+      });
+
+      startBackgroundEngines(ctx, runId);
+    } catch (error) {
+      if (error instanceof PipelineCancelledError) {
+        logger.info("Resumed pipeline cancelled by user", { runId });
+        try {
+          await updateRunStatus(
+            runId,
+            "cancelled",
+            ctx.run.currentStep,
+            ctx.run.progressPct,
+            "Cancelled by user",
+            "Pipeline cancelled",
+          );
+        } catch (statusError) {
+          logger.error("Failed to update run status after cancellation", {
+            runId,
+            statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          });
+        }
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown pipeline error";
+        logger.error("Resumed pipeline failed", { runId, error: message });
+        try {
+          await updateRunStatus(
+            runId,
+            "failed",
+            ctx.run.currentStep,
+            ctx.run.progressPct,
+            message,
+            `Pipeline failed: ${message}`,
+          );
+        } catch (statusError) {
+          logger.error("Failed to update run status after resume failure", {
+            runId,
+            originalError: message,
+            statusError: statusError instanceof Error ? statusError.message : String(statusError),
+          });
+        }
       }
     }
-  }
   } finally {
     clearRunCancelled(runId);
     activePipelineRuns.delete(runId);
@@ -765,10 +1069,7 @@ export async function resumePipeline(runId: string): Promise<void> {
  * fetches whatever recommendations exist in Lakebase at the time it runs).
  * Each engine's progress is tracked independently via its own status module.
  */
-function startBackgroundEngines(
-  ctx: PipelineContext,
-  runId: string
-): void {
+function startBackgroundEngines(ctx: PipelineContext, runId: string): void {
   const genieTask = async () => {
     await startJob(runId);
     try {
@@ -792,10 +1093,8 @@ function startBackgroundEngines(
   const dashboardTask = async () => {
     await startDashboardJob(runId);
     try {
-      const dashCount = await runDashboardRecommendations(
-        ctx,
-        runId,
-        (message, percent) => updateDashboardJob(runId, message, percent),
+      const dashCount = await runDashboardRecommendations(ctx, runId, (message, percent) =>
+        updateDashboardJob(runId, message, percent),
       );
       await completeDashboardJob(runId, dashCount);
       logger.info("Background Dashboard Engine completed", { runId, dashboardCount: dashCount });

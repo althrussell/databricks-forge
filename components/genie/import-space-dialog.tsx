@@ -76,8 +76,8 @@ export function ImportSpaceDialog({ onImported }: ImportSpaceDialogProps) {
         <DialogHeader>
           <DialogTitle>Import Genie Space JSON</DialogTitle>
           <DialogDescription>
-            Paste a Genie Space JSON configuration to analyze it without API access.
-            Accepts either a raw <code>serialized_space</code> object or the full API response.
+            Paste a Genie Space JSON configuration to analyze it without API access. Accepts either
+            a raw <code>serialized_space</code> object or the full API response.
           </DialogDescription>
         </DialogHeader>
         <Textarea

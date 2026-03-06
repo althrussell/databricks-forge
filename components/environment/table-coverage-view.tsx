@@ -22,7 +22,12 @@ const COVERAGE_PAGE_SIZE = 25;
 export function TableCoverageView() {
   const [data, setData] = useState<{
     tables: CoverageTableRow[];
-    stats: { totalTables: number; coveredTables: number; uncoveredTables: number; coveragePct: number };
+    stats: {
+      totalTables: number;
+      coveredTables: number;
+      uncoveredTables: number;
+      coveragePct: number;
+    };
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "covered" | "uncovered">("all");
@@ -73,9 +78,7 @@ export function TableCoverageView() {
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">
-            Table Coverage Analysis
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">Table Coverage Analysis</CardTitle>
           <CardDescription>
             Links estate tables with discovered use cases. Uncovered tables are expansion signals.
           </CardDescription>
@@ -108,28 +111,40 @@ export function TableCoverageView() {
           <Input
             placeholder="Search tables..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             className="pl-8"
           />
         </div>
         <Button
           variant={filter === "all" ? "default" : "outline"}
           size="sm"
-          onClick={() => { setFilter("all"); setPage(0); }}
+          onClick={() => {
+            setFilter("all");
+            setPage(0);
+          }}
         >
           All
         </Button>
         <Button
           variant={filter === "covered" ? "default" : "outline"}
           size="sm"
-          onClick={() => { setFilter("covered"); setPage(0); }}
+          onClick={() => {
+            setFilter("covered");
+            setPage(0);
+          }}
         >
           With Use Cases
         </Button>
         <Button
           variant={filter === "uncovered" ? "default" : "outline"}
           size="sm"
-          onClick={() => { setFilter("uncovered"); setPage(0); }}
+          onClick={() => {
+            setFilter("uncovered");
+            setPage(0);
+          }}
         >
           Untapped
         </Button>
@@ -152,7 +167,9 @@ export function TableCoverageView() {
                 <TableCell className="font-mono text-xs">
                   {t.tableFqn}
                   {t.sensitivityLevel === "confidential" || t.sensitivityLevel === "restricted" ? (
-                    <Badge variant="destructive" className="ml-1 text-[10px]">PII</Badge>
+                    <Badge variant="destructive" className="ml-1 text-[10px]">
+                      PII
+                    </Badge>
                   ) : null}
                 </TableCell>
                 <TableCell className="text-xs">{t.domain ?? "—"}</TableCell>
@@ -165,10 +182,7 @@ export function TableCoverageView() {
                     <div className="space-y-0.5">
                       {t.useCases.slice(0, 3).map((uc) => (
                         <div key={uc.id} className="flex items-center gap-1">
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px]"
-                          >
+                          <Badge variant="secondary" className="text-[10px]">
                             {uc.type}
                           </Badge>
                           <span className="truncate text-xs">{uc.name}</span>
@@ -184,9 +198,7 @@ export function TableCoverageView() {
                       )}
                     </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground">
-                      No use cases
-                    </span>
+                    <span className="text-xs text-muted-foreground">No use cases</span>
                   )}
                 </TableCell>
               </TableRow>
@@ -196,16 +208,31 @@ export function TableCoverageView() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-2">
             <p className="text-sm text-muted-foreground">
-              Showing {safePage * COVERAGE_PAGE_SIZE + 1}–{Math.min((safePage + 1) * COVERAGE_PAGE_SIZE, filtered.length)} of {filtered.length}
+              Showing {safePage * COVERAGE_PAGE_SIZE + 1}–
+              {Math.min((safePage + 1) * COVERAGE_PAGE_SIZE, filtered.length)} of {filtered.length}
             </p>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} aria-label="Previous page">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage === 0}
+                onClick={() => setPage(safePage - 1)}
+                aria-label="Previous page"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="px-2 text-sm text-muted-foreground">
                 {safePage + 1} / {totalPages}
               </span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)} aria-label="Next page">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages - 1}
+                onClick={() => setPage(safePage + 1)}
+                aria-label="Next page"
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

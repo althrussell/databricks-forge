@@ -12,12 +12,15 @@ import type {
   EnrichedSqlSnippetMeasure,
   EnrichedSqlSnippetDimension,
   EnrichedSqlSnippetFilter,
+  MetricViewProposal,
 } from "@/lib/genie/types";
 import type {
   DashboardDesign,
   DashboardRecommendation,
   DashboardEngineInput,
   DashboardEngineResult,
+  FilterCandidate,
+  MetricViewForDashboard,
 } from "./types";
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
@@ -26,6 +29,7 @@ import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assem
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
+import { validateDatasetSql } from "./validation";
 import { logger } from "@/lib/logger";
 import type { DiscoveredDashboard } from "@/lib/discovery/types";
 
@@ -65,15 +69,10 @@ function groupUseCasesByDomain(useCases: UseCase[]): DomainGroup[] {
     }
   }
 
-  return Array.from(domainMap.values()).sort(
-    (a, b) => b.useCases.length - a.useCases.length
-  );
+  return Array.from(domainMap.values()).sort((a, b) => b.useCases.length - a.useCases.length);
 }
 
-function buildColumnSchemas(
-  metadata: MetadataSnapshot,
-  tableFqns: string[]
-): string[] {
+function buildColumnSchemas(metadata: MetadataSnapshot, tableFqns: string[]): string[] {
   const targetSet = new Set(tableFqns.map((f) => f.toLowerCase()));
   const columnsByTable = new Map<string, string[]>();
 
@@ -86,19 +85,21 @@ function buildColumnSchemas(
   }
 
   return Array.from(columnsByTable.entries()).map(
-    ([table, cols]) => `${table}: ${cols.join(", ")}`
+    ([table, cols]) => `${table}: ${cols.join(", ")}`,
   );
 }
 
 function getGenieOutputsForDomain(
   domain: string,
-  genieRecommendations?: GenieEngineRecommendation[]
-): { measures: EnrichedSqlSnippetMeasure[]; dimensions: EnrichedSqlSnippetDimension[]; filters: EnrichedSqlSnippetFilter[] } | null {
+  genieRecommendations?: GenieEngineRecommendation[],
+): {
+  measures: EnrichedSqlSnippetMeasure[];
+  dimensions: EnrichedSqlSnippetDimension[];
+  filters: EnrichedSqlSnippetFilter[];
+} | null {
   if (!genieRecommendations) return null;
 
-  const rec = genieRecommendations.find(
-    (r) => r.domain.toLowerCase() === domain.toLowerCase()
-  );
+  const rec = genieRecommendations.find((r) => r.domain.toLowerCase() === domain.toLowerCase());
   if (!rec) return null;
 
   try {
@@ -116,16 +117,134 @@ function getGenieOutputsForDomain(
   }
 }
 
+function getFilterCandidatesForDomain(
+  metadata: MetadataSnapshot,
+  tableFqns: string[],
+  genieOutputs: {
+    filters: EnrichedSqlSnippetFilter[];
+    dimensions: EnrichedSqlSnippetDimension[];
+  } | null,
+): FilterCandidate[] {
+  const candidates: FilterCandidate[] = [];
+  const seen = new Set<string>();
+
+  // Pull from Genie filters first
+  if (genieOutputs?.filters) {
+    for (const f of genieOutputs.filters) {
+      if (!seen.has(f.name.toLowerCase())) {
+        seen.add(f.name.toLowerCase());
+        candidates.push({ name: f.name, column: f.sql, tableFqn: "", dataType: "STRING" });
+      }
+    }
+  }
+
+  // Detect date and low-cardinality columns from metadata
+  const targetSet = new Set(tableFqns.map((t) => t.toLowerCase()));
+  for (const col of metadata.columns) {
+    if (!targetSet.has(col.tableFqn.toLowerCase())) continue;
+    const key = `${col.tableFqn}.${col.columnName}`.toLowerCase();
+    if (seen.has(key)) continue;
+
+    const dt = col.dataType.toUpperCase();
+    if (dt.includes("DATE") || dt.includes("TIMESTAMP")) {
+      seen.add(key);
+      candidates.push({
+        name: col.columnName,
+        column: col.columnName,
+        tableFqn: col.tableFqn,
+        dataType: dt,
+      });
+    }
+  }
+
+  return candidates.slice(0, 6);
+}
+
+function getMetricViewDataForDomain(
+  domain: string,
+  genieRecommendations?: GenieEngineRecommendation[],
+): MetricViewForDashboard[] {
+  if (!genieRecommendations) return [];
+
+  const rec = genieRecommendations.find((r) => r.domain.toLowerCase() === domain.toLowerCase());
+  if (!rec?.metricViewProposals) return [];
+
+  try {
+    const proposals = JSON.parse(rec.metricViewProposals) as MetricViewProposal[];
+    const deployedFqns = new Set((rec.metricViews ?? []).map((f) => f.toLowerCase()));
+
+    return proposals
+      .filter((p) => p.validationStatus !== "error")
+      .map((p) => {
+        const dims: MetricViewForDashboard["dimensions"] = [];
+        const measures: MetricViewForDashboard["measures"] = [];
+
+        // Parse dimensions and measures from the YAML text
+        const yamlLines = (p.yaml ?? "").split("\n");
+        let section: "none" | "dimensions" | "measures" = "none";
+
+        for (const line of yamlLines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("dimensions:")) {
+            section = "dimensions";
+            continue;
+          }
+          if (trimmed.startsWith("measures:")) {
+            section = "measures";
+            continue;
+          }
+          if (
+            trimmed.startsWith("joins:") ||
+            trimmed.startsWith("filter:") ||
+            trimmed.startsWith("materialization:")
+          ) {
+            section = "none";
+            continue;
+          }
+
+          if (section === "dimensions" || section === "measures") {
+            const nameMatch = trimmed.match(/^-?\s*name:\s*(.+)/);
+            if (nameMatch) {
+              const name = nameMatch[1].replace(/^["']|["']$/g, "").trim();
+              // Look ahead for expr on the next line
+              const idx = yamlLines.indexOf(line);
+              const nextLine = yamlLines[idx + 1]?.trim() ?? "";
+              const exprMatch = nextLine.match(/^expr:\s*(.+)/);
+              const expr = exprMatch ? exprMatch[1].replace(/^["']|["']$/g, "").trim() : name;
+
+              if (section === "dimensions") dims.push({ name, expr });
+              else measures.push({ name, expr });
+            }
+          }
+        }
+
+        const fqn =
+          deployedFqns.size > 0
+            ? ((rec.metricViews ?? []).find((f) =>
+                f.toLowerCase().includes(p.name.toLowerCase()),
+              ) ?? p.name)
+            : p.name;
+
+        return { fqn, name: p.name, description: p.description, dimensions: dims, measures };
+      })
+      .filter((mv) => mv.measures.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 async function processDomain(
   group: DomainGroup,
   metadata: MetadataSnapshot,
   endpoint: string,
   businessName: string,
   businessContext: import("@/lib/domain/types").BusinessContext | null,
-  genieRecommendations?: GenieEngineRecommendation[]
+  genieRecommendations?: GenieEngineRecommendation[],
 ): Promise<DashboardRecommendation | null> {
   const columnSchemas = buildColumnSchemas(metadata, group.tables);
   const genieOutputs = getGenieOutputsForDomain(group.domain, genieRecommendations);
+  const filterCandidates = getFilterCandidatesForDomain(metadata, group.tables, genieOutputs);
+  const metricViews = getMetricViewDataForDomain(group.domain, genieRecommendations);
 
   const prompt = buildDashboardDesignPrompt({
     businessName,
@@ -138,6 +257,8 @@ async function processDomain(
     measures: genieOutputs?.measures,
     dimensions: genieOutputs?.dimensions,
     filters: genieOutputs?.filters,
+    filterCandidates,
+    metricViews,
   });
 
   const messages: ChatMessage[] = [
@@ -171,7 +292,7 @@ async function processDomain(
   const dashAllowlist = buildSchemaAllowlist(metadata);
   const originalCount = parsed.datasets.length;
   parsed.datasets = parsed.datasets.filter((ds) =>
-    validateSqlExpression(dashAllowlist, ds.sql, `dashboard:${ds.name}`, true)
+    validateSqlExpression(dashAllowlist, ds.sql, `dashboard:${ds.name}`, true),
   );
   if (parsed.datasets.length < originalCount) {
     logger.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
@@ -198,7 +319,9 @@ async function processDomain(
           surface: "dashboard",
         });
         if (review.fixedSql) {
-          if (validateSqlExpression(dashAllowlist, review.fixedSql, `dashboard_fix:${ds.name}`, true)) {
+          if (
+            validateSqlExpression(dashAllowlist, review.fixedSql, `dashboard_fix:${ds.name}`, true)
+          ) {
             logger.info("Dashboard Engine: review applied fix", {
               dataset: ds.name,
               qualityScore: review.qualityScore,
@@ -220,9 +343,7 @@ async function processDomain(
         return ds;
       }),
     );
-    parsed.datasets = reviewed.filter(
-      (ds): ds is NonNullable<typeof ds> => ds !== null,
-    );
+    parsed.datasets = reviewed.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
     if (parsed.datasets.length === 0) {
       logger.warn("Dashboard Engine: all datasets rejected by review", {
         domain: group.domain,
@@ -230,6 +351,26 @@ async function processDomain(
       return null;
     }
   }
+
+  // EXPLAIN validation: dry-run each dataset SQL to catch planning errors
+  const explainResults = await Promise.all(
+    parsed.datasets.map(async (ds) => {
+      if (!ds.sql) return ds;
+      const err = await validateDatasetSql(ds.sql, ds.name);
+      return err ? null : ds;
+    }),
+  );
+  parsed.datasets = explainResults.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
+  if (parsed.datasets.length === 0) {
+    logger.warn("Dashboard Engine: all datasets failed EXPLAIN validation", {
+      domain: group.domain,
+    });
+    return null;
+  }
+  // Drop widgets that reference removed datasets
+  parsed.widgets = parsed.widgets.filter((w) =>
+    parsed.datasets.some((ds) => ds.name === w.datasetName),
+  );
 
   const lakeviewDashboard = assembleLakeviewDashboard(parsed);
 
@@ -241,7 +382,7 @@ async function processDomain(
     group.domain,
     group.subdomains,
     businessName,
-    useCaseIds
+    useCaseIds,
   );
 }
 
@@ -252,7 +393,7 @@ async function processDomain(
  * and Lakeview-compatible widget specifications.
  */
 export async function runDashboardEngine(
-  input: DashboardEngineInput
+  input: DashboardEngineInput,
 ): Promise<DashboardEngineResult> {
   const {
     run,

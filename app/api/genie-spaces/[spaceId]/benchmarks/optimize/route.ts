@@ -40,7 +40,10 @@ export async function POST(
 
     const feedback: FeedbackEntry[] = run.feedbackJson ? JSON.parse(run.feedbackJson) : [];
     if (feedback.length === 0) {
-      return NextResponse.json({ error: "No feedback has been submitted for this run" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No feedback has been submitted for this run" },
+        { status: 400 },
+      );
     }
 
     let serializedSpace = getSpaceCache(spaceId);

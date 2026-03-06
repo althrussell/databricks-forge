@@ -17,9 +17,6 @@ export async function GET() {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error("[api/environment-scan/active] GET failed", { error: msg });
-    return NextResponse.json(
-      { error: "Failed to retrieve active scans" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to retrieve active scans" }, { status: 500 });
   }
 }

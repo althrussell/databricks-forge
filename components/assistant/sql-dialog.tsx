@@ -18,22 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import {
   Play,
   Copy,
@@ -131,17 +118,30 @@ function compareValues(a: string | null, b: string | null, asc: boolean): number
 // Component
 // ---------------------------------------------------------------------------
 
-export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onRequestFix, onDeployNotebook }: SqlDialogProps) {
+export function SqlDialog({
+  open,
+  sqlBlocks,
+  initialIndex = 0,
+  onOpenChange,
+  onRequestFix,
+  onDeployNotebook,
+}: SqlDialogProps) {
   const [blockIndex, setBlockIndex] = React.useState(initialIndex);
   const activeSqlBlock = sqlBlocks[blockIndex] ?? sqlBlocks[0] ?? "";
   const [currentSql, setCurrentSql] = React.useState(activeSqlBlock);
   const [editing, setEditing] = React.useState(false);
   const [running, setRunning] = React.useState(false);
   const [explaining, setExplaining] = React.useState(false);
-  const [explainResult, setExplainResult] = React.useState<{ valid: boolean; error?: string } | null>(null);
+  const [explainResult, setExplainResult] = React.useState<{
+    valid: boolean;
+    error?: string;
+  } | null>(null);
   const [result, setResult] = React.useState<SqlExecutionResult | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const [inspectedCell, setInspectedCell] = React.useState<{ col: SqlColumn; value: string | null } | null>(null);
+  const [inspectedCell, setInspectedCell] = React.useState<{
+    col: SqlColumn;
+    value: string | null;
+  } | null>(null);
 
   // Pagination
   const [page, setPage] = React.useState(0);
@@ -265,7 +265,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
     if (!result?.result) return;
     const { columns, rows } = result.result;
     const header = columns.map((c) => c.name).join(",");
-    const body = rows.map((row) => row.map((cell) => `"${(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const body = rows
+      .map((row) => row.map((cell) => `"${(cell ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const csv = `${header}\n${body}`;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -316,7 +318,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
         <DialogHeader className="px-5 pt-5 pb-3">
           <DialogTitle className="flex items-center gap-2">
             SQL Query
-            <Badge variant="secondary" className="text-[10px]">Executable</Badge>
+            <Badge variant="secondary" className="text-[10px]">
+              Executable
+            </Badge>
             {sqlBlocks.length > 1 && (
               <div className="ml-2 flex items-center gap-1">
                 <Button
@@ -352,7 +356,12 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
         <TooltipProvider>
           <div className="flex items-center gap-2 border-b px-5 pb-3">
             {running ? (
-              <Button size="sm" variant="destructive" className="h-8 gap-1.5 text-xs" onClick={handleCancel}>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 gap-1.5 text-xs"
+                onClick={handleCancel}
+              >
                 <Square className="size-3.5" />
                 Cancel
               </Button>
@@ -364,7 +373,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                     Run Query
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Run Query ({navigator?.platform?.includes("Mac") ? "⌘" : "Ctrl"}+Enter)</TooltipContent>
+                <TooltipContent>
+                  Run Query ({navigator?.platform?.includes("Mac") ? "⌘" : "Ctrl"}+Enter)
+                </TooltipContent>
               </Tooltip>
             )}
             <Tooltip>
@@ -376,13 +387,22 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                   onClick={handleExplain}
                   disabled={explaining || running}
                 >
-                  {explaining ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+                  {explaining ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Search className="size-3.5" />
+                  )}
                   Explain
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Validate SQL without executing (EXPLAIN)</TooltipContent>
             </Tooltip>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleCopy}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={handleCopy}
+            >
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               {copied ? "Copied" : "Copy"}
             </Button>
@@ -401,7 +421,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                   <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
                     <History className="size-3.5" />
                     History
-                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">{history.length}</Badge>
+                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                      {history.length}
+                    </Badge>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="max-h-[300px] w-96 overflow-y-auto p-2">
@@ -449,7 +471,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
 
         {/* Explain result */}
         {explainResult && (
-          <div className={`mx-5 mt-3 flex items-start gap-2 rounded-md border p-2 text-xs ${explainResult.valid ? "border-emerald-500/30 bg-emerald-500/10" : "border-destructive/50 bg-destructive/10"}`}>
+          <div
+            className={`mx-5 mt-3 flex items-start gap-2 rounded-md border p-2 text-xs ${explainResult.valid ? "border-emerald-500/30 bg-emerald-500/10" : "border-destructive/50 bg-destructive/10"}`}
+          >
             {explainResult.valid ? (
               <>
                 <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
@@ -492,9 +516,13 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                       <Play className="mx-auto mb-2 size-8 opacity-20" />
                       <p className="text-sm font-medium">No results yet</p>
                       <p className="mt-1 text-xs">
-                        Click <span className="font-medium text-foreground">Run Query</span> or press{" "}
+                        Click <span className="font-medium text-foreground">Run Query</span> or
+                        press{" "}
                         <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">
-                          {typeof navigator !== "undefined" && navigator?.platform?.includes("Mac") ? "⌘" : "Ctrl"}+Enter
+                          {typeof navigator !== "undefined" && navigator?.platform?.includes("Mac")
+                            ? "⌘"
+                            : "Ctrl"}
+                          +Enter
                         </kbd>
                       </p>
                     </div>
@@ -507,7 +535,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                     <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-destructive">Execution Error</p>
-                      <p className="mt-1 break-words text-xs text-muted-foreground">{result.error}</p>
+                      <p className="mt-1 break-words text-xs text-muted-foreground">
+                        {result.error}
+                      </p>
                       {onRequestFix && (
                         <Button
                           variant="outline"
@@ -535,7 +565,8 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                         {result.durationMs}ms
                       </Badge>
                       <Badge variant="secondary" className="text-xs">
-                        {result.result.totalRowCount} row{result.result.totalRowCount !== 1 ? "s" : ""}
+                        {result.result.totalRowCount} row
+                        {result.result.totalRowCount !== 1 ? "s" : ""}
                       </Badge>
                       <div className="flex-1" />
                       {/* Pagination */}
@@ -564,7 +595,12 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                           </Button>
                         </div>
                       )}
-                      <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleExportCsv}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={handleExportCsv}
+                      >
                         <Download className="size-3" />
                         Export CSV
                       </Button>
@@ -575,7 +611,9 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                       <Table>
                         <TableHeader className="sticky top-0 z-10 bg-muted">
                           <TableRow>
-                            <TableHead className="w-10 text-center text-[10px] text-muted-foreground">#</TableHead>
+                            <TableHead className="w-10 text-center text-[10px] text-muted-foreground">
+                              #
+                            </TableHead>
                             {result.result.columns.map((col, ci) => (
                               <TableHead
                                 key={col.name}
@@ -584,12 +622,15 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                               >
                                 <div className="flex items-center gap-1">
                                   <span>{col.name}</span>
-                                  <span className="text-[10px] font-normal text-muted-foreground">{col.typeName}</span>
-                                  {sortCol === ci && (
-                                    sortAsc
-                                      ? <ArrowUp className="size-3 text-primary" />
-                                      : <ArrowDown className="size-3 text-primary" />
-                                  )}
+                                  <span className="text-[10px] font-normal text-muted-foreground">
+                                    {col.typeName}
+                                  </span>
+                                  {sortCol === ci &&
+                                    (sortAsc ? (
+                                      <ArrowUp className="size-3 text-primary" />
+                                    ) : (
+                                      <ArrowDown className="size-3 text-primary" />
+                                    ))}
                                 </div>
                               </TableHead>
                             ))}
@@ -605,7 +646,12 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
                                 <TableCell
                                   key={ci}
                                   className="max-w-[300px] cursor-pointer truncate text-xs hover:bg-accent/50"
-                                  onClick={() => setInspectedCell({ col: result.result!.columns[ci], value: cell })}
+                                  onClick={() =>
+                                    setInspectedCell({
+                                      col: result.result!.columns[ci],
+                                      value: cell,
+                                    })
+                                  }
                                 >
                                   {cell === null || cell === undefined ? (
                                     <span className="italic text-muted-foreground">null</span>
@@ -644,9 +690,16 @@ export function SqlDialog({ open, sqlBlocks, initialIndex = 0, onOpenChange, onR
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{inspectedCell.col.name}</span>
-                  <Badge variant="secondary" className="text-[10px]">{inspectedCell.col.typeName}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {inspectedCell.col.typeName}
+                  </Badge>
                 </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setInspectedCell(null)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setInspectedCell(null)}
+                >
                   Close
                 </Button>
               </div>

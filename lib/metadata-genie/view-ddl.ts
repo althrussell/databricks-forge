@@ -101,18 +101,12 @@ const VIEW_DEFS: ViewDef[] = [
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
     tableNameColumn: "table_name",
-    comment:
-      "Curated metadata view: column definitions including types and descriptions",
+    comment: "Curated metadata view: column definitions including types and descriptions",
   },
   {
     name: "mdg_views",
     source: "system.information_schema.views",
-    columns: [
-      "table_catalog",
-      "table_schema",
-      "table_name",
-      "view_definition",
-    ],
+    columns: ["table_catalog", "table_schema", "table_name", "view_definition"],
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
     tableNameColumn: "table_name",
@@ -141,13 +135,7 @@ const VIEW_DEFS: ViewDef[] = [
   {
     name: "mdg_table_tags",
     source: "system.information_schema.table_tags",
-    columns: [
-      "catalog_name",
-      "schema_name",
-      "table_name",
-      "tag_name",
-      "tag_value",
-    ],
+    columns: ["catalog_name", "schema_name", "table_name", "tag_name", "tag_value"],
     filterColumn: "catalog_name",
     schemaColumn: "schema_name",
     tableNameColumn: "table_name",
@@ -156,14 +144,7 @@ const VIEW_DEFS: ViewDef[] = [
   {
     name: "mdg_column_tags",
     source: "system.information_schema.column_tags",
-    columns: [
-      "catalog_name",
-      "schema_name",
-      "table_name",
-      "column_name",
-      "tag_name",
-      "tag_value",
-    ],
+    columns: ["catalog_name", "schema_name", "table_name", "column_name", "tag_name", "tag_value"],
     filterColumn: "catalog_name",
     schemaColumn: "schema_name",
     tableNameColumn: "table_name",
@@ -185,8 +166,7 @@ const VIEW_DEFS: ViewDef[] = [
     filterColumn: "table_catalog",
     schemaColumn: "table_schema",
     tableNameColumn: "table_name",
-    comment:
-      "Curated metadata view: primary key and foreign key constraints",
+    comment: "Curated metadata view: primary key and foreign key constraints",
   },
   {
     name: "mdg_table_privileges",
@@ -240,7 +220,7 @@ function sqlEscape(s: string): string {
  */
 function buildDescriptionsCTE(
   viewName: string,
-  aiDescriptions: Record<string, string>
+  aiDescriptions: Record<string, string>,
 ): string | null {
   if (viewName !== "mdg_tables") return null;
 
@@ -281,9 +261,7 @@ export function generateViewDDL(opts: {
   const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
   const fqnPrefix = `\`${safeCatalog}\`.\`${safeSchema}\``;
 
-  const defs = lineageAccessible
-    ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
-    : VIEW_DEFS;
+  const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
 
   return defs.map((def) => {
     const conditions: string[] = [];
@@ -314,16 +292,15 @@ export function generateViewDDL(opts: {
       if (catalogScope && catalogScope.length > 0) {
         const safeCats = catalogScope.map((c) => validateIdentifier(c, "catalogScope"));
         const orConditions = safeCats
-          .map((c) => `source_table_full_name LIKE '${c}.%' OR target_table_full_name LIKE '${c}.%'`)
+          .map(
+            (c) => `source_table_full_name LIKE '${c}.%' OR target_table_full_name LIKE '${c}.%'`,
+          )
           .join(" OR ");
         conditions.push(`(${orConditions})`);
       }
     }
 
-    const whereClause =
-      conditions.length > 0
-        ? `\nWHERE ${conditions.join("\n  AND ")}`
-        : "";
+    const whereClause = conditions.length > 0 ? `\nWHERE ${conditions.join("\n  AND ")}` : "";
 
     // Check if this view gets an ai_comment column via CTE
     const cte =
@@ -371,18 +348,11 @@ export function generateDropViewDDL(viewFqns: string[]): string[] {
 /**
  * Return the list of view FQNs that would be created for a given target.
  */
-export function getViewFqns(
-  target: ViewTarget,
-  lineageAccessible?: boolean
-): string[] {
+export function getViewFqns(target: ViewTarget, lineageAccessible?: boolean): string[] {
   const safeCatalog = validateIdentifier(target.catalog, "viewTarget.catalog");
   const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
-  const defs = lineageAccessible
-    ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
-    : VIEW_DEFS;
-  return defs.map(
-    (def) => `\`${safeCatalog}\`.\`${safeSchema}\`.\`${def.name}\``
-  );
+  const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
+  return defs.map((def) => `\`${safeCatalog}\`.\`${safeSchema}\`.\`${def.name}\``);
 }
 
 /** Return the view definitions for preview/documentation. */
@@ -392,8 +362,6 @@ export function getViewDefinitions(): ViewDef[] {
 
 /** Return just the view names (without FQN prefix). */
 export function getViewNames(lineageAccessible?: boolean): string[] {
-  const defs = lineageAccessible
-    ? [...VIEW_DEFS, LINEAGE_VIEW_DEF]
-    : VIEW_DEFS;
+  const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
   return defs.map((d) => d.name);
 }

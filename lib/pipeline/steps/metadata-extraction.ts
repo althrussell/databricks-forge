@@ -28,16 +28,9 @@ import {
   fetchForeignKeysBatch,
   filterAccessibleScopes,
 } from "@/lib/queries/metadata";
-import {
-  enrichTablesInBatches,
-  getTableTags,
-  getColumnTags,
-} from "@/lib/queries/metadata-detail";
+import { enrichTablesInBatches, getTableTags, getColumnTags } from "@/lib/queries/metadata-detail";
 import { walkLineage } from "@/lib/queries/lineage";
-import {
-  runIntelligenceLayer,
-  buildTableInputs,
-} from "@/lib/ai/environment-intelligence";
+import { runIntelligenceLayer, buildTableInputs } from "@/lib/ai/environment-intelligence";
 import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
 import { updateRunMessage } from "@/lib/lakebase/runs";
@@ -69,9 +62,7 @@ import { v4 as uuidv4 } from "uuid";
  *   - "catalog1, catalog2" (multiple catalogs)
  *   - "catalog.schema1, catalog.schema2" (multiple schemas)
  */
-function parseUCMetadata(
-  ucMetadata: string
-): Array<{ catalog: string; schema?: string }> {
+function parseUCMetadata(ucMetadata: string): Array<{ catalog: string; schema?: string }> {
   const parts = ucMetadata.split(",").map((p) => p.trim());
   return parts.map((part) => {
     const segments = part.split(".");
@@ -89,7 +80,7 @@ export interface MetadataExtractionResult {
 
 export async function runMetadataExtraction(
   ctx: PipelineContext,
-  runId?: string
+  runId?: string,
 ): Promise<MetadataExtractionResult> {
   const { config } = ctx.run;
   const scopes = parseUCMetadata(config.ucMetadata);
@@ -102,7 +93,8 @@ export async function runMetadataExtraction(
 
   // --- Phase 0: Permission pre-check -- filter inaccessible scopes in parallel ---
 
-  if (runId) await updateRunMessage(runId, `Probing ${scopes.length} scope(s) for access permissions...`);
+  if (runId)
+    await updateRunMessage(runId, `Probing ${scopes.length} scope(s) for access permissions...`);
   const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
 
   if (skipped.length > 0) {
@@ -112,7 +104,7 @@ export async function runMetadataExtraction(
     if (runId) {
       await updateRunMessage(
         runId,
-        `Filtered ${skipped.length} inaccessible scope(s): ${skipped.map((s) => s.label).join(", ")}. Scanning ${accessibleScopes.length} accessible scope(s)...`
+        `Filtered ${skipped.length} inaccessible scope(s): ${skipped.map((s) => s.label).join(", ")}. Scanning ${accessibleScopes.length} accessible scope(s)...`,
       );
     }
   }
@@ -123,7 +115,11 @@ export async function runMetadataExtraction(
     const scope = accessibleScopes[si];
     const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
     try {
-      if (runId) await updateRunMessage(runId, `Scanning catalog ${scopeLabel}... (${si + 1}/${accessibleScopes.length})`);
+      if (runId)
+        await updateRunMessage(
+          runId,
+          `Scanning catalog ${scopeLabel}... (${si + 1}/${accessibleScopes.length})`,
+        );
       const tables = await listTables(scope.catalog, scope.schema);
       allTables.push(...tables);
 
@@ -135,7 +131,11 @@ export async function runMetadataExtraction(
       const tableTypes = await fetchTableTypes(scope.catalog, scope.schema);
       mergeTableTypes(tables, tableTypes);
 
-      if (runId) await updateRunMessage(runId, `Extracting columns for ${tables.length} tables in ${scopeLabel}...`);
+      if (runId)
+        await updateRunMessage(
+          runId,
+          `Extracting columns for ${tables.length} tables in ${scopeLabel}...`,
+        );
       const columns = await listColumns(scope.catalog, scope.schema);
       allColumns.push(...columns);
 
@@ -152,12 +152,15 @@ export async function runMetadataExtraction(
   }
 
   if (runId && allTables.length > 0) {
-    await updateRunMessage(runId, `Found ${allTables.length} tables across ${accessibleScopes.length} scope(s), ${allColumns.length} columns`);
+    await updateRunMessage(
+      runId,
+      `Found ${allTables.length} tables across ${accessibleScopes.length} scope(s), ${allColumns.length} columns`,
+    );
   }
 
   if (allTables.length === 0) {
     throw new Error(
-      `No tables found for UC metadata scope: ${config.ucMetadata}. Check permissions and paths.`
+      `No tables found for UC metadata scope: ${config.ucMetadata}. Check permissions and paths.`,
     );
   }
 
@@ -178,7 +181,7 @@ export async function runMetadataExtraction(
   };
 
   logger.info(
-    `[metadata-extraction] Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns, ${allMetricViews.length} metric views`
+    `[metadata-extraction] Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns, ${allMetricViews.length} metric views`,
   );
 
   // --- Phase 2: Enrichment pass (estate scan) ---
@@ -195,7 +198,7 @@ export async function runMetadataExtraction(
         allFKs,
         accessibleScopes,
         dc,
-        runId
+        runId,
       );
     } catch (error) {
       logger.error("[metadata-extraction] Enrichment pass failed (non-fatal)", {
@@ -228,10 +231,7 @@ export async function runMetadataExtraction(
   return { snapshot, lineageGraph };
 }
 
-function buildRunSchemaSnapshot(
-  tables: TableInfo[],
-  columns: ColumnInfo[],
-): SchemaSnapshot {
+function buildRunSchemaSnapshot(tables: TableInfo[], columns: ColumnInfo[]): SchemaSnapshot {
   const colsByTable = new Map<string, Array<{ name: string; type: string }>>();
   for (const c of columns) {
     const list = colsByTable.get(c.tableFqn) ?? [];
@@ -262,7 +262,7 @@ async function runEnrichmentPass(
   allFKs: ForeignKey[],
   scopes: Array<{ catalog: string; schema?: string }>,
   depthConfig: DiscoveryDepthConfig,
-  runId?: string
+  runId?: string,
 ): Promise<LineageGraph> {
   const scanId = uuidv4();
   const startTime = Date.now();
@@ -276,15 +276,34 @@ async function runEnrichmentPass(
   }
 
   // Step 1: Lineage walk (traversal depth from config)
-  if (runId) await updateRunMessage(runId, `Walking lineage (up to ${depthConfig.lineageDepth} hops) to discover related tables...`);
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Walking lineage (up to ${depthConfig.lineageDepth} hops) to discover related tables...`,
+    );
   const seedFqns = allTables.map((t) => t.fqn);
   const lineageGraph = await walkLineage(seedFqns, { maxDepth: depthConfig.lineageDepth });
 
   // Merge discovered tables into the working set
   const discoveredFqns = lineageGraph.discoveredTables;
-  const expandedTables: Array<{ fqn: string; discoveredVia: "selected" | "lineage"; tableType: string; dataSourceFormat: string | null }> = [
-    ...seedFqns.map((fqn) => ({ fqn, discoveredVia: "selected" as const, tableType: tableTypeLookup.get(fqn) ?? "TABLE", dataSourceFormat: formatLookup.get(fqn) ?? null })),
-    ...discoveredFqns.map((fqn) => ({ fqn, discoveredVia: "lineage" as const, tableType: "TABLE", dataSourceFormat: null as string | null })),
+  const expandedTables: Array<{
+    fqn: string;
+    discoveredVia: "selected" | "lineage";
+    tableType: string;
+    dataSourceFormat: string | null;
+  }> = [
+    ...seedFqns.map((fqn) => ({
+      fqn,
+      discoveredVia: "selected" as const,
+      tableType: tableTypeLookup.get(fqn) ?? "TABLE",
+      dataSourceFormat: formatLookup.get(fqn) ?? null,
+    })),
+    ...discoveredFqns.map((fqn) => ({
+      fqn,
+      discoveredVia: "lineage" as const,
+      tableType: "TABLE",
+      dataSourceFormat: null as string | null,
+    })),
   ];
 
   logger.info("[metadata-extraction] Lineage expanded scope", {
@@ -295,10 +314,16 @@ async function runEnrichmentPass(
 
   // Fetch metadata for lineage-discovered tables and merge into snapshot
   if (discoveredFqns.length > 0) {
-    if (runId) await updateRunMessage(runId, `Fetching metadata for ${discoveredFqns.length} lineage-discovered tables...`);
+    if (runId)
+      await updateRunMessage(
+        runId,
+        `Fetching metadata for ${discoveredFqns.length} lineage-discovered tables...`,
+      );
     try {
       const newTableInfos = await fetchTableInfoBatch(discoveredFqns);
-      newTableInfos.forEach((t) => { t.discoveredVia = "lineage"; });
+      newTableInfos.forEach((t) => {
+        t.discoveredVia = "lineage";
+      });
       const newColumns = await fetchColumnsBatch(discoveredFqns);
       const newFKs = await fetchForeignKeysBatch(discoveredFqns);
 
@@ -336,22 +361,24 @@ async function runEnrichmentPass(
     if (runId) {
       await updateRunMessage(
         runId,
-        `Lineage walk discovered ${discoveredFqns.length} additional tables (${seedFqns.length} selected + ${discoveredFqns.length} via lineage = ${snapshot.tableCount} total)`
+        `Lineage walk discovered ${discoveredFqns.length} additional tables (${seedFqns.length} selected + ${discoveredFqns.length} via lineage = ${snapshot.tableCount} total)`,
       );
     }
   }
 
   // Step 2: Deep metadata enrichment
-  if (runId) await updateRunMessage(runId, `Enriching ${expandedTables.length} tables (DESCRIBE DETAIL + HISTORY)...`);
-  const enrichmentResults = await enrichTablesInBatches(
-    expandedTables,
-    5,
-    (completed, total) => {
-      if (runId && completed % 10 === 0) {
-        updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch((e) => logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }));
-      }
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Enriching ${expandedTables.length} tables (DESCRIBE DETAIL + HISTORY)...`,
+    );
+  const enrichmentResults = await enrichTablesInBatches(expandedTables, 5, (completed, total) => {
+    if (runId && completed % 10 === 0) {
+      updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch((e) =>
+        logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }),
+      );
     }
-  );
+  });
 
   // Step 3: Tags
   if (runId) await updateRunMessage(runId, "Fetching tags...");
@@ -395,19 +422,17 @@ async function runEnrichmentPass(
     if (runId) await updateRunMessage(runId, "Running LLM intelligence analysis...");
     const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
 
-    intelligenceResult = await runIntelligenceLayer(
-      tableInputs,
-      lineageGraph,
-      {
-        endpoint,
-        businessName: undefined,
-        onProgress: (pass, pct) => {
-          if (runId && pct === 0) {
-            updateRunMessage(runId, `Intelligence: ${pass}...`).catch((e) => logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }));
-          }
-        },
-      }
-    );
+    intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
+      endpoint,
+      businessName: undefined,
+      onProgress: (pass, pct) => {
+        if (runId && pct === 0) {
+          updateRunMessage(runId, `Intelligence: ${pass}...`).catch((e) =>
+            logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }),
+          );
+        }
+      },
+    });
 
     // Apply LLM results to details
     for (const domain of intelligenceResult.domains) {
@@ -481,16 +506,24 @@ async function runEnrichmentPass(
     totalFiles: details.reduce((sum, d) => sum + (d.numFiles ?? 0), 0),
     totalRows: details.reduce((sum, d) => sum + (d.numRows ?? 0), 0),
     tablesWithStreaming: Array.from(histories.values()).filter((h) => h.hasStreamingWrites).length,
-    tablesWithCDF: details.filter((d) => d.tableProperties["delta.enableChangeDataFeed"] === "true").length,
-    tablesNeedingOptimize: Array.from(healthScores.values()).filter((h) => h.issues.some((i) => i.includes("OPTIMIZE"))).length,
-    tablesNeedingVacuum: Array.from(healthScores.values()).filter((h) => h.issues.some((i) => i.includes("VACUUM"))).length,
+    tablesWithCDF: details.filter((d) => d.tableProperties["delta.enableChangeDataFeed"] === "true")
+      .length,
+    tablesNeedingOptimize: Array.from(healthScores.values()).filter((h) =>
+      h.issues.some((i) => i.includes("OPTIMIZE")),
+    ).length,
+    tablesNeedingVacuum: Array.from(healthScores.values()).filter((h) =>
+      h.issues.some((i) => i.includes("VACUUM")),
+    ).length,
     lineageDiscoveredCount: discoveredFqns.length,
     domainCount: intelligenceResult?.domains.length ?? 0,
-    piiTablesCount: intelligenceResult?.sensitivities ? new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size : 0,
+    piiTablesCount: intelligenceResult?.sensitivities
+      ? new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size
+      : 0,
     redundancyPairsCount: intelligenceResult?.redundancies.length ?? 0,
     dataProductCount: intelligenceResult?.dataProducts.length ?? 0,
     avgGovernanceScore: intelligenceResult?.governanceGaps.length
-      ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) / intelligenceResult.governanceGaps.length
+      ? intelligenceResult.governanceGaps.reduce((s, g) => s + g.overallScore, 0) /
+        intelligenceResult.governanceGaps.length
       : 0,
     genieSpaceCount: 0,
     dashboardCount: 0,
@@ -571,7 +604,14 @@ async function runEnrichmentPass(
   // Generate vector embeddings for estate data (best-effort, non-blocking)
   try {
     const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
-    await embedScanResults(scanId, details, historiesWithHealth, lineageGraph.edges, insightRecords, allColumns);
+    await embedScanResults(
+      scanId,
+      details,
+      historiesWithHealth,
+      lineageGraph.edges,
+      insightRecords,
+      allColumns,
+    );
   } catch (embedErr) {
     logger.warn("[metadata-extraction] Estate embedding failed (non-fatal)", {
       scanId,

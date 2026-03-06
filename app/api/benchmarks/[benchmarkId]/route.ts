@@ -74,19 +74,21 @@ export async function PATCH(
       }
 
       const { embedBenchmarkRecords } = await import("@/lib/embeddings/embed-pipeline");
-      const chunkCount = await embedBenchmarkRecords([{
-        benchmarkId: updated.benchmarkId,
-        kind: updated.kind,
-        title: updated.title,
-        summary: updated.summary,
-        sourceUrl: updated.sourceUrl,
-        publisher: updated.publisher,
-        industry: updated.industry,
-        region: updated.region,
-        publishedAt: updated.publishedAt,
-        ttlDays: updated.ttlDays,
-        sourceContent,
-      }]);
+      const chunkCount = await embedBenchmarkRecords([
+        {
+          benchmarkId: updated.benchmarkId,
+          kind: updated.kind,
+          title: updated.title,
+          summary: updated.summary,
+          sourceUrl: updated.sourceUrl,
+          publisher: updated.publisher,
+          industry: updated.industry,
+          region: updated.region,
+          publishedAt: updated.publishedAt,
+          ttlDays: updated.ttlDays,
+          sourceContent,
+        },
+      ]);
 
       const saved = await updateBenchmarkSourceContent(benchmarkId, {
         sourceContent,

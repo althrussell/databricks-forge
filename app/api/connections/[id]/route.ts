@@ -8,11 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureMigrated } from "@/lib/lakebase/schema";
-import {
-  getConnection,
-  updateConnection,
-  deleteConnection,
-} from "@/lib/lakebase/connections";
+import { getConnection, updateConnection, deleteConnection } from "@/lib/lakebase/connections";
 import type { UpdateConnectionInput } from "@/lib/connections/types";
 
 interface RouteParams {
@@ -31,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to get connection" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -49,7 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to update connection" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -66,7 +62,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to delete connection" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

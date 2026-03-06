@@ -4,13 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -69,10 +63,17 @@ export default function FabricHubPage() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
-    if (!activeScanProgress || activeScanProgress.status === "completed" || activeScanProgress.status === "failed") return;
+    if (
+      !activeScanProgress ||
+      activeScanProgress.status === "completed" ||
+      activeScanProgress.status === "failed"
+    )
+      return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/fabric/scan/${activeScanProgress.scanId}?mode=progress`);
@@ -85,7 +86,9 @@ export default function FabricHubPage() {
             else toast.error(`Scan failed: ${progress.message}`);
           }
         }
-      } catch { /* polling failure is non-fatal */ }
+      } catch {
+        /* polling failure is non-fatal */
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, [activeScanProgress, fetchData]);
@@ -107,7 +110,13 @@ export default function FabricHubPage() {
         throw new Error(data.error || "Failed to start scan");
       }
       const { scanId } = await res.json();
-      setActiveScanProgress({ scanId, status: "scanning", message: "Starting...", percent: 5, phase: "init" });
+      setActiveScanProgress({
+        scanId,
+        status: "scanning",
+        message: "Starting...",
+        percent: 5,
+        phase: "init",
+      });
       toast.success(incremental ? "Incremental scan started" : "Full scan started");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start scan");
@@ -121,7 +130,9 @@ export default function FabricHubPage() {
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40" />)}
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-40" />
+          ))}
         </div>
       </div>
     );
@@ -132,7 +143,8 @@ export default function FabricHubPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Fabric / Power BI</h1>
         <p className="text-muted-foreground">
-          Scan your Microsoft Fabric and Power BI estate, then migrate to Databricks-native artifacts.
+          Scan your Microsoft Fabric and Power BI estate, then migrate to Databricks-native
+          artifacts.
         </p>
       </div>
 
@@ -140,13 +152,19 @@ export default function FabricHubPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">New Scan</CardTitle>
-          <CardDescription>Select a connection and scan the Power BI tenant for workspaces, datasets, reports, and measures.</CardDescription>
+          <CardDescription>
+            Select a connection and scan the Power BI tenant for workspaces, datasets, reports, and
+            measures.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {connections.length === 0 ? (
             <div className="text-sm text-muted-foreground">
               No Fabric connections configured.{" "}
-              <Link href="/connections" className="text-primary underline">Add one first</Link>.
+              <Link href="/connections" className="text-primary underline">
+                Add one first
+              </Link>
+              .
             </div>
           ) : (
             <div className="flex items-center gap-3">
@@ -158,13 +176,22 @@ export default function FabricHubPage() {
                   {connections.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
-                      <Badge variant="outline" className="ml-2 text-xs capitalize">{c.accessLevel}</Badge>
+                      <Badge variant="outline" className="ml-2 text-xs capitalize">
+                        {c.accessLevel}
+                      </Badge>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={() => handleScan(false)} disabled={!selectedConnectionId || scanning}>
-                {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scan className="h-4 w-4 mr-2" />}
+              <Button
+                onClick={() => handleScan(false)}
+                disabled={!selectedConnectionId || scanning}
+              >
+                {scanning ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Scan className="h-4 w-4 mr-2" />
+                )}
                 Full Scan
               </Button>
               {(() => {
@@ -175,7 +202,11 @@ export default function FabricHubPage() {
                     onClick={() => handleScan(true)}
                     disabled={!selectedConnectionId || scanning}
                   >
-                    {scanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+                    {scanning ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Zap className="h-4 w-4 mr-2" />
+                    )}
                     Quick Scan (changes only)
                   </Button>
                 ) : null;
@@ -217,10 +248,14 @@ export default function FabricHubPage() {
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
-                          <Icon className={`h-4 w-4 ${cfg.color} ${scan.status === "scanning" ? "animate-spin" : ""}`} />
+                          <Icon
+                            className={`h-4 w-4 ${cfg.color} ${scan.status === "scanning" ? "animate-spin" : ""}`}
+                          />
                           {cfg.label}
                           {scan.scanMode === "incremental" && (
-                            <Badge variant="secondary" className="text-[10px]">Incremental</Badge>
+                            <Badge variant="secondary" className="text-[10px]">
+                              Incremental
+                            </Badge>
                           )}
                         </CardTitle>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -249,7 +284,9 @@ export default function FabricHubPage() {
                         </div>
                       </div>
                       {scan.errorMessage && (
-                        <p className="text-xs text-destructive mt-2 truncate">{scan.errorMessage}</p>
+                        <p className="text-xs text-destructive mt-2 truncate">
+                          {scan.errorMessage}
+                        </p>
                       )}
                     </CardContent>
                   </Card>

@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Network, Search } from "lucide-react";
 
 export function EnvironmentScanCard({ runId }: { runId: string }) {
@@ -30,9 +24,7 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
         const resp = await fetch("/api/environment-scan");
         if (!resp.ok) return;
         const data = await resp.json();
-        const linked = data.scans?.find(
-          (s: { runId?: string }) => s.runId === runId
-        );
+        const linked = data.scans?.find((s: { runId?: string }) => s.runId === runId);
         if (linked) setScan(linked);
       } catch {
         // Non-critical
@@ -49,9 +41,7 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
           <Network className="h-4 w-4" />
           Environment Intelligence
         </CardTitle>
-        <CardDescription>
-          Metadata enrichment scan linked to this run
-        </CardDescription>
+        <CardDescription>Metadata enrichment scan linked to this run</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-5">
@@ -65,9 +55,7 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Via Lineage</p>
-            <p className="text-lg font-bold">
-              {scan.lineageDiscoveredCount}
-            </p>
+            <p className="text-lg font-bold">{scan.lineageDiscoveredCount}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">PII Tables</p>
@@ -80,7 +68,8 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
             </p>
           </div>
         </div>
-        {(scan.genieSpaceCount ?? 0) + (scan.dashboardCount ?? 0) + (scan.metricViewCount ?? 0) > 0 && (
+        {(scan.genieSpaceCount ?? 0) + (scan.dashboardCount ?? 0) + (scan.metricViewCount ?? 0) >
+          0 && (
           <>
             <div className="mt-4 mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Search className="h-3.5 w-3.5" />
@@ -101,7 +90,9 @@ export function EnvironmentScanCard({ runId }: { runId: string }) {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Table Coverage</p>
-                <p className="text-lg font-bold">{scan.analyticsCoveragePercent?.toFixed(0) ?? 0}%</p>
+                <p className="text-lg font-bold">
+                  {scan.analyticsCoveragePercent?.toFixed(0) ?? 0}%
+                </p>
               </div>
             </div>
           </>

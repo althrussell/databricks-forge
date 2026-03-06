@@ -9,15 +9,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { isValidUUID } from "@/lib/validation";
 import { getRunById } from "@/lib/lakebase/runs";
-import {
-  getGenieEngineConfig,
-  saveGenieEngineConfig,
-} from "@/lib/lakebase/genie-engine-config";
+import { getGenieEngineConfig, saveGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import type { GenieEngineConfig } from "@/lib/genie/types";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -40,7 +37,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;

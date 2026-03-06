@@ -12,7 +12,7 @@ import { getConfig } from "@/lib/dbx/client";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
     const { runId } = await params;
@@ -25,7 +25,9 @@ export async function GET(
     let databricksHost: string | null = null;
     try {
       databricksHost = getConfig().host;
-    } catch { /* host unavailable in some dev environments */ }
+    } catch {
+      /* host unavailable in some dev environments */
+    }
 
     if (!data) {
       return NextResponse.json({

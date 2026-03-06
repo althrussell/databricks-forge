@@ -20,7 +20,11 @@ import type {
   EnrichedSqlSnippetFilter,
   EnrichedSqlSnippetDimension,
 } from "../types";
-import { buildSchemaContextBlock, validateSqlExpression, type SchemaAllowlist } from "../schema-allowlist";
+import {
+  buildSchemaContextBlock,
+  validateSqlExpression,
+  type SchemaAllowlist,
+} from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
@@ -46,9 +50,10 @@ export interface SemanticExpressionsOutput {
 }
 
 export async function runSemanticExpressions(
-  input: SemanticExpressionsInput
+  input: SemanticExpressionsInput,
 ): Promise<SemanticExpressionsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, businessContext, config, endpoint, signal } = input;
+  const { tableFqns, metadata, allowlist, useCases, businessContext, config, endpoint, signal } =
+    input;
 
   // Phase A: auto-generate time periods
   let timeFilters: EnrichedSqlSnippetFilter[] = [];
@@ -57,9 +62,8 @@ export async function runSemanticExpressions(
   if (config.autoTimePeriods) {
     const tp = generateTimePeriods(metadata.columns, tableFqns, {
       fiscalYearStartMonth: config.fiscalYearStartMonth,
-      targetDateColumns: config.timePeriodDateColumns.length > 0
-        ? config.timePeriodDateColumns
-        : undefined,
+      targetDateColumns:
+        config.timePeriodDateColumns.length > 0 ? config.timePeriodDateColumns : undefined,
     });
     timeFilters = tp.filters;
     timeDimensions = tp.dimensions;
@@ -73,7 +77,13 @@ export async function runSemanticExpressions(
   if (config.llmRefinement) {
     try {
       const llmResult = await generateLLMExpressions(
-        tableFqns, metadata, useCases, businessContext, config.glossary, endpoint, signal
+        tableFqns,
+        metadata,
+        useCases,
+        businessContext,
+        config.glossary,
+        endpoint,
+        signal,
       );
       llmMeasures = llmResult.measures
         .filter((m) => !isSnippetTooComplex(m.sql, m.name))
@@ -100,7 +110,11 @@ export async function runSemanticExpressions(
     ];
     if (batchItems.length > 0) {
       const batchSchemaCtx = buildSchemaContextBlock(input.metadata, input.tableFqns);
-      const batchResults = await reviewBatch(batchItems, "genie-semantic-expressions", batchSchemaCtx);
+      const batchResults = await reviewBatch(
+        batchItems,
+        "genie-semantic-expressions",
+        batchSchemaCtx,
+      );
       const failedIds = new Set(
         batchResults.filter((r) => r.result.verdict === "fail").map((r) => r.id),
       );
@@ -153,7 +167,11 @@ async function generateLLMExpressions(
   glossary: GlossaryEntry[],
   endpoint: string,
   signal?: AbortSignal,
-): Promise<{ measures: EnrichedSqlSnippetMeasure[]; filters: EnrichedSqlSnippetFilter[]; dimensions: EnrichedSqlSnippetDimension[] }> {
+): Promise<{
+  measures: EnrichedSqlSnippetMeasure[];
+  filters: EnrichedSqlSnippetFilter[];
+  dimensions: EnrichedSqlSnippetDimension[];
+}> {
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
   const sqlExamples = useCases
@@ -162,9 +180,10 @@ async function generateLLMExpressions(
     .map((uc) => `-- ${uc.name}\n${uc.sqlCode}`)
     .join("\n\n");
 
-  const glossaryBlock = glossary.length > 0
-    ? `### BUSINESS GLOSSARY\n${glossary.map((g) => `- **${g.term}**: ${g.definition} (synonyms: ${g.synonyms.join(", ")})`).join("\n")}`
-    : "";
+  const glossaryBlock =
+    glossary.length > 0
+      ? `### BUSINESS GLOSSARY\n${glossary.map((g) => `- **${g.term}**: ${g.definition} (synonyms: ${g.synonyms.join(", ")})`).join("\n")}`
+      : "";
 
   const bizContext = businessContext
     ? `Industry: ${businessContext.industries}\nPriorities: ${businessContext.businessPriorities}\nGoals: ${businessContext.strategicGoals}`
@@ -290,7 +309,11 @@ function isSnippetTooComplex(sql: string, name: string): boolean {
     logger.info("Rejecting snippet with window function", { name });
     return true;
   }
-  if (/\b(REGR_SLOPE|REGR_R2|REGR_INTERCEPT|CORR|STDDEV_POP|STDDEV_SAMP|SKEWNESS|KURTOSIS|CUME_DIST)\b/i.test(sql)) {
+  if (
+    /\b(REGR_SLOPE|REGR_R2|REGR_INTERCEPT|CORR|STDDEV_POP|STDDEV_SAMP|SKEWNESS|KURTOSIS|CUME_DIST)\b/i.test(
+      sql,
+    )
+  ) {
     logger.info("Rejecting snippet with statistical function", { name });
     return true;
   }

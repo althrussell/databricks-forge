@@ -144,9 +144,7 @@ export async function getUseCasesByRunId(runId: string): Promise<UseCase[]> {
  * Lightweight variant that omits sqlCode to reduce payload size.
  * Used for initial page loads where SQL isn't displayed upfront.
  */
-export async function getUseCaseSummariesByRunId(
-  runId: string
-): Promise<UseCase[]> {
+export async function getUseCaseSummariesByRunId(runId: string): Promise<UseCase[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeUseCase.findMany({
       where: { runId },
@@ -160,10 +158,7 @@ export async function getUseCaseSummariesByRunId(
 /**
  * Get use cases for a run filtered by domain.
  */
-export async function getUseCasesByDomain(
-  runId: string,
-  domain: string
-): Promise<UseCase[]> {
+export async function getUseCasesByDomain(runId: string, domain: string): Promise<UseCase[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeUseCase.findMany({
       where: { runId, domain },
@@ -209,10 +204,7 @@ export async function deleteUseCasesForRun(runId: string): Promise<void> {
  * Retrieve accepted use cases from previous runs targeting the same UC scope.
  * Used as few-shot examples in the use case generation prompt.
  */
-export async function getFeedbackExamples(
-  ucMetadata: string,
-  limit = 10
-): Promise<UseCase[]> {
+export async function getFeedbackExamples(ucMetadata: string, limit = 10): Promise<UseCase[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeUseCase.findMany({
       where: {

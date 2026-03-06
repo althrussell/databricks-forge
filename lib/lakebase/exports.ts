@@ -33,7 +33,7 @@ export interface ExportRecordRow {
 export async function insertExportRecord(
   runId: string,
   format: ExportFormat,
-  filePath?: string | null
+  filePath?: string | null,
 ): Promise<void> {
   try {
     await withPrisma(async (prisma) => {
@@ -62,9 +62,7 @@ export async function insertExportRecord(
 /**
  * Get all exports for a run, ordered by creation time descending.
  */
-export async function getExportsByRunId(
-  runId: string
-): Promise<ExportRecordRow[]> {
+export async function getExportsByRunId(runId: string): Promise<ExportRecordRow[]> {
   return withPrisma(async (prisma) => {
     const rows = await prisma.forgeExport.findMany({
       where: { runId },

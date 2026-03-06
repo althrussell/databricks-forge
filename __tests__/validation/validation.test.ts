@@ -25,24 +25,18 @@ describe("validateIdentifier", () => {
 
   it("rejects SQL injection characters", () => {
     expect(() => validateIdentifier("catalog; DROP TABLE", "catalog")).toThrow(
-      IdentifierValidationError
+      IdentifierValidationError,
     );
-    expect(() => validateIdentifier("catalog'--", "catalog")).toThrow(
-      IdentifierValidationError
-    );
-    expect(() => validateIdentifier("cat`alog", "catalog")).toThrow(
-      IdentifierValidationError
-    );
+    expect(() => validateIdentifier("catalog'--", "catalog")).toThrow(IdentifierValidationError);
+    expect(() => validateIdentifier("cat`alog", "catalog")).toThrow(IdentifierValidationError);
     expect(() => validateIdentifier("catalog.schema", "catalog")).toThrow(
-      IdentifierValidationError
+      IdentifierValidationError,
     );
   });
 
   it("rejects strings exceeding max length", () => {
     const longName = "a".repeat(256);
-    expect(() => validateIdentifier(longName, "catalog")).toThrow(
-      IdentifierValidationError
-    );
+    expect(() => validateIdentifier(longName, "catalog")).toThrow(IdentifierValidationError);
   });
 });
 

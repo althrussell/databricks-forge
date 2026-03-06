@@ -76,10 +76,7 @@ const metadata: MetadataSnapshot = {
   lineageDiscoveredFqns: [],
 };
 
-const tableFqns = [
-  "samples.bakehouse.sales_customers",
-  "samples.bakehouse.sales_transactions",
-];
+const tableFqns = ["samples.bakehouse.sales_customers", "samples.bakehouse.sales_transactions"];
 
 const joinSpecs = [
   {
@@ -93,7 +90,11 @@ describe("example-query-generation", () => {
   it("builds deterministic example queries with join coverage", () => {
     const allowlist = buildSchemaAllowlist(metadata);
     const queries = buildDeterministicExampleQueries(
-      "Customer Insights", tableFqns, metadata, allowlist, joinSpecs,
+      "Customer Insights",
+      tableFqns,
+      metadata,
+      allowlist,
+      joinSpecs,
     );
 
     expect(queries.length).toBeGreaterThan(0);
@@ -103,7 +104,13 @@ describe("example-query-generation", () => {
   it("generates simple questions by default", () => {
     const allowlist = buildSchemaAllowlist(metadata);
     const queries = buildDeterministicExampleQueries(
-      "Customer Insights", tableFqns, metadata, allowlist, joinSpecs, undefined, "simple",
+      "Customer Insights",
+      tableFqns,
+      metadata,
+      allowlist,
+      joinSpecs,
+      undefined,
+      "simple",
     );
 
     expect(queries.length).toBeGreaterThan(0);
@@ -118,7 +125,13 @@ describe("example-query-generation", () => {
   it("generates medium questions", () => {
     const allowlist = buildSchemaAllowlist(metadata);
     const queries = buildDeterministicExampleQueries(
-      "Customer Insights", tableFqns, metadata, allowlist, joinSpecs, undefined, "medium",
+      "Customer Insights",
+      tableFqns,
+      metadata,
+      allowlist,
+      joinSpecs,
+      undefined,
+      "medium",
     );
 
     expect(queries.length).toBeGreaterThan(0);
@@ -133,7 +146,13 @@ describe("example-query-generation", () => {
   it("generates complex questions", () => {
     const allowlist = buildSchemaAllowlist(metadata);
     const queries = buildDeterministicExampleQueries(
-      "Customer Insights", tableFqns, metadata, allowlist, joinSpecs, undefined, "complex",
+      "Customer Insights",
+      tableFqns,
+      metadata,
+      allowlist,
+      joinSpecs,
+      undefined,
+      "complex",
     );
 
     expect(queries.length).toBeGreaterThan(0);
@@ -153,24 +172,38 @@ describe("statementToQuestion", () => {
   });
 
   it("simple: uses direct phrasing without verbose wrappers", () => {
-    expect(statementToQuestion("Identify revenue leakage", "simple")).toBe("How do we identify revenue leakage?");
-    expect(statementToQuestion("Analyse customer churn", "simple")).toBe("How do we analyse customer churn?");
-    expect(statementToQuestion("Build a dashboard", "simple")).toBe("How would we build a dashboard?");
+    expect(statementToQuestion("Identify revenue leakage", "simple")).toBe(
+      "How do we identify revenue leakage?",
+    );
+    expect(statementToQuestion("Analyse customer churn", "simple")).toBe(
+      "How do we analyse customer churn?",
+    );
+    expect(statementToQuestion("Build a dashboard", "simple")).toBe(
+      "How would we build a dashboard?",
+    );
     expect(statementToQuestion("Revenue by region", "simple")).toBe("Revenue by region?");
   });
 
   it("medium: uses moderate phrasing", () => {
-    expect(statementToQuestion("Identify revenue leakage", "medium")).toBe("How can we identify revenue leakage?");
+    expect(statementToQuestion("Identify revenue leakage", "medium")).toBe(
+      "How can we identify revenue leakage?",
+    );
     expect(statementToQuestion("Analyse customer churn", "medium")).toBe("Analyse customer churn?");
   });
 
   it("complex: uses verbose wrappers for unmatched patterns", () => {
-    expect(statementToQuestion("Revenue by region", "complex")).toBe("What insights can we gain from: Revenue by region?");
-    expect(statementToQuestion("Identify revenue leakage", "complex")).toBe("How can we identify revenue leakage?");
+    expect(statementToQuestion("Revenue by region", "complex")).toBe(
+      "What insights can we gain from: Revenue by region?",
+    );
+    expect(statementToQuestion("Identify revenue leakage", "complex")).toBe(
+      "How can we identify revenue leakage?",
+    );
   });
 
   it("defaults to simple when no complexity specified", () => {
-    expect(statementToQuestion("Identify revenue leakage")).toBe("How do we identify revenue leakage?");
+    expect(statementToQuestion("Identify revenue leakage")).toBe(
+      "How do we identify revenue leakage?",
+    );
     expect(statementToQuestion("Revenue by region")).toBe("Revenue by region?");
   });
 });

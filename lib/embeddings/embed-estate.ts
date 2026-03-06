@@ -147,7 +147,10 @@ export async function embedScanResults(
     // 3. Environment insights (PII, redundancy, governance, relationships, data products)
     for (const ins of insights) {
       if (ins.insightType === "foreign_key") continue; // structural, not semantic
-      const kind = ins.insightType === "data_product" ? "data_product" as const : "environment_insight" as const;
+      const kind =
+        ins.insightType === "data_product"
+          ? ("data_product" as const)
+          : ("environment_insight" as const);
       const text = composeEnvironmentInsight(ins);
       texts.push(text);
       inputs.push({

@@ -27,10 +27,7 @@ interface DiscoverResult {
   healthReport: SpaceHealthReport | null;
 }
 
-async function runBounded<T>(
-  tasks: (() => Promise<T>)[],
-  concurrency: number,
-): Promise<T[]> {
+async function runBounded<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
   const results: T[] = [];
   let idx = 0;
 
@@ -41,11 +38,7 @@ async function runBounded<T>(
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, tasks.length) }, () =>
-      runNext(),
-    ),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => runNext()));
   return results;
 }
 
@@ -55,10 +48,7 @@ export async function POST(request: NextRequest) {
     const spaceIds = body.spaceIds as string[];
 
     if (!Array.isArray(spaceIds) || spaceIds.length === 0) {
-      return NextResponse.json(
-        { error: "spaceIds array is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "spaceIds array is required" }, { status: 400 });
     }
 
     if (spaceIds.length > MAX_BATCH_SIZE) {
@@ -70,10 +60,7 @@ export async function POST(request: NextRequest) {
 
     for (const id of spaceIds) {
       if (!isSafeId(id)) {
-        return NextResponse.json(
-          { error: `Invalid spaceId: ${id}` },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: `Invalid spaceId: ${id}` }, { status: 400 });
       }
     }
 
@@ -83,42 +70,37 @@ export async function POST(request: NextRequest) {
       categoryWeights: null,
     }));
 
-    const tasks = spaceIds.map(
-      (spaceId) =>
-        async (): Promise<[string, DiscoverResult]> => {
-          try {
-            let serializedSpace = getSpaceCache(spaceId);
-            if (!serializedSpace) {
-              const spaceResponse = await getGenieSpace(spaceId);
-              serializedSpace = spaceResponse.serialized_space ?? "{}";
-              setSpaceCache(spaceId, serializedSpace);
-            }
+    const tasks = spaceIds.map((spaceId) => async (): Promise<[string, DiscoverResult]> => {
+      try {
+        let serializedSpace = getSpaceCache(spaceId);
+        if (!serializedSpace) {
+          const spaceResponse = await getGenieSpace(spaceId);
+          serializedSpace = spaceResponse.serialized_space ?? "{}";
+          setSpaceCache(spaceId, serializedSpace);
+        }
 
-            const metadata = extractSpaceMetadata(serializedSpace);
+        const metadata = extractSpaceMetadata(serializedSpace);
 
-            const space = JSON.parse(serializedSpace);
-            let healthReport = runHealthCheck(
-              space,
-              config.overrides.length > 0 ? config.overrides : undefined,
-              config.customChecks.length > 0
-                ? config.customChecks
-                : undefined,
-              config.categoryWeights ?? undefined,
-            );
-            if (isReviewEnabled("health-check-sql-quality")) {
-              healthReport = await enrichReportWithSqlQuality(space, healthReport);
-            }
+        const space = JSON.parse(serializedSpace);
+        let healthReport = runHealthCheck(
+          space,
+          config.overrides.length > 0 ? config.overrides : undefined,
+          config.customChecks.length > 0 ? config.customChecks : undefined,
+          config.categoryWeights ?? undefined,
+        );
+        if (isReviewEnabled("health-check-sql-quality")) {
+          healthReport = await enrichReportWithSqlQuality(space, healthReport);
+        }
 
-            return [spaceId, { metadata, healthReport }];
-          } catch (err) {
-            logger.warn("Discover failed for space", {
-              spaceId,
-              error: String(err),
-            });
-            return [spaceId, { metadata: null, healthReport: null }];
-          }
-        },
-    );
+        return [spaceId, { metadata, healthReport }];
+      } catch (err) {
+        logger.warn("Discover failed for space", {
+          spaceId,
+          error: String(err),
+        });
+        return [spaceId, { metadata: null, healthReport: null }];
+      }
+    });
 
     const results = await runBounded(tasks, CONCURRENCY);
     const output: Record<string, DiscoverResult> = {};

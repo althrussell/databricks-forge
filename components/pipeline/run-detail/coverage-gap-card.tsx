@@ -35,9 +35,7 @@ export function CoverageGapCard({ coverageData, onClick }: CoverageGapCardProps)
   return (
     <Card
       className={
-        onClick
-          ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-          : ""
+        onClick ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30" : ""
       }
       onClick={onClick}
     >

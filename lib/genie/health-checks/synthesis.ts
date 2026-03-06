@@ -43,7 +43,9 @@ export async function runLlmQualitativeChecks(
   space: SpaceJson,
   checks: CheckDefinition[],
 ): Promise<{ results: CheckResult[]; findings: Finding[] }> {
-  const qualitativeChecks = checks.filter((c) => c.evaluator === "llm_qualitative" && c.quality_prompt);
+  const qualitativeChecks = checks.filter(
+    (c) => c.evaluator === "llm_qualitative" && c.quality_prompt,
+  );
   if (qualitativeChecks.length === 0) return { results: [], findings: [] };
 
   const sectionGroups = new Map<string, CheckDefinition[]>();
@@ -62,9 +64,7 @@ export async function runLlmQualitativeChecks(
       const sectionData = section === "root" ? space : resolvePath(space, section);
       const sectionJson = JSON.stringify(sectionData, null, 2);
 
-      const itemsText = sectionChecks
-        .map((c) => `- ${c.id}: ${c.quality_prompt}`)
-        .join("\n");
+      const itemsText = sectionChecks.map((c) => `- ${c.id}: ${c.quality_prompt}`).join("\n");
 
       const prompt = `You are evaluating a Databricks Genie Space configuration section against quality criteria.
 
@@ -129,15 +129,28 @@ Only include findings for FAILED criteria. Match severity to importance:
 
       for (const finding of parsed.findings ?? []) {
         allFindings.push({
-          category: finding.category === "best_practice" ? "best_practice" : finding.category === "warning" ? "warning" : "suggestion",
-          severity: finding.severity === "critical" ? "critical" : finding.severity === "warning" ? "warning" : "info",
+          category:
+            finding.category === "best_practice"
+              ? "best_practice"
+              : finding.category === "warning"
+                ? "warning"
+                : "suggestion",
+          severity:
+            finding.severity === "critical"
+              ? "critical"
+              : finding.severity === "warning"
+                ? "warning"
+                : "info",
           description: finding.description,
           recommendation: finding.recommendation,
           reference: finding.reference,
         });
       }
     } catch (err) {
-      logger.warn("LLM qualitative check failed for section, marking all as passed", { section, error: String(err) });
+      logger.warn("LLM qualitative check failed for section, marking all as passed", {
+        section,
+        error: String(err),
+      });
       for (const check of sectionChecks) {
         allResults.push({
           id: check.id,
@@ -234,7 +247,12 @@ Output JSON:
   } catch (err) {
     logger.warn("Synthesis LLM call failed, returning defaults", { error: String(err) });
     return {
-      assessment: report.overallScore >= 80 ? "good_to_go" : report.overallScore >= 50 ? "quick_wins" : "foundation_needed",
+      assessment:
+        report.overallScore >= 80
+          ? "good_to_go"
+          : report.overallScore >= 50
+            ? "quick_wins"
+            : "foundation_needed",
       assessmentRationale: "Automated assessment based on score (LLM synthesis unavailable)",
       compensatingStrengths: [],
       celebrationPoints: [],

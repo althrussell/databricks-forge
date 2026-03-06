@@ -9,10 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
 import { listGenieSpaces, createGenieSpace } from "@/lib/dbx/genie";
-import {
-  listTrackedGenieSpaces,
-  trackGenieSpaceCreated,
-} from "@/lib/lakebase/genie-spaces";
+import { listTrackedGenieSpaces, trackGenieSpaceCreated } from "@/lib/lakebase/genie-spaces";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import type { GenieAuthMode } from "@/lib/settings";
@@ -33,9 +30,7 @@ export async function GET() {
 
     // Filter out tracked spaces that no longer exist in the workspace.
     // Lakebase rows are left intact so the runs page can still offer redeployment.
-    const workspaceIds = new Set(
-      (apiResult.spaces ?? []).map((s) => s.space_id),
-    );
+    const workspaceIds = new Set((apiResult.spaces ?? []).map((s) => s.space_id));
     const liveTracked = tracked.filter(
       (t) => t.status === "trashed" || workspaceIds.has(t.spaceId),
     );
@@ -105,7 +100,11 @@ export async function POST(request: NextRequest) {
     const validation = await revalidateSerializedSpace(serializedSpace);
     if (!validation.ok) {
       return NextResponse.json(
-        { error: validation.error, code: validation.code, diagnostics: validation.diagnostics ?? null },
+        {
+          error: validation.error,
+          code: validation.code,
+          diagnostics: validation.diagnostics ?? null,
+        },
         { status: 409 },
       );
     }

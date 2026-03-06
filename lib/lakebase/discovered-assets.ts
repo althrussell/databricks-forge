@@ -15,7 +15,7 @@ import type { DiscoveryResult, AssetCoverage } from "@/lib/discovery/types";
 export async function saveDiscoveryResults(
   runId: string,
   discovery: DiscoveryResult,
-  coverage: AssetCoverage
+  coverage: AssetCoverage,
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     // Clear previous discovery data for this run
@@ -79,9 +79,7 @@ export async function saveDiscoveryResults(
 // Read discovery results
 // ---------------------------------------------------------------------------
 
-export async function getDiscoveryResultsByRunId(
-  runId: string
-): Promise<{
+export async function getDiscoveryResultsByRunId(runId: string): Promise<{
   genieSpaces: Array<{
     spaceId: string;
     title: string;

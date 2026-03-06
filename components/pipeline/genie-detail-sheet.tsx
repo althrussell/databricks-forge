@@ -193,11 +193,7 @@ export function GenieDetailSheet({
         <SheetFooter className="mt-6 flex-col gap-2 sm:flex-col">
           {tracking && genieSpaceUrl(tracking.spaceId) && (
             <Button asChild className="w-full bg-violet-600 hover:bg-violet-700">
-              <a
-                href={genieSpaceUrl(tracking.spaceId)!}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={genieSpaceUrl(tracking.spaceId)!} target="_blank" rel="noopener noreferrer">
                 <ExternalLinkIcon className="mr-2 h-4 w-4" />
                 Open in Databricks
               </a>
@@ -247,7 +243,9 @@ export function GenieDetailSheet({
               {deployStatus.warn && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-950/30">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400">{deployStatus.reason}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    {deployStatus.reason}
+                  </p>
                 </div>
               )}
               <Button

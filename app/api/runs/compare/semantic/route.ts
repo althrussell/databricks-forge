@@ -76,9 +76,7 @@ export async function GET(req: NextRequest) {
           const best = results[0];
           const similarity = best.score;
           const category: OverlapPair["category"] =
-            similarity > 0.85 ? "near-duplicate" :
-            similarity > 0.6 ? "related" :
-            "unique";
+            similarity > 0.85 ? "near-duplicate" : similarity > 0.6 ? "related" : "unique";
 
           pairs.push({
             useCaseA: { id: uc.id, name: uc.name ?? "Unnamed" },
@@ -98,7 +96,10 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch (err) {
-        logger.warn("[api/compare/semantic] Failed for use case", { ucId: uc.id, error: String(err) });
+        logger.warn("[api/compare/semantic] Failed for use case", {
+          ucId: uc.id,
+          error: String(err),
+        });
         pairs.push({
           useCaseA: { id: uc.id, name: uc.name ?? "Unnamed" },
           useCaseB: null,

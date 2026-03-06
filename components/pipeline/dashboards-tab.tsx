@@ -1,13 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -164,7 +158,9 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
         /* no active job */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [runId, startPolling]);
 
   // Cleanup polling on unmount
@@ -178,7 +174,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
 
   function getTrackedStatus(domain: string): TrackedDashboard | undefined {
     return tracked.find(
-      (t) => t.domain.toLowerCase() === domain.toLowerCase() && t.status !== "trashed"
+      (t) => t.domain.toLowerCase() === domain.toLowerCase() && t.status !== "trashed",
     );
   }
 
@@ -244,9 +240,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
   // Detail rec
   // -------------------------------------------------------------------------
 
-  const detailRec = detailDomain
-    ? recommendations.find((r) => r.domain === detailDomain)
-    : null;
+  const detailRec = detailDomain ? recommendations.find((r) => r.domain === detailDomain) : null;
 
   const detailDesign: DashboardDesign | null = detailRec?.dashboardDesign ?? null;
 
@@ -370,11 +364,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
             >
               {generating ? "Generating..." : "Regenerate All"}
             </Button>
-            <Button
-              size="sm"
-              disabled={selected.size === 0}
-              onClick={handleDeploySelected}
-            >
+            <Button size="sm" disabled={selected.size === 0} onClick={handleDeploySelected}>
               Deploy Selected ({selected.size})
             </Button>
           </div>
@@ -427,9 +417,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {rec.subdomains.length > 0
-                      ? rec.subdomains.join(", ")
-                      : rec.domain}
+                    {rec.subdomains.length > 0 ? rec.subdomains.join(", ") : rec.domain}
                   </div>
                 </div>
                 <Badge variant="secondary" className="text-xs">
@@ -450,24 +438,12 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                   )}
                 </div>
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDeploySingle(rec)}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => handleDeploySingle(rec)}>
                     {isDeployed ? "Update" : "Deploy"}
                   </Button>
                   {isDeployed && trackedDash?.dashboardUrl && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      asChild
-                    >
-                      <a
-                        href={trackedDash.dashboardUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
+                    <Button variant="ghost" size="sm" asChild>
+                      <a href={trackedDash.dashboardUrl} target="_blank" rel="noopener noreferrer">
                         Open
                       </a>
                     </Button>
@@ -497,7 +473,9 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
               <div className="mt-6 space-y-4">
                 {detailRec.changeSummary && (
                   <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
-                    <p className="text-xs font-medium text-sky-700 dark:text-sky-400">Changes vs Existing</p>
+                    <p className="text-xs font-medium text-sky-700 dark:text-sky-400">
+                      Changes vs Existing
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">{detailRec.changeSummary}</p>
                   </div>
                 )}
@@ -534,7 +512,9 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                             <div key={ds.name} className="border rounded-md p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="font-medium text-sm">{ds.displayName}</span>
-                                <Badge variant="outline" className="text-xs">{ds.purpose}</Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {ds.purpose}
+                                </Badge>
                               </div>
                               <pre className="text-xs bg-muted p-2 rounded overflow-x-auto whitespace-pre-wrap font-mono">
                                 {ds.sql}
@@ -553,14 +533,21 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                       <AccordionContent>
                         <div className="space-y-2">
                           {detailDesign.widgets.map((w, i) => (
-                            <div key={i} className="flex items-center gap-3 py-2 border-b last:border-b-0">
-                              <Badge variant="secondary" className="text-xs min-w-[60px] justify-center">
+                            <div
+                              key={i}
+                              className="flex items-center gap-3 py-2 border-b last:border-b-0"
+                            >
+                              <Badge
+                                variant="secondary"
+                                className="text-xs min-w-[60px] justify-center"
+                              >
                                 {w.type}
                               </Badge>
                               <div>
                                 <div className="text-sm font-medium">{w.title}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  Dataset: {w.datasetName} | Fields: {w.fields.map((f) => f.name).join(", ")}
+                                  Dataset: {w.datasetName} | Fields:{" "}
+                                  {w.fields.map((f) => f.name).join(", ")}
                                 </div>
                               </div>
                             </div>
@@ -576,7 +563,11 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                         <pre className="text-xs bg-muted p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono max-h-96">
                           {(() => {
                             try {
-                              return JSON.stringify(JSON.parse(detailRec.serializedDashboard), null, 2);
+                              return JSON.stringify(
+                                JSON.parse(detailRec.serializedDashboard),
+                                null,
+                                2,
+                              );
                             } catch {
                               return detailRec.serializedDashboard;
                             }
@@ -597,10 +588,7 @@ export function DashboardsTab({ runId }: DashboardsTabProps) {
                 >
                   {regeneratingDomain === detailRec.domain ? "Regenerating..." : "Regenerate"}
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleDeploySingle(detailRec)}
-                >
+                <Button size="sm" onClick={() => handleDeploySingle(detailRec)}>
                   {getTrackedStatus(detailRec.domain) ? "Update Dashboard" : "Deploy Dashboard"}
                 </Button>
               </SheetFooter>

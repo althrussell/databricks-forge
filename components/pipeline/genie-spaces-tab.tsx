@@ -110,8 +110,8 @@ export function GenieSpacesTab({
         <CardContent className="flex flex-col items-center justify-center py-12">
           <GenieIcon className="h-10 w-10 text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
-            No Genie Space recommendations available for this run. This may be
-            because the metadata snapshot was not cached.
+            No Genie Space recommendations available for this run. This may be because the metadata
+            snapshot was not cached.
           </p>
         </CardContent>
       </Card>
@@ -120,9 +120,7 @@ export function GenieSpacesTab({
 
   return (
     <div className="space-y-4">
-      {hasV1Domains && (
-        <GenieV1WarningBanner enhancementCount={enhancementCount} />
-      )}
+      {hasV1Domains && <GenieV1WarningBanner enhancementCount={enhancementCount} />}
 
       <GenieRecommendationTable
         recommendations={recommendations}

@@ -52,9 +52,9 @@ describe("pptx executive summary helpers", () => {
     expect(lines[0]).toMatchObject({
       kind: "narrative",
     });
-    expect(lines.some((line) => line.text.includes("18 use cases discovered across 6 domains"))).toBe(
-      true
-    );
+    expect(
+      lines.some((line) => line.text.includes("18 use cases discovered across 6 domains")),
+    ).toBe(true);
   });
 
   it("paginates in stable order with no empty pages", () => {
