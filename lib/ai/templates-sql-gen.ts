@@ -95,12 +95,33 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - **ROW LIMIT (CRITICAL)**: ALWAYS \`LIMIT\` the input to \`ai_query()\` or \`ai_gen()\` to at most **1000 rows**. AI function calls are expensive per row -- unbounded queries can cost thousands of dollars. Filter or aggregate data BEFORE passing to AI functions
 - When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`
 - **VALID NAMED PARAMETERS ONLY**: ai_query() accepts ONLY these named parameters: \`modelParameters\`, \`responseFormat\`, \`failOnError\`. NEVER use \`systemPrompt\`, \`system_prompt\`, or any other parameter name -- they will cause UNRECOGNIZED_PARAMETER_NAME errors. Embed persona/system instructions inside the request string via CONCAT.
-- **STRUCTURED OUTPUT**: When the AI output must conform to a schema, use \`responseFormat => 'STRUCT<result: STRUCT<field1: TYPE, field2: TYPE>>'\` instead of parsing free text. The top-level STRUCT must have exactly one field
-- **ERROR HANDLING FOR BATCH**: When processing many rows, use \`failOnError => false\` so one bad row does not abort the entire query. Access results via \`result.result\` and errors via \`result.errorMessage\`
+- **STRUCTURED OUTPUT (MANDATORY PATTERN)**: When using \`failOnError => false\`, the result field is ALWAYS STRING regardless of \`responseFormat\`. Do NOT use \`responseFormat\` with \`failOnError => false\` -- accessing nested struct fields on the result (e.g. \`ai_result.result.field\`) will cause INVALID_EXTRACT_BASE_FIELD_TYPE errors. Instead use this pattern:
+  1. Include JSON format instructions in the prompt text via CONCAT: \`'Respond ONLY with valid JSON in this format: {"field1": "value", "field2": 0}'\`
+  2. Call \`ai_query(endpoint, prompt, modelParameters => named_struct(...), failOnError => false) AS ai_result\`
+  3. Parse the STRING result: \`from_json(ai_result.result, 'STRUCT<field1: TYPE, field2: TYPE>') AS parsed_result\`
+  4. Access parsed fields: \`parsed_result.field1\`, \`parsed_result.field2\`; access errors: \`ai_result.errorMessage\`
+  Example:
+  \`\`\`
+  ai_query('{sql_model_serving}', ai_prompt, modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024), failOnError => false) AS ai_result,
+  from_json(ai_result.result, 'STRUCT<confidence: INT, category: STRING, reasoning: STRING>') AS parsed_result
+  \`\`\`
+- **ERROR HANDLING FOR BATCH**: When processing many rows, ALWAYS use \`failOnError => false\` so one bad row does not abort the entire query. Access raw result string via \`ai_result.result\`, errors via \`ai_result.errorMessage\`, and parsed fields via \`from_json()\` as described above
 - **PERSONA ENRICHMENT (MANDATORY)**: Every \`ai_query()\` persona MUST include business context. Do NOT use generic personas. Pattern:
   \`CONCAT('You are a [Role] for {business_name} focused on [relevant business context]. Strategic goals include: [relevant goals]. Analyze...')\`
 - Build the AI prompt as a column in a CTE FIRST, then pass it to \`ai_query()\` in the next CTE
 - **ai_sys_prompt column**: The final output MUST include an \`ai_sys_prompt\` column as the LAST column, containing the exact prompt sent to \`ai_query()\` for auditability
+
+**4b. AI QUERY PERFORMANCE (MANDATORY FOR AI USE CASES)**
+- **FILTER FIRST, AI LAST**: AI functions (\`ai_query\`, \`ai_similarity\`, \`ai_gen\`) are expensive per-row operations. Structure the query so cheap relational operations (WHERE, JOIN, GROUP BY) reduce the dataset BEFORE any AI function is called
+- **BLOCKING STRATEGY FOR PAIRWISE OPERATIONS**: When building candidate pairs (deduplication, record matching), do NOT use a single broad self-join with multiple OR predicates. Instead:
+  1. Normalize text columns in an early CTE: \`lower(trim(coalesce(col, '')))\`, \`soundex(col)\` for phonetic matching
+  2. Split candidate generation into multiple narrow blocking joins (one per rule), each with equality predicates on normalized columns
+  3. UNION the candidate pair sets to deduplicate
+  4. Run \`ai_similarity()\` ONLY on the combined blocked candidate set
+  5. Filter by similarity threshold: \`WHERE similarity_score >= 0.80\`
+  6. Run \`ai_query()\` ONLY on the filtered, LIMIT-ed set
+- **COST PYRAMID**: Structure AI queries as a funnel -- cheap filters (millions of rows) -> blocking joins (thousands) -> ai_similarity scoring (hundreds) -> ai_query LLM calls (tens to low hundreds)
+- **NORMALIZE ONCE, REUSE**: Create normalized columns (\`lower(trim(...))\`, \`soundex()\`) in the first CTE and reference them in all subsequent blocking joins rather than recomputing
 
 **5. STATISTICAL USE CASE RULES**
 - Use the appropriate statistical SQL functions as the primary analytical technique
@@ -211,7 +232,7 @@ You are a **Senior Databricks SQL Engineer** with 15+ years of experience debugg
 - **Type mismatch**: Cast columns to the correct type (e.g., \`CAST(col AS STRING)\`). Use \`DECIMAL(18,2)\` for financial data, not FLOAT/DOUBLE
 - **Window function errors**: Check PARTITION BY and ORDER BY clauses; ensure the window is valid. Prefer QUALIFY over wrapping in a subquery
 - **Ambiguous column**: Qualify with table alias (e.g., \`t1.col\` not just \`col\`)
-- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct. If using \`responseFormat\`, the top-level STRUCT must have exactly one field. If you see UNRECOGNIZED_PARAMETER_NAME, remove invalid named parameters (like \`systemPrompt\`) -- only \`modelParameters\`, \`responseFormat\`, and \`failOnError\` are valid. Embed persona/system instructions in the request text via CONCAT
+- **ai_query errors**: Check that the model endpoint is quoted, CONCAT is well-formed, and modelParameters syntax is correct. If you see UNRECOGNIZED_PARAMETER_NAME, remove invalid named parameters (like \`systemPrompt\`) -- only \`modelParameters\`, \`responseFormat\`, and \`failOnError\` are valid. Embed persona/system instructions in the request text via CONCAT. **CRITICAL**: If the error is INVALID_EXTRACT_BASE_FIELD_TYPE on \`ai_result.result\`, the code is trying to access struct fields on a STRING. Fix: (1) remove \`responseFormat\` from \`ai_query()\`, (2) add JSON format instructions to the prompt text, (3) parse with \`from_json(ai_result.result, 'STRUCT<...>') AS parsed_result\`, (4) replace all \`ai_result.result.field\` references with \`parsed_result.field\`
 - **AI_FORECAST errors**: Ensure \`time_col\`, \`value_col\`, \`group_col\` are string literals (quoted), not column references
 - **Geospatial errors**: H3 functions require BIGINT cell IDs; ST functions require GEOMETRY/GEOGRAPHY types. Use \`ST_Point(lon, lat)\` to create point geometries from coordinates
 - **Truncated SQL / syntax error at end of input**: The original query was too long and got cut off. SIMPLIFY the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total

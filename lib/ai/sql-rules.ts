@@ -20,6 +20,13 @@ Syntax and type safety:
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query) in metric view definitions. They are non-deterministic and prohibitively expensive. Use only deterministic expressions over materialized columns.
 - NEVER use TO_DATE() or TO_TIMESTAMP() to parse string columns -- they throw on format mismatches. Use COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy'), try_to_date(col, 'dd/MM/yyyy')) to handle mixed date formats gracefully. If the column is already DATE or TIMESTAMP type, use it directly without parsing.
 - ai_query() only accepts these named parameters: modelParameters, responseFormat, failOnError. NEVER use systemPrompt, system_prompt, or any other invented parameter names. Embed persona/system instructions in the request text via CONCAT.
+- ai_query() with failOnError => false returns STRUCT<result: STRING, errorMessage: STRING>. The result field is ALWAYS STRING regardless of responseFormat. Do NOT use responseFormat with failOnError => false. To get structured output: (1) instruct the model to return JSON in the prompt text, (2) parse with from_json(col.result, 'STRUCT<field1: TYPE, ...>') AS parsed_result. Accessing nested struct fields directly on the result (e.g. ai_result.result.field) causes INVALID_EXTRACT_BASE_FIELD_TYPE errors.
+
+AI function performance:
+- AI functions (ai_query, ai_similarity, ai_gen) are expensive per-row. Filter and aggregate data BEFORE passing to AI functions. Structure queries as a cost funnel: cheap filters first, then blocking joins, then ai_similarity scoring, then ai_query LLM calls on the smallest possible set.
+- For pairwise operations (deduplication, matching), split candidate generation into multiple narrow blocking joins with equality predicates on normalized columns, UNION the candidate sets, then score only the blocked pairs with ai_similarity.
+- Normalize text columns (lower(trim(coalesce(col, ''))), soundex()) in an early CTE and reuse the normalized columns for blocking joins. Reserve ai_similarity() for the scoring stage after blocking.
+- ALWAYS LIMIT the input rows to ai_query() / ai_gen() to at most 1000 rows. Apply the LIMIT after filtering and scoring, not before.
 
 Identifier quoting:
 - ALWAYS backtick-quote column names that contain spaces, special characters, or mixed case (e.g. \`Net Cash Flow\`, \`Account ID\`).
@@ -97,6 +104,8 @@ DATABRICKS SQL RULES:
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, etc.) in metric views.
 - NEVER use TO_DATE()/TO_TIMESTAMP(). Use COALESCE(try_to_date(col, fmt1), try_to_date(col, fmt2)) for safe string-to-date parsing.
 - ai_query() named parameters: ONLY modelParameters, responseFormat, failOnError. NEVER use systemPrompt or other invented names.
+- ai_query() with failOnError => false: result field is ALWAYS STRING. Do NOT use responseFormat with failOnError. Parse structured output with from_json(ai_result.result, 'STRUCT<...>') AS parsed_result.
+- AI functions are expensive per-row. Filter/aggregate BEFORE ai_query/ai_similarity. For pairwise ops: block first (narrow joins + UNION), score second (ai_similarity), LLM last (ai_query on filtered LIMIT-ed set).
 - ALWAYS backtick-quote column names with spaces or special characters. Use names EXACTLY as in the schema.
 - No STRING_AGG() -- use array_join(collect_list(col), ',') instead.
 - Prefer MERGE INTO over DELETE + INSERT for upserts.
@@ -165,4 +174,13 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - No bare column references or alias-prefixed references for measure columns
    - GROUP BY ALL or explicit GROUP BY on dimension columns is present
    - No SELECT * on metric views
+
+7. AI FUNCTION COMPLIANCE (if query uses ai_query, ai_similarity, ai_gen)
+   - ai_query() with failOnError => false: result parsed via from_json(ai_result.result, 'STRUCT<...>') -- NOT via direct struct field access (ai_result.result.field causes INVALID_EXTRACT_BASE_FIELD_TYPE)
+   - Structured output instructions included in prompt text (CONCAT with JSON format example), NOT via responseFormat when failOnError => false
+   - Input rows to ai_query()/ai_gen() are LIMIT-ed to at most 1000
+   - Cheap relational filters applied BEFORE expensive AI function calls
+   - For pairwise operations: blocking joins with normalized columns BEFORE ai_similarity scoring
+   - ai_sys_prompt column present as last column for auditability
+   - Only valid named parameters used: modelParameters, responseFormat, failOnError (no systemPrompt or invented names)
 `.trim();

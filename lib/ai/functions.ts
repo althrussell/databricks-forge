@@ -84,9 +84,9 @@ export const AI_FUNCTIONS: Record<string, AIFunction> = {
   ai_query: {
     function: "ai_query",
     businessValue:
-      "Invokes custom model serving endpoints or LLMs for flexible AI-powered analysis, generation, and recommendations. Supports structured output via `responseFormat` parameter and graceful error handling via `failOnError => false`.",
+      "Invokes custom model serving endpoints or LLMs for flexible AI-powered analysis, generation, and recommendations. With `failOnError => false`, returns STRUCT<result: STRING, errorMessage: STRING>. Parse structured output using `from_json(ai_result.result, 'STRUCT<...>') AS parsed_result` -- do NOT access nested struct fields directly on the result.",
     exampleUseCases:
-      "Custom analysis, recommendation generation, complex reasoning tasks, structured data extraction",
+      "Custom analysis, recommendation generation, complex reasoning tasks, structured data extraction with from_json parsing",
   },
   ai_forecast: {
     function: "ai_forecast",
