@@ -37,11 +37,6 @@ import {
   getMetricViewProposalsByRunDomain,
   updateDeploymentStatus,
 } from "@/lib/lakebase/metric-view-proposals";
-import {
-  ensureMetricViewsDeployed,
-  extractMetricViewFqnsFromSpace,
-} from "@/lib/genie/metric-view-dependencies";
-
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------
@@ -114,25 +109,6 @@ export async function POST(
     for (const domainReq of body.domains) {
       const assets: AssetResult[] = [];
       const deployedMvs: { fqn: string; description?: string }[] = [];
-
-      // 0. Pre-flight: ensure any metric views referenced by the serialized
-      //    space that aren't in the explicit deploy list are auto-deployed
-      try {
-        const referencedFqns = extractMetricViewFqnsFromSpace(domainReq.serializedSpace);
-        if (referencedFqns.length > 0) {
-          const depResult = await ensureMetricViewsDeployed(referencedFqns, body.targetSchema);
-          if (depResult.failed.length > 0) {
-            logger.warn("Some metric view dependencies could not be auto-deployed", {
-              domain: domainReq.domain,
-              failed: depResult.failed,
-            });
-          }
-        }
-      } catch (err) {
-        logger.warn("Metric view dependency check failed (non-fatal)", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
 
       // 1. Deploy metric views (with auto-fix)
       // Pre-load standalone proposals so we can update their deployment status
