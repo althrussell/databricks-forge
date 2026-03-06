@@ -22,6 +22,14 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function accessibleRow() {
+  return { columns: [], rows: [["1"]], totalRowCount: 1 };
+}
+
+function emptyResult() {
+  return { columns: [], rows: [], totalRowCount: 0 };
+}
+
 describe("walkLineage", () => {
   it("returns empty graph for no seed tables", async () => {
     const result = await walkLineage([]);
@@ -37,35 +45,20 @@ describe("walkLineage", () => {
     expect(result.discoveredTables).toHaveLength(0);
   });
 
-  it("uses WITH RECURSIVE and returns edges", async () => {
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [["1"]], totalRowCount: 1 });
+  it("performs BFS walk and returns edges", async () => {
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
 
     mockExecuteSQL.mockResolvedValueOnce({
       columns: [],
       totalRowCount: 2,
       rows: [
-        [
-          "catalog.schema.source",
-          "catalog.schema.table1",
-          "TABLE",
-          "TABLE",
-          "TABLE",
-          "2024-01-01",
-          "5",
-          "1",
-        ],
-        [
-          "catalog.schema.table1",
-          "catalog.schema.target",
-          "TABLE",
-          "TABLE",
-          "TABLE",
-          "2024-01-02",
-          "3",
-          "1",
-        ],
+        ["catalog.schema.source", "catalog.schema.table1", "TABLE", "TABLE", "TABLE", "2024-01-01", "5"],
+        ["catalog.schema.table1", "catalog.schema.target", "TABLE", "TABLE", "TABLE", "2024-01-02", "3"],
       ],
     });
+
+    // Second BFS round for discovered tables -- no further edges
+    mockExecuteSQL.mockResolvedValueOnce(emptyResult());
 
     const result = await walkLineage(["catalog.schema.table1"]);
 
@@ -73,39 +66,49 @@ describe("walkLineage", () => {
     expect(result.discoveredTables).toContain("catalog.schema.source");
     expect(result.discoveredTables).toContain("catalog.schema.target");
 
-    // Verify only 2 SQL calls were made (accessibility + recursive CTE)
-    expect(mockExecuteSQL).toHaveBeenCalledTimes(2);
+    // accessibility check + depth-1 BFS query + depth-2 BFS query (empty frontier)
+    expect(mockExecuteSQL).toHaveBeenCalledTimes(3);
 
-    // Verify the recursive CTE was used
-    const cteCall = mockExecuteSQL.mock.calls[1][0];
-    expect(cteCall).toContain("WITH RECURSIVE");
-    expect(cteCall).toContain("lineage_walk");
+    const bfsCall = mockExecuteSQL.mock.calls[1][0];
+    expect(bfsCall).toContain("system.access.table_lineage");
+    expect(bfsCall).toContain("GROUP BY");
   });
 
   it("uses correct direction for upstream-only walk", async () => {
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [["1"]], totalRowCount: 1 });
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [], totalRowCount: 0 });
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
+    mockExecuteSQL.mockResolvedValueOnce(emptyResult());
 
     await walkLineage(["catalog.schema.table1"], { direction: "upstream" });
 
-    const cteCall = mockExecuteSQL.mock.calls[1][0];
-    expect(cteCall).toContain("l.target_table_full_name IN");
-    expect(cteCall).toContain("l.target_table_full_name = lw.source_fqn");
+    const bfsCall = mockExecuteSQL.mock.calls[1][0];
+    expect(bfsCall).toContain("target_table_full_name IN");
+    expect(bfsCall).not.toContain("source_table_full_name IN");
   });
 
   it("uses correct direction for downstream-only walk", async () => {
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [["1"]], totalRowCount: 1 });
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [], totalRowCount: 0 });
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
+    mockExecuteSQL.mockResolvedValueOnce(emptyResult());
 
     await walkLineage(["catalog.schema.table1"], { direction: "downstream" });
 
-    const cteCall = mockExecuteSQL.mock.calls[1][0];
-    expect(cteCall).toContain("l.source_table_full_name IN");
-    expect(cteCall).toContain("l.source_table_full_name = lw.target_fqn");
+    const bfsCall = mockExecuteSQL.mock.calls[1][0];
+    expect(bfsCall).toContain("source_table_full_name IN");
+    expect(bfsCall).not.toContain("target_table_full_name IN");
+  });
+
+  it("uses both directions by default", async () => {
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
+    mockExecuteSQL.mockResolvedValueOnce(emptyResult());
+
+    await walkLineage(["catalog.schema.table1"]);
+
+    const bfsCall = mockExecuteSQL.mock.calls[1][0];
+    expect(bfsCall).toContain("target_table_full_name IN");
+    expect(bfsCall).toContain("source_table_full_name IN");
   });
 
   it("caps discovered tables at maxDiscoveredTables", async () => {
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [["1"]], totalRowCount: 1 });
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
 
     const manyEdges = Array.from({ length: 20 }, (_, i) => [
       `catalog.schema.src_${i}`,
@@ -114,7 +117,6 @@ describe("walkLineage", () => {
       "TABLE",
       "TABLE",
       "2024-01-01",
-      "1",
       "1",
     ]);
     mockExecuteSQL.mockResolvedValueOnce({
@@ -130,28 +132,49 @@ describe("walkLineage", () => {
     expect(result.discoveredTables.length).toBeLessThanOrEqual(5);
   });
 
-  it("returns empty graph when recursive CTE fails", async () => {
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [["1"]], totalRowCount: 1 });
-    mockExecuteSQL.mockRejectedValueOnce(new Error("WITH RECURSIVE not supported"));
+  it("returns partial results when BFS query fails mid-walk", async () => {
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
+    mockExecuteSQL.mockRejectedValueOnce(new Error("SQL execution failed"));
 
     const result = await walkLineage(["catalog.schema.table1"]);
     expect(result.edges).toHaveLength(0);
     expect(result.discoveredTables).toHaveLength(0);
+    expect(result.seedTables).toEqual(["catalog.schema.table1"]);
   });
 
-  it("deduplicates edges", async () => {
-    mockExecuteSQL.mockResolvedValueOnce({ columns: [], rows: [["1"]], totalRowCount: 1 });
+  it("deduplicates edges by source+target+entityType", async () => {
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
     mockExecuteSQL.mockResolvedValueOnce({
       columns: [],
       totalRowCount: 2,
       rows: [
-        ["catalog.schema.a", "catalog.schema.b", "TABLE", "TABLE", "TABLE", "2024-01-01", "5", "1"],
-        ["catalog.schema.a", "catalog.schema.b", "TABLE", "TABLE", "TABLE", "2024-01-02", "3", "1"],
+        ["catalog.schema.a", "catalog.schema.b", "TABLE", "TABLE", "TABLE", "2024-01-01", "5"],
+        ["catalog.schema.a", "catalog.schema.b", "TABLE", "TABLE", "TABLE", "2024-01-02", "3"],
       ],
     });
+    // No further frontier since b is the only discovered table
+    mockExecuteSQL.mockResolvedValueOnce(emptyResult());
 
     const result = await walkLineage(["catalog.schema.a"]);
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].eventCount).toBe(5);
+  });
+
+  it("respects maxDepth option", async () => {
+    mockExecuteSQL.mockResolvedValueOnce(accessibleRow());
+
+    // Depth 1: discover table_b from table_a
+    mockExecuteSQL.mockResolvedValueOnce({
+      columns: [],
+      totalRowCount: 1,
+      rows: [["catalog.schema.table_a", "catalog.schema.table_b", "TABLE", "TABLE", "TABLE", "2024-01-01", "1"]],
+    });
+
+    const result = await walkLineage(["catalog.schema.table_a"], { maxDepth: 1 });
+
+    // accessibility + 1 BFS round only
+    expect(mockExecuteSQL).toHaveBeenCalledTimes(2);
+    expect(result.edges).toHaveLength(1);
+    expect(result.discoveredTables).toContain("catalog.schema.table_b");
   });
 });
