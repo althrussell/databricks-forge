@@ -56,6 +56,209 @@ export function stripFqnPrefixes(sql: string): string {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Snowflake join nesting auto-fix
+// ---------------------------------------------------------------------------
+
+interface ParsedJoin {
+  name: string;
+  source: string;
+  on: string;
+  children: ParsedJoin[];
+  extraLines: string[];
+}
+
+/**
+ * Parse a flat YAML joins block into structured join objects.
+ * Handles `name:`, `source:`, `on:`, and any extra fields (type, etc.).
+ */
+function parseJoinsBlock(joinsText: string): ParsedJoin[] {
+  const joins: ParsedJoin[] = [];
+  const lines = joinsText.split("\n");
+  let current: Partial<ParsedJoin> | null = null;
+
+  for (const line of lines) {
+    const itemMatch = line.match(/^(\s*)-\s*name:\s*(\w+)/);
+    if (itemMatch) {
+      if (current?.name) {
+        joins.push({
+          name: current.name,
+          source: current.source ?? "",
+          on: current.on ?? "",
+          children: [],
+          extraLines: current.extraLines ?? [],
+        });
+      }
+      current = { name: itemMatch[2], extraLines: [] };
+      continue;
+    }
+
+    if (!current) continue;
+
+    const sourceMatch = line.match(/^\s*source:\s*(.+)/);
+    if (sourceMatch) {
+      current.source = sourceMatch[1].trim();
+      continue;
+    }
+
+    const onMatch = line.match(/^\s*on:\s*(.+)/);
+    if (onMatch) {
+      current.on = onMatch[1].trim();
+      continue;
+    }
+
+    if (line.trim()) {
+      current.extraLines = current.extraLines ?? [];
+      current.extraLines.push(line);
+    }
+  }
+
+  if (current?.name) {
+    joins.push({
+      name: current.name,
+      source: current.source ?? "",
+      on: current.on ?? "",
+      children: [],
+      extraLines: current.extraLines ?? [],
+    });
+  }
+
+  return joins;
+}
+
+/**
+ * Determine the left-side alias referenced in an `on:` clause.
+ * E.g. `source.member_id = member.member_id` → "source"
+ *       `member.location_id = location.location_id` → "member"
+ */
+function getOnLeftAlias(onExpr: string): string {
+  const match = onExpr.match(/^\s*(\w+)\./);
+  return match ? match[1].toLowerCase() : "source";
+}
+
+/**
+ * Serialize a join tree back to YAML text with proper indentation.
+ */
+function serializeJoins(joins: ParsedJoin[], indent: number): string {
+  const pad = " ".repeat(indent);
+  const lines: string[] = [];
+
+  for (const j of joins) {
+    lines.push(`${pad}- name: ${j.name}`);
+    lines.push(`${pad}  source: ${j.source}`);
+    lines.push(`${pad}  on: ${j.on}`);
+    for (const extra of j.extraLines) {
+      const trimmed = extra.replace(/^\s+/, "");
+      lines.push(`${pad}  ${trimmed}`);
+    }
+    if (j.children.length > 0) {
+      lines.push(`${pad}  joins:`);
+      lines.push(serializeJoins(j.children, indent + 4));
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Restructure flat top-level joins into nested joins for snowflake schemas.
+ *
+ * When a join's `on:` clause references another join alias (not `source`),
+ * move it as a child of the referenced join. This converts:
+ *
+ *   joins:
+ *     - name: member    on: source.member_id = member.member_id
+ *     - name: location  on: member.location_id = location.location_id
+ *
+ * Into:
+ *
+ *   joins:
+ *     - name: member    on: source.member_id = member.member_id
+ *       joins:
+ *         - name: location  on: member.location_id = location.location_id
+ *
+ * Operates on YAML text (the body between $$) or on DDL containing the YAML.
+ */
+export function nestSnowflakeJoins(text: string): string {
+  const lines = text.split("\n");
+
+  // Find the first top-level `joins:` line (not a nested `joins:` inside a join)
+  let joinsLineIdx = -1;
+  let joinsIndent = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)joins:\s*$/);
+    if (m) {
+      joinsLineIdx = i;
+      joinsIndent = m[1].length;
+      break;
+    }
+  }
+  if (joinsLineIdx === -1) return text;
+
+  // Collect all lines belonging to this joins block (indented more than joins:)
+  const blockStart = joinsLineIdx + 1;
+  let blockEnd = blockStart;
+  while (blockEnd < lines.length) {
+    const line = lines[blockEnd];
+    if (line.trim() === "") {
+      blockEnd++;
+      continue;
+    }
+    const lineIndent = line.search(/\S/);
+    if (lineIndent <= joinsIndent) break;
+    blockEnd++;
+  }
+
+  const joinsRawBlock = lines.slice(blockStart, blockEnd).join("\n");
+  const joins = parseJoinsBlock(joinsRawBlock);
+  if (joins.length <= 1) return text;
+
+  // Build a name->join index for reparenting
+  const joinByName = new Map<string, ParsedJoin>();
+  for (const j of joins) {
+    joinByName.set(j.name.toLowerCase(), j);
+  }
+
+  // Determine which joins are top-level (reference `source`) and which
+  // must be nested (reference another join alias)
+  const topLevel: ParsedJoin[] = [];
+  const toNest: ParsedJoin[] = [];
+
+  for (const j of joins) {
+    const leftAlias = getOnLeftAlias(j.on);
+    if (leftAlias === "source" || !joinByName.has(leftAlias)) {
+      topLevel.push(j);
+    } else {
+      toNest.push(j);
+    }
+  }
+
+  // Nothing to nest — all joins already reference source
+  if (toNest.length === 0) return text;
+
+  // Attach each nested join to its parent (supports multi-level chains)
+  for (const j of toNest) {
+    const parentAlias = getOnLeftAlias(j.on);
+    const parent = joinByName.get(parentAlias);
+    if (parent) {
+      parent.children.push(j);
+    } else {
+      topLevel.push(j);
+    }
+  }
+
+  // Rebuild the joins block with nesting
+  const newJoinsLines = [
+    " ".repeat(joinsIndent) + "joins:",
+    serializeJoins(topLevel, joinsIndent + 2),
+  ];
+
+  // Reconstruct the full text
+  const before = lines.slice(0, joinsLineIdx);
+  const after = lines.slice(blockEnd);
+  return [...before, ...newJoinsLines, ...after].join("\n");
+}
+
 function toSnakeCase(name: string): string {
   return name
     .trim()
@@ -63,6 +266,75 @@ function toSnakeCase(name: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
 }
+
+// ---------------------------------------------------------------------------
+// Hierarchical join context builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Present join specs hierarchically so the LLM understands snowflake nesting.
+ * Joins whose leftTable is in `factTables` are top-level; others are indented
+ * under the join they depend on.
+ */
+function buildHierarchicalJoinBlock(joinSpecs: JoinSpecInput[], factTables: string[]): string {
+  if (joinSpecs.length === 0) return "";
+
+  const factSet = new Set(factTables.map((t) => t.toLowerCase()));
+
+  // Partition: direct joins (left side is a fact/source table) vs transitive
+  const directJoins: JoinSpecInput[] = [];
+  const transitiveJoins: JoinSpecInput[] = [];
+
+  for (const j of joinSpecs) {
+    if (factSet.has(j.leftTable.toLowerCase())) {
+      directJoins.push(j);
+    } else {
+      transitiveJoins.push(j);
+    }
+  }
+
+  // Index transitive joins by their leftTable (the parent dim they depend on)
+  const childrenByParent = new Map<string, JoinSpecInput[]>();
+  for (const j of transitiveJoins) {
+    const key = j.leftTable.toLowerCase();
+    const list = childrenByParent.get(key) ?? [];
+    list.push(j);
+    childrenByParent.set(key, list);
+  }
+
+  const lines: string[] = [];
+
+  for (const j of directJoins) {
+    lines.push(`- source → ${j.rightTable} ON ${j.sql} (${j.relationshipType})`);
+    // Append any transitive children indented under this join
+    const children = childrenByParent.get(j.rightTable.toLowerCase());
+    if (children) {
+      for (const c of children) {
+        lines.push(
+          `  - ${c.leftTable} → ${c.rightTable} ON ${c.sql} (${c.relationshipType}) [MUST NEST under ${c.leftTable}]`,
+        );
+      }
+    }
+  }
+
+  // Any remaining transitive joins whose parent isn't a direct join
+  for (const j of transitiveJoins) {
+    const parentIsDirect = directJoins.some(
+      (d) => d.rightTable.toLowerCase() === j.leftTable.toLowerCase(),
+    );
+    if (!parentIsDirect) {
+      lines.push(
+        `- ${j.leftTable} → ${j.rightTable} ON ${j.sql} (${j.relationshipType}) [TRANSITIVE — nest under parent join]`,
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Input / Output types
+// ---------------------------------------------------------------------------
 
 export interface MetricViewProposalsInput {
   domain: string;
@@ -125,7 +397,47 @@ $$
   - source: catalog.schema.dim_table
   - on: MUST qualify BOTH sides. Use \`source.\` for the primary table alias and the join name for the dimension table.
     Example: \`source.customerID = customer.customerID\` (NOT \`customerID = customer.customerID\` which is ambiguous)
-  - joins: nested list (for snowflake, DBR 17.1+)
+  - joins: nested list (for snowflake schemas — see CRITICAL rule below)
+
+### CRITICAL: Snowflake join nesting
+When a join's \`on:\` clause references another join alias (NOT \`source\`), that join MUST be nested under the referenced parent join using a \`joins:\` sub-list. Top-level joins may ONLY reference \`source\` in their \`on:\` clause — referencing a sibling join alias causes an UNRESOLVED_COLUMN error.
+
+Star schema (all joins reference \`source\` — flat is correct):
+\`\`\`yaml
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
+  - name: product
+    source: catalog.schema.dim_product
+    on: source.product_id = product.product_id
+\`\`\`
+
+Snowflake schema (location and segment join through member — MUST nest):
+\`\`\`yaml
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+    joins:
+      - name: location
+        source: catalog.schema.dim_location
+        on: member.location_id = location.location_id
+      - name: segment
+        source: catalog.schema.dim_segment
+        on: member.segment_id = segment.segment_id
+\`\`\`
+
+WRONG (flat — causes UNRESOLVED_COLUMN):
+\`\`\`yaml
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+  - name: location
+    source: catalog.schema.dim_location
+    on: member.location_id = location.location_id
+\`\`\`
 
 ### Measure patterns:
 - Basic: \`SUM(amount)\`, \`COUNT(1)\`, \`AVG(price)\`
@@ -293,6 +605,69 @@ export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlis
   return issues;
 }
 
+/**
+ * Detect top-level joins whose `on:` clause references a sibling join alias
+ * instead of `source`. This indicates a snowflake pattern that requires nesting.
+ */
+export function detectFlatSnowflakeJoins(yaml: string): string[] {
+  const issues: string[] = [];
+
+  // Only inspect top-level joins (indented exactly one level under `joins:`)
+  const topJoinsSectionMatch = yaml.match(
+    /^(\s*)joins:\s*\n((?:\s+-\s*name:.*\n(?:\s+\w+:.*\n?)*)*)/m,
+  );
+  if (!topJoinsSectionMatch) return issues;
+
+  const baseIndent = topJoinsSectionMatch[1].length;
+  const joinsBlock = topJoinsSectionMatch[2];
+
+  // Parse top-level join names and their on: clauses
+  const joinNames = new Set<string>();
+  const entries: { name: string; on: string }[] = [];
+
+  const lines = joinsBlock.split("\n");
+  let currentName = "";
+  let currentOn = "";
+
+  for (const line of lines) {
+    const nameMatch = line.match(/^(\s*)-\s*name:\s*(\w+)/);
+    if (nameMatch) {
+      const indent = nameMatch[1].length;
+      // Only capture top-level joins (indented by baseIndent + 2)
+      if (indent <= baseIndent + 4) {
+        if (currentName) {
+          entries.push({ name: currentName, on: currentOn });
+        }
+        currentName = nameMatch[2];
+        currentOn = "";
+        joinNames.add(currentName.toLowerCase());
+      }
+      continue;
+    }
+
+    const onMatch = line.match(/^\s*on:\s*(.+)/);
+    if (onMatch && currentName) {
+      currentOn = onMatch[1].trim();
+    }
+  }
+  if (currentName) {
+    entries.push({ name: currentName, on: currentOn });
+  }
+
+  // Check if any top-level join's `on:` references a sibling alias
+  for (const entry of entries) {
+    if (!entry.on) continue;
+    const leftAlias = entry.on.match(/^\s*(\w+)\./)?.[1]?.toLowerCase();
+    if (leftAlias && leftAlias !== "source" && joinNames.has(leftAlias)) {
+      issues.push(
+        `Join \`${entry.name}\` references alias \`${leftAlias}\` in its \`on:\` clause but is defined as a top-level sibling — it must be nested under the \`${leftAlias}\` join (snowflake schema pattern)`,
+      );
+    }
+  }
+
+  return issues;
+}
+
 export function validateMetricViewYaml(
   yaml: string,
   ddl: string,
@@ -396,6 +771,10 @@ export function validateMetricViewYaml(
       issues.push(`Nested aggregate function in measure expr is not allowed: ${exprLine.trim()}`);
     }
   }
+
+  // Detect flat joins that reference sibling join aliases (snowflake nesting issue).
+  // Top-level joins must only reference `source` in their `on:` clause.
+  issues.push(...detectFlatSnowflakeJoins(yaml));
 
   // Validate alias.column references (e.g. source.amount, supplier.name)
   // against actual table schemas in the allowlist
@@ -550,6 +929,7 @@ Rules:
 - The primary fact table has the implicit alias \`source\`. Use \`source.columnName\` or bare \`columnName\` for its columns.
 - Join aliases must match a \`name:\` declared in the \`joins:\` block. Do NOT invent aliases.
 - If a join references a table not listed in the SCHEMA CONTEXT, REMOVE the entire join and all references to it.
+- SNOWFLAKE JOINS: If a join's \`on:\` clause references another join alias (NOT \`source\`), that join MUST be nested under the referenced parent join using a \`joins:\` sub-list. Top-level joins may ONLY reference \`source.\` in their \`on:\` clause. For example, if \`location\` joins on \`member.location_id\`, the \`location\` join must be nested under the \`member\` join.
 - Measure \`name\` MUST be snake_case (no spaces) and MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`. Add a \`display_name\` for the human-readable label.
 - When column names contain spaces, backtick-quote them: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`.
 - Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
@@ -669,13 +1049,10 @@ export async function runMetricViewProposals(
     .map((d) => `- ${d.name}: ${stripFqnPrefixes(d.sql)}`)
     .join("\n");
 
-  // Build join context
-  const joinBlock =
-    joinSpecs.length > 0
-      ? joinSpecs
-          .map((j) => `- ${j.leftTable} → ${j.rightTable} ON ${j.sql} (${j.relationshipType})`)
-          .join("\n")
-      : "";
+  // Build join context with hierarchical structure for snowflake schemas.
+  // Top-level joins reference the source fact table; transitive joins
+  // (dim → dim2) are indented under their parent to signal nesting.
+  const joinBlock = buildHierarchicalJoinBlock(joinSpecs, tableFqns);
 
   // Build column enrichments context
   const enrichmentBlock = columnEnrichments
@@ -707,7 +1084,7 @@ Create 1-3 metric view proposals for the "${domain}" domain. Each proposal MUST:
 
 1. Follow the YAML v1.1 spec exactly (version, source, dimensions, measures)
 2. Use a central fact table as the source
-${joinSpecs.length > 0 ? "3. When joins are available, create star-schema metric views using the joins: block to pull dimensions from dimension tables" : "3. Define meaningful dimensions from the source table columns. Do NOT create a joins: block — no join relationships are available."}
+${joinSpecs.length > 0 ? "3. When joins are available, create star/snowflake-schema metric views using the joins: block to pull dimensions from dimension tables. For snowflake schemas where a dimension table joins through another dimension table (not through `source`), you MUST nest the dependent join under the parent join's `joins:` sub-list. NEVER reference a sibling join alias in a top-level `on:` clause." : "3. Define meaningful dimensions from the source table columns. Do NOT create a joins: block — no join relationships are available."}
 4. Include time-based dimensions using DATE_TRUNC for any date/timestamp columns
 5. Include a mix of measure types:
    - Basic aggregates (SUM, COUNT, AVG)
@@ -798,6 +1175,10 @@ Create metric view proposals for this domain.`;
           (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
         );
 
+        // Auto-fix snowflake joins: restructure flat sibling joins into
+        // nested joins when `on:` references another join alias.
+        ddlStr = nestSnowflakeJoins(ddlStr);
+
         const {
           yaml: fixedYaml,
           ddl: fixedDdl,
@@ -852,6 +1233,9 @@ Create metric view proposals for this domain.`;
         /^(\s*(?:expr|on):\s*)(.+)$/gm,
         (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
       );
+
+      // Auto-fix snowflake joins in repaired DDL
+      repaired.ddl = nestSnowflakeJoins(repaired.ddl);
 
       const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(
         repaired.yaml,

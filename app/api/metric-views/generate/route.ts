@@ -1,0 +1,111 @@
+/**
+ * API: /api/metric-views/generate
+ *
+ * POST -- Standalone metric view generation. Builds metric view proposals
+ * from UC metadata without requiring a full Genie engine or pipeline run.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/error-utils";
+import { getServingEndpoint } from "@/lib/dbx/client";
+import { listTables, listColumns, listForeignKeys } from "@/lib/queries/metadata";
+import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
+import { runMetricViewProposals } from "@/lib/genie/passes/metric-view-proposals";
+import { buildLightweightSeed } from "@/lib/genie/passes/lightweight-seed";
+import { saveMetricViewProposals } from "@/lib/lakebase/metric-view-proposals";
+import { logger } from "@/lib/logger";
+import type { MetadataSnapshot } from "@/lib/domain/types";
+import type { JoinSpecInput } from "@/lib/genie/types";
+
+interface RequestBody {
+  schemaScope: string;
+  tables?: string[];
+  businessContext?: string;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as RequestBody;
+    const { schemaScope, tables: tableFilter } = body;
+
+    if (!schemaScope || schemaScope.split(".").length < 2) {
+      return NextResponse.json(
+        { error: "schemaScope must be catalog.schema format" },
+        { status: 400 },
+      );
+    }
+
+    const [catalogName, schemaName] = schemaScope.split(".");
+    const endpoint = getServingEndpoint();
+
+    // Build metadata snapshot from UC information_schema
+    const tableInfos = await listTables(catalogName, schemaName);
+    const columnInfos = await listColumns(catalogName, schemaName);
+    const fks = await listForeignKeys(catalogName, schemaName).catch(() => []);
+
+    const metadata: MetadataSnapshot = {
+      cacheKey: `standalone_${schemaScope}_${Date.now()}`,
+      ucPath: schemaScope,
+      tables: tableInfos,
+      columns: columnInfos,
+      foreignKeys: fks,
+      metricViews: [],
+      schemaMarkdown: "",
+      tableCount: tableInfos.length,
+      columnCount: columnInfos.length,
+      cachedAt: new Date().toISOString(),
+      lineageDiscoveredFqns: [],
+    };
+
+    // Filter to specific tables if requested
+    const tableFqns = tableFilter?.length ? tableFilter : tableInfos.map((t) => t.fqn);
+
+    const allowlist = buildSchemaAllowlist(metadata);
+
+    // Build join specs from FK metadata
+    const joinSpecs: JoinSpecInput[] = fks.map((fk) => ({
+      leftTable: fk.tableFqn,
+      rightTable: fk.referencedTableFqn,
+      sql: `${fk.tableFqn.split(".").pop()}.${fk.columnName} = ${fk.referencedTableFqn.split(".").pop()}.${fk.referencedColumnName}`,
+      relationshipType: "many_to_one" as const,
+      source: "fk" as const,
+      confidence: "high" as const,
+    }));
+
+    // Build lightweight seed (no LLM needed)
+    const { measures, dimensions, columnEnrichments } = buildLightweightSeed(tableFqns, metadata);
+
+    // Generate metric view proposals
+    const result = await runMetricViewProposals({
+      domain: schemaScope,
+      tableFqns,
+      metadata,
+      allowlist,
+      useCases: [],
+      measures,
+      dimensions,
+      joinSpecs,
+      columnEnrichments,
+      endpoint,
+    });
+
+    // Persist proposals
+    await saveMetricViewProposals(null, schemaScope, null, result.proposals);
+
+    logger.info("Standalone metric view generation complete", {
+      schemaScope,
+      proposalCount: result.proposals.length,
+    });
+
+    return NextResponse.json({
+      proposals: result.proposals,
+      schemaScope,
+      tableCount: tableFqns.length,
+    });
+  } catch (err) {
+    logger.error("Standalone metric view generation failed", {
+      error: safeErrorMessage(err),
+    });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
+  }
+}

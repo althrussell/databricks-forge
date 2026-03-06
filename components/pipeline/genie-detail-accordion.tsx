@@ -48,7 +48,7 @@ export function GenieDetailAccordion({
         </AccordionContent>
       </AccordionItem>
 
-      {/* Metric Views */}
+      {/* Metric Views — read-only reference (full management in Metric Views tab) */}
       {(rec.metricViews.length > 0 ||
         mvProposals.length > 0 ||
         (parsed.data_sources?.metric_views && parsed.data_sources.metric_views.length > 0)) && (
@@ -57,93 +57,45 @@ export function GenieDetailAccordion({
             Metric Views ({rec.metricViewCount})
           </AccordionTrigger>
           <AccordionContent>
-            <div className="max-h-80 space-y-3 overflow-auto text-xs">
+            <div className="max-h-80 space-y-2 overflow-auto text-xs">
+              <p className="text-[10px] text-muted-foreground mb-2">
+                Metric views are managed in the <strong>Metric Views</strong> tab. Below are the
+                metric views referenced by this Genie space.
+              </p>
               {mvProposals.length > 0
                 ? mvProposals.map((mv, i) => (
-                    <div key={i} className="space-y-1.5 rounded border p-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-violet-500">{mv.name}</span>
-                        <Badge
-                          variant="outline"
-                          className={
-                            mv.validationStatus === "valid"
-                              ? "border-green-500/50 text-green-600 text-[9px]"
-                              : mv.validationStatus === "warning"
-                                ? "border-amber-500/50 text-amber-600 text-[9px]"
-                                : "border-red-500/50 text-red-600 text-[9px]"
-                          }
-                        >
-                          {mv.validationStatus}
-                        </Badge>
-                      </div>
-                      {mv.description && <p className="text-muted-foreground">{mv.description}</p>}
-                      <div className="flex flex-wrap gap-1">
-                        {mv.sourceTables.map((t) => (
-                          <Badge key={t} variant="outline" className="font-mono text-[9px]">
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {mv.hasJoins && (
-                          <Badge className="bg-blue-500/10 text-blue-600 text-[9px]">joins</Badge>
-                        )}
-                        {mv.hasFilteredMeasures && (
-                          <Badge className="bg-amber-500/10 text-amber-600 text-[9px]">
-                            filtered
-                          </Badge>
-                        )}
-                        {mv.hasWindowMeasures && (
-                          <Badge className="bg-purple-500/10 text-purple-600 text-[9px]">
-                            window
-                          </Badge>
-                        )}
-                        {mv.hasMaterialization && (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px]">
-                            materialized
-                          </Badge>
-                        )}
-                      </div>
-                      {mv.validationIssues && mv.validationIssues.length > 0 && (
-                        <div
-                          className={`rounded p-1.5 ${mv.validationStatus === "error" ? "bg-red-50 dark:bg-red-950/20" : "bg-amber-50 dark:bg-amber-950/20"}`}
-                        >
-                          <p
-                            className={`text-[10px] font-medium ${mv.validationStatus === "error" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}
-                          >
-                            {mv.validationStatus === "error"
-                              ? "Validation errors:"
-                              : "Validation issues:"}
-                          </p>
-                          {mv.validationIssues.map((issue, idx) => (
-                            <p
-                              key={idx}
-                              className={`text-[10px] ${mv.validationStatus === "error" ? "text-red-600 dark:text-red-500" : "text-amber-600 dark:text-amber-500"}`}
-                            >
-                              - {issue}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                      {mv.ddl && (
-                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[10px] font-mono leading-relaxed">
-                          {mv.ddl}
-                        </pre>
-                      )}
+                    <div key={i} className="flex items-center gap-2 rounded border p-1.5">
+                      <span className="font-mono font-semibold text-violet-500 truncate flex-1">
+                        {mv.name}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          mv.validationStatus === "valid"
+                            ? "border-green-500/50 text-green-600 text-[9px]"
+                            : mv.validationStatus === "warning"
+                              ? "border-amber-500/50 text-amber-600 text-[9px]"
+                              : "border-red-500/50 text-red-600 text-[9px]"
+                        }
+                      >
+                        {mv.validationStatus}
+                      </Badge>
                     </div>
                   ))
                 : parsed.data_sources?.metric_views && parsed.data_sources.metric_views.length > 0
                   ? parsed.data_sources.metric_views.map((mv) => (
-                      <div key={mv.identifier} className="space-y-0.5">
-                        <span className="truncate font-mono text-violet-500">{mv.identifier}</span>
-                        {mv.description && mv.description.length > 0 && (
-                          <p className="text-muted-foreground">{mv.description.join(" ")}</p>
-                        )}
+                      <div
+                        key={mv.identifier}
+                        className="flex items-center gap-2 rounded border p-1.5"
+                      >
+                        <span className="truncate font-mono text-violet-500 flex-1">
+                          {mv.identifier}
+                        </span>
                       </div>
                     ))
                   : rec.metricViews.map((mv) => (
-                      <div key={mv} className="truncate font-mono text-violet-500">
-                        {mv}
+                      <div key={mv} className="flex items-center gap-2 rounded border p-1.5">
+                        <span className="truncate font-mono text-violet-500 flex-1">{mv}</span>
                       </div>
                     ))}
             </div>

@@ -32,6 +32,7 @@ import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
+import { saveMetricViewProposals } from "@/lib/lakebase/metric-view-proposals";
 import { runTitleGeneration } from "./passes/title-generation";
 import { runExampleQueryGeneration } from "./passes/example-query-generation";
 import { inferNormalizedDomainFromTables, normalizeDomainLabel } from "./domain-normalization";
@@ -865,9 +866,38 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     total: allJoins.length,
   });
 
-  // Passes 3-6 in parallel (mirrors processDomain structure)
-  onProgress?.("Creating trusted assets, instructions, benchmarks & metric views...", 50);
-  const [trustedResult, instructionResult, benchmarkResult, metricViewResult] = await Promise.all([
+  // Phase A: Metric views first
+  onProgress?.("Generating metric views...", 50);
+  const metricViewResult = engineConfig.generateMetricViews
+    ? await runMetricViewProposals({
+        domain,
+        tableFqns: validTableFqns,
+        metadata,
+        allowlist,
+        useCases: [],
+        measures: exprResult.measures,
+        dimensions: exprResult.dimensions,
+        joinSpecs: allJoins,
+        columnEnrichments: columnResult.enrichments,
+        endpoint: premiumEndpoint,
+        signal,
+      })
+    : { proposals: [] };
+
+  // Persist metric view proposals to standalone table (best-effort)
+  try {
+    const schemaScope = metadata.ucPath;
+    await saveMetricViewProposals(null, schemaScope, domain, metricViewResult.proposals);
+  } catch (err) {
+    logger.warn("Failed to persist ad-hoc metric view proposals (non-fatal)", {
+      domain,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Phase B: Passes 3-5 in parallel
+  onProgress?.("Creating trusted assets, instructions & benchmarks...", 60);
+  const [trustedResult, instructionResult, benchmarkResult] = await Promise.all([
     engineConfig.generateTrustedAssets
       ? runTrustedAssetAuthoring({
           tableFqns: validTableFqns,
@@ -911,22 +941,6 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
           signal,
         })
       : Promise.resolve({ benchmarks: [...engineConfig.benchmarkQuestions] }),
-
-    engineConfig.generateMetricViews
-      ? runMetricViewProposals({
-          domain,
-          tableFqns: validTableFqns,
-          metadata,
-          allowlist,
-          useCases: [],
-          measures: exprResult.measures,
-          dimensions: exprResult.dimensions,
-          joinSpecs: allJoins,
-          columnEnrichments: columnResult.enrichments,
-          endpoint: premiumEndpoint,
-          signal,
-        })
-      : Promise.resolve({ proposals: [] }),
   ]);
 
   onProgress?.("Assembling Genie Space...", 90);

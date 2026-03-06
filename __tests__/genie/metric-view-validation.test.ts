@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   stripFqnPrefixes,
+  nestSnowflakeJoins,
+  detectFlatSnowflakeJoins,
   validateColumnReferences,
   validateMetricViewYaml,
 } from "@/lib/genie/passes/metric-view-proposals";
@@ -259,5 +261,170 @@ measures:
 
     const nestedIssues = result.issues.filter((i) => i.includes("Nested aggregate"));
     expect(nestedIssues).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nestSnowflakeJoins
+// ---------------------------------------------------------------------------
+
+describe("nestSnowflakeJoins", () => {
+  it("restructures flat snowflake joins into nested joins", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact_orders
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+  - name: location
+    source: catalog.schema.dim_location
+    on: member.location_id = location.location_id
+  - name: segment
+    source: catalog.schema.dim_segment
+    on: member.segment_id = segment.segment_id
+dimensions:
+  - name: state
+    expr: location.state
+`;
+    const result = nestSnowflakeJoins(yaml);
+
+    // location and segment should be nested under member
+    expect(result).toContain("- name: member");
+    expect(result).toContain("    joins:");
+    expect(result).toContain("      - name: location");
+    expect(result).toContain("      - name: segment");
+    // location and segment should NOT appear at the same indent as member
+    // Extract the joins block and check only top-level join items in it
+    const joinsSection = result.split("joins:")[1].split("dimensions:")[0];
+    const topJoinNames = [...joinsSection.matchAll(/^  - name: (\w+)/gm)].map((m) => m[1]);
+    expect(topJoinNames).toEqual(["member"]);
+  });
+
+  it("preserves star schema joins (no nesting needed)", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact_orders
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
+  - name: product
+    source: catalog.schema.dim_product
+    on: source.product_id = product.product_id
+dimensions:
+  - name: cust_name
+    expr: customer.name
+`;
+    const result = nestSnowflakeJoins(yaml);
+
+    // Both joins should remain at top level
+    expect(result).toContain("- name: customer");
+    expect(result).toContain("- name: product");
+    // No nested joins: block should be added
+    expect(result).not.toMatch(/^\s+joins:\s*$/m);
+  });
+
+  it("handles multi-level nesting (fact -> A -> B -> C)", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: dim_a
+    source: catalog.schema.dim_a
+    on: source.a_id = dim_a.id
+  - name: dim_b
+    source: catalog.schema.dim_b
+    on: dim_a.b_id = dim_b.id
+  - name: dim_c
+    source: catalog.schema.dim_c
+    on: dim_b.c_id = dim_c.id
+dimensions:
+  - name: col
+    expr: dim_c.col
+`;
+    const result = nestSnowflakeJoins(yaml);
+
+    // dim_b should be under dim_a, dim_c should be under dim_b
+    expect(result).toContain("- name: dim_a");
+    expect(result).toContain("      - name: dim_b");
+    expect(result).toContain("          - name: dim_c");
+  });
+
+  it("returns input unchanged when no joins block exists", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: col
+    expr: col
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    expect(nestSnowflakeJoins(yaml)).toBe(yaml);
+  });
+
+  it("returns input unchanged for a single join", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: dim
+    source: catalog.schema.dim
+    on: source.dim_id = dim.id
+dimensions:
+  - name: col
+    expr: dim.col
+`;
+    expect(nestSnowflakeJoins(yaml)).toBe(yaml);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectFlatSnowflakeJoins
+// ---------------------------------------------------------------------------
+
+describe("detectFlatSnowflakeJoins", () => {
+  it("flags flat joins referencing sibling aliases", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+  - name: location
+    source: catalog.schema.dim_location
+    on: member.location_id = location.location_id
+`;
+    const issues = detectFlatSnowflakeJoins(yaml);
+    expect(issues.length).toBe(1);
+    expect(issues[0]).toContain("location");
+    expect(issues[0]).toContain("member");
+    expect(issues[0]).toContain("nested");
+  });
+
+  it("passes star schema joins (all reference source)", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
+  - name: product
+    source: catalog.schema.dim_product
+    on: source.product_id = product.product_id
+`;
+    const issues = detectFlatSnowflakeJoins(yaml);
+    expect(issues).toEqual([]);
+  });
+
+  it("passes when no joins block exists", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: col
+    expr: col
+`;
+    const issues = detectFlatSnowflakeJoins(yaml);
+    expect(issues).toEqual([]);
   });
 });
