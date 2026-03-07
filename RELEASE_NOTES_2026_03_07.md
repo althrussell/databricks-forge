@@ -1,10 +1,27 @@
 # Release Notes -- 2026-03-07
 
-**Databricks Forge AI v0.13.1**
+**Databricks Forge AI v0.14.0**
 
 ---
 
 ## New Features
+
+### Metric View Deploy Modal
+
+Deploying metric views from the Metric Views tab now opens a modal dialog where users select the target `catalog.schema` via the Catalog Browser before deployment begins. This replaces the previous silent deploy that used the proposal's original schema scope with no user visibility. Both single-view deploy and "Deploy All Valid" actions use the same modal. The modal shows deployment progress and per-view success/failure results, matching the existing Genie Space deploy UX.
+
+### Metric View Repair Button
+
+Failed and errored metric views now show a "Repair" button (wrench icon) that re-runs the full validation and repair pipeline on a single proposal without requiring a full pipeline re-run. The repair flow:
+
+- Loads the run's cached metadata and rebuilds the schema allowlist
+- Applies all deterministic auto-fixes (snowflake join nesting, alias qualification, collision and shadow renaming)
+- Re-validates against the allowlist
+- If still errored with column issues, invokes LLM repair with full schema context
+- Dry-runs the repaired DDL to catch SQL-level errors
+- Updates the proposal in Lakebase and resets deployment status to "proposed"
+
+New API endpoint: `POST /api/metric-views/[id]/repair`.
 
 ### Metric View Deployment Gate
 
@@ -14,8 +31,6 @@ Metric views are no longer silently auto-deployed to Unity Catalog when deployin
 - Lets the user select a target schema via the Catalog Browser
 - Deploys each metric view individually with per-view success/failure reporting
 - Only allows the parent deploy to proceed once dependencies are satisfied
-
-This gives users full control over where metric views land and prevents unexpected objects appearing in their catalogs.
 
 ### Metric View Dependency Check API
 
@@ -43,10 +58,11 @@ Industry Outcome Map coverage analysis has been promoted from a buried collapsib
 
 ---
 
-## Commits (4)
+## Commits (5)
 
 | Hash | Summary |
 |---|---|
+| `eda89a6` | Add deploy modal with schema picker and repair button for metric views |
 | `8953d16` | Fix metric views width overflow by adding min-w-0 to layout flex column |
 | `fc2ed03` | Replace silent metric view auto-deploy with user-facing dependency gate |
 | `3dd4ce5` | Add 429 rate-limit endpoint fallback to review model |
