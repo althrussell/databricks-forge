@@ -37,6 +37,7 @@ import {
   getMetricViewProposalsByRunDomain,
   updateDeploymentStatus,
 } from "@/lib/lakebase/metric-view-proposals";
+import { rewriteDashboardMetricViewFqns } from "@/lib/genie/metric-view-dependencies";
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------
@@ -54,6 +55,8 @@ interface RequestBody {
   domains: DomainDeployRequest[];
   targetSchema: string; // "catalog.schema"
   authMode?: GenieAuthMode;
+  /** Optional metric view FQN rewrites (old ref → deployed FQN). */
+  fqnRewrites?: Record<string, string>;
 }
 
 interface DomainResult {
@@ -106,7 +109,17 @@ export async function POST(
     const config = getConfig();
     const results: DomainResult[] = [];
 
+    const fqnRewrites = body.fqnRewrites ?? {};
+
     for (const domainReq of body.domains) {
+      // Apply metric view FQN rewrites to the serialized space if provided
+      if (Object.keys(fqnRewrites).length > 0) {
+        domainReq.serializedSpace = rewriteDashboardMetricViewFqns(
+          domainReq.serializedSpace,
+          fqnRewrites,
+        );
+      }
+
       const assets: AssetResult[] = [];
       const deployedMvs: { fqn: string; description?: string }[] = [];
 

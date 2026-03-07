@@ -29,17 +29,33 @@ export async function POST(request: NextRequest) {
       fqnsToCheck = body.fqns;
     } else if (body.runId && body.domain) {
       const proposals = await getMetricViewProposalsByRunDomain(body.runId, body.domain);
-      const proposed = proposals.filter(
-        (p) => p.deploymentStatus !== "deployed" && p.validationStatus !== "error" && p.ddl,
-      );
-      fqnsToCheck = proposed
-        .map((p) => {
+      // Include ALL proposals -- those without DDL or with errors still need
+      // dependency resolution (they may have been deployed standalone).
+      const seen = new Set<string>();
+      for (const p of proposals) {
+        let fqn: string | null = null;
+
+        // 1. Already deployed elsewhere -- check that FQN
+        if (p.deployedFqn) {
+          fqn = p.deployedFqn;
+        }
+        // 2. Has DDL -- extract FQN from CREATE VIEW statement
+        if (!fqn && p.ddl) {
           const match = p.ddl.match(
             /VIEW\s+(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
           );
-          return match ? match[1].replace(/`/g, "") : null;
-        })
-        .filter((fqn): fqn is string => fqn !== null);
+          fqn = match ? match[1].replace(/`/g, "") : null;
+        }
+        // 3. Fallback -- construct from schemaScope + name
+        if (!fqn && p.schemaScope && p.name) {
+          fqn = `${p.schemaScope}.${p.name}`;
+        }
+
+        if (fqn && !seen.has(fqn.toLowerCase())) {
+          seen.add(fqn.toLowerCase());
+          fqnsToCheck.push(fqn);
+        }
+      }
     }
 
     if (fqnsToCheck.length === 0) {

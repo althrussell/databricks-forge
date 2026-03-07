@@ -24,6 +24,7 @@ import {
   trackDashboardCreated,
   trackDashboardUpdated,
 } from "@/lib/lakebase/dashboards";
+import { rewriteDashboardMetricViewFqns } from "@/lib/genie/metric-view-dependencies";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -58,6 +59,18 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const parentPath = (body.parentPath as string) ?? DEFAULT_DASHBOARD_PARENT_PATH;
     const shouldPublish = body.publish === true;
+    const fqnRewrites = (body.fqnRewrites as Record<string, string> | undefined) ?? {};
+
+    // Apply metric view FQN rewrites to the dashboard SQL if any were provided
+    let serializedDashboard = rec.serializedDashboard;
+    if (Object.keys(fqnRewrites).length > 0) {
+      serializedDashboard = rewriteDashboardMetricViewFqns(serializedDashboard, fqnRewrites);
+      logger.info("Applied metric view FQN rewrites to dashboard", {
+        runId,
+        domain: decodedDomain,
+        rewrites: fqnRewrites,
+      });
+    }
 
     // Check if there's already a tracked dashboard for this run+domain
     const tracked = await listTrackedDashboards(runId);
@@ -72,7 +85,7 @@ export async function POST(
     if (existing) {
       const result = await updateDashboard(existing.dashboardId, {
         displayName: rec.title,
-        serializedDashboard: rec.serializedDashboard,
+        serializedDashboard,
       });
       dashboardId = result.dashboard_id;
       action = "updated";
@@ -82,7 +95,7 @@ export async function POST(
     } else {
       const result = await createDashboard({
         displayName: rec.title,
-        serializedDashboard: rec.serializedDashboard,
+        serializedDashboard,
         warehouseId: config.warehouseId,
         parentPath,
       });

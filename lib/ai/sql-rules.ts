@@ -36,6 +36,7 @@ Identifier quoting:
 Query structure:
 - For top-N queries, ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() for top-N because ties can return more than N rows.
 - Use QUALIFY for per-group deduplication (e.g. latest row per customer), NOT for top-N lists.
+- NEVER use aggregate functions (SUM, AVG, COUNT, MIN, MAX) in the same SELECT block as QUALIFY. QUALIFY operates before GROUP BY, so aggregates are invalid in that context. Split into two CTEs: first CTE uses QUALIFY for row-level deduplication on raw columns, second CTE aggregates the result.
 - Always include human-readable identifying columns (e.g. customer name, email, product name) in entity-level query output.
 - Prefer explicit column lists over SELECT *.
 - Filter early, aggregate late -- push WHERE clauses as close to the source tables as possible.
@@ -96,6 +97,7 @@ export const DATABRICKS_SQL_RULES_COMPACT = `
 DATABRICKS SQL RULES:
 - NEVER use MEDIAN(). Use PERCENTILE_APPROX(col, 0.5) instead.
 - NEVER nest a window function (OVER) inside an aggregate (SUM, AVG, COUNT, MIN, MAX).
+- NEVER combine aggregate functions (SUM, AVG, etc.) with QUALIFY in the same SELECT. QUALIFY runs before GROUP BY. Split deduplication and aggregation into separate CTEs.
 - Use DECIMAL(18,2) for financial/monetary calculations.
 - Use COLLATE UTF8_LCASE for case-insensitive comparisons.
 - Use PERCENTILE_APPROX for percentile calculations.
@@ -154,6 +156,7 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - Pipe syntax (|>) for complex multi-step transformations
    - DECIMAL(18,2) for financial calculations
    - No nested window functions inside aggregates
+   - No aggregate functions (SUM/AVG/COUNT/MIN/MAX) in the same SELECT as QUALIFY -- split into separate CTEs
    - Backtick-quoted identifiers with spaces/special chars
    - Three-part fully-qualified table names (catalog.schema.table)
    - array_join(collect_list(col), ',') instead of STRING_AGG()

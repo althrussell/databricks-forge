@@ -21,6 +21,7 @@ import type { DashboardRecommendation } from "@/lib/dashboard/types";
 import {
   MetricViewDependencyModal,
   type MissingMetricView,
+  type DeployedResult,
 } from "@/components/pipeline/metric-view-dependency-modal";
 
 // ---------------------------------------------------------------------------
@@ -71,6 +72,7 @@ export function DashboardDeployModal({
   const [missingMvs, setMissingMvs] = useState<MissingMetricView[]>([]);
   const [checkingDeps, setCheckingDeps] = useState(false);
   const [defaultMvSchema, setDefaultMvSchema] = useState("");
+  const [fqnRewrites, setFqnRewrites] = useState<Record<string, string>>({});
 
   function handleClose() {
     const wasCompleted = step === "done";
@@ -79,6 +81,7 @@ export function DashboardDeployModal({
     setDeployingIdx(0);
     setMissingMvs([]);
     setCheckingDeps(false);
+    setFqnRewrites({});
     onOpenChange(false);
     if (wasCompleted) {
       onDeployComplete();
@@ -133,7 +136,8 @@ export function DashboardDeployModal({
     }
   }
 
-  async function handleDeploy() {
+  async function handleDeploy(rewrites?: Record<string, string>) {
+    const activeRewrites = rewrites ?? fqnRewrites;
     setStep("deploying");
     setResults([]);
     const deployResults: DomainResult[] = [];
@@ -143,12 +147,20 @@ export function DashboardDeployModal({
       setDeployingIdx(i);
 
       try {
+        const bodyPayload: Record<string, unknown> = {
+          parentPath,
+          publish: publishAfterDeploy,
+        };
+        if (Object.keys(activeRewrites).length > 0) {
+          bodyPayload.fqnRewrites = activeRewrites;
+        }
+
         const res = await fetch(
           `/api/runs/${runId}/dashboard-engine/${encodeURIComponent(rec.domain)}/deploy`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ parentPath, publish: publishAfterDeploy }),
+            body: JSON.stringify(bodyPayload),
           },
         );
 
@@ -334,8 +346,21 @@ export function DashboardDeployModal({
           }}
           missing={missingMvs}
           defaultSchema={defaultMvSchema}
-          onDeployed={() => {
-            handleDeploy();
+          onDeployed={(deployed: DeployedResult[]) => {
+            const rewrites: Record<string, string> = {};
+            for (const d of deployed) {
+              if (d.fqn !== d.deployedFqn) {
+                rewrites[d.fqn] = d.deployedFqn;
+              }
+              // Also rewrite bare name → deployed FQN
+              const bareName = d.name.toLowerCase();
+              const fqnLower = d.fqn.toLowerCase();
+              if (bareName !== fqnLower && !rewrites[d.name]) {
+                rewrites[d.name] = d.deployedFqn;
+              }
+            }
+            setFqnRewrites(rewrites);
+            handleDeploy(rewrites);
           }}
           onCancel={() => {
             setStep("configure");

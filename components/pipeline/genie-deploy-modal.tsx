@@ -31,6 +31,7 @@ import { loadSettings } from "@/lib/settings";
 import {
   MetricViewDependencyModal,
   type MissingMetricView,
+  type DeployedResult,
 } from "@/components/pipeline/metric-view-dependency-modal";
 
 // ---------------------------------------------------------------------------
@@ -128,6 +129,7 @@ export function GenieDeployModal({
   // Metric view dependency gate
   const [missingMvs, setMissingMvs] = useState<MissingMetricView[]>([]);
   const [checkingDeps, setCheckingDeps] = useState(false);
+  const [mvFqnRewrites, setMvFqnRewrites] = useState<Record<string, string>>({});
 
   // Build all deployable assets from the selected domains
   const allAssets = useMemo<DeployableAsset[]>(() => {
@@ -241,6 +243,7 @@ export function GenieDeployModal({
           domains: domainPayloads,
           targetSchema: schema,
           authMode: loadSettings().genieDeployAuthMode,
+          ...(Object.keys(mvFqnRewrites).length > 0 && { fqnRewrites: mvFqnRewrites }),
         }),
       });
 
@@ -564,7 +567,19 @@ export function GenieDeployModal({
           }}
           missing={missingMvs}
           defaultSchema={targetSchema[0] ?? defaultSchema}
-          onDeployed={() => {
+          onDeployed={(deployed: DeployedResult[]) => {
+            const rewrites: Record<string, string> = {};
+            for (const d of deployed) {
+              if (d.fqn !== d.deployedFqn) {
+                rewrites[d.fqn] = d.deployedFqn;
+              }
+              const bareName = d.name.toLowerCase();
+              const fqnLower = d.fqn.toLowerCase();
+              if (bareName !== fqnLower && !rewrites[d.name]) {
+                rewrites[d.name] = d.deployedFqn;
+              }
+            }
+            setMvFqnRewrites(rewrites);
             executeDeploy();
           }}
           onCancel={() => {
