@@ -585,6 +585,9 @@ CORRECT: \`expr: customer.nation.n_name\`
 ### CRITICAL: Join alias must not match a source column name
 If the source table has a column named \`claim_type\`, do NOT name a join alias \`claim_type\` — use \`claim_type_dim\` instead. Matching names cause the SQL engine to interpret \`claim_type.col\` as struct field extraction on the column rather than a join alias reference (INVALID_EXTRACT_BASE_FIELD_TYPE).
 
+### CRITICAL: Dimension name must not match a join alias
+If a join alias is \`claim_type\`, do NOT name a dimension \`claim_type\` — use \`claim_type_name\` or another distinct identifier. When a dimension name matches a join alias, \`alias.column\` expressions resolve the alias as the dimension scalar (a STRING) instead of the join table, causing INVALID_EXTRACT_BASE_FIELD_TYPE. The dimension name shadows the join alias in expression resolution.
+
 ### Measure patterns:
 - Basic: \`SUM(amount)\`, \`COUNT(1)\`, \`AVG(price)\`
 - Filtered: \`SUM(amount) FILTER (WHERE status = 'OPEN')\`
@@ -668,7 +671,6 @@ interface ValidationResult {
 export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlist): string[] {
   const issues: string[] = [];
 
-  // Primary source table -> implicit "source" alias
   const sourceMatch = yaml.match(/^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m);
   if (!sourceMatch) return issues;
   const sourceFqn = sourceMatch[1];
@@ -676,9 +678,6 @@ export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlis
   const aliasToTable = new Map<string, string>();
   aliasToTable.set("source", sourceFqn);
 
-  // Parse join aliases from the joins: section.
-  // Isolate the joins block (indented lines after "joins:") to avoid
-  // matching the top-level source: field.
   const joinsSectionMatch = yaml.match(/\bjoins:\s*\n((?:[\t ]+.*\n?)*)/);
   if (joinsSectionMatch) {
     const joinsText = joinsSectionMatch[1];
@@ -698,7 +697,6 @@ export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlis
     }
   }
 
-  // Collect all expr: and on: field values
   const fieldPattern = /\b(?:expr|on):\s*(.+)/g;
   const expressions: string[] = [];
   let fm: RegExpExecArray | null;
@@ -706,27 +704,44 @@ export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlis
     expressions.push(fm[1]);
   }
 
-  // Validate alias.column references against the allowlist
-  const colRefPattern = /\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b/g;
-  const quotedColRefPattern = /\b([a-zA-Z_]\w*)\.`([^`]+)`/g;
   const reported = new Set<string>();
-
-  // SQL keywords and YAML fields that look like alias.column but aren't
   const SKIP_ALIASES = new Set(["version", "catalog", "schema", "language", "yaml"]);
 
-  function checkRef(alias: string, column: string, display: string): void {
-    if (SKIP_ALIASES.has(alias.toLowerCase())) return;
+  // Match dotted identifier chains (2+ segments) — handles parent-chain
+  // nested join syntax like member.employer_dim.industry and deeper chains
+  // like customer.nation.region.r_name.
+  const unquotedChainRe = /\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+)\b/g;
+  const quotedChainRe = /\b([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\.`([^`]+)`/g;
 
-    const tableFqn = aliasToTable.get(alias.toLowerCase());
-    if (!tableFqn) {
+  function validateChain(segments: string[], display: string): void {
+    if (segments.length < 2) return;
+    const rootAlias = segments[0];
+    if (SKIP_ALIASES.has(rootAlias.toLowerCase())) return;
+
+    const rootTable = aliasToTable.get(rootAlias.toLowerCase());
+    if (!rootTable) {
       if (!reported.has(display)) {
         reported.add(display);
         issues.push(
-          `Unknown alias \`${alias}\` in \`${display}\` — only \`source\` and declared join names are valid`,
+          `Unknown alias \`${rootAlias}\` in \`${display}\` — only \`source\` and declared join names are valid`,
         );
       }
       return;
     }
+
+    let currentAlias = rootAlias.toLowerCase();
+    for (let i = 1; i < segments.length - 1; i++) {
+      const seg = segments[i].toLowerCase();
+      if (aliasToTable.has(seg)) {
+        currentAlias = seg;
+      } else {
+        return;
+      }
+    }
+
+    const column = segments[segments.length - 1];
+    const tableFqn = aliasToTable.get(currentAlias);
+    if (!tableFqn) return;
 
     if (!isValidColumn(allowlist, tableFqn, column)) {
       if (!reported.has(display)) {
@@ -738,13 +753,21 @@ export function validateColumnReferences(yaml: string, allowlist: SchemaAllowlis
 
   for (const expr of expressions) {
     let cm: RegExpExecArray | null;
-    // Backtick-quoted: alias.`column with spaces`
-    while ((cm = quotedColRefPattern.exec(expr)) !== null) {
-      checkRef(cm[1], cm[2], `${cm[1]}.\`${cm[2]}\``);
+
+    while ((cm = quotedChainRe.exec(expr)) !== null) {
+      const prefix = cm[1];
+      const quotedCol = cm[2];
+      const segments = [...prefix.split("."), quotedCol];
+      const display = `${prefix}.\`${quotedCol}\``;
+      reported.add(prefix);
+      validateChain(segments, display);
     }
-    // Unquoted: alias.column
-    while ((cm = colRefPattern.exec(expr)) !== null) {
-      checkRef(cm[1], cm[2], `${cm[1]}.${cm[2]}`);
+
+    while ((cm = unquotedChainRe.exec(expr)) !== null) {
+      const chain = cm[1];
+      if (reported.has(chain)) continue;
+      const segments = chain.split(".");
+      validateChain(segments, chain);
     }
   }
 
@@ -915,6 +938,38 @@ export function validateMetricViewYaml(
     }
   }
 
+  // Detect dimension names that shadow join alias names — the dimension
+  // takes priority and Databricks treats `alias.col` as struct field
+  // extraction on the scalar dimension, causing INVALID_EXTRACT_BASE_FIELD_TYPE.
+  {
+    const joinsIdx = yaml.indexOf("joins:");
+    if (joinsIdx !== -1) {
+      const joinAliasNames = new Set<string>();
+      const jnRe = /^\s*-\s*name:\s*(\w+)/gm;
+      const jBlock = yaml.slice(joinsIdx);
+      let jnm: RegExpExecArray | null;
+      while ((jnm = jnRe.exec(jBlock)) !== null) {
+        joinAliasNames.add(jnm[1].toLowerCase());
+      }
+
+      const dimsIdx = yaml.indexOf("dimensions:");
+      if (dimsIdx !== -1) {
+        const dEnd = yaml.indexOf("measures:", dimsIdx);
+        const dBlock = dEnd > dimsIdx ? yaml.slice(dimsIdx, dEnd) : yaml.slice(dimsIdx, joinsIdx);
+        const dimNameRe = /^\s*-\s*name:\s*(\w+)/gm;
+        let dnm: RegExpExecArray | null;
+        while ((dnm = dimNameRe.exec(dBlock)) !== null) {
+          const dName = dnm[1];
+          if (joinAliasNames.has(dName.toLowerCase())) {
+            issues.push(
+              `Dimension name "${dName}" shadows join alias "${dName}" — Databricks resolves alias.column as struct extraction on the dimension scalar, causing INVALID_EXTRACT_BASE_FIELD_TYPE. Rename the dimension (e.g. "${toSnakeCase(dName)}_name").`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   // Safety-net: detect explicitly nested aggregate functions
   const AGG_FNS = "SUM|COUNT|AVG|MIN|MAX|PERCENTILE_APPROX|COLLECT_LIST|COLLECT_SET";
   const nestedAggPattern = new RegExp(`\\b(${AGG_FNS})\\s*\\([^)]*\\b(${AGG_FNS})\\s*\\(`, "i");
@@ -951,6 +1006,7 @@ export function validateMetricViewYaml(
       i.includes("Window function") ||
       i.includes("AI function") ||
       i.includes("shadows source column") ||
+      i.includes("shadows join alias") ||
       i.includes("Nested aggregate"),
   );
 
@@ -958,6 +1014,52 @@ export function validateMetricViewYaml(
     status: issues.length === 0 ? "valid" : hasCritical ? "error" : "warning",
     issues,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Dry-run: validate DDL via temp view to avoid leaving artifacts
+// ---------------------------------------------------------------------------
+
+const PERMISSION_PATTERNS = [
+  "PERMISSION_DENIED",
+  "does not have CREATE",
+  "Access denied",
+  "INSUFFICIENT_PRIVILEGES",
+];
+
+const VIEW_FQN_RE =
+  /(?:CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i;
+
+/**
+ * Validate metric view DDL by creating a temporary view and immediately
+ * dropping it. Returns the error message if validation fails, or null on
+ * success. The temp view uses a `__forge_validate_` prefix so it is
+ * distinguishable from real views and is always cleaned up in a finally block.
+ */
+export async function dryRunMetricViewDdl(ddl: string): Promise<string | null> {
+  const fqnMatch = ddl.match(VIEW_FQN_RE);
+  if (!fqnMatch) return "Could not extract view FQN from DDL";
+
+  const originalFqn = fqnMatch[1].replace(/`/g, "");
+  const parts = originalFqn.split(".");
+  const tempName = `__forge_validate_${Date.now()}`;
+  const tempFqn = `${parts[0]}.${parts[1]}.${tempName}`;
+  const tempDdl = ddl.replace(VIEW_FQN_RE, (match) =>
+    match.replace(fqnMatch[1], `\`${parts[0]}\`.\`${parts[1]}\`.\`${tempName}\``),
+  );
+
+  try {
+    await executeSQL(tempDdl);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  } finally {
+    try {
+      await executeSQL(`DROP VIEW IF EXISTS \`${parts[0]}\`.\`${parts[1]}\`.\`${tempName}\``);
+    } catch {
+      logger.warn("Failed to drop temp validation view", { tempFqn });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1105,6 +1207,96 @@ export function autoRenameCollidingJoinAliases(
 }
 
 // ---------------------------------------------------------------------------
+// Auto-rename: fix dimension names that shadow join aliases
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect dimension names that collide with join alias names and rename
+ * them using the rightmost column from their `expr`. When a dimension
+ * name matches a join alias, Databricks resolves `alias.col` against the
+ * dimension (a scalar) instead of the join, causing
+ * INVALID_EXTRACT_BASE_FIELD_TYPE.
+ */
+export function autoRenameShadowedDimensions(
+  yaml: string,
+  ddl: string,
+): { yaml: string; ddl: string; renamed: number } {
+  const joinsIdx = yaml.indexOf("joins:");
+  if (joinsIdx === -1) return { yaml, ddl, renamed: 0 };
+
+  const joinAliases = new Set<string>();
+  const joinNameRe = /^\s*-\s*name:\s*(\w+)/gm;
+  const joinsSection = yaml.slice(joinsIdx);
+  let jm: RegExpExecArray | null;
+  while ((jm = joinNameRe.exec(joinsSection)) !== null) {
+    joinAliases.add(jm[1].toLowerCase());
+  }
+  if (joinAliases.size === 0) return { yaml, ddl, renamed: 0 };
+
+  const dimsIdx = yaml.indexOf("dimensions:");
+  if (dimsIdx === -1) return { yaml, ddl, renamed: 0 };
+  const measuresIdx = yaml.indexOf("measures:");
+  const dimsBlock =
+    measuresIdx > dimsIdx ? yaml.slice(dimsIdx, measuresIdx) : yaml.slice(dimsIdx, joinsIdx);
+
+  const dimEntryRe = /-\s*name:\s*(\w+)\s*\n\s*expr:\s*(.+)/g;
+  const renames = new Map<string, string>();
+  const existingDimNames = new Set<string>();
+
+  const allDimNamesRe = /^\s*-\s*name:\s*(\w+)/gm;
+  let dn: RegExpExecArray | null;
+  while ((dn = allDimNamesRe.exec(dimsBlock)) !== null) {
+    existingDimNames.add(dn[1].toLowerCase());
+  }
+
+  let dm: RegExpExecArray | null;
+  while ((dm = dimEntryRe.exec(dimsBlock)) !== null) {
+    const dimName = dm[1];
+    if (!joinAliases.has(dimName.toLowerCase())) continue;
+
+    const expr = dm[2].trim().replace(/^["']|["']$/g, "");
+    const dotParts = expr.split(".");
+    let candidate = dotParts[dotParts.length - 1].replace(/`/g, "").replace(/\W/g, "_");
+    candidate = toSnakeCase(candidate);
+
+    if (existingDimNames.has(candidate.toLowerCase()) || joinAliases.has(candidate.toLowerCase())) {
+      candidate = `${candidate}_val`;
+    }
+
+    renames.set(dimName, candidate);
+    existingDimNames.add(candidate.toLowerCase());
+  }
+
+  if (renames.size === 0) return { yaml, ddl, renamed: 0 };
+
+  let modYaml = yaml;
+  let modDdl = ddl;
+
+  for (const [oldName, newName] of renames) {
+    const escaped = escapeRegExp(oldName);
+    const pattern = new RegExp(`(-\\s*name:\\s*)${escaped}(\\s*(?:\\n|$))`, "g");
+    modYaml = applyInDimensionsBlock(modYaml, pattern, `$1${newName}$2`);
+    modDdl = applyInDimensionsBlock(modDdl, pattern, `$1${newName}$2`);
+  }
+
+  return { yaml: modYaml, ddl: modDdl, renamed: renames.size };
+}
+
+function applyInDimensionsBlock(text: string, pattern: RegExp, replacement: string): string {
+  const idx = text.indexOf("dimensions:");
+  if (idx === -1) return text;
+  const measIdx = text.indexOf("measures:", idx);
+  if (measIdx === -1) {
+    return text.slice(0, idx) + text.slice(idx).replace(pattern, replacement);
+  }
+  return (
+    text.slice(0, idx) +
+    text.slice(idx, measIdx).replace(pattern, replacement) +
+    text.slice(measIdx)
+  );
+}
+
+// ---------------------------------------------------------------------------
 // LLM repair: re-prompt once with validation errors + correct schema
 // ---------------------------------------------------------------------------
 
@@ -1114,7 +1306,9 @@ const COLUMN_ERROR_PATTERNS = [
   "UNRESOLVED_COLUMN",
   "NESTED_AGGREGATE",
   "FIELD_NOT_FOUND",
+  "INVALID_EXTRACT_BASE_FIELD_TYPE",
   "shadows source column",
+  "shadows join alias",
   "Nested aggregate",
 ];
 
@@ -1141,6 +1335,7 @@ Rules:
 - SNOWFLAKE JOINS: If a join's \`on:\` clause references another join alias (NOT \`source\`), that join MUST be nested under the referenced parent join using a \`joins:\` sub-list. Top-level joins may ONLY reference \`source.\` in their \`on:\` clause. For example, if \`location\` joins on \`member.location_id\`, the \`location\` join must be nested under the \`member\` join.
 - PARENT-CHAIN COLUMN REFERENCES: Column references to nested join aliases MUST use the parent-chain prefix. If \`nation\` is nested under \`customer\`, use \`customer.nation.n_name\` NOT \`nation.n_name\`. Direct nested-alias refs cause UNRESOLVED_COLUMN.
 - JOIN ALIAS COLLISION: A join alias MUST NOT match a column name on the source table. If the source has column \`claim_type\`, name the join alias \`claim_type_dim\`. Matching names cause INVALID_EXTRACT_BASE_FIELD_TYPE.
+- DIMENSION NAME COLLISION: A dimension \`name\` MUST NOT match a join alias \`name\`. If a join alias is \`claim_type\`, rename the dimension to \`claim_type_name\` or similar. Matching names cause INVALID_EXTRACT_BASE_FIELD_TYPE because the dimension shadows the join alias.
 - Measure \`name\` MUST be snake_case (no spaces) and MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`. Add a \`display_name\` for the human-readable label.
 - When column names contain spaces, backtick-quote them: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`.
 - Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
@@ -1408,6 +1603,18 @@ Create metric view proposals for this domain.`;
           });
         }
 
+        // Rename dimension names that shadow join aliases
+        const dimCollision = autoRenameShadowedDimensions(yamlStr, ddlStr);
+        yamlStr = dimCollision.yaml;
+        ddlStr = dimCollision.ddl;
+        if (dimCollision.renamed > 0) {
+          logger.info("Auto-renamed dimension names shadowing join aliases", {
+            domain,
+            name: String(p.name ?? ""),
+            renamed: dimCollision.renamed,
+          });
+        }
+
         const {
           yaml: fixedYaml,
           ddl: fixedDdl,
@@ -1515,25 +1722,11 @@ Create metric view proposals for this domain.`;
       }
     }
 
-    // Dry-run: execute DDL for proposals that passed static validation to
-    // catch SQL-level errors before the user ever sees the proposal.
-    // Permission errors are treated as warnings (user can deploy to a
-    // different schema), not hard failures.
-    const PERMISSION_PATTERNS = [
-      "PERMISSION_DENIED",
-      "does not have CREATE",
-      "Access denied",
-      "INSUFFICIENT_PRIVILEGES",
-    ];
-
     for (const proposal of proposals) {
       if (proposal.validationStatus === "error") continue;
-      try {
-        await executeSQL(proposal.ddl);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const isPermissionError = PERMISSION_PATTERNS.some((p) => msg.includes(p));
-
+      const dryRunError = await dryRunMetricViewDdl(proposal.ddl);
+      if (dryRunError) {
+        const isPermissionError = PERMISSION_PATTERNS.some((p) => dryRunError.includes(p));
         if (isPermissionError) {
           if (proposal.validationStatus !== "warning") {
             proposal.validationStatus = "warning";
@@ -1547,11 +1740,11 @@ Create metric view proposals for this domain.`;
           });
         } else {
           proposal.validationStatus = "error";
-          proposal.validationIssues.push(`SQL validation failed: ${msg}`);
+          proposal.validationIssues.push(`SQL validation failed: ${dryRunError}`);
           logger.warn("Metric view dry-run failed", {
             domain,
             name: proposal.name,
-            error: msg,
+            error: dryRunError,
           });
         }
       }

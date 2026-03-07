@@ -24,10 +24,11 @@ import {
   qualifyNestedAliasRefs,
   autoRenameCollidingJoinAliases,
   autoRenameShadowedMeasures,
+  autoRenameShadowedDimensions,
   repairProposal,
   hasColumnErrors,
+  dryRunMetricViewDdl,
 } from "@/lib/genie/passes/metric-view-proposals";
-import { executeSQL } from "@/lib/dbx/sql";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
@@ -79,6 +80,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     yaml = aliasCollision.yaml;
     ddl = aliasCollision.ddl;
 
+    const dimCollision = autoRenameShadowedDimensions(yaml, ddl);
+    yaml = dimCollision.yaml;
+    ddl = dimCollision.ddl;
+
     const shadowFix = autoRenameShadowedMeasures(yaml, ddl, allowlist);
     yaml = shadowFix.yaml;
     ddl = shadowFix.ddl;
@@ -124,6 +129,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         yaml = reAliasCollision.yaml;
         ddl = reAliasCollision.ddl;
 
+        const reDimCollision = autoRenameShadowedDimensions(yaml, ddl);
+        yaml = reDimCollision.yaml;
+        ddl = reDimCollision.ddl;
+
         const reShadow = autoRenameShadowedMeasures(yaml, ddl, allowlist);
         yaml = reShadow.yaml;
         ddl = reShadow.ddl;
@@ -132,14 +141,11 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       }
     }
 
-    // Step 4: Dry-run DDL for non-error proposals
+    // Step 4: Dry-run DDL via temp view (no persistent artifacts)
     if (validation.status !== "error") {
-      try {
-        await executeSQL(ddl);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const isPermission = PERMISSION_PATTERNS.some((p) => msg.includes(p));
-
+      const dryRunError = await dryRunMetricViewDdl(ddl);
+      if (dryRunError) {
+        const isPermission = PERMISSION_PATTERNS.some((p) => dryRunError.includes(p));
         if (isPermission) {
           if (validation.status !== "warning") validation.status = "warning";
           validation.issues.push(
@@ -147,7 +153,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
           );
         } else {
           validation.status = "error";
-          validation.issues.push(`SQL validation failed: ${msg}`);
+          validation.issues.push(`SQL validation failed: ${dryRunError}`);
         }
       }
     }
