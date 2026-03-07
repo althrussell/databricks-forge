@@ -48,7 +48,7 @@ export function GenieDetailAccordion({
         </AccordionContent>
       </AccordionItem>
 
-      {/* Metric Views — read-only reference (full management in Metric Views tab) */}
+      {/* Metric Views — generated for this Genie space */}
       {(rec.metricViews.length > 0 ||
         mvProposals.length > 0 ||
         (parsed.data_sources?.metric_views && parsed.data_sources.metric_views.length > 0)) && (
@@ -59,8 +59,8 @@ export function GenieDetailAccordion({
           <AccordionContent>
             <div className="max-h-80 space-y-2 overflow-auto text-xs">
               <p className="text-[10px] text-muted-foreground mb-2">
-                Metric views are managed in the <strong>Metric Views</strong> tab. Below are the
-                metric views referenced by this Genie space.
+                Metric views generated for this Genie space. They will be deployed alongside the
+                space.
               </p>
               {mvProposals.length > 0
                 ? mvProposals.map((mv, i) => (

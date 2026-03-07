@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { GenieWorkbench } from "@/components/pipeline/genie-workbench";
 import { DashboardsTab } from "@/components/pipeline/dashboards-tab";
-import { MetricViewsTab } from "@/components/pipeline/metric-views-tab";
+
 import { OverviewTabContent } from "./overview-tab-content";
 import { OutcomeMapTabContent } from "./outcome-map-tab-content";
 import { UseCasesTabContent } from "./use-cases-tab-content";
@@ -93,19 +93,6 @@ export function RunCompletedTabs({
         {useCases.length > 0 && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <TabsTrigger value="metric-views">
-                Metric Views{" "}
-                {genieGenerating && <span className="ml-1 animate-pulse text-emerald-500">●</span>}
-              </TabsTrigger>
-            </TooltipTrigger>
-            <TooltipContent>
-              View and deploy metric view definitions generated for this run
-            </TooltipContent>
-          </Tooltip>
-        )}
-        {useCases.length > 0 && (
-          <Tooltip>
-            <TooltipTrigger asChild>
               <TabsTrigger value="genie">
                 Genie Spaces{" "}
                 {genieGenerating && <span className="ml-1 animate-pulse text-violet-500">●</span>}
@@ -167,12 +154,6 @@ export function RunCompletedTabs({
             useCases={useCases}
             runId={runId}
           />
-        </TabsContent>
-      )}
-
-      {useCases.length > 0 && (
-        <TabsContent value="metric-views" className="min-w-0 pt-4">
-          <MetricViewsTab runId={run.runId} />
         </TabsContent>
       )}
 

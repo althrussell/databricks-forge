@@ -761,7 +761,6 @@ function SelectAssetsStep({
           <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
           <p className="text-[11px] text-blue-700 dark:text-blue-300">
             Any metric views referenced by Genie spaces will be automatically deployed if missing.
-            Manage all metric view proposals in the <strong>Metric Views</strong> tab.
           </p>
         </div>
       </div>

@@ -79,20 +79,11 @@ export function MetricViewDependencyModal({
   const [targetSchema, setTargetSchema] = useState<string[]>(defaultSchema ? [defaultSchema] : []);
   const [outcomes, setOutcomes] = useState<DeployOutcome[]>([]);
 
-  const foundElsewhere = useMemo(
-    () => missing.filter((mv) => mv.existingFqn),
-    [missing],
-  );
+  const foundElsewhere = useMemo(() => missing.filter((mv) => mv.existingFqn), [missing]);
 
-  const deployable = useMemo(
-    () => missing.filter((mv) => !mv.existingFqn && mv.ddl),
-    [missing],
-  );
+  const deployable = useMemo(() => missing.filter((mv) => !mv.existingFqn && mv.ddl), [missing]);
 
-  const noDdl = useMemo(
-    () => missing.filter((mv) => !mv.existingFqn && !mv.ddl),
-    [missing],
-  );
+  const noDdl = useMemo(() => missing.filter((mv) => !mv.existingFqn && !mv.ddl), [missing]);
 
   const selectedCount = [...selected].filter((fqn) =>
     deployable.some((mv) => mv.fqn === fqn),
