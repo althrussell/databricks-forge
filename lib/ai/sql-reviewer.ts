@@ -81,6 +81,7 @@ IMPORTANT DIALECT CONTEXT: This is Databricks SQL (based on Spark SQL / ANSI SQL
 - No TOP N — use ORDER BY ... LIMIT N
 - No DATEADD(datepart, n, date) — use DATE_ADD(date, n) or date + INTERVAL 'n' DAY
 - QUALIFY clause IS supported for per-group deduplication
+- QUALIFY runs before GROUP BY -- NEVER combine aggregates (SUM/AVG/COUNT) with QUALIFY in the same SELECT block
 - Pipe syntax (|>) IS supported for chaining transformations
 - TIMESTAMP_NTZ IS supported for timezone-independent timestamps
 - MERGE INTO IS supported with WHEN MATCHED AND / WHEN NOT MATCHED

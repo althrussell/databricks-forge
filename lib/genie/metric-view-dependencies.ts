@@ -14,6 +14,7 @@ import {
 } from "@/lib/lakebase/metric-view-proposals";
 import { deployAsset } from "./deploy";
 import { logger } from "@/lib/logger";
+import { validateIdentifier } from "@/lib/validation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +27,8 @@ export interface DependencyCheckResult {
     fqn: string;
     proposalId?: string;
     ddl?: string;
+    /** FQN where the view already exists (different from referenced FQN). */
+    existingFqn?: string;
   }>;
   deployed: string[];
 }
@@ -36,13 +39,48 @@ export interface DeployDependenciesResult {
 }
 
 // ---------------------------------------------------------------------------
+// Unity Catalog search
+// ---------------------------------------------------------------------------
+
+/**
+ * Search Unity Catalog for a metric view by name within a catalog.
+ * Returns the 3-part FQN if found, null otherwise.
+ */
+export async function searchMetricViewInCatalog(
+  name: string,
+  catalog: string,
+): Promise<string | null> {
+  try {
+    const safeCatalog = validateIdentifier(catalog, "catalog");
+    const safeName = name.replace(/'/g, "''");
+    const sql = `
+      SELECT table_catalog, table_schema, table_name
+      FROM \`${safeCatalog}\`.information_schema.tables
+      WHERE table_type = 'METRIC_VIEW'
+        AND LOWER(table_name) = LOWER('${safeName}')
+      LIMIT 1
+    `;
+    const result = await executeSQL(sql);
+    if (result.rows.length > 0) {
+      const [cat, sch, tbl] = result.rows[0];
+      return `${cat}.${sch}.${tbl}`;
+    }
+    return null;
+  } catch (err) {
+    logger.debug("searchMetricViewInCatalog failed", { name, catalog, error: String(err) });
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Check
 // ---------------------------------------------------------------------------
 
 /**
  * Check whether the required metric view FQNs are deployed in Unity Catalog.
  * For any missing, check if a proposal exists in the ForgeMetricViewProposal
- * table that could be auto-deployed.
+ * table that could be auto-deployed. Also searches for views deployed at a
+ * different FQN (by name) and populates `existingFqn` when found.
  */
 export async function checkMetricViewDependencies(
   requiredFqns: string[],
@@ -72,16 +110,41 @@ export async function checkMetricViewDependencies(
   const proposals = await findMetricViewProposalsByFqn(missingFqns);
   const proposalByName = new Map(proposals.map((p) => [p.name.toLowerCase(), p]));
 
-  const missing = missingFqns.map((fqn) => {
+  const missing: DependencyCheckResult["missing"] = [];
+
+  for (const fqn of missingFqns) {
     const name = fqn.split(".").pop()?.toLowerCase() ?? fqn;
     const proposal = proposalByName.get(name);
-    return {
+
+    let existingFqn: string | undefined;
+
+    // If the proposal was already deployed elsewhere, use that FQN
+    if (proposal?.deployedFqn) {
+      try {
+        await executeSQL(`DESCRIBE TABLE ${proposal.deployedFqn}`);
+        existingFqn = proposal.deployedFqn;
+      } catch {
+        // deployedFqn is stale -- view no longer exists there
+      }
+    }
+
+    // If still not found, search UC by name within the same catalog
+    if (!existingFqn) {
+      const catalog = fqn.split(".")[0];
+      if (catalog && catalog !== name) {
+        const found = await searchMetricViewInCatalog(name, catalog);
+        if (found) existingFqn = found;
+      }
+    }
+
+    missing.push({
       name: proposal?.name ?? name,
       fqn,
       proposalId: proposal?.id,
       ddl: proposal?.ddl,
-    };
-  });
+      existingFqn,
+    });
+  }
 
   return {
     allDeployed: false,
@@ -178,4 +241,100 @@ export function extractMetricViewFqnsFromSql(sql: string, knownMvFqns: string[])
 
   const lowerSql = sql.toLowerCase();
   return knownMvFqns.filter((fqn) => lowerSql.includes(fqn.toLowerCase()));
+}
+
+// ---------------------------------------------------------------------------
+// FQN rewriting (Lakeview dashboards + Genie spaces)
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply case-insensitive string replacements to every entry in an array.
+ * Returns true if at least one replacement was made.
+ */
+function rewriteStringArray(
+  arr: string[],
+  entries: Array<[old: string, replacement: string]>,
+): boolean {
+  let changed = false;
+  for (let i = 0; i < arr.length; i++) {
+    let result = arr[i];
+    for (const [oldRef, newFqn] of entries) {
+      if (oldRef.toLowerCase() === newFqn.toLowerCase()) continue;
+      const escaped = oldRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const replaced = result.replace(new RegExp(escaped, "gi"), newFqn);
+      if (replaced !== result) {
+        result = replaced;
+        changed = true;
+      }
+    }
+    arr[i] = result;
+  }
+  return changed;
+}
+
+/**
+ * Rewrite metric view FQNs in a serialized Lakeview dashboard **or** Genie
+ * space JSON.
+ *
+ * `rewrites` maps original references (FQN or bare name) to the actual
+ * deployed FQN. Replacements are case-insensitive and applied to:
+ *
+ *  - **Dashboard**: every dataset's `queryLines`
+ *  - **Genie space**: `data_sources.metric_views[].identifier` and
+ *    `instructions.example_question_sqls[].sql[]`
+ */
+export function rewriteDashboardMetricViewFqns(
+  serializedJson: string,
+  rewrites: Record<string, string>,
+): string {
+  const entries = Object.entries(rewrites);
+  if (entries.length === 0) return serializedJson;
+
+  try {
+    const parsed = JSON.parse(serializedJson);
+    let changed = false;
+
+    // --- Lakeview dashboard format: datasets[key].queryLines ---
+    const datasets = parsed?.datasets;
+    if (datasets && typeof datasets === "object") {
+      for (const dsKey of Object.keys(datasets)) {
+        const ds = datasets[dsKey];
+        if (Array.isArray(ds?.queryLines)) {
+          if (rewriteStringArray(ds.queryLines, entries)) changed = true;
+        }
+      }
+    }
+
+    // --- Genie space format: data_sources.metric_views[].identifier ---
+    const metricViews = parsed?.data_sources?.metric_views;
+    if (Array.isArray(metricViews)) {
+      for (const mv of metricViews as Array<{ identifier?: string; description?: string[] }>) {
+        if (typeof mv.identifier !== "string") continue;
+        for (const [oldRef, newFqn] of entries) {
+          if (oldRef.toLowerCase() === newFqn.toLowerCase()) continue;
+          if (mv.identifier.toLowerCase() === oldRef.toLowerCase()) {
+            mv.identifier = newFqn;
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // --- Genie space format: instructions.example_question_sqls[].sql[] ---
+    const exampleSqls = parsed?.instructions?.example_question_sqls;
+    if (Array.isArray(exampleSqls)) {
+      for (const eq of exampleSqls as Array<{ sql?: string[] }>) {
+        if (Array.isArray(eq.sql)) {
+          if (rewriteStringArray(eq.sql, entries)) changed = true;
+        }
+      }
+    }
+
+    if (!changed) return serializedJson;
+    return JSON.stringify(parsed);
+  } catch {
+    logger.warn("Failed to parse serialized JSON for FQN rewriting");
+    return serializedJson;
+  }
 }

@@ -24,12 +24,17 @@ export interface MissingMetricView {
   fqn: string;
   proposalId?: string;
   ddl?: string;
+  /** FQN where the view already exists (different from the referenced FQN). */
+  existingFqn?: string;
 }
 
 export interface DeployedResult {
+  /** The original FQN referenced in the SQL / space. */
   fqn: string;
   proposalId?: string;
   name: string;
+  /** The actual deployed FQN (may differ from `fqn` after rewrite). */
+  deployedFqn: string;
 }
 
 type Step = "select" | "schema" | "deploying" | "done";
@@ -69,14 +74,25 @@ export function MetricViewDependencyModal({
 }: MetricViewDependencyModalProps) {
   const [step, setStep] = useState<Step>("select");
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(missing.filter((mv) => mv.ddl).map((mv) => mv.fqn)),
+    () => new Set(missing.filter((mv) => mv.ddl && !mv.existingFqn).map((mv) => mv.fqn)),
   );
   const [targetSchema, setTargetSchema] = useState<string[]>(defaultSchema ? [defaultSchema] : []);
   const [outcomes, setOutcomes] = useState<DeployOutcome[]>([]);
 
-  const deployable = useMemo(() => missing.filter((mv) => mv.ddl), [missing]);
+  const foundElsewhere = useMemo(
+    () => missing.filter((mv) => mv.existingFqn),
+    [missing],
+  );
 
-  const noDdl = useMemo(() => missing.filter((mv) => !mv.ddl), [missing]);
+  const deployable = useMemo(
+    () => missing.filter((mv) => !mv.existingFqn && mv.ddl),
+    [missing],
+  );
+
+  const noDdl = useMemo(
+    () => missing.filter((mv) => !mv.existingFqn && !mv.ddl),
+    [missing],
+  );
 
   const selectedCount = [...selected].filter((fqn) =>
     deployable.some((mv) => mv.fqn === fqn),
@@ -120,6 +136,16 @@ export function MetricViewDependencyModal({
     const results: DeployOutcome[] = [];
     const deployed: DeployedResult[] = [];
 
+    // Include "found elsewhere" items as already-resolved rewrites
+    for (const mv of foundElsewhere) {
+      deployed.push({
+        fqn: mv.fqn,
+        name: mv.name,
+        proposalId: mv.proposalId,
+        deployedFqn: mv.existingFqn!,
+      });
+    }
+
     for (const mv of toDeploy) {
       if (!mv.proposalId) {
         results.push({ name: mv.name, fqn: mv.fqn, success: false, error: "No proposal ID" });
@@ -142,9 +168,10 @@ export function MetricViewDependencyModal({
             deployedFqn: data.fqn,
           });
           deployed.push({
-            fqn: data.fqn,
+            fqn: mv.fqn,
             proposalId: mv.proposalId,
             name: mv.name,
+            deployedFqn: data.fqn,
           });
         } else {
           results.push({
@@ -170,7 +197,7 @@ export function MetricViewDependencyModal({
     if (deployed.length > 0) {
       onDeployed(deployed);
     }
-  }, [targetSchema, deployable, selected, onDeployed]);
+  }, [targetSchema, deployable, selected, onDeployed, foundElsewhere]);
 
   function handleClose() {
     if (step === "done") {
@@ -202,7 +229,7 @@ export function MetricViewDependencyModal({
           </DialogTitle>
           <DialogDescription>
             {step === "select" &&
-              `${missing.length} metric view${missing.length !== 1 ? "s" : ""} referenced by this deployment ${missing.length !== 1 ? "are" : "is"} not yet deployed. Select which to deploy.`}
+              `${missing.length} metric view${missing.length !== 1 ? "s" : ""} referenced by this deployment ${missing.length !== 1 ? "need" : "needs"} attention.`}
             {step === "schema" &&
               "Choose the target schema where the metric views will be created."}
             {step === "deploying" && "Deploying metric views to Unity Catalog..."}
@@ -213,14 +240,39 @@ export function MetricViewDependencyModal({
         <div className="flex-1 overflow-y-auto min-h-0 space-y-3 py-2">
           {step === "select" && (
             <>
+              {/* Already deployed elsewhere -- auto-resolved */}
+              {foundElsewhere.length > 0 && (
+                <div className="rounded-md border border-green-500/50 bg-green-500/5 p-3">
+                  <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">
+                    Found deployed ({foundElsewhere.length})
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mb-2">
+                    These metric views were found at a different location. Dashboard SQL will be
+                    updated automatically.
+                  </p>
+                  {foundElsewhere.map((mv) => (
+                    <div key={mv.fqn} className="flex items-center gap-2 py-1">
+                      <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                      <div className="min-w-0">
+                        <code className="text-xs font-mono truncate block">{mv.name}</code>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {mv.existingFqn}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Needs manual creation -- blocks deployment */}
               {noDdl.length > 0 && (
                 <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3">
                   <p className="text-xs font-medium text-destructive mb-1">
-                    Cannot deploy ({noDdl.length})
+                    Not found ({noDdl.length})
                   </p>
                   <p className="text-[10px] text-muted-foreground mb-2">
-                    No DDL found -- these metric views have no proposal and must be created
-                    manually.
+                    These metric views have no proposal and could not be found in Unity Catalog.
+                    Deploy them from the Metric Views page first.
                   </p>
                   {noDdl.map((mv) => (
                     <div key={mv.fqn} className="flex items-center gap-2 py-1">
@@ -231,6 +283,7 @@ export function MetricViewDependencyModal({
                 </div>
               )}
 
+              {/* Deployable -- user selects which to deploy */}
               {deployable.length > 0 && (
                 <>
                   <div className="flex items-center justify-between px-1">
@@ -270,9 +323,18 @@ export function MetricViewDependencyModal({
                 </>
               )}
 
-              {deployable.length === 0 && noDdl.length > 0 && (
+              {/* Only found-elsewhere items and nothing to deploy -- proceed directly */}
+              {deployable.length === 0 && foundElsewhere.length > 0 && noDdl.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  All metric views have been resolved. Click &quot;Continue&quot; to proceed with
+                  deployment.
+                </p>
+              )}
+
+              {/* Fully blocked -- no deployable, no found-elsewhere */}
+              {deployable.length === 0 && foundElsewhere.length === 0 && noDdl.length > 0 && (
                 <p className="text-xs text-muted-foreground text-center py-4">
-                  No metric views can be auto-deployed. The deployment cannot proceed.
+                  Deployment cannot proceed until all metric views are available.
                 </p>
               )}
             </>
@@ -303,8 +365,14 @@ export function MetricViewDependencyModal({
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-violet-500 mb-3" />
               <p className="text-sm text-muted-foreground">
-                Deploying {selectedCount} metric view{selectedCount !== 1 ? "s" : ""} to{" "}
-                <code className="text-xs font-mono">{targetSchema[0]}</code>...
+                {selectedCount > 0 ? (
+                  <>
+                    Deploying {selectedCount} metric view{selectedCount !== 1 ? "s" : ""} to{" "}
+                    <code className="text-xs font-mono">{targetSchema[0]}</code>...
+                  </>
+                ) : (
+                  "Resolving metric view references..."
+                )}
               </p>
             </div>
           )}
@@ -339,9 +407,18 @@ export function MetricViewDependencyModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button onClick={() => setStep("schema")} disabled={selectedCount === 0}>
-                Next: Choose Schema
-              </Button>
+              {deployable.length > 0 ? (
+                <Button
+                  onClick={() => setStep("schema")}
+                  disabled={selectedCount === 0 || noDdl.length > 0}
+                >
+                  Next: Choose Schema
+                </Button>
+              ) : foundElsewhere.length > 0 && noDdl.length === 0 ? (
+                <Button onClick={executeDeploy}>Continue</Button>
+              ) : (
+                <Button disabled>Next: Choose Schema</Button>
+              )}
             </>
           )}
 
