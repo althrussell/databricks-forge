@@ -25,6 +25,7 @@ import {
   autoRenameCollidingJoinAliases,
   autoRenameShadowedMeasures,
   autoRenameShadowedDimensions,
+  autoFixMaterializationRefs,
   repairProposal,
   hasColumnErrors,
   dryRunMetricViewDdl,
@@ -88,6 +89,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     yaml = shadowFix.yaml;
     ddl = shadowFix.ddl;
 
+    const matFix = autoFixMaterializationRefs(yaml, ddl);
+    yaml = matFix.yaml;
+    ddl = matFix.ddl;
+
     // Step 2: Validate after auto-fixes
     let validation = validateMetricViewYaml(yaml, ddl, allowlist);
 
@@ -136,6 +141,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         const reShadow = autoRenameShadowedMeasures(yaml, ddl, allowlist);
         yaml = reShadow.yaml;
         ddl = reShadow.ddl;
+
+        const reMatFix = autoFixMaterializationRefs(yaml, ddl);
+        yaml = reMatFix.yaml;
+        ddl = reMatFix.ddl;
 
         validation = validateMetricViewYaml(yaml, ddl, allowlist);
       }
