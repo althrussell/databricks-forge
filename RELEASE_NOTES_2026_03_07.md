@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-07
 
-**Databricks Forge AI v0.13.0**
+**Databricks Forge AI v0.13.1**
 
 ---
 
@@ -29,9 +29,9 @@ New `POST /api/metric-views/check-dependencies` endpoint that performs a read-on
 
 When the primary Model Serving endpoint exhausts its 429 retry budget, the app now automatically falls back to the review endpoint instead of failing. This applies to Genie Engine LLM cache calls and both streaming and non-streaming pipeline agent calls. A centralized `getFallbackEndpoint()` helper resolves the alternate endpoint while avoiding self-fallback loops.
 
-### Metric Views Tab Width Fix
+### Metric Views Tab Width Fix (Root Cause)
 
-The Metric Views tab no longer breaks the app layout when descriptions are very long. Added `min-w-0 overflow-hidden` to the CollapsibleTrigger inner flex container so `truncate` can properly take effect.
+The Metric Views tab no longer breaks the app layout when descriptions are very long. The root cause was the main column flex item in `app/layout.tsx` lacking `min-w-0`, allowing CSS `min-width: auto` to expand the entire page to content width. Added `min-w-0` to the layout flex column, `overflow-x-hidden` to `<main>`, switched the description from `truncate` to `line-clamp-2 break-words` for word wrapping, and added `break-words` to validation issue lists.
 
 ### YAML Copy Buttons on Metric Views
 
@@ -43,10 +43,11 @@ Industry Outcome Map coverage analysis has been promoted from a buried collapsib
 
 ---
 
-## Commits (3)
+## Commits (4)
 
 | Hash | Summary |
 |---|---|
+| `8953d16` | Fix metric views width overflow by adding min-w-0 to layout flex column |
 | `fc2ed03` | Replace silent metric view auto-deploy with user-facing dependency gate |
 | `3dd4ce5` | Add 429 rate-limit endpoint fallback to review model |
 | `2935f50` | UX fixes: contain metric views width, add YAML copy buttons, promote outcome map to dedicated tab |
