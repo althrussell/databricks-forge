@@ -240,6 +240,14 @@ Items 17--25: i18n, benchmark evaluation, RAG context, cost estimation, WebSocke
 
 ---
 
+## Future Feature Specs
+
+These features have detailed design documents but are not yet scheduled.
+
+- **Industry Gold Data Model Advisor** -- Recommend industry best-practice gold data models, gap analysis against the customer's estate, DDL generation. See [GOLD_MODEL_ADVISOR.md](GOLD_MODEL_ADVISOR.md).
+
+---
+
 ## Roadmap Visualisation
 
 ```mermaid

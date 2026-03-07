@@ -50,6 +50,15 @@ export interface MetricViewDeployResult {
 // ---------------------------------------------------------------------------
 
 /**
+ * Prepend a resource prefix to an object name, avoiding double-prefixing.
+ * Returns the name unchanged when prefix is empty.
+ */
+export function applyResourcePrefix(objectName: string, prefix: string): string {
+  if (!prefix || objectName.startsWith(prefix)) return objectName;
+  return `${prefix}${objectName}`;
+}
+
+/**
  * Strip 4-part FQN column prefixes (catalog.schema.table.column -> column)
  * from a SQL/YAML expression string.
  */
@@ -59,14 +68,22 @@ export function stripFqnPrefixes(sql: string): string {
 
 /**
  * Rewrite the target FQN in a CREATE VIEW statement to use a different
- * catalog.schema while preserving the object name.
+ * catalog.schema while preserving the object name. Optionally applies a
+ * resource prefix to the object name.
  */
-export function rewriteDdlTarget(ddl: string, targetSchema: string): string {
+export function rewriteDdlTarget(
+  ddl: string,
+  targetSchema: string,
+  resourcePrefix?: string,
+): string {
   return ddl.replace(
     /(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+)(`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?\.`?[a-zA-Z_]\w*`?)/i,
     (_match, prefix: string, fqn: string) => {
       const parts = fqn.replace(/`/g, "").split(".");
-      const objectName = parts[parts.length - 1];
+      let objectName = parts[parts.length - 1];
+      if (resourcePrefix) {
+        objectName = applyResourcePrefix(objectName, resourcePrefix);
+      }
       return `${prefix}${targetSchema}.${objectName}`;
     },
   );
@@ -469,8 +486,11 @@ export async function grantAccess(fqn: string): Promise<void> {
 export async function deployAsset(
   asset: DeployAsset,
   targetSchema: string,
+  resourcePrefix?: string,
 ): Promise<AssetResult & { deployed: boolean; fqn: string }> {
-  const rewritten = sanitizeMetricViewDdl(rewriteDdlTarget(asset.ddl, targetSchema));
+  const rewritten = sanitizeMetricViewDdl(
+    rewriteDdlTarget(asset.ddl, targetSchema, resourcePrefix),
+  );
   const objectName = extractObjectName(rewritten) ?? asset.name;
   const fqn = `${targetSchema}.${objectName}`;
 
@@ -574,12 +594,15 @@ export async function deployAsset(
 export async function deployMetricViews(
   views: Array<{ name: string; ddl: string; description?: string }>,
   targetSchema: string,
+  resourcePrefix?: string,
 ): Promise<{ results: MetricViewDeployResult[]; deployedFqns: string[] }> {
   const results: MetricViewDeployResult[] = [];
   const deployedFqns: string[] = [];
 
   for (const mv of views) {
-    const rewritten = sanitizeMetricViewDdl(rewriteDdlTarget(mv.ddl, targetSchema));
+    const rewritten = sanitizeMetricViewDdl(
+      rewriteDdlTarget(mv.ddl, targetSchema, resourcePrefix),
+    );
     const objectName = extractObjectName(rewritten) ?? mv.name;
     const fqn = `${targetSchema}.${objectName}`;
 

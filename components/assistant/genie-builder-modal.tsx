@@ -98,6 +98,7 @@ export function GenieBuilderModal({
 
   const [deployedSpaceId, setDeployedSpaceId] = useState<string | null>(null);
   const [databricksHost, setDatabricksHost] = useState("");
+  const [metricViewsServerEnabled, setMetricViewsServerEnabled] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const generationTriggered = useRef(false);
@@ -116,6 +117,7 @@ export function GenieBuilderModal({
       .then((r) => r.json())
       .then((d) => {
         if (d.host) setDatabricksHost(d.host.replace(/\/$/, ""));
+        if (d.metricViewsEnabled) setMetricViewsServerEnabled(true);
       })
       .catch(() => {});
   }, []);
@@ -308,6 +310,7 @@ export function GenieBuilderModal({
           authMode: settings.genieDeployAuthMode,
           targetSchema: targetSchema[0] || defaultSchema || undefined,
           metricViews: mvPayload.length > 0 ? mvPayload : undefined,
+          resourcePrefix: settings.catalogResourcePrefix,
         }),
       });
 
@@ -542,7 +545,7 @@ export function GenieBuilderModal({
             )}
 
             {/* Metric view schema selector */}
-            {hasMetricViews && loadSettings().genieEngineDefaults.generateMetricViews && (
+            {metricViewsServerEnabled && hasMetricViews && loadSettings().genieEngineDefaults.generateMetricViews && (
               <>
                 <Separator />
                 <div className="space-y-2">

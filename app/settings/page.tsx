@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
-import { saveSettings } from "@/lib/settings";
+import { saveSettings, DEFAULT_CATALOG_RESOURCE_PREFIX } from "@/lib/settings";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import {
   ProfileSettings,
@@ -46,7 +46,10 @@ export default function SettingsPage() {
     setBenchmarksEnabled,
     questionComplexity,
     setQuestionComplexity,
+    catalogResourcePrefix,
+    setCatalogResourcePrefix,
     benchmarksServerEnabled,
+    metricViewsServerEnabled,
     embeddingAvailable,
     rebuildingEmbeddings,
     setRebuildingEmbeddings,
@@ -94,6 +97,7 @@ export default function SettingsPage() {
       semanticSearchEnabled,
       benchmarksEnabled,
       questionComplexity,
+      catalogResourcePrefix,
     });
     toast.success("Settings saved");
   };
@@ -127,6 +131,7 @@ export default function SettingsPage() {
         adhocGenie: "simple",
         metadataGenie: "simple",
       });
+      setCatalogResourcePrefix(DEFAULT_CATALOG_RESOURCE_PREFIX);
       toast.success("Local settings cleared");
     }
   };
@@ -224,6 +229,7 @@ export default function SettingsPage() {
         onGenieDeployAuthModeChange={setGenieDeployAuthMode}
         questionComplexity={questionComplexity}
         onQuestionComplexityChange={setQuestionComplexity}
+        metricViewsServerEnabled={metricViewsServerEnabled ?? false}
       />
 
       <ExportSettings
@@ -231,6 +237,8 @@ export default function SettingsPage() {
         onDefaultExportFormatChange={setDefaultExportFormat}
         notebookPath={notebookPath}
         onNotebookPathChange={setNotebookPath}
+        catalogResourcePrefix={catalogResourcePrefix}
+        onCatalogResourcePrefixChange={setCatalogResourcePrefix}
       />
 
       <AboutSettings profile={profile} />

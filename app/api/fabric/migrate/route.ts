@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       scanId: string;
       targetCatalog: string;
       targetSchema: string;
+      resourcePrefix?: string;
     };
 
     if (!body.scanId || !body.targetCatalog || !body.targetSchema) {
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
       body.scanId,
       body.targetCatalog,
       body.targetSchema,
+      body.resourcePrefix,
     );
 
     return NextResponse.json(state, { status: 201 });

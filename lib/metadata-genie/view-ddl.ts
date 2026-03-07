@@ -255,8 +255,9 @@ export function generateViewDDL(opts: {
   catalogScope?: string[];
   aiDescriptions?: Record<string, string>;
   lineageAccessible?: boolean;
+  resourcePrefix?: string;
 }): string[] {
-  const { target, catalogScope, aiDescriptions, lineageAccessible } = opts;
+  const { target, catalogScope, aiDescriptions, lineageAccessible, resourcePrefix } = opts;
   const safeCatalog = validateIdentifier(target.catalog, "viewTarget.catalog");
   const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
   const fqnPrefix = `\`${safeCatalog}\`.\`${safeSchema}\``;
@@ -264,6 +265,9 @@ export function generateViewDDL(opts: {
   const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
 
   return defs.map((def) => {
+    const viewName = resourcePrefix && !def.name.startsWith(resourcePrefix)
+      ? `${resourcePrefix}${def.name}`
+      : def.name;
     const conditions: string[] = [];
 
     if (def.filterColumn) {
@@ -308,7 +312,7 @@ export function generateViewDDL(opts: {
         ? buildDescriptionsCTE(def.name, aiDescriptions)
         : null;
 
-    let sql = `CREATE OR REPLACE VIEW ${fqnPrefix}.\`${def.name}\``;
+    let sql = `CREATE OR REPLACE VIEW ${fqnPrefix}.\`${viewName}\``;
     sql += `\nCOMMENT '${def.comment}'`;
 
     if (cte) {
@@ -348,11 +352,20 @@ export function generateDropViewDDL(viewFqns: string[]): string[] {
 /**
  * Return the list of view FQNs that would be created for a given target.
  */
-export function getViewFqns(target: ViewTarget, lineageAccessible?: boolean): string[] {
+export function getViewFqns(
+  target: ViewTarget,
+  lineageAccessible?: boolean,
+  resourcePrefix?: string,
+): string[] {
   const safeCatalog = validateIdentifier(target.catalog, "viewTarget.catalog");
   const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
   const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
-  return defs.map((def) => `\`${safeCatalog}\`.\`${safeSchema}\`.\`${def.name}\``);
+  return defs.map((def) => {
+    const viewName = resourcePrefix && !def.name.startsWith(resourcePrefix)
+      ? `${resourcePrefix}${def.name}`
+      : def.name;
+    return `\`${safeCatalog}\`.\`${safeSchema}\`.\`${viewName}\``;
+  });
 }
 
 /** Return the view definitions for preview/documentation. */
@@ -361,7 +374,12 @@ export function getViewDefinitions(): ViewDef[] {
 }
 
 /** Return just the view names (without FQN prefix). */
-export function getViewNames(lineageAccessible?: boolean): string[] {
+export function getViewNames(lineageAccessible?: boolean, resourcePrefix?: string): string[] {
   const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
-  return defs.map((d) => d.name);
+  return defs.map((d) => {
+    if (resourcePrefix && !d.name.startsWith(resourcePrefix)) {
+      return `${resourcePrefix}${d.name}`;
+    }
+    return d.name;
+  });
 }

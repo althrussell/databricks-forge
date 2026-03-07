@@ -32,6 +32,7 @@ import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
+import { isMetricViewsEnabled } from "./metric-views-config";
 import { saveMetricViewProposals } from "@/lib/lakebase/metric-view-proposals";
 import { runTitleGeneration } from "./passes/title-generation";
 import { runExampleQueryGeneration } from "./passes/example-query-generation";
@@ -868,7 +869,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
 
   // Phase A: Metric views first
   onProgress?.("Generating metric views...", 50);
-  const metricViewResult = engineConfig.generateMetricViews
+  const metricViewResult = isMetricViewsEnabled() && engineConfig.generateMetricViews
     ? await runMetricViewProposals({
         domain,
         tableFqns: validTableFqns,

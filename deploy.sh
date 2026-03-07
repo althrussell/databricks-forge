@@ -26,6 +26,8 @@
 #               --seed-benchmark-industries "banking,hls,rcg"
 # Optional benchmark admin restriction:
 #   ./deploy.sh --benchmark-admins "alice@company.com,bob@company.com"
+# Optional metric views (disabled by default):
+#   ./deploy.sh --enable-metric-views
 # =========================================================================
 
 set -euo pipefail
@@ -71,6 +73,7 @@ ARG_SEED_BENCHMARKS=false
 ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=false
 ARG_SEED_BENCHMARK_INDUSTRIES=""
 ARG_BENCHMARK_ADMINS=""
+ARG_ENABLE_METRIC_VIEWS=false
 ARG_DESTROY=false
 
 print_usage() {
@@ -121,6 +124,7 @@ Options:
                              Applies to curated packs and generated baselines.
   --benchmark-admins CSV     Comma-separated emails allowed to manage benchmarks.
                              If unset, all authenticated users can manage them.
+  --enable-metric-views      Enable metric view generation (off by default)
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -151,6 +155,7 @@ while [[ $# -gt 0 ]]; do
     --seed-benchmarks-all-industries) ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=true; shift ;;
     --seed-benchmark-industries) ARG_SEED_BENCHMARK_INDUSTRIES="$2"; shift 2 ;;
     --benchmark-admins) ARG_BENCHMARK_ADMINS="$2"; shift 2 ;;
+    --enable-metric-views) ARG_ENABLE_METRIC_VIEWS=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -182,6 +187,7 @@ SEED_BENCHMARKS="${ARG_SEED_BENCHMARKS}"
 SEED_BENCHMARKS_ALL_INDUSTRIES="${ARG_SEED_BENCHMARKS_ALL_INDUSTRIES}"
 SEED_BENCHMARK_INDUSTRIES="${ARG_SEED_BENCHMARK_INDUSTRIES:-}"
 BENCHMARK_ADMINS="${ARG_BENCHMARK_ADMINS:-}"
+ENABLE_METRIC_VIEWS="${ARG_ENABLE_METRIC_VIEWS}"
 
 if [[ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" && "$SEED_BENCHMARKS" != "true" ]]; then
   SEED_BENCHMARKS=true
@@ -269,7 +275,7 @@ wait_for_app_absent() {
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ "$APP_NAME" = "databricks-forge" ] && [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ]; then
+  if [ "$APP_NAME" = "databricks-forge" ] && [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ] && [ "$ENABLE_METRIC_VIEWS" != "true" ]; then
     return
   fi
 
@@ -287,6 +293,7 @@ prepare_app_yaml() {
   export SEED_BENCHMARKS_ALL_INDUSTRIES
   export SEED_BENCHMARK_INDUSTRIES
   export BENCHMARK_ADMINS
+  export ENABLE_METRIC_VIEWS
   python3 - <<'PY'
 import os
 from pathlib import Path
@@ -302,6 +309,7 @@ seed_benchmarks = os.environ.get("SEED_BENCHMARKS", "").strip().lower() == "true
 seed_benchmarks_all = os.environ.get("SEED_BENCHMARKS_ALL_INDUSTRIES", "").strip().lower() == "true"
 seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").strip()
 benchmark_admins = os.environ.get("BENCHMARK_ADMINS", "").strip()
+enable_metric_views = os.environ.get("ENABLE_METRIC_VIEWS", "").strip().lower() == "true"
 
 path = Path("app.yaml")
 lines = path.read_text().splitlines()
@@ -324,6 +332,7 @@ def is_managed_name_line(s: str) -> bool:
         or "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES" in t
         or "FORGE_SEED_BENCHMARK_INDUSTRIES" in t
         or "FORGE_BENCHMARK_ADMINS" in t
+        or "FORGE_METRIC_VIEWS_ENABLED" in t
     )
 
 while i < len(lines):
@@ -369,6 +378,9 @@ if seed_benchmark_industries:
 if benchmark_admins:
     out.append("  - name: FORGE_BENCHMARK_ADMINS")
     out.append(f'    value: "{benchmark_admins}"')
+if enable_metric_views:
+    out.append("  - name: FORGE_METRIC_VIEWS_ENABLED")
+    out.append('    value: "true"')
 path.write_text("\n".join(out) + "\n")
 PY
 }
@@ -731,6 +743,7 @@ print_success() {
   printf "      Seed benchmarks:  %s\n" "$( [ "$SEED_BENCHMARKS" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Seed all industries: %s\n" "$( [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Seed industry filter: %s\n" "${SEED_BENCHMARK_INDUSTRIES:-none}"
+  printf "      Metric views:     %s\n" "$( [ "$ENABLE_METRIC_VIEWS" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Benchmark admins: %s\n" "${BENCHMARK_ADMINS:-all authenticated users}"
   if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
     printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"

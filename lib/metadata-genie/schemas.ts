@@ -19,6 +19,7 @@ export const DeployBodySchema = z.object({
     schema: z.string().min(1, "schema is required"),
   }),
   authMode: z.string().optional(),
+  resourcePrefix: z.string().optional(),
 });
 
 export const DeleteBodySchema = z.object({

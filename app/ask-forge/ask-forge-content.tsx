@@ -41,7 +41,7 @@ export default function AskForgeContent() {
   const [suggestedQuestions, setSuggestedQuestions] = React.useState<string[] | undefined>();
   const chatRef = React.useRef<AskForgeChatHandle>(null);
 
-  const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = React.useState(true);
   const [contextCollapsed, setContextCollapsed] = React.useState(false);
   const [historyAvailable, setHistoryAvailable] = React.useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = React.useState(0);

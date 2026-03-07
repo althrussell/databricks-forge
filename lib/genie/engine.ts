@@ -29,6 +29,7 @@ import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
 import { runMetricViewProposals } from "./passes/metric-view-proposals";
+import { isMetricViewsEnabled } from "./metric-views-config";
 import { runJoinInference } from "./passes/join-inference";
 import { runTitleGeneration } from "./passes/title-generation";
 import { runExampleQueryGeneration } from "./passes/example-query-generation";
@@ -502,7 +503,7 @@ async function processDomain(
   // Phase A: Metric views run first so they can be persisted and referenced
   // by downstream consumers (Genie space assembly, dashboard engine).
   onProgress("Generating metric views...");
-  const metricViewResult = config.generateMetricViews
+  const metricViewResult = isMetricViewsEnabled() && config.generateMetricViews
     ? await runMetricViewProposals({
         domain: normalizedDomain,
         tableFqns: tables,

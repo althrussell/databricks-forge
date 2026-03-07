@@ -84,6 +84,7 @@ export async function runGoldSchemaStep(
   scanId: string,
   targetCatalog: string,
   targetSchema: string,
+  resourcePrefix?: string,
 ): Promise<MigrationState> {
   const scan = await getFabricScanDetail(scanId);
   if (!scan) throw new Error("Scan not found");
@@ -107,7 +108,9 @@ export async function runGoldSchemaStep(
   migrationStates.set(migrationId, state);
 
   try {
-    const proposal = await proposeGoldSchema(scan.datasets, targetCatalog, targetSchema);
+    const proposal = await proposeGoldSchema(scan.datasets, targetCatalog, targetSchema, {
+      resourcePrefix,
+    });
     state.goldTables = proposal.tables.map((t) => ({
       ...t,
       deployStatus: "proposed" as ArtifactStatus,

@@ -75,6 +75,7 @@ export function MetadataGenieDeployModal({
           id: spaceId,
           viewTarget: { catalog: parts[0], schema: parts[1] },
           authMode: loadSettings().genieDeployAuthMode,
+          resourcePrefix: loadSettings().catalogResourcePrefix,
         }),
       });
 
@@ -136,7 +137,9 @@ export function MetadataGenieDeployModal({
             {targetSchema.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 Views will be created as{" "}
-                <code className="text-xs font-medium">{targetSchema[0]}.mdg_*</code>
+                <code className="text-xs font-medium">
+                  {targetSchema[0]}.{loadSettings().catalogResourcePrefix}mdg_*
+                </code>
               </p>
             )}
             {error && <p className="text-sm text-destructive">{error}</p>}

@@ -38,6 +38,7 @@ import {
   updateDeploymentStatus,
 } from "@/lib/lakebase/metric-view-proposals";
 import { rewriteDashboardMetricViewFqns } from "@/lib/genie/metric-view-dependencies";
+import { isMetricViewsEnabled } from "@/lib/genie/metric-views-config";
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------
@@ -57,6 +58,8 @@ interface RequestBody {
   authMode?: GenieAuthMode;
   /** Optional metric view FQN rewrites (old ref → deployed FQN). */
   fqnRewrites?: Record<string, string>;
+  /** Prefix prepended to UC resource names (e.g. "forge_"). */
+  resourcePrefix?: string;
 }
 
 interface DomainResult {
@@ -123,34 +126,34 @@ export async function POST(
       const assets: AssetResult[] = [];
       const deployedMvs: { fqn: string; description?: string }[] = [];
 
-      // 1. Deploy metric views (with auto-fix)
-      // Pre-load standalone proposals so we can update their deployment status
-      let mvProposals: Awaited<ReturnType<typeof getMetricViewProposalsByRunDomain>> = [];
-      try {
-        mvProposals = await getMetricViewProposalsByRunDomain(runId, domainReq.domain);
-      } catch {
-        // Non-fatal: standalone table may not exist yet for old runs
-      }
+      // 1. Deploy metric views (with auto-fix) -- skipped when the global kill switch is off
+      if (isMetricViewsEnabled()) {
+        let mvProposals: Awaited<ReturnType<typeof getMetricViewProposalsByRunDomain>> = [];
+        try {
+          mvProposals = await getMetricViewProposalsByRunDomain(runId, domainReq.domain);
+        } catch {
+          // Non-fatal: standalone table may not exist yet for old runs
+        }
 
-      for (const mv of domainReq.metricViews) {
-        const result = await deployAsset(mv, body.targetSchema);
-        assets.push(result);
-        if (result.deployed) {
-          deployedMvs.push({ fqn: result.fqn, description: mv.description });
-          logger.info("Metric view deployed", { runId, domain: domainReq.domain, fqn: result.fqn });
+        for (const mv of domainReq.metricViews) {
+          const result = await deployAsset(mv, body.targetSchema, body.resourcePrefix);
+          assets.push(result);
+          if (result.deployed) {
+            deployedMvs.push({ fqn: result.fqn, description: mv.description });
+            logger.info("Metric view deployed", { runId, domain: domainReq.domain, fqn: result.fqn });
 
-          // Update the standalone ForgeMetricViewProposal table
-          const matchingProposal = mvProposals.find(
-            (p) => p.name.toLowerCase() === mv.name.toLowerCase(),
-          );
-          if (matchingProposal) {
-            try {
-              await updateDeploymentStatus(matchingProposal.id, "deployed", result.fqn);
-            } catch (err) {
-              logger.warn("Failed to update MV proposal deployment status", {
-                proposalId: matchingProposal.id,
-                error: err instanceof Error ? err.message : String(err),
-              });
+            const matchingProposal = mvProposals.find(
+              (p) => p.name.toLowerCase() === mv.name.toLowerCase(),
+            );
+            if (matchingProposal) {
+              try {
+                await updateDeploymentStatus(matchingProposal.id, "deployed", result.fqn);
+              } catch (err) {
+                logger.warn("Failed to update MV proposal deployment status", {
+                  proposalId: matchingProposal.id,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
             }
           }
         }
