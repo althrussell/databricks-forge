@@ -10,7 +10,7 @@
 import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import { validateFqn } from "@/lib/validation";
-import { nestSnowflakeJoins } from "./passes/metric-view-proposals";
+import { nestSnowflakeJoins, qualifyNestedAliasRefs } from "./passes/metric-view-proposals";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -172,6 +172,9 @@ export function sanitizeMetricViewDdl(ddl: string): string {
 
   // Restructure flat snowflake joins into nested joins
   result = nestSnowflakeJoins(result);
+
+  // Qualify nested join alias references with parent-chain prefix
+  result = qualifyNestedAliasRefs(result);
 
   // Remove window blocks that the YAML parser rejects
   result = stripWindowBlocks(result);
