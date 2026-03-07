@@ -18,17 +18,12 @@ import { Separator } from "@/components/ui/separator";
 import { CheckCircle2, XCircle, Loader2, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import type { DashboardRecommendation } from "@/lib/dashboard/types";
-import {
-  MetricViewDependencyModal,
-  type MissingMetricView,
-  type DeployedResult,
-} from "@/components/pipeline/metric-view-dependency-modal";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Step = "configure" | "mv-deps" | "deploying" | "done";
+type Step = "configure" | "deploying" | "done";
 
 interface DomainResult {
   domain: string;
@@ -68,76 +63,18 @@ export function DashboardDeployModal({
   const [results, setResults] = useState<DomainResult[]>([]);
   const [deployingIdx, setDeployingIdx] = useState(0);
 
-  // Metric view dependency gate
-  const [missingMvs, setMissingMvs] = useState<MissingMetricView[]>([]);
-  const [checkingDeps, setCheckingDeps] = useState(false);
-  const [defaultMvSchema, setDefaultMvSchema] = useState("");
-  const [fqnRewrites, setFqnRewrites] = useState<Record<string, string>>({});
-
   function handleClose() {
     const wasCompleted = step === "done";
     setStep("configure");
     setResults([]);
     setDeployingIdx(0);
-    setMissingMvs([]);
-    setCheckingDeps(false);
-    setFqnRewrites({});
     onOpenChange(false);
     if (wasCompleted) {
       onDeployComplete();
     }
   }
 
-  async function checkDepsAndDeploy() {
-    setCheckingDeps(true);
-
-    try {
-      const allMissing: MissingMetricView[] = [];
-      let schema = "";
-
-      for (const rec of recommendations) {
-        try {
-          const res = await fetch("/api/metric-views/check-dependencies", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ runId, domain: rec.domain }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.missing && data.missing.length > 0) {
-              for (const mv of data.missing) {
-                if (!allMissing.some((m) => m.fqn === mv.fqn)) {
-                  allMissing.push(mv);
-                  if (!schema && mv.fqn) {
-                    const parts = mv.fqn.split(".");
-                    if (parts.length >= 2) schema = `${parts[0]}.${parts[1]}`;
-                  }
-                }
-              }
-            }
-          }
-        } catch {
-          // If check fails for a domain, proceed anyway
-        }
-      }
-
-      if (allMissing.length > 0) {
-        setMissingMvs(allMissing);
-        setDefaultMvSchema(schema);
-        setStep("mv-deps");
-      } else {
-        handleDeploy();
-      }
-    } catch {
-      handleDeploy();
-    } finally {
-      setCheckingDeps(false);
-    }
-  }
-
-  async function handleDeploy(rewrites?: Record<string, string>) {
-    const activeRewrites = rewrites ?? fqnRewrites;
+  async function handleDeploy() {
     setStep("deploying");
     setResults([]);
     const deployResults: DomainResult[] = [];
@@ -147,20 +84,15 @@ export function DashboardDeployModal({
       setDeployingIdx(i);
 
       try {
-        const bodyPayload: Record<string, unknown> = {
-          parentPath,
-          publish: publishAfterDeploy,
-        };
-        if (Object.keys(activeRewrites).length > 0) {
-          bodyPayload.fqnRewrites = activeRewrites;
-        }
-
         const res = await fetch(
           `/api/runs/${runId}/dashboard-engine/${encodeURIComponent(rec.domain)}/deploy`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyPayload),
+            body: JSON.stringify({
+              parentPath,
+              publish: publishAfterDeploy,
+            }),
           },
         );
 
@@ -203,10 +135,7 @@ export function DashboardDeployModal({
   const failCount = results.filter((r) => r.error).length;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={step === "deploying" || step === "mv-deps" ? undefined : handleClose}
-    >
+    <Dialog open={open} onOpenChange={step === "deploying" ? undefined : handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -338,53 +267,15 @@ export function DashboardDeployModal({
           </div>
         )}
 
-        {/* Metric view dependency modal (overlay) */}
-        <MetricViewDependencyModal
-          open={step === "mv-deps"}
-          onOpenChange={(o) => {
-            if (!o) setStep("configure");
-          }}
-          missing={missingMvs}
-          defaultSchema={defaultMvSchema}
-          onDeployed={(deployed: DeployedResult[]) => {
-            const rewrites: Record<string, string> = {};
-            for (const d of deployed) {
-              if (d.fqn !== d.deployedFqn) {
-                rewrites[d.fqn] = d.deployedFqn;
-              }
-              // Also rewrite bare name → deployed FQN
-              const bareName = d.name.toLowerCase();
-              const fqnLower = d.fqn.toLowerCase();
-              if (bareName !== fqnLower && !rewrites[d.name]) {
-                rewrites[d.name] = d.deployedFqn;
-              }
-            }
-            setFqnRewrites(rewrites);
-            handleDeploy(rewrites);
-          }}
-          onCancel={() => {
-            setStep("configure");
-          }}
-        />
-
         <DialogFooter>
           {step === "configure" && (
             <>
               <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button onClick={checkDepsAndDeploy} disabled={checkingDeps}>
-                {checkingDeps ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Checking...
-                  </>
-                ) : (
-                  <>
-                    Deploy {recommendations.length} Dashboard
-                    {recommendations.length !== 1 ? "s" : ""}
-                  </>
-                )}
+              <Button onClick={handleDeploy}>
+                Deploy {recommendations.length} Dashboard
+                {recommendations.length !== 1 ? "s" : ""}
               </Button>
             </>
           )}

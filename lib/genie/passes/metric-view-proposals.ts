@@ -947,7 +947,15 @@ export function validateMetricViewYaml(
     if (joinsIdx !== -1) {
       const joinAliasNames = new Set<string>();
       const jnRe = /^\s*-\s*name:\s*(\w+)/gm;
-      const jBlock = yaml.slice(joinsIdx);
+      const jBlockEnd = Math.min(
+        ...[yaml.indexOf("dimensions:", joinsIdx), yaml.indexOf("measures:", joinsIdx)].filter(
+          (i) => i > joinsIdx,
+        ),
+      );
+      const jBlock =
+        Number.isFinite(jBlockEnd) && jBlockEnd > joinsIdx
+          ? yaml.slice(joinsIdx, jBlockEnd)
+          : yaml.slice(joinsIdx);
       let jnm: RegExpExecArray | null;
       while ((jnm = jnRe.exec(jBlock)) !== null) {
         joinAliasNames.add(jnm[1].toLowerCase());
@@ -1273,7 +1281,15 @@ export function autoRenameShadowedDimensions(
 
   const joinAliases = new Set<string>();
   const joinNameRe = /^\s*-\s*name:\s*(\w+)/gm;
-  const joinsSection = yaml.slice(joinsIdx);
+  const joinsEnd = Math.min(
+    ...[yaml.indexOf("dimensions:", joinsIdx), yaml.indexOf("measures:", joinsIdx)].filter(
+      (i) => i > joinsIdx,
+    ),
+  );
+  const joinsSection =
+    Number.isFinite(joinsEnd) && joinsEnd > joinsIdx
+      ? yaml.slice(joinsIdx, joinsEnd)
+      : yaml.slice(joinsIdx);
   let jm: RegExpExecArray | null;
   while ((jm = joinNameRe.exec(joinsSection)) !== null) {
     joinAliases.add(jm[1].toLowerCase());
@@ -1852,6 +1868,11 @@ Create metric view proposals for this domain.`;
       );
       repaired.yaml = repairAliasCollision.yaml;
       repaired.ddl = repairAliasCollision.ddl;
+
+      // Rename dimension names that shadow join aliases
+      const repairDimCollision = autoRenameShadowedDimensions(repaired.yaml, repaired.ddl);
+      repaired.yaml = repairDimCollision.yaml;
+      repaired.ddl = repairDimCollision.ddl;
 
       const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(
         repaired.yaml,

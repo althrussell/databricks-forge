@@ -12,7 +12,6 @@ import type {
   EnrichedSqlSnippetMeasure,
   EnrichedSqlSnippetDimension,
   EnrichedSqlSnippetFilter,
-  MetricViewProposal,
 } from "@/lib/genie/types";
 import type {
   DashboardDesign,
@@ -20,7 +19,6 @@ import type {
   DashboardEngineInput,
   DashboardEngineResult,
   FilterCandidate,
-  MetricViewForDashboard,
 } from "./types";
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
@@ -29,7 +27,7 @@ import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assem
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
-import { validateDatasetSql, validateMetricViewSql } from "./validation";
+import { validateDatasetSql } from "./validation";
 import { logger } from "@/lib/logger";
 import type { DiscoveredDashboard } from "@/lib/discovery/types";
 
@@ -160,166 +158,6 @@ function getFilterCandidatesForDomain(
   return candidates.slice(0, 6);
 }
 
-/**
- * Parse dimensions and measures from YAML text into structured form.
- */
-function parseDimsAndMeasuresFromYaml(yaml: string): {
-  dims: MetricViewForDashboard["dimensions"];
-  measures: MetricViewForDashboard["measures"];
-} {
-  const dims: MetricViewForDashboard["dimensions"] = [];
-  const measures: MetricViewForDashboard["measures"] = [];
-  const yamlLines = (yaml ?? "").split("\n");
-  let section: "none" | "dimensions" | "measures" = "none";
-
-  for (const line of yamlLines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("dimensions:")) {
-      section = "dimensions";
-      continue;
-    }
-    if (trimmed.startsWith("measures:")) {
-      section = "measures";
-      continue;
-    }
-    if (
-      trimmed.startsWith("joins:") ||
-      trimmed.startsWith("filter:") ||
-      trimmed.startsWith("materialization:")
-    ) {
-      section = "none";
-      continue;
-    }
-
-    if (section === "dimensions" || section === "measures") {
-      const nameMatch = trimmed.match(/^-?\s*name:\s*(.+)/);
-      if (nameMatch) {
-        const name = nameMatch[1].replace(/^["']|["']$/g, "").trim();
-        const idx = yamlLines.indexOf(line);
-        const nextLine = yamlLines[idx + 1]?.trim() ?? "";
-        const exprMatch = nextLine.match(/^expr:\s*(.+)/);
-        const expr = exprMatch ? exprMatch[1].replace(/^["']|["']$/g, "").trim() : name;
-
-        if (section === "dimensions") dims.push({ name, expr });
-        else measures.push({ name, expr });
-      }
-    }
-  }
-
-  return { dims, measures };
-}
-
-/**
- * Read metric views from the new ForgeMetricViewProposal table.
- * Returns empty array if the table hasn't been populated (old runs).
- */
-async function getMetricViewsFromProposalTable(
-  runId: string,
-  domain: string,
-): Promise<MetricViewForDashboard[]> {
-  try {
-    const { getMetricViewProposalsByRunDomain } =
-      await import("@/lib/lakebase/metric-view-proposals");
-    const proposals = await getMetricViewProposalsByRunDomain(runId, domain);
-    if (proposals.length === 0) return [];
-
-    return proposals
-      .filter((p) => p.validationStatus !== "error")
-      .map((p) => {
-        const { dims, measures } = parseDimsAndMeasuresFromYaml(p.yaml);
-        const fqn = p.deployedFqn ?? p.name;
-        return { fqn, name: p.name, description: p.description ?? "", dimensions: dims, measures };
-      })
-      .filter((mv) => mv.measures.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Backward-compatible fallback: read metric view proposals from the old
- * GenieEngineRecommendation table.
- */
-function getMetricViewsFromGenieRecommendation(
-  domain: string,
-  genieRecommendations?: GenieEngineRecommendation[],
-): MetricViewForDashboard[] {
-  if (!genieRecommendations) return [];
-
-  const rec = genieRecommendations.find((r) => r.domain.toLowerCase() === domain.toLowerCase());
-  if (!rec?.metricViewProposals) return [];
-
-  try {
-    const proposals = JSON.parse(rec.metricViewProposals) as MetricViewProposal[];
-    const deployedFqns = new Set((rec.metricViews ?? []).map((f) => f.toLowerCase()));
-
-    return proposals
-      .filter((p) => p.validationStatus !== "error")
-      .map((p) => {
-        const { dims, measures } = parseDimsAndMeasuresFromYaml(p.yaml);
-        const fqn =
-          deployedFqns.size > 0
-            ? ((rec.metricViews ?? []).find((f) =>
-                f.toLowerCase().includes(p.name.toLowerCase()),
-              ) ?? p.name)
-            : p.name;
-        return { fqn, name: p.name, description: p.description, dimensions: dims, measures };
-      })
-      .filter((mv) => mv.measures.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Get metric view data for a domain — tries the new standalone table first,
- * falls back to the old GenieEngineRecommendation table for backward compat.
- */
-async function getMetricViewDataForDomain(
-  domain: string,
-  runId?: string,
-  genieRecommendations?: GenieEngineRecommendation[],
-): Promise<MetricViewForDashboard[]> {
-  // Try new table first
-  if (runId) {
-    const fromNewTable = await getMetricViewsFromProposalTable(runId, domain);
-    if (fromNewTable.length > 0) return fromNewTable;
-  }
-
-  // Fallback to old table
-  return getMetricViewsFromGenieRecommendation(domain, genieRecommendations);
-}
-
-function buildMetricViewLookups(metricViews: MetricViewForDashboard[]): {
-  fqns: Set<string>;
-  measures: Map<string, string[]>;
-} {
-  const fqns = new Set<string>();
-  const measures = new Map<string, string[]>();
-  for (const mv of metricViews) {
-    const fqnLower = mv.fqn.toLowerCase();
-    fqns.add(fqnLower);
-    measures.set(
-      fqnLower,
-      mv.measures.map((m) => m.name),
-    );
-  }
-  return { fqns, measures };
-}
-
-function buildMetricViewSchemaContext(metricViews: MetricViewForDashboard[]): string {
-  if (metricViews.length === 0) return "";
-  const lines = ["\n## Metric Views (these are WITH METRICS views -- use MEASURE() syntax)"];
-  for (const mv of metricViews) {
-    lines.push(`${mv.fqn} [METRIC VIEW]`);
-    lines.push(`  Dimensions: ${mv.dimensions.map((d) => d.name).join(", ")}`);
-    lines.push(
-      `  Measures (MUST use MEASURE(col) AS col): ${mv.measures.map((m) => m.name).join(", ")}`,
-    );
-  }
-  return lines.join("\n");
-}
-
 async function processDomain(
   group: DomainGroup,
   metadata: MetadataSnapshot,
@@ -332,8 +170,6 @@ async function processDomain(
   const columnSchemas = buildColumnSchemas(metadata, group.tables);
   const genieOutputs = getGenieOutputsForDomain(group.domain, genieRecommendations);
   const filterCandidates = getFilterCandidatesForDomain(metadata, group.tables, genieOutputs);
-  const metricViews = await getMetricViewDataForDomain(group.domain, runId, genieRecommendations);
-  const mvLookups = buildMetricViewLookups(metricViews);
 
   const prompt = buildDashboardDesignPrompt({
     businessName,
@@ -347,7 +183,6 @@ async function processDomain(
     dimensions: genieOutputs?.dimensions,
     filters: genieOutputs?.filters,
     filterCandidates,
-    metricViews,
   });
 
   const messages: ChatMessage[] = [
@@ -397,24 +232,9 @@ async function processDomain(
     return null;
   }
 
-  // Metric view SQL validation: check MEASURE() usage, aliases, GROUP BY
-  if (mvLookups.fqns.size > 0) {
-    for (const ds of parsed.datasets) {
-      const mvResult = validateMetricViewSql(ds.sql, mvLookups.fqns, mvLookups.measures);
-      if (!mvResult.valid) {
-        logger.warn("Dashboard Engine: metric view SQL issues detected", {
-          dataset: ds.name,
-          domain: group.domain,
-          issues: mvResult.issues,
-        });
-      }
-    }
-  }
-
   // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
   if (isReviewEnabled("dashboard")) {
-    const mvSchemaCtx = buildMetricViewSchemaContext(metricViews);
-    const schemaCtx = columnSchemas.join("\n") + mvSchemaCtx;
+    const schemaCtx = columnSchemas.join("\n");
     const reviewed = await Promise.all(
       parsed.datasets.map(async (ds) => {
         if (!ds.sql) return ds;
