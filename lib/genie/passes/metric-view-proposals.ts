@@ -292,7 +292,10 @@ function buildParentChainMap(text: string): Map<string, string> {
   let blockEnd = joinsLineIdx + 1;
   while (blockEnd < lines.length) {
     const line = lines[blockEnd];
-    if (line.trim() === "") { blockEnd++; continue; }
+    if (line.trim() === "") {
+      blockEnd++;
+      continue;
+    }
     const lineIndent = line.search(/\S/);
     if (lineIndent <= joinsIndent) break;
     blockEnd++;
@@ -1115,11 +1118,11 @@ const COLUMN_ERROR_PATTERNS = [
   "Nested aggregate",
 ];
 
-function hasColumnErrors(issues: string[]): boolean {
+export function hasColumnErrors(issues: string[]): boolean {
   return issues.some((i) => COLUMN_ERROR_PATTERNS.some((p) => i.includes(p)));
 }
 
-async function repairProposal(
+export async function repairProposal(
   proposal: MetricViewProposal,
   schemaBlock: string,
   columnsBlock: string,

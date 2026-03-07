@@ -24,7 +24,12 @@ import {
   Table2,
   Copy,
   Check,
+  Wrench,
 } from "lucide-react";
+import {
+  MetricViewDeployModal,
+  type DeployableProposal,
+} from "@/components/pipeline/metric-view-deploy-modal";
 
 interface MetricViewProposal {
   id: string;
@@ -124,13 +129,19 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 function MetricViewRow({
   proposal,
   onDeploy,
-  deploying,
+  onRepair,
+  repairing,
 }: {
   proposal: MetricViewProposal;
-  onDeploy: (id: string) => void;
-  deploying: boolean;
+  onDeploy: (proposal: MetricViewProposal) => void;
+  onRepair: (id: string) => void;
+  repairing: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+
+  const canDeploy =
+    proposal.deploymentStatus !== "deployed" && proposal.validationStatus !== "error";
+  const canRepair = proposal.validationStatus === "error" || proposal.deploymentStatus === "failed";
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
@@ -169,21 +180,33 @@ function MetricViewRow({
               )}
               <ValidationBadge status={proposal.validationStatus} />
               <StatusBadge status={proposal.deploymentStatus} />
-              {proposal.deploymentStatus !== "deployed" &&
-                proposal.validationStatus !== "error" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeploy(proposal.id);
-                    }}
-                    disabled={deploying}
-                  >
-                    <Rocket className="mr-1 h-3 w-3" />
-                    {deploying ? "Deploying..." : "Deploy"}
-                  </Button>
-                )}
+              {canRepair && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRepair(proposal.id);
+                  }}
+                  disabled={repairing}
+                >
+                  <Wrench className="mr-1 h-3 w-3" />
+                  {repairing ? "Repairing..." : "Repair"}
+                </Button>
+              )}
+              {canDeploy && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeploy(proposal);
+                  }}
+                >
+                  <Rocket className="mr-1 h-3 w-3" />
+                  Deploy
+                </Button>
+              )}
             </div>
           </div>
         </CollapsibleTrigger>
@@ -249,10 +272,13 @@ function MetricViewRow({
 export function MetricViewsTab({ runId }: { runId: string }) {
   const [proposals, setProposals] = useState<MetricViewProposal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deployingIds, setDeployingIds] = useState<Set<string>>(new Set());
   const [filterDomain, setFilterDomain] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [deployAllLoading, setDeployAllLoading] = useState(false);
+  const [repairingIds, setRepairingIds] = useState<Set<string>>(new Set());
+
+  // Deploy modal state
+  const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const [deployModalProposals, setDeployModalProposals] = useState<DeployableProposal[]>([]);
 
   const fetchProposals = useCallback(async () => {
     try {
@@ -272,22 +298,23 @@ export function MetricViewsTab({ runId }: { runId: string }) {
     fetchProposals();
   }, [fetchProposals]);
 
-  const handleDeploy = useCallback(
+  const openDeployModal = useCallback((items: MetricViewProposal[]) => {
+    setDeployModalProposals(
+      items.map((p) => ({ id: p.id, name: p.name, schemaScope: p.schemaScope })),
+    );
+    setDeployModalOpen(true);
+  }, []);
+
+  const handleRepair = useCallback(
     async (id: string) => {
-      setDeployingIds((prev) => new Set([...prev, id]));
+      setRepairingIds((prev) => new Set([...prev, id]));
       try {
-        const res = await fetch(`/api/metric-views/${id}/deploy`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        if (res.ok) {
-          await fetchProposals();
-        }
+        await fetch(`/api/metric-views/${id}/repair`, { method: "POST" });
+        await fetchProposals();
       } catch {
         // ignore
       } finally {
-        setDeployingIds((prev) => {
+        setRepairingIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
           return next;
@@ -296,17 +323,6 @@ export function MetricViewsTab({ runId }: { runId: string }) {
     },
     [fetchProposals],
   );
-
-  const handleDeployAll = useCallback(async () => {
-    setDeployAllLoading(true);
-    const deployable = proposals.filter(
-      (p) => p.deploymentStatus !== "deployed" && p.validationStatus !== "error",
-    );
-    for (const p of deployable) {
-      await handleDeploy(p.id);
-    }
-    setDeployAllLoading(false);
-  }, [proposals, handleDeploy]);
 
   const domains = Array.from(new Set(proposals.map((p) => p.domain).filter(Boolean)));
 
@@ -392,9 +408,17 @@ export function MetricViewsTab({ runId }: { runId: string }) {
               </SelectContent>
             </Select>
             {deployableCount > 0 && (
-              <Button size="sm" onClick={handleDeployAll} disabled={deployAllLoading}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const deployable = proposals.filter(
+                    (p) => p.deploymentStatus !== "deployed" && p.validationStatus !== "error",
+                  );
+                  openDeployModal(deployable);
+                }}
+              >
                 <Rocket className="mr-1 h-3 w-3" />
-                {deployAllLoading ? "Deploying..." : `Deploy All Valid (${deployableCount})`}
+                Deploy All Valid ({deployableCount})
               </Button>
             )}
           </div>
@@ -405,8 +429,9 @@ export function MetricViewsTab({ runId }: { runId: string }) {
           <MetricViewRow
             key={p.id}
             proposal={p}
-            onDeploy={handleDeploy}
-            deploying={deployingIds.has(p.id)}
+            onDeploy={(proposal) => openDeployModal([proposal])}
+            onRepair={handleRepair}
+            repairing={repairingIds.has(p.id)}
           />
         ))}
         {filtered.length === 0 && (
@@ -415,6 +440,13 @@ export function MetricViewsTab({ runId }: { runId: string }) {
           </p>
         )}
       </CardContent>
+
+      <MetricViewDeployModal
+        open={deployModalOpen}
+        onOpenChange={setDeployModalOpen}
+        proposals={deployModalProposals}
+        onComplete={fetchProposals}
+      />
     </Card>
   );
 }
