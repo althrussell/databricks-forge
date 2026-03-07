@@ -5,6 +5,7 @@ import {
   detectFlatSnowflakeJoins,
   qualifyNestedAliasRefs,
   autoRenameCollidingJoinAliases,
+  autoRenameShadowedDimensions,
   validateColumnReferences,
   validateMetricViewYaml,
 } from "@/lib/genie/passes/metric-view-proposals";
@@ -729,5 +730,269 @@ dimensions:
 
     expect(result.renamed).toBe(0);
     expect(result.yaml).toBe(yaml);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// autoRenameShadowedDimensions
+// ---------------------------------------------------------------------------
+
+describe("autoRenameShadowedDimensions", () => {
+  it("renames dimension that shadows a join alias", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact_claim
+dimensions:
+  - name: claim_type
+    expr: claim_type.claim_type_name
+  - name: claim_status
+    expr: claim_status
+measures:
+  - name: total_claims
+    expr: COUNT(claim_id)
+joins:
+  - name: claim_type
+    source: catalog.schema.dim_claim_type
+    on: source.claim_type_id = claim_type.claim_type_id
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoRenameShadowedDimensions(yaml, ddl);
+
+    expect(result.renamed).toBe(1);
+    expect(result.yaml).toContain("- name: claim_type_name");
+    const dimsBlock = result.yaml.split("measures:")[0];
+    expect(dimsBlock).not.toMatch(/- name: claim_type\n/);
+    expect(result.yaml).toContain("- name: claim_status");
+    expect(result.ddl).toContain("- name: claim_type_name");
+    // Join alias should remain unchanged
+    const joinsBlock = result.yaml.split("joins:")[1];
+    expect(joinsBlock).toContain("- name: claim_type");
+  });
+
+  it("does not rename when no collision exists", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: cust_name
+    expr: customer.name
+measures:
+  - name: cnt
+    expr: COUNT(1)
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoRenameShadowedDimensions(yaml, ddl);
+
+    expect(result.renamed).toBe(0);
+    expect(result.yaml).toBe(yaml);
+  });
+
+  it("appends _val when derived name already exists", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: member
+    expr: member.member_name
+  - name: member_name
+    expr: member.display_name
+measures:
+  - name: cnt
+    expr: COUNT(1)
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoRenameShadowedDimensions(yaml, ddl);
+
+    expect(result.renamed).toBe(1);
+    expect(result.yaml).toContain("- name: member_name_val");
+  });
+
+  it("returns unchanged when no joins block exists", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: col
+    expr: col
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoRenameShadowedDimensions(yaml, ddl);
+
+    expect(result.renamed).toBe(0);
+    expect(result.yaml).toBe(yaml);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateColumnReferences — parent-chain nested join refs
+// ---------------------------------------------------------------------------
+
+describe("validateColumnReferences — nested join parent-chain", () => {
+  const allowlist = makeAllowlist({
+    "catalog.schema.fact_advice": ["advice_case_id", "member_id", "adviser_id"],
+    "catalog.schema.dim_member": ["member_id", "lifecycle_stage", "employer_id"],
+    "catalog.schema.dim_employer": ["employer_id", "industry", "employer_size"],
+    "catalog.schema.dim_adviser": ["adviser_id", "adviser_name"],
+  });
+
+  it("passes 3-part parent-chain ref (member.employer_dim.industry)", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact_advice
+joins:
+  - name: adviser
+    source: catalog.schema.dim_adviser
+    on: source.adviser_id = adviser.adviser_id
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+    joins:
+      - name: employer_dim
+        source: catalog.schema.dim_employer
+        on: member.employer_id = employer_dim.employer_id
+dimensions:
+  - name: employer_industry
+    expr: member.employer_dim.industry
+  - name: employer_size
+    expr: member.employer_dim.employer_size
+  - name: lifecycle
+    expr: member.lifecycle_stage
+`;
+    const issues = validateColumnReferences(yaml, allowlist);
+    expect(issues).toEqual([]);
+  });
+
+  it("passes 4-part parent-chain ref (customer.nation.region.col)", () => {
+    const deepAllowlist = makeAllowlist({
+      "catalog.schema.fact": ["order_id", "cust_id"],
+      "catalog.schema.dim_customer": ["cust_id", "nation_id"],
+      "catalog.schema.dim_nation": ["nation_id", "n_name", "region_id"],
+      "catalog.schema.dim_region": ["region_id", "r_name"],
+    });
+
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.cust_id = customer.cust_id
+    joins:
+      - name: nation
+        source: catalog.schema.dim_nation
+        on: customer.nation_id = nation.nation_id
+        joins:
+          - name: region
+            source: catalog.schema.dim_region
+            on: nation.region_id = region.region_id
+dimensions:
+  - name: nation_name
+    expr: customer.nation.n_name
+  - name: region_name
+    expr: customer.nation.region.r_name
+`;
+    const issues = validateColumnReferences(yaml, deepAllowlist);
+    expect(issues).toEqual([]);
+  });
+
+  it("still flags genuinely missing columns on nested join table", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact_advice
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+    joins:
+      - name: employer_dim
+        source: catalog.schema.dim_employer
+        on: member.employer_id = employer_dim.employer_id
+dimensions:
+  - name: employer_country
+    expr: member.employer_dim.country
+`;
+    const issues = validateColumnReferences(yaml, allowlist);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0]).toContain("country");
+    expect(issues[0]).toContain("not found in table");
+  });
+
+  it("still flags missing columns on simple 2-part refs", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact_advice
+dimensions:
+  - name: nonexistent
+    expr: source.nonexistent_col
+`;
+    const issues = validateColumnReferences(yaml, allowlist);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues[0]).toContain("nonexistent_col");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateMetricViewYaml — dimension shadows join alias
+// ---------------------------------------------------------------------------
+
+describe("validateMetricViewYaml — dimension shadows join alias", () => {
+  const allowlist = makeAllowlist({
+    "catalog.schema.fact_claim": ["claim_id", "claim_type_id", "amount"],
+    "catalog.schema.dim_claim_type": ["claim_type_id", "claim_type_name"],
+  });
+
+  it("flags dimension name that matches a join alias", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact_claim
+dimensions:
+  - name: claim_type
+    expr: claim_type.claim_type_name
+measures:
+  - name: claim_count
+    expr: COUNT(claim_id)
+joins:
+  - name: claim_type
+    source: catalog.schema.dim_claim_type
+    on: source.claim_type_id = claim_type.claim_type_id
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+    const result = validateMetricViewYaml(yaml, ddl, allowlist);
+
+    expect(result.status).toBe("error");
+    expect(result.issues.some((i) => i.includes("shadows join alias"))).toBe(true);
+  });
+
+  it("passes when dimension names do not match join aliases", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact_claim
+dimensions:
+  - name: claim_type_name
+    expr: claim_type.claim_type_name
+measures:
+  - name: claim_count
+    expr: COUNT(claim_id)
+joins:
+  - name: claim_type
+    source: catalog.schema.dim_claim_type
+    on: source.claim_type_id = claim_type.claim_type_id
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+    const result = validateMetricViewYaml(yaml, ddl, allowlist);
+
+    const shadowIssues = result.issues.filter((i) => i.includes("shadows join alias"));
+    expect(shadowIssues).toEqual([]);
   });
 });
