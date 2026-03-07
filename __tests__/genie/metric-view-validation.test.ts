@@ -6,6 +6,7 @@ import {
   qualifyNestedAliasRefs,
   autoRenameCollidingJoinAliases,
   autoRenameShadowedDimensions,
+  autoFixMaterializationRefs,
   validateColumnReferences,
   validateMetricViewYaml,
 } from "@/lib/genie/passes/metric-view-proposals";
@@ -994,5 +995,180 @@ joins:
 
     const shadowIssues = result.issues.filter((i) => i.includes("shadows join alias"));
     expect(shadowIssues).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// autoFixMaterializationRefs
+// ---------------------------------------------------------------------------
+
+describe("autoFixMaterializationRefs", () => {
+  it("maps join alias to declared dimension name via expr", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact_complaint
+dimensions:
+  - name: category_name
+    expr: complaint_category.category_name
+  - name: complaint_severity
+    expr: severity
+measures:
+  - name: complaint_count
+    expr: COUNT(complaint_id)
+joins:
+  - name: complaint_category
+    source: catalog.schema.dim_complaint_category
+    on: source.category_id = complaint_category.category_id
+materialization:
+  schedule: every 6 hours
+  mode: relaxed
+  materialized_views:
+    - name: summary
+      type: aggregated
+      dimensions: [complaint_category, complaint_severity]
+      measures: [complaint_count]
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoFixMaterializationRefs(yaml, ddl);
+
+    expect(result.fixed).toBeGreaterThan(0);
+    expect(result.yaml).toContain("dimensions: [category_name, complaint_severity]");
+  });
+
+  it("removes unresolvable refs", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: status
+    expr: status
+measures:
+  - name: cnt
+    expr: COUNT(1)
+materialization:
+  schedule: every 6 hours
+  mode: relaxed
+  materialized_views:
+    - name: summary
+      type: aggregated
+      dimensions: [status, nonexistent_dim]
+      measures: [cnt]
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoFixMaterializationRefs(yaml, ddl);
+
+    expect(result.fixed).toBeGreaterThan(0);
+    expect(result.yaml).toContain("dimensions: [status]");
+  });
+
+  it("passes through valid refs unchanged", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: status
+    expr: status
+measures:
+  - name: cnt
+    expr: COUNT(1)
+materialization:
+  schedule: every 6 hours
+  mode: relaxed
+  materialized_views:
+    - name: summary
+      type: aggregated
+      dimensions: [status]
+      measures: [cnt]
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoFixMaterializationRefs(yaml, ddl);
+
+    expect(result.fixed).toBe(0);
+    expect(result.yaml).toBe(yaml);
+  });
+
+  it("returns unchanged when no materialization block exists", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: status
+    expr: status
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoFixMaterializationRefs(yaml, ddl);
+
+    expect(result.fixed).toBe(0);
+    expect(result.yaml).toBe(yaml);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateMetricViewYaml — materialization refs
+// ---------------------------------------------------------------------------
+
+describe("validateMetricViewYaml — materialization refs", () => {
+  const allowlist = makeAllowlist({
+    "catalog.schema.fact": ["complaint_id", "category_id", "severity"],
+    "catalog.schema.dim_cat": ["category_id", "category_name"],
+  });
+
+  it("flags undeclared dimension in materialization block", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: category_name
+    expr: complaint_category.category_name
+measures:
+  - name: complaint_count
+    expr: COUNT(complaint_id)
+joins:
+  - name: complaint_category
+    source: catalog.schema.dim_cat
+    on: source.category_id = complaint_category.category_id
+materialization:
+  schedule: every 6 hours
+  mode: relaxed
+  materialized_views:
+    - name: summary
+      type: aggregated
+      dimensions: [complaint_category]
+      measures: [complaint_count]
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+    const result = validateMetricViewYaml(yaml, ddl, allowlist);
+
+    expect(result.issues.some((i) => i.includes("undeclared dimension"))).toBe(true);
+    expect(result.issues.some((i) => i.includes("complaint_category"))).toBe(true);
+  });
+
+  it("passes when materialization uses declared names", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: severity_level
+    expr: severity
+measures:
+  - name: complaint_count
+    expr: COUNT(complaint_id)
+materialization:
+  schedule: every 6 hours
+  mode: relaxed
+  materialized_views:
+    - name: summary
+      type: aggregated
+      dimensions: [severity_level]
+      measures: [complaint_count]
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+    const result = validateMetricViewYaml(yaml, ddl, allowlist);
+
+    const matIssues = result.issues.filter((i) => i.includes("undeclared"));
+    expect(matIssues).toEqual([]);
   });
 });

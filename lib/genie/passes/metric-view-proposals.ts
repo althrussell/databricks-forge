@@ -616,6 +616,7 @@ materialization:
       dimensions: [dim1]
       measures: [measure1]
 \`\`\`
+CRITICAL: Materialization \`dimensions\` and \`measures\` lists MUST reference declared dimension/measure \`name\` values. Do NOT use join aliases, column names, or table names. For example, if your dimension is \`name: category_name\` with \`expr: complaint_category.category_name\`, use \`category_name\` in the materialization list, NOT \`complaint_category\`.
 `.trim();
 
 // ---------------------------------------------------------------------------
@@ -987,6 +988,52 @@ export function validateMetricViewYaml(
   // against actual table schemas in the allowlist
   issues.push(...validateColumnReferences(yaml, allowlist));
 
+  // Validate materialization block references declared dimension/measure names
+  {
+    const matIdx = yaml.indexOf("materialization:");
+    if (matIdx !== -1) {
+      const declaredDims = new Set<string>();
+      const declaredMeasures = new Set<string>();
+
+      const dimsIdx = yaml.indexOf("dimensions:");
+      const measIdx = yaml.indexOf("measures:");
+
+      if (dimsIdx !== -1) {
+        const dEnd = measIdx > dimsIdx ? measIdx : matIdx;
+        const dBlock = yaml.slice(dimsIdx, dEnd);
+        const dnRe = /^\s*-\s*name:\s*(\w+)/gm;
+        let dnm: RegExpExecArray | null;
+        while ((dnm = dnRe.exec(dBlock)) !== null) declaredDims.add(dnm[1].toLowerCase());
+      }
+      if (measIdx !== -1) {
+        const mEnd = matIdx > measIdx ? matIdx : yaml.indexOf("joins:", measIdx);
+        const mBlock = yaml.slice(measIdx, mEnd > measIdx ? mEnd : undefined);
+        const mnRe = /^\s*-\s*name:\s*(\w+)/gm;
+        let mnm: RegExpExecArray | null;
+        while ((mnm = mnRe.exec(mBlock)) !== null) declaredMeasures.add(mnm[1].toLowerCase());
+      }
+
+      const matBlock = yaml.slice(matIdx);
+      const matListRe = /\b(dimensions|measures):\s*\[([^\]]*)\]/g;
+      let mlm: RegExpExecArray | null;
+      while ((mlm = matListRe.exec(matBlock)) !== null) {
+        const kind = mlm[1];
+        const declared = kind === "dimensions" ? declaredDims : declaredMeasures;
+        const items = mlm[2]
+          .split(",")
+          .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean);
+        for (const item of items) {
+          if (!declared.has(item.toLowerCase())) {
+            issues.push(
+              `Materialization references undeclared ${kind.slice(0, -1)} "${item}" — only declared ${kind} names are valid in materialized_views.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   if (!ddl.includes("WITH METRICS")) {
     issues.push("DDL missing WITH METRICS clause");
   }
@@ -1294,6 +1341,113 @@ function applyInDimensionsBlock(text: string, pattern: RegExp, replacement: stri
     text.slice(idx, measIdx).replace(pattern, replacement) +
     text.slice(measIdx)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Auto-fix: materialization refs that use join aliases instead of dim/measure names
+// ---------------------------------------------------------------------------
+
+/**
+ * Fix materialization blocks that reference join aliases, column names, or
+ * other invalid identifiers instead of declared dimension/measure `name` values.
+ * Attempts to map each invalid ref to the correct declared name by checking
+ * if a dimension's `expr` starts with `{ref}.` (join-alias-to-dimension mapping).
+ * Unresolvable refs are removed from the list.
+ */
+export function autoFixMaterializationRefs(
+  yaml: string,
+  ddl: string,
+): { yaml: string; ddl: string; fixed: number } {
+  const matIdx = yaml.indexOf("materialization:");
+  if (matIdx === -1) return { yaml, ddl, fixed: 0 };
+
+  const dimNames = new Set<string>();
+  const measureNames = new Set<string>();
+  const exprByJoinAlias = new Map<string, string>();
+
+  const dimsIdx = yaml.indexOf("dimensions:");
+  const measIdx = yaml.indexOf("measures:");
+
+  if (dimsIdx !== -1) {
+    const dEnd = measIdx > dimsIdx ? measIdx : matIdx;
+    const dBlock = yaml.slice(dimsIdx, dEnd);
+    const entryRe = /-\s*name:\s*(\w+)\s*\n\s*expr:\s*(.+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = entryRe.exec(dBlock)) !== null) {
+      const name = m[1];
+      dimNames.add(name.toLowerCase());
+      const expr = m[2].trim().replace(/^["']|["']$/g, "");
+      const aliasPart = expr.split(".")[0].replace(/`/g, "");
+      if (expr.includes(".")) {
+        exprByJoinAlias.set(aliasPart.toLowerCase(), name);
+      }
+    }
+  }
+
+  if (measIdx !== -1) {
+    const joinsAfterMeas = yaml.indexOf("joins:", measIdx);
+    const mEnd = joinsAfterMeas > measIdx ? joinsAfterMeas : matIdx > measIdx ? matIdx : -1;
+    const mBlock = yaml.slice(measIdx, mEnd > measIdx ? mEnd : undefined);
+    const nameRe = /^\s*-\s*name:\s*(\w+)/gm;
+    let m: RegExpExecArray | null;
+    while ((m = nameRe.exec(mBlock)) !== null) {
+      measureNames.add(m[1].toLowerCase());
+    }
+  }
+
+  const allDeclared = new Set([...dimNames, ...measureNames]);
+
+  const matListRe = /(\b(?:dimensions|measures):\s*\[)([^\]]*)\]/g;
+  let fixed = 0;
+
+  function fixList(listContent: string): string {
+    const items = listContent
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const fixedItems: string[] = [];
+
+    for (const item of items) {
+      const clean = item.replace(/^["']|["']$/g, "").trim();
+      if (allDeclared.has(clean.toLowerCase())) {
+        fixedItems.push(clean);
+      } else {
+        const mapped = exprByJoinAlias.get(clean.toLowerCase());
+        if (mapped) {
+          fixedItems.push(mapped);
+          fixed++;
+        } else {
+          fixed++;
+        }
+      }
+    }
+
+    return fixedItems.join(", ");
+  }
+
+  const matBlock = yaml.slice(matIdx);
+  const fixedMatBlock = matBlock.replace(matListRe, (_match, prefix: string, list: string) => {
+    return `${prefix}${fixList(list)}]`;
+  });
+
+  if (fixed === 0) return { yaml, ddl, fixed: 0 };
+
+  const modYaml = yaml.slice(0, matIdx) + fixedMatBlock;
+
+  let modDdl = ddl;
+  const ddlMatIdx = ddl.indexOf("materialization:");
+  if (ddlMatIdx !== -1) {
+    const ddlMatBlock = ddl.slice(ddlMatIdx);
+    const fixedDdlMatBlock = ddlMatBlock.replace(
+      matListRe,
+      (_match, prefix: string, list: string) => {
+        return `${prefix}${fixList(list)}]`;
+      },
+    );
+    modDdl = ddl.slice(0, ddlMatIdx) + fixedDdlMatBlock;
+  }
+
+  return { yaml: modYaml, ddl: modDdl, fixed };
 }
 
 // ---------------------------------------------------------------------------
@@ -1628,14 +1782,26 @@ Create metric view proposals for this domain.`;
           });
         }
 
-        const validation = validateMetricViewYaml(fixedYaml, fixedDdl, allowlist);
-        const features = detectFeatures(fixedYaml);
+        // Fix materialization refs that use join aliases instead of dim/measure names
+        const matFix = autoFixMaterializationRefs(fixedYaml, fixedDdl);
+        const finalYaml = matFix.yaml;
+        const finalDdl = matFix.ddl;
+        if (matFix.fixed > 0) {
+          logger.info("Auto-fixed materialization refs", {
+            domain,
+            name: String(p.name ?? ""),
+            fixed: matFix.fixed,
+          });
+        }
+
+        const validation = validateMetricViewYaml(finalYaml, finalDdl, allowlist);
+        const features = detectFeatures(finalYaml);
 
         return {
           name: String(p.name ?? ""),
           description: String(p.description ?? ""),
-          yaml: fixedYaml,
-          ddl: fixedDdl,
+          yaml: finalYaml,
+          ddl: finalDdl,
           sourceTables: Array.isArray(p.sourceTables) ? p.sourceTables.map(String) : [],
           hasJoins: features.hasJoins,
           hasFilteredMeasures: features.hasFilteredMeasures,
