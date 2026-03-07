@@ -48,7 +48,7 @@ export default function RootLayout({
             </a>
             <div className="flex h-screen overflow-hidden">
               <SidebarNav />
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
                   <MobileNav />
                   <span className="text-sm font-semibold md:hidden">Forge AI</span>
@@ -59,7 +59,7 @@ export default function RootLayout({
                   <AskForgePanel />
                   <ThemeToggle />
                 </header>
-                <main id="main-content" className="flex-1 overflow-y-auto">
+                <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden">
                   <div className="w-full px-6 py-6">{children}</div>
                 </main>
               </div>

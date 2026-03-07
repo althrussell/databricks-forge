@@ -155,7 +155,7 @@ function MetricViewRow({
                   )}
                 </div>
                 {proposal.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 break-words">
                     {proposal.description}
                   </p>
                 )}
@@ -204,7 +204,7 @@ function MetricViewRow({
             {proposal.validationIssues.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-amber-600 mb-1">Validation Issues</p>
-                <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
+                <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside break-words">
                   {proposal.validationIssues.map((issue, idx) => (
                     <li key={idx}>{issue}</li>
                   ))}
