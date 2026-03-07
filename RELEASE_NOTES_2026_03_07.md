@@ -1,31 +1,41 @@
 # Release Notes -- 2026-03-07
 
-**Databricks Forge AI v0.14.1**
+**Databricks Forge AI v0.14.2**
 
 ---
 
 ## Bug Fixes
 
-- **False validation on nested join parent-chain references** -- `validateColumnReferences()` now walks the full join tree so parent-chain refs like `member.employer_dim.industry` (and deeper chains like `customer.nation.region.r_name`) no longer produce false "column not found" errors.
+- **Metric view validation false positives** -- The join-alias scanner in `validateMetricViewYaml` and `autoRenameShadowedDimensions` scanned from `joins:` to end-of-YAML, incorrectly collecting dimension and measure names as join aliases. Every dimension then "shadowed itself", producing a flood of false-positive `INVALID_EXTRACT_BASE_FIELD_TYPE` warnings. Fixed by limiting the scan to the joins section only.
 
-- **Dry-run validation deploying metric views** -- The "dry-run" SQL validation was executing `CREATE OR REPLACE VIEW` DDL, which silently deployed metric views into the user's schema. Now creates a temporary `__forge_validate_` view and drops it in a `finally` block so no artifacts remain.
+- **Missing auto-fix in repair loop** -- The LLM repair loop called `autoRenameCollidingJoinAliases` and `autoRenameShadowedMeasures` but omitted `autoRenameShadowedDimensions`, so repaired proposals could still have dimension/alias collisions. Now included.
 
-- **Dimension name vs join alias collision** -- Added `autoRenameShadowedDimensions()` pass and validation check to detect and fix dimension names that shadow join aliases (e.g. dimension `claim_type` colliding with join alias `claim_type`), which causes `INVALID_EXTRACT_BASE_FIELD_TYPE`. Three-layer defence: LLM prompt guidance, programmatic auto-rename, and validation error detection.
+- **Materialization block referencing join aliases** -- Fixed materialization refs that used join alias names instead of declared dimension/measure names.
 
 ---
 
 ## Improvements
 
-### Metric view repair route hardened
-- Repair route now runs `autoRenameShadowedDimensions` in both pre-LLM and post-LLM repair passes.
-- `COLUMN_ERROR_PATTERNS` expanded with `INVALID_EXTRACT_BASE_FIELD_TYPE` and `shadows join alias` so the repair loop triggers for these error classes.
+### Metric views scoped to Genie Spaces only
+- Removed the standalone **Metric Views** tab from the pipeline run detail page. Metric views are now only visible within Genie Space details, simplifying the UI.
+- Updated help text in the Genie detail accordion and deploy modal to reflect the new structure.
+
+### Dashboards use standalone SQL exclusively
+- Dashboard engine no longer fetches or passes metric view proposals to the LLM prompt. Dashboards now generate standalone SQL with no dependency on new metric views.
+- Removed the metric view dependency check and `MetricViewDependencyModal` from the dashboard deploy flow, simplifying it from a 4-step to a 3-step process (configure, deploying, done).
+- Removed metric view FQN rewriting from the dashboard deploy API route.
+
+### Metric view dependency resolution with FQN rewriting
+- Added QUALIFY+aggregate SQL rule and metric view dependency resolution with FQN rewriting for Genie Space deployments.
 
 ---
 
-## Commits (1)
+## Commits (3)
 
 | Hash | Summary |
 |---|---|
-| `497acd3` | Fix metric view validation bugs: parent-chain refs, dry-run deploy, dimension-join collisions |
+| `dfa4cce` | Fix metric view validation false positives and decouple dashboards from metric views |
+| `2ec3662` | Add QUALIFY+aggregate SQL rule and metric view dependency resolution with FQN rewriting |
+| `119b967` | Fix materialization block referencing join aliases instead of declared dim/measure names |
 
 **Uncommitted changes:** version bump + release notes (this file).
