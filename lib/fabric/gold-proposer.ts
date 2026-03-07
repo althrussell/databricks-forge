@@ -60,7 +60,11 @@ export async function proposeGoldSchema(
   datasets: FabricDataset[],
   targetCatalog: string,
   targetSchema: string,
-  options?: { useLLM?: boolean; sensitivityMappings?: SensitivityLabelMapping[] },
+  options?: {
+    useLLM?: boolean;
+    sensitivityMappings?: SensitivityLabelMapping[];
+    resourcePrefix?: string;
+  },
 ): Promise<GoldSchemaProposal> {
   const allTables: FabricTable[] = [];
   const allRelationships: FabricRelationship[] = [];
@@ -86,8 +90,10 @@ export async function proposeGoldSchema(
   const proposals: GoldTableProposal[] = [];
   const nameMapping: NameMapping[] = [];
 
+  const rp = options?.resourcePrefix ?? "";
   for (const table of allTables) {
-    const ucTableName = normalizeTableName(table.name, usedNames);
+    let ucTableName = normalizeTableName(table.name, usedNames);
+    if (rp && !ucTableName.startsWith(rp)) ucTableName = `${rp}${ucTableName}`;
     usedNames.add(ucTableName);
     nameMapping.push({ original: table.name, normalized: ucTableName, source: "table" });
 

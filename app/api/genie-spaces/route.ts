@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       quality,
       targetSchema,
       metricViews,
+      resourcePrefix,
     } = body as {
       title: string;
       description: string;
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
       };
       targetSchema?: string;
       metricViews?: Array<{ name: string; ddl: string; description?: string }>;
+      resourcePrefix?: string;
     };
 
     if (!title || !serializedSpace || !domain) {
@@ -129,7 +131,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const mvDeploy = await deployMetricViews(metricViews, targetSchema);
+      const mvDeploy = await deployMetricViews(metricViews, targetSchema, resourcePrefix);
       mvResults = mvDeploy.results;
       deployedMvFqns.push(...mvDeploy.deployedFqns);
       finalSerializedSpace = patchSpaceWithMetricViews(serializedSpace, deployedMvFqns);

@@ -243,6 +243,7 @@ export function GenieDeployModal({
           domains: domainPayloads,
           targetSchema: schema,
           authMode: loadSettings().genieDeployAuthMode,
+          resourcePrefix: loadSettings().catalogResourcePrefix,
           ...(Object.keys(mvFqnRewrites).length > 0 && { fqnRewrites: mvFqnRewrites }),
         }),
       });

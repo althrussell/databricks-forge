@@ -1088,16 +1088,20 @@ const VIEW_FQN_RE =
 /**
  * Validate metric view DDL by creating a temporary view and immediately
  * dropping it. Returns the error message if validation fails, or null on
- * success. The temp view uses a `__forge_validate_` prefix so it is
+ * success. The temp view uses a `__<prefix>validate_` prefix so it is
  * distinguishable from real views and is always cleaned up in a finally block.
  */
-export async function dryRunMetricViewDdl(ddl: string): Promise<string | null> {
+export async function dryRunMetricViewDdl(
+  ddl: string,
+  resourcePrefix?: string,
+): Promise<string | null> {
   const fqnMatch = ddl.match(VIEW_FQN_RE);
   if (!fqnMatch) return "Could not extract view FQN from DDL";
 
   const originalFqn = fqnMatch[1].replace(/`/g, "");
   const parts = originalFqn.split(".");
-  const tempName = `__forge_validate_${Date.now()}`;
+  const pfx = resourcePrefix || "forge_";
+  const tempName = `__${pfx}validate_${Date.now()}`;
   const tempFqn = `${parts[0]}.${parts[1]}.${tempName}`;
   const tempDdl = ddl.replace(VIEW_FQN_RE, (match) =>
     match.replace(fqnMatch[1], `\`${parts[0]}\`.\`${parts[1]}\`.\`${tempName}\``),

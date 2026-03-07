@@ -16,7 +16,10 @@ import { logger } from "@/lib/logger";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const body = (await request.json().catch(() => ({}))) as { targetSchema?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      targetSchema?: string;
+      resourcePrefix?: string;
+    };
 
     const proposal = await getMetricViewProposalById(id);
     if (!proposal) {
@@ -33,9 +36,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
-    // Derive target schema from DDL FQN if not explicitly provided
     const derivedSchema = body.targetSchema ?? proposal.schemaScope;
-    const result = await deployAsset({ name: proposal.name, ddl: proposal.ddl }, derivedSchema);
+    const result = await deployAsset(
+      { name: proposal.name, ddl: proposal.ddl },
+      derivedSchema,
+      body.resourcePrefix,
+    );
 
     if (result.deployed) {
       await updateDeploymentStatus(id, "deployed", result.fqn);

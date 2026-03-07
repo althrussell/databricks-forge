@@ -77,6 +77,7 @@ interface GenieDefaultsSettingsProps {
       | QuestionComplexitySettings
       | ((prev: QuestionComplexitySettings) => QuestionComplexitySettings),
   ) => void;
+  metricViewsServerEnabled: boolean;
 }
 
 export function GenieDefaultsSettings({
@@ -86,6 +87,7 @@ export function GenieDefaultsSettings({
   onGenieDeployAuthModeChange,
   questionComplexity,
   onQuestionComplexityChange,
+  metricViewsServerEnabled,
 }: GenieDefaultsSettingsProps) {
   return (
     <Card>
@@ -318,14 +320,16 @@ export function GenieDefaultsSettings({
                 onGenieDefaultsChange((prev) => ({ ...prev, generateBenchmarks: v }))
               }
             />
-            <GenieToggle
-              label="Metric Views"
-              description="Propose metric view definitions (KPIs, dimensions, measures)"
-              checked={genieDefaults.generateMetricViews}
-              onToggle={(v) =>
-                onGenieDefaultsChange((prev) => ({ ...prev, generateMetricViews: v }))
-              }
-            />
+            {metricViewsServerEnabled && (
+              <GenieToggle
+                label="Metric Views"
+                description="Propose metric view definitions (KPIs, dimensions, measures)"
+                checked={genieDefaults.generateMetricViews}
+                onToggle={(v) =>
+                  onGenieDefaultsChange((prev) => ({ ...prev, generateMetricViews: v }))
+                }
+              />
+            )}
             <GenieToggle
               label="Auto Time Periods"
               description="Generate standard date filters and dimensions (last week, last month, fiscal quarters)"

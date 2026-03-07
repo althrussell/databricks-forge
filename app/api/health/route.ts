@@ -14,6 +14,7 @@ import { safeErrorMessage } from "@/lib/error-utils";
 import { getDatabaseAuthRuntimeState, getPrisma } from "@/lib/prisma";
 import { executeSQL } from "@/lib/dbx/sql";
 import { getCurrentUserEmail, getConfig } from "@/lib/dbx/client";
+import { isMetricViewsEnabled } from "@/lib/genie/metric-views-config";
 import packageJson from "@/package.json";
 
 interface HealthCheck {
@@ -99,12 +100,17 @@ export async function GET(request: Request) {
     // Non-critical
   }
 
-  const health: HealthCheck & { userEmail?: string | null; host?: string | null } = {
+  const health: HealthCheck & {
+    userEmail?: string | null;
+    host?: string | null;
+    metricViewsEnabled?: boolean;
+  } = {
     ...base,
     checks: { database, warehouse },
     authRuntime: getDatabaseAuthRuntimeState(),
     userEmail,
     host,
+    metricViewsEnabled: isMetricViewsEnabled(),
   };
 
   return NextResponse.json(health, { status: httpStatus, headers: cacheHeaders });

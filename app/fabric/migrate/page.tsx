@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import { loadSettings } from "@/lib/settings";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -174,6 +175,7 @@ export default function MigrationWizardPage() {
       scanId,
       targetCatalog: targetCatalog.trim(),
       targetSchema: targetSchema.trim(),
+      resourcePrefix: loadSettings().catalogResourcePrefix,
     });
     if (state) setStep("gold");
   };

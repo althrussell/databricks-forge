@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { CheckCircle2, XCircle, Loader2, Rocket, Layers } from "lucide-react";
+import { loadSettings } from "@/lib/settings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,7 +79,10 @@ export function MetricViewDeployModal({
         const res = await fetch(`/api/metric-views/${p.id}/deploy`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ targetSchema: schema }),
+          body: JSON.stringify({
+            targetSchema: schema,
+            resourcePrefix: loadSettings().catalogResourcePrefix,
+          }),
         });
         const data = await res.json();
 

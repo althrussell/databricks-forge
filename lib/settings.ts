@@ -59,6 +59,8 @@ export interface AppSettings {
   benchmarksEnabled: boolean;
   /** Per-surface question complexity (simple / medium / complex). Controls the language style of Genie sample questions. */
   questionComplexity: QuestionComplexitySettings;
+  /** Prefix prepended to Unity Catalog resource names (views, metric views, tables) created by Forge. Must be lowercase alphanumeric + underscores and end with '_'. */
+  catalogResourcePrefix: string;
 }
 
 const STORAGE_KEY = "forge-ai-settings";
@@ -82,6 +84,8 @@ const DEFAULT_QUESTION_COMPLEXITY: QuestionComplexitySettings = {
   metadataGenie: "simple",
 };
 
+export const DEFAULT_CATALOG_RESOURCE_PREFIX = "forge_";
+
 const DEFAULTS: AppSettings = {
   sampleRowsPerTable: 0,
   defaultExportFormat: "excel",
@@ -95,6 +99,7 @@ const DEFAULTS: AppSettings = {
   semanticSearchEnabled: true,
   benchmarksEnabled: false,
   questionComplexity: { ...DEFAULT_QUESTION_COMPLEXITY },
+  catalogResourcePrefix: DEFAULT_CATALOG_RESOURCE_PREFIX,
 };
 
 export function loadSettings(): AppSettings {
@@ -143,6 +148,7 @@ export function loadSettings(): AppSettings {
           ? parsed.benchmarksEnabled
           : DEFAULTS.benchmarksEnabled,
       questionComplexity: parseQuestionComplexity(parsed.questionComplexity),
+      catalogResourcePrefix: parseCatalogResourcePrefix(parsed.catalogResourcePrefix),
     };
   } catch {
     return { ...DEFAULTS };
@@ -206,6 +212,14 @@ function parseQuestionComplexity(raw: unknown): QuestionComplexitySettings {
     }
   }
   return result;
+}
+
+function parseCatalogResourcePrefix(raw: unknown): string {
+  if (typeof raw !== "string") return DEFAULT_CATALOG_RESOURCE_PREFIX;
+  const trimmed = raw.trim();
+  if (!trimmed) return DEFAULT_CATALOG_RESOURCE_PREFIX;
+  if (!/^[a-z0-9_]+$/.test(trimmed)) return DEFAULT_CATALOG_RESOURCE_PREFIX;
+  return trimmed.endsWith("_") ? trimmed : `${trimmed}_`;
 }
 
 export function saveSettings(settings: Partial<AppSettings>): AppSettings {

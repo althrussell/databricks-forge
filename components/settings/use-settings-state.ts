@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { loadSettings } from "@/lib/settings";
+import { loadSettings, DEFAULT_CATALOG_RESOURCE_PREFIX } from "@/lib/settings";
 import {
   DEFAULT_DEPTH_CONFIGS,
   type DiscoveryDepth,
@@ -79,7 +79,12 @@ export function useSettingsState() {
     }
     return loadSettings().questionComplexity;
   });
+  const [catalogResourcePrefix, setCatalogResourcePrefix] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_CATALOG_RESOURCE_PREFIX;
+    return loadSettings().catalogResourcePrefix;
+  });
   const [benchmarksServerEnabled, setBenchmarksServerEnabled] = useState<boolean | null>(null);
+  const [metricViewsServerEnabled, setMetricViewsServerEnabled] = useState<boolean | null>(null);
   const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
   const [embeddingCount, setEmbeddingCount] = useState<number | null>(null);
@@ -108,8 +113,14 @@ export function useSettingsState() {
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json())
-      .then((data) => setProfile({ email: data.userEmail ?? null, host: data.host ?? null }))
-      .catch(() => setProfile({ email: null, host: null }));
+      .then((data) => {
+        setProfile({ email: data.userEmail ?? null, host: data.host ?? null });
+        setMetricViewsServerEnabled(data.metricViewsEnabled ?? false);
+      })
+      .catch(() => {
+        setProfile({ email: null, host: null });
+        setMetricViewsServerEnabled(false);
+      });
   }, []);
 
   const updateDepthParam = (
@@ -145,7 +156,10 @@ export function useSettingsState() {
     setBenchmarksEnabled,
     questionComplexity,
     setQuestionComplexity,
+    catalogResourcePrefix,
+    setCatalogResourcePrefix,
     benchmarksServerEnabled,
+    metricViewsServerEnabled,
     embeddingAvailable,
     rebuildingEmbeddings,
     setRebuildingEmbeddings,

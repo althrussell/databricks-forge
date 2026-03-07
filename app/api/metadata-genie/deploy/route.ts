@@ -28,8 +28,9 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const { id, viewTarget, authMode } = parsed.data as typeof parsed.data & {
+    const { id, viewTarget, authMode, resourcePrefix } = parsed.data as typeof parsed.data & {
       authMode?: GenieAuthMode;
+      resourcePrefix?: string;
     };
 
     try {
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
       catalogScope: space.catalogScope ?? undefined,
       aiDescriptions: space.aiDescriptions ?? undefined,
       lineageAccessible: space.lineageAccessible,
+      resourcePrefix,
     });
 
     const viewResults: { view: string; success: boolean; error?: string }[] = [];
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const viewFqns = getViewFqns(viewTarget, space.lineageAccessible);
+    const viewFqns = getViewFqns(viewTarget, space.lineageAccessible, resourcePrefix);
 
     // 3. Deploy Genie Space
     const config = getConfig();
