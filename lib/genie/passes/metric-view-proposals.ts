@@ -261,6 +261,123 @@ export function nestSnowflakeJoins(text: string): string {
   return [...before, ...newJoinsLines, ...after].join("\n");
 }
 
+// ---------------------------------------------------------------------------
+// Qualify nested alias references with parent-chain prefixes
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a map of nested join alias → parent-chain prefix from the join tree.
+ * E.g. if `investment_option` is nested under `account`, produces:
+ *   { "investment_option" → "account.investment_option" }
+ * For multi-level: `city` under `location` under `member` →
+ *   { "location" → "member.location", "city" → "member.location.city" }
+ * Top-level joins (direct children of `source`) are NOT included.
+ */
+function buildParentChainMap(text: string): Map<string, string> {
+  const chainMap = new Map<string, string>();
+
+  const lines = text.split("\n");
+  let joinsLineIdx = -1;
+  let joinsIndent = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)joins:\s*$/);
+    if (m) {
+      joinsLineIdx = i;
+      joinsIndent = m[1].length;
+      break;
+    }
+  }
+  if (joinsLineIdx === -1) return chainMap;
+
+  let blockEnd = joinsLineIdx + 1;
+  while (blockEnd < lines.length) {
+    const line = lines[blockEnd];
+    if (line.trim() === "") { blockEnd++; continue; }
+    const lineIndent = line.search(/\S/);
+    if (lineIndent <= joinsIndent) break;
+    blockEnd++;
+  }
+
+  const joinsRawBlock = lines.slice(joinsLineIdx + 1, blockEnd).join("\n");
+  const joins = parseJoinsBlock(joinsRawBlock);
+  if (joins.length <= 1) return chainMap;
+
+  const joinByName = new Map<string, ParsedJoin>();
+  for (const j of joins) {
+    joinByName.set(j.name.toLowerCase(), j);
+  }
+
+  const topLevel: ParsedJoin[] = [];
+  const toNest: ParsedJoin[] = [];
+
+  for (const j of joins) {
+    const leftAlias = getOnLeftAlias(j.on);
+    if (leftAlias === "source" || !joinByName.has(leftAlias)) {
+      topLevel.push(j);
+    } else {
+      toNest.push(j);
+    }
+  }
+
+  for (const j of toNest) {
+    const parentAlias = getOnLeftAlias(j.on);
+    const parent = joinByName.get(parentAlias);
+    if (parent) {
+      parent.children.push(j);
+    }
+  }
+
+  function walk(joins: ParsedJoin[], prefix: string): void {
+    for (const j of joins) {
+      if (j.children.length > 0) {
+        for (const child of j.children) {
+          const chain = prefix ? `${prefix}.${j.name}.${child.name}` : `${j.name}.${child.name}`;
+          chainMap.set(child.name.toLowerCase(), chain);
+          walk([child], prefix ? `${prefix}.${j.name}` : j.name);
+        }
+      }
+    }
+  }
+
+  walk(topLevel, "");
+  return chainMap;
+}
+
+/**
+ * Rewrite nested join alias references in `expr:` and `filter:` fields to use
+ * parent-chain syntax as required by Databricks metric view YAML v1.1.
+ *
+ * Databricks requires nested join column references to traverse the parent
+ * chain: `account.investment_option.col` instead of `investment_option.col`.
+ * The `on:` clauses are NOT rewritten — they correctly reference the immediate
+ * parent per the Databricks spec.
+ */
+export function qualifyNestedAliasRefs(text: string): string {
+  const chainMap = buildParentChainMap(text);
+  if (chainMap.size === 0) return text;
+
+  return text.replace(
+    /^(\s*(?:expr|filter):\s*)(.+)$/gm,
+    (_match, prefix: string, rest: string) => {
+      let result = rest;
+      for (const [alias, chain] of chainMap) {
+        // Replace `alias.column` with `chain.column`, avoiding already-qualified refs.
+        // Use word-boundary matching and negative lookbehind for dot (already part of chain).
+        const pattern = new RegExp(
+          `(?<![.\\w])${escapeRegExp(alias)}\\.(?!${escapeRegExp(alias)}\\.)`,
+          "gi",
+        );
+        result = result.replace(pattern, `${chain}.`);
+      }
+      return prefix + result;
+    },
+  );
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function toSnakeCase(name: string): string {
   return name
     .trim()
@@ -401,8 +518,10 @@ $$
     Example: \`source.customerID = customer.customerID\` (NOT \`customerID = customer.customerID\` which is ambiguous)
   - joins: nested list (for snowflake schemas — see CRITICAL rule below)
 
-### CRITICAL: Snowflake join nesting
+### CRITICAL: Snowflake join nesting and parent-chain column references
 When a join's \`on:\` clause references another join alias (NOT \`source\`), that join MUST be nested under the referenced parent join using a \`joins:\` sub-list. Top-level joins may ONLY reference \`source\` in their \`on:\` clause — referencing a sibling join alias causes an UNRESOLVED_COLUMN error.
+
+**CRITICAL: Column references to nested join aliases MUST use the parent-chain prefix.** For example, if \`nation\` is nested under \`customer\`, reference its columns as \`customer.nation.n_name\`, NOT \`nation.n_name\`. Direct nested-alias references cause UNRESOLVED_COLUMN errors.
 
 Star schema (all joins reference \`source\` — flat is correct):
 \`\`\`yaml
@@ -413,33 +532,55 @@ joins:
   - name: product
     source: catalog.schema.dim_product
     on: source.product_id = product.product_id
+dimensions:
+  - name: customer_name
+    expr: customer.c_name
 \`\`\`
 
-Snowflake schema (location and segment join through member — MUST nest):
+Snowflake schema (nation joins through customer — MUST nest, columns use parent-chain):
 \`\`\`yaml
 joins:
-  - name: member
-    source: catalog.schema.dim_member
-    on: source.member_id = member.member_id
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
     joins:
-      - name: location
-        source: catalog.schema.dim_location
-        on: member.location_id = location.location_id
-      - name: segment
-        source: catalog.schema.dim_segment
-        on: member.segment_id = segment.segment_id
+      - name: nation
+        source: catalog.schema.dim_nation
+        on: customer.nation_key = nation.nation_key
+        joins:
+          - name: region
+            source: catalog.schema.dim_region
+            on: nation.region_key = region.region_key
+dimensions:
+  - name: customer_name
+    expr: customer.c_name
+  - name: nation_name
+    expr: customer.nation.n_name
+  - name: region_name
+    expr: customer.nation.region.r_name
 \`\`\`
 
 WRONG (flat — causes UNRESOLVED_COLUMN):
 \`\`\`yaml
 joins:
-  - name: member
-    source: catalog.schema.dim_member
-    on: source.member_id = member.member_id
-  - name: location
-    source: catalog.schema.dim_location
-    on: member.location_id = location.location_id
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
+  - name: nation
+    source: catalog.schema.dim_nation
+    on: customer.nation_key = nation.nation_key
 \`\`\`
+
+WRONG (direct nested-alias reference — causes UNRESOLVED_COLUMN):
+\`\`\`yaml
+dimensions:
+  - name: nation_name
+    expr: nation.n_name
+\`\`\`
+CORRECT: \`expr: customer.nation.n_name\`
+
+### CRITICAL: Join alias must not match a source column name
+If the source table has a column named \`claim_type\`, do NOT name a join alias \`claim_type\` — use \`claim_type_dim\` instead. Matching names cause the SQL engine to interpret \`claim_type.col\` as struct field extraction on the column rather than a join alias reference (INVALID_EXTRACT_BASE_FIELD_TYPE).
 
 ### Measure patterns:
 - Basic: \`SUM(amount)\`, \`COUNT(1)\`, \`AVG(price)\`
@@ -630,6 +771,7 @@ export function detectFlatSnowflakeJoins(yaml: string): string[] {
   const lines = joinsBlock.split("\n");
   let currentName = "";
   let currentOn = "";
+  let insideNested = false;
 
   for (const line of lines) {
     const nameMatch = line.match(/^(\s*)-\s*name:\s*(\w+)/);
@@ -643,9 +785,14 @@ export function detectFlatSnowflakeJoins(yaml: string): string[] {
         currentName = nameMatch[2];
         currentOn = "";
         joinNames.add(currentName.toLowerCase());
+        insideNested = false;
+      } else {
+        insideNested = true;
       }
       continue;
     }
+
+    if (insideNested) continue;
 
     const onMatch = line.match(/^\s*on:\s*(.+)/);
     if (onMatch && currentName) {
@@ -898,6 +1045,63 @@ function applyInMeasuresBlock(text: string, pattern: RegExp, replacement: string
 }
 
 // ---------------------------------------------------------------------------
+// Auto-rename: fix join aliases that collide with source table column names
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect join aliases that collide with source table column names and rename
+ * them to `{alias}_dim`. When a join alias matches a source column name,
+ * Databricks treats `alias.col` as a struct field extraction on the source
+ * column instead of a join-alias reference, causing INVALID_EXTRACT_BASE_FIELD_TYPE.
+ */
+export function autoRenameCollidingJoinAliases(
+  yaml: string,
+  ddl: string,
+  allowlist: SchemaAllowlist,
+): { yaml: string; ddl: string; renamed: number } {
+  const sourceMatch = yaml.match(/^\s*source:\s*([a-zA-Z_]\w*\.[a-zA-Z_]\w*\.[a-zA-Z_]\w*)/m);
+  if (!sourceMatch) return { yaml, ddl, renamed: 0 };
+
+  const sourceCols = allowlist.columns.get(sourceMatch[1].toLowerCase());
+  if (!sourceCols || sourceCols.size === 0) return { yaml, ddl, renamed: 0 };
+
+  // Extract join alias names from the YAML
+  const joinNamePattern = /^\s*-\s*name:\s*(\w+)/gm;
+  const aliasRenames = new Map<string, string>();
+  let nm: RegExpExecArray | null;
+
+  const joinsIdx = yaml.indexOf("joins:");
+  if (joinsIdx === -1) return { yaml, ddl, renamed: 0 };
+  const joinsSection = yaml.slice(joinsIdx);
+
+  while ((nm = joinNamePattern.exec(joinsSection)) !== null) {
+    const alias = nm[1];
+    if (sourceCols.has(alias.toLowerCase()) && !aliasRenames.has(alias)) {
+      aliasRenames.set(alias, `${alias}_dim`);
+    }
+  }
+
+  if (aliasRenames.size === 0) return { yaml, ddl, renamed: 0 };
+
+  let modYaml = yaml;
+  let modDdl = ddl;
+
+  for (const [oldAlias, newAlias] of aliasRenames) {
+    const escaped = escapeRegExp(oldAlias);
+    // Rename in `- name:` declarations
+    const namePattern = new RegExp(`(-\\s*name:\\s*)${escaped}(\\s*(?:\\n|$))`, "gm");
+    modYaml = modYaml.replace(namePattern, `$1${newAlias}$2`);
+    modDdl = modDdl.replace(namePattern, `$1${newAlias}$2`);
+    // Rename in `on:` clauses (both sides) and `expr:` / `filter:` fields
+    const refPattern = new RegExp(`\\b${escaped}\\b(?=\\.)`, "g");
+    modYaml = modYaml.replace(refPattern, newAlias);
+    modDdl = modDdl.replace(refPattern, newAlias);
+  }
+
+  return { yaml: modYaml, ddl: modDdl, renamed: aliasRenames.size };
+}
+
+// ---------------------------------------------------------------------------
 // LLM repair: re-prompt once with validation errors + correct schema
 // ---------------------------------------------------------------------------
 
@@ -932,6 +1136,8 @@ Rules:
 - Join aliases must match a \`name:\` declared in the \`joins:\` block. Do NOT invent aliases.
 - If a join references a table not listed in the SCHEMA CONTEXT, REMOVE the entire join and all references to it.
 - SNOWFLAKE JOINS: If a join's \`on:\` clause references another join alias (NOT \`source\`), that join MUST be nested under the referenced parent join using a \`joins:\` sub-list. Top-level joins may ONLY reference \`source.\` in their \`on:\` clause. For example, if \`location\` joins on \`member.location_id\`, the \`location\` join must be nested under the \`member\` join.
+- PARENT-CHAIN COLUMN REFERENCES: Column references to nested join aliases MUST use the parent-chain prefix. If \`nation\` is nested under \`customer\`, use \`customer.nation.n_name\` NOT \`nation.n_name\`. Direct nested-alias refs cause UNRESOLVED_COLUMN.
+- JOIN ALIAS COLLISION: A join alias MUST NOT match a column name on the source table. If the source has column \`claim_type\`, name the join alias \`claim_type_dim\`. Matching names cause INVALID_EXTRACT_BASE_FIELD_TYPE.
 - Measure \`name\` MUST be snake_case (no spaces) and MUST NOT be identical to any source column name (causes NESTED_AGGREGATE_FUNCTION). If the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`. Add a \`display_name\` for the human-readable label.
 - When column names contain spaces, backtick-quote them: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`.
 - Return the SAME JSON format: { "yaml": "...", "ddl": "..." }
@@ -1086,7 +1292,7 @@ Create 1-3 metric view proposals for the "${domain}" domain. Each proposal MUST:
 
 1. Follow the YAML v1.1 spec exactly (version, source, dimensions, measures)
 2. Use a central fact table as the source
-${joinSpecs.length > 0 ? "3. When joins are available, create star/snowflake-schema metric views using the joins: block to pull dimensions from dimension tables. For snowflake schemas where a dimension table joins through another dimension table (not through `source`), you MUST nest the dependent join under the parent join's `joins:` sub-list. NEVER reference a sibling join alias in a top-level `on:` clause." : "3. Define meaningful dimensions from the source table columns. Do NOT create a joins: block — no join relationships are available."}
+${joinSpecs.length > 0 ? "3. When joins are available, create star/snowflake-schema metric views using the joins: block to pull dimensions from dimension tables. For snowflake schemas where a dimension table joins through another dimension table (not through `source`), you MUST nest the dependent join under the parent join's `joins:` sub-list. NEVER reference a sibling join alias in a top-level `on:` clause. Column references to nested join aliases MUST use the parent-chain prefix (e.g. `customer.nation.n_name` NOT `nation.n_name`). Join alias names MUST NOT match any source table column name — use a `_dim` suffix if needed." : "3. Define meaningful dimensions from the source table columns. Do NOT create a joins: block — no join relationships are available."}
 4. Include time-based dimensions using DATE_TRUNC for any date/timestamp columns
 5. Include a mix of measure types:
    - Basic aggregates (SUM, COUNT, AVG)
@@ -1167,7 +1373,7 @@ Create metric view proposals for this domain.`;
 
     const proposals: MetricViewProposal[] = items
       .map((p) => {
-        const yamlStr = String(p.yaml ?? "");
+        let yamlStr = String(p.yaml ?? "");
         let ddlStr = String(p.ddl ?? "");
 
         // Safety net: strip FQN column prefixes from YAML expr/on lines in the DDL.
@@ -1179,7 +1385,25 @@ Create metric view proposals for this domain.`;
 
         // Auto-fix snowflake joins: restructure flat sibling joins into
         // nested joins when `on:` references another join alias.
+        yamlStr = nestSnowflakeJoins(yamlStr);
         ddlStr = nestSnowflakeJoins(ddlStr);
+
+        // Rewrite nested join alias references to use parent-chain syntax
+        // (e.g. `investment_option.col` → `account.investment_option.col`)
+        yamlStr = qualifyNestedAliasRefs(yamlStr);
+        ddlStr = qualifyNestedAliasRefs(ddlStr);
+
+        // Rename join aliases that collide with source column names
+        const aliasCollision = autoRenameCollidingJoinAliases(yamlStr, ddlStr, allowlist);
+        yamlStr = aliasCollision.yaml;
+        ddlStr = aliasCollision.ddl;
+        if (aliasCollision.renamed > 0) {
+          logger.info("Auto-renamed colliding join aliases", {
+            domain,
+            name: String(p.name ?? ""),
+            renamed: aliasCollision.renamed,
+          });
+        }
 
         const {
           yaml: fixedYaml,
@@ -1236,8 +1460,22 @@ Create metric view proposals for this domain.`;
         (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
       );
 
-      // Auto-fix snowflake joins in repaired DDL
+      // Auto-fix snowflake joins in repaired YAML + DDL
+      repaired.yaml = nestSnowflakeJoins(repaired.yaml);
       repaired.ddl = nestSnowflakeJoins(repaired.ddl);
+
+      // Qualify nested alias refs with parent-chain prefix
+      repaired.yaml = qualifyNestedAliasRefs(repaired.yaml);
+      repaired.ddl = qualifyNestedAliasRefs(repaired.ddl);
+
+      // Rename colliding join aliases
+      const repairAliasCollision = autoRenameCollidingJoinAliases(
+        repaired.yaml,
+        repaired.ddl,
+        allowlist,
+      );
+      repaired.yaml = repairAliasCollision.yaml;
+      repaired.ddl = repairAliasCollision.ddl;
 
       const { yaml: reFixedYaml, ddl: reFixedDdl } = autoRenameShadowedMeasures(
         repaired.yaml,

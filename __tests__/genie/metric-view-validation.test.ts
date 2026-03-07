@@ -3,6 +3,8 @@ import {
   stripFqnPrefixes,
   nestSnowflakeJoins,
   detectFlatSnowflakeJoins,
+  qualifyNestedAliasRefs,
+  autoRenameCollidingJoinAliases,
   validateColumnReferences,
   validateMetricViewYaml,
 } from "@/lib/genie/passes/metric-view-proposals";
@@ -481,5 +483,251 @@ dimensions:
 `;
     const issues = detectFlatSnowflakeJoins(yaml);
     expect(issues).toEqual([]);
+  });
+
+  it("passes already-nested joins without false positive", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: calendar
+    source: catalog.schema.dim_calendar
+    on: source.month_id = calendar.month_id
+  - name: account
+    source: catalog.schema.dim_account
+    on: source.account_id = account.account_id
+    joins:
+      - name: investment_option
+        source: catalog.schema.dim_investment_option
+        on: account.option_id = investment_option.option_id
+dimensions:
+  - name: month_date
+    expr: calendar.month_date
+  - name: option_name
+    expr: account.investment_option.option_name
+`;
+    const issues = detectFlatSnowflakeJoins(yaml);
+    expect(issues).toEqual([]);
+  });
+
+  it("passes deeply nested joins without false positive", () => {
+    const yaml = `
+version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: member
+    source: catalog.schema.dim_member
+    on: source.member_id = member.member_id
+    joins:
+      - name: employer
+        source: catalog.schema.dim_employer
+        on: member.employer_id = employer.employer_id
+      - name: location
+        source: catalog.schema.dim_location
+        on: member.location_id = location.location_id
+`;
+    const issues = detectFlatSnowflakeJoins(yaml);
+    expect(issues).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// qualifyNestedAliasRefs
+// ---------------------------------------------------------------------------
+
+describe("qualifyNestedAliasRefs", () => {
+  it("rewrites nested alias refs in expr to parent-chain syntax", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: account
+    source: catalog.schema.dim_account
+    on: source.account_id = account.account_id
+    joins:
+      - name: investment_option
+        source: catalog.schema.dim_option
+        on: account.option_id = investment_option.option_id
+dimensions:
+  - name: option_name
+    expr: investment_option.option_name
+  - name: account_name
+    expr: account.account_name
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    const result = qualifyNestedAliasRefs(yaml);
+
+    expect(result).toContain("expr: account.investment_option.option_name");
+    expect(result).toContain("expr: account.account_name");
+    // on: clause should NOT be rewritten
+    expect(result).toContain("on: account.option_id = investment_option.option_id");
+  });
+
+  it("handles multi-level nesting (A -> B -> C)", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.cust_id = customer.cust_id
+    joins:
+      - name: nation
+        source: catalog.schema.dim_nation
+        on: customer.nation_id = nation.nation_id
+        joins:
+          - name: region
+            source: catalog.schema.dim_region
+            on: nation.region_id = region.region_id
+dimensions:
+  - name: nation_name
+    expr: nation.n_name
+  - name: region_name
+    expr: region.r_name
+`;
+    const result = qualifyNestedAliasRefs(yaml);
+
+    expect(result).toContain("expr: customer.nation.n_name");
+    expect(result).toContain("expr: customer.nation.region.r_name");
+  });
+
+  it("does not modify star-schema joins (no nesting)", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.cust_id = customer.cust_id
+  - name: product
+    source: catalog.schema.dim_product
+    on: source.product_id = product.product_id
+dimensions:
+  - name: cust_name
+    expr: customer.name
+  - name: prod_name
+    expr: product.name
+`;
+    const result = qualifyNestedAliasRefs(yaml);
+
+    expect(result).toContain("expr: customer.name");
+    expect(result).toContain("expr: product.name");
+  });
+
+  it("returns input unchanged when no joins exist", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+dimensions:
+  - name: col
+    expr: col
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    expect(qualifyNestedAliasRefs(yaml)).toBe(yaml);
+  });
+
+  it("is idempotent (does not double-qualify already-qualified refs)", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: account
+    source: catalog.schema.dim_account
+    on: source.account_id = account.account_id
+    joins:
+      - name: investment_option
+        source: catalog.schema.dim_option
+        on: account.option_id = investment_option.option_id
+dimensions:
+  - name: option_name
+    expr: account.investment_option.option_name
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    const result = qualifyNestedAliasRefs(yaml);
+    expect(result).toContain("expr: account.investment_option.option_name");
+    // Apply again — should be unchanged
+    const result2 = qualifyNestedAliasRefs(result);
+    expect(result2).toBe(result);
+  });
+
+  it("qualifies nested refs in filter fields", () => {
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+filter: investment_option.active = TRUE
+joins:
+  - name: account
+    source: catalog.schema.dim_account
+    on: source.account_id = account.account_id
+    joins:
+      - name: investment_option
+        source: catalog.schema.dim_option
+        on: account.option_id = investment_option.option_id
+dimensions:
+  - name: col
+    expr: source.col
+measures:
+  - name: cnt
+    expr: COUNT(1)
+`;
+    const result = qualifyNestedAliasRefs(yaml);
+    expect(result).toContain("filter: account.investment_option.active = TRUE");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// autoRenameCollidingJoinAliases
+// ---------------------------------------------------------------------------
+
+describe("autoRenameCollidingJoinAliases", () => {
+  it("renames join alias that collides with source column", () => {
+    const allowlist = makeAllowlist({
+      "catalog.schema.fact_claim": ["claim_id", "claim_type", "amount"],
+      "catalog.schema.dim_claim_type": ["claim_type_id", "claim_type_name"],
+    });
+
+    const yaml = `version: 1.1
+source: catalog.schema.fact_claim
+joins:
+  - name: claim_type
+    source: catalog.schema.dim_claim_type
+    on: source.claim_type = claim_type.claim_type_id
+dimensions:
+  - name: type_name
+    expr: claim_type.claim_type_name
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoRenameCollidingJoinAliases(yaml, ddl, allowlist);
+
+    expect(result.renamed).toBe(1);
+    expect(result.yaml).toContain("- name: claim_type_dim");
+    expect(result.yaml).toContain("on: source.claim_type = claim_type_dim.claim_type_id");
+    expect(result.yaml).toContain("expr: claim_type_dim.claim_type_name");
+    expect(result.ddl).toContain("- name: claim_type_dim");
+  });
+
+  it("does not rename aliases that do not collide", () => {
+    const allowlist = makeAllowlist({
+      "catalog.schema.fact": ["order_id", "customer_id"],
+      "catalog.schema.dim_customer": ["customer_id", "name"],
+    });
+
+    const yaml = `version: 1.1
+source: catalog.schema.fact
+joins:
+  - name: customer
+    source: catalog.schema.dim_customer
+    on: source.customer_id = customer.customer_id
+dimensions:
+  - name: cust_name
+    expr: customer.name
+`;
+    const ddl = `CREATE OR REPLACE VIEW catalog.schema.mv WITH METRICS LANGUAGE YAML AS $$\n${yaml}\n$$`;
+
+    const result = autoRenameCollidingJoinAliases(yaml, ddl, allowlist);
+
+    expect(result.renamed).toBe(0);
+    expect(result.yaml).toBe(yaml);
   });
 });
