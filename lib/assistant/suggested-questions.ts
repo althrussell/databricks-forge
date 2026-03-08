@@ -23,6 +23,13 @@ export const FALLBACK_QUESTIONS = [
   "What data quality issues exist?",
 ];
 
+export const FALLBACK_QUESTIONS_ANALYST = [
+  "What KPIs can we track from our data?",
+  "Which data sources support a revenue dashboard?",
+  "How can we measure customer retention?",
+  "Show me what dimensions we can slice sales by",
+];
+
 export const FALLBACK_QUESTIONS_TECH = [
   "Which tables need VACUUM or OPTIMIZE?",
   "Show me tables with stale data (no writes in 30+ days)",
@@ -230,7 +237,11 @@ export async function buildSuggestedQuestions(
       }
     }
 
-    if (candidates.length === 0) return [];
+    if (candidates.length === 0) {
+      if (persona === "tech") return FALLBACK_QUESTIONS_TECH;
+      if (persona === "analyst") return FALLBACK_QUESTIONS_ANALYST;
+      return FALLBACK_QUESTIONS;
+    }
 
     return pickRandom(candidates, TARGET_COUNT);
   } catch (err) {

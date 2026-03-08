@@ -140,6 +140,7 @@ export async function runAssistantEngine(
     question,
     intentResult.intent,
     history,
+    persona,
   );
 
   // Short-circuit when no data exists -- avoid burning LLM tokens on generic answers
@@ -402,6 +403,7 @@ export async function runAssistantEngine(
     genieSpaceMatch,
     context.tableEnrichments,
     conversationSummary,
+    persona,
   );
 
   const durationMs = Date.now() - start;
@@ -446,6 +448,7 @@ export async function runAssistantEngine(
         sourceCount: sources.length,
         retrievalTopScore: context.retrievalTopScore,
         sqlBlocks,
+        persona,
       });
       return insertQualityMetrics([
         {
@@ -526,10 +529,11 @@ function buildActions(
   genieMatch: { spaceTitle: string; spaceId: string; score: number } | null = null,
   tableEnrichments: TableEnrichment[] = [],
   conversationSummary: string = "",
+  persona: AssistantPersona = "business",
 ): ActionCard[] {
   const actions: ActionCard[] = [];
 
-  if (sqlBlocks.length > 0) {
+  if (sqlBlocks.length > 0 && persona !== "business") {
     actions.push({
       type: "run_sql",
       label: "Run this SQL",
@@ -573,18 +577,22 @@ function buildActions(
   }
 
   if (tables.length > 0) {
-    actions.push({
-      type: "view_tables",
-      label: `View ${tables.length} Referenced Table${tables.length > 1 ? "s" : ""}`,
-      payload: { tables },
-    });
-
-    if (tables.length >= 2) {
+    if (persona !== "business") {
       actions.push({
-        type: "view_erd",
-        label: "View ERD",
+        type: "view_tables",
+        label: `View ${tables.length} Referenced Table${tables.length > 1 ? "s" : ""}`,
         payload: { tables },
       });
+    }
+
+    if (tables.length >= 2) {
+      if (persona !== "business") {
+        actions.push({
+          type: "view_erd",
+          label: "View ERD",
+          payload: { tables },
+        });
+      }
 
       const schemas = tables.map((t) => t.split(".")[1]).filter(Boolean);
       const schemaCounts = new Map<string, number>();
@@ -624,6 +632,16 @@ function buildActions(
         url: host ? `${host}/ml/genie/rooms/${genieMatch.spaceId}` : "",
       },
     });
+  }
+
+  // Persona-specific reordering: promote dashboard actions for analyst,
+  // ensure deploy actions are prominent for business
+  if (persona === "analyst") {
+    const dashIdx = actions.findIndex((a) => a.type === "deploy_dashboard");
+    if (dashIdx > 0) {
+      const [dashAction] = actions.splice(dashIdx, 1);
+      actions.unshift(dashAction);
+    }
   }
 
   return actions;

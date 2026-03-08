@@ -16,6 +16,7 @@ import {
 } from "@/lib/embeddings/retriever";
 import type { RetrievedChunk } from "@/lib/embeddings/types";
 import type { AssistantIntent } from "./intent";
+import type { AssistantPersona } from "./prompts";
 import type { ConversationTurn } from "./engine";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
@@ -126,6 +127,43 @@ interface RetrievalPlan {
 }
 
 // ---------------------------------------------------------------------------
+// Persona modulation -- supplements intent-based retrieval plans
+// ---------------------------------------------------------------------------
+
+function applyPersonaModulation(
+  basePlans: RetrievalPlan[],
+  persona: AssistantPersona,
+): RetrievalPlan[] {
+  const existingScopes = new Set(basePlans.map((p) => p.scope));
+  const supplemental: RetrievalPlan[] = [];
+
+  if (persona === "tech") {
+    if (!existingScopes.has("estate")) {
+      supplemental.push({ scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true });
+    }
+    if (!existingScopes.has("insights")) {
+      supplemental.push({ scope: "insights", topK: 6, minScore: 0.35, useLatestScan: true });
+    }
+  } else if (persona === "business") {
+    if (!existingScopes.has("usecases")) {
+      supplemental.push({ scope: "usecases", topK: 6, minScore: 0.35, useLatestRun: true });
+    }
+    if (!existingScopes.has("benchmarks")) {
+      supplemental.push({ scope: "benchmarks", topK: 4, minScore: 0.35 });
+    }
+  } else if (persona === "analyst") {
+    if (!existingScopes.has("usecases")) {
+      supplemental.push({ scope: "usecases", topK: 6, minScore: 0.35, useLatestRun: true });
+    }
+    if (!existingScopes.has("insights")) {
+      supplemental.push({ scope: "insights", topK: 6, minScore: 0.35, useLatestScan: true });
+    }
+  }
+
+  return [...basePlans, ...supplemental];
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -133,11 +171,15 @@ interface RetrievalPlan {
  * Build full LLM context using dual-strategy pipeline:
  *   1. Direct Lakebase queries (always available, no embedding dependency)
  *   2. Vector semantic search (when embeddings are enabled)
+ *
+ * Persona supplements the intent-based retrieval to ensure each audience
+ * gets contextually appropriate chunks (e.g. tech always gets estate health).
  */
 export async function buildAssistantContext(
   question: string,
   intent: AssistantIntent,
   history: ConversationTurn[] = [],
+  persona: AssistantPersona = "business",
 ): Promise<AssistantContext> {
   // --- Strategy 1: Direct Lakebase context (always runs) ---
   const directContext = await fetchDirectLakebaseContext();
@@ -147,10 +189,11 @@ export async function buildAssistantContext(
   let ragContext = "";
 
   if (isEmbeddingEnabled()) {
-    const allPlans = INTENT_SCOPES[intent];
+    const basePlans = INTENT_SCOPES[intent];
+    const modulated = applyPersonaModulation(basePlans, persona);
     const plans = isBenchmarksEnabled()
-      ? allPlans
-      : allPlans.filter((p) => p.scope !== "benchmarks");
+      ? modulated
+      : modulated.filter((p) => p.scope !== "benchmarks");
     chunks = await retrieveWithFallback(
       question,
       plans,

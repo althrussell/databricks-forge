@@ -11,6 +11,11 @@ import { SqlRunner } from "./sql-runner";
 import { DeployOptions } from "./deploy-options";
 import type { AssistantPersona } from "@/lib/assistant/prompts";
 import {
+  FALLBACK_QUESTIONS,
+  FALLBACK_QUESTIONS_ANALYST,
+  FALLBACK_QUESTIONS_TECH,
+} from "@/lib/assistant/suggested-questions";
+import {
   BrainCircuit,
   Send,
   Loader2,
@@ -102,16 +107,11 @@ export interface AskForgeChatHandle {
   submitQuestion: (question: string) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Suggested questions (fallback when no dynamic questions are provided)
-// ---------------------------------------------------------------------------
-
-const FALLBACK_QUESTIONS = [
-  "How can I calculate Customer Lifetime Value?",
-  "Which tables have PII data?",
-  "Show me revenue trends by region",
-  "What data quality issues exist?",
-];
+function getFallbackQuestions(persona: AssistantPersona): string[] {
+  if (persona === "tech") return FALLBACK_QUESTIONS_TECH;
+  if (persona === "analyst") return FALLBACK_QUESTIONS_ANALYST;
+  return FALLBACK_QUESTIONS;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -470,7 +470,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                     </p>
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {(suggestedQuestions ?? FALLBACK_QUESTIONS).map((q) => (
+                    {(suggestedQuestions ?? getFallbackQuestions(persona)).map((q) => (
                       <button
                         key={q}
                         onClick={() => {

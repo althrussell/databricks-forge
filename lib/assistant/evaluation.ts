@@ -1,4 +1,5 @@
 import { validateReadOnlySql } from "@/lib/assistant/sql-proposer";
+import type { AssistantPersona } from "./prompts";
 
 export interface AssistantEvalInput {
   question: string;
@@ -6,6 +7,7 @@ export interface AssistantEvalInput {
   sourceCount: number;
   retrievalTopScore: number | null;
   sqlBlocks: string[];
+  persona?: AssistantPersona;
 }
 
 export interface AssistantEvalResult {
@@ -37,13 +39,38 @@ function scoreActionSafety(sqlBlocks: string[], findings: string[]): number {
   return clampScore((valid / sqlBlocks.length) * 100);
 }
 
+interface ScoringWeights {
+  citation: number;
+  grounding: number;
+  actionSafety: number;
+  confidence: number;
+}
+
+function getPersonaWeights(persona: AssistantPersona): ScoringWeights {
+  switch (persona) {
+    case "business":
+      return { citation: 0.0, grounding: 0.45, actionSafety: 0.3, confidence: 0.25 };
+    case "analyst":
+      return { citation: 0.1, grounding: 0.4, actionSafety: 0.3, confidence: 0.2 };
+    case "tech":
+      return { citation: 0.2, grounding: 0.35, actionSafety: 0.3, confidence: 0.15 };
+  }
+}
+
 export function scoreAssistantResponse(input: AssistantEvalInput): AssistantEvalResult {
+  const persona = input.persona ?? "business";
   const findings: string[] = [];
   const citationPresent = hasCitationMarkers(input.answer);
-  const citationScore = citationPresent ? 100 : 0;
 
-  if (input.sourceCount > 0 && !citationPresent) {
-    findings.push("Answer has sources but no citation markers.");
+  // Business persona is instructed to omit citations; don't penalise absence
+  let citationScore: number;
+  if (persona === "business") {
+    citationScore = 100;
+  } else {
+    citationScore = citationPresent ? 100 : 0;
+    if (input.sourceCount > 0 && !citationPresent) {
+      findings.push("Answer has sources but no citation markers.");
+    }
   }
 
   let groundingScore = 100;
@@ -62,8 +89,12 @@ export function scoreAssistantResponse(input: AssistantEvalInput): AssistantEval
   }
 
   const actionSafetyScore = scoreActionSafety(input.sqlBlocks, findings);
+  const w = getPersonaWeights(persona);
   const overallScore = clampScore(
-    citationScore * 0.2 + groundingScore * 0.35 + actionSafetyScore * 0.3 + confidenceScore * 0.15,
+    citationScore * w.citation +
+      groundingScore * w.grounding +
+      actionSafetyScore * w.actionSafety +
+      confidenceScore * w.confidence,
   );
 
   return {
