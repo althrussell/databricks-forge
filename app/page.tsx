@@ -15,11 +15,7 @@ async function fetchDashboardStats(): Promise<{
   error: string | null;
 }> {
   try {
-    // Sequential queries instead of 10-way Promise.all.
-    // Uses 1-2 pool connections at a time instead of 10, avoiding
-    // Lakebase connection rate limits on cold start.
     const stats = await withPrisma(async (prisma) => {
-      // ---- Batch 1: Run data (above the fold — KPI cards + recent runs) ----
       const [runStatusGroups, recentRuns] = await Promise.all([
         prisma.forgeRun.groupBy({
           by: ["status"],
@@ -40,7 +36,6 @@ async function fetchDashboardStats(): Promise<{
         }),
       ]);
 
-      // ---- Batch 2: Use case data (charts + KPI enrichment) ----
       const [typeGroups, domainGroups, scoreRows] = await Promise.all([
         prisma.forgeUseCase.groupBy({
           by: ["type"],
@@ -75,7 +70,6 @@ async function fetchDashboardStats(): Promise<{
         }),
       ]);
 
-      // Derive all KPIs from the grouped/raw results
       const statusLookup = new Map(runStatusGroups.map((g) => [g.status, g._count._all]));
       const completedRuns = statusLookup.get("completed") ?? 0;
       const failedRuns = statusLookup.get("failed") ?? 0;
@@ -175,15 +169,19 @@ async function fetchDashboardStats(): Promise<{
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-24" />
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      {/* Hero skeleton */}
+      <Skeleton className="h-40 rounded-2xl" />
+      {/* Tile row */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 rounded-xl" />
         ))}
       </div>
-      <div className="grid gap-6 md:grid-cols-2">
-        <Skeleton className="h-64" />
-        <Skeleton className="h-64" />
+      {/* Content row */}
+      <div className="grid gap-6 lg:grid-cols-5">
+        <Skeleton className="h-72 rounded-xl lg:col-span-3" />
+        <Skeleton className="h-72 rounded-xl lg:col-span-2" />
       </div>
     </div>
   );
@@ -194,34 +192,50 @@ async function DashboardData() {
   return <DashboardContent initialStats={stats} initialError={error} />;
 }
 
-export default function DashboardPage() {
+function HeroBanner() {
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/databricks-icon.svg"
-            alt="Databricks"
-            width={36}
-            height={38}
-            className="shrink-0"
-          />
+    <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-accent/30 dark:from-card dark:via-card dark:to-primary/5">
+      {/* Geometric texture */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.04]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5L55 20V40L30 55L5 40V20L30 5Z' fill='none' stroke='%23FF3621' stroke-width='0.5'/%3E%3C/svg%3E")`,
+          backgroundSize: "60px 60px",
+        }}
+      />
+      <div className="relative flex items-center justify-between gap-6 px-8 py-10 sm:px-10 sm:py-12">
+        <div className="flex items-center gap-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 shadow-sm ring-1 ring-primary/10">
+            <Image
+              src="/databricks-icon.svg"
+              alt="Databricks"
+              width={32}
+              height={34}
+              className="shrink-0"
+            />
+          </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Forge AI</h1>
-            <p className="mt-1 text-muted-foreground">
-              Transform your Unity Catalog metadata into actionable, AI-generated use cases.
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Forge AI</h1>
+            <p className="mt-1 max-w-lg text-sm text-muted-foreground sm:text-base">
+              Transform Unity Catalog metadata into scored, actionable use cases.
             </p>
           </div>
         </div>
-        <Button asChild>
+        <Button size="lg" className="hidden shrink-0 sm:inline-flex" asChild>
           <Link href="/configure">
             <Plus className="mr-2 h-4 w-4" />
             New Discovery
           </Link>
         </Button>
       </div>
+    </div>
+  );
+}
 
+export default function DashboardPage() {
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <HeroBanner />
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardData />
       </Suspense>

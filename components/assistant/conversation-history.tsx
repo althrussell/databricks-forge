@@ -190,7 +190,7 @@ export function ConversationHistory({
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-10 flex-col items-center border-r bg-muted/30 py-2">
+      <div className="flex h-full w-10 flex-col items-center border-r bg-muted/20 py-2">
         <Button
           variant="ghost"
           size="sm"
@@ -214,7 +214,7 @@ export function ConversationHistory({
   }
 
   return (
-    <div className="flex h-full w-[260px] shrink-0 flex-col border-r bg-muted/30">
+    <div className="flex h-full w-[260px] shrink-0 flex-col border-r bg-muted/20">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-3 py-2.5">
         <span className="text-xs font-medium text-muted-foreground">History</span>

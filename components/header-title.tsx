@@ -24,5 +24,5 @@ export function HeaderPageTitle() {
 
   if (!title) return null;
 
-  return <span className="hidden text-sm font-medium text-muted-foreground md:block">{title}</span>;
+  return <span className="hidden text-sm font-semibold text-foreground/80 md:block">{title}</span>;
 }

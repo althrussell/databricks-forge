@@ -39,6 +39,7 @@ import {
   Building2,
   ExternalLink,
 } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 import type {
   ConnectionSummary,
   CreateConnectionInput,
@@ -80,29 +81,27 @@ export default function ConnectionsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Connections</h1>
-          <p className="text-muted-foreground">
-            Manage external platform connections for metadata scanning and migration.
-          </p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Connection
-            </Button>
-          </DialogTrigger>
-          <AddConnectionDialog
-            onCreated={() => {
-              setDialogOpen(false);
-              fetchConnections();
-            }}
-          />
-        </Dialog>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Connections"
+        subtitle="Manage external platform connections for metadata scanning and migration."
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Connection
+              </Button>
+            </DialogTrigger>
+            <AddConnectionDialog
+              onCreated={() => {
+                setDialogOpen(false);
+                fetchConnections();
+              }}
+            />
+          </Dialog>
+        }
+      />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

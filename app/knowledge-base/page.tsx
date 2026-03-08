@@ -9,6 +9,7 @@
  */
 
 import * as React from "react";
+import { PageHeader } from "@/components/page-header";
 import { loadSettings } from "@/lib/settings";
 import { FileText, Upload, Trash2, CheckCircle2, Clock, AlertCircle, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -186,14 +187,11 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Knowledge Base</h1>
-        <p className="text-muted-foreground mt-1">
-          Upload strategy documents, data dictionaries, and governance policies to enhance AI
-          analysis.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Knowledge Base"
+        subtitle="Upload strategy documents, data dictionaries, and governance policies to enhance AI analysis."
+      />
 
       {/* Upload area */}
       <Card>

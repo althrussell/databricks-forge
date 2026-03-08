@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { loadSettings } from "@/lib/settings";
+import { sidebarVariants, sidebarTransition } from "@/lib/motion";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -112,16 +114,16 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
   );
 
   return (
-    <nav className={cn(collapsed ? "px-2 py-4" : "p-4")}>
+    <nav className={cn(collapsed ? "px-2 py-3" : "px-3 py-3")}>
       {visibleSections.map((section, sectionIdx) => (
         <div key={section.label}>
           {sectionIdx > 0 && (
-            <div className={cn("my-2", collapsed ? "px-1" : "px-3")}>
-              <div className="border-t border-border/60" />
+            <div className={cn("my-3", collapsed ? "px-1" : "px-2")}>
+              <div className="border-t border-sidebar-border/50" />
             </div>
           )}
           {!collapsed && (
-            <p className="mb-1 mt-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            <p className="mb-1.5 mt-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/50">
               {section.label}
             </p>
           )}
@@ -136,15 +138,18 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    "flex items-center rounded-md text-sm font-medium transition-colors",
+                    "group relative flex items-center rounded-lg text-sm font-medium transition-all duration-150",
                     collapsed ? "justify-center p-2" : "gap-3 px-3 py-2",
                     isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      ? "bg-primary/[0.08] text-primary shadow-sm ring-1 ring-primary/10 dark:bg-primary/10 dark:ring-primary/15"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   )}
                 >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && item.label}
+                  {isActive && !collapsed && (
+                    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
+                  )}
+                  <item.icon className={cn("h-4 w-4 shrink-0", isActive && "text-primary")} />
+                  {!collapsed && <span>{item.label}</span>}
                 </Link>
               );
 
@@ -186,19 +191,19 @@ export function SidebarNav() {
   }, []);
 
   return (
-    <aside
-      className={cn(
-        "hidden border-r bg-muted/30 transition-all duration-200 md:flex md:flex-col",
-        collapsed ? "w-14" : "w-64",
-      )}
+    <motion.aside
+      variants={sidebarVariants}
+      animate={collapsed ? "collapsed" : "expanded"}
+      transition={sidebarTransition}
+      className="hidden overflow-hidden border-r bg-gradient-to-b from-sidebar via-sidebar to-sidebar/80 md:flex md:flex-col"
     >
       <div
         className={cn(
-          "flex h-16 shrink-0 items-center border-b",
-          collapsed ? "justify-center px-2" : "px-6",
+          "flex h-14 shrink-0 items-center border-b border-sidebar-border/60",
+          collapsed ? "justify-center px-2" : "px-5",
         )}
       >
-        <Link href="/" className="flex items-center gap-2.5 font-semibold">
+        <Link href="/" className="flex items-center gap-2.5 font-bold tracking-tight">
           <Image
             src="/databricks-icon.svg"
             alt="Databricks"
@@ -206,19 +211,31 @@ export function SidebarNav() {
             height={23}
             className="shrink-0"
           />
-          {!collapsed && <span>Forge AI</span>}
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden whitespace-nowrap"
+              >
+                Forge AI
+              </motion.span>
+            )}
+          </AnimatePresence>
         </Link>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <NavLinks collapsed={collapsed} />
       </div>
-      <div className="shrink-0 border-t">
+      <div className="shrink-0 border-t border-sidebar-border/60">
         {!collapsed && <VersionBadge />}
         <div className={cn("flex", collapsed ? "justify-center p-2" : "justify-end px-4 py-2")}>
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="h-7 w-7 p-0 text-muted-foreground/60 hover:text-foreground"
             onClick={toggle}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -226,7 +243,7 @@ export function SidebarNav() {
           </Button>
         </div>
       </div>
-    </aside>
+    </motion.aside>
   );
 }
 

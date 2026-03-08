@@ -600,9 +600,7 @@ export async function deployMetricViews(
   const deployedFqns: string[] = [];
 
   for (const mv of views) {
-    const rewritten = sanitizeMetricViewDdl(
-      rewriteDdlTarget(mv.ddl, targetSchema, resourcePrefix),
-    );
+    const rewritten = sanitizeMetricViewDdl(rewriteDdlTarget(mv.ddl, targetSchema, resourcePrefix));
     const objectName = extractObjectName(rewritten) ?? mv.name;
     const fqn = `${targetSchema}.${objectName}`;
 

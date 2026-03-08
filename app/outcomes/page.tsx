@@ -119,7 +119,7 @@ export default function OutcomesPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

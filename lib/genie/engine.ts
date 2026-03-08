@@ -503,21 +503,22 @@ async function processDomain(
   // Phase A: Metric views run first so they can be persisted and referenced
   // by downstream consumers (Genie space assembly, dashboard engine).
   onProgress("Generating metric views...");
-  const metricViewResult = isMetricViewsEnabled() && config.generateMetricViews
-    ? await runMetricViewProposals({
-        domain: normalizedDomain,
-        tableFqns: tables,
-        metadata,
-        allowlist,
-        useCases,
-        measures: exprResult.measures,
-        dimensions: exprResult.dimensions,
-        joinSpecs: allJoins,
-        columnEnrichments: columnResult.enrichments,
-        endpoint: premiumEndpoint,
-        signal,
-      })
-    : { proposals: [] };
+  const metricViewResult =
+    isMetricViewsEnabled() && config.generateMetricViews
+      ? await runMetricViewProposals({
+          domain: normalizedDomain,
+          tableFqns: tables,
+          metadata,
+          allowlist,
+          useCases,
+          measures: exprResult.measures,
+          dimensions: exprResult.dimensions,
+          joinSpecs: allJoins,
+          columnEnrichments: columnResult.enrichments,
+          endpoint: premiumEndpoint,
+          signal,
+        })
+      : { proposals: [] };
 
   // Persist metric view proposals to standalone table (best-effort)
   try {

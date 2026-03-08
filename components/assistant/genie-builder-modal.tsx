@@ -545,42 +545,44 @@ export function GenieBuilderModal({
             )}
 
             {/* Metric view schema selector */}
-            {metricViewsServerEnabled && hasMetricViews && loadSettings().genieEngineDefaults.generateMetricViews && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium">
-                        Metric Views (
-                        {mvProposals.filter((m) => m.validationStatus !== "error").length})
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Choose a target schema for metric view deployment.
-                      </p>
+            {metricViewsServerEnabled &&
+              hasMetricViews &&
+              loadSettings().genieEngineDefaults.generateMetricViews && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium">
+                          Metric Views (
+                          {mvProposals.filter((m) => m.validationStatus !== "error").length})
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Choose a target schema for metric view deployment.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setShowSchemaSelector(!showSchemaSelector)}
+                      >
+                        {targetSchema[0] || defaultSchema || "Select schema"}
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setShowSchemaSelector(!showSchemaSelector)}
-                    >
-                      {targetSchema[0] || defaultSchema || "Select schema"}
-                    </Button>
+                    {showSchemaSelector && (
+                      <div className="max-h-48 overflow-y-auto rounded-md border">
+                        <CatalogBrowser
+                          selectedSources={targetSchema}
+                          onSelectionChange={handleSchemaChange}
+                          selectionMode="schema"
+                          defaultExpandPath={defaultSchema}
+                        />
+                      </div>
+                    )}
                   </div>
-                  {showSchemaSelector && (
-                    <div className="max-h-48 overflow-y-auto rounded-md border">
-                      <CatalogBrowser
-                        selectedSources={targetSchema}
-                        onSelectionChange={handleSchemaChange}
-                        selectionMode="schema"
-                        defaultExpandPath={defaultSchema}
-                      />
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+                </>
+              )}
           </div>
         )}
 

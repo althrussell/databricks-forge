@@ -378,9 +378,7 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         sections.push(parts.join("\n"));
 
         try {
-          const opts = latestRun.generationOptions
-            ? JSON.parse(latestRun.generationOptions)
-            : {};
+          const opts = latestRun.generationOptions ? JSON.parse(latestRun.generationOptions) : {};
           industryId = opts?.industry ?? null;
         } catch {
           /* ignore malformed JSON */
@@ -390,9 +388,8 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
       // 2. Industry context and KPIs (from outcome map, when industry is known)
       if (industryId) {
         try {
-          const { buildIndustryContextPrompt, buildIndustryKPIsPrompt } = await import(
-            "@/lib/domain/industry-outcomes-server"
-          );
+          const { buildIndustryContextPrompt, buildIndustryKPIsPrompt } =
+            await import("@/lib/domain/industry-outcomes-server");
           const [industryContext, industryKpis] = await Promise.all([
             buildIndustryContextPrompt(industryId),
             buildIndustryKPIsPrompt(industryId),
@@ -449,9 +446,10 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
             const sorted = domainGroups.sort((a, b) => b._count._all - a._count._all);
             const domParts = ["## Domain Distribution"];
             for (const g of sorted) {
-              const avgGov = g._avg.governanceScore != null
-                ? `, avg governance ${Math.round(g._avg.governanceScore)}/100`
-                : "";
+              const avgGov =
+                g._avg.governanceScore != null
+                  ? `, avg governance ${Math.round(g._avg.governanceScore)}/100`
+                  : "";
               domParts.push(`- **${g.dataDomain}** -- ${g._count._all} tables${avgGov}`);
             }
             sections.push(domParts.join("\n"));

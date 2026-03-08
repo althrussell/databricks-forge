@@ -14,16 +14,20 @@ export function SummaryCard({ title, value, tip, onClick }: SummaryCardProps) {
   return (
     <Card
       className={
-        onClick ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30" : ""
+        onClick
+          ? "cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+          : ""
       }
       onClick={onClick}
     >
       <CardContent className="pt-6">
         <div className="flex items-center gap-1.5">
-          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {title}
+          </p>
           {tip && <InfoTip tip={tip} />}
         </div>
-        <p className="text-2xl font-bold">{value}</p>
+        <p className="mt-1 text-2xl font-bold tracking-tight">{value}</p>
       </CardContent>
     </Card>
   );

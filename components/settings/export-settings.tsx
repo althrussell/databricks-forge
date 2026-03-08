@@ -97,8 +97,9 @@ export function ExportSettings({
             />
           </div>
           <p className="text-[10px] text-muted-foreground">
-            Example: with prefix <code className="font-mono">{catalogResourcePrefix || "forge_"}</code>, a metric
-            view named <code className="font-mono">order_revenue</code> becomes{" "}
+            Example: with prefix{" "}
+            <code className="font-mono">{catalogResourcePrefix || "forge_"}</code>, a metric view
+            named <code className="font-mono">order_revenue</code> becomes{" "}
             <code className="font-mono">{catalogResourcePrefix || "forge_"}order_revenue</code>
           </p>
         </div>

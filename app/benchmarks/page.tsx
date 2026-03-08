@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -203,14 +204,11 @@ function BenchmarksContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Benchmark Catalog</h1>
-        <p className="text-muted-foreground">
-          Public-source benchmark governance with lifecycle states: draft, reviewed, published,
-          deprecated.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Benchmark Catalog"
+        subtitle="Public-source benchmark governance with lifecycle states: draft, reviewed, published, deprecated."
+      />
 
       <Card>
         <CardHeader>

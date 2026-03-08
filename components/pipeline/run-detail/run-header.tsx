@@ -42,15 +42,17 @@ export function RunHeader({
   const isCompleted = run.status === "completed";
 
   return (
-    <div className="flex items-start justify-between">
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">{run.config.businessName}</h1>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+            {run.config.businessName}
+          </h1>
           <Badge variant="secondary" className={STATUS_STYLES[run.status] ?? ""}>
             {STATUS_LABELS[run.status]}
           </Badge>
         </div>
-        <p className="mt-1 font-mono text-sm text-muted-foreground">{run.config.ucMetadata}</p>
+        <p className="mt-1.5 font-mono text-sm text-muted-foreground">{run.config.ucMetadata}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Created{" "}
           {new Date(run.createdAt).toLocaleDateString(undefined, {
