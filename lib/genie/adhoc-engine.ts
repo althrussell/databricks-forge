@@ -869,21 +869,22 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
 
   // Phase A: Metric views first
   onProgress?.("Generating metric views...", 50);
-  const metricViewResult = isMetricViewsEnabled() && engineConfig.generateMetricViews
-    ? await runMetricViewProposals({
-        domain,
-        tableFqns: validTableFqns,
-        metadata,
-        allowlist,
-        useCases: [],
-        measures: exprResult.measures,
-        dimensions: exprResult.dimensions,
-        joinSpecs: allJoins,
-        columnEnrichments: columnResult.enrichments,
-        endpoint: premiumEndpoint,
-        signal,
-      })
-    : { proposals: [] };
+  const metricViewResult =
+    isMetricViewsEnabled() && engineConfig.generateMetricViews
+      ? await runMetricViewProposals({
+          domain,
+          tableFqns: validTableFqns,
+          metadata,
+          allowlist,
+          useCases: [],
+          measures: exprResult.measures,
+          dimensions: exprResult.dimensions,
+          joinSpecs: allJoins,
+          columnEnrichments: columnResult.enrichments,
+          endpoint: premiumEndpoint,
+          signal,
+        })
+      : { proposals: [] };
 
   // Persist metric view proposals to standalone table (best-effort)
   try {

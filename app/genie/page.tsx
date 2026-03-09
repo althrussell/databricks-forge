@@ -35,6 +35,7 @@ import {
 import type { GenieSpaceResponse, TrackedGenieSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
+import { PageHeader } from "@/components/page-header";
 import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
 import { ImportSpaceDialog } from "@/components/genie/import-space-dialog";
 import { HealthCheckSettingsDialog } from "@/components/genie/health-check-settings";
@@ -213,15 +214,12 @@ export default function GenieSpacesPage() {
   const trashedSpaces = spaces.filter((s) => s.status === "trashed");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Genie Spaces</h1>
-          <p className="text-muted-foreground">
-            Manage and deploy Databricks Genie Spaces for natural language SQL exploration.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Genie Spaces"
+        subtitle="Manage and deploy Databricks Genie Spaces for natural language SQL exploration."
+        actions={
+          <div className="flex items-center gap-2">
           <HealthCheckSettingsDialog />
           <ImportSpaceDialog
             onImported={(result) => {
@@ -257,7 +255,8 @@ export default function GenieSpacesPage() {
             Refresh
           </Button>
         </div>
-      </div>
+        }
+      />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

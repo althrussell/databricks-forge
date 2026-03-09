@@ -2,21 +2,22 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { resilientFetch } from "@/lib/resilient-fetch";
 import { InfoTip } from "@/components/ui/info-tip";
 import { DASHBOARD } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ScoreDistributionChart,
   DomainBreakdownChart,
   TypeSplitChart,
 } from "@/components/charts/lazy";
 import { ActivityFeedInline } from "@/components/pipeline/activity-feed";
+import { staggerContainer, staggerItem } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import {
-  BarChart3,
   BrainCircuit,
   Layers,
   Trophy,
@@ -24,6 +25,7 @@ import {
   TrendingUp,
   Plus,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 export interface DashboardStats {
@@ -55,6 +57,19 @@ export interface DashboardStats {
     benchmarkFreshnessRate: number | null;
     benchmarkIndustryCoverage: number | null;
   };
+}
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -103,12 +118,100 @@ export function DashboardContent({
     return <EmptyDashboard />;
   }
 
+  const successRate =
+    stats.totalRuns > 0 ? Math.round((stats.completedRuns / stats.totalRuns) * 100) : 0;
+
   return (
-    <>
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <KPICard
-          icon={<Activity className="h-4 w-4 text-blue-500" />}
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+      className="space-y-8"
+    >
+      {/* ── Hero metric + Quick actions ── */}
+      <motion.div variants={staggerItem} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Hero metric tile */}
+        {(() => {
+          const latestRun = stats.recentRuns.find((r) => r.status === "completed");
+          const card = (
+            <Card
+              className={cn(
+                "relative overflow-hidden border-primary/20 sm:col-span-2 lg:col-span-1 lg:row-span-2",
+                latestRun && "hover:-translate-y-0.5 hover:shadow-md",
+              )}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2">
+                  <BrainCircuit className="h-4 w-4 text-primary" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Use Cases Generated
+                  </p>
+                  <InfoTip tip={DASHBOARD.useCases} />
+                </div>
+                <p className="mt-3 text-5xl font-extrabold tracking-tight text-primary">
+                  {stats.totalUseCases.toLocaleString()}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {stats.aiCount} AI &middot; {stats.statisticalCount} Statistical
+                  {stats.geospatialCount > 0 && (
+                    <> &middot; {stats.geospatialCount} Geospatial</>
+                  )}
+                </p>
+                {latestRun && (
+                  <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground/70">
+                    from {latestRun.businessName}
+                    <ArrowRight className="h-3 w-3" />
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          );
+          return latestRun ? (
+            <Link href={`/runs/${latestRun.runId}`} className="group sm:col-span-2 lg:col-span-1 lg:row-span-2">
+              {card}
+            </Link>
+          ) : (
+            <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">{card}</div>
+          );
+        })()}
+
+        {/* Quick action: New Discovery */}
+        <Link href="/configure" className="group">
+          <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="flex h-full items-center gap-4 pt-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/15">
+                <Plus className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold">New Discovery</p>
+                <p className="text-xs text-muted-foreground">Configure a pipeline run</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* Quick action: Ask Forge */}
+        <Link href="/ask-forge" className="group">
+          <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="flex h-full items-center gap-4 pt-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 transition-colors group-hover:bg-chart-2/15">
+                <Sparkles className="h-5 w-5 text-chart-2" />
+              </div>
+              <div>
+                <p className="font-semibold">Ask Forge</p>
+                <p className="text-xs text-muted-foreground">Chat with your data estate</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+            </CardContent>
+          </Card>
+        </Link>
+      </motion.div>
+
+      {/* ── Secondary KPI tiles ── */}
+      <motion.div variants={staggerItem} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KPITile
+          icon={<Activity className="h-4 w-4 text-chart-2" />}
           label="Total Runs"
           tip={DASHBOARD.totalRuns}
           value={stats.totalRuns}
@@ -118,43 +221,34 @@ export function DashboardContent({
               : `${stats.completedRuns} completed`
           }
         />
-        <KPICard
-          icon={<BrainCircuit className="h-4 w-4 text-violet-500" />}
-          label="Use Cases"
-          tip={DASHBOARD.useCases}
-          value={stats.totalUseCases}
-          detail={`${stats.aiCount} AI, ${stats.statisticalCount} Stat${stats.geospatialCount ? `, ${stats.geospatialCount} Geo` : ""}`}
-        />
-        <KPICard
-          icon={<Trophy className="h-4 w-4 text-amber-500" />}
+        <KPITile
+          icon={<Trophy className="h-4 w-4 text-chart-4" />}
           label="Avg Score"
           tip={DASHBOARD.avgScore}
           value={`${stats.avgScore}%`}
-          detail="Across all use cases"
+          detail="Composite quality score"
+          sentiment={stats.avgScore >= 70 ? "positive" : stats.avgScore >= 40 ? "neutral" : "warning"}
         />
-        <KPICard
-          icon={<Layers className="h-4 w-4 text-teal-500" />}
+        <KPITile
+          icon={<Layers className="h-4 w-4 text-chart-3" />}
           label="Domains"
           tip={DASHBOARD.domains}
           value={stats.totalDomains}
-          detail="Unique business domains"
+          detail="Business domains identified"
         />
-        <KPICard
-          icon={<TrendingUp className="h-4 w-4 text-green-500" />}
+        <KPITile
+          icon={<TrendingUp className="h-4 w-4 text-chart-3" />}
           label="Success Rate"
           tip={DASHBOARD.successRate}
-          value={
-            stats.totalRuns > 0
-              ? `${Math.round((stats.completedRuns / stats.totalRuns) * 100)}%`
-              : "N/A"
-          }
+          value={successRate > 0 ? `${successRate}%` : "N/A"}
           detail={stats.failedRuns > 0 ? `${stats.failedRuns} failed` : "All runs successful"}
+          sentiment={successRate === 100 ? "positive" : successRate >= 80 ? "neutral" : "warning"}
         />
-      </div>
+      </motion.div>
 
-      {/* Charts Row */}
+      {/* ── Charts ── */}
       {stats.totalUseCases > 0 && (
-        <div className="grid gap-6 md:grid-cols-3">
+        <motion.div variants={staggerItem} className="grid gap-6 md:grid-cols-3">
           <ScoreDistributionChart scores={stats.scores} />
           <DomainBreakdownChart data={stats.domainBreakdown} />
           <TypeSplitChart
@@ -162,184 +256,210 @@ export function DashboardContent({
             statisticalCount={stats.statisticalCount}
             geospatialCount={stats.geospatialCount}
           />
-        </div>
+        </motion.div>
       )}
 
-      {/* Recent Runs & Activity */}
-      <Card>
-        <CardHeader className="pb-2">
-          <Tabs defaultValue="runs" className="w-full">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <TabsList className="shrink-0">
-                <TabsTrigger value="runs">Recent Runs</TabsTrigger>
-                <TabsTrigger value="activity">Activity</TabsTrigger>
-              </TabsList>
+      {/* ── Recent Runs + Activity (side by side) ── */}
+      <motion.div variants={staggerItem} className="grid gap-6 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Recent Runs</CardTitle>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="h-8 shrink-0 gap-1 px-2.5 text-xs"
+                className="h-8 gap-1 px-2.5 text-xs text-muted-foreground"
                 asChild
               >
                 <Link href="/runs">
-                  View All
+                  View all
                   <ArrowRight className="ml-1 h-3 w-3" />
                 </Link>
               </Button>
             </div>
-            <TabsContent value="runs" className="mt-4">
-              {stats.recentRuns.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No runs yet. Start a new discovery to see results here.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {stats.recentRuns.map((run) => (
-                    <Link
-                      key={run.runId}
-                      href={`/runs/${run.runId}`}
-                      className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <p className="font-medium">{run.businessName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(run.createdAt).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {run.status === "completed" && run.useCaseCount > 0 && (
-                          <span className="text-sm text-muted-foreground">
-                            {run.useCaseCount} use cases
-                          </span>
-                        )}
-                        <Badge variant="secondary" className={STATUS_STYLES[run.status] ?? ""}>
-                          {run.status}
-                        </Badge>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="activity" className="mt-4">
-              <ActivityFeedInline limit={10} />
-            </TabsContent>
-          </Tabs>
-        </CardHeader>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            {stats.recentRuns.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No runs yet. Start a new discovery to see results here.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {stats.recentRuns.map((run) => (
+                  <Link
+                    key={run.runId}
+                    href={`/runs/${run.runId}`}
+                    className="flex items-center justify-between rounded-lg border px-4 py-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{run.businessName}</p>
+                      <p
+                        className="text-xs text-muted-foreground"
+                        title={new Date(run.createdAt).toLocaleString()}
+                      >
+                        {timeAgo(run.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {run.status === "completed" && run.useCaseCount > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {run.useCaseCount} use cases
+                        </span>
+                      )}
+                      <Badge variant="secondary" className={STATUS_STYLES[run.status] ?? ""}>
+                        {run.status}
+                      </Badge>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Forge reads <strong>metadata only</strong> -- schema names, table names, and column names.
-        No row-level data is accessed unless data sampling is explicitly enabled.
-      </p>
-    </>
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ActivityFeedInline limit={5} />
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }
 
-function KPICard({
+// ── KPI Tile ──────────────────────────────────────────────────────────
+
+type Sentiment = "positive" | "neutral" | "warning";
+
+const SENTIMENT_BORDER: Record<Sentiment, string> = {
+  positive: "border-l-green-500 dark:border-l-green-400",
+  neutral: "border-l-border",
+  warning: "border-l-amber-500 dark:border-l-amber-400",
+};
+
+function KPITile({
   icon,
   label,
   tip,
   value,
   detail,
+  sentiment = "neutral",
 }: {
   icon: React.ReactNode;
   label: string;
   tip?: string;
   value: string | number;
   detail?: string;
+  sentiment?: Sentiment;
 }) {
   return (
-    <Card>
+    <Card className={cn("border-l-[3px]", SENTIMENT_BORDER[sentiment])}>
       <CardContent className="pt-6">
         <div className="flex items-center gap-2">
           {icon}
           <div className="flex items-center gap-1">
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {label}
+            </p>
             {tip && <InfoTip tip={tip} />}
           </div>
         </div>
-        <p className="mt-2 text-2xl font-bold">{value}</p>
+        <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
         {detail && <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>}
       </CardContent>
     </Card>
   );
 }
 
+// ── Empty Dashboard ───────────────────────────────────────────────────
+
 function EmptyDashboard() {
   return (
-    <div className="space-y-6">
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <BrainCircuit className="h-8 w-8 text-primary" />
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+      className="space-y-8"
+    >
+      {/* Welcome hero */}
+      <motion.div variants={staggerItem}>
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-primary/5">
+          {/* Diamond pattern */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 2L38 20L20 38L2 20Z' fill='none' stroke='%23FF3621' stroke-width='0.5'/%3E%3C/svg%3E")`,
+              backgroundSize: "40px 40px",
+            }}
+          />
+          <div className="relative px-8 py-16 text-center sm:px-12 sm:py-20">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 shadow-sm ring-1 ring-primary/10">
+              <BrainCircuit className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+              Welcome to Forge AI
+            </h2>
+            <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+              Discover high-value data use cases from your Unity Catalog metadata. Configure your
+              business context, point at your catalogs, and let AI generate scored, actionable
+              recommendations.
+            </p>
+            <Button size="lg" className="mt-8" asChild>
+              <Link href="/configure">
+                <Plus className="mr-2 h-4 w-4" />
+                Start Your First Discovery
+              </Link>
+            </Button>
           </div>
-          <h2 className="text-xl font-semibold">Welcome to Forge AI</h2>
-          <p className="mt-2 max-w-md text-muted-foreground">
-            Discover high-value data use cases from your Unity Catalog metadata. Start by
-            configuring your business context and selecting your data sources.
-          </p>
-          <Button className="mt-6" asChild>
-            <Link href="/configure">
-              <Plus className="mr-2 h-4 w-4" />
-              Start Your First Discovery
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </motion.div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <CardTitle className="text-base">1. Configure</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Set your business context, select catalogs and schemas, and choose analysis
-              priorities.
-            </p>
-          </CardContent>
-        </Card>
+      {/* How it works -- compact row */}
+      <motion.div variants={staggerItem} className="grid gap-4 sm:grid-cols-3">
+        <StepTile
+          step={1}
+          title="Configure"
+          description="Set your business context, select catalogs and schemas, and choose analysis priorities."
+        />
+        <StepTile
+          step={2}
+          title="Discover"
+          description="AI analyses your metadata in 7 steps: context, filtering, generation, clustering, scoring, and SQL."
+        />
+        <StepTile
+          step={3}
+          title="Export & Deploy"
+          description="Download results as Excel, PDF, or PowerPoint. Deploy SQL notebooks and Genie Spaces."
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
 
-        <Card>
-          <CardHeader>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
-              <BrainCircuit className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <CardTitle className="text-base">2. Discover</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              AI analyses your metadata in 7 steps: context, filtering, use case generation,
-              scoring, and SQL.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
-              <Trophy className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-            <CardTitle className="text-base">3. Export</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Download results as Excel, PDF, PowerPoint, or deploy SQL notebooks directly to your
-              workspace.
-            </p>
-          </CardContent>
-        </Card>
+function StepTile({
+  step,
+  title,
+  description,
+}: {
+  step: number;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Card className="relative overflow-hidden">
+      <div className="pointer-events-none absolute -right-3 -top-3 text-7xl font-extrabold leading-none text-muted-foreground/[0.04]">
+        {step}
       </div>
-    </div>
+      <CardContent className="relative pt-6">
+        <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">
+          {step}
+        </div>
+        <p className="font-semibold">{title}</p>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
   );
 }

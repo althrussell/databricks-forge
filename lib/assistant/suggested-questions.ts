@@ -12,23 +12,18 @@ import { getIndustryOutcomeAsync } from "@/lib/domain/industry-outcomes-server";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 import type { AssistantPersona } from "./prompts";
 
-// ---------------------------------------------------------------------------
-// Fallback (shown when no runs or scans exist)
-// ---------------------------------------------------------------------------
+import {
+  FALLBACK_QUESTIONS,
+  FALLBACK_QUESTIONS_ANALYST,
+  FALLBACK_QUESTIONS_TECH,
+} from "./suggested-question-defaults";
 
-export const FALLBACK_QUESTIONS = [
-  "How can I calculate Customer Lifetime Value?",
-  "Which tables have PII data?",
-  "Show me revenue trends by region",
-  "What data quality issues exist?",
-];
-
-export const FALLBACK_QUESTIONS_TECH = [
-  "Which tables need VACUUM or OPTIMIZE?",
-  "Show me tables with stale data (no writes in 30+ days)",
-  "What schema drift or governance gaps exist?",
-  "Which tables have the most downstream dependencies?",
-];
+// Re-export client-safe constants so existing server-side imports still work.
+export {
+  FALLBACK_QUESTIONS,
+  FALLBACK_QUESTIONS_ANALYST,
+  FALLBACK_QUESTIONS_TECH,
+};
 
 const TARGET_COUNT = 6;
 
@@ -230,7 +225,11 @@ export async function buildSuggestedQuestions(
       }
     }
 
-    if (candidates.length === 0) return [];
+    if (candidates.length === 0) {
+      if (persona === "tech") return FALLBACK_QUESTIONS_TECH;
+      if (persona === "analyst") return FALLBACK_QUESTIONS_ANALYST;
+      return FALLBACK_QUESTIONS;
+    }
 
     return pickRandom(candidates, TARGET_COUNT);
   } catch (err) {

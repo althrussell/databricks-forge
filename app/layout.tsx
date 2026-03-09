@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,14 +10,16 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SearchBar } from "@/components/search/search-bar";
 import { AskForgePanel } from "@/components/assistant/ask-forge-panel";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const sans = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const mono = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -35,9 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} h-screen overflow-hidden antialiased`}
-      >
+      <body className={`${sans.variable} ${mono.variable} h-screen overflow-hidden antialiased`}>
         <ThemeProvider>
           <TooltipProvider>
             <a
@@ -49,18 +49,21 @@ export default function RootLayout({
             <div className="flex h-screen overflow-hidden">
               <SidebarNav />
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+                <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-4 shadow-[0_1px_2px_0_rgb(0_0_0/0.03)] backdrop-blur-sm dark:shadow-[0_1px_2px_0_rgb(0_0_0/0.15)] md:px-6">
                   <MobileNav />
-                  <span className="text-sm font-semibold md:hidden">Forge AI</span>
+                  <span className="text-sm font-bold tracking-tight md:hidden">Forge AI</span>
                   <div className="hidden flex-1 md:block">
                     <HeaderPageTitle />
                   </div>
-                  <SearchBar />
-                  <AskForgePanel />
-                  <ThemeToggle />
+                  <div className="flex items-center gap-1">
+                    <SearchBar />
+                    <AskForgePanel />
+                    <div className="mx-1 h-5 w-px bg-border/60 hidden sm:block" />
+                    <ThemeToggle />
+                  </div>
                 </header>
                 <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden">
-                  <div className="w-full px-6 py-6">{children}</div>
+                  <div className="w-full px-4 py-6 sm:px-6 lg:px-8">{children}</div>
                 </main>
               </div>
             </div>

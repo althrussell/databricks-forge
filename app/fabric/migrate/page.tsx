@@ -206,7 +206,7 @@ export default function MigrationWizardPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       {/* Header */}
       <div className="flex items-center gap-2">
         <Link href="/fabric">

@@ -16,6 +16,7 @@ import {
 } from "@/lib/embeddings/retriever";
 import type { RetrievedChunk } from "@/lib/embeddings/types";
 import type { AssistantIntent } from "./intent";
+import type { AssistantPersona } from "./prompts";
 import type { ConversationTurn } from "./engine";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
@@ -51,6 +52,7 @@ export interface AssistantContext {
   retrievalTopScore: number | null;
   retrievalAvgScore: number | null;
   lowConfidenceRetrieval: boolean;
+  industryId: string | null;
 }
 
 const INTENT_SCOPES: Record<
@@ -106,6 +108,7 @@ interface DirectContextResult {
   latestRunId: string | null;
   latestScanId: string | null;
   latestFabricScanId: string | null;
+  industryId: string | null;
 }
 
 interface RetrievalPlan {
@@ -126,6 +129,43 @@ interface RetrievalPlan {
 }
 
 // ---------------------------------------------------------------------------
+// Persona modulation -- supplements intent-based retrieval plans
+// ---------------------------------------------------------------------------
+
+function applyPersonaModulation(
+  basePlans: RetrievalPlan[],
+  persona: AssistantPersona,
+): RetrievalPlan[] {
+  const existingScopes = new Set(basePlans.map((p) => p.scope));
+  const supplemental: RetrievalPlan[] = [];
+
+  if (persona === "tech") {
+    if (!existingScopes.has("estate")) {
+      supplemental.push({ scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true });
+    }
+    if (!existingScopes.has("insights")) {
+      supplemental.push({ scope: "insights", topK: 6, minScore: 0.35, useLatestScan: true });
+    }
+  } else if (persona === "business") {
+    if (!existingScopes.has("usecases")) {
+      supplemental.push({ scope: "usecases", topK: 6, minScore: 0.35, useLatestRun: true });
+    }
+    if (!existingScopes.has("benchmarks")) {
+      supplemental.push({ scope: "benchmarks", topK: 4, minScore: 0.35 });
+    }
+  } else if (persona === "analyst") {
+    if (!existingScopes.has("usecases")) {
+      supplemental.push({ scope: "usecases", topK: 6, minScore: 0.35, useLatestRun: true });
+    }
+    if (!existingScopes.has("insights")) {
+      supplemental.push({ scope: "insights", topK: 6, minScore: 0.35, useLatestScan: true });
+    }
+  }
+
+  return [...basePlans, ...supplemental];
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -133,11 +173,15 @@ interface RetrievalPlan {
  * Build full LLM context using dual-strategy pipeline:
  *   1. Direct Lakebase queries (always available, no embedding dependency)
  *   2. Vector semantic search (when embeddings are enabled)
+ *
+ * Persona supplements the intent-based retrieval to ensure each audience
+ * gets contextually appropriate chunks (e.g. tech always gets estate health).
  */
 export async function buildAssistantContext(
   question: string,
   intent: AssistantIntent,
   history: ConversationTurn[] = [],
+  persona: AssistantPersona = "business",
 ): Promise<AssistantContext> {
   // --- Strategy 1: Direct Lakebase context (always runs) ---
   const directContext = await fetchDirectLakebaseContext();
@@ -147,10 +191,11 @@ export async function buildAssistantContext(
   let ragContext = "";
 
   if (isEmbeddingEnabled()) {
-    const allPlans = INTENT_SCOPES[intent];
+    const basePlans = INTENT_SCOPES[intent];
+    const modulated = applyPersonaModulation(basePlans, persona);
     const plans = isBenchmarksEnabled()
-      ? allPlans
-      : allPlans.filter((p) => p.scope !== "benchmarks");
+      ? modulated
+      : modulated.filter((p) => p.scope !== "benchmarks");
     chunks = await retrieveWithFallback(
       question,
       plans,
@@ -262,6 +307,7 @@ export async function buildAssistantContext(
     retrievalTopScore,
     retrievalAvgScore,
     lowConfidenceRetrieval,
+    industryId: directContext.industryId,
   };
 }
 
@@ -300,6 +346,7 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
       const sections: string[] = [];
       let latestRunId: string | null = null;
       let latestScanId: string | null = null;
+      let industryId: string | null = null;
 
       // 1. Business context from latest completed run
       const latestRun = await prisma.forgeRun.findFirst({
@@ -312,6 +359,7 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
           businessPriorities: true,
           strategicGoals: true,
           businessDomains: true,
+          generationOptions: true,
           ucMetadata: true,
         },
       });
@@ -328,9 +376,35 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
           parts.push(`Strategic Goals: ${truncate(latestRun.strategicGoals, 400)}`);
         if (latestRun.businessDomains) parts.push(`Business Domains: ${latestRun.businessDomains}`);
         sections.push(parts.join("\n"));
+
+        try {
+          const opts = latestRun.generationOptions ? JSON.parse(latestRun.generationOptions) : {};
+          industryId = opts?.industry ?? null;
+        } catch {
+          /* ignore malformed JSON */
+        }
       }
 
-      // 2. Estate summary from latest scan
+      // 2. Industry context and KPIs (from outcome map, when industry is known)
+      if (industryId) {
+        try {
+          const { buildIndustryContextPrompt, buildIndustryKPIsPrompt } =
+            await import("@/lib/domain/industry-outcomes-server");
+          const [industryContext, industryKpis] = await Promise.all([
+            buildIndustryContextPrompt(industryId),
+            buildIndustryKPIsPrompt(industryId),
+          ]);
+          if (industryContext) sections.push(industryContext);
+          if (industryKpis) sections.push(industryKpis);
+        } catch (err) {
+          logger.warn("[assistant/context] Failed to load industry context", {
+            industryId,
+            error: String(err),
+          });
+        }
+      }
+
+      // 3. Estate summary from latest scan
       const latestScan = await prisma.forgeEnvironmentScan.findFirst({
         orderBy: { createdAt: "desc" },
         select: {
@@ -359,9 +433,35 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         parts.push(`Avg governance score: ${latestScan.avgGovernanceScore.toFixed(0)}/100`);
         parts.push(`Last scanned: ${latestScan.createdAt.toISOString()}`);
         sections.push(parts.join("\n"));
+
+        // 4. Domain distribution from ForgeTableDetail (grouped by dataDomain)
+        try {
+          const domainGroups = await prisma.forgeTableDetail.groupBy({
+            by: ["dataDomain"],
+            where: { scanId: latestScan.scanId, dataDomain: { not: null } },
+            _count: { _all: true },
+            _avg: { governanceScore: true },
+          });
+          if (domainGroups.length > 0) {
+            const sorted = domainGroups.sort((a, b) => b._count._all - a._count._all);
+            const domParts = ["## Domain Distribution"];
+            for (const g of sorted) {
+              const avgGov =
+                g._avg.governanceScore != null
+                  ? `, avg governance ${Math.round(g._avg.governanceScore)}/100`
+                  : "";
+              domParts.push(`- **${g.dataDomain}** -- ${g._count._all} tables${avgGov}`);
+            }
+            sections.push(domParts.join("\n"));
+          }
+        } catch (err) {
+          logger.warn("[assistant/context] Failed to fetch domain distribution", {
+            error: String(err),
+          });
+        }
       }
 
-      // 3. Deployed assets (dashboards + Genie spaces)
+      // 5. Deployed assets (dashboards + Genie spaces)
       const [deployedDashboards, deployedSpaces] = await Promise.all([
         prisma.forgeDashboard.findMany({
           where: { status: { not: "trashed" } },
@@ -392,7 +492,7 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         sections.push(parts.join("\n"));
       }
 
-      // 4. Latest Fabric scan for PBI context retrieval
+      // 6. Latest Fabric scan for PBI context retrieval
       let latestFabricScanId: string | null = null;
       try {
         const latestFabricScan = await prisma.forgeFabricScan.findFirst({
@@ -412,13 +512,20 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         latestRunId,
         latestScanId,
         latestFabricScanId,
+        industryId,
       };
     });
   } catch (err) {
     logger.warn("[assistant/context] Failed to fetch direct Lakebase context", {
       error: String(err),
     });
-    return { text: null, latestRunId: null, latestScanId: null, latestFabricScanId: null };
+    return {
+      text: null,
+      latestRunId: null,
+      latestScanId: null,
+      latestFabricScanId: null,
+      industryId: null,
+    };
   }
 }
 

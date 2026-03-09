@@ -37,6 +37,7 @@ import type {
   UseCaseAlignmentEntry,
   StepMetrics,
 } from "@/lib/lakebase/run-comparison";
+import { PageHeader } from "@/components/page-header";
 import { InfoTip } from "@/components/ui/info-tip";
 import { COMPARE } from "@/lib/help-text";
 import { SemanticOverlap } from "@/components/compare/semantic-overlap";
@@ -94,49 +95,46 @@ function ComparePageInner() {
   }, [runA, runB, fetchComparison]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Compare Runs</h1>
-          <p className="mt-1 text-muted-foreground">
-            Side-by-side comparison of two discovery runs including prompt version diffs
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {compareData && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  const res = await fetch(`/api/runs/compare/export?runA=${runA}&runB=${runB}`);
-                  if (!res.ok) throw new Error("Export failed");
-                  const blob = await res.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `forge_comparison_${runA.substring(0, 8)}_vs_${runB.substring(0, 8)}.xlsx`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                } catch {
-                  // Silent fail — toast not available here
-                }
-              }}
-            >
-              Export Comparison
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Compare Runs"
+        subtitle="Side-by-side comparison of two discovery runs including prompt version diffs"
+        actions={
+          <div className="flex items-center gap-2">
+            {compareData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/runs/compare/export?runA=${runA}&runB=${runB}`);
+                    if (!res.ok) throw new Error("Export failed");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `forge_comparison_${runA.substring(0, 8)}_vs_${runB.substring(0, 8)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    // Silent fail — toast not available here
+                  }
+                }}
+              >
+                Export Comparison
+              </Button>
+            )}
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/runs">
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Back to Runs
+              </Link>
             </Button>
-          )}
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/runs">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back to Runs
-            </Link>
-          </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Run Selectors */}
       {!runsLoading && runs.length === 0 ? (

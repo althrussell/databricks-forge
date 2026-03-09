@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ConfigForm } from "@/components/pipeline/config-form";
 import { SuggestionPanel } from "@/components/pipeline/suggestion-panel";
+import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Lightbulb } from "lucide-react";
 
@@ -10,20 +11,16 @@ export default function ConfigurePage() {
   const [businessName, setBusinessName] = useState("");
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">New Discovery Run</h1>
-        <p className="mt-1 text-muted-foreground">
-          Configure your business context and Unity Catalog scope, then let Forge AI discover use
-          cases.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="New Discovery Run"
+        subtitle="Configure your business context and Unity Catalog scope, then let Forge AI discover use cases."
+      />
 
-      {/* Quick Tips */}
-      <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
+      <Card className="border-chart-2/20 bg-chart-2/[0.03] dark:border-chart-2/15 dark:bg-chart-2/[0.04]">
         <CardContent className="pt-4">
           <div className="flex gap-3">
-            <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
+            <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-chart-2" />
             <div className="space-y-1">
               <p className="text-sm font-medium">Tips for best results</p>
               <ul className="space-y-0.5 text-xs text-muted-foreground">

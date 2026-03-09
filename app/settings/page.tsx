@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Save } from "lucide-react";
 import { saveSettings, DEFAULT_CATALOG_RESOURCE_PREFIX } from "@/lib/settings";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
+import { PageHeader } from "@/components/page-header";
 import {
   ProfileSettings,
   DataSamplingSettings,
@@ -168,7 +169,7 @@ export default function SettingsPage() {
 
   if (!loaded) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1400px] space-y-8">
         <div>
           <Skeleton className="h-8 w-48" />
           <Skeleton className="mt-2 h-5 w-96" />
@@ -179,13 +180,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-muted-foreground">
-          Configure application-wide defaults and preferences.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Settings"
+        subtitle="Configure application-wide defaults and preferences."
+      />
 
       <ProfileSettings profile={profile} />
 

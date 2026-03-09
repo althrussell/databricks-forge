@@ -2,10 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
 import { RunsContent } from "@/components/runs/runs-content";
 import { listRuns } from "@/lib/lakebase/runs";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
+import { Plus } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
@@ -48,16 +50,19 @@ async function RunsData() {
 
 export default function RunsPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pipeline Runs</h1>
-          <p className="mt-1 text-muted-foreground">View and manage your discovery pipeline runs</p>
-        </div>
-        <Button asChild>
-          <Link href="/configure">New Discovery</Link>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Pipeline Runs"
+        subtitle="View and manage your discovery pipeline runs"
+        actions={
+          <Button asChild>
+            <Link href="/configure">
+              <Plus className="mr-2 h-4 w-4" />
+              New Discovery
+            </Link>
+          </Button>
+        }
+      />
 
       <Suspense fallback={<RunsSkeleton />}>
         <RunsData />

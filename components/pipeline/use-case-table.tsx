@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
+
 import { toast } from "sonner";
 import {
   BrainCircuit,
@@ -51,6 +51,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   BookOpen,
+  ChevronDown,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/lazy";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
@@ -283,7 +284,7 @@ export function UseCaseTable({
                 filtered.map((uc, idx) => (
                   <TableRow
                     key={uc.id}
-                    className="cursor-pointer transition-colors hover:bg-row-hover"
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
                     onClick={() => {
                       setSelectedUseCase(uc);
                       setAdjustingScores(false);
@@ -297,7 +298,7 @@ export function UseCaseTable({
                       <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">{uc.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{uc.statement}</p>
+                          <p className="line-clamp-1 text-xs text-muted-foreground">{uc.statement}</p>
                         </div>
                         {hasAnyUserScore(uc) && (
                           <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-violet-500" />
@@ -463,8 +464,8 @@ export function UseCaseTable({
                 )}
               </div>
 
-              <div className="mt-6 space-y-5">
-                {/* Score Radar Chart */}
+              <div className="mt-6 space-y-6">
+                {/* ── Scores & Feedback ── */}
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Score Profile
@@ -486,7 +487,6 @@ export function UseCaseTable({
                   />
                 </div>
 
-                {/* Scores Grid */}
                 <div className="grid grid-cols-4 gap-3">
                   {(() => {
                     const eff = adjustingScores
@@ -544,157 +544,141 @@ export function UseCaseTable({
                   })()}
                 </div>
 
-                {/* Score Adjustment Panel */}
                 {onUpdate && (
-                  <>
-                    <Separator />
-                    {!adjustingScores ? (
-                      <div className="flex items-center gap-2">
+                  !adjustingScores ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startAdjusting(selectedUseCase)}
+                      >
+                        <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+                        Adjust Scores
+                      </Button>
+                      {hasAnyUserScore(selectedUseCase) && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          onClick={() => startAdjusting(selectedUseCase)}
+                          className="text-muted-foreground"
+                          onClick={resetToSystemScores}
                         >
-                          <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
-                          Adjust Scores
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          Reset to System
                         </Button>
-                        {hasAnyUserScore(selectedUseCase) && (
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 rounded-lg border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-800 dark:bg-violet-950/30">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">
+                          Adjust Scores
+                        </p>
+                        <div className="flex gap-2">
                           <Button
-                            variant="ghost"
                             size="sm"
-                            className="text-muted-foreground"
-                            onClick={resetToSystemScores}
+                            onClick={saveAdjustedScores}
+                            disabled={!hasUserScoreChanges(selectedUseCase)}
                           >
-                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset to System
+                            <Check className="mr-1 h-3.5 w-3.5" />
+                            Apply
                           </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-4 rounded-lg border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-800 dark:bg-violet-950/30">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">
-                            Adjust Scores
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={saveAdjustedScores}
-                              disabled={!hasUserScoreChanges(selectedUseCase)}
-                            >
-                              <Check className="mr-1 h-3.5 w-3.5" />
-                              Apply
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setAdjustingScores(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAdjustingScores(false)}
+                          >
+                            Cancel
+                          </Button>
                         </div>
+                      </div>
 
-                        <ScoreSlider
-                          icon={
-                            <Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                          }
-                          label="Priority"
-                          value={adjPriority}
-                          systemValue={Math.round(selectedUseCase.priorityScore * 100)}
-                          onChange={setAdjPriority}
-                        />
-                        <ScoreSlider
-                          icon={
-                            <Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                          }
-                          label="Feasibility"
-                          value={adjFeasibility}
-                          systemValue={Math.round(selectedUseCase.feasibilityScore * 100)}
-                          onChange={setAdjFeasibility}
-                        />
-                        <ScoreSlider
-                          icon={
-                            <Zap className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                          }
-                          label="Impact"
-                          value={adjImpact}
-                          systemValue={Math.round(selectedUseCase.impactScore * 100)}
-                          onChange={setAdjImpact}
-                        />
+                      <ScoreSlider
+                        icon={<Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                        label="Priority"
+                        value={adjPriority}
+                        systemValue={Math.round(selectedUseCase.priorityScore * 100)}
+                        onChange={setAdjPriority}
+                      />
+                      <ScoreSlider
+                        icon={<Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                        label="Feasibility"
+                        value={adjFeasibility}
+                        systemValue={Math.round(selectedUseCase.feasibilityScore * 100)}
+                        onChange={setAdjFeasibility}
+                      />
+                      <ScoreSlider
+                        icon={<Zap className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                        label="Impact"
+                        value={adjImpact}
+                        systemValue={Math.round(selectedUseCase.impactScore * 100)}
+                        onChange={setAdjImpact}
+                      />
 
-                        <div className="flex items-center justify-between rounded-md bg-violet-100 px-3 py-2 dark:bg-violet-900/40">
-                          <div className="flex items-center gap-2">
-                            <Trophy className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                            <span className="text-sm font-medium text-violet-900 dark:text-violet-200">
-                              Computed Overall
-                            </span>
-                          </div>
-                          <span className="text-lg font-bold text-violet-900 dark:text-violet-200">
-                            {Math.round(adjOverall * 100)}%
+                      <div className="flex items-center justify-between rounded-md bg-violet-100 px-3 py-2 dark:bg-violet-900/40">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                          <span className="text-sm font-medium text-violet-900 dark:text-violet-200">
+                            Computed Overall
                           </span>
                         </div>
-
-                        <p className="text-[11px] text-violet-700 dark:text-violet-400">
-                          Overall = Priority (30%) + Feasibility (20%) + Impact (50%). System scores
-                          are preserved and both will appear in exports.
-                        </p>
-
-                        {hasAnyUserScore(selectedUseCase) && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-violet-700 dark:text-violet-300"
-                            onClick={resetToSystemScores}
-                          >
-                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset All to System Scores
-                          </Button>
-                        )}
+                        <span className="text-lg font-bold text-violet-900 dark:text-violet-200">
+                          {Math.round(adjOverall * 100)}%
+                        </span>
                       </div>
-                    )}
-                  </>
-                )}
 
-                {/* Feedback Buttons */}
-                {onUpdate && (
-                  <>
-                    <Separator />
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-muted-foreground mr-1">
-                        Feedback:
-                      </span>
-                      {(["accepted", "rejected", "dismissed"] as const).map((fb) => (
+                      <p className="text-[11px] text-violet-700 dark:text-violet-400">
+                        Overall = Priority (30%) + Feasibility (20%) + Impact (50%). System scores
+                        are preserved and both will appear in exports.
+                      </p>
+
+                      {hasAnyUserScore(selectedUseCase) && (
                         <Button
-                          key={fb}
-                          variant={selectedUseCase.feedback === fb ? "default" : "outline"}
+                          variant="ghost"
                           size="sm"
-                          onClick={async () => {
-                            const newFb = selectedUseCase.feedback === fb ? null : fb;
-                            const updated = {
-                              ...selectedUseCase,
-                              feedback: newFb,
-                              feedbackAt: newFb ? new Date().toISOString() : null,
-                            };
-                            const result = await onUpdate(updated);
-                            if (result && "ok" in result && result.ok) {
-                              setSelectedUseCase(updated);
-                            }
-                          }}
+                          className="w-full text-violet-700 dark:text-violet-300"
+                          onClick={resetToSystemScores}
                         >
-                          {fb === "accepted" && <ThumbsUp className="mr-1 h-3.5 w-3.5" />}
-                          {fb === "rejected" && <ThumbsDown className="mr-1 h-3.5 w-3.5" />}
-                          {fb === "dismissed" && <X className="mr-1 h-3.5 w-3.5" />}
-                          {fb.charAt(0).toUpperCase() + fb.slice(1)}
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          Reset All to System Scores
                         </Button>
-                      ))}
+                      )}
                     </div>
-                  </>
+                  )
                 )}
 
-                <Separator />
+                {onUpdate && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground mr-1">
+                      Feedback:
+                    </span>
+                    {(["accepted", "rejected", "dismissed"] as const).map((fb) => (
+                      <Button
+                        key={fb}
+                        variant={selectedUseCase.feedback === fb ? "default" : "outline"}
+                        size="sm"
+                        onClick={async () => {
+                          const newFb = selectedUseCase.feedback === fb ? null : fb;
+                          const updated = {
+                            ...selectedUseCase,
+                            feedback: newFb,
+                            feedbackAt: newFb ? new Date().toISOString() : null,
+                          };
+                          const result = await onUpdate(updated);
+                          if (result && "ok" in result && result.ok) {
+                            setSelectedUseCase(updated);
+                          }
+                        }}
+                      >
+                        {fb === "accepted" && <ThumbsUp className="mr-1 h-3.5 w-3.5" />}
+                        {fb === "rejected" && <ThumbsDown className="mr-1 h-3.5 w-3.5" />}
+                        {fb === "dismissed" && <X className="mr-1 h-3.5 w-3.5" />}
+                        {fb.charAt(0).toUpperCase() + fb.slice(1)}
+                      </Button>
+                    ))}
+                  </div>
+                )}
 
-                {/* Statement with copy / edit */}
+                {/* ── Description ── */}
                 <DetailSection
                   icon={<FileText className="h-4 w-4 text-blue-500" />}
                   title="Statement"
@@ -712,7 +696,6 @@ export function UseCaseTable({
                   )}
                 </DetailSection>
 
-                {/* Solution with copy */}
                 <DetailSection
                   icon={<Lightbulb className="h-4 w-4 text-amber-500" />}
                   title="Solution"
@@ -721,7 +704,6 @@ export function UseCaseTable({
                   {selectedUseCase.solution}
                 </DetailSection>
 
-                {/* Business Value */}
                 <DetailSection
                   icon={<TrendingUp className="h-4 w-4 text-green-500" />}
                   title="Business Value"
@@ -730,188 +712,162 @@ export function UseCaseTable({
                   {selectedUseCase.businessValue}
                 </DetailSection>
 
-                <Separator />
-
-                {/* Metadata grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <MetaField
-                    icon={<Cpu className="h-3.5 w-3.5 text-violet-500" />}
-                    label="Technique"
-                    value={selectedUseCase.analyticsTechnique}
-                  />
-                  <MetaField
-                    icon={<Users className="h-3.5 w-3.5 text-sky-500" />}
-                    label="Beneficiary"
-                    value={selectedUseCase.beneficiary}
-                  />
-                  <MetaField
-                    icon={<UserCheck className="h-3.5 w-3.5 text-emerald-500" />}
-                    label="Sponsor"
-                    value={selectedUseCase.sponsor}
-                  />
-                </div>
-
-                {/* Enrichment Sources */}
-                {selectedUseCase.enrichmentTags && selectedUseCase.enrichmentTags.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <div className="mb-1.5 flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-amber-500" />
-                        <p className="text-sm font-semibold">Enrichment Sources</p>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {selectedUseCase.enrichmentTags.includes("benchmark") && (
-                          <Badge
-                            variant="outline"
-                            className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400"
-                          >
-                            <BarChart3 className="h-2.5 w-2.5" />
-                            Benchmark
-                          </Badge>
-                        )}
-                        {selectedUseCase.enrichmentTags.includes("outcome_map") && (
-                          <Badge
-                            variant="outline"
-                            className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400"
-                          >
-                            <Target className="h-2.5 w-2.5" />
-                            Outcome Map
-                          </Badge>
-                        )}
-                        {selectedUseCase.enrichmentTags.includes("document") && (
-                          <Badge
-                            variant="outline"
-                            className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400"
-                          >
-                            <FileText className="h-2.5 w-2.5" />
-                            Document
-                          </Badge>
-                        )}
-                      </div>
+                {/* ── Technical Details (collapsed) ── */}
+                <DisclosureSection
+                  title="Technical Details"
+                  count={
+                    (selectedUseCase.tablesInvolved.length > 0 ? 1 : 0) +
+                    (selectedUseCase.sqlCode ? 1 : 0) +
+                    (selectedUseCase.enrichmentTags?.length ? 1 : 0) +
+                    (relatedUseCases.length > 0 ? 1 : 0) +
+                    1
+                  }
+                >
+                  <div className="space-y-5">
+                    {/* Compact metadata */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                      <MetaInline icon={<Cpu className="h-3 w-3 text-violet-500" />} label="Technique" value={selectedUseCase.analyticsTechnique} />
+                      <MetaInline icon={<Users className="h-3 w-3 text-sky-500" />} label="Beneficiary" value={selectedUseCase.beneficiary} />
+                      <MetaInline icon={<UserCheck className="h-3 w-3 text-emerald-500" />} label="Sponsor" value={selectedUseCase.sponsor} />
                     </div>
-                  </>
-                )}
 
-                {/* Tables Involved */}
-                {(selectedUseCase.tablesInvolved.length > 0 || editing) && (
-                  <>
-                    <Separator />
-                    <DetailSection
-                      icon={<Database className="h-4 w-4 text-orange-500" />}
-                      title="Tables Involved"
-                    >
-                      {editing ? (
-                        <div className="mt-1">
-                          <Input
-                            value={editTables}
-                            onChange={(e) => setEditTables(e.target.value)}
-                            placeholder="catalog.schema.table, ..."
-                          />
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            Comma-separated fully-qualified table names
-                          </p>
+                    {/* Enrichment Sources */}
+                    {selectedUseCase.enrichmentTags && selectedUseCase.enrichmentTags.length > 0 && (
+                      <div>
+                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                          Enrichment Sources
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedUseCase.enrichmentTags.includes("benchmark") && (
+                            <Badge variant="outline" className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400">
+                              <BarChart3 className="h-2.5 w-2.5" />
+                              Benchmark
+                            </Badge>
+                          )}
+                          {selectedUseCase.enrichmentTags.includes("outcome_map") && (
+                            <Badge variant="outline" className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400">
+                              <Target className="h-2.5 w-2.5" />
+                              Outcome Map
+                            </Badge>
+                          )}
+                          {selectedUseCase.enrichmentTags.includes("document") && (
+                            <Badge variant="outline" className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400">
+                              <FileText className="h-2.5 w-2.5" />
+                              Document
+                            </Badge>
+                          )}
                         </div>
-                      ) : (
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {selectedUseCase.tablesInvolved.map((t) => {
-                            const isLineage = lineageDiscoveredFqns.includes(t);
-                            return (
-                              <Badge
-                                key={t}
-                                variant="outline"
-                                className={`gap-1 font-mono text-[11px] font-normal ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
-                                title={
-                                  isLineage
-                                    ? "This table was automatically discovered via data lineage — it was not in your original catalog/schema selection."
-                                    : undefined
-                                }
-                              >
-                                {isLineage ? (
-                                  <Link2 className="h-2.5 w-2.5 text-blue-500" />
-                                ) : (
-                                  <Database className="h-2.5 w-2.5 text-muted-foreground" />
-                                )}
-                                {t}
-                                {isLineage && (
-                                  <span className="text-[9px] text-blue-500">via lineage</span>
-                                )}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </DetailSection>
-                  </>
-                )}
-
-                {/* SQL Code with syntax highlighting and copy */}
-                {selectedUseCase.sqlCode && (
-                  <>
-                    <Separator />
-                    <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Code2 className="h-4 w-4 text-pink-500" />
-                          <p className="text-sm font-semibold">SQL Code</p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-xs"
-                          onClick={() => {
-                            navigator.clipboard.writeText(selectedUseCase.sqlCode!);
-                            toast.success("SQL copied to clipboard");
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                          Copy SQL
-                        </Button>
                       </div>
-                      <pre className="overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed">
-                        {selectedUseCase.sqlCode}
-                      </pre>
-                    </div>
-                  </>
-                )}
+                    )}
 
-                {/* Related Use Cases */}
-                {relatedUseCases.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <div className="mb-2 flex items-center gap-2">
-                        <Link2 className="h-4 w-4 text-indigo-500" />
-                        <p className="text-sm font-semibold">Related Use Cases</p>
-                      </div>
-                      <p className="mb-3 text-xs text-muted-foreground">
-                        Other use cases sharing the same tables
-                      </p>
-                      <div className="space-y-2">
-                        {relatedUseCases.map((uc) => (
-                          <button
-                            key={uc.id}
-                            className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-muted/50"
-                            onClick={() => {
-                              setSelectedUseCase(uc);
-                              setAdjustingScores(false);
-                              setEditing(false);
+                    {/* Tables Involved */}
+                    {(selectedUseCase.tablesInvolved.length > 0 || editing) && (
+                      <DetailSection
+                        icon={<Database className="h-4 w-4 text-orange-500" />}
+                        title="Tables Involved"
+                      >
+                        {editing ? (
+                          <div className="mt-1">
+                            <Input
+                              value={editTables}
+                              onChange={(e) => setEditTables(e.target.value)}
+                              placeholder="catalog.schema.table, ..."
+                            />
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              Comma-separated fully-qualified table names
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {selectedUseCase.tablesInvolved.map((t) => {
+                              const isLineage = lineageDiscoveredFqns.includes(t);
+                              return (
+                                <Badge
+                                  key={t}
+                                  variant="outline"
+                                  className={`gap-1 font-mono text-[11px] font-normal ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
+                                  title={
+                                    isLineage
+                                      ? "This table was automatically discovered via data lineage — it was not in your original catalog/schema selection."
+                                      : undefined
+                                  }
+                                >
+                                  {isLineage ? (
+                                    <Link2 className="h-2.5 w-2.5 text-blue-500" />
+                                  ) : (
+                                    <Database className="h-2.5 w-2.5 text-muted-foreground" />
+                                  )}
+                                  {t}
+                                  {isLineage && (
+                                    <span className="text-[9px] text-blue-500">via lineage</span>
+                                  )}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </DetailSection>
+                    )}
+
+                    {/* SQL Code (collapsed by default) */}
+                    {selectedUseCase.sqlCode && (
+                      <DisclosureSection
+                        title="SQL Code"
+                        icon={<Code2 className="h-4 w-4 text-pink-500" />}
+                        action={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(selectedUseCase.sqlCode!);
+                              toast.success("SQL copied to clipboard");
                             }}
                           >
-                            <div>
-                              <p className="text-sm font-medium">{uc.name}</p>
-                              <p className="text-xs text-muted-foreground">{uc.domain}</p>
-                            </div>
-                            <ScoreBadge
-                              score={uc.userOverallScore ?? uc.overallScore}
-                              isAdjusted={uc.userOverallScore != null}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                            <Copy className="h-3 w-3" />
+                            Copy
+                          </Button>
+                        }
+                      >
+                        <pre className="overflow-x-auto rounded-md border bg-muted/50 p-3 font-mono text-xs leading-relaxed">
+                          {selectedUseCase.sqlCode}
+                        </pre>
+                      </DisclosureSection>
+                    )}
+
+                    {/* Related Use Cases */}
+                    {relatedUseCases.length > 0 && (
+                      <DisclosureSection
+                        title={`Related Use Cases (${relatedUseCases.length})`}
+                        icon={<Link2 className="h-4 w-4 text-indigo-500" />}
+                      >
+                        <div className="space-y-2">
+                          {relatedUseCases.map((uc) => (
+                            <button
+                              key={uc.id}
+                              className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-muted/50"
+                              onClick={() => {
+                                setSelectedUseCase(uc);
+                                setAdjustingScores(false);
+                                setEditing(false);
+                              }}
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{uc.name}</p>
+                                <p className="text-xs text-muted-foreground">{uc.domain}</p>
+                              </div>
+                              <ScoreBadge
+                                score={uc.userOverallScore ?? uc.overallScore}
+                                isAdjusted={uc.userOverallScore != null}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </DisclosureSection>
+                    )}
+                  </div>
+                </DisclosureSection>
               </div>
             </>
           )}
@@ -1028,7 +984,7 @@ function DetailSection({
   );
 }
 
-function MetaField({
+function MetaInline({
   icon,
   label,
   value,
@@ -1038,12 +994,46 @@ function MetaField({
   value: string;
 }) {
   return (
-    <div className="rounded-md border bg-muted/30 px-3 py-2.5">
-      <div className="mb-0.5 flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5">
+      {icon}
+      <span className="text-xs text-muted-foreground">{label}:</span>
+      <span className="text-xs font-medium">{value}</span>
+    </span>
+  );
+}
+
+function DisclosureSection({
+  title,
+  icon,
+  action,
+  count,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  action?: React.ReactNode;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-lg border bg-muted/10">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold hover:bg-muted/30 transition-colors rounded-lg"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+        />
         {icon}
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      </div>
-      <p className="text-sm">{value}</p>
+        <span className="flex-1">{title}</span>
+        {count != null && !open && (
+          <span className="text-xs font-normal text-muted-foreground">{count} items</span>
+        )}
+        {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+      </button>
+      {open && <div className="px-3 pb-3">{children}</div>}
     </div>
   );
 }

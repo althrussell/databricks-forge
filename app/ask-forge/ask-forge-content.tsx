@@ -237,11 +237,11 @@ export default function AskForgeContent() {
   }, []);
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-3rem)] flex-col">
+    <div className="-mx-4 -my-6 flex h-[calc(100vh-3.5rem)] flex-col sm:-mx-6 lg:-mx-8">
       <EmbeddingStatus />
 
       {/* Persona toggle banner */}
-      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-1.5">
+      <div className="flex items-center justify-between border-b bg-muted/20 px-4 py-1.5">
         <span className="text-xs font-medium text-muted-foreground">Mode</span>
         <ToggleGroup
           type="single"

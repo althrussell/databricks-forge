@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -127,7 +128,7 @@ export default function FabricHubPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1400px] space-y-8">
         <Skeleton className="h-8 w-64" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -139,14 +140,11 @@ export default function FabricHubPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Fabric / Power BI</h1>
-        <p className="text-muted-foreground">
-          Scan your Microsoft Fabric and Power BI estate, then migrate to Databricks-native
-          artifacts.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Fabric / Power BI"
+        subtitle="Scan your Microsoft Fabric and Power BI estate, then migrate to Databricks-native artifacts."
+      />
 
       {/* Scan trigger */}
       <Card>

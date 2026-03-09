@@ -140,7 +140,11 @@ export async function POST(
           assets.push(result);
           if (result.deployed) {
             deployedMvs.push({ fqn: result.fqn, description: mv.description });
-            logger.info("Metric view deployed", { runId, domain: domainReq.domain, fqn: result.fqn });
+            logger.info("Metric view deployed", {
+              runId,
+              domain: domainReq.domain,
+              fqn: result.fqn,
+            });
 
             const matchingProposal = mvProposals.find(
               (p) => p.name.toLowerCase() === mv.name.toLowerCase(),

@@ -123,7 +123,7 @@ export default function TableDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1400px] space-y-8">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -147,7 +147,7 @@ export default function TableDetailPage() {
   const freshness = freshnessIndicator(detail.lastModified ?? undefined);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
           <Link href="/environment">

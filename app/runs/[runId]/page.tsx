@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScoreRadarOverview } from "@/components/charts/lazy";
 import {
   RunHeader,
   IndustryBanner,
@@ -101,7 +100,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1400px] space-y-8">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-96 w-full" />
@@ -111,7 +110,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   if (error || !run) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-[1400px] space-y-4">
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
           {error ?? "Run not found"}
         </div>
@@ -134,7 +133,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       : null;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       <RunHeader
         run={run}
         runId={runId}
@@ -180,11 +179,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
             onInsightsOpen={() => setInsightsOpen(true)}
             onOutcomeMapClick={run.config.industry ? () => setActiveTab("outcome-map") : undefined}
           />
-          {useCases.length > 1 && (
-            <div>
-              <ScoreRadarOverview useCases={useCases} />
-            </div>
-          )}
           <RunCompletedTabs
             run={run}
             useCases={useCases}

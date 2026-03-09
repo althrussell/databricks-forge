@@ -191,7 +191,7 @@ export default function MetadataGeniePage() {
   const deployedSpaces = spaces.filter((s) => s.status === "deployed");
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

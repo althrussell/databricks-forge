@@ -265,9 +265,10 @@ export function generateViewDDL(opts: {
   const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
 
   return defs.map((def) => {
-    const viewName = resourcePrefix && !def.name.startsWith(resourcePrefix)
-      ? `${resourcePrefix}${def.name}`
-      : def.name;
+    const viewName =
+      resourcePrefix && !def.name.startsWith(resourcePrefix)
+        ? `${resourcePrefix}${def.name}`
+        : def.name;
     const conditions: string[] = [];
 
     if (def.filterColumn) {
@@ -361,9 +362,10 @@ export function getViewFqns(
   const safeSchema = validateIdentifier(target.schema, "viewTarget.schema");
   const defs = lineageAccessible ? [...VIEW_DEFS, LINEAGE_VIEW_DEF] : VIEW_DEFS;
   return defs.map((def) => {
-    const viewName = resourcePrefix && !def.name.startsWith(resourcePrefix)
-      ? `${resourcePrefix}${def.name}`
-      : def.name;
+    const viewName =
+      resourcePrefix && !def.name.startsWith(resourcePrefix)
+        ? `${resourcePrefix}${def.name}`
+        : def.name;
     return `\`${safeCatalog}\`.\`${safeSchema}\`.\`${viewName}\``;
   });
 }

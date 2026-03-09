@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,7 +26,6 @@ import {
   TrendingUp,
   ArrowRight,
   Sparkles,
-  Layers,
   Upload,
 } from "lucide-react";
 import {
@@ -34,8 +35,8 @@ import {
   type ReferenceUseCase,
 } from "@/lib/domain/industry-outcomes";
 import { useIndustryOutcomes } from "@/lib/hooks/use-industry-outcomes";
-import { InfoTip } from "@/components/ui/info-tip";
-import { OUTCOMES } from "@/lib/help-text";
+import { PageHeader } from "@/components/page-header";
+import { staggerContainer, staggerItem } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,9 +105,16 @@ function matchesSearch(industry: IndustryOutcome, query: string): boolean {
 // ---------------------------------------------------------------------------
 
 export default function OutcomesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { outcomes, loading } = useIndustryOutcomes();
-  const [selectedIndustry, setSelectedIndustry] = useState<IndustryOutcome | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = searchParams.get("q") ?? "";
+  const selectedId = searchParams.get("industry");
+
+  const selectedIndustry = useMemo(
+    () => (selectedId ? outcomes.find((i) => i.id === selectedId) ?? null : null),
+    [selectedId, outcomes],
+  );
 
   const filteredIndustries = useMemo(() => {
     if (!searchQuery.trim()) return outcomes;
@@ -118,66 +126,59 @@ export default function OutcomesPage() {
     [outcomes],
   );
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
-              <Layers className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">Industry Outcome Maps</h1>
-                <InfoTip tip={OUTCOMES.pageDescription} />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {loading ? (
-                  "Loading..."
-                ) : (
-                  <>
-                    {outcomes.length} industries &middot; {totalUseCases} reference use cases
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-            These outcome maps contain curated high-value use cases, strategic priorities, and KPIs
-            for each industry. When you select an industry during discovery, this data enriches the
-            AI prompts to generate more relevant, strategically-aligned use cases.
-          </p>
-        </div>
-        <Link href="/outcomes/ingest">
-          <Button>
-            <Upload className="mr-2 h-4 w-4" />
-            Ingest New Map
-          </Button>
-        </Link>
-      </div>
+  function setSearchQuery(q: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (q) {
+      params.set("q", q);
+    } else {
+      params.delete("q");
+    }
+    params.delete("industry");
+    router.replace(`/outcomes?${params.toString()}`);
+  }
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search industries, priorities, or use cases..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+  function selectIndustry(id: string) {
+    router.push(`/outcomes?industry=${encodeURIComponent(id)}`);
+  }
+
+  function clearSelection() {
+    router.push("/outcomes");
+  }
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-8">
+      <PageHeader
+        title="Industry Outcome Maps"
+        subtitle={
+          loading
+            ? "Loading..."
+            : `${outcomes.length} industries \u00b7 ${totalUseCases} reference use cases`
+        }
+        actions={
+          <Button asChild>
+            <Link href="/outcomes/ingest">
+              <Upload className="mr-2 h-4 w-4" />
+              Ingest New Map
+            </Link>
+          </Button>
+        }
+      />
 
       {selectedIndustry ? (
-        /* ------------------------------------------------------------------ */
-        /* Industry Detail View                                                */
-        /* ------------------------------------------------------------------ */
-        <IndustryDetailView industry={selectedIndustry} onBack={() => setSelectedIndustry(null)} />
+        <IndustryDetailView industry={selectedIndustry} onBack={clearSelection} />
       ) : (
-        /* ------------------------------------------------------------------ */
-        /* Industry Grid                                                       */
-        /* ------------------------------------------------------------------ */
         <>
+          {/* Search */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search industries, priorities, or use cases..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
           {filteredIndustries.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -196,15 +197,21 @@ export default function OutcomesPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <motion.div
+              variants={staggerContainer}
+              initial="hidden"
+              animate="visible"
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
               {filteredIndustries.map((industry) => (
-                <IndustryCard
-                  key={industry.id}
-                  industry={industry}
-                  onClick={() => setSelectedIndustry(industry)}
-                />
+                <motion.div key={industry.id} variants={staggerItem}>
+                  <IndustryCard
+                    industry={industry}
+                    onClick={() => selectIndustry(industry.id)}
+                  />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </>
       )}
@@ -224,7 +231,7 @@ function IndustryCard({ industry, onClick }: { industry: IndustryOutcome; onClic
 
   return (
     <Card
-      className={`group flex cursor-pointer flex-col border bg-gradient-to-br transition-all hover:shadow-md ${gradientClass}`}
+      className={`group flex h-full cursor-pointer flex-col border bg-gradient-to-br hover:-translate-y-0.5 hover:shadow-md ${gradientClass}`}
       onClick={onClick}
     >
       <CardHeader className="pb-3">
@@ -237,12 +244,11 @@ function IndustryCard({ industry, onClick }: { industry: IndustryOutcome; onClic
         </div>
         {industry.subVerticals && (
           <CardDescription className="line-clamp-2 text-xs">
-            {industry.subVerticals.join(" · ")}
+            {industry.subVerticals.join(" \u00b7 ")}
           </CardDescription>
         )}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-between space-y-3">
-        {/* Objective pills */}
         <div className="flex flex-wrap gap-1">
           {industry.objectives.map((obj) => (
             <Badge key={obj.name} variant="secondary" className="text-xs">
@@ -253,7 +259,6 @@ function IndustryCard({ industry, onClick }: { industry: IndustryOutcome; onClic
 
         <div>
           <Separator />
-          {/* Stats row */}
           <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Target className="h-3.5 w-3.5" />
@@ -290,9 +295,14 @@ function IndustryDetailView({
   const iconColor = INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+      className="space-y-8"
+    >
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
+      <motion.div variants={staggerItem} className="flex items-center gap-2 text-sm">
         <button
           onClick={onBack}
           className="text-muted-foreground transition-colors hover:text-foreground"
@@ -301,97 +311,99 @@ function IndustryDetailView({
         </button>
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-medium">{industry.name}</span>
-      </div>
+      </motion.div>
 
       {/* Header Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${INDUSTRY_COLORS[industry.id] ?? ""}`}
-            >
-              <Building2 className={`h-6 w-6 ${iconColor}`} />
-            </div>
-            <div>
-              <CardTitle className="text-xl">{industry.name}</CardTitle>
-              {industry.subVerticals && (
-                <CardDescription>{industry.subVerticals.join(" · ")}</CardDescription>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Stat pills */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatPill
-              icon={<Target className="h-4 w-4 text-violet-500" />}
-              label="Objectives"
-              value={industry.objectives.length}
-            />
-            <StatPill
-              icon={<TrendingUp className="h-4 w-4 text-blue-500" />}
-              label="Strategic Priorities"
-              value={priCount}
-            />
-            <StatPill
-              icon={<Lightbulb className="h-4 w-4 text-amber-500" />}
-              label="Reference Use Cases"
-              value={ucCount}
-            />
-            <StatPill
-              icon={<Users className="h-4 w-4 text-emerald-500" />}
-              label="Key Personas"
-              value={personaCount}
-            />
-          </div>
-
-          <Separator className="my-4" />
-
-          {/* Suggested config */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                Suggested Business Domains
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {industry.suggestedDomains.map((d) => (
-                  <Badge key={d} variant="outline" className="text-xs">
-                    {d}
-                  </Badge>
-                ))}
+      <motion.div variants={staggerItem}>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div
+                className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${INDUSTRY_COLORS[industry.id] ?? ""}`}
+              >
+                <Building2 className={`h-6 w-6 ${iconColor}`} />
+              </div>
+              <div>
+                <CardTitle className="text-xl">{industry.name}</CardTitle>
+                {industry.subVerticals && (
+                  <CardDescription>{industry.subVerticals.join(" \u00b7 ")}</CardDescription>
+                )}
               </div>
             </div>
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                Suggested Priorities
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {industry.suggestedPriorities.map((p) => (
-                  <Badge key={p} variant="outline" className="text-xs">
-                    {p}
-                  </Badge>
-                ))}
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatPill
+                icon={<Target className="h-4 w-4 text-violet-500" />}
+                label="Objectives"
+                value={industry.objectives.length}
+              />
+              <StatPill
+                icon={<TrendingUp className="h-4 w-4 text-blue-500" />}
+                label="Strategic Priorities"
+                value={priCount}
+              />
+              <StatPill
+                icon={<Lightbulb className="h-4 w-4 text-amber-500" />}
+                label="Reference Use Cases"
+                value={ucCount}
+              />
+              <StatPill
+                icon={<Users className="h-4 w-4 text-emerald-500" />}
+                label="Key Personas"
+                value={personaCount}
+              />
+            </div>
+
+            <Separator className="my-4" />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Suggested Business Domains
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {industry.suggestedDomains.map((d) => (
+                    <Badge key={d} variant="outline" className="text-xs">
+                      {d}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Suggested Priorities
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {industry.suggestedPriorities.map((p) => (
+                    <Badge key={p} variant="outline" className="text-xs">
+                      {p}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
 
-          <Separator className="my-4" />
+            <Separator className="my-4" />
 
-          <Button asChild size="sm">
-            <Link href="/configure">
-              <Sparkles className="mr-2 h-4 w-4" />
-              Start Discovery with {industry.name}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
+            <Button asChild size="sm">
+              <Link href="/configure">
+                <Sparkles className="mr-2 h-4 w-4" />
+                Start Discovery with {industry.name}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Objectives */}
       {industry.objectives.map((objective) => (
-        <ObjectiveSection key={objective.name} objective={objective} industryId={industry.id} />
+        <motion.div key={objective.name} variants={staggerItem}>
+          <ObjectiveSection objective={objective} industryId={industry.id} />
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }
 
@@ -451,14 +463,12 @@ function PriorityAccordion({ priority }: { priority: StrategicPriority }) {
       </AccordionTrigger>
       <AccordionContent className="pb-4 pt-1">
         <div className="space-y-4">
-          {/* Use Cases */}
           <div className="space-y-2">
             {priority.useCases.map((uc) => (
               <UseCaseRow key={uc.name} useCase={uc} />
             ))}
           </div>
 
-          {/* KPIs & Personas Footer */}
           {(priority.kpis.length > 0 || priority.personas.length > 0) && (
             <>
               <Separator />
