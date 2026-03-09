@@ -100,11 +100,14 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
   2. Call \`ai_query(endpoint, prompt, modelParameters => named_struct(...), failOnError => false) AS ai_result\`
   3. Parse the STRING result: \`from_json(ai_result.result, 'STRUCT<field1: TYPE, field2: TYPE>') AS parsed_result\`
   4. Access parsed fields: \`parsed_result.field1\`, \`parsed_result.field2\`; access errors: \`ai_result.errorMessage\`
+  **ALIAS NAMING**: ALWAYS use exactly \`ai_result\` for the ai_query output and \`parsed_result\` for the from_json output. NEVER abbreviate to \`parsed\`, \`result\`, \`ai_res\`, or other variations.
   Example:
   \`\`\`
   ai_query('{sql_model_serving}', ai_prompt, modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024), failOnError => false) AS ai_result,
   from_json(ai_result.result, 'STRUCT<confidence: INT, category: STRING, reasoning: STRING>') AS parsed_result
   \`\`\`
+  **WRONG** (will be rejected): \`... AS parsed\`, \`parsed.confidence\`, \`res.field\`
+  **CORRECT**: \`... AS parsed_result\`, \`parsed_result.confidence\`
 - **ERROR HANDLING FOR BATCH**: When processing many rows, ALWAYS use \`failOnError => false\` so one bad row does not abort the entire query. Access raw result string via \`ai_result.result\`, errors via \`ai_result.errorMessage\`, and parsed fields via \`from_json()\` as described above
 - **PERSONA ENRICHMENT (MANDATORY)**: Every \`ai_query()\` persona MUST include business context. Do NOT use generic personas. Pattern:
   \`CONCAT('You are a [Role] for {business_name} focused on [relevant business context]. Strategic goals include: [relevant goals]. Analyze...')\`
@@ -133,6 +136,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - Be specific: reference exact column names; write concrete WHERE, GROUP BY, and ORDER BY clauses
 - NEVER nest a window function (OVER) inside an aggregate function (SUM, AVG, COUNT, MIN, MAX) — this is a runtime error in Databricks SQL. Compute window values in a subquery or CTE first, then aggregate the results.
 - NEVER use MEDIAN() — it is not supported in Databricks SQL. Use PERCENTILE_APPROX(col, 0.5) instead.
+- NEVER use \`LATERAL VIEW EXPLODE\` — it is deprecated Hive syntax that cannot be combined with subsequent JOINs. Instead, use \`EXPLODE()\` inside a CTE: \`SELECT t.*, exploded.col FROM table t, LATERAL (SELECT EXPLODE(t.array_col) AS col) exploded\`, or use a comma-join: \`SELECT t.*, x.col FROM table t CROSS JOIN LATERAL EXPLODE(t.array_col) AS x(col)\`
 - No markdown fences: output raw SQL only
 
 **7. ADVANCED DBSQL FEATURES (USE WHERE APPROPRIATE)**

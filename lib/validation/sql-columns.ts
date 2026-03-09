@@ -68,7 +68,7 @@ export const AI_FUNCTION_RETURN_FIELDS = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
-// Comment stripping
+// Comment and string-literal stripping
 // ---------------------------------------------------------------------------
 
 /**
@@ -77,6 +77,15 @@ export const AI_FUNCTION_RETURN_FIELDS = new Set([
  */
 export function stripSqlComments(sql: string): string {
   return sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+/**
+ * Replace SQL string literals with empty strings to prevent false-positive
+ * column-reference matches on prose inside CONCAT(), ai_query prompts, etc.
+ * Handles escaped single quotes (`''`) inside literals.
+ */
+export function stripStringLiterals(sql: string): string {
+  return sql.replace(/'(?:''|[^'])*'/g, "''");
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +171,7 @@ export function extractSqlAliases(sql: string): SqlAliases {
  * backtick-quoted column names with spaces are captured correctly.
  */
 export function extractColumnReferences(sql: string): ColumnReference[] {
-  const cleanSql = stripSqlComments(sql);
+  const cleanSql = stripStringLiterals(stripSqlComments(sql));
   const refs: ColumnReference[] = [];
 
   // Plain: alias.column_name
@@ -241,6 +250,18 @@ export function validateColumnReferences(
     // CTE columns are user-defined in the query and cannot be validated
     // against source table schemas.
     if (aliases.cteNames.has(prefixLower) || aliases.cteAliases.has(prefixLower)) continue;
+
+    // Skip references where the prefix is a column alias (struct field
+    // access). This handles from_json() output aliases -- e.g.
+    // `from_json(ai_result.result, 'STRUCT<...>') AS parsed_result` makes
+    // `parsed_result.field` valid. We exclude table aliases and CTE names
+    // to avoid accidentally skipping real table-column references.
+    if (
+      aliases.columnAliases.has(prefixLower) &&
+      !aliases.tableAliases.has(prefixLower) &&
+      !aliases.cteNames.has(prefixLower)
+    )
+      continue;
 
     // Skip known aliases and CTE names used as column references
     if (aliases.all.has(colLower)) continue;
