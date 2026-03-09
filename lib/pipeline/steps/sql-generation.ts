@@ -393,6 +393,7 @@ async function generateSqlForUseCase(
     promptKey: "USE_CASE_SQL_GEN_PROMPT",
     variables,
     modelEndpoint: aiModel,
+    maxTokens: 16_384,
     runId,
     step: "sql-generation",
   });
@@ -403,11 +404,16 @@ async function generateSqlForUseCase(
     return { sql: null, diag };
   }
 
-  // Detect truncated SQL (LLM ran out of tokens mid-query)
-  if (isTruncatedSql(sql)) {
+  // Detect truncated SQL: either the model explicitly signals truncation
+  // via finish_reason "length", or we infer it from the SQL structure
+  const finishReasonTruncated = result.finishReason === "length";
+  if (finishReasonTruncated || isTruncatedSql(sql)) {
     diag.wasTruncated = true;
-    logger.warn("SQL appears truncated (output token limit hit), attempting fix", {
+    logger.warn("SQL appears truncated, attempting fix", {
       useCaseId: uc.id,
+      detectedBy: finishReasonTruncated ? "finish_reason=length" : "heuristic",
+      finishReason: result.finishReason,
+      completionTokens: result.tokenUsage?.completionTokens,
       sqlPreview: sql.substring(Math.max(0, sql.length - 120)),
     });
     const fixedSql = await attemptSqlFix(
@@ -607,6 +613,7 @@ async function attemptSqlFix(
       },
       modelEndpoint: aiModel,
       temperature: 0.1,
+      maxTokens: 16_384,
       retries: 0,
       runId,
       step: "sql-generation",
@@ -884,13 +891,24 @@ function isTruncatedSql(sql: string): boolean {
   // it's likely truncated
   if (/[,(+\-*/=<>]\s*$/.test(trimmed)) return true;
   if (
-    /\b(AND|OR|ON|FROM|JOIN|WHERE|SELECT|GROUP|ORDER|HAVING|BY|AS|CASE|WHEN|THEN)\s*$/i.test(
+    /\b(AND|OR|ON|FROM|JOIN|WHERE|SELECT|GROUP|ORDER|HAVING|BY|AS|CASE|WHEN|THEN|INNER|LEFT|RIGHT|FULL|CROSS|OUTER|INTO|SET|VALUES|BETWEEN|LIKE|IN|NOT|EXISTS|UNION|EXCEPT|INTERSECT)\s*$/i.test(
       trimmed,
     )
   )
     return true;
 
-  // If the query is very long (200+ lines) and doesn't end cleanly, likely truncated
+  // Unbalanced parentheses: more opens than closes means we're mid-expression
+  const openParens = (trimmed.match(/\(/g) || []).length;
+  const closeParens = (trimmed.match(/\)/g) || []).length;
+  if (openParens > closeParens) return true;
+
+  // Ends with a table/column identifier after JOIN or FROM (missing ON clause
+  // or rest of query). Pattern: word.word.word or backtick-quoted identifiers
+  // at the end without a following clause.
+  if (/\b(?:JOIN|FROM)\s+[`\w]+\.[`\w]+\.[`\w]+\s*$/i.test(trimmed)) return true;
+  if (/\b(?:JOIN|FROM)\s+[`\w]+\.[`\w]+\s*$/i.test(trimmed)) return true;
+
+  // If the query is very long (150+ lines) and doesn't end cleanly, likely truncated
   const lineCount = trimmed.split("\n").length;
   if (lineCount > 150 && !/\)\s*$/.test(trimmed)) return true;
 
