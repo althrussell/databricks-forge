@@ -75,10 +75,7 @@ export async function POST(
 
     const tables = parsed.data_sources?.tables?.map((t) => t.identifier).filter(Boolean) ?? [];
     if (tables.length === 0) {
-      return NextResponse.json(
-        { error: "Space has no tables to improve" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Space has no tables to improve" }, { status: 400 });
     }
 
     const body = await request.json().catch(() => ({}));

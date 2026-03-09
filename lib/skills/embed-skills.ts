@@ -78,12 +78,7 @@ export async function embedIndustryKPIs(): Promise<number> {
     for (const obj of industry.objectives) {
       for (const pri of obj.priorities) {
         if (pri.kpis.length === 0) continue;
-        const text = composeIndustryKPI(
-          industry.name,
-          pri.name,
-          pri.kpis,
-          pri.personas,
-        );
+        const text = composeIndustryKPI(industry.name, pri.name, pri.kpis, pri.personas);
         records.push({
           sourceId: `kpi-${industry.id}-${pri.name.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}`,
           contentText: text,
@@ -122,9 +117,6 @@ export async function embedIndustryKPIs(): Promise<number> {
  * Embed all skills and industry KPIs. Convenience wrapper.
  */
 export async function embedAllSkills(): Promise<{ skillChunks: number; industryKpis: number }> {
-  const [skillChunks, industryKpis] = await Promise.all([
-    embedStaticSkills(),
-    embedIndustryKPIs(),
-  ]);
+  const [skillChunks, industryKpis] = await Promise.all([embedStaticSkills(), embedIndustryKPIs()]);
   return { skillChunks, industryKpis };
 }

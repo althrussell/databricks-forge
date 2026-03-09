@@ -18,6 +18,8 @@ import { chatCompletion } from "@/lib/dbx/model-serving";
 import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
+import "@/lib/skills/content";
+import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 import { normalizeIdentifier } from "./name-normalizer";
 import { logger } from "@/lib/logger";
 import type { NameMapping } from "./name-normalizer";
@@ -227,10 +229,13 @@ async function translateBatchWithLLM(
     )
     .join("\n\n");
 
+  const daxSkills = resolveForPipelineStep("sql-generation", { contextBudget: 1500 });
+  const daxSkillBlock = formatContextSections(daxSkills.contextSections);
+
   const prompt = `Translate these Power BI DAX measures to Databricks SQL expressions.
 
 ${DATABRICKS_SQL_RULES_COMPACT}
-
+${daxSkillBlock ? `\n## Databricks SQL Patterns\n${daxSkillBlock}\n` : ""}
 Name mapping (PBI → UC):
 Tables:
 ${tableMappings}

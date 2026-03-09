@@ -201,10 +201,7 @@ export function SpaceHealthTab({ report, spaceId, onFix, fixing }: SpaceHealthTa
                     {cat.passed}/{cat.total}
                   </span>
                 </div>
-                <Progress
-                  value={cat.score}
-                  className={cn("h-2", progressColor(cat.score))}
-                />
+                <Progress value={cat.score} className={cn("h-2", progressColor(cat.score))} />
               </CardContent>
             </Card>
           );
@@ -251,7 +248,9 @@ export function SpaceHealthTab({ report, spaceId, onFix, fixing }: SpaceHealthTa
                         <div className="min-w-0 flex-1">
                           <div className="text-sm">{check.description}</div>
                           {check.detail && (
-                            <div className="mt-0.5 text-xs text-muted-foreground">{check.detail}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {check.detail}
+                            </div>
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">

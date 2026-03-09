@@ -26,9 +26,7 @@ export function SummaryCardsSection({
   const avgScore =
     useCases.length > 0
       ? Math.round(
-          (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) /
-            useCases.length) *
-            100,
+          (useCases.reduce((s, uc) => s + effectiveScores(uc).overall, 0) / useCases.length) * 100,
         )
       : null;
 

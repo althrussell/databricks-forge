@@ -18,11 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   BrainCircuit,
@@ -203,21 +199,19 @@ export default function GenieSpacesPage() {
       try {
         const res = await fetch("/api/genie-spaces/improve-status");
         if (res.ok) {
-          const data: { jobs: Record<string, { status: string; percent: number; message: string }> } =
-            await res.json();
+          const data: {
+            jobs: Record<string, { status: string; percent: number; message: string }>;
+          } = await res.json();
           setImproveStatuses(data.jobs);
 
           for (const [sid, job] of Object.entries(data.jobs)) {
             const prev = prevStatuses.get(sid);
             if (prev === "generating" && job.status === "completed") {
               const space = spacesRef.current.find((s) => s.spaceId === sid);
-              toast.success(
-                `"${space?.title ?? "Space"}" improvement complete — click to review`,
-                {
-                  action: { label: "Review", onClick: () => router.push(`/genie/${sid}`) },
-                  duration: 8000,
-                },
-              );
+              toast.success(`"${space?.title ?? "Space"}" improvement complete — click to review`, {
+                action: { label: "Review", onClick: () => router.push(`/genie/${sid}`) },
+                duration: 8000,
+              });
             }
             prevStatuses.set(sid, job.status);
           }
@@ -277,41 +271,41 @@ export default function GenieSpacesPage() {
         subtitle="Manage and deploy Databricks Genie Spaces for natural language SQL exploration."
         actions={
           <div className="flex items-center gap-2">
-          <HealthCheckSettingsDialog />
-          <ImportSpaceDialog
-            onImported={(result) => {
-              const importedId = `imported-${Date.now()}`;
-              setSpaces((prev) => [
-                {
-                  spaceId: importedId,
-                  title: result.title,
-                  description: "Imported via JSON paste",
-                  source: "workspace" as const,
-                  status: "active" as const,
-                  tableCount: result.metadata?.tableCount,
-                  measureCount: result.metadata?.measureCount,
-                  sampleQuestionCount: result.metadata?.sampleQuestionCount,
-                  filterCount: result.metadata?.filterCount,
-                },
-                ...prev,
-              ]);
-              setHealthScores((prev) => ({ ...prev, [importedId]: result.healthReport }));
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={loading || discovering}
-          >
-            {loading || discovering ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 size-4" />
-            )}
-            Refresh
-          </Button>
-        </div>
+            <HealthCheckSettingsDialog />
+            <ImportSpaceDialog
+              onImported={(result) => {
+                const importedId = `imported-${Date.now()}`;
+                setSpaces((prev) => [
+                  {
+                    spaceId: importedId,
+                    title: result.title,
+                    description: "Imported via JSON paste",
+                    source: "workspace" as const,
+                    status: "active" as const,
+                    tableCount: result.metadata?.tableCount,
+                    measureCount: result.metadata?.measureCount,
+                    sampleQuestionCount: result.metadata?.sampleQuestionCount,
+                    filterCount: result.metadata?.filterCount,
+                  },
+                  ...prev,
+                ]);
+                setHealthScores((prev) => ({ ...prev, [importedId]: result.healthReport }));
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={loading || discovering}
+            >
+              {loading || discovering ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 size-4" />
+              )}
+              Refresh
+            </Button>
+          </div>
         }
       />
 

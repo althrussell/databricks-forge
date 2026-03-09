@@ -180,20 +180,32 @@ export function computeImproveStats(serializedSpace: string): ImproveStats {
     };
   } catch {
     return {
-      tables: 0, joins: 0, measures: 0, filters: 0, dimensions: 0,
-      benchmarks: 0, sampleQuestions: 0, exampleSqls: 0, instructionLength: 0, metricViews: 0,
+      tables: 0,
+      joins: 0,
+      measures: 0,
+      filters: 0,
+      dimensions: 0,
+      benchmarks: 0,
+      sampleQuestions: 0,
+      exampleSqls: 0,
+      instructionLength: 0,
+      metricViews: 0,
     };
   }
 }
 
-export function computeImproveChanges(
-  before: ImproveStats,
-  after: ImproveStats,
-): ImproveChange[] {
+export function computeImproveChanges(before: ImproveStats, after: ImproveStats): ImproveChange[] {
   const changes: ImproveChange[] = [];
   const diff = (label: string, section: string, b: number, a: number) => {
-    if (a > b) changes.push({ section, description: `Added ${a - b} ${label}`, added: a - b, modified: 0 });
-    else if (a < b) changes.push({ section, description: `Reduced ${label} from ${b} to ${a}`, added: 0, modified: 1 });
+    if (a > b)
+      changes.push({ section, description: `Added ${a - b} ${label}`, added: a - b, modified: 0 });
+    else if (a < b)
+      changes.push({
+        section,
+        description: `Reduced ${label} from ${b} to ${a}`,
+        added: 0,
+        modified: 1,
+      });
   };
 
   diff("tables", "Data Sources / Tables", before.tables, after.tables);

@@ -1,110 +1,129 @@
 /**
- * Databricks SQL Patterns skill.
+ * Databricks SQL Generation Craft skill.
  *
- * Distilled from databricks-dbsql skill:
- *   - best-practices.md (data modeling, Liquid Clustering, performance, anti-patterns)
- *   - SKILL.md (SQL scripting, procedures, window/lambda, AI functions)
+ * Pure SQL writing recipes distilled from:
+ *   - templates-sql-gen.ts (tuned prompts and fix patterns)
+ *   - sql-rules.ts (quality rules and review checklist)
+ *   - External window-lambda-functions.md, best-practices.md
  *
- * Provides knowledge NOT already in sql-rules.ts: schema design, dimensional
- * modeling, Liquid Clustering guidance, and data modeling anti-patterns.
+ * Covers: window functions, CTE patterns, date idioms, lambda/higher-order
+ * functions, and query anti-patterns. Data modeling content has been moved
+ * to the separate databricks-data-modeling skill.
  */
 
 import type { SkillDefinition } from "../types";
 import { registerSkill } from "../registry";
 
-const DATA_MODELING_PATTERNS = `Databricks Data Modeling Patterns:
-- Gold layer: use star schema (denormalized dimensions, normalized facts at the grain of the business event)
-- Silver layer: OBT or Data Vault for rapid integration and cleansing
-- Kimball methodology: (1) identify the business process, (2) declare the grain, (3) choose dimensions (who/what/where/when/why/how), (4) identify facts (numeric measures at declared grain)
-- Fact table types: Transaction (one row per event, most common), Periodic Snapshot (one row per entity per period), Accumulating Snapshot (one row per lifecycle, updated at milestones)
-- Dimension tables: highly denormalized, flatten many-to-one relationships within a single dimension table
-- Use GENERATED ALWAYS AS IDENTITY for surrogate keys; prefer integer surrogates over string keys for join performance
-- Define PRIMARY KEY constraints on dimension surrogate keys and FOREIGN KEY constraints on fact table FK columns to help the query optimizer
-- Add COMMENT on all tables and columns for AI/BI discoverability
-- Apply TAGS for governance (PII, sensitivity level, data tier)
-- Store DECIMAL(18,2) for financial/monetary values, never FLOAT/DOUBLE`;
+const WINDOW_RECIPES = `Window Function Recipes (Databricks SQL):
+- Running total: SUM(amount) OVER (PARTITION BY region ORDER BY order_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+- MoM growth: (amount - LAG(amount, 1) OVER (PARTITION BY region ORDER BY month)) / NULLIF(LAG(amount, 1) OVER (PARTITION BY region ORDER BY month), 0) * 100
+- YoY comparison: LAG(revenue, 12) OVER (PARTITION BY region ORDER BY month) AS prior_year_revenue
+- Gap-and-island: Use ROW_NUMBER() to detect consecutive sequences; subtract ROW_NUMBER from a monotonic column to form group ids
+- Cumulative distribution: CUME_DIST() OVER (PARTITION BY segment ORDER BY score), NTILE(4) OVER (ORDER BY score) for quartiles
+- Per-group dedup: QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY updated_at DESC) = 1
+- Named windows: SELECT ... OVER w FROM t WINDOW w AS (PARTITION BY region ORDER BY date)
+- LAST_VALUE: Always include ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING (default frame excludes future rows)
+- Moving average: AVG(amount) OVER (PARTITION BY region ORDER BY order_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)
+- NEVER nest a window function inside an aggregate -- split into two CTEs: first CTE computes the window, second CTE aggregates the result
+- QUALIFY runs before GROUP BY -- NEVER combine aggregates (SUM/AVG/COUNT) with QUALIFY in the same SELECT; split into CTE + QUALIFY`;
 
-const LIQUID_CLUSTERING_PATTERNS = `Liquid Clustering Guidance:
-- Prefer Liquid Clustering over traditional partitioning for all new Delta tables
-- Choose 1-4 clustering keys; fewer is better for tables under 10 TB (2 keys often outperform 4)
-- Cluster fact tables by the most commonly filtered foreign keys (e.g. date_key, customer_key)
-- Cluster dimension tables by primary key plus common filter columns
-- Liquid Clustering is NOT compatible with partitioning or Z-ORDER on the same table
-- Traditional partitioning: only for very large tables (hundreds of TB) with a stable, low-cardinality partition key
-- Z-ORDER is legacy; always prefer Liquid Clustering for new tables`;
+const CTE_PATTERNS = `CTE Patterns for Clean SQL Generation:
+- First CTE should use SELECT DISTINCT when pulling base entities to deduplicate early
+- Use 3-7 CTEs with business-friendly names (e.g. active_customers, monthly_revenue, churn_candidates -- NOT cte1, cte2)
+- Filter early, aggregate late: push WHERE conditions into the first CTE, aggregate in later CTEs
+- Staged window-then-aggregate: CTE1 computes window functions, CTE2 aggregates the windowed results
+- Pipe syntax (|>) can replace deeply nested CTEs for linear transformation chains: FROM t |> WHERE ... |> AGGREGATE ... |> ORDER BY ...
+- Final SELECT should include LIMIT 10 for preview (unless the use case explicitly needs all rows)
+- Each CTE should have a single clear purpose; avoid multi-purpose CTEs that do filtering + joining + aggregating
+- Prefer UNION ALL over UNION unless deduplication is genuinely needed (UNION triggers a sort)`;
 
-const PERFORMANCE_PATTERNS = `Databricks SQL Performance Patterns:
-- Run ANALYZE TABLE ... COMPUTE STATISTICS FOR COLUMNS on dimension keys and frequently filtered columns
-- Use deterministic queries (avoid NOW(), CURRENT_TIMESTAMP(), RAND() in filters) to benefit from query result caching
-- Prefer CREATE OR REPLACE TABLE over DROP IF EXISTS + CREATE
-- Prefer native SQL functions over Python/Scala UDFs (UDFs require serialization, dramatically slower)
-- Use window functions instead of self-joins for row comparisons, running totals, and ranking
-- Enable predictive optimization for Unity Catalog managed tables (auto OPTIMIZE + VACUUM)
-- Set delta.dataSkippingStatsColumns table property to specify which columns collect statistics
-- Use materialized views for frequently computed aggregations (schedule with SCHEDULE EVERY)
-- For pairwise AI operations: block first (narrow joins + UNION), score second (ai_similarity), LLM last (ai_query on LIMIT-ed set)`;
+const DATE_IDIOMS = `Date Idioms for Databricks SQL:
+- Truncation: DATE_TRUNC('MONTH', order_date), DATE_TRUNC('QUARTER', order_date), DATE_TRUNC('YEAR', order_date)
+- Safe parsing: try_to_date(col, 'yyyy-MM-dd') with COALESCE fallback -- NEVER use TO_DATE (throws on bad data)
+- Interval arithmetic: date_col + INTERVAL '30' DAY, date_col - INTERVAL '1' YEAR, DATE_ADD(date_col, 7), DATE_SUB(date_col, 30)
+- Fiscal calendar: MAKE_DATE(YEAR(date_col) + CASE WHEN MONTH(date_col) >= fiscal_start THEN 0 ELSE -1 END, fiscal_start, 1) for fiscal year start
+- Period comparison: Use DATE_TRUNC + LAG for period-over-period; use DATEDIFF for day counts
+- Current period: CURRENT_DATE(), CURRENT_TIMESTAMP(); for deterministic caching use a parameter instead
+- Month boundaries: LAST_DAY(date_col) for end of month, DATE_TRUNC('MONTH', date_col) for start of month
+- Extract components: YEAR(date_col), MONTH(date_col), DAY(date_col), DAYOFWEEK(date_col), WEEKOFYEAR(date_col)
+- Timezone-safe: Use TIMESTAMP_NTZ for timezone-independent timestamps; CAST(ts AS DATE) to strip time`;
 
-const ANTI_PATTERNS = `Data Modeling Anti-Patterns (AVOID these):
-- Skipping dimensional modeling in Gold layer (OBTs are fine for Silver, but Gold should use star schemas)
-- Over-partitioning (more than 5000 partitions degrades performance; use Liquid Clustering instead)
-- String surrogate keys (integer IDENTITY columns are faster for joins)
-- Missing PK/FK constraints (deprives the optimizer of relationship information)
-- Missing COMMENT and TAGS on tables/columns (reduces discoverability for AI/BI tools)
-- Using FLOAT/DOUBLE for financial data (use DECIMAL to avoid precision errors)
-- Filtering on ARRAY/MAP columns in WHERE clauses (lacks column-level statistics for data skipping)
-- Python/Scala UDFs when native SQL functions exist (serialization overhead is dramatic)
-- Non-deterministic functions in cached queries (NOW(), RAND() prevent result caching)
-- Too many Liquid Clustering keys (for tables under 10 TB, 2 keys often outperform 4)
-- Manual OPTIMIZE/VACUUM without predictive optimization (enable predictive optimization for managed tables)
-- DELETE + INSERT when MERGE INTO achieves the same result`;
+const LAMBDA_PATTERNS = `Lambda / Higher-Order Function Patterns:
+- transform(array, x -> expr): Apply function to each element -- prefer over EXPLODE + re-aggregate
+- filter(array, x -> predicate): Keep matching elements: filter(tags, t -> t LIKE 'premium%')
+- exists(array, x -> predicate): TRUE if any element matches (short-circuits)
+- forall(array, x -> predicate): TRUE if all elements match
+- aggregate(array, zero, (acc, x) -> merge, acc -> finish): Reduce: aggregate(quantities, 0, (a, x) -> a + x)
+- array_sort(array, (a, b) -> comparator): Custom sort: array_sort(items, (a, b) -> CASE WHEN a.price < b.price THEN -1 WHEN a.price > b.price THEN 1 ELSE 0 END)
+- zip_with(array1, array2, (a, b) -> expr): Pair-wise combination of two arrays
+- map_filter(map, (k, v) -> predicate): Filter map entries
+- transform_keys/transform_values: Transform map keys or values with a lambda
+- RULE: Prefer lambda functions over EXPLODE + GROUP BY + re-aggregate for array manipulation -- it avoids expensive shuffles
+- RULE: Lambdas cannot contain subqueries or aggregate functions`;
 
-const SCD_PATTERNS = `SCD Patterns for Databricks:
-- SCD Type 1 (overwrite): in-place updates via MERGE INTO with WHEN MATCHED THEN UPDATE
-- SCD Type 2 (history): version records with surrogate keys, effective_start_date, effective_end_date, is_current columns
-- SCD Type 2 implementation: MERGE INTO to close current record (SET is_current = FALSE, effective_end_date = current_timestamp()) + INSERT new version
-- Delta Lake Time Travel provides complementary historical access within configured retention`;
+const QUERY_ANTI_PATTERNS = `SQL Query Anti-Patterns (AVOID these):
+- Nesting a window function inside an aggregate: SUM(ROW_NUMBER() OVER ...) -- split into two CTEs
+- Using MEDIAN() -- not available in Databricks SQL; use PERCENTILE_APPROX(col, 0.5) instead
+- Using STRING_AGG() -- not available; use array_join(collect_list(col), ', ') instead
+- Using RANK()/DENSE_RANK() for top-N queries -- use ORDER BY col DESC LIMIT N instead (much cheaper)
+- Combining QUALIFY + aggregate in the same SELECT -- QUALIFY runs before GROUP BY, so aggregates are not available
+- Using TO_DATE or TO_TIMESTAMP without try_ prefix -- throws on malformed data; use try_to_date / try_to_timestamp
+- Non-deterministic functions in cached queries -- NOW(), CURRENT_TIMESTAMP(), RAND() prevent query result caching; pass as parameters
+- Self-joins for row comparison -- use LAG/LEAD/window functions instead
+- SELECT * in production queries -- always name columns explicitly
+- Python/Scala UDFs when native SQL exists -- serialization overhead is dramatic
+- UNION when UNION ALL suffices -- UNION forces a sort for dedup
+- DELETE + INSERT when MERGE INTO achieves the same result
+- Missing COALESCE on nullable columns used in calculations -- NULL propagates through arithmetic
+- Using FLOAT/DOUBLE for monetary values -- use DECIMAL(18,2) to avoid precision errors`;
 
 const skill: SkillDefinition = {
   id: "databricks-sql-patterns",
-  name: "Databricks SQL & Data Modeling Patterns",
+  name: "Databricks SQL Generation Craft",
   description:
-    "Star schema design, Kimball methodology, Liquid Clustering, performance " +
-    "optimization, SCD patterns, and data modeling anti-patterns for Databricks SQL.",
+    "SQL writing recipes for Databricks: window functions, CTE patterns, date idioms, " +
+    "lambda/higher-order functions, and query anti-patterns. Focused on generation quality.",
   relevance: {
-    intents: ["technical", "business"],
-    geniePasses: ["columnIntelligence", "trustedAssets", "instructions"],
-    pipelineSteps: ["sql-generation", "table-filtering"],
+    intents: ["technical", "business", "dashboard"],
+    geniePasses: [
+      "trustedAssets",
+      "benchmarks",
+      "instructions",
+      "exampleQueries",
+      "semanticExpressions",
+    ],
+    pipelineSteps: ["sql-generation"],
   },
   chunks: [
     {
-      id: "sql-data-modeling",
-      title: "Data Modeling Patterns",
-      content: DATA_MODELING_PATTERNS,
+      id: "sql-window-recipes",
+      title: "Window Function Recipes",
+      content: WINDOW_RECIPES,
       category: "patterns",
     },
     {
-      id: "sql-liquid-clustering",
-      title: "Liquid Clustering Guidance",
-      content: LIQUID_CLUSTERING_PATTERNS,
+      id: "sql-cte-patterns",
+      title: "CTE Patterns",
+      content: CTE_PATTERNS,
       category: "patterns",
     },
     {
-      id: "sql-performance",
-      title: "SQL Performance Patterns",
-      content: PERFORMANCE_PATTERNS,
+      id: "sql-date-idioms",
+      title: "Date Idioms",
+      content: DATE_IDIOMS,
       category: "patterns",
     },
     {
-      id: "sql-anti-patterns",
-      title: "Data Modeling Anti-Patterns",
-      content: ANTI_PATTERNS,
+      id: "sql-lambda-patterns",
+      title: "Lambda / Higher-Order Function Patterns",
+      content: LAMBDA_PATTERNS,
+      category: "patterns",
+    },
+    {
+      id: "sql-query-anti-patterns",
+      title: "SQL Query Anti-Patterns",
+      content: QUERY_ANTI_PATTERNS,
       category: "anti-patterns",
-    },
-    {
-      id: "sql-scd",
-      title: "Slowly Changing Dimension Patterns",
-      content: SCD_PATTERNS,
-      category: "patterns",
     },
   ],
 };

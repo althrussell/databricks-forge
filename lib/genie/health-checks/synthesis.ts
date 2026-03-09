@@ -17,6 +17,8 @@ import type {
 } from "./types";
 import { resolvePath } from "./evaluators";
 import type { SpaceJson } from "@/lib/genie/types";
+import "@/lib/skills/content";
+import { resolveForGeniePass, formatContextSections } from "@/lib/skills/resolver";
 
 interface LlmCheckEvaluation {
   id: string;
@@ -66,6 +68,9 @@ export async function runLlmQualitativeChecks(
 
       const itemsText = sectionChecks.map((c) => `- ${c.id}: ${c.quality_prompt}`).join("\n");
 
+      const hcSkills = resolveForGeniePass("instructions", { contextBudget: 1500 });
+      const hcSkillBlock = formatContextSections(hcSkills.contextSections);
+
       const prompt = `You are evaluating a Databricks Genie Space configuration section against quality criteria.
 
 ## Section: ${section}
@@ -74,7 +79,7 @@ export async function runLlmQualitativeChecks(
 \`\`\`json
 ${sectionJson.slice(0, 8000)}
 \`\`\`
-
+${hcSkillBlock ? `\n## Genie Best Practices Reference\n${hcSkillBlock}\n` : ""}
 ## Quality Criteria to Evaluate:
 ${itemsText}
 
@@ -185,6 +190,9 @@ export async function runSynthesis(report: SpaceHealthReport): Promise<Synthesis
     .map((c) => `- [${c.severity}] ${c.description}${c.detail ? `: ${c.detail}` : ""}`)
     .join("\n");
 
+  const synthSkills = resolveForGeniePass("instructions", { contextBudget: 1200 });
+  const synthSkillBlock = formatContextSections(synthSkills.contextSections);
+
   const prompt = `You are synthesizing a cross-sectional analysis of a Databricks Genie Space configuration.
 
 ## Overall Score: ${report.overallScore}/100 (Grade: ${report.grade})
@@ -194,7 +202,7 @@ ${categorySummaries}
 
 ## Failed Checks:
 ${failedCheckSummaries || "None -- all checks passed!"}
-
+${synthSkillBlock ? `\n## Genie Best Practices Reference\n${synthSkillBlock}\n` : ""}
 ## Instructions:
 
 Based on the category scores and failed checks, provide a holistic assessment:

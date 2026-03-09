@@ -48,9 +48,12 @@ export async function ensureEmbeddingSchema(): Promise<void> {
       )
     `);
   } catch (err) {
-    logger.warn("[embeddings] Table creation skipped (may already exist or insufficient privileges)", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn(
+      "[embeddings] Table creation skipped (may already exist or insufficient privileges)",
+      {
+        error: err instanceof Error ? err.message : String(err),
+      },
+    );
   }
 
   // B-tree indexes — Prisma also creates these via @@index directives (with
@@ -68,9 +71,12 @@ export async function ensureEmbeddingSchema(): Promise<void> {
         `CREATE INDEX IF NOT EXISTS ${name} ON forge_embeddings(${col})`,
       );
     } catch (err) {
-      logger.debug(`[embeddings] Index ${name} creation skipped (may exist or insufficient privileges)`, {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logger.debug(
+        `[embeddings] Index ${name} creation skipped (may exist or insufficient privileges)`,
+        {
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
     }
   }
 
@@ -81,9 +87,12 @@ export async function ensureEmbeddingSchema(): Promise<void> {
         WITH (m = 16, ef_construction = 64)
     `);
   } catch (err) {
-    logger.warn("[embeddings] HNSW index creation skipped (may already exist or insufficient privileges)", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn(
+      "[embeddings] HNSW index creation skipped (may already exist or insufficient privileges)",
+      {
+        error: err instanceof Error ? err.message : String(err),
+      },
+    );
   }
 
   logger.info("[embeddings] Schema bootstrap complete");

@@ -52,9 +52,7 @@ export function SummaryCard({
           </div>
         </div>
         <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
-        {detail && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
-        )}
+        {detail && <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>}
       </CardContent>
     </Card>
   );

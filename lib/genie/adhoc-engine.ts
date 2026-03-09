@@ -51,6 +51,12 @@ import { cachedChatCompletion } from "./llm-cache";
 import { parseLLMJson } from "./passes/parse-llm-json";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
+import "@/lib/skills/content";
+import {
+  resolveForGeniePass,
+  formatContextSections,
+  formatSystemOverlay,
+} from "@/lib/skills/resolver";
 import {
   fetchTableInfoBatch,
   fetchColumnsBatch,
@@ -320,6 +326,11 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "measures": [...], "filters": [...], "dimensions": [...] }`;
 
+  const adhocSkills = resolveForGeniePass("semanticExpressions");
+  const adhocSkillOverlay = formatSystemOverlay(adhocSkills.systemOverlay);
+  const adhocSkillContext = formatContextSections(adhocSkills.contextSections);
+  const systemWithSkills = systemMessage + adhocSkillOverlay;
+
   const contextLine = conversationSummary
     ? `Domain: ${domain}\nConversation context: ${conversationSummary}`
     : `Domain: ${domain}`;
@@ -328,11 +339,11 @@ Return JSON: { "measures": [...], "filters": [...], "dimensions": [...] }`;
 
 ### BUSINESS CONTEXT
 ${contextLine}
-
+${adhocSkillContext ? `\n### Databricks SQL Patterns\n${adhocSkillContext}\n` : ""}
 Generate the most useful measures, filters, and dimensions for a Genie space serving this domain. Pick only the expressions that would matter most to a business analyst.`;
 
   const messages: ChatMessage[] = [
-    { role: "system", content: systemMessage },
+    { role: "system", content: systemWithSkills },
     { role: "user", content: userMessage },
   ];
 

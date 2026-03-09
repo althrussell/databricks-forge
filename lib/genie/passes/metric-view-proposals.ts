@@ -1649,7 +1649,8 @@ export async function runMetricViewProposals(
   // Determine if materialization should be suggested
   const suggestMaterialization = tableFqns.length > 10 || joinSpecs.length > 3;
 
-  const systemMessage = `You are a Databricks SQL expert creating Unity Catalog metric view definitions.
+  const systemMessage =
+    `You are a Databricks SQL expert creating Unity Catalog metric view definitions.
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
@@ -1697,7 +1698,8 @@ ${joinSpecs.length === 0 ? "- There are NO join relationships — do NOT create 
 
 IMPORTANT:
 - The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.
-- Column references in YAML expr fields must use BARE column names (e.g. \`amount\`, \`franchiseID\`) or JOIN ALIAS prefixes (e.g. \`franchise.franchiseID\`). NEVER use fully-qualified table names as column prefixes (e.g. \`catalog.schema.table.column\` is WRONG — the SQL engine cannot resolve 4-part names in metric view expressions).` + formatSystemOverlay(resolveForGeniePass("metricViews").systemOverlay);
+- Column references in YAML expr fields must use BARE column names (e.g. \`amount\`, \`franchiseID\`) or JOIN ALIAS prefixes (e.g. \`franchise.franchiseID\`). NEVER use fully-qualified table names as column prefixes (e.g. \`catalog.schema.table.column\` is WRONG — the SQL engine cannot resolve 4-part names in metric view expressions).` +
+    formatSystemOverlay(resolveForGeniePass("metricViews").systemOverlay);
 
   const userMessage = `${schemaBlock}
 

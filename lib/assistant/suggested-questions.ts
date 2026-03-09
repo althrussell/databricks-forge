@@ -19,11 +19,7 @@ import {
 } from "./suggested-question-defaults";
 
 // Re-export client-safe constants so existing server-side imports still work.
-export {
-  FALLBACK_QUESTIONS,
-  FALLBACK_QUESTIONS_ANALYST,
-  FALLBACK_QUESTIONS_TECH,
-};
+export { FALLBACK_QUESTIONS, FALLBACK_QUESTIONS_ANALYST, FALLBACK_QUESTIONS_TECH };
 
 const TARGET_COUNT = 6;
 

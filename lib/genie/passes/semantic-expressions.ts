@@ -29,7 +29,11 @@ import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { generateTimePeriods } from "../time-periods";
-import { resolveForGeniePass, formatContextSections, buildIndustrySkillSections } from "@/lib/skills";
+import {
+  resolveForGeniePass,
+  formatContextSections,
+  buildIndustrySkillSections,
+} from "@/lib/skills";
 
 const TEMPERATURE = 0.2;
 
@@ -55,8 +59,17 @@ export interface SemanticExpressionsOutput {
 export async function runSemanticExpressions(
   input: SemanticExpressionsInput,
 ): Promise<SemanticExpressionsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, businessContext, config, industryId, endpoint, signal } =
-    input;
+  const {
+    tableFqns,
+    metadata,
+    allowlist,
+    useCases,
+    businessContext,
+    config,
+    industryId,
+    endpoint,
+    signal,
+  } = input;
 
   // Phase A: auto-generate time periods
   let timeFilters: EnrichedSqlSnippetFilter[] = [];

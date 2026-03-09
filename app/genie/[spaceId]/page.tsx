@@ -533,7 +533,11 @@ export default function SpaceDetailPage() {
             cloning={cloning}
             improveProgress={
               improveProgress
-                ? { status: improveProgress.status, message: improveProgress.message, percent: improveProgress.percent }
+                ? {
+                    status: improveProgress.status,
+                    message: improveProgress.message,
+                    percent: improveProgress.percent,
+                  }
                 : null
             }
             onImprove={handleStartImprove}

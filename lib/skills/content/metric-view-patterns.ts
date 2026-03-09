@@ -97,16 +97,57 @@ const DIMENSION_PATTERNS = `Common Metric View Dimension Patterns:
 - Joined column: expr: customer.segment (from join named "customer")
 - Boolean flag: expr: CASE WHEN return_date IS NOT NULL THEN 'Returned' ELSE 'Kept' END`;
 
+const JOIN_PATTERNS = `Metric View Join Patterns:
+- Star schema join: joins: [{name: dim_customer, source: catalog.schema.dim_customer, on: source.customer_id = dim_customer.customer_id}]
+- Snowflake (nested joins under parent, DBR 17.1+): joins under a parent join definition inherit the parent's source
+- Parent-chain column references: customer.nation.n_name traverses customer join -> nation sub-join
+- Join alias MUST NOT match any source column name (use _dim suffix if collision: customer_dim)
+- Dimension name MUST NOT match join alias (causes ambiguous resolution)
+- Use either "on" (expression) or "using" (column list) in a join, NEVER both
+- Reference joined columns as: join_name.column_name (e.g. customer.segment)`;
+
+const MV_GOTCHAS = `Metric View Gotchas (AVOID these):
+- Measure name shadowing a source column: triggers NESTED_AGGREGATE_FUNCTION error (rename the measure)
+- OVER / window functions in measure expr: not supported (use window: block instead)
+- AI functions (ai_query, ai_classify) in measure/dimension expr: not supported
+- MEDIAN() in measure expr: not available -- use PERCENTILE_APPROX(col, 0.5) instead
+- Bare column in expr: use just the column name (amount), NOT the FQN (catalog.schema.table.amount)
+- Materialization view names must match declared measure/dimension names exactly
+- Backtick-quote dimension and measure names that contain spaces: MEASURE(\`Total Revenue\`) AS total_revenue
+- SELECT * on a metric view: NOT supported -- must explicitly list dimensions and MEASURE() calls
+- JOIN at query time: NOT supported -- all joins must be defined in the YAML, not the SELECT`;
+
+const WINDOW_EXAMPLES = `Metric View Window Measure Examples:
+- YTD Revenue:
+    name: YTD Revenue
+    expr: SUM(revenue)
+    window:
+      - order: Order Month
+        range: cumulative
+      - order: Order Year
+        range: current
+- Rolling 7-Day Active Users:
+    name: Rolling 7-Day Users
+    expr: COUNT(DISTINCT user_id)
+    window:
+      - order: Activity Date
+        range: trailing 7 day
+        semiadditive: last
+- Period-over-Period (derived from window measures):
+    name: MoM Growth
+    expr: (MEASURE(Current Month Revenue) - MEASURE(Previous Month Revenue)) / MEASURE(Previous Month Revenue) * 100`;
+
 const skill: SkillDefinition = {
   id: "metric-view-patterns",
   name: "Metric View YAML Patterns",
   description:
     "Unity Catalog metric view YAML specification, measure patterns " +
     "(ratio, filtered, window), dimension patterns, join definitions, " +
-    "and query rules (MEASURE(), GROUP BY ALL).",
+    "gotchas, and query rules (MEASURE(), GROUP BY ALL).",
   relevance: {
     intents: ["dashboard", "technical"],
     geniePasses: ["metricViews", "semanticExpressions"],
+    pipelineSteps: ["sql-generation"],
   },
   chunks: [
     {
@@ -133,6 +174,24 @@ const skill: SkillDefinition = {
       title: "Dimension Patterns",
       content: DIMENSION_PATTERNS,
       category: "patterns",
+    },
+    {
+      id: "mv-join-patterns",
+      title: "Join Patterns",
+      content: JOIN_PATTERNS,
+      category: "patterns",
+    },
+    {
+      id: "mv-gotchas",
+      title: "Metric View Gotchas",
+      content: MV_GOTCHAS,
+      category: "anti-patterns",
+    },
+    {
+      id: "mv-window-examples",
+      title: "Window Measure Examples",
+      content: WINDOW_EXAMPLES,
+      category: "examples",
     },
   ],
 };

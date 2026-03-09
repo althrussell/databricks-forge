@@ -6,13 +6,7 @@
  * or pipeline step) to get applicable skills.
  */
 
-import type {
-  SkillDefinition,
-  SkillChunk,
-  AskForgeIntent,
-  GeniePass,
-  PipelineStep,
-} from "./types";
+import type { SkillDefinition, SkillChunk, AskForgeIntent, GeniePass, PipelineStep } from "./types";
 
 // ---------------------------------------------------------------------------
 // Internal store
@@ -48,25 +42,17 @@ export function getAllSkills(): SkillDefinition[] {
 
 /** Return all skills whose relevance includes the given Ask Forge intent. */
 export function getSkillsForIntent(intent: AskForgeIntent): SkillDefinition[] {
-  return Array.from(skills.values()).filter((s) =>
-    s.relevance.intents?.includes(intent),
-  );
+  return Array.from(skills.values()).filter((s) => s.relevance.intents?.includes(intent));
 }
 
 /** Return all skills whose relevance includes the given Genie pass. */
 export function getSkillsForGeniePass(pass: GeniePass): SkillDefinition[] {
-  return Array.from(skills.values()).filter((s) =>
-    s.relevance.geniePasses?.includes(pass),
-  );
+  return Array.from(skills.values()).filter((s) => s.relevance.geniePasses?.includes(pass));
 }
 
 /** Return all skills whose relevance includes the given pipeline step. */
-export function getSkillsForPipelineStep(
-  step: PipelineStep,
-): SkillDefinition[] {
-  return Array.from(skills.values()).filter((s) =>
-    s.relevance.pipelineSteps?.includes(step),
-  );
+export function getSkillsForPipelineStep(step: PipelineStep): SkillDefinition[] {
+  return Array.from(skills.values()).filter((s) => s.relevance.pipelineSteps?.includes(step));
 }
 
 // ---------------------------------------------------------------------------

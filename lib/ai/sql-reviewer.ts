@@ -15,6 +15,8 @@ import { getReviewEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "./sql-rules";
+import "@/lib/skills/content";
+import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,6 +74,10 @@ function buildReviewPrompt(sql: string, opts: ReviewOptions): string {
       : `If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. Preserve the original table/column references since no schema is available for validation.`
     : `Do NOT include a "fixed_sql" field.`;
 
+  const skillContext = resolveForPipelineStep("sql-generation", { contextBudget: 3000 });
+  const skillBlock = formatContextSections(skillContext.contextSections);
+  const skillSection = skillBlock ? `\n## SQL Craft Reference\n${skillBlock}\n` : "";
+
   return `You are a senior Databricks SQL reviewer. Evaluate the SQL below against the quality rules and checklist.
 
 IMPORTANT DIALECT CONTEXT: This is Databricks SQL (based on Spark SQL / ANSI SQL). The following standard SQL features are NOT available or behave differently:
@@ -91,7 +97,7 @@ IMPORTANT DIALECT CONTEXT: This is Databricks SQL (based on Spark SQL / ANSI SQL
 \`\`\`sql
 ${sql}
 \`\`\`
-${schemaBlock}
+${schemaBlock}${skillSection}
 ## Quality Rules
 ${DATABRICKS_SQL_RULES}
 
@@ -133,10 +139,14 @@ function buildBatchReviewPrompt(items: BatchReviewItem[], schemaContext?: string
     ? `\n## Available Schema\n\`\`\`\n${schemaContext}\n\`\`\`\n`
     : "";
 
+  const skillContext = resolveForPipelineStep("sql-generation", { contextBudget: 2000 });
+  const skillBlock = formatContextSections(skillContext.contextSections);
+  const batchSkillSection = skillBlock ? `\n## SQL Craft Reference\n${skillBlock}\n` : "";
+
   return `You are a senior Databricks SQL reviewer. Evaluate each SQL expression below against the quality rules and checklist.
 
 ${sqlBlocks}
-${schemaBlock}
+${schemaBlock}${batchSkillSection}
 ## Quality Rules
 ${DATABRICKS_SQL_RULES}
 

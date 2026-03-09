@@ -189,7 +189,8 @@ async function processTrustedAssetBatch(
     })
     .join("\n\n---\n\n");
 
-  const systemMessage = `You are a SQL expert creating trusted assets for a Databricks Genie space.
+  const systemMessage =
+    `You are a SQL expert creating trusted assets for a Databricks Genie space.
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
@@ -314,14 +315,14 @@ async function processReferenceSqlBatch(
   const sqlExamples = referenceSql
     .slice(0, 12)
     .map((r) => {
-      const sql = r.sql.length > MAX_SQL_CHARS
-        ? r.sql.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
-        : r.sql;
+      const sql =
+        r.sql.length > MAX_SQL_CHARS ? r.sql.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)" : r.sql;
       return `Question: ${r.question}\nSQL:\n${sql}`;
     })
     .join("\n\n---\n\n");
 
-  const systemMessage = `You are a SQL expert creating trusted assets for a Databricks Genie space.
+  const systemMessage =
+    `You are a SQL expert creating trusted assets for a Databricks Genie space.
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 

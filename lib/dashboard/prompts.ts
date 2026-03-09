@@ -13,6 +13,8 @@ import type {
 } from "@/lib/genie/types";
 import type { FilterCandidate } from "./types";
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import "@/lib/skills/content";
+import { resolveForIntent, formatContextSections } from "@/lib/skills/resolver";
 
 export const DASHBOARD_SYSTEM_MESSAGE =
   "You are a Principal Analytics Engineer specialising in Databricks AI/BI (Lakeview) dashboards. " +
@@ -181,6 +183,13 @@ export function buildDashboardDesignPrompt(input: DashboardPromptInput): string 
     "   - The filter column name in the filter widget must match the column alias used in the dataset SQL",
   );
   sections.push("");
+  const dashSkills = resolveForIntent("dashboard", { contextBudget: 2500 });
+  const dashSkillBlock = formatContextSections(dashSkills.contextSections);
+  if (dashSkillBlock) {
+    sections.push("### Dashboard Design Patterns");
+    sections.push(dashSkillBlock);
+    sections.push("");
+  }
   sections.push("### SQL Rules");
   sections.push(DATABRICKS_SQL_RULES);
   sections.push("");

@@ -355,15 +355,13 @@ async function generateLLMInstruction(
     .join(", ");
   const safeConversation = sanitizeUserContext(conversationSummary);
 
-  const industrySections = industryId
-    ? buildIndustrySkillSections(industryId)
-    : [];
-  const industryBlock = industrySections.length > 0
-    ? "\n\n" + formatContextSections(industrySections)
-    : "";
-  const skillContextBlock = skillsResolved.contextSections.length > 0
-    ? "\n\n" + formatContextSections(skillsResolved.contextSections)
-    : "";
+  const industrySections = industryId ? buildIndustrySkillSections(industryId) : [];
+  const industryBlock =
+    industrySections.length > 0 ? "\n\n" + formatContextSections(industrySections) : "";
+  const skillContextBlock =
+    skillsResolved.contextSections.length > 0
+      ? "\n\n" + formatContextSections(skillsResolved.contextSections)
+      : "";
 
   const context = [
     `Business: ${businessName}`,

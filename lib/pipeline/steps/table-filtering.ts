@@ -8,6 +8,8 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
+import "@/lib/skills/content";
+import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import {
   updateRunMessage,
@@ -247,7 +249,9 @@ async function filterBatch(
       business_context: JSON.stringify(businessContext),
       exclusion_strategy:
         "Exclude only tables that are PURELY technical infrastructure (system logs, audit trails, internal monitoring). When in doubt, classify as business.",
-      additional_context_section: "",
+      additional_context_section: formatContextSections(
+        resolveForPipelineStep("table-filtering", { contextBudget: 1500 }).contextSections,
+      ),
       strategy_rules:
         "Default to BUSINESS classification. Only mark as TECHNICAL if the table has zero business relevance.",
       tables_markdown: buildTablesMarkdown(tables, columnIndex),

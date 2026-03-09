@@ -13,12 +13,7 @@
 // ---------------------------------------------------------------------------
 
 /** Ask Forge intent categories that a skill may apply to. */
-export type AskForgeIntent =
-  | "business"
-  | "technical"
-  | "dashboard"
-  | "navigation"
-  | "exploration";
+export type AskForgeIntent = "business" | "technical" | "dashboard" | "navigation" | "exploration";
 
 /** Genie Engine passes that a skill may apply to. */
 export type GeniePass =
@@ -27,14 +22,17 @@ export type GeniePass =
   | "benchmarks"
   | "trustedAssets"
   | "metricViews"
-  | "columnIntelligence";
+  | "columnIntelligence"
+  | "exampleQueries"
+  | "joinInference";
 
 /** Pipeline steps that a skill may apply to. */
 export type PipelineStep =
   | "sql-generation"
   | "scoring"
   | "use-case-generation"
-  | "table-filtering";
+  | "table-filtering"
+  | "dashboard-design";
 
 /** Categorisation of knowledge within a chunk. */
 export type SkillCategory =
