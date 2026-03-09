@@ -370,27 +370,27 @@ export function UseCaseTable({
                       {isExpanded && (
                         <TableRow className="bg-muted/30 hover:bg-muted/30">
                           <TableCell />
-                          <TableCell colSpan={5} className="py-4">
+                          <TableCell colSpan={5} className="max-w-0 break-words py-4">
                             <div className="space-y-3">
                               <div>
                                 <div className="mb-1 flex items-center gap-1.5">
-                                  <FileText className="h-3.5 w-3.5 text-blue-500" />
+                                  <FileText className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Statement
                                   </span>
                                 </div>
-                                <p className="text-sm leading-relaxed text-foreground/90">
+                                <p className="whitespace-normal text-sm leading-relaxed text-foreground/90">
                                   {uc.statement}
                                 </p>
                               </div>
                               <div>
                                 <div className="mb-1 flex items-center gap-1.5">
-                                  <TrendingUp className="h-3.5 w-3.5 text-green-500" />
+                                  <TrendingUp className="h-3.5 w-3.5 shrink-0 text-green-500" />
                                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     Business Value
                                   </span>
                                 </div>
-                                <p className="text-sm leading-relaxed text-foreground/90">
+                                <p className="whitespace-normal text-sm leading-relaxed text-foreground/90">
                                   {uc.businessValue}
                                 </p>
                               </div>
