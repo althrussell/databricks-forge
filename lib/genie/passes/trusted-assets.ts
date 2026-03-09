@@ -15,6 +15,7 @@ import type {
   EntityMatchingCandidate,
   QuestionComplexity,
   JoinSpecInput,
+  ReferenceSqlExample,
 } from "../types";
 import {
   buildSchemaContextBlock,
@@ -39,6 +40,8 @@ export interface TrustedAssetsInput {
   joinSpecs: JoinSpecInput[];
   endpoint: string;
   questionComplexity?: QuestionComplexity;
+  /** Validated SQL from the existing space, used when useCases is empty. */
+  referenceSql?: ReferenceSqlExample[];
   signal?: AbortSignal;
 }
 
@@ -58,6 +61,7 @@ export async function runTrustedAssetAuthoring(
     joinSpecs,
     endpoint,
     questionComplexity,
+    referenceSql,
     signal,
   } = input;
 
@@ -65,7 +69,9 @@ export async function runTrustedAssetAuthoring(
     .filter((uc) => uc.sqlCode && uc.sqlStatus === "generated")
     .slice(0, 12);
 
-  if (topUseCases.length === 0) {
+  const hasReferenceSql = referenceSql && referenceSql.length > 0;
+
+  if (topUseCases.length === 0 && !hasReferenceSql) {
     return { queries: [] };
   }
 
@@ -73,48 +79,64 @@ export async function runTrustedAssetAuthoring(
   const entityBlock = buildEntityBlock(entityCandidates);
   const joinBlock = buildJoinBlock(joinSpecs);
 
-  const batches: UseCase[][] = [];
-  for (let i = 0; i < topUseCases.length; i += BATCH_SIZE) {
-    batches.push(topUseCases.slice(i, i + BATCH_SIZE));
+  if (topUseCases.length > 0) {
+    const batches: UseCase[][] = [];
+    for (let i = 0; i < topUseCases.length; i += BATCH_SIZE) {
+      batches.push(topUseCases.slice(i, i + BATCH_SIZE));
+    }
+
+    logger.info("Trusted asset authoring: batching use cases", {
+      totalUseCases: topUseCases.length,
+      batchCount: batches.length,
+      batchSize: BATCH_SIZE,
+    });
+
+    const batchResults = await mapWithConcurrency(
+      batches.map((batch) => async () => {
+        try {
+          return await processTrustedAssetBatch(
+            batch,
+            schemaBlock,
+            entityBlock,
+            joinBlock,
+            allowlist,
+            endpoint,
+            questionComplexity,
+            signal,
+          );
+        } catch (err) {
+          logger.warn("Trusted asset batch failed, continuing with remaining batches", {
+            batchSize: batch.length,
+            batchUseCases: batch.map((uc) => uc.name),
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return { queries: [] as TrustedAssetQuery[] };
+        }
+      }),
+      BATCH_CONCURRENCY,
+    );
+
+    const allQueries: TrustedAssetQuery[] = [];
+    for (const result of batchResults) {
+      allQueries.push(...result.queries);
+    }
+    return { queries: allQueries };
   }
 
-  logger.info("Trusted asset authoring: batching use cases", {
-    totalUseCases: topUseCases.length,
-    batchCount: batches.length,
-    batchSize: BATCH_SIZE,
+  logger.info("Trusted asset authoring: using reference SQL from existing space", {
+    referenceSqlCount: referenceSql!.length,
   });
 
-  const batchResults = await mapWithConcurrency(
-    batches.map((batch) => async () => {
-      try {
-        return await processTrustedAssetBatch(
-          batch,
-          schemaBlock,
-          entityBlock,
-          joinBlock,
-          allowlist,
-          endpoint,
-          questionComplexity,
-          signal,
-        );
-      } catch (err) {
-        logger.warn("Trusted asset batch failed, continuing with remaining batches", {
-          batchSize: batch.length,
-          batchUseCases: batch.map((uc) => uc.name),
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return { queries: [] as TrustedAssetQuery[] };
-      }
-    }),
-    BATCH_CONCURRENCY,
+  return processReferenceSqlBatch(
+    referenceSql!,
+    schemaBlock,
+    entityBlock,
+    joinBlock,
+    allowlist,
+    endpoint,
+    questionComplexity,
+    signal,
   );
-
-  const allQueries: TrustedAssetQuery[] = [];
-  for (const result of batchResults) {
-    allQueries.push(...result.queries);
-  }
-
-  return { queries: allQueries };
 }
 
 function buildEntityBlock(entityCandidates: EntityMatchingCandidate[]): string {
@@ -254,6 +276,125 @@ Create parameterized queries from these examples.`;
               `trusted_query_fix:${q.question}`,
               true,
             )
+          ) {
+            return { ...q, sql: review.fixedSql };
+          }
+          logger.warn("Trusted asset review fix failed schema validation, keeping original", {
+            question: q.question,
+          });
+          return q;
+        }
+        if (review.verdict === "fail") return null;
+        return q;
+      }),
+    );
+    queries = reviewed.filter((q): q is NonNullable<typeof q> => q !== null);
+  }
+
+  return { queries };
+}
+
+/**
+ * Generate trusted assets from reference SQL (existing space SQL) when no
+ * pipeline use cases are available. Adapts the reference examples into
+ * parameterized queries using the same LLM prompt structure.
+ */
+async function processReferenceSqlBatch(
+  referenceSql: ReferenceSqlExample[],
+  schemaBlock: string,
+  entityBlock: string,
+  joinBlock: string,
+  allowlist: SchemaAllowlist,
+  endpoint: string,
+  questionComplexity?: QuestionComplexity,
+  signal?: AbortSignal,
+): Promise<TrustedAssetsOutput> {
+  const MAX_SQL_CHARS = 3000;
+  const sqlExamples = referenceSql
+    .slice(0, 12)
+    .map((r) => {
+      const sql = r.sql.length > MAX_SQL_CHARS
+        ? r.sql.slice(0, MAX_SQL_CHARS) + "\n-- (truncated)"
+        : r.sql;
+      return `Question: ${r.question}\nSQL:\n${sql}`;
+    })
+    .join("\n\n---\n\n");
+
+  const systemMessage = `You are a SQL expert creating trusted assets for a Databricks Genie space.
+
+You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
+
+From the provided REFERENCE SQL, create **new parameterized queries** that cover different analytical angles for the same tables. You may adapt the reference SQL or create new queries that reuse the same tables and columns.
+
+For each query:
+- Convert WHERE clause values into named parameters using :param_name syntax
+- Type each parameter (String, Date, Numeric) based on the column's data type
+- For entity-matching columns, include sample values in the parameter comment
+- Include DEFAULT NULL for optional parameters
+- ONLY use column names that appear in the SCHEMA CONTEXT
+
+QUANTITY RULES:
+- Produce 3-5 parameterized queries covering different analytical patterns.
+
+${DATABRICKS_SQL_RULES_COMPACT}
+${getQuestionRules(questionComplexity ?? "simple")}
+Return JSON: {
+  "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
+}`;
+
+  const userMessage = `${schemaBlock}
+
+${entityBlock}
+
+${joinBlock}
+
+### REFERENCE SQL FROM EXISTING SPACE
+${sqlExamples}
+
+Create new parameterized queries based on these reference patterns.`;
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemMessage },
+    { role: "user", content: userMessage },
+  ];
+
+  const result = await cachedChatCompletion({
+    endpoint,
+    messages,
+    temperature: TEMPERATURE,
+    maxTokens: 32768,
+    responseFormat: "json_object",
+    signal,
+  });
+
+  const content = result.content ?? "";
+  const parsed = parseLLMJson(content, "genie:trusted-assets-ref") as Record<string, unknown>;
+
+  let queries: TrustedAssetQuery[] = parseArray(parsed.queries)
+    .map((q) => ({
+      question: String(q.question ?? ""),
+      sql: String(q.sql ?? ""),
+      parameters: parseArray(q.parameters).map((p) => ({
+        name: String(p.name ?? ""),
+        type: (["String", "Date", "Numeric"].includes(String(p.type))
+          ? String(p.type)
+          : "String") as "String" | "Date" | "Numeric",
+        comment: String(p.comment ?? ""),
+        defaultValue: p.defaultValue ? String(p.defaultValue) : null,
+      })),
+    }))
+    .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_ref:${q.question}`, true));
+
+  if (isReviewEnabled("genie-trusted-assets") && queries.length > 0) {
+    const reviewed = await Promise.all(
+      queries.map(async (q) => {
+        const review = await reviewAndFixSql(q.sql, {
+          schemaContext: schemaBlock,
+          surface: "genie-trusted-assets",
+        });
+        if (review.fixedSql) {
+          if (
+            validateSqlExpression(allowlist, review.fixedSql, `trusted_ref_fix:${q.question}`, true)
           ) {
             return { ...q, sql: review.fixedSql };
           }

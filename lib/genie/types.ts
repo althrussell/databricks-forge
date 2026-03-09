@@ -66,6 +66,16 @@ export interface BenchmarkInput {
   alternatePhrasings: string[];
 }
 
+/**
+ * Validated SQL from an existing space, used to ground LLM passes during
+ * fix/improve workflows where no pipeline use cases are available.
+ */
+export interface ReferenceSqlExample {
+  name: string;
+  question: string;
+  sql: string;
+}
+
 export interface GenieEngineConfig {
   glossary: GlossaryEntry[];
   columnOverrides: ColumnOverride[];

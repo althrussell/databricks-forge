@@ -11,7 +11,12 @@ import { cachedChatCompletion } from "../llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
-import type { BenchmarkInput, EntityMatchingCandidate, JoinSpecInput } from "../types";
+import type {
+  BenchmarkInput,
+  EntityMatchingCandidate,
+  JoinSpecInput,
+  ReferenceSqlExample,
+} from "../types";
 import {
   buildSchemaContextBlock,
   validateSqlExpression,
@@ -36,11 +41,20 @@ export interface BenchmarkGenerationInput {
   customerBenchmarks: BenchmarkInput[];
   joinSpecs: JoinSpecInput[];
   endpoint: string;
+  /** Validated SQL from the existing space, used when useCases is empty. */
+  referenceSql?: ReferenceSqlExample[];
   signal?: AbortSignal;
+}
+
+export interface BenchmarkGenerationDiagnostics {
+  generated: number;
+  rejected: number;
+  fallbackUsed: boolean;
 }
 
 export interface BenchmarkGenerationOutput {
   benchmarks: BenchmarkInput[];
+  diagnostics?: BenchmarkGenerationDiagnostics;
 }
 
 export async function runBenchmarkGeneration(
@@ -54,6 +68,7 @@ export async function runBenchmarkGeneration(
     entityCandidates,
     customerBenchmarks,
     joinSpecs,
+    referenceSql,
     endpoint,
     signal,
   } = input;
@@ -73,6 +88,8 @@ export async function runBenchmarkGeneration(
     .map((c) => `${c.tableFqn}.${c.columnName}: [${c.sampleValues.slice(0, 8).join(", ")}]`)
     .join("\n");
 
+  const refSqlBlock = buildReferenceSqlBlock(referenceSql);
+
   const useCasesWithSql = useCases.filter((uc) => uc.sqlCode).slice(0, 10);
 
   const batches: UseCase[][] = [];
@@ -86,6 +103,7 @@ export async function runBenchmarkGeneration(
 
   logger.info("Benchmark generation: batching use cases", {
     totalUseCases: useCasesWithSql.length,
+    referenceSqlCount: referenceSql?.length ?? 0,
     batchCount: batches.length,
     batchSize: BATCH_SIZE,
     benchmarksPerBatch: BENCHMARKS_PER_BATCH,
@@ -99,6 +117,7 @@ export async function runBenchmarkGeneration(
           schemaBlock,
           entityBlock,
           joinBlock,
+          refSqlBlock,
           allowlist,
           endpoint,
           signal,
@@ -108,13 +127,36 @@ export async function runBenchmarkGeneration(
           batchSize: batch.length,
           error: err instanceof Error ? err.message : String(err),
         });
-        return [] as BenchmarkInput[];
+        return { valid: [] as BenchmarkInput[], rejected: [] as BenchmarkInput[] };
       }
     }),
     BATCH_CONCURRENCY,
   );
 
-  const allBenchmarks: BenchmarkInput[] = batchResults.flat();
+  let totalGenerated = 0;
+  let totalRejected = 0;
+  const allValid: BenchmarkInput[] = [];
+  const allRejected: BenchmarkInput[] = [];
+  for (const r of batchResults) {
+    allValid.push(...r.valid);
+    allRejected.push(...r.rejected);
+    totalGenerated += r.valid.length + r.rejected.length;
+    totalRejected += r.rejected.length;
+  }
+
+  let fallbackUsed = false;
+  let allBenchmarks = allValid;
+
+  if (allValid.length === 0 && allRejected.length > 0) {
+    logger.warn(
+      "All generated benchmarks rejected by schema validation -- falling back to question-only",
+      { generated: totalGenerated, rejected: totalRejected },
+    );
+    fallbackUsed = true;
+    allBenchmarks = allRejected
+      .slice(0, BENCHMARKS_PER_BATCH)
+      .map((b) => ({ ...b, expectedSql: "" }));
+  }
 
   const customerQuestions = new Set(customerBenchmarks.map((b) => b.question.toLowerCase()));
   const deduped = dedup(allBenchmarks, (b) => b.question.toLowerCase());
@@ -123,7 +165,27 @@ export async function runBenchmarkGeneration(
     ...deduped.filter((b) => !customerQuestions.has(b.question.toLowerCase())),
   ];
 
-  return { benchmarks: merged };
+  return {
+    benchmarks: merged,
+    diagnostics: { generated: totalGenerated, rejected: totalRejected, fallbackUsed },
+  };
+}
+
+function buildReferenceSqlBlock(referenceSql?: ReferenceSqlExample[]): string {
+  if (!referenceSql || referenceSql.length === 0) return "";
+  const MAX_REF_SQL_CHARS = 2000;
+  return `### REFERENCE SQL FROM EXISTING SPACE (use the same tables, columns, and patterns)\n${referenceSql
+    .slice(0, 8)
+    .map((r) => {
+      const sql = r.sql.length > MAX_REF_SQL_CHARS ? r.sql.slice(0, MAX_REF_SQL_CHARS) + "\n-- (truncated)" : r.sql;
+      return `Question: ${r.question}\nSQL:\n${sql}`;
+    })
+    .join("\n\n---\n\n")}`;
+}
+
+interface BatchResult {
+  valid: BenchmarkInput[];
+  rejected: BenchmarkInput[];
 }
 
 async function processBenchmarkBatch(
@@ -131,10 +193,11 @@ async function processBenchmarkBatch(
   schemaBlock: string,
   entityBlock: string,
   joinBlock: string,
+  refSqlBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
   signal?: AbortSignal,
-): Promise<BenchmarkInput[]> {
+): Promise<BatchResult> {
   const MAX_SQL_CHARS = 3000;
   const useCaseContext = batch
     .map((uc) => {
@@ -145,6 +208,12 @@ async function processBenchmarkBatch(
       return `Use case: ${uc.name}\nQuestion: ${uc.statement}\nGROUND TRUTH SQL (use this as the expectedSql, do NOT simplify):\n${sql}`;
     })
     .join("\n\n---\n\n");
+
+  const sqlContextSection = useCaseContext
+    ? `### USE CASES WITH SQL\n${useCaseContext}`
+    : refSqlBlock
+      ? refSqlBlock
+      : "(no use case SQL available)";
 
   const systemMessage = `You are a QA expert creating benchmark questions for a Databricks Genie space.
 
@@ -169,6 +238,7 @@ SQL rules:
 - For top-N queries, use ORDER BY ... LIMIT N (not RANK/DENSE_RANK)
 - Include human-readable columns (names, emails) alongside IDs
 - Use proper JOIN conditions from the table relationships provided
+- ONLY use column names that appear in the SCHEMA CONTEXT -- do NOT guess or abbreviate column names
 
 ${DATABRICKS_SQL_RULES_COMPACT}
 
@@ -178,8 +248,7 @@ Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "altern
 
 ${entityBlock ? `### ENTITY MATCHING VALUES\n${entityBlock}\n` : ""}
 ${joinBlock ? `${joinBlock}\n` : ""}
-### USE CASES WITH SQL
-${useCaseContext || "(no use case SQL available)"}
+${sqlContextSection}
 
 Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alternate phrasings.`;
 
@@ -207,7 +276,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
 
   const MAX_BENCHMARK_SQL_CHARS = 3000;
 
-  let benchmarks = items
+  const candidates = items
     .map((b) => ({
       question: String(b.question ?? ""),
       expectedSql: String(b.expectedSql ?? b.expected_sql ?? ""),
@@ -225,10 +294,19 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
         return false;
       }
       return true;
-    })
-    .filter((b) =>
-      validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`, true),
-    );
+    });
+
+  const valid: BenchmarkInput[] = [];
+  const rejected: BenchmarkInput[] = [];
+  for (const b of candidates) {
+    if (validateSqlExpression(allowlist, b.expectedSql, `benchmark:${b.question}`, true)) {
+      valid.push(b);
+    } else {
+      rejected.push(b);
+    }
+  }
+
+  let benchmarks = valid;
 
   // LLM review gate: review + fix each benchmark's expected SQL
   if (isReviewEnabled("genie-benchmarks") && benchmarks.length > 0) {
@@ -256,7 +334,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     benchmarks = reviewed.filter((b): b is NonNullable<typeof b> => b !== null);
   }
 
-  return benchmarks;
+  return { valid: benchmarks, rejected };
 }
 
 function dedup(items: BenchmarkInput[], keyFn: (item: BenchmarkInput) => string): BenchmarkInput[] {

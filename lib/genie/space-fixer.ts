@@ -11,7 +11,13 @@ import { executeSQL } from "@/lib/dbx/sql";
 import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
 import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
 import { extractEntityCandidatesFromSchema } from "@/lib/genie/entity-extraction";
-import { defaultGenieEngineConfig, type SpaceJson, type JoinSpecInput } from "@/lib/genie/types";
+import {
+  defaultGenieEngineConfig,
+  type SpaceJson,
+  type JoinSpecInput,
+  type BenchmarkInput,
+  type ReferenceSqlExample,
+} from "@/lib/genie/types";
 import { resolveRegistry } from "@/lib/genie/health-checks/registry";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
@@ -106,6 +112,63 @@ function extractSpaceContext(space: SpaceJson): SpaceContext {
     existingBenchmarkQuestions: benchmarkQuestions,
     joinSpecs,
   };
+}
+
+interface SpaceSqlContext {
+  referenceSql: ReferenceSqlExample[];
+  existingBenchmarks: BenchmarkInput[];
+}
+
+/**
+ * Harvest validated SQL from an existing space to ground LLM passes.
+ * Returns reference SQL examples (from trusted assets, measures, benchmarks)
+ * and existing benchmarks in BenchmarkInput format.
+ */
+function extractSpaceSqlExamples(space: SpaceJson): SpaceSqlContext {
+  const referenceSql: ReferenceSqlExample[] = [];
+  const existingBenchmarks: BenchmarkInput[] = [];
+
+  const exampleSqls = (space.instructions?.example_question_sqls ?? []) as SpaceJson[];
+  for (const e of exampleSqls) {
+    const question = Array.isArray(e.question) ? String(e.question[0] ?? "") : String(e.question ?? "");
+    const sql = Array.isArray(e.sql) ? String(e.sql[0] ?? "") : String(e.sql ?? "");
+    if (question && sql) {
+      referenceSql.push({ name: question, question, sql });
+    }
+  }
+
+  const measures = (space.instructions?.sql_snippets?.measures ?? []) as SpaceJson[];
+  for (const m of measures) {
+    const name = String(m.display_name ?? m.alias ?? "");
+    const sql = Array.isArray(m.sql) ? String(m.sql[0] ?? "") : String(m.sql ?? "");
+    if (name && sql) {
+      referenceSql.push({ name, question: `Calculate ${name}`, sql });
+    }
+  }
+
+  const benchmarkQuestions = (space.benchmarks?.questions ?? []) as SpaceJson[];
+  for (const q of benchmarkQuestions) {
+    const question = Array.isArray(q.question) ? String(q.question[0] ?? "") : String(q.question ?? "");
+    if (!question) continue;
+
+    const answers = (q.answer ?? []) as SpaceJson[];
+    const sqlAnswer = answers.find((a: SpaceJson) => a.format === "sql");
+    const sql = sqlAnswer
+      ? (Array.isArray(sqlAnswer.content) ? String(sqlAnswer.content[0] ?? "") : String(sqlAnswer.content ?? ""))
+      : "";
+
+    existingBenchmarks.push({
+      question,
+      expectedSql: sql,
+      alternatePhrasings: [],
+    });
+
+    if (sql) {
+      referenceSql.push({ name: question, question, sql });
+    }
+  }
+
+  return { referenceSql, existingBenchmarks };
 }
 
 function synthesizeBusinessContext(ctx: SpaceContext): BusinessContext | null {
@@ -244,6 +307,41 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
   const fastEndpoint = getFastServingEndpoint();
   const spaceCtx = extractSpaceContext(space);
   const businessContext = synthesizeBusinessContext(spaceCtx);
+  const spaceSql = extractSpaceSqlExamples(space);
+
+  const SQL_STRATEGIES: Set<FixStrategy> = new Set([
+    "benchmark_generation",
+    "trusted_assets",
+    "semantic_expressions",
+  ]);
+
+  const tablesWithoutColumns = tableFqns.filter(
+    (fqn) => !metadata.columns.some((c) => c.tableFqn.toLowerCase() === fqn.toLowerCase()),
+  );
+  if (tablesWithoutColumns.length > 0) {
+    logger.warn("Tables with no columns in metadata -- SQL generation may be unreliable", {
+      tablesWithoutColumns,
+      totalTables: tableFqns.length,
+    });
+  }
+  if (metadata.columns.length === 0 && tableFqns.length > 0) {
+    logger.error("No columns retrieved for any table -- skipping SQL-generating strategies", {
+      tables: tableFqns,
+    });
+    const skippedSqlStrategies = [...strategies.keys()].filter((s) => SQL_STRATEGIES.has(s));
+    if (skippedSqlStrategies.length > 0) {
+      changes.push({
+        section: "metadata",
+        description: `Skipped ${skippedSqlStrategies.join(", ")}: no column metadata available for ${tableFqns.length} table${tableFqns.length !== 1 ? "s" : ""}`,
+        added: 0,
+        modified: 0,
+      });
+      for (const s of skippedSqlStrategies) {
+        strategies.delete(s);
+        strategiesRun.push(s);
+      }
+    }
+  }
 
   const entityCandidates = extractEntityCandidatesFromSchema(
     metadata.columns.map((c) => ({
@@ -488,6 +586,7 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             entityCandidates,
             joinSpecs: spaceCtx.joinSpecs,
             endpoint,
+            referenceSql: spaceSql.referenceSql,
           });
 
           const existingQuestions = new Set(
@@ -563,8 +662,9 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
             allowlist,
             useCases: [],
             entityCandidates,
-            customerBenchmarks: [],
+            customerBenchmarks: spaceSql.existingBenchmarks,
             joinSpecs: spaceCtx.joinSpecs,
+            referenceSql: spaceSql.referenceSql,
             endpoint,
           });
 
@@ -587,9 +687,11 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
                     : {}),
                 })),
               ];
+              const diag = output.diagnostics;
+              const diagNote = diag?.fallbackUsed ? " (question-only fallback)" : "";
               changes.push({
                 section: "benchmarks.questions",
-                description: `Benchmark generation: added ${newBenchmarks.length} benchmark question${newBenchmarks.length !== 1 ? "s" : ""}`,
+                description: `Benchmark generation: added ${newBenchmarks.length} benchmark question${newBenchmarks.length !== 1 ? "s" : ""}${diagNote}`,
                 added: newBenchmarks.length,
                 modified: 0,
               });
