@@ -2,7 +2,7 @@
  * JSON export generator for use cases with run metadata.
  */
 
-import type { PipelineRun, UseCase } from "@/lib/domain/types";
+import type { ConsultingScorecard, PipelineRun, ScoreRationale, UseCase } from "@/lib/domain/types";
 
 interface ExportJson {
   exportedAt: string;
@@ -45,6 +45,8 @@ interface ExportJson {
       impact: number | null;
       overall: number | null;
     };
+    scoreRationale: ScoreRationale | null;
+    consultingScorecard: ConsultingScorecard | null;
     enrichmentTags: string[] | null;
     sqlStatus: string | null;
     feedback: string | null;
@@ -95,6 +97,8 @@ export function generateJson(run: PipelineRun, useCases: UseCase[]): Buffer {
         impact: uc.userImpactScore,
         overall: uc.userOverallScore,
       },
+      scoreRationale: uc.scoreRationale ?? null,
+      consultingScorecard: uc.consultingScorecard ?? null,
       enrichmentTags: uc.enrichmentTags ?? null,
       sqlStatus: uc.sqlStatus,
       feedback: uc.feedback,

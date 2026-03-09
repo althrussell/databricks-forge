@@ -22,7 +22,7 @@ import {
   validateLLMArray,
 } from "@/lib/validation";
 import { mapWithConcurrency } from "@/lib/genie/concurrency";
-import type { PipelineContext, UseCase } from "@/lib/domain/types";
+import type { PipelineContext, ScoreRationale, UseCase } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { scoreUseCaseConsultingQuality } from "@/lib/pipeline/usecase-scorecard";
 
@@ -200,6 +200,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   for (const uc of scored) {
     const scorecard = scoreUseCaseConsultingQuality(uc);
     uc.overallScore = scorecard.blendedScore;
+    uc.consultingScorecard = scorecard;
   }
 
   scored.sort((a, b) => b.overallScore - a.overallScore);
@@ -268,10 +269,15 @@ async function scoreDomain(
   const baseContextTokens = 2000; // template + business context overhead
   const batches = buildTokenAwareBatches(domainCases, renderScoreRow, baseContextTokens);
 
-  const scoreMap = new Map<
-    number,
-    { priority: number; feasibility: number; impact: number; overall: number }
-  >();
+  interface ScoreEntry {
+    priority: number;
+    feasibility: number;
+    impact: number;
+    overall: number;
+    rationale: ScoreRationale | null;
+  }
+
+  const scoreMap = new Map<number, ScoreEntry>();
 
   const batchResults = await Promise.all(
     batches.map(async (batch) => {
@@ -316,11 +322,55 @@ async function scoreDomain(
   for (const items of batchResults) {
     for (const item of items) {
       if (isNaN(item.no)) continue;
+
+      let rationale: ScoreRationale | null = null;
+      if (item.priority_rationale || item.feasibility_rationale || item.impact_rationale) {
+        rationale = {
+          priority: {
+            rationale: item.priority_rationale || "",
+            factors: item.priority_factors
+              ? {
+                  roi: clampScore(item.priority_factors.roi),
+                  strategic_alignment: clampScore(item.priority_factors.strategic_alignment),
+                  time_to_value: clampScore(item.priority_factors.time_to_value),
+                  reusability: clampScore(item.priority_factors.reusability),
+                }
+              : { roi: 0, strategic_alignment: 0, time_to_value: 0, reusability: 0 },
+          },
+          feasibility: {
+            rationale: item.feasibility_rationale || "",
+            factors: item.feasibility_factors
+              ? {
+                  data_availability: clampScore(item.feasibility_factors.data_availability),
+                  data_accessibility: clampScore(item.feasibility_factors.data_accessibility),
+                  architecture_fitness: clampScore(item.feasibility_factors.architecture_fitness),
+                  team_skills: clampScore(item.feasibility_factors.team_skills),
+                  domain_knowledge: clampScore(item.feasibility_factors.domain_knowledge),
+                  people_allocation: clampScore(item.feasibility_factors.people_allocation),
+                  budget_allocation: clampScore(item.feasibility_factors.budget_allocation),
+                  time_to_production: clampScore(item.feasibility_factors.time_to_production),
+                }
+              : {
+                  data_availability: 0,
+                  data_accessibility: 0,
+                  architecture_fitness: 0,
+                  team_skills: 0,
+                  domain_knowledge: 0,
+                  people_allocation: 0,
+                  budget_allocation: 0,
+                  time_to_production: 0,
+                },
+          },
+          impact: { rationale: item.impact_rationale || "" },
+        };
+      }
+
       scoreMap.set(item.no, {
         priority: clampScore(item.priority_score),
         feasibility: clampScore(item.feasibility_score),
         impact: clampScore(item.impact_score),
         overall: clampScore(item.overall_score),
+        rationale,
       });
     }
   }
@@ -332,11 +382,13 @@ async function scoreDomain(
       uc.feasibilityScore = scores.feasibility;
       uc.impactScore = scores.impact;
       uc.overallScore = scores.overall;
+      uc.scoreRationale = scores.rationale;
     } else {
       uc.priorityScore = 0.5;
       uc.feasibilityScore = 0.5;
       uc.impactScore = 0.5;
       uc.overallScore = 0.5;
+      uc.scoreRationale = null;
     }
   }
 }

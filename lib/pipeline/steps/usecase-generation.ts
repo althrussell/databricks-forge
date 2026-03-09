@@ -460,6 +460,8 @@ async function generateBatch(
         userFeasibilityScore: null,
         userImpactScore: null,
         userOverallScore: null,
+        scoreRationale: null, // populated in Step 6
+        consultingScorecard: null, // populated in Step 6
         sqlCode: null,
         sqlStatus: null,
         feedback: null,

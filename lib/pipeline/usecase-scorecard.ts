@@ -1,14 +1,6 @@
-import type { UseCase } from "@/lib/domain/types";
+import type { ConsultingScorecard, UseCase } from "@/lib/domain/types";
 
-export interface ConsultingScorecard {
-  strategicAlignment: number;
-  measurableValue: number;
-  implementationFeasibility: number;
-  evidenceStrength: number;
-  novelty: number;
-  boardroomDefensibility: number;
-  blendedScore: number;
-}
+export type { ConsultingScorecard };
 
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) return 0;

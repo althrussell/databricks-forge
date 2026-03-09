@@ -669,6 +669,26 @@ export async function generatePptx(
           w: CONTENT_W - 0.6,
           fontFace: "Calibri",
         });
+
+        // Score rationale (if available)
+        if (uc.scoreRationale) {
+          const rationales = [
+            uc.scoreRationale.priority.rationale,
+            uc.scoreRationale.feasibility.rationale,
+            uc.scoreRationale.impact.rationale,
+          ].filter(Boolean);
+          if (rationales.length > 0 && scoreY + 0.35 < 7.0) {
+            ucSlide.addText(rationales.join("  |  "), {
+              x: CONTENT_MARGIN + 0.3,
+              y: scoreY + 0.3,
+              w: CONTENT_W - 0.6,
+              fontSize: 8,
+              italic: true,
+              color: MID_GRAY,
+              fontFace: "Calibri",
+            });
+          }
+        }
       }
 
       addFooter(ucSlide);

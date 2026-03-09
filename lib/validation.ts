@@ -222,15 +222,44 @@ export const BusinessContextOutputSchema = z
   })
   .passthrough();
 
+const numericField = z.union([z.number(), z.string()]).transform(Number).pipe(z.number());
+
+const PriorityFactorsSchema = z
+  .object({
+    roi: numericField,
+    strategic_alignment: numericField,
+    time_to_value: numericField,
+    reusability: numericField,
+  })
+  .optional();
+
+const FeasibilityFactorsSchema = z
+  .object({
+    data_availability: numericField,
+    data_accessibility: numericField,
+    architecture_fitness: numericField,
+    team_skills: numericField,
+    domain_knowledge: numericField,
+    people_allocation: numericField,
+    budget_allocation: numericField,
+    time_to_production: numericField,
+  })
+  .optional();
+
 /** Step 6a: Score items returned by SCORE_USE_CASES_PROMPT */
 export const ScoreItemSchema = z.object({
   no: z
     .union([z.number(), z.string()])
     .transform((v) => (typeof v === "number" ? v : parseInt(String(v), 10))),
-  priority_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
-  feasibility_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
-  impact_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
-  overall_score: z.union([z.number(), z.string()]).transform(Number).pipe(z.number()),
+  priority_score: numericField,
+  feasibility_score: numericField,
+  impact_score: numericField,
+  overall_score: numericField,
+  priority_rationale: z.string().optional().default(""),
+  feasibility_rationale: z.string().optional().default(""),
+  impact_rationale: z.string().optional().default(""),
+  priority_factors: PriorityFactorsSchema,
+  feasibility_factors: FeasibilityFactorsSchema,
 });
 export type ScoreItemOutput = z.infer<typeof ScoreItemSchema>;
 

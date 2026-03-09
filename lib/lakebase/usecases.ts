@@ -3,7 +3,7 @@
  */
 
 import { withPrisma } from "@/lib/prisma";
-import type { UseCase, UseCaseType } from "@/lib/domain/types";
+import type { ConsultingScorecard, ScoreRationale, UseCase, UseCaseType } from "@/lib/domain/types";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -41,6 +41,8 @@ function dbRowToUseCase(row: {
   userFeasibilityScore: number | null;
   userImpactScore: number | null;
   userOverallScore: number | null;
+  scoreRationale?: string | null;
+  consultingScorecard?: string | null;
   sqlCode: string | null;
   sqlStatus: string | null;
   feedback: string | null;
@@ -70,6 +72,8 @@ function dbRowToUseCase(row: {
     userFeasibilityScore: row.userFeasibilityScore ?? null,
     userImpactScore: row.userImpactScore ?? null,
     userOverallScore: row.userOverallScore ?? null,
+    scoreRationale: parseJSON<ScoreRationale | null>(row.scoreRationale, null),
+    consultingScorecard: parseJSON<ConsultingScorecard | null>(row.consultingScorecard, null),
     sqlCode: row.sqlCode ?? null,
     sqlStatus: row.sqlStatus ?? null,
     feedback: (row.feedback as UseCase["feedback"]) ?? null,
@@ -118,6 +122,8 @@ export async function insertUseCases(useCases: UseCase[]): Promise<void> {
         feasibilityScore: uc.feasibilityScore,
         impactScore: uc.impactScore,
         overallScore: uc.overallScore,
+        scoreRationale: uc.scoreRationale ? JSON.stringify(uc.scoreRationale) : null,
+        consultingScorecard: uc.consultingScorecard ? JSON.stringify(uc.consultingScorecard) : null,
         sqlCode: uc.sqlCode,
         sqlStatus: uc.sqlStatus,
         enrichmentTags: uc.enrichmentTags ? JSON.stringify(uc.enrichmentTags) : null,
