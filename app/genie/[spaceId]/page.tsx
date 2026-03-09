@@ -4,42 +4,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  BrainCircuit,
-  CheckCircle2,
-  Copy,
-  ExternalLink,
-  Info,
-  Lightbulb,
-  Loader2,
-  Shield,
-  Sparkles,
-  Table2,
-  BarChart3,
-  MessageSquare,
-  Link2,
-  Wrench,
-  XCircle,
-  AlertTriangle,
-  FlaskConical,
-  Settings,
-  Activity,
-  X,
-} from "lucide-react";
+import { Activity, ArrowLeft, FlaskConical, Settings, Shield } from "lucide-react";
+
+import { SpaceDetailHero } from "@/components/genie/space-detail-hero";
+import { SpaceOverviewTab, ImprovementAdvice } from "@/components/genie/space-overview-tab";
 import { SpaceConfigViewer } from "@/components/genie/space-config-viewer";
+import { SpaceHealthTab } from "@/components/genie/space-health-tab";
+import { SpaceBenchmarksTab } from "@/components/genie/space-benchmarks-tab";
 import { OptimizationReview } from "@/components/genie/optimization-review";
+
 import type { SerializedSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import type { ImproveStats, ImproveChange } from "@/lib/genie/improve-jobs";
+
+// ── Types ───────────────────────────────────────────────────────────
 
 interface SpaceDetail {
   spaceId: string;
@@ -82,6 +64,8 @@ interface ImproveProgress {
   result: ImproveResult | null;
 }
 
+// ── Page Component ──────────────────────────────────────────────────
+
 export default function SpaceDetailPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
   const router = useRouter();
@@ -101,6 +85,8 @@ export default function SpaceDetailPage() {
   const [improveProgress, setImproveProgress] = useState<ImproveProgress | null>(null);
   const [improveResult, setImproveResult] = useState<ImproveResult | null>(null);
   const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Data fetching ─────────────────────────────────────────────────
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -124,6 +110,8 @@ export default function SpaceDetailPage() {
       })
       .catch(() => {});
   }, [fetchDetail]);
+
+  // ── Fix handlers ──────────────────────────────────────────────────
 
   const handleFix = async (checkIds: string[]) => {
     setFixing(true);
@@ -234,7 +222,7 @@ export default function SpaceDetailPage() {
     }
   };
 
-  // -- Improve with Genie Engine -----------------------------------------
+  // ── Improve with Genie Engine ─────────────────────────────────────
 
   const stopImprovePolling = useCallback(() => {
     if (improveTimerRef.current) {
@@ -277,7 +265,6 @@ export default function SpaceDetailPage() {
     return () => stopImprovePolling();
   }, [stopImprovePolling]);
 
-  // Check for an in-flight improvement on mount (survives navigation)
   useEffect(() => {
     if (!spaceId) return;
     fetch(`/api/genie-spaces/${spaceId}/improve`)
@@ -384,17 +371,39 @@ export default function SpaceDetailPage() {
     }
   };
 
+  // ── Derived values ────────────────────────────────────────────────
+
   const canImprove = !detail?.runId;
+  const genieUrl = databricksHost ? `${databricksHost}/genie/rooms/${spaceId}` : "";
+
+  const parsed: SerializedSpace | null = (() => {
+    if (!detail) return null;
+    try {
+      return JSON.parse(detail.serializedSpace) as SerializedSpace;
+    } catch {
+      return null;
+    }
+  })();
+
+  // ── Loading ───────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="mx-auto max-w-[1400px] space-y-8">
         <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-10 w-96" />
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
         <Skeleton className="h-48" />
-        <Skeleton className="h-96" />
       </div>
     );
   }
+
+  // ── Not found ─────────────────────────────────────────────────────
 
   if (!detail) {
     return (
@@ -410,17 +419,8 @@ export default function SpaceDetailPage() {
     );
   }
 
-  const parsed: SerializedSpace | null = (() => {
-    try {
-      return JSON.parse(detail.serializedSpace) as SerializedSpace;
-    } catch {
-      return null;
-    }
-  })();
+  // ── Fix review mode ───────────────────────────────────────────────
 
-  const genieUrl = databricksHost ? `${databricksHost}/genie/rooms/${spaceId}` : "";
-
-  // If a fix result is pending review, show the optimization review
   if (fixResult) {
     return (
       <div className="mx-auto max-w-[1400px] space-y-8">
@@ -447,7 +447,8 @@ export default function SpaceDetailPage() {
     );
   }
 
-  // If an improve result is pending review, show the comparison
+  // ── Improve review mode ───────────────────────────────────────────
+
   if (improveResult) {
     return (
       <div className="mx-auto max-w-[1400px] space-y-8">
@@ -459,7 +460,6 @@ export default function SpaceDetailPage() {
           <h1 className="text-xl font-bold tracking-tight">Genie Engine Improvement Review</h1>
         </div>
 
-        {/* Improvement advice card */}
         <ImprovementAdvice
           statsBefore={improveResult.statsBefore}
           statsAfter={improveResult.statsAfter}
@@ -482,34 +482,23 @@ export default function SpaceDetailPage() {
     );
   }
 
-  return (
-    <div className="mx-auto max-w-[1400px] space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/genie">
-            <ArrowLeft className="mr-1 size-4" />
-            Back
-          </Link>
-        </Button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">{detail.title}</h1>
-          {detail.description && (
-            <p className="mt-1 text-sm text-muted-foreground">{detail.description}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {detail.healthReport && <HealthGradeInline report={detail.healthReport} />}
-          <Badge
-            variant={detail.source === "pipeline" ? "secondary" : "outline"}
-            className="text-xs"
-          >
-            {detail.source === "pipeline" ? "Pipeline" : "Workspace"}
-          </Badge>
-        </div>
-      </div>
+  // ── Main view ─────────────────────────────────────────────────────
 
-      {/* Tabs */}
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-6">
+      <SpaceDetailHero
+        title={detail.title}
+        description={detail.description}
+        grade={detail.healthReport?.grade}
+        overallScore={detail.healthReport?.overallScore}
+        source={detail.source}
+        genieUrl={genieUrl}
+        canImprove={canImprove}
+        improving={improving}
+        fixing={fixing}
+        onImprove={handleStartImprove}
+      />
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">
@@ -530,180 +519,29 @@ export default function SpaceDetailPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="mt-4 space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Key Stats */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Space Metadata</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <StatItem icon={Table2} label="Tables" value={detail.metadata?.tableCount ?? 0} />
-                  <StatItem
-                    icon={BarChart3}
-                    label="Measures"
-                    value={detail.metadata?.measureCount ?? 0}
-                  />
-                  <StatItem
-                    icon={MessageSquare}
-                    label="Sample Questions"
-                    value={detail.metadata?.sampleQuestionCount ?? 0}
-                  />
-                  <StatItem
-                    icon={Link2}
-                    label="Filters"
-                    value={detail.metadata?.filterCount ?? 0}
-                  />
-                  <StatItem icon={Sparkles} label="Joins" value={detail.metadata?.joinCount ?? 0} />
-                  <StatItem
-                    icon={FlaskConical}
-                    label="Benchmarks"
-                    value={detail.metadata?.benchmarkCount ?? 0}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Details */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {detail.domain && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Domain</span>
-                    <span>{detail.domain}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Space ID</span>
-                  <code className="text-xs">{spaceId}</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status</span>
-                  <Badge variant="outline" className="text-xs">
-                    {detail.status}
-                  </Badge>
-                </div>
-                {detail.metadata?.metricViewCount !== undefined &&
-                  detail.metadata.metricViewCount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Metric Views</span>
-                      <span>{detail.metadata.metricViewCount}</span>
-                    </div>
-                  )}
-                {detail.metadata?.expressionCount !== undefined &&
-                  detail.metadata.expressionCount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Expressions</span>
-                      <span>{detail.metadata.expressionCount}</span>
-                    </div>
-                  )}
-                {detail.metadata?.exampleSqlCount !== undefined &&
-                  detail.metadata.exampleSqlCount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Example SQLs</span>
-                      <span>{detail.metadata.exampleSqlCount}</span>
-                    </div>
-                  )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Actions */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {canImprove && (
-                  <Button
-                    size="sm"
-                    onClick={handleStartImprove}
-                    disabled={improving || fixing}
-                    className="gap-1.5"
-                  >
-                    {improving ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <BrainCircuit className="size-4" />
-                    )}
-                    Improve with Genie Engine
-                  </Button>
-                )}
-                {genieUrl && (
-                  <Button size="sm" variant="outline" asChild>
-                    <a href={genieUrl} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-1.5 size-4" />
-                      Open in Databricks
-                    </a>
-                  </Button>
-                )}
-                <Button size="sm" variant="outline" asChild>
-                  <Link href={`/genie/${spaceId}/benchmarks`}>
-                    <FlaskConical className="mr-1.5 size-4" />
-                    Run Benchmarks
-                  </Link>
-                </Button>
-                <Button size="sm" variant="outline" onClick={handleClone} disabled={cloning}>
-                  {cloning ? (
-                    <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  ) : (
-                    <Copy className="mr-1.5 size-4" />
-                  )}
-                  Clone
-                </Button>
-                {detail.runId && (
-                  <Button size="sm" variant="ghost" asChild>
-                    <Link href={`/runs/${detail.runId}?tab=genie`}>View Run</Link>
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Improvement Progress */}
-          {improving && improveProgress && (
-            <Card className="border-violet-200 dark:border-violet-800">
-              <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <BrainCircuit className="size-5 shrink-0 animate-pulse text-violet-500" />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        Improving with Genie Engine...
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {improveProgress.percent}%
-                      </span>
-                    </div>
-                    <Progress value={improveProgress.percent} className="h-2" />
-                    <p className="text-xs text-muted-foreground">
-                      {improveProgress.message}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground/70">
-                      You can navigate away — the engine will keep running.
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleCancelImprove}
-                    className="shrink-0"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+        <TabsContent value="overview" className="mt-4">
+          <SpaceOverviewTab
+            spaceId={spaceId}
+            metadata={detail.metadata}
+            domain={detail.domain}
+            status={detail.status}
+            runId={detail.runId}
+            genieUrl={genieUrl}
+            canImprove={canImprove}
+            improving={improving}
+            fixing={fixing}
+            cloning={cloning}
+            improveProgress={
+              improveProgress
+                ? { status: improveProgress.status, message: improveProgress.message, percent: improveProgress.percent }
+                : null
+            }
+            onImprove={handleStartImprove}
+            onCancelImprove={handleCancelImprove}
+            onClone={handleClone}
+          />
         </TabsContent>
 
-        {/* Configuration Tab */}
         <TabsContent value="configuration" className="mt-4">
           {parsed ? (
             <SpaceConfigViewer space={parsed} />
@@ -714,10 +552,9 @@ export default function SpaceDetailPage() {
           )}
         </TabsContent>
 
-        {/* Health Tab */}
-        <TabsContent value="health" className="mt-4 space-y-6">
+        <TabsContent value="health" className="mt-4">
           {detail.healthReport ? (
-            <InlineHealthReport
+            <SpaceHealthTab
               report={detail.healthReport}
               spaceId={spaceId}
               onFix={handleFix}
@@ -730,329 +567,13 @@ export default function SpaceDetailPage() {
           )}
         </TabsContent>
 
-        {/* Benchmarks Tab */}
         <TabsContent value="benchmarks" className="mt-4">
-          <Card>
-            <CardContent className="flex flex-col items-center py-12">
-              <FlaskConical className="mb-4 size-10 text-muted-foreground/50" />
-              <h2 className="text-lg font-semibold">Benchmark Test Runner</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Run benchmark questions against this space to test accuracy.
-              </p>
-              <Button className="mt-4" asChild>
-                <Link href={`/genie/${spaceId}/benchmarks`}>
-                  <FlaskConical className="mr-2 size-4" />
-                  Open Test Runner
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <SpaceBenchmarksTab
+            spaceId={spaceId}
+            benchmarkCount={detail.metadata?.benchmarkCount ?? 0}
+          />
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-function StatItem({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Icon className="size-4 text-muted-foreground" />
-      <div>
-        <div className="text-lg font-semibold">{value}</div>
-        <div className="text-xs text-muted-foreground">{label}</div>
-      </div>
-    </div>
-  );
-}
-
-function HealthGradeInline({ report }: { report: SpaceHealthReport }) {
-  const colorClass =
-    report.grade === "A" || report.grade === "B"
-      ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-400"
-      : report.grade === "C"
-        ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400"
-        : "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-400";
-
-  return (
-    <div
-      className={`flex size-8 items-center justify-center rounded-full border text-sm font-bold ${colorClass}`}
-      title={`Health: ${report.grade} (${report.overallScore}/100)`}
-    >
-      {report.grade}
-    </div>
-  );
-}
-
-function severityIcon(severity: string) {
-  switch (severity) {
-    case "critical":
-      return <XCircle className="size-4 text-red-500" />;
-    case "warning":
-      return <AlertTriangle className="size-4 text-amber-500" />;
-    case "info":
-      return <Info className="size-4 text-blue-500" />;
-    default:
-      return null;
-  }
-}
-
-function gradeBg(grade: string): string {
-  switch (grade) {
-    case "A":
-    case "B":
-      return "bg-green-100 dark:bg-green-900/30";
-    case "C":
-      return "bg-amber-100 dark:bg-amber-900/30";
-    case "D":
-    case "F":
-      return "bg-red-100 dark:bg-red-900/30";
-    default:
-      return "bg-muted";
-  }
-}
-
-function gradeColor(grade: string): string {
-  switch (grade) {
-    case "A":
-    case "B":
-      return "text-green-600";
-    case "C":
-      return "text-amber-600";
-    case "D":
-    case "F":
-      return "text-red-600";
-    default:
-      return "text-muted-foreground";
-  }
-}
-
-function InlineHealthReport({
-  report,
-  spaceId,
-  onFix,
-  fixing,
-}: {
-  report: SpaceHealthReport;
-  spaceId: string;
-  onFix: (checkIds: string[]) => void;
-  fixing: boolean;
-}) {
-  const fixableChecks = report.checks.filter((c) => !c.passed && c.fixable);
-
-  return (
-    <div className="space-y-6">
-      {/* Score header */}
-      <div className={`flex items-center gap-4 rounded-lg p-4 ${gradeBg(report.grade)}`}>
-        <div className={`text-4xl font-bold ${gradeColor(report.grade)}`}>{report.grade}</div>
-        <div>
-          <div className="text-2xl font-semibold">{report.overallScore}/100</div>
-          <div className="text-sm text-muted-foreground">
-            {report.fixableCount > 0 && (
-              <span className="text-amber-600">
-                {report.fixableCount} fixable issue{report.fixableCount !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Quick wins */}
-      {report.quickWins.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="flex items-center gap-1.5 text-sm font-medium">
-            <Lightbulb className="size-4 text-amber-500" />
-            Quick Wins
-          </h3>
-          <ul className="space-y-1.5">
-            {report.quickWins.map((qw, i) => (
-              <li key={i} className="rounded border bg-muted/50 px-3 py-2 text-sm">
-                {qw}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Fix All + Run Benchmarks */}
-      <div className="flex gap-2">
-        {fixableChecks.length > 0 && (
-          <Button size="sm" onClick={() => onFix(fixableChecks.map((c) => c.id))} disabled={fixing}>
-            {fixing ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <Wrench className="mr-2 size-4" />
-            )}
-            Fix All ({fixableChecks.length})
-          </Button>
-        )}
-        <Button size="sm" variant="outline" asChild>
-          <Link href={`/genie/${spaceId}/benchmarks`}>
-            <FlaskConical className="mr-2 size-4" />
-            Run Benchmarks
-          </Link>
-        </Button>
-      </div>
-
-      {/* Category breakdown */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">Categories</h3>
-        {Object.entries(report.categories).map(([catId, cat]) => (
-          <div key={catId} className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span>{cat.label}</span>
-              <span className="text-muted-foreground">
-                {cat.passed}/{cat.total} ({cat.score}%)
-              </span>
-            </div>
-            <Progress value={cat.score} className="h-2" />
-          </div>
-        ))}
-      </div>
-
-      {/* Individual checks */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">All Checks</h3>
-        {Object.entries(report.categories).map(([catId, cat]) => {
-          const catChecks = report.checks.filter((c) => c.category === catId);
-          if (catChecks.length === 0) return null;
-          return (
-            <div key={catId} className="space-y-2">
-              <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {cat.label}
-              </h4>
-              {catChecks.map((check) => (
-                <div key={check.id} className="flex items-start gap-2 rounded border px-3 py-2">
-                  {check.passed ? (
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-500" />
-                  ) : (
-                    severityIcon(check.severity)
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm">{check.description}</div>
-                    {check.detail && (
-                      <div className="mt-0.5 text-xs text-muted-foreground">{check.detail}</div>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {!check.passed && check.fixable && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => onFix([check.id])}
-                        disabled={fixing}
-                      >
-                        <Wrench className="mr-1 size-3" />
-                        Fix
-                      </Button>
-                    )}
-                    {!check.passed && (
-                      <Badge
-                        variant={check.severity === "critical" ? "destructive" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {check.severity}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------------------
-// Improvement Advice
-// -------------------------------------------------------------------------
-
-const STAT_LABELS: { key: keyof ImproveStats; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: "tables", label: "Tables", icon: Table2 },
-  { key: "joins", label: "Joins", icon: Sparkles },
-  { key: "measures", label: "Measures", icon: BarChart3 },
-  { key: "filters", label: "Filters", icon: Link2 },
-  { key: "dimensions", label: "Expressions", icon: MessageSquare },
-  { key: "benchmarks", label: "Benchmarks", icon: FlaskConical },
-  { key: "sampleQuestions", label: "Sample Questions", icon: MessageSquare },
-  { key: "exampleSqls", label: "Example SQLs", icon: Settings },
-  { key: "metricViews", label: "Metric Views", icon: BarChart3 },
-];
-
-function ImprovementAdvice({
-  statsBefore,
-  statsAfter,
-}: {
-  statsBefore: ImproveStats;
-  statsAfter: ImproveStats;
-}) {
-  const improved = STAT_LABELS.filter(
-    ({ key }) => (statsAfter[key] as number) > (statsBefore[key] as number),
-  );
-  const totalBefore = Object.values(statsBefore).reduce(
-    (s, v) => s + (typeof v === "number" ? v : 0),
-    0,
-  );
-  const totalAfter = Object.values(statsAfter).reduce(
-    (s, v) => s + (typeof v === "number" ? v : 0),
-    0,
-  );
-
-  return (
-    <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <BrainCircuit className="size-5 text-violet-500" />
-          Why the improved version is better
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          The Genie Engine ran a full analysis across all tables — adding
-          LLM-generated joins, measures, filters, benchmarks, and enriched
-          instructions that the Quick Build did not include.
-          {totalAfter > totalBefore && (
-            <span className="font-medium text-violet-600 dark:text-violet-400">
-              {" "}The improved configuration is {Math.round(((totalAfter - totalBefore) / Math.max(totalBefore, 1)) * 100)}% richer overall.
-            </span>
-          )}
-        </p>
-
-        {improved.length > 0 && (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {improved.map(({ key, label, icon: Icon }) => {
-              const before = statsBefore[key] as number;
-              const after = statsAfter[key] as number;
-              return (
-                <div
-                  key={key}
-                  className="flex items-center gap-2 rounded-md border bg-background px-3 py-2"
-                >
-                  <Icon className="size-4 shrink-0 text-violet-500" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">{label}</div>
-                    <div className="flex items-baseline gap-1.5 text-sm">
-                      <span className="text-muted-foreground line-through">{before}</span>
-                      <ArrowUpRight className="inline size-3 text-green-500" />
-                      <span className="font-semibold text-green-600">{after}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
