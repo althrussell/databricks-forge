@@ -21,6 +21,7 @@ Syntax and type safety:
 - NEVER use TO_DATE() or TO_TIMESTAMP() to parse string columns -- they throw on format mismatches. Use COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy'), try_to_date(col, 'dd/MM/yyyy')) to handle mixed date formats gracefully. If the column is already DATE or TIMESTAMP type, use it directly without parsing.
 - ai_query() only accepts these named parameters: modelParameters, responseFormat, failOnError. NEVER use systemPrompt, system_prompt, or any other invented parameter names. Embed persona/system instructions in the request text via CONCAT.
 - ai_query() with failOnError => false returns STRUCT<result: STRING, errorMessage: STRING>. The result field is ALWAYS STRING regardless of responseFormat. Do NOT use responseFormat with failOnError => false. To get structured output: (1) instruct the model to return JSON in the prompt text, (2) parse with from_json(col.result, 'STRUCT<field1: TYPE, ...>') AS parsed_result. Accessing nested struct fields directly on the result (e.g. ai_result.result.field) causes INVALID_EXTRACT_BASE_FIELD_TYPE errors.
+- from_json() alias naming: ALWAYS use exactly \`ai_result\` for the ai_query() output and \`parsed_result\` for the from_json() output. NEVER abbreviate to \`parsed\`, \`result\`, \`ai_res\`, or other variations -- inconsistent naming breaks automated validation.
 
 AI function performance:
 - AI functions (ai_query, ai_similarity, ai_gen) are expensive per-row. Filter and aggregate data BEFORE passing to AI functions. Structure queries as a cost funnel: cheap filters first, then blocking joins, then ai_similarity scoring, then ai_query LLM calls on the smallest possible set.
@@ -41,6 +42,7 @@ Query structure:
 - Prefer explicit column lists over SELECT *.
 - Filter early, aggregate late -- push WHERE clauses as close to the source tables as possible.
 - Use window functions instead of self-joins where possible.
+- NEVER use LATERAL VIEW EXPLODE -- it is deprecated Hive syntax that cannot be combined with subsequent JOINs. Use EXPLODE() inside a CTE with comma-join or CROSS JOIN LATERAL syntax instead.
 
 Databricks SQL features:
 - Use COLLATE UTF8_LCASE for case-insensitive string comparisons instead of LOWER()/UPPER() wrappers.
@@ -106,12 +108,12 @@ DATABRICKS SQL RULES:
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, etc.) in metric views.
 - NEVER use TO_DATE()/TO_TIMESTAMP(). Use COALESCE(try_to_date(col, fmt1), try_to_date(col, fmt2)) for safe string-to-date parsing.
 - ai_query() named parameters: ONLY modelParameters, responseFormat, failOnError. NEVER use systemPrompt or other invented names.
-- ai_query() with failOnError => false: result field is ALWAYS STRING. Do NOT use responseFormat with failOnError. Parse structured output with from_json(ai_result.result, 'STRUCT<...>') AS parsed_result.
+- ai_query() with failOnError => false: result field is ALWAYS STRING. Do NOT use responseFormat with failOnError. Parse structured output with from_json(ai_result.result, 'STRUCT<...>') AS parsed_result. ALWAYS use exactly \`ai_result\` and \`parsed_result\` as alias names.
 - AI functions are expensive per-row. Filter/aggregate BEFORE ai_query/ai_similarity. For pairwise ops: block first (narrow joins + UNION), score second (ai_similarity), LLM last (ai_query on filtered LIMIT-ed set).
 - ALWAYS backtick-quote column names with spaces or special characters. Use names EXACTLY as in the schema.
 - No STRING_AGG() -- use array_join(collect_list(col), ',') instead.
 - Prefer MERGE INTO over DELETE + INSERT for upserts.
-- Access STRUCT fields with dot notation; use EXPLODE for arrays.
+- Access STRUCT fields with dot notation; use EXPLODE for arrays. NEVER use LATERAL VIEW EXPLODE (deprecated Hive syntax).
 - Prefer TIMESTAMP_NTZ for timezone-independent timestamps.
 - Use INTERVAL '30' DAY syntax for interval literals.
 - Prefer CREATE OR REPLACE over DROP + CREATE.
@@ -186,6 +188,7 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - For pairwise operations: blocking joins with normalized columns BEFORE ai_similarity scoring
    - ai_sys_prompt column present as last column for auditability
    - Only valid named parameters used: modelParameters, responseFormat, failOnError (no systemPrompt or invented names)
+   - from_json() alias uses canonical name \`parsed_result\` (not \`parsed\`, \`result\`, or other abbreviations)
 `.trim();
 
 export const DATABRICKS_DATA_MODELING_RULES = `

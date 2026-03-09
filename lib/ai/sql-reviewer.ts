@@ -70,7 +70,7 @@ function buildReviewPrompt(sql: string, opts: ReviewOptions): string {
 
   const fixInstruction = opts.requestFix
     ? opts.schemaContext
-      ? `If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. The fix must ONLY use columns from the schema above.`
+      ? `If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. CRITICAL CONSTRAINT: The fix must ONLY use columns that appear in the "Available Schema" section above. Do NOT invent, guess, or rename any column -- if a column does not exist in the schema, remove the expression rather than substituting. Do NOT introduce new table aliases or column names that are not in the original SQL or schema.`
       : `If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. Preserve the original table/column references since no schema is available for validation.`
     : `Do NOT include a "fixed_sql" field.`;
 

@@ -617,12 +617,32 @@ function buildColumnViolationMessage(
     lines.push(``, `Possible matches (use ONLY if semantically correct):`, ...suggestions);
   }
 
+  // Detect from_json() alias pattern (parsed.field, parsed_result.field, etc.)
+  const parsedPrefixes = unknownColumns
+    .filter((c) => c.includes("."))
+    .map((c) => c.split(".")[0].toLowerCase());
+  const hasParsedAliasIssue = parsedPrefixes.some(
+    (p) => p === "parsed" || p === "parsed_result" || p === "ai_result" || p === "result",
+  );
+
   lines.push(
     ``,
     `Remove ALL references to the non-existent columns listed above. Use ONLY columns`,
     `from the valid list. Do NOT substitute or guess alternative names -- if no suitable`,
     `column exists, simplify the query to remove that logic entirely.`,
   );
+
+  if (hasParsedAliasIssue) {
+    lines.push(
+      ``,
+      `NOTE: Some flagged columns appear to be from_json() struct fields (e.g. parsed.field).`,
+      `If using ai_query() with failOnError => false and from_json(), use EXACTLY these alias names:`,
+      `  - ai_query(...) AS ai_result`,
+      `  - from_json(ai_result.result, 'STRUCT<...>') AS parsed_result`,
+      `  - Access fields as: parsed_result.field_name`,
+      `NEVER use "parsed" or other abbreviations as the from_json alias.`,
+    );
+  }
 
   return lines.join("\n");
 }
