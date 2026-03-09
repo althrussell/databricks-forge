@@ -11,6 +11,7 @@ import {
   extractColumnReferences,
   extractSqlAliases,
   stripSqlComments,
+  stripStringLiterals,
   AI_FUNCTION_RETURN_FIELDS,
 } from "@/lib/validation/sql-columns";
 import { logger } from "@/lib/logger";
@@ -323,7 +324,7 @@ export function findInvalidIdentifiers(
   strictColumnCheck = false,
 ): string[] {
   const invalid: string[] = [];
-  const cleanSql = stripSqlComments(sql);
+  const cleanSql = stripStringLiterals(stripSqlComments(sql));
 
   // Collect FQNs that are targets of CREATE statements (these are being defined, not referenced)
   const createTargets = new Set<string>();
@@ -410,6 +411,16 @@ export function findInvalidIdentifiers(
       if (aliases.cteNames.has(prefixLower) || aliases.cteAliases.has(prefixLower)) continue;
       if (aliases.all.has(colLower)) continue;
       if (AI_FUNCTION_RETURN_FIELDS.has(colLower)) continue;
+
+      // Skip refs where the prefix is a column alias (struct field access),
+      // e.g. `from_json(...) AS parsed_result` → `parsed_result.field`.
+      // Only skip when the prefix is NOT also a table alias or CTE name.
+      if (
+        aliases.columnAliases.has(prefixLower) &&
+        !aliases.tableAliases.has(prefixLower) &&
+        !aliases.cteNames.has(prefixLower)
+      )
+        continue;
 
       if (!allColumns.has(colLower)) {
         const display = ref.isQuoted

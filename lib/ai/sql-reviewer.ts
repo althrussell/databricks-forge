@@ -11,8 +11,8 @@
  *   - reviewBatch()      -- batch review for short expressions
  */
 
-import { getReviewEndpoint, isReviewEnabled } from "@/lib/dbx/client";
-import { chatCompletion } from "@/lib/dbx/model-serving";
+import { getReviewEndpoint, getFastServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { chatCompletion, ModelServingError } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "./sql-rules";
 import "@/lib/skills/content";
@@ -324,6 +324,26 @@ const PASS_THROUGH_RESULT: ReviewResult = {
   suggestions: [],
 };
 
+function isRateLimitError(err: unknown): boolean {
+  return err instanceof ModelServingError && err.statusCode === 429;
+}
+
+function summariseIssues(issues: ReviewIssue[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const i of issues) {
+    counts[i.category] = (counts[i.category] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function topIssueMessages(issues: ReviewIssue[], n = 3): string[] {
+  const byPriority = [...issues].sort((a, b) => {
+    const order = { error: 0, warning: 1, info: 2 };
+    return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
+  });
+  return byPriority.slice(0, n).map((i) => `[${i.severity}/${i.category}] ${i.message}`);
+}
+
 /**
  * Review a single SQL statement. Returns a structured verdict without fixing.
  * If the review endpoint is not configured or disabled for this surface,
@@ -336,27 +356,61 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
   const endpoint = getReviewEndpoint();
   const prompt = buildReviewPrompt(sql, { ...opts, requestFix: false });
 
-  try {
+  const callReview = async (ep: string): Promise<ReviewResult> => {
     const response = await chatCompletion({
-      endpoint,
+      endpoint: ep,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
       maxTokens: opts.maxTokens ?? 4096,
       responseFormat: "json_object",
     });
+    return parseReviewResponse(response.content, false);
+  };
 
-    const result = parseReviewResponse(response.content, false);
+  try {
+    const result = await callReview(endpoint);
 
     logger.info("SQL review complete", {
       surface: opts.surface,
       verdict: result.verdict,
       qualityScore: result.qualityScore,
       issueCount: result.issues.length,
+      issueCategories: summariseIssues(result.issues),
+      topIssues: topIssueMessages(result.issues),
       endpoint,
     });
 
     return result;
   } catch (err) {
+    if (isRateLimitError(err)) {
+      const fallback = getFastServingEndpoint();
+      if (fallback !== endpoint) {
+        logger.warn("SQL review hit 429, retrying with fast model", {
+          surface: opts.surface,
+          originalEndpoint: endpoint,
+          fallbackEndpoint: fallback,
+        });
+        try {
+          const result = await callReview(fallback);
+          logger.info("SQL review complete (fallback)", {
+            surface: opts.surface,
+            verdict: result.verdict,
+            qualityScore: result.qualityScore,
+            issueCount: result.issues.length,
+            issueCategories: summariseIssues(result.issues),
+            topIssues: topIssueMessages(result.issues),
+            endpoint: fallback,
+          });
+          return result;
+        } catch (fallbackErr) {
+          logger.warn("SQL review fallback also failed, passing through", {
+            surface: opts.surface,
+            error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+          });
+          return PASS_THROUGH_RESULT;
+        }
+      }
+    }
     logger.warn("SQL review failed, passing through", {
       surface: opts.surface,
       error: err instanceof Error ? err.message : String(err),
@@ -379,28 +433,65 @@ export async function reviewAndFixSql(
   const endpoint = getReviewEndpoint();
   const prompt = buildReviewPrompt(sql, { ...opts, requestFix: true });
 
-  try {
+  const callReviewFix = async (ep: string): Promise<ReviewResult> => {
     const response = await chatCompletion({
-      endpoint,
+      endpoint: ep,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
       maxTokens: opts.maxTokens ?? 8192,
       responseFormat: "json_object",
     });
+    return parseReviewResponse(response.content, true);
+  };
 
-    const result = parseReviewResponse(response.content, true);
+  try {
+    const result = await callReviewFix(endpoint);
 
     logger.info("SQL review+fix complete", {
       surface: opts.surface,
       verdict: result.verdict,
       qualityScore: result.qualityScore,
       issueCount: result.issues.length,
+      issueCategories: summariseIssues(result.issues),
+      topIssues: topIssueMessages(result.issues),
       hasFix: !!result.fixedSql,
+      sqlPreview: sql.substring(0, 120),
       endpoint,
     });
 
     return result;
   } catch (err) {
+    if (isRateLimitError(err)) {
+      const fallback = getFastServingEndpoint();
+      if (fallback !== endpoint) {
+        logger.warn("SQL review+fix hit 429, retrying with fast model", {
+          surface: opts.surface,
+          originalEndpoint: endpoint,
+          fallbackEndpoint: fallback,
+        });
+        try {
+          const result = await callReviewFix(fallback);
+          logger.info("SQL review+fix complete (fallback)", {
+            surface: opts.surface,
+            verdict: result.verdict,
+            qualityScore: result.qualityScore,
+            issueCount: result.issues.length,
+            issueCategories: summariseIssues(result.issues),
+            topIssues: topIssueMessages(result.issues),
+            hasFix: !!result.fixedSql,
+            sqlPreview: sql.substring(0, 120),
+            endpoint: fallback,
+          });
+          return result;
+        } catch (fallbackErr) {
+          logger.warn("SQL review+fix fallback also failed, passing through", {
+            surface: opts.surface,
+            error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+          });
+          return PASS_THROUGH_RESULT;
+        }
+      }
+    }
     logger.warn("SQL review+fix failed, passing through", {
       surface: opts.surface,
       error: err instanceof Error ? err.message : String(err),
@@ -429,27 +520,62 @@ export async function reviewBatch(
   const endpoint = getReviewEndpoint();
   const prompt = buildBatchReviewPrompt(items, schemaContext);
 
-  try {
+  const callBatchReview = async (ep: string): Promise<BatchReviewResult[]> => {
     const response = await chatCompletion({
-      endpoint,
+      endpoint: ep,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
       maxTokens: Math.min(items.length * 1024, 16384),
       responseFormat: "json_object",
     });
+    return parseBatchReviewResponse(response.content, items);
+  };
 
-    const results = parseBatchReviewResponse(response.content, items);
-
+  const logBatchResults = (results: BatchReviewResult[], ep: string, label = ""): void => {
     const failCount = results.filter((r) => r.result.verdict === "fail").length;
-    logger.info("SQL batch review complete", {
+    const warnCount = results.filter((r) => r.result.verdict === "warn").length;
+    const scores = results.map((r) => r.result.qualityScore);
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    logger.info(`SQL batch review complete${label}`, {
       surface,
       totalItems: items.length,
       failCount,
-      endpoint,
+      warnCount,
+      avgQualityScore: avgScore,
+      endpoint: ep,
     });
+  };
 
+  try {
+    const results = await callBatchReview(endpoint);
+    logBatchResults(results, endpoint);
     return results;
   } catch (err) {
+    if (isRateLimitError(err)) {
+      const fallback = getFastServingEndpoint();
+      if (fallback !== endpoint) {
+        logger.warn("SQL batch review hit 429, retrying with fast model", {
+          surface,
+          originalEndpoint: endpoint,
+          fallbackEndpoint: fallback,
+          itemCount: items.length,
+        });
+        try {
+          const results = await callBatchReview(fallback);
+          logBatchResults(results, fallback, " (fallback)");
+          return results;
+        } catch (fallbackErr) {
+          logger.warn("SQL batch review fallback also failed, passing through", {
+            surface,
+            error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+          });
+          return items.map((item) => ({
+            id: item.id,
+            result: PASS_THROUGH_RESULT,
+          }));
+        }
+      }
+    }
     logger.warn("SQL batch review failed, passing through", {
       surface,
       error: err instanceof Error ? err.message : String(err),
