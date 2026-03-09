@@ -25,8 +25,18 @@ import {
   ThumbsUp,
   ThumbsDown,
   AlertCircle,
+  Target,
+  Briefcase,
+  Wrench,
+  Sparkles,
+  BarChart3,
+  Database,
+  Lightbulb,
+  ArrowRight,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 import { GenieBuilderModal } from "./genie-builder-modal";
 
 // ---------------------------------------------------------------------------
@@ -101,6 +111,8 @@ export interface AskForgeChatProps {
   onConversationCreated?: (conversationId: string) => void;
   /** Called when the user clears the conversation (parent should start a new session) */
   onClear?: () => void;
+  /** Called when the user changes persona in the empty state */
+  onPersonaChange?: (persona: AssistantPersona) => void;
 }
 
 export interface AskForgeChatHandle {
@@ -112,6 +124,14 @@ function getFallbackQuestions(persona: AssistantPersona): string[] {
   if (persona === "analyst") return FALLBACK_QUESTIONS_ANALYST;
   return FALLBACK_QUESTIONS;
 }
+
+const SUGGESTION_ICONS = [Sparkles, BarChart3, Database, Lightbulb];
+
+const PERSONA_META: Record<AssistantPersona, { icon: React.ReactNode; label: string }> = {
+  business: { icon: <Target className="size-3.5" />, label: "Business" },
+  analyst: { icon: <Briefcase className="size-3.5" />, label: "Analyst" },
+  tech: { icon: <Wrench className="size-3.5" />, label: "Tech" },
+};
 
 // ---------------------------------------------------------------------------
 // Component
@@ -133,6 +153,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       onSources,
       onConversationCreated,
       onClear,
+      onPersonaChange,
     },
     ref,
   ) {
@@ -406,17 +427,24 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             <Badge variant="secondary" className="text-[10px]">
               AI
             </Badge>
+            {messages.length > 0 && (
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                {PERSONA_META[persona].icon}
+                {PERSONA_META[persona].label}
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {messages.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0"
+                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
                 onClick={handleClear}
-                title="Clear conversation"
+                title="Start a new conversation"
               >
                 <Trash2 className="size-3.5" />
+                <span className="hidden sm:inline">New chat</span>
               </Button>
             )}
           </div>
@@ -430,18 +458,17 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             {messages.length === 0 &&
               (suggestedQuestions && suggestedQuestions.length === 0 ? (
                 <div
-                  className={`flex flex-col items-center justify-center gap-4 text-center ${isCompact ? "py-16" : "py-24"}`}
+                  className={`flex flex-col items-center justify-center gap-5 text-center ${isCompact ? "py-16" : "py-20"}`}
                 >
-                  <AlertCircle
-                    className={`text-muted-foreground/40 ${isCompact ? "size-10" : "size-14"}`}
-                  />
+                  <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/10">
+                    <AlertCircle className="size-7 text-primary/60" />
+                  </div>
                   <div>
-                    <p className={`font-medium ${isCompact ? "" : "text-lg"}`}>
+                    <p className={`font-semibold ${isCompact ? "" : "text-lg"}`}>
                       No data available yet
                     </p>
-                    <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                      Run an environment scan or discovery pipeline to start asking questions. Ask
-                      Forge answers are grounded in your actual metadata.
+                    <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">
+                      Run an environment scan or discovery pipeline to start asking questions.
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -455,46 +482,117 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                 </div>
               ) : (
                 <div
-                  className={`flex flex-col items-center justify-center gap-3 text-center ${isCompact ? "py-16" : "py-24"}`}
+                  className={`flex flex-col items-center justify-center gap-6 text-center ${isCompact ? "py-12" : "py-16"}`}
                 >
-                  <BrainCircuit
-                    className={`text-muted-foreground/30 ${isCompact ? "size-12" : "size-16"}`}
-                  />
+                  {/* Branded icon */}
+                  <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/10">
+                    <BrainCircuit className="size-8 text-primary" />
+                  </div>
+
+                  {/* Headline */}
                   <div>
-                    <p className={`font-medium ${isCompact ? "" : "text-lg"}`}>
-                      Ask Forge anything about your data
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Ask business questions, explore your estate, or request SQL and dashboards.
-                      Answers are grounded in your actual metadata.
+                    <h2
+                      className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}
+                    >
+                      What can I help you find?
+                    </h2>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      Grounded in your actual metadata, tables, and lineage.
                     </p>
                   </div>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {(suggestedQuestions ?? getFallbackQuestions(persona)).map((q) => (
-                      <button
-                        key={q}
-                        onClick={() => {
-                          setInput(q);
-                          inputRef.current?.focus();
-                        }}
-                        className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
-                      >
-                        {q}
-                      </button>
-                    ))}
+
+                  {/* Persona selector -- only in empty state, full mode */}
+                  {!isCompact && onPersonaChange && (
+                    <ToggleGroup
+                      type="single"
+                      size="sm"
+                      variant="outline"
+                      value={persona}
+                      onValueChange={(v) => {
+                        if (v) onPersonaChange(v as AssistantPersona);
+                      }}
+                      className="rounded-lg border bg-muted/30 p-1"
+                    >
+                      <ToggleGroupItem value="business" className="gap-1.5 rounded-md px-3 text-xs">
+                        <Target className="size-3.5" />
+                        Business
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="analyst" className="gap-1.5 rounded-md px-3 text-xs">
+                        <Briefcase className="size-3.5" />
+                        Analyst
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="tech" className="gap-1.5 rounded-md px-3 text-xs">
+                        <Wrench className="size-3.5" />
+                        Tech
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  )}
+
+                  {/* Suggestion cards */}
+                  <div
+                    className={`w-full ${isCompact ? "flex flex-wrap justify-center gap-2" : "mx-auto grid max-w-xl grid-cols-2 gap-3"}`}
+                  >
+                    {(suggestedQuestions ?? getFallbackQuestions(persona))
+                      .slice(0, isCompact ? 6 : 4)
+                      .map((q, i) => {
+                        if (isCompact) {
+                          return (
+                            <button
+                              key={q}
+                              onClick={() => {
+                                setInput(q);
+                                inputRef.current?.focus();
+                              }}
+                              className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+                            >
+                              {q}
+                            </button>
+                          );
+                        }
+                        const Icon = SUGGESTION_ICONS[i % SUGGESTION_ICONS.length];
+                        return (
+                          <button
+                            key={q}
+                            onClick={() => {
+                              setInput(q);
+                              inputRef.current?.focus();
+                            }}
+                            className="group flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm"
+                          >
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                              <Icon className="size-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm leading-snug text-foreground/80 group-hover:text-foreground">
+                                {q}
+                              </p>
+                              <span className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                                Ask this
+                                <ArrowRight className="size-3" />
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               ))}
 
             {messages.map((msg) => (
               <div key={msg.id} className="space-y-3">
-                <div className="flex items-start gap-2.5">
+                <div
+                  className={cn(
+                    "flex items-start gap-3",
+                    msg.role === "assistant" && "rounded-lg bg-muted/30 p-4",
+                  )}
+                >
                   <div
-                    className={`mt-1 flex size-6 shrink-0 items-center justify-center rounded-full ${
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-full",
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
+                        : "bg-background text-primary ring-1 ring-border",
+                    )}
                   >
                     {msg.role === "user" ? (
                       <User className="size-3.5" />
@@ -504,10 +602,10 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                   </div>
                   <div className="min-w-0 flex-1">
                     {msg.role === "user" ? (
-                      <p className="text-sm">{msg.content}</p>
+                      <p className="text-sm leading-relaxed">{msg.content}</p>
                     ) : (
                       <>
-                        {msg.intent && (
+                        {msg.intent && persona !== "business" && (
                           <Badge variant="outline" className="mb-2 text-[10px]">
                             {msg.intent.intent} · {(msg.intent.confidence * 100).toFixed(0)}%
                           </Badge>
@@ -536,7 +634,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                   !msg.isStreaming &&
                   msg.actions &&
                   msg.actions.length > 0 && (
-                    <div className="ml-8">
+                    <div className="ml-10">
                       <ActionCardList
                         actions={msg.actions}
                         onAction={(a) => handleAction(a, msg.sqlBlocks)}
@@ -546,19 +644,23 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
 
                 {msg.role === "assistant" &&
                   !msg.isStreaming &&
+                  persona !== "business" &&
                   msg.sources &&
                   msg.sources.length > 0 && (
-                    <div className="ml-8">
+                    <div className="ml-10">
                       <SourceCardList sources={msg.sources} />
                     </div>
                   )}
 
                 {msg.role === "assistant" && !msg.isStreaming && msg.logId && (
-                  <div className="ml-8 flex items-center gap-1">
+                  <div className="ml-10 flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={`h-7 w-7 p-0 ${msg.feedback === "up" ? "text-green-600" : "text-muted-foreground"}`}
+                      className={cn(
+                        "h-7 w-7 p-0",
+                        msg.feedback === "up" ? "text-green-600" : "text-muted-foreground",
+                      )}
                       onClick={() => handleFeedback(msg.id, msg.logId!, "up")}
                       disabled={!!msg.feedback}
                       title="Helpful"
@@ -568,7 +670,10 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={`h-7 w-7 p-0 ${msg.feedback === "down" ? "text-red-600" : "text-muted-foreground"}`}
+                      className={cn(
+                        "h-7 w-7 p-0",
+                        msg.feedback === "down" ? "text-red-600" : "text-muted-foreground",
+                      )}
                       onClick={() => handleFeedback(msg.id, msg.logId!, "down")}
                       disabled={!!msg.feedback}
                       title="Not helpful"
@@ -603,34 +708,36 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         </ScrollArea>
 
         {/* Input */}
-        <div className="border-t p-4">
-          <div
-            className={`flex items-end gap-2 ${isCompact ? "" : "mx-auto w-full max-w-[min(90%,72rem)]"}`}
-          >
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your data estate..."
-              className="flex-1 resize-none rounded-md border bg-muted/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              rows={input.includes("\n") ? Math.min(5, input.split("\n").length + 1) : 1}
-              disabled={loading}
-            />
-            <Button
-              size="sm"
-              className="h-9 w-9 shrink-0 p-0"
-              onClick={() => handleSubmit()}
-              disabled={loading || !input.trim()}
-            >
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            </Button>
+        <div className="border-t px-4 py-3">
+          <div className={isCompact ? "" : "mx-auto w-full max-w-[min(90%,72rem)]"}>
+            <div className="flex items-end gap-2 rounded-xl border bg-muted/20 p-2 shadow-sm transition-shadow focus-within:border-primary/30 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/20">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about your data estate…"
+                className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm placeholder:text-muted-foreground/60 focus:outline-none"
+                rows={input.includes("\n") ? Math.min(5, input.split("\n").length + 1) : 1}
+                disabled={loading}
+              />
+              <Button
+                size="sm"
+                className="size-9 shrink-0 rounded-lg p-0"
+                onClick={() => handleSubmit()}
+                disabled={loading || !input.trim()}
+              >
+                {loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+              </Button>
+            </div>
+            <p className="mt-1.5 text-center text-[10px] text-muted-foreground/60">
+              Enter to send · Shift+Enter for new line · ⌘J to toggle
+            </p>
           </div>
-          <p
-            className={`mt-1.5 text-[10px] text-muted-foreground ${isCompact ? "" : "mx-auto w-full max-w-[min(90%,72rem)]"}`}
-          >
-            Press Enter to send, Shift+Enter for new line. ⌘J to toggle.
-          </p>
         </div>
 
         {genieModalPayload && (

@@ -56,41 +56,50 @@ export function EmbeddingStatus() {
 
   if (!stats?.enabled) {
     return (
-      <div className="flex items-center gap-2 border-b bg-amber-50 px-4 py-2 dark:bg-amber-950/30">
-        <AlertCircle className="size-4 text-amber-600 dark:text-amber-400" />
+      <div className="flex items-center gap-2 border-b bg-amber-50/80 px-4 py-1.5 dark:bg-amber-950/30">
+        <AlertCircle className="size-3.5 text-amber-600 dark:text-amber-400" />
         <span className="text-xs text-amber-700 dark:text-amber-300">
-          Embedding endpoint not configured. Ask Forge works best with semantic search enabled.
+          Embedding endpoint not configured — enable semantic search for best results.
         </span>
       </div>
     );
   }
 
   return (
-    <div className="border-b bg-muted/30">
-      <div className="flex items-center justify-between px-4 py-2">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Database className="size-3.5" />
-          <span className="font-medium">Knowledge Base</span>
+    <div className="border-b">
+      <div className="flex items-center justify-between px-4 py-1.5">
+        <div className="flex items-center gap-2">
           {stats.totalRecords > 0 ? (
-            <Badge variant="secondary" className="gap-1 text-[10px]">
-              <CheckCircle2 className="size-2.5 text-green-500" />
-              {stats.totalRecords.toLocaleString()} vectors
-            </Badge>
+            <>
+              <CheckCircle2 className="size-3.5 text-green-500" />
+              <span className="text-xs text-muted-foreground">
+                Grounded in{" "}
+                <span className="font-medium text-foreground/80">
+                  {stats.totalRecords.toLocaleString()}
+                </span>{" "}
+                knowledge sources
+              </span>
+            </>
           ) : (
-            <Badge variant="outline" className="text-[10px] text-amber-600">
-              No embeddings
-            </Badge>
+            <>
+              <AlertCircle className="size-3.5 text-amber-500" />
+              <span className="text-xs text-muted-foreground">
+                No knowledge sources indexed yet
+              </span>
+            </>
           )}
-          {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-        </button>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="ml-1 text-muted-foreground/60 transition-colors hover:text-foreground"
+          >
+            {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          </button>
+        </div>
 
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 gap-1 text-[10px]"
+          className="h-6 gap-1 text-[10px] text-muted-foreground"
           onClick={() => fetchStats()}
         >
           <RefreshCw className="size-3" />
