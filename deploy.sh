@@ -37,7 +37,7 @@ set -euo pipefail
 # -------------------------------------------------------------------------
 APP_NAME="databricks-forge"
 APP_DESC="Discover AI-powered use cases from Unity Catalog metadata"
-DEFAULT_ENDPOINT="databricks-claude-sonnet-4-6"
+DEFAULT_ENDPOINT="databricks-claude-opus-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_EMBEDDING_ENDPOINT="databricks-qwen3-embedding-0-6b"
 DEFAULT_REVIEW_ENDPOINT="databricks-gpt-5-4"
@@ -92,7 +92,7 @@ Options:
                          (default: databricks-forge)
   --warehouse NAME        SQL Warehouse name (skips interactive prompt)
   --profile NAME         Databricks CLI profile name
-  --endpoint NAME             Premium model endpoint    (default: databricks-claude-sonnet-4-6)
+  --endpoint NAME             Premium model endpoint    (default: databricks-claude-opus-4-6)
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
   --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-qwen3-embedding-0-6b)
   --review-endpoint NAME      Review model endpoint     (default: databricks-gpt-5-4)
