@@ -7,6 +7,7 @@ import {
   DomainBreakdownChart,
   TypeSplitChart,
   StepDurationChart,
+  ScoreRadarOverview,
 } from "@/components/charts/lazy";
 import { SchemaCoverageCard } from "./schema-coverage-card";
 import { BusinessContextCard } from "./business-context-card";
@@ -76,7 +77,8 @@ export function OverviewTabContent({
           )}
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-6 pt-4">
-          {/* Charts */}
+          {useCases.length > 1 && <ScoreRadarOverview useCases={useCases} />}
+
           {useCases.length > 0 && (
             <div className="grid gap-6 md:grid-cols-3">
               <ScoreDistributionChart

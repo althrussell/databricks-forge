@@ -16,6 +16,7 @@ import {
 } from "@/components/charts/lazy";
 import { ActivityFeedInline } from "@/components/pipeline/activity-feed";
 import { staggerContainer, staggerItem } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import {
   BrainCircuit,
   Layers,
@@ -56,6 +57,19 @@ export interface DashboardStats {
     benchmarkFreshnessRate: number | null;
     benchmarkIndustryCoverage: number | null;
   };
+}
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -117,25 +131,49 @@ export function DashboardContent({
       {/* ── Hero metric + Quick actions ── */}
       <motion.div variants={staggerItem} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Hero metric tile */}
-        <Card className="relative overflow-hidden border-primary/20 sm:col-span-2 lg:col-span-1 lg:row-span-2">
-          <div className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rounded-full bg-primary/5" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center gap-2">
-              <BrainCircuit className="h-4 w-4 text-primary" />
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Use Cases Generated
-              </p>
-              <InfoTip tip={DASHBOARD.useCases} />
-            </div>
-            <p className="mt-3 text-5xl font-extrabold tracking-tight text-primary">
-              {stats.totalUseCases.toLocaleString()}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {stats.aiCount} AI &middot; {stats.statisticalCount} Statistical
-              {stats.geospatialCount > 0 && <> &middot; {stats.geospatialCount} Geospatial</>}
-            </p>
-          </CardContent>
-        </Card>
+        {(() => {
+          const latestRun = stats.recentRuns.find((r) => r.status === "completed");
+          const card = (
+            <Card
+              className={cn(
+                "relative overflow-hidden border-primary/20 sm:col-span-2 lg:col-span-1 lg:row-span-2",
+                latestRun && "hover:-translate-y-0.5 hover:shadow-md",
+              )}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2">
+                  <BrainCircuit className="h-4 w-4 text-primary" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Use Cases Generated
+                  </p>
+                  <InfoTip tip={DASHBOARD.useCases} />
+                </div>
+                <p className="mt-3 text-5xl font-extrabold tracking-tight text-primary">
+                  {stats.totalUseCases.toLocaleString()}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {stats.aiCount} AI &middot; {stats.statisticalCount} Statistical
+                  {stats.geospatialCount > 0 && (
+                    <> &middot; {stats.geospatialCount} Geospatial</>
+                  )}
+                </p>
+                {latestRun && (
+                  <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground/70">
+                    from {latestRun.businessName}
+                    <ArrowRight className="h-3 w-3" />
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          );
+          return latestRun ? (
+            <Link href={`/runs/${latestRun.runId}`} className="group sm:col-span-2 lg:col-span-1 lg:row-span-2">
+              {card}
+            </Link>
+          ) : (
+            <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">{card}</div>
+          );
+        })()}
 
         {/* Quick action: New Discovery */}
         <Link href="/configure" className="group">
@@ -189,6 +227,7 @@ export function DashboardContent({
           tip={DASHBOARD.avgScore}
           value={`${stats.avgScore}%`}
           detail="Composite quality score"
+          sentiment={stats.avgScore >= 70 ? "positive" : stats.avgScore >= 40 ? "neutral" : "warning"}
         />
         <KPITile
           icon={<Layers className="h-4 w-4 text-chart-3" />}
@@ -203,8 +242,22 @@ export function DashboardContent({
           tip={DASHBOARD.successRate}
           value={successRate > 0 ? `${successRate}%` : "N/A"}
           detail={stats.failedRuns > 0 ? `${stats.failedRuns} failed` : "All runs successful"}
+          sentiment={successRate === 100 ? "positive" : successRate >= 80 ? "neutral" : "warning"}
         />
       </motion.div>
+
+      {/* ── Charts ── */}
+      {stats.totalUseCases > 0 && (
+        <motion.div variants={staggerItem} className="grid gap-6 md:grid-cols-3">
+          <ScoreDistributionChart scores={stats.scores} />
+          <DomainBreakdownChart data={stats.domainBreakdown} />
+          <TypeSplitChart
+            aiCount={stats.aiCount}
+            statisticalCount={stats.statisticalCount}
+            geospatialCount={stats.geospatialCount}
+          />
+        </motion.div>
+      )}
 
       {/* ── Recent Runs + Activity (side by side) ── */}
       <motion.div variants={staggerItem} className="grid gap-6 lg:grid-cols-5">
@@ -240,13 +293,11 @@ export function DashboardContent({
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{run.businessName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(run.createdAt).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      <p
+                        className="text-xs text-muted-foreground"
+                        title={new Date(run.createdAt).toLocaleString()}
+                      >
+                        {timeAgo(run.createdAt)}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
@@ -271,33 +322,23 @@ export function DashboardContent({
             <CardTitle className="text-base">Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <ActivityFeedInline limit={8} />
+            <ActivityFeedInline limit={5} />
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* ── Charts ── */}
-      {stats.totalUseCases > 0 && (
-        <motion.div variants={staggerItem} className="grid gap-6 md:grid-cols-3">
-          <ScoreDistributionChart scores={stats.scores} />
-          <DomainBreakdownChart data={stats.domainBreakdown} />
-          <TypeSplitChart
-            aiCount={stats.aiCount}
-            statisticalCount={stats.statisticalCount}
-            geospatialCount={stats.geospatialCount}
-          />
-        </motion.div>
-      )}
-
-      <p className="text-xs text-muted-foreground">
-        Forge reads <strong>metadata only</strong> -- schema names, table names, and column names.
-        No row-level data is accessed unless data sampling is explicitly enabled.
-      </p>
     </motion.div>
   );
 }
 
 // ── KPI Tile ──────────────────────────────────────────────────────────
+
+type Sentiment = "positive" | "neutral" | "warning";
+
+const SENTIMENT_BORDER: Record<Sentiment, string> = {
+  positive: "border-l-green-500 dark:border-l-green-400",
+  neutral: "border-l-border",
+  warning: "border-l-amber-500 dark:border-l-amber-400",
+};
 
 function KPITile({
   icon,
@@ -305,15 +346,17 @@ function KPITile({
   tip,
   value,
   detail,
+  sentiment = "neutral",
 }: {
   icon: React.ReactNode;
   label: string;
   tip?: string;
   value: string | number;
   detail?: string;
+  sentiment?: Sentiment;
 }) {
   return (
-    <Card>
+    <Card className={cn("border-l-[3px]", SENTIMENT_BORDER[sentiment])}>
       <CardContent className="pt-6">
         <div className="flex items-center gap-2">
           {icon}

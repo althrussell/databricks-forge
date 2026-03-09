@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+
 import {
   Accordion,
   AccordionContent,
@@ -37,8 +37,7 @@ import {
   Info,
 } from "lucide-react";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
-import { InfoTip } from "@/components/ui/info-tip";
-import { OUTCOMES } from "@/lib/help-text";
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -383,7 +382,7 @@ export default function IngestOutcomeMapPage() {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -393,11 +392,8 @@ export default function IngestOutcomeMapPage() {
             </Button>
           </Link>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">Ingest Outcome Map</h1>
-              <InfoTip tip={OUTCOMES.ingestDescription} />
-            </div>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Ingest Outcome Map</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               Upload a markdown outcome map and let AI extract structured data
             </p>
           </div>
@@ -436,8 +432,6 @@ export default function IngestOutcomeMapPage() {
           />
         </div>
       </div>
-
-      <Separator />
 
       {/* ----------------------------------------------------------------- */}
       {/* Step 1: Upload */}
@@ -647,7 +641,7 @@ export default function IngestOutcomeMapPage() {
       {/* Step 3: Review & Edit */}
       {/* ----------------------------------------------------------------- */}
       {step === "review" && parsedOutcome && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {/* Summary header */}
           <Card className="bg-gradient-to-r from-primary/5 to-primary/0">
             <CardHeader>

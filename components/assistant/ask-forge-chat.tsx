@@ -14,7 +14,7 @@ import {
   FALLBACK_QUESTIONS,
   FALLBACK_QUESTIONS_ANALYST,
   FALLBACK_QUESTIONS_TECH,
-} from "@/lib/assistant/suggested-questions";
+} from "@/lib/assistant/suggested-question-defaults";
 import {
   BrainCircuit,
   Send,
