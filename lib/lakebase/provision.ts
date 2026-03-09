@@ -73,11 +73,12 @@ function dedup<T>(key: string, fn: () => Promise<T>): Promise<T> {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PROJECT_ID_BASE = "databricks-forge";
+const PROJECT_ID_BASE = process.env.FORGE_APP_NAME || "databricks-forge";
 const BRANCH_ID = "production";
 const DATABASE_NAME = "databricks_postgres";
 const PG_VERSION = "17";
-const DISPLAY_NAME = "Databricks Forge AI";
+const DISPLAY_NAME =
+  PROJECT_ID_BASE === "databricks-forge" ? "Databricks Forge AI" : `Forge AI (${PROJECT_ID_BASE})`;
 const LAKEBASE_AUTH_MODES = ["oauth", "native_password"] as const;
 export type LakebaseAuthMode = (typeof LAKEBASE_AUTH_MODES)[number];
 
