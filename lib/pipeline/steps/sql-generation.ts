@@ -82,6 +82,16 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   let completed = 0;
   let failed = 0;
 
+  // Diagnostic accumulators for summary logging
+  const outcomes: { id: string; name: string; domain: string; status: string; qualityScore?: number }[] = [];
+  let hallucinationAttempts = 0;
+  let hallucinationFixed = 0;
+  let executionFixAttempts = 0;
+  let executionFixed = 0;
+  let truncatedCount = 0;
+  let reviewFixApplied = 0;
+  let reviewFixRejected = 0;
+
   // Shared prompt variables (business context -- same for all use cases)
   const businessVars: Record<string, string> = {
     business_name: run.config.businessName,
@@ -161,16 +171,43 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
         const result = results[j];
         const uc = wave[j];
 
-        if (result.status === "fulfilled" && result.value) {
-          uc.sqlCode = result.value;
+        if (result.status === "fulfilled" && result.value.sql) {
+          const { sql: genSql, diag } = result.value;
+          uc.sqlCode = genSql;
           uc.sqlStatus = "generated";
+
+          if (diag.hadHallucination) hallucinationAttempts++;
+          if (diag.hallucinationFixed) hallucinationFixed++;
+          if (diag.hadExecutionError) executionFixAttempts++;
+          if (diag.executionFixed) executionFixed++;
+          if (diag.wasTruncated) truncatedCount++;
+          if (diag.reviewApplied) reviewFixApplied++;
+          if (diag.reviewRejected) reviewFixRejected++;
+
+          outcomes.push({
+            id: uc.id,
+            name: uc.name,
+            domain,
+            status: "generated",
+            qualityScore: diag.qualityScore,
+          });
         } else {
           const reason =
             result.status === "rejected"
               ? result.reason instanceof Error
                 ? result.reason.message
                 : String(result.reason)
-              : "empty response";
+              : result.status === "fulfilled"
+                ? "empty/null SQL"
+                : "empty response";
+
+          // Still accumulate diagnostics from fulfilled-but-null results
+          if (result.status === "fulfilled") {
+            const { diag } = result.value;
+            if (diag.hadHallucination) hallucinationAttempts++;
+            if (diag.wasTruncated) truncatedCount++;
+          }
+
           logger.warn("SQL generation failed for use case", {
             useCaseId: uc.id,
             name: uc.name,
@@ -179,6 +216,7 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
           uc.sqlCode = null;
           uc.sqlStatus = "failed";
           failed++;
+          outcomes.push({ id: uc.id, name: uc.name, domain, status: `failed: ${reason.substring(0, 100)}` });
         }
         completed++;
       }
@@ -198,7 +236,18 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
     }
   }
 
-  logger.info("SQL generation complete", { generated: completed - failed, failed });
+  logger.info("SQL generation complete", {
+    generated: completed - failed,
+    failed,
+    hallucinationAttempts,
+    hallucinationFixed,
+    executionFixAttempts,
+    executionFixed,
+    truncatedCount,
+    reviewFixApplied,
+    reviewFixRejected,
+    outcomes: outcomes.map((o) => `${o.domain}/${o.name}: ${o.status}`),
+  });
 
   return useCases;
 }
@@ -206,6 +255,34 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
 // ---------------------------------------------------------------------------
 // Per-use-case SQL generation
 // ---------------------------------------------------------------------------
+
+interface SqlGenDiagnostics {
+  hadHallucination: boolean;
+  hallucinationFixed: boolean;
+  hadExecutionError: boolean;
+  executionFixed: boolean;
+  wasTruncated: boolean;
+  reviewApplied: boolean;
+  reviewRejected: boolean;
+  qualityScore?: number;
+}
+
+interface SqlGenResult {
+  sql: string | null;
+  diag: SqlGenDiagnostics;
+}
+
+function emptyDiag(): SqlGenDiagnostics {
+  return {
+    hadHallucination: false,
+    hallucinationFixed: false,
+    hadExecutionError: false,
+    executionFixed: false,
+    wasTruncated: false,
+    reviewApplied: false,
+    reviewRejected: false,
+  };
+}
 
 async function generateSqlForUseCase(
   uc: UseCase,
@@ -222,7 +299,8 @@ async function generateSqlForUseCase(
   sampleRowsPerTable: number,
   runId?: string,
   userEmail?: string | null,
-): Promise<string | null> {
+): Promise<SqlGenResult> {
+  const diag = emptyDiag();
   // Resolve table schemas for this use case's involved tables
   const involvedTables: TableInfo[] = [];
   const involvedColumns: ColumnInfo[] = [];
@@ -322,13 +400,15 @@ async function generateSqlForUseCase(
   const sql = cleanSqlResponse(result.rawResponse);
 
   if (!sql || sql.length < 20) {
-    return null;
+    return { sql: null, diag };
   }
 
   // Detect truncated SQL (LLM ran out of tokens mid-query)
   if (isTruncatedSql(sql)) {
+    diag.wasTruncated = true;
     logger.warn("SQL appears truncated (output token limit hit), attempting fix", {
       useCaseId: uc.id,
+      sqlPreview: sql.substring(Math.max(0, sql.length - 120)),
     });
     const fixedSql = await attemptSqlFix(
       uc,
@@ -339,24 +419,30 @@ async function generateSqlForUseCase(
       aiModel,
       runId,
     );
-    if (fixedSql) return fixedSql;
-    return null;
+    if (fixedSql) return { sql: fixedSql, diag };
+    return { sql: null, diag };
   }
 
   // Strict column validation -- hallucinated columns trigger a fix cycle
   let currentSql = sql;
   const validation = validateSqlOutput(currentSql, uc.tablesInvolved, involvedColumns);
   if (!validation.valid) {
-    logger.warn("SQL validation failed", { useCaseId: uc.id, warnings: validation.warnings });
+    logger.warn("SQL validation failed", {
+      useCaseId: uc.id,
+      warnings: validation.warnings,
+      sqlPreview: currentSql.substring(0, 200),
+    });
   }
 
   if (validation.unknownColumns.length > 0) {
+    diag.hadHallucination = true;
     logger.info("Hallucinated columns detected, attempting fix", {
       useCaseId: uc.id,
       unknownColumns: validation.unknownColumns,
       knownColumnCount: involvedColumns.length,
       tablesResolved: involvedTables.length,
       tablesRequested: uc.tablesInvolved.length,
+      sqlPreview: currentSql.substring(0, 200),
     });
 
     const columnErrorMsg = buildColumnViolationMessage(
@@ -378,7 +464,7 @@ async function generateSqlForUseCase(
 
     if (!fixedSql) {
       logger.warn("Column fix failed, rejecting SQL", { useCaseId: uc.id });
-      return null;
+      return { sql: null, diag };
     }
 
     const revalidation = validateSqlOutput(fixedSql, uc.tablesInvolved, involvedColumns);
@@ -390,18 +476,21 @@ async function generateSqlForUseCase(
         tablesResolved: involvedTables.length,
         tablesRequested: uc.tablesInvolved.length,
       });
-      return null;
+      return { sql: null, diag };
     }
 
+    diag.hallucinationFixed = true;
     currentSql = fixedSql;
   }
 
   // Attempt to execute the SQL to catch runtime errors; if it fails, try fix prompt
   const executionError = await trySqlExecution(currentSql);
   if (executionError) {
+    diag.hadExecutionError = true;
     logger.info("SQL execution failed, attempting fix", {
       useCaseId: uc.id,
       error: executionError,
+      sqlPreview: currentSql.substring(0, 200),
     });
     const fixedSql = await attemptSqlFix(
       uc,
@@ -414,6 +503,7 @@ async function generateSqlForUseCase(
       sampleDataSection,
     );
     if (fixedSql) {
+      diag.executionFixed = true;
       currentSql = fixedSql;
     } else {
       logger.warn("SQL fix failed, returning original SQL", { useCaseId: uc.id });
@@ -428,6 +518,7 @@ async function generateSqlForUseCase(
       schemaContext: schemaMarkdown,
       surface: "pipeline-sql",
     });
+    diag.qualityScore = review.qualityScore;
     if (review.fixedSql) {
       const fixError = await trySqlExecution(review.fixedSql);
       if (!fixError) {
@@ -437,11 +528,13 @@ async function generateSqlForUseCase(
           involvedColumns,
         );
         if (reviewColCheck.unknownColumns.length > 0) {
+          diag.reviewRejected = true;
           logger.warn("Review fix introduced hallucinated columns, keeping original", {
             useCaseId: uc.id,
             unknownColumns: reviewColCheck.unknownColumns,
           });
         } else {
+          diag.reviewApplied = true;
           logger.info("SQL review applied fix", {
             useCaseId: uc.id,
             qualityScore: review.qualityScore,
@@ -450,18 +543,22 @@ async function generateSqlForUseCase(
           currentSql = review.fixedSql;
         }
       } else {
-        logger.warn("Review fix failed EXPLAIN, keeping original", { useCaseId: uc.id });
+        diag.reviewRejected = true;
+        logger.warn("Review fix failed EXPLAIN, keeping original", {
+          useCaseId: uc.id,
+          explainError: fixError.substring(0, 200),
+        });
       }
     } else if (review.verdict === "fail") {
       logger.warn("SQL review verdict: fail (no fix available)", {
         useCaseId: uc.id,
         qualityScore: review.qualityScore,
-        issues: review.issues.map((i) => i.message),
+        issues: review.issues.map((i) => `[${i.category}] ${i.message}`),
       });
     }
   }
 
-  return currentSql;
+  return { sql: currentSql, diag };
 }
 
 /**
