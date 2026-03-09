@@ -221,6 +221,9 @@ export async function generateExcel(
     { header: "System Feasibility", key: "feasibility", width: 15 },
     { header: "System Impact", key: "impact", width: 13 },
     { header: "System Overall", key: "overall", width: 13 },
+    { header: "Priority Rationale", key: "priorityRationale", width: 45 },
+    { header: "Feasibility Rationale", key: "feasibilityRationale", width: 45 },
+    { header: "Impact Rationale", key: "impactRationale", width: 45 },
   ];
 
   if (hasAnyUserScores) {
@@ -258,6 +261,9 @@ export async function generateExcel(
       feasibility: uc.feasibilityScore,
       impact: uc.impactScore,
       overall: uc.overallScore,
+      priorityRationale: uc.scoreRationale?.priority.rationale ?? "",
+      feasibilityRationale: uc.scoreRationale?.feasibility.rationale ?? "",
+      impactRationale: uc.scoreRationale?.impact.rationale ?? "",
     };
 
     if (hasAnyUserScores) {
@@ -273,20 +279,22 @@ export async function generateExcel(
   styleHeaderRow(ucSheet);
   styleDataRows(ucSheet, 2, ucSheet.rowCount);
 
-  // Apply conditional score formatting to system score columns (14-17)
-  const totalCols = hasAnyUserScores ? 21 : 17;
+  // Apply conditional score formatting to system score columns (15-18)
+  const rationaleColCount = 3;
+  const totalCols = hasAnyUserScores ? 18 + rationaleColCount + 4 : 18 + rationaleColCount;
   for (let r = 2; r <= ucSheet.rowCount; r++) {
     const row = ucSheet.getRow(r);
-    for (let col = 14; col <= 17; col++) {
+    for (let col = 15; col <= 18; col++) {
       const cell = row.getCell(col);
       const val = cell.value as number;
       if (typeof val === "number") {
         styleScoreCell(cell, val);
       }
     }
-    // Apply conditional score formatting to user score columns (18-21) if present
+    // Apply conditional score formatting to user score columns if present
     if (hasAnyUserScores) {
-      for (let col = 18; col <= 21; col++) {
+      const userScoreStart = 18 + rationaleColCount + 1; // after rationale columns
+      for (let col = userScoreStart; col <= userScoreStart + 3; col++) {
         const cell = row.getCell(col);
         const val = cell.value as number;
         if (typeof val === "number") {

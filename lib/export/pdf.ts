@@ -751,6 +751,28 @@ export async function generatePdf(
                 align: "center",
               });
           }
+
+          // Score rationale (if available)
+          if (uc.scoreRationale) {
+            const rationaleY = scoreBarY + 32;
+            if (rationaleY < PAGE_H - 30) {
+              const rationales = [
+                uc.scoreRationale.priority.rationale,
+                uc.scoreRationale.feasibility.rationale,
+                uc.scoreRationale.impact.rationale,
+              ].filter(Boolean);
+              if (rationales.length > 0) {
+                doc
+                  .fontSize(7)
+                  .fillColor(MID_GRAY)
+                  .font("Helvetica-Oblique")
+                  .text(rationales.join(" | "), MARGIN + 20, rationaleY, {
+                    width: CONTENT_W - 40,
+                    lineGap: 1,
+                  });
+              }
+            }
+          }
         }
 
         addFooter(doc);

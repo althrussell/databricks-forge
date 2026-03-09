@@ -185,6 +185,44 @@ export interface BusinessContext {
 }
 
 // ---------------------------------------------------------------------------
+// Score Rationale & Consulting Scorecard
+// ---------------------------------------------------------------------------
+
+export interface PriorityFactors {
+  roi: number;
+  strategic_alignment: number;
+  time_to_value: number;
+  reusability: number;
+}
+
+export interface FeasibilityFactors {
+  data_availability: number;
+  data_accessibility: number;
+  architecture_fitness: number;
+  team_skills: number;
+  domain_knowledge: number;
+  people_allocation: number;
+  budget_allocation: number;
+  time_to_production: number;
+}
+
+export interface ScoreRationale {
+  priority: { rationale: string; factors: PriorityFactors };
+  feasibility: { rationale: string; factors: FeasibilityFactors };
+  impact: { rationale: string };
+}
+
+export interface ConsultingScorecard {
+  strategicAlignment: number;
+  measurableValue: number;
+  implementationFeasibility: number;
+  evidenceStrength: number;
+  novelty: number;
+  boardroomDefensibility: number;
+  blendedScore: number;
+}
+
+// ---------------------------------------------------------------------------
 // Use Case
 // ---------------------------------------------------------------------------
 
@@ -214,6 +252,8 @@ export interface UseCase {
   userFeasibilityScore: number | null;
   userImpactScore: number | null;
   userOverallScore: number | null;
+  scoreRationale: ScoreRationale | null;
+  consultingScorecard: ConsultingScorecard | null;
   sqlCode: string | null;
   sqlStatus: string | null;
   feedback: "accepted" | "rejected" | "dismissed" | null;

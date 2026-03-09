@@ -56,6 +56,7 @@ import {
   Globe,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/lazy";
+import { ScoreInsights } from "@/components/pipeline/score-insights";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
 import type { UseCase } from "@/lib/domain/types";
 
@@ -699,6 +700,13 @@ export function UseCaseTable({
                       )}
                     </div>
                   ))}
+
+                {!adjustingScores && (
+                  <ScoreInsights
+                    rationale={selectedUseCase.scoreRationale}
+                    scorecard={selectedUseCase.consultingScorecard}
+                  />
+                )}
 
                 {onUpdate && (
                   <div className="flex items-center gap-2">

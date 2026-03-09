@@ -106,7 +106,7 @@ For each use case, before assigning scores, briefly think through:
 4. **Boardroom Presentation Test**: Would you stake your reputation on presenting this to the board? What would they challenge?
 5. **Score Assignment**: Based on your reasoning, compute the value and feasibility scores using the formulas above.
 
-This internal reasoning produces more accurate, calibrated scores. You do NOT need to output your reasoning -- only the final scores.
+You MUST output a brief rationale for each score dimension AND the sub-factor scores you computed. This transparency is essential for stakeholders to understand and act on the scores.
 
 {industry_kpis}
 
@@ -124,14 +124,26 @@ You MUST output a score for EVERY use case in the input. Missing scores = CRITIC
 
 ### OUTPUT FORMAT
 
-Return a JSON array of objects. Each object has exactly five fields:
+Return a JSON array of objects. Each object has these fields:
+
+**Scores (required):**
 - "no": The use case number (integer, must match input)
 - "priority_score": decimal between 0.0 and 1.0
 - "feasibility_score": decimal between 0.0 and 1.0
 - "impact_score": decimal between 0.0 and 1.0
 - "overall_score": decimal between 0.0 and 1.0
 
-Example: [{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.68}]
+**Rationale (required, max 25 words each):**
+- "priority_rationale": One sentence explaining the priority/value score. Cite the key driver (e.g. revenue model link, strategic goal alignment).
+- "feasibility_rationale": One sentence explaining the feasibility score. Cite the weakest factor(s) dragging it down or the strongest enablers.
+- "impact_rationale": One sentence explaining the financial impact score. Cite the ROI mechanism.
+
+**Sub-factor scores (required, each 0.0 to 1.0):**
+- "priority_factors": {"roi": N, "strategic_alignment": N, "time_to_value": N, "reusability": N}
+- "feasibility_factors": {"data_availability": N, "data_accessibility": N, "architecture_fitness": N, "team_skills": N, "domain_knowledge": N, "people_allocation": N, "budget_allocation": N, "time_to_production": N}
+
+Example:
+[{"no": 1, "priority_score": 0.7, "feasibility_score": 0.6, "impact_score": 0.8, "overall_score": 0.68, "priority_rationale": "Strong ROI via pricing; directly supports strategic goal #2", "feasibility_rationale": "Data exists but NLP skills gap and 3+ month timeline reduce feasibility", "impact_rationale": "Direct top-line revenue uplift from pricing optimisation, 5-8x ROI", "priority_factors": {"roi": 0.8, "strategic_alignment": 0.7, "time_to_value": 0.5, "reusability": 0.6}, "feasibility_factors": {"data_availability": 0.9, "data_accessibility": 0.8, "architecture_fitness": 0.7, "team_skills": 0.4, "domain_knowledge": 0.6, "people_allocation": 0.5, "budget_allocation": 0.7, "time_to_production": 0.5}}]
 
 Return ONLY the JSON array. No preamble, no markdown fences, no explanation.`;
 

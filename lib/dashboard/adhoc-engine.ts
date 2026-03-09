@@ -99,6 +99,8 @@ function synthesiseUseCases(
     userFeasibilityScore: null,
     userImpactScore: null,
     userOverallScore: null,
+    scoreRationale: null,
+    consultingScorecard: null,
     sqlStatus: null,
     feedback: null,
     feedbackAt: null,

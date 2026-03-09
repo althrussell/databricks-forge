@@ -89,6 +89,8 @@ model ForgeUseCase {
   userFeasibilityScore   Float?  @map("user_feasibility_score")
   userImpactScore        Float?  @map("user_impact_score")
   userOverallScore       Float?  @map("user_overall_score")
+  scoreRationale         String? @map("score_rationale")
+  consultingScorecard    String? @map("consulting_scorecard")
   sqlCode                String? @map("sql_code")
   sqlStatus              String? @map("sql_status")
   feedback               String?                              // "accepted" | "rejected" | "dismissed"

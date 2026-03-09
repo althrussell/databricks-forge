@@ -31,6 +31,8 @@ function makeUseCase(overrides: Partial<UseCase> = {}): UseCase {
     userFeasibilityScore: null,
     userImpactScore: null,
     userOverallScore: null,
+    scoreRationale: null,
+    consultingScorecard: null,
     sqlCode: "SELECT 1",
     sqlStatus: "generated",
     feedback: null,
