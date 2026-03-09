@@ -147,7 +147,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - **COLLATE**: For case-insensitive string comparisons, use \`COLLATE UTF8_LCASE\` on BOTH sides: \`col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE\`. Applying collation to only one side produces unreliable results
 - **Window functions**: Prefer window functions over self-joins. Use \`LAG(col, 1) OVER (PARTITION BY group ORDER BY date)\` for period-over-period comparisons. Use \`SUM(col) OVER (ORDER BY date)\` for running totals. Use \`AVG(col) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)\` for moving averages
 - **Window frames**: Specify explicit frames (\`ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\`) when cumulative behaviour is intended. Use \`ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\` for LAST_VALUE to see the entire partition
-- **Named windows**: When multiple columns use the same PARTITION BY, define a named window: \`SELECT SUM(x) OVER w, AVG(x) OVER w FROM t WINDOW w AS (PARTITION BY ...)\`
+- **Named windows**: When multiple columns use the same PARTITION BY, define a named window: \`SELECT SUM(x) OVER w, AVG(x) OVER w FROM t WINDOW w AS (PARTITION BY ...)\`. CRITICAL: you CANNOT extend a named window with a frame spec -- \`OVER (w ROWS BETWEEN ...)\` is a syntax error. Inline the full spec or define separate named windows for each distinct frame
 - Use explicit column lists over SELECT *
 
 **8. GEOSPATIAL USE CASE RULES**

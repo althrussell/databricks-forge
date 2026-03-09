@@ -65,6 +65,7 @@ Window functions:
 - Prefer window functions over self-joins for row comparisons, running totals, and ranking.
 - Specify explicit window frames (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) when cumulative behaviour is intended -- the default RANGE frame may group duplicate ORDER BY values unexpectedly.
 - Use named windows (WINDOW w AS (PARTITION BY ...)) when multiple columns share the same partitioning to reduce repetition.
+- NEVER extend a named window with a frame spec -- OVER (w ROWS BETWEEN ...) is a syntax error in Databricks SQL. Either inline the full window spec (PARTITION BY + ORDER BY + frame) in every OVER clause, or define separate named windows for each distinct frame.
 - Use LAST_VALUE with ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING to get the partition last value (default frame stops at CURRENT ROW).
 
 Lambda / higher-order functions:
@@ -132,6 +133,7 @@ DATABRICKS SQL RULES:
 - Use INTERVAL '30' DAY syntax for interval literals.
 - Prefer CREATE OR REPLACE over DROP + CREATE.
 - Specify explicit window frames (ROWS BETWEEN ...) for cumulative calculations.
+- NEVER extend a named window with a frame spec -- OVER (w ROWS BETWEEN ...) is a syntax error. Inline the full spec or define separate named windows per frame.
 - Prefer transform()/filter()/aggregate() for array ops over EXPLODE + re-aggregate.
 - When querying metric views: wrap ALL measure columns in MEASURE(col) AS col. Use GROUP BY ALL. NEVER use SELECT * or alias-prefixed measure references.
 - Format SQL across multiple lines with proper indentation. NEVER output single-line SQL.
@@ -188,7 +190,7 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - CREATE OR REPLACE over DROP IF EXISTS + CREATE
    - CLUSTER BY for liquid clustering (replaces Z-ORDER)
    - Explicit window frames (ROWS BETWEEN) for cumulative calculations
-   - Named windows when multiple columns share partitioning
+   - Named windows when multiple columns share partitioning -- but NEVER extend a named window with a frame (OVER (w ROWS BETWEEN ...) is invalid); inline the full spec or define separate named windows per frame
    - transform()/filter()/aggregate() for array operations instead of EXPLODE + re-aggregate
    - array_sort() with lambda for custom sort orders
 

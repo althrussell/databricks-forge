@@ -662,7 +662,7 @@ export function generateWindowFunctionsSummary(): string {
     return `### ${cat}\n${items}`;
   });
 
-  return `## Available Window Functions\n\nWindow functions operate on rows within a partition without collapsing them. Use OVER (PARTITION BY ... ORDER BY ...) to define the window.\n\n${sections.join("\n\n")}\n\n### Key Patterns\n- **Running total**: \`SUM(col) OVER (ORDER BY date_col)\`\n- **Moving average**: \`AVG(col) OVER (ORDER BY date_col ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)\`\n- **MoM comparison**: \`LAG(col, 1) OVER (PARTITION BY group ORDER BY month)\`\n- **Deduplication**: \`ROW_NUMBER() OVER (...) ... QUALIFY rn = 1\`\n- **Named window**: \`SELECT SUM(x) OVER w, AVG(x) OVER w FROM t WINDOW w AS (PARTITION BY ...)\``;
+  return `## Available Window Functions\n\nWindow functions operate on rows within a partition without collapsing them. Use OVER (PARTITION BY ... ORDER BY ...) to define the window.\n\n${sections.join("\n\n")}\n\n### Key Patterns\n- **Running total**: \`SUM(col) OVER (ORDER BY date_col)\`\n- **Moving average**: \`AVG(col) OVER (ORDER BY date_col ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)\`\n- **MoM comparison**: \`LAG(col, 1) OVER (PARTITION BY group ORDER BY month)\`\n- **Deduplication**: \`ROW_NUMBER() OVER (...) ... QUALIFY rn = 1\`\n- **Named window**: \`SELECT SUM(x) OVER w, AVG(x) OVER w FROM t WINDOW w AS (PARTITION BY ...)\`\n\n### Critical Constraint\n- NEVER extend a named window with a frame: \`OVER (w ROWS BETWEEN ...)\` is a syntax error in Databricks SQL. Inline the full window spec or define separate named windows for each distinct frame.`;
 }
 
 /**

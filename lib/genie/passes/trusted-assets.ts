@@ -286,6 +286,11 @@ Create parameterized queries from these examples.`;
               true,
             )
           ) {
+            logger.info("Trusted asset SQL fix applied", {
+              question: q.question,
+              verdict: review.verdict,
+              qualityScore: review.qualityScore,
+            });
             return { ...q, sql: review.fixedSql };
           }
           logger.warn("Trusted asset review fix failed schema validation, keeping original", {
@@ -293,7 +298,13 @@ Create parameterized queries from these examples.`;
           });
           return q;
         }
-        if (review.verdict === "fail") return null;
+        if (review.verdict === "fail") {
+          logger.warn("Trusted asset SQL dropped (fail verdict, no usable fix)", {
+            question: q.question,
+            qualityScore: review.qualityScore,
+          });
+          return null;
+        }
         return q;
       }),
     );
@@ -405,6 +416,11 @@ Create new parameterized queries based on these reference patterns.`;
           if (
             validateSqlExpression(allowlist, review.fixedSql, `trusted_ref_fix:${q.question}`, true)
           ) {
+            logger.info("Trusted asset SQL fix applied", {
+              question: q.question,
+              verdict: review.verdict,
+              qualityScore: review.qualityScore,
+            });
             return { ...q, sql: review.fixedSql };
           }
           logger.warn("Trusted asset review fix failed schema validation, keeping original", {
@@ -412,7 +428,13 @@ Create new parameterized queries based on these reference patterns.`;
           });
           return q;
         }
-        if (review.verdict === "fail") return null;
+        if (review.verdict === "fail") {
+          logger.warn("Trusted asset SQL dropped (fail verdict, no usable fix)", {
+            question: q.question,
+            qualityScore: review.qualityScore,
+          });
+          return null;
+        }
         return q;
       }),
     );

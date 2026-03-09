@@ -92,6 +92,7 @@ IMPORTANT DIALECT CONTEXT: This is Databricks SQL (based on Spark SQL / ANSI SQL
 - TIMESTAMP_NTZ IS supported for timezone-independent timestamps
 - MERGE INTO IS supported with WHEN MATCHED AND / WHEN NOT MATCHED
 - CREATE OR REPLACE TABLE/VIEW IS supported
+- Named WINDOW clause IS supported, but you CANNOT extend a named window with a frame spec — OVER (win_name ROWS BETWEEN ...) is a syntax error; inline the full PARTITION BY / ORDER BY / frame in every OVER clause, or define separate named windows for each distinct frame
 
 ## SQL to Review
 \`\`\`sql

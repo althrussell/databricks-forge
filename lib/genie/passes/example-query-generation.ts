@@ -260,10 +260,21 @@ async function generateWithEndpoint(
               true,
             )
           ) {
+            logger.info("Example query SQL fix applied", {
+              question: q.question,
+              verdict: review.verdict,
+              qualityScore: review.qualityScore,
+            });
             return { ...q, sql: review.fixedSql };
           }
         }
-        if (review.verdict === "fail") return null;
+        if (review.verdict === "fail") {
+          logger.warn("Example query SQL dropped (fail verdict, no usable fix)", {
+            question: q.question,
+            qualityScore: review.qualityScore,
+          });
+          return null;
+        }
         return q;
       }),
     );

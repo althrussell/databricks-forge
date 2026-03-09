@@ -344,6 +344,11 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
           if (
             validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)
           ) {
+            logger.info("Benchmark SQL fix applied", {
+              question: b.question,
+              verdict: review.verdict,
+              qualityScore: review.qualityScore,
+            });
             return { ...b, expectedSql: review.fixedSql };
           }
           logger.warn("Benchmark review fix failed schema validation, keeping original", {
@@ -351,7 +356,13 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
           });
           return b;
         }
-        if (review.verdict === "fail") return null;
+        if (review.verdict === "fail") {
+          logger.warn("Benchmark SQL dropped (fail verdict, no usable fix)", {
+            question: b.question,
+            qualityScore: review.qualityScore,
+          });
+          return null;
+        }
         return b;
       }),
     );
