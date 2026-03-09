@@ -282,6 +282,7 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
           }
 
           await pool.query('ALTER ROLE ' + safeRole + ' PASSWORD ' + safePasswordLiteral);
+          await pool.query('GRANT ' + safeRole + ' TO CURRENT_USER');
           await pool.query('GRANT CONNECT ON DATABASE databricks_postgres TO ' + safeRole);
           await pool.query('GRANT USAGE, CREATE ON SCHEMA public TO ' + safeRole);
           await pool.query('GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public TO ' + safeRole);
