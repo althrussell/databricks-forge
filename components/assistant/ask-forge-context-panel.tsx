@@ -139,13 +139,22 @@ export function AskForgeContextPanel({
 
   if (!hasContent && !loadingTables) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <Database className="size-10 text-muted-foreground/30" />
+      <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
+        <div className="flex items-center gap-3 text-muted-foreground/25">
+          <div className="flex size-10 items-center justify-center rounded-lg border border-dashed border-muted-foreground/20">
+            <Database className="size-5" />
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg border border-dashed border-muted-foreground/20">
+            <GitBranch className="size-5" />
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg border border-dashed border-muted-foreground/20">
+            <FileSearch className="size-5" />
+          </div>
+        </div>
         <div>
-          <p className="text-sm font-medium text-muted-foreground">Context Panel</p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
-            Referenced tables, health scores, lineage, and freshness will appear here when Forge
-            responds.
+          <p className="text-sm font-medium text-muted-foreground/60">Context appears here</p>
+          <p className="mx-auto mt-1.5 max-w-[220px] text-xs text-muted-foreground/40">
+            Ask a question to see referenced tables, lineage, and sources
           </p>
         </div>
       </div>

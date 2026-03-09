@@ -194,11 +194,16 @@ export function ConversationHistory({
         <Button
           variant="ghost"
           size="sm"
-          className="mb-2 h-8 w-8 p-0"
+          className="relative mb-2 h-8 w-8 p-0"
           onClick={onToggleCollapse}
-          title="Expand history"
+          title={`Expand history${conversations.length > 0 ? ` (${conversations.length})` : ""}`}
         >
           <PanelLeft className="size-4" />
+          {conversations.length > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+              {conversations.length > 9 ? "9+" : conversations.length}
+            </span>
+          )}
         </Button>
         <Button
           variant="ghost"
@@ -299,19 +304,22 @@ export function ConversationHistory({
           {!loading &&
             groups.map((group) => (
               <div key={group.label} className="mb-3">
-                <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.label}
                 </p>
                 {group.conversations.map((conv) => (
                   <div
                     key={conv.id}
                     className={cn(
-                      "group relative flex items-center rounded-md px-2 py-1.5 text-sm transition-colors",
+                      "group relative flex items-center rounded-md py-1.5 text-sm transition-colors",
                       activeConversationId === conv.id
-                        ? "bg-accent text-accent-foreground"
-                        : "text-foreground/80 hover:bg-accent/50",
+                        ? "bg-accent text-accent-foreground pl-3.5 pr-2"
+                        : "px-2 text-foreground/80 hover:bg-accent/50",
                     )}
                   >
+                    {activeConversationId === conv.id && (
+                      <span className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary" />
+                    )}
                     {editingId === conv.id ? (
                       <div className="flex min-w-0 flex-1 items-center gap-1">
                         <Input

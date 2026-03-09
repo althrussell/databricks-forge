@@ -21,9 +21,8 @@ import {
 } from "@/components/assistant/deploy-dashboard-dialog";
 import { DeployOptions } from "@/components/assistant/deploy-options";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
-import { PanelRightClose, PanelRight, Target, Briefcase, Wrench } from "lucide-react";
+import { PanelRightClose, PanelRight } from "lucide-react";
 
 export default function AskForgeContent() {
   const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(
@@ -240,31 +239,6 @@ export default function AskForgeContent() {
     <div className="-mx-4 -my-6 flex h-[calc(100vh-3.5rem)] flex-col sm:-mx-6 lg:-mx-8">
       <EmbeddingStatus />
 
-      {/* Persona toggle banner */}
-      <div className="flex items-center justify-between border-b bg-muted/20 px-4 py-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Mode</span>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          variant="outline"
-          value={persona}
-          onValueChange={handlePersonaChange}
-        >
-          <ToggleGroupItem value="business" className="gap-1 px-2.5 text-xs">
-            <Target className="size-3.5" />
-            Business
-          </ToggleGroupItem>
-          <ToggleGroupItem value="analyst" className="gap-1 px-2.5 text-xs">
-            <Briefcase className="size-3.5" />
-            Analyst
-          </ToggleGroupItem>
-          <ToggleGroupItem value="tech" className="gap-1 px-2.5 text-xs">
-            <Wrench className="size-3.5" />
-            Tech
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
       <div className="flex min-h-0 flex-1">
         {/* History sidebar */}
         {historyAvailable && (
@@ -288,6 +262,7 @@ export default function AskForgeContent() {
             sessionId={chatSessionId}
             initialMessages={initialMessages}
             suggestedQuestions={suggestedQuestions}
+            onPersonaChange={handlePersonaChange}
             onOpenSql={(sql, allBlocks) => {
               const blocks = allBlocks && allBlocks.length > 0 ? allBlocks : [sql];
               const index = blocks.indexOf(sql);

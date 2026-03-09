@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,7 @@ import {
   ThumbsDown,
   BookOpen,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/lazy";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
@@ -78,6 +79,7 @@ export function UseCaseTable({
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"score" | "name" | "domain">("score");
   const [selectedUseCase, setSelectedUseCase] = useState<UseCase | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editStatement, setEditStatement] = useState("");
@@ -281,80 +283,124 @@ export function UseCaseTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((uc, idx) => (
-                  <TableRow
-                    key={uc.id}
-                    className="cursor-pointer transition-colors hover:bg-muted/50"
-                    onClick={() => {
-                      setSelectedUseCase(uc);
-                      setAdjustingScores(false);
-                      setEditing(false);
-                    }}
-                  >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {idx + 1}
-                    </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{uc.name}</p>
-                          <p className="line-clamp-1 text-xs text-muted-foreground">{uc.statement}</p>
-                        </div>
-                        {hasAnyUserScore(uc) && (
-                          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <TypeBadge type={uc.type} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm">{uc.domain}</span>
-                        {uc.subdomain && (
-                          <span className="text-xs text-muted-foreground">/ {uc.subdomain}</span>
-                        )}
-                        {uc.enrichmentTags && uc.enrichmentTags.length > 0 && (
-                          <span
-                            className="ml-1 flex gap-0.5"
-                            title={`Enriched via: ${uc.enrichmentTags.join(", ")}`}
-                          >
-                            {uc.enrichmentTags.includes("benchmark") && (
-                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
-                            )}
-                            {uc.enrichmentTags.includes("outcome_map") && (
-                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
-                            )}
-                            {uc.enrichmentTags.includes("document") && (
-                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-500" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ScoreBadge
-                        score={uc.userOverallScore ?? uc.overallScore}
-                        isAdjusted={uc.userOverallScore != null}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedUseCase(uc);
-                          setAdjustingScores(false);
-                          setEditing(false);
-                        }}
+                filtered.map((uc, idx) => {
+                  const isExpanded = expandedId === uc.id;
+                  return (
+                    <React.Fragment key={uc.id}>
+                      <TableRow
+                        className="cursor-pointer transition-colors hover:bg-muted/50"
+                        onClick={() => setExpandedId(isExpanded ? null : uc.id)}
                       >
-                        Details
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            {isExpanded ? (
+                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            {idx + 1}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[300px]">
+                          <div className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium">{uc.name}</p>
+                              {!isExpanded && (
+                                <p className="line-clamp-1 text-xs text-muted-foreground">
+                                  {uc.statement}
+                                </p>
+                              )}
+                            </div>
+                            {hasAnyUserScore(uc) && (
+                              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <TypeBadge type={uc.type} />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm">{uc.domain}</span>
+                            {uc.subdomain && (
+                              <span className="text-xs text-muted-foreground">
+                                / {uc.subdomain}
+                              </span>
+                            )}
+                            {uc.enrichmentTags && uc.enrichmentTags.length > 0 && (
+                              <span
+                                className="ml-1 flex gap-0.5"
+                                title={`Enriched via: ${uc.enrichmentTags.join(", ")}`}
+                              >
+                                {uc.enrichmentTags.includes("benchmark") && (
+                                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                )}
+                                {uc.enrichmentTags.includes("outcome_map") && (
+                                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                )}
+                                {uc.enrichmentTags.includes("document") && (
+                                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-500" />
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ScoreBadge
+                            score={uc.userOverallScore ?? uc.overallScore}
+                            isAdjusted={uc.userOverallScore != null}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedUseCase(uc);
+                              setAdjustingScores(false);
+                              setEditing(false);
+                            }}
+                          >
+                            Details
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell />
+                          <TableCell colSpan={5} className="py-4">
+                            <div className="space-y-3">
+                              <div>
+                                <div className="mb-1 flex items-center gap-1.5">
+                                  <FileText className="h-3.5 w-3.5 text-blue-500" />
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Statement
+                                  </span>
+                                </div>
+                                <p className="text-sm leading-relaxed text-foreground/90">
+                                  {uc.statement}
+                                </p>
+                              </div>
+                              <div>
+                                <div className="mb-1 flex items-center gap-1.5">
+                                  <TrendingUp className="h-3.5 w-3.5 text-green-500" />
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Business Value
+                                  </span>
+                                </div>
+                                <p className="text-sm leading-relaxed text-foreground/90">
+                                  {uc.businessValue}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -372,7 +418,7 @@ export function UseCaseTable({
           }
         }}
       >
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetContent className="w-full overflow-y-auto px-6 sm:max-w-2xl">
           {selectedUseCase && (
             <>
               <SheetHeader className="pb-2">

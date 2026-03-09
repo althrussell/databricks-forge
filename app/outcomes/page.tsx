@@ -42,31 +42,47 @@ import { staggerContainer, staggerItem } from "@/lib/motion";
 // Constants
 // ---------------------------------------------------------------------------
 
-const INDUSTRY_COLORS: Record<string, string> = {
-  banking: "from-blue-500/20 to-blue-600/5 border-blue-200 dark:border-blue-800",
-  insurance: "from-indigo-500/20 to-indigo-600/5 border-indigo-200 dark:border-indigo-800",
-  hls: "from-emerald-500/20 to-emerald-600/5 border-emerald-200 dark:border-emerald-800",
-  rcg: "from-orange-500/20 to-orange-600/5 border-orange-200 dark:border-orange-800",
-  manufacturing: "from-slate-500/20 to-slate-600/5 border-slate-200 dark:border-slate-800",
-  "energy-utilities": "from-amber-500/20 to-amber-600/5 border-amber-200 dark:border-amber-800",
-  communications: "from-cyan-500/20 to-cyan-600/5 border-cyan-200 dark:border-cyan-800",
-  "media-advertising": "from-pink-500/20 to-pink-600/5 border-pink-200 dark:border-pink-800",
-  "digital-natives": "from-violet-500/20 to-violet-600/5 border-violet-200 dark:border-violet-800",
-  games: "from-red-500/20 to-red-600/5 border-red-200 dark:border-red-800",
-};
+const COLOR_PALETTE = [
+  { gradient: "from-blue-500/20 to-blue-600/5 border-blue-200 dark:border-blue-800", icon: "text-blue-600 dark:text-blue-400" },
+  { gradient: "from-emerald-500/20 to-emerald-600/5 border-emerald-200 dark:border-emerald-800", icon: "text-emerald-600 dark:text-emerald-400" },
+  { gradient: "from-orange-500/20 to-orange-600/5 border-orange-200 dark:border-orange-800", icon: "text-orange-600 dark:text-orange-400" },
+  { gradient: "from-violet-500/20 to-violet-600/5 border-violet-200 dark:border-violet-800", icon: "text-violet-600 dark:text-violet-400" },
+  { gradient: "from-cyan-500/20 to-cyan-600/5 border-cyan-200 dark:border-cyan-800", icon: "text-cyan-600 dark:text-cyan-400" },
+  { gradient: "from-pink-500/20 to-pink-600/5 border-pink-200 dark:border-pink-800", icon: "text-pink-600 dark:text-pink-400" },
+  { gradient: "from-amber-500/20 to-amber-600/5 border-amber-200 dark:border-amber-800", icon: "text-amber-600 dark:text-amber-400" },
+  { gradient: "from-indigo-500/20 to-indigo-600/5 border-indigo-200 dark:border-indigo-800", icon: "text-indigo-600 dark:text-indigo-400" },
+  { gradient: "from-red-500/20 to-red-600/5 border-red-200 dark:border-red-800", icon: "text-red-600 dark:text-red-400" },
+  { gradient: "from-teal-500/20 to-teal-600/5 border-teal-200 dark:border-teal-800", icon: "text-teal-600 dark:text-teal-400" },
+  { gradient: "from-rose-500/20 to-rose-600/5 border-rose-200 dark:border-rose-800", icon: "text-rose-600 dark:text-rose-400" },
+  { gradient: "from-sky-500/20 to-sky-600/5 border-sky-200 dark:border-sky-800", icon: "text-sky-600 dark:text-sky-400" },
+] as const;
 
-const INDUSTRY_ICON_COLORS: Record<string, string> = {
-  banking: "text-blue-600 dark:text-blue-400",
-  insurance: "text-indigo-600 dark:text-indigo-400",
-  hls: "text-emerald-600 dark:text-emerald-400",
-  rcg: "text-orange-600 dark:text-orange-400",
-  manufacturing: "text-slate-600 dark:text-slate-400",
-  "energy-utilities": "text-amber-600 dark:text-amber-400",
-  communications: "text-cyan-600 dark:text-cyan-400",
-  "media-advertising": "text-pink-600 dark:text-pink-400",
-  "digital-natives": "text-violet-600 dark:text-violet-400",
-  games: "text-red-600 dark:text-red-400",
-};
+const GRID_COLS = 3;
+
+function buildColorAssignments(count: number) {
+  const assigned: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const col = i % GRID_COLS;
+    const row = Math.floor(i / GRID_COLS);
+    const neighbors = new Set<number>();
+    if (col > 0) neighbors.add(assigned[i - 1]);
+    if (row > 0) neighbors.add(assigned[i - GRID_COLS]);
+
+    let pick = i % COLOR_PALETTE.length;
+    let attempts = 0;
+    while (neighbors.has(pick) && attempts < COLOR_PALETTE.length) {
+      pick = (pick + 1) % COLOR_PALETTE.length;
+      attempts++;
+    }
+    assigned.push(pick);
+  }
+  return assigned;
+}
+
+function getCardColor(index: number, assignments: number[]) {
+  const colorIdx = assignments[index] ?? index % COLOR_PALETTE.length;
+  return COLOR_PALETTE[colorIdx];
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,6 +137,17 @@ export default function OutcomesPage() {
     return outcomes.filter((i) => matchesSearch(i, searchQuery));
   }, [searchQuery, outcomes]);
 
+  const colorAssignments = useMemo(
+    () => buildColorAssignments(filteredIndustries.length),
+    [filteredIndustries.length],
+  );
+
+  const selectedColor = useMemo(() => {
+    if (!selectedId) return getCardColor(0, colorAssignments);
+    const idx = filteredIndustries.findIndex((i) => i.id === selectedId);
+    return getCardColor(idx >= 0 ? idx : 0, colorAssignments);
+  }, [selectedId, filteredIndustries, colorAssignments]);
+
   const totalUseCases = useMemo(
     () => outcomes.reduce((acc, i) => acc + countUseCases(i), 0),
     [outcomes],
@@ -165,7 +192,7 @@ export default function OutcomesPage() {
       />
 
       {selectedIndustry ? (
-        <IndustryDetailView industry={selectedIndustry} onBack={clearSelection} />
+        <IndustryDetailView industry={selectedIndustry} color={selectedColor} onBack={clearSelection} />
       ) : (
         <>
           {/* Search */}
@@ -203,10 +230,11 @@ export default function OutcomesPage() {
               animate="visible"
               className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
             >
-              {filteredIndustries.map((industry) => (
+              {filteredIndustries.map((industry, idx) => (
                 <motion.div key={industry.id} variants={staggerItem}>
                   <IndustryCard
                     industry={industry}
+                    color={getCardColor(idx, colorAssignments)}
                     onClick={() => selectIndustry(industry.id)}
                   />
                 </motion.div>
@@ -223,11 +251,19 @@ export default function OutcomesPage() {
 // Industry Card (Grid View)
 // ---------------------------------------------------------------------------
 
-function IndustryCard({ industry, onClick }: { industry: IndustryOutcome; onClick: () => void }) {
+function IndustryCard({
+  industry,
+  color,
+  onClick,
+}: {
+  industry: IndustryOutcome;
+  color: { gradient: string; icon: string };
+  onClick: () => void;
+}) {
   const ucCount = countUseCases(industry);
   const priCount = countPriorities(industry);
-  const gradientClass = INDUSTRY_COLORS[industry.id] ?? "from-gray-500/20 to-gray-600/5";
-  const iconColor = INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
+  const gradientClass = color.gradient;
+  const iconColor = color.icon;
 
   return (
     <Card
@@ -281,9 +317,11 @@ function IndustryCard({ industry, onClick }: { industry: IndustryOutcome; onClic
 
 function IndustryDetailView({
   industry,
+  color,
   onBack,
 }: {
   industry: IndustryOutcome;
+  color: { gradient: string; icon: string };
   onBack: () => void;
 }) {
   const ucCount = countUseCases(industry);
@@ -292,7 +330,7 @@ function IndustryDetailView({
     industry.objectives.flatMap((obj) => obj.priorities.flatMap((p) => p.personas)),
   ).size;
 
-  const iconColor = INDUSTRY_ICON_COLORS[industry.id] ?? "text-gray-600 dark:text-gray-400";
+  const iconColor = color.icon;
 
   return (
     <motion.div
@@ -319,7 +357,7 @@ function IndustryDetailView({
           <CardHeader>
             <div className="flex items-center gap-3">
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${INDUSTRY_COLORS[industry.id] ?? ""}`}
+                className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${color.gradient}`}
               >
                 <Building2 className={`h-6 w-6 ${iconColor}`} />
               </div>
@@ -400,7 +438,7 @@ function IndustryDetailView({
       {/* Objectives */}
       {industry.objectives.map((objective) => (
         <motion.div key={objective.name} variants={staggerItem}>
-          <ObjectiveSection objective={objective} industryId={industry.id} />
+          <ObjectiveSection objective={objective} iconColor={color.icon} />
         </motion.div>
       ))}
     </motion.div>
@@ -413,12 +451,11 @@ function IndustryDetailView({
 
 function ObjectiveSection({
   objective,
-  industryId,
+  iconColor,
 }: {
   objective: IndustryObjective;
-  industryId: string;
+  iconColor: string;
 }) {
-  const iconColor = INDUSTRY_ICON_COLORS[industryId] ?? "text-gray-600 dark:text-gray-400";
 
   return (
     <Card>
