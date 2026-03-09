@@ -142,7 +142,7 @@ const MAX_CONCURRENT_LLM_CALLS = Math.max(
 /**
  * Simple async semaphore to cap total in-flight LLM calls across all
  * pipeline steps. Prevents 429 rate-limit storms on customer workspaces.
- * Override with LLM_MAX_CONCURRENT env var (default: 4).
+ * Override with LLM_MAX_CONCURRENT env var (default: 64).
  */
 class Semaphore {
   private current = 0;

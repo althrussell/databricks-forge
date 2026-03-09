@@ -15,7 +15,9 @@ export async function GET() {
   try {
     await ensureMigrated();
     const maps = await listOutcomeMaps();
-    return NextResponse.json(maps);
+    return NextResponse.json(maps, {
+      headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" },
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to list outcome maps" },

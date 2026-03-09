@@ -99,7 +99,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ fqn
       return Response.json({ error: "Table not found" }, { status: 404 });
     }
 
-    return Response.json(data);
+    return Response.json(data, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+    });
   } catch (err) {
     logger.error("[api/environment/table] Error", { error: String(err) });
     return Response.json({ error: "Failed to load table detail" }, { status: 500 });

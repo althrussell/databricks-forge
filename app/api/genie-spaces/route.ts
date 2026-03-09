@@ -45,11 +45,16 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({
-      spaces: apiResult.spaces,
-      tracked: liveTracked,
-      staleCount,
-    });
+    return NextResponse.json(
+      {
+        spaces: apiResult.spaces,
+        tracked: liveTracked,
+        staleCount,
+      },
+      {
+        headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" },
+      },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

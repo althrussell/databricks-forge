@@ -75,7 +75,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(graph);
+    return NextResponse.json(graph, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+    });
   } catch (error) {
     logger.error("[api/environment/aggregate/erd] GET failed", {
       error: error instanceof Error ? error.message : String(error),

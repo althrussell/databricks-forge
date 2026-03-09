@@ -19,7 +19,8 @@ import { isEmbeddingEnabled } from "./config";
 // ---------------------------------------------------------------------------
 
 export const EMBEDDING_DIM = 1024;
-const MAX_BATCH_SIZE = 16;
+const MAX_BATCH_SIZE = 32;
+const MAX_CONCURRENT_BATCHES = 3;
 const EMBEDDING_TIMEOUT_MS = 60_000;
 
 const MAX_RETRIES = 3;
@@ -61,15 +62,47 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     );
   }
 
-  const results: number[][] = [];
-
+  // Build batches and run with bounded concurrency
+  const batches: string[][] = [];
   for (let i = 0; i < texts.length; i += MAX_BATCH_SIZE) {
-    const batch = texts.slice(i, i + MAX_BATCH_SIZE);
-    const batchResults = await callWithRetry(batch);
-    results.push(...batchResults);
+    batches.push(texts.slice(i, i + MAX_BATCH_SIZE));
   }
 
-  return results;
+  if (batches.length <= 1) {
+    return callWithRetry(batches[0]);
+  }
+
+  // Run multiple batches concurrently to reduce total latency
+  let active = 0;
+  const queue: Array<() => void> = [];
+  const batchResults = await Promise.all(
+    batches.map(
+      (batch) =>
+        new Promise<number[][]>((resolve, reject) => {
+          const run = async () => {
+            try {
+              resolve(await callWithRetry(batch));
+            } catch (e) {
+              reject(e);
+            } finally {
+              active--;
+              if (queue.length > 0) queue.shift()!();
+            }
+          };
+          if (active < MAX_CONCURRENT_BATCHES) {
+            active++;
+            run();
+          } else {
+            queue.push(() => {
+              active++;
+              run();
+            });
+          }
+        }),
+    ),
+  );
+
+  return batchResults.flat();
 }
 
 /**

@@ -41,7 +41,12 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
-import { SqlEditor } from "./sql-editor";
+import dynamic from "next/dynamic";
+
+const SqlEditor = dynamic(() => import("./sql-editor").then((m) => m.SqlEditor), {
+  ssr: false,
+  loading: () => <div className="h-48 w-full animate-pulse rounded-md bg-muted" />,
+});
 
 // ---------------------------------------------------------------------------
 // Types

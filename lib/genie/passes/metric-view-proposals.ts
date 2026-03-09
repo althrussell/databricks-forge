@@ -1944,37 +1944,43 @@ Create metric view proposals for this domain.`;
       }
     }
 
-    // LLM review gate: review DDL for proposals that passed validation
+    // LLM review gate: review DDL for proposals that passed validation (parallel)
     if (isReviewEnabled("genie-metric-views")) {
-      for (const proposal of proposals) {
-        if (proposal.validationStatus === "error" || !proposal.ddl) continue;
-        try {
-          const review = await reviewAndFixSql(proposal.ddl, {
-            schemaContext: schemaBlock,
-            surface: "genie-metric-views",
-          });
-          if (review.fixedSql) {
-            const revalidation = validateMetricViewYaml(proposal.yaml, review.fixedSql, allowlist);
-            if (revalidation.status !== "error") {
-              proposal.ddl = review.fixedSql;
-              logger.info("Metric view: review applied DDL fix", {
-                name: proposal.name,
-                qualityScore: review.qualityScore,
-              });
+      const reviewable = proposals.filter((p) => p.validationStatus !== "error" && p.ddl);
+      await Promise.all(
+        reviewable.map(async (proposal) => {
+          try {
+            const review = await reviewAndFixSql(proposal.ddl!, {
+              schemaContext: schemaBlock,
+              surface: "genie-metric-views",
+            });
+            if (review.fixedSql) {
+              const revalidation = validateMetricViewYaml(
+                proposal.yaml,
+                review.fixedSql,
+                allowlist,
+              );
+              if (revalidation.status !== "error") {
+                proposal.ddl = review.fixedSql;
+                logger.info("Metric view: review applied DDL fix", {
+                  name: proposal.name,
+                  qualityScore: review.qualityScore,
+                });
+              }
+            } else if (review.verdict === "fail") {
+              proposal.validationIssues.push(...review.issues.map((i) => `Review: ${i.message}`));
+              if (proposal.validationStatus === "valid") {
+                proposal.validationStatus = "warning";
+              }
             }
-          } else if (review.verdict === "fail") {
-            proposal.validationIssues.push(...review.issues.map((i) => `Review: ${i.message}`));
-            if (proposal.validationStatus === "valid") {
-              proposal.validationStatus = "warning";
-            }
+          } catch (err) {
+            logger.warn("Metric view review failed, keeping original", {
+              name: proposal.name,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
-        } catch (err) {
-          logger.warn("Metric view review failed, keeping original", {
-            name: proposal.name,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
+        }),
+      );
     }
 
     logger.info("Metric view proposals generated", {

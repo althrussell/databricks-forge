@@ -64,7 +64,7 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
-      clearInterval(pollRef.current);
+      clearTimeout(pollRef.current);
       pollRef.current = null;
     }
   }, []);
@@ -84,7 +84,8 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
 
   const startPolling = useCallback(() => {
     stopPolling();
-    pollRef.current = setInterval(async () => {
+    let delay = 2000;
+    const poll = async () => {
       try {
         const res = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
         const data = await res.json();
@@ -108,23 +109,29 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
             toast.success(
               `Genie Engine complete: ${data.domainCount} domain${data.domainCount !== 1 ? "s" : ""} generated`,
             );
+            return;
           } else if (data.status === "cancelled") {
             stopPolling();
             setGenerating(false);
             setLastError(null);
             setLastErrorType(null);
             toast.info("Generation cancelled");
+            return;
           } else if (data.status === "failed") {
             stopPolling();
             setGenerating(false);
             setLastError(data.error || "Generation failed");
             setLastErrorType(data.errorType ?? "general");
+            return;
           }
+          delay = 2000;
         }
       } catch {
-        // Silently retry
+        delay = Math.min(delay * 1.3, 10000);
       }
-    }, 2000);
+      pollRef.current = setTimeout(poll, delay);
+    };
+    pollRef.current = setTimeout(poll, delay);
   }, [runId, stopPolling, fetchDomains]);
 
   useEffect(() => {

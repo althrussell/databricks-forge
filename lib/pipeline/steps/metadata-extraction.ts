@@ -111,42 +111,39 @@ export async function runMetadataExtraction(
 
   // --- Phase 1: Basic metadata extraction (existing logic) ---
 
-  for (let si = 0; si < accessibleScopes.length; si++) {
-    const scope = accessibleScopes[si];
-    const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
-    try {
-      if (runId)
-        await updateRunMessage(
-          runId,
-          `Scanning catalog ${scopeLabel}... (${si + 1}/${accessibleScopes.length})`,
-        );
+  if (runId)
+    await updateRunMessage(runId, `Scanning ${accessibleScopes.length} scope(s) in parallel...`);
+
+  const scopeResults = await Promise.allSettled(
+    accessibleScopes.map(async (scope) => {
+      const scopeLabel = `${scope.catalog}${scope.schema ? "." + scope.schema : ""}`;
       const tables = await listTables(scope.catalog, scope.schema);
-      allTables.push(...tables);
 
-      // Fetch table descriptions from information_schema.tables
-      const tableComments = await fetchTableComments(scope.catalog, scope.schema);
+      // Run independent metadata queries in parallel once tables are listed
+      const [tableComments, tableTypes, columns, fks, mvs] = await Promise.all([
+        fetchTableComments(scope.catalog, scope.schema),
+        fetchTableTypes(scope.catalog, scope.schema),
+        listColumns(scope.catalog, scope.schema),
+        listForeignKeys(scope.catalog, scope.schema),
+        listMetricViews(scope.catalog, scope.schema),
+      ]);
+
       mergeTableComments(tables, tableComments);
-
-      // Fetch actual table types (TABLE, VIEW, etc.) from information_schema
-      const tableTypes = await fetchTableTypes(scope.catalog, scope.schema);
       mergeTableTypes(tables, tableTypes);
 
-      if (runId)
-        await updateRunMessage(
-          runId,
-          `Extracting columns for ${tables.length} tables in ${scopeLabel}...`,
-        );
-      const columns = await listColumns(scope.catalog, scope.schema);
-      allColumns.push(...columns);
+      return { scopeLabel, tables, columns, fks, mvs };
+    }),
+  );
 
-      const fks = await listForeignKeys(scope.catalog, scope.schema);
-      allFKs.push(...fks);
-
-      const mvs = await listMetricViews(scope.catalog, scope.schema);
-      allMetricViews.push(...mvs);
-    } catch (error) {
-      logger.warn(`[metadata-extraction] Failed to extract metadata for ${scopeLabel}`, {
-        error: error instanceof Error ? error.message : String(error),
+  for (const result of scopeResults) {
+    if (result.status === "fulfilled") {
+      allTables.push(...result.value.tables);
+      allColumns.push(...result.value.columns);
+      allFKs.push(...result.value.fks);
+      allMetricViews.push(...result.value.mvs);
+    } else {
+      logger.warn("[metadata-extraction] Failed to extract metadata for scope", {
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       });
     }
   }
