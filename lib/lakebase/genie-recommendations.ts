@@ -155,8 +155,18 @@ export async function saveGenieRecommendations(
 
         if (recommendations.length === 0) return;
 
+        // Deduplicate by domain -- keep the recommendation with more tables
+        const deduped = new Map<string, (typeof recommendations)[number]>();
+        for (const rec of recommendations) {
+          const existing = deduped.get(rec.domain);
+          if (!existing || rec.tableCount > existing.tableCount) {
+            deduped.set(rec.domain, rec);
+          }
+        }
+        const uniqueRecs = [...deduped.values()];
+
         await tx.forgeGenieRecommendation.createMany({
-          data: recommendations.map((rec, idx) => {
+          data: uniqueRecs.map((rec, idx) => {
             const po = outputsByDomain.get(rec.domain);
             const id = replaceDomains?.length
               ? `${runId}_genie_${rec.domain.toLowerCase().replace(/\s+/g, "_")}`
@@ -189,6 +199,7 @@ export async function saveGenieRecommendations(
               changeSummary: rec.changeSummary ?? null,
             };
           }),
+          skipDuplicates: true,
         });
       },
     );

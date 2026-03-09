@@ -15,13 +15,16 @@ DATABRICKS SQL QUALITY RULES (mandatory for all generated SQL):
 Syntax and type safety:
 - NEVER use MEDIAN() -- it is not supported in Databricks SQL. Use PERCENTILE_APPROX(col, 0.5) instead.
 - NEVER nest a window function (OVER) inside an aggregate function (SUM, AVG, COUNT, MIN, MAX). Compute window values in a CTE first, then aggregate.
-- Use DECIMAL(18,2) instead of FLOAT/DOUBLE for financial and monetary calculations.
+- NEVER use an aggregate function (SUM, AVG, COUNT, MIN, MAX) as an argument to a window function (LAG, LEAD, REGR_SLOPE, NTILE, etc.). Example of WRONG: LAG(AVG(cost)) OVER (...), REGR_SLOPE(AVG(x), ...) OVER (...). CORRECT: aggregate in one CTE first, then apply LAG/REGR_SLOPE on the pre-aggregated result in the next CTE.
+- NEVER reference a SELECT-list alias in sibling expressions within the same SELECT block. SQL evaluates all SELECT expressions logically in parallel, so \`SELECT from_json(...) AS parsed_result, parsed_result.field1\` is INVALID. CORRECT: compute the alias in a CTE or subquery first, then reference it in the outer SELECT.
+- Use DECIMAL(18,2) instead of FLOAT/DOUBLE for financial and monetary calculations. Cast DOUBLE source columns to DECIMAL(18,2) BEFORE aggregation: use SUM(CAST(amount AS DECIMAL(18,2))), NOT CAST(SUM(amount) AS DECIMAL(18,2)) -- the latter loses precision during double-precision accumulation.
 - All string literals must use single quotes. COALESCE text defaults must be quoted: COALESCE(col, 'Unknown') not COALESCE(col, Unknown).
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query) in metric view definitions. They are non-deterministic and prohibitively expensive. Use only deterministic expressions over materialized columns.
 - NEVER use TO_DATE() or TO_TIMESTAMP() to parse string columns -- they throw on format mismatches. Use COALESCE(try_to_date(col, 'yyyy-MM-dd'), try_to_date(col, 'MM/dd/yyyy'), try_to_date(col, 'dd/MM/yyyy')) to handle mixed date formats gracefully. If the column is already DATE or TIMESTAMP type, use it directly without parsing.
 - ai_query() only accepts these named parameters: modelParameters, responseFormat, failOnError. NEVER use systemPrompt, system_prompt, or any other invented parameter names. Embed persona/system instructions in the request text via CONCAT.
 - ai_query() with failOnError => false returns STRUCT<result: STRING, errorMessage: STRING>. The result field is ALWAYS STRING regardless of responseFormat. Do NOT use responseFormat with failOnError => false. To get structured output: (1) instruct the model to return JSON in the prompt text, (2) parse with from_json(col.result, 'STRUCT<field1: TYPE, ...>') AS parsed_result. Accessing nested struct fields directly on the result (e.g. ai_result.result.field) causes INVALID_EXTRACT_BASE_FIELD_TYPE errors.
 - from_json() alias naming: ALWAYS use exactly \`ai_result\` for the ai_query() output and \`parsed_result\` for the from_json() output. NEVER abbreviate to \`parsed\`, \`result\`, \`ai_res\`, or other variations -- inconsistent naming breaks automated validation.
+- ai_forecast() requires time-series-ready data with explicit time and value columns. Only use ai_forecast() when the schema explicitly contains time-series columns (date/timestamp + numeric value). NEVER assume or invent columns to satisfy ai_forecast() input requirements.
 
 AI function performance:
 - AI functions (ai_query, ai_similarity, ai_gen) are expensive per-row. Filter and aggregate data BEFORE passing to AI functions. Structure queries as a cost funnel: cheap filters first, then blocking joins, then ai_similarity scoring, then ai_query LLM calls on the smallest possible set.
@@ -35,17 +38,24 @@ Identifier quoting:
 - Table names should use fully-qualified three-part names: catalog.schema.table
 
 Query structure:
-- For top-N queries, ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() for top-N because ties can return more than N rows.
+- For top-N queries, ALWAYS use ORDER BY ... LIMIT N. NEVER use RANK() or DENSE_RANK() for top-N because ties can return more than N rows. ANY query with ORDER BY that ranks, sorts by a metric, or serves as a preview MUST include LIMIT.
 - Use QUALIFY for per-group deduplication (e.g. latest row per customer), NOT for top-N lists.
 - NEVER use aggregate functions (SUM, AVG, COUNT, MIN, MAX) in the same SELECT block as QUALIFY. QUALIFY operates before GROUP BY, so aggregates are invalid in that context. Split into two CTEs: first CTE uses QUALIFY for row-level deduplication on raw columns, second CTE aggregates the result.
+- SELECT DISTINCT: Use SELECT DISTINCT only when the source is known to have duplicates or when a JOIN can produce them. Do NOT use DISTINCT as a defensive pattern when the source key is already unique -- it adds an expensive shuffle and masks data quality issues. Prefer QUALIFY ROW_NUMBER() for deterministic deduplication with explicit ordering.
 - Always include human-readable identifying columns (e.g. customer name, email, product name) in entity-level query output.
 - Prefer explicit column lists over SELECT *.
 - Filter early, aggregate late -- push WHERE clauses as close to the source tables as possible.
 - Use window functions instead of self-joins where possible.
 - NEVER use LATERAL VIEW EXPLODE -- it is deprecated Hive syntax that cannot be combined with subsequent JOINs. Use EXPLODE() inside a CTE with comma-join or CROSS JOIN LATERAL syntax instead.
 
+SQL formatting:
+- Format SQL across multiple lines with proper indentation. SELECT, FROM, WHERE, JOIN, GROUP BY, ORDER BY, LIMIT on separate lines.
+- One column/expression per line in SELECT lists for queries with more than 3 columns.
+- CTE definitions on separate lines: WITH name AS ( on one line, closing ) on its own line.
+- NEVER output single-line SQL -- it is unreadable and unmaintainable.
+
 Databricks SQL features:
-- Use COLLATE UTF8_LCASE for case-insensitive string comparisons instead of LOWER()/UPPER() wrappers.
+- Use COLLATE UTF8_LCASE for case-insensitive string comparisons instead of LOWER()/UPPER() wrappers. Apply COLLATE to BOTH sides of the comparison: \`col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE\`. Applying only to one side can produce incorrect results.
 - Use PERCENTILE_APPROX for percentile calculations (P20, P50, P75, etc.).
 - Prefer native SQL functions over UDFs -- UDFs require serialization and are dramatically slower.
 - Use pipe syntax (|>) for complex multi-step transformations where it improves readability.
@@ -99,10 +109,14 @@ export const DATABRICKS_SQL_RULES_COMPACT = `
 DATABRICKS SQL RULES:
 - NEVER use MEDIAN(). Use PERCENTILE_APPROX(col, 0.5) instead.
 - NEVER nest a window function (OVER) inside an aggregate (SUM, AVG, COUNT, MIN, MAX).
+- NEVER use an aggregate as an argument to a window function: LAG(AVG(x)) OVER (...) is INVALID. Aggregate first in a CTE, then apply the window function on the aggregated result.
+- NEVER reference a SELECT-list alias in sibling expressions in the same SELECT. Compute the alias in a CTE first, then reference it in the outer query.
 - NEVER combine aggregate functions (SUM, AVG, etc.) with QUALIFY in the same SELECT. QUALIFY runs before GROUP BY. Split deduplication and aggregation into separate CTEs.
-- Use DECIMAL(18,2) for financial/monetary calculations.
-- Use COLLATE UTF8_LCASE for case-insensitive comparisons.
+- Use DECIMAL(18,2) for financial/monetary calculations. Cast DOUBLE to DECIMAL(18,2) BEFORE aggregation: SUM(CAST(amt AS DECIMAL(18,2))), not CAST(SUM(amt) AS DECIMAL(18,2)).
+- Use COLLATE UTF8_LCASE on BOTH sides for case-insensitive comparisons: col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE.
 - Use PERCENTILE_APPROX for percentile calculations.
+- For top-N/ranked/preview queries, ALWAYS use ORDER BY ... LIMIT N. Any ORDER BY without LIMIT wastes resources.
+- SELECT DISTINCT: use only when source is known to have duplicates. Do NOT use defensively on unique keys -- prefer QUALIFY ROW_NUMBER() for deterministic deduplication.
 - Filter early, aggregate late.
 - Prefer native SQL functions over UDFs.
 - NEVER use AI functions (ai_analyze_sentiment, ai_classify, etc.) in metric views.
@@ -120,6 +134,7 @@ DATABRICKS SQL RULES:
 - Specify explicit window frames (ROWS BETWEEN ...) for cumulative calculations.
 - Prefer transform()/filter()/aggregate() for array ops over EXPLODE + re-aggregate.
 - When querying metric views: wrap ALL measure columns in MEASURE(col) AS col. Use GROUP BY ALL. NEVER use SELECT * or alias-prefixed measure references.
+- Format SQL across multiple lines with proper indentation. NEVER output single-line SQL.
 `.trim();
 
 export const DATABRICKS_SQL_REVIEW_CHECKLIST = `
@@ -131,17 +146,21 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - Aggregations are grouped correctly (no missing GROUP BY columns)
    - WHERE/HAVING filters are logically sound
    - Data types are handled correctly (no implicit lossy casts)
+   - No SELECT-list alias reuse: an alias defined in a SELECT block MUST NOT be referenced by sibling expressions in the same SELECT (compute in a CTE first)
+   - No aggregate inside window function: LAG(AVG(...)), REGR_SLOPE(AVG(...), ...) etc. are INVALID -- aggregate first, then window
 
 2. PERFORMANCE
    - Filters are pushed early (WHERE before aggregation, not HAVING for non-aggregate conditions)
    - No unnecessary self-joins (use window functions instead)
    - No SELECT * in production queries
-   - LIMIT is present for top-N queries (not RANK/DENSE_RANK)
+   - LIMIT is present for ANY query using ORDER BY for ranking, top-N, or preview purposes (not RANK/DENSE_RANK)
    - CTEs are used to avoid repeated subquery evaluation
+   - SELECT DISTINCT is justified: not used defensively on already-unique keys (adds unnecessary shuffle)
+   - Financial DECIMAL casting done BEFORE aggregation: SUM(CAST(col AS DECIMAL(18,2))), not CAST(SUM(col) AS DECIMAL(18,2))
 
 3. READABILITY
    - Meaningful aliases for tables and columns
-   - Consistent formatting and indentation
+   - Consistent formatting and indentation -- multi-line SQL with SELECT/FROM/WHERE/JOIN/GROUP BY/ORDER BY on separate lines. Single-line SQL is a fail
    - Complex logic broken into CTEs rather than deeply nested subqueries
    - Column order makes business sense (identifiers first, measures second)
 
@@ -152,7 +171,7 @@ REVIEW CHECKLIST (evaluate each dimension independently):
 
 5. DATABRICKS IDIOM ADHERENCE
    - PERCENTILE_APPROX instead of MEDIAN()
-   - COLLATE UTF8_LCASE for case-insensitive comparisons
+   - COLLATE UTF8_LCASE on BOTH sides for case-insensitive comparisons: col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE
    - try_to_date/try_to_timestamp instead of TO_DATE/TO_TIMESTAMP
    - QUALIFY for per-group deduplication
    - Pipe syntax (|>) for complex multi-step transformations

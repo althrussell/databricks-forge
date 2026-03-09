@@ -8,6 +8,7 @@
 
 import type { UseCase, MetadataSnapshot, MetricViewInfo } from "@/lib/domain/types";
 import type { GenieEngineConfig } from "../types";
+import { normalizeDomainLabel } from "../domain-normalization";
 import { logger } from "@/lib/logger";
 
 export interface DomainGroup {
@@ -127,6 +128,47 @@ export function runTableSelection(
     });
   }
 
-  results.sort((a, b) => b.useCases.length - a.useCases.length);
-  return results;
+  // Merge groups whose normalized domain labels collide (e.g. "Procurement" and
+  // "Supply" both normalize to "Supply Chain"). Without this, the persistence
+  // layer hits a unique constraint on (run_id, domain).
+  const mergedMap = new Map<string, DomainGroup>();
+  for (const group of results) {
+    const normalized = normalizeDomainLabel(group.domain);
+    const existing = mergedMap.get(normalized);
+    if (existing) {
+      logger.info("Merging domain groups with same normalized label", {
+        rawDomains: [existing.domain, group.domain],
+        normalizedLabel: normalized,
+      });
+      const mergedTables = [...new Set([...existing.tables, ...group.tables])];
+      const mergedSubdomains = [
+        ...new Set([...existing.subdomains, ...group.subdomains]),
+      ];
+      const mergedUseCases = [...existing.useCases, ...group.useCases].sort(
+        (a, b) => b.overallScore - a.overallScore,
+      );
+      const mergedMetricViews = [
+        ...existing.metricViews,
+        ...group.metricViews.filter(
+          (mv) =>
+            !existing.metricViews.some(
+              (e) => `${e.catalog}.${e.schema}.${e.name}` === `${mv.catalog}.${mv.schema}.${mv.name}`,
+            ),
+        ),
+      ];
+      mergedMap.set(normalized, {
+        domain: normalized,
+        subdomains: mergedSubdomains,
+        tables: mergedTables.slice(0, maxTables),
+        metricViews: mergedMetricViews,
+        useCases: mergedUseCases,
+      });
+    } else {
+      mergedMap.set(normalized, { ...group, domain: normalized });
+    }
+  }
+
+  const merged = [...mergedMap.values()];
+  merged.sort((a, b) => b.useCases.length - a.useCases.length);
+  return merged;
 }

@@ -69,13 +69,13 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - All string literals must use single quotes
 - COALESCE string defaults must be quoted: \`COALESCE(col, 'Unknown')\` not \`COALESCE(col, Unknown)\`
 - CTE-computed columns (aliases you define with AS) are fine to reference in subsequent CTEs, but source table columns MUST come from the schema
-- Use \`DECIMAL(18,2)\` instead of FLOAT/DOUBLE for financial and monetary calculations to avoid precision errors
+- Use \`DECIMAL(18,2)\` instead of FLOAT/DOUBLE for financial and monetary calculations. Cast DOUBLE source columns to DECIMAL(18,2) BEFORE aggregation: \`SUM(CAST(amount AS DECIMAL(18,2)))\`, NOT \`CAST(SUM(amount) AS DECIMAL(18,2))\` — the latter accumulates double-precision rounding errors
 
-**2. FIRST CTE MUST USE SELECT DISTINCT (MANDATORY)**
-- The FIRST CTE MUST ALWAYS use \`SELECT DISTINCT\` to ensure NO DUPLICATE RECORDS
-- Duplicates in source data cascade errors through all downstream CTEs
-- Pattern: \`WITH base_data AS (SELECT DISTINCT col1, col2, ... FROM table WHERE ...)\`
-- Alternative: If aggregating, use \`GROUP BY\` on all non-aggregated columns
+**2. BASE CTE DEDUPLICATION**
+- The FIRST CTE must ensure no duplicate records. If the source table has a unique key (e.g. a primary key or natural business key), SELECT without DISTINCT -- adding DISTINCT on an already-unique source is wasteful and masks data quality problems.
+- If duplicates are possible (e.g. after JOINs or from known source issues), use \`QUALIFY ROW_NUMBER() OVER (PARTITION BY business_key ORDER BY ...) = 1\` for deterministic deduplication with explicit tie-breaking.
+- Use \`SELECT DISTINCT\` ONLY when no clear business key exists for QUALIFY. NEVER use DISTINCT as a defensive catch-all when the source is already unique.
+- Alternative: If aggregating in the first CTE, use \`GROUP BY\` on all non-aggregated columns
 
 **3. CTE STRUCTURE & QUERY LENGTH**
 - Use 3-7 CTEs for readability -- break the query into logical steps (data assembly, transformation, analysis, output)
@@ -135,6 +135,8 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - JOIN correctly using the foreign key relationships provided
 - Be specific: reference exact column names; write concrete WHERE, GROUP BY, and ORDER BY clauses
 - NEVER nest a window function (OVER) inside an aggregate function (SUM, AVG, COUNT, MIN, MAX) — this is a runtime error in Databricks SQL. Compute window values in a subquery or CTE first, then aggregate the results.
+- NEVER use an aggregate function as an argument to a window function — e.g. \`LAG(AVG(cost)) OVER (...)\` or \`REGR_SLOPE(AVG(x), ...) OVER (...)\` is INVALID. Aggregate in one CTE, then apply the window function on the result in the next CTE.
+- NEVER reference a SELECT-list alias in sibling expressions within the same SELECT block. SQL evaluates all SELECT expressions in parallel, so \`SELECT from_json(...) AS parsed_result, parsed_result.field1\` fails. Compute the alias in a CTE first, then reference it in the outer SELECT.
 - NEVER use MEDIAN() — it is not supported in Databricks SQL. Use PERCENTILE_APPROX(col, 0.5) instead.
 - NEVER use \`LATERAL VIEW EXPLODE\` — it is deprecated Hive syntax that cannot be combined with subsequent JOINs. Instead, use \`EXPLODE()\` inside a CTE: \`SELECT t.*, exploded.col FROM table t, LATERAL (SELECT EXPLODE(t.array_col) AS col) exploded\`, or use a comma-join: \`SELECT t.*, x.col FROM table t CROSS JOIN LATERAL EXPLODE(t.array_col) AS x(col)\`
 - No markdown fences: output raw SQL only
@@ -142,7 +144,7 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 **7. ADVANCED DBSQL FEATURES (USE WHERE APPROPRIATE)**
 - **QUALIFY**: Use \`QUALIFY\` instead of wrapping window functions in subqueries for **per-group deduplication** only. Pattern: \`SELECT *, ROW_NUMBER() OVER (PARTITION BY group_col ORDER BY ...) AS rn FROM table QUALIFY rn = 1\`. Do NOT use QUALIFY for top-N lists -- use \`ORDER BY ... LIMIT N\` instead
 - **Pipe syntax**: For complex multi-step transformations, consider using pipe syntax (\`|>\`) for readability. Pattern: \`FROM table |> WHERE ... |> AGGREGATE ... GROUP BY ... |> ORDER BY ...\`
-- **COLLATE**: For case-insensitive string comparisons, use \`COLLATE UTF8_LCASE\` instead of \`LOWER()\`/\`UPPER()\` wrappers
+- **COLLATE**: For case-insensitive string comparisons, use \`COLLATE UTF8_LCASE\` on BOTH sides: \`col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE\`. Applying collation to only one side produces unreliable results
 - **Window functions**: Prefer window functions over self-joins. Use \`LAG(col, 1) OVER (PARTITION BY group ORDER BY date)\` for period-over-period comparisons. Use \`SUM(col) OVER (ORDER BY date)\` for running totals. Use \`AVG(col) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)\` for moving averages
 - **Window frames**: Specify explicit frames (\`ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\`) when cumulative behaviour is intended. Use \`ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\` for LAST_VALUE to see the entire partition
 - **Named windows**: When multiple columns use the same PARTITION BY, define a named window: \`SELECT SUM(x) OVER w, AVG(x) OVER w FROM t WINDOW w AS (PARTITION BY ...)\`

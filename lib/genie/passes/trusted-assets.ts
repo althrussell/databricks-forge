@@ -209,6 +209,13 @@ SQL PRESERVATION RULES:
 - PRESERVE window function ordering (ASC/DESC) exactly. NTILE, RANK, ROW_NUMBER semantics depend on sort direction -- reversing ORDER BY reverses the business meaning.
 - PRESERVE all statistical and advanced functions (CORR, REGR_SLOPE, REGR_INTERCEPT, REGR_R2, PERCENTILE_APPROX, SKEWNESS, KURTOSIS, CUME_DIST). These are analytical requirements, not optional embellishments.
 
+SQL QUALITY RULES (apply during parameterization):
+- Format SQL across multiple lines with proper indentation. NEVER output single-line SQL.
+- For case-insensitive parameter comparisons, use COLLATE UTF8_LCASE on BOTH sides: col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE. One-sided collation produces unreliable results.
+- Cast DOUBLE monetary columns to DECIMAL(18,2) BEFORE aggregation: SUM(CAST(amt AS DECIMAL(18,2))), not CAST(SUM(amt) AS DECIMAL(18,2)).
+- SELECT DISTINCT: use only when source duplication is known. Prefer QUALIFY ROW_NUMBER() for deterministic deduplication.
+- ANY query with ORDER BY for ranking or preview purposes MUST include LIMIT.
+
 QUANTITY RULES:
 - Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
 - Do NOT create any SQL functions (UDFs). Only produce parameterized queries.

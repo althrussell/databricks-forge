@@ -248,10 +248,13 @@ For each benchmark:
 - alternatePhrasings: 2-3 different ways to ask the same question
 
 SQL rules:
-- For top-N queries, use ORDER BY ... LIMIT N (not RANK/DENSE_RANK)
+- For top-N queries, use ORDER BY ... LIMIT N (not RANK/DENSE_RANK). ANY query with ORDER BY must include LIMIT.
 - Include human-readable columns (names, emails) alongside IDs
 - Use proper JOIN conditions from the table relationships provided
 - ONLY use column names that appear in the SCHEMA CONTEXT -- do NOT guess or abbreviate column names
+- Format SQL across multiple lines with proper indentation (SELECT, FROM, WHERE, GROUP BY, ORDER BY on separate lines). NEVER output single-line SQL.
+- For case-insensitive comparisons, use COLLATE UTF8_LCASE on BOTH sides: col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE
+- Cast DOUBLE monetary columns to DECIMAL(18,2) BEFORE aggregation: SUM(CAST(amt AS DECIMAL(18,2)))
 
 ${DATABRICKS_SQL_RULES_COMPACT}
 
