@@ -211,8 +211,22 @@ export function useRunDetail(runId: string) {
   useEffect(() => {
     const isActive = run?.status === "running" || run?.status === "pending";
     if (!isActive) return;
-    const interval = setInterval(fetchRun, 3000);
-    return () => clearInterval(interval);
+    let delay = 2000;
+    let lastStatus = run?.status;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = () => {
+      fetchRun().then(() => {
+        if (run?.status !== lastStatus) {
+          delay = 2000;
+          lastStatus = run?.status;
+        } else {
+          delay = Math.min(delay * 1.3, 8000);
+        }
+        timer = setTimeout(poll, delay);
+      });
+    };
+    timer = setTimeout(poll, delay);
+    return () => clearTimeout(timer);
   }, [run?.status, fetchRun]);
 
   useEffect(() => {
@@ -226,23 +240,25 @@ export function useRunDetail(runId: string) {
         if (data.status === "generating") {
           setGenieGenerating(true);
           if (!geniePollRef.current) {
-            geniePollRef.current = setInterval(async () => {
+            let genieDelay = 2000;
+            const geniePoll = async () => {
               try {
                 const r = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
                 if (r.ok) {
                   const d = await r.json();
                   if (d.status !== "generating") {
                     setGenieGenerating(false);
-                    if (geniePollRef.current) {
-                      clearInterval(geniePollRef.current);
-                      geniePollRef.current = null;
-                    }
+                    geniePollRef.current = null;
+                    return;
                   }
                 }
               } catch {
                 /* ignore */
               }
-            }, 3000);
+              genieDelay = Math.min(genieDelay * 1.3, 10000);
+              geniePollRef.current = setTimeout(geniePoll, genieDelay);
+            };
+            geniePollRef.current = setTimeout(geniePoll, genieDelay);
           }
         } else setGenieGenerating(false);
       } catch {
@@ -253,7 +269,7 @@ export function useRunDetail(runId: string) {
     return () => {
       cancelled = true;
       if (geniePollRef.current) {
-        clearInterval(geniePollRef.current);
+        clearTimeout(geniePollRef.current);
         geniePollRef.current = null;
       }
     };
@@ -270,23 +286,25 @@ export function useRunDetail(runId: string) {
         if (data.status === "generating") {
           setDashboardGenerating(true);
           if (!dashboardPollRef.current) {
-            dashboardPollRef.current = setInterval(async () => {
+            let dashDelay = 2000;
+            const dashPoll = async () => {
               try {
                 const r = await fetch(`/api/runs/${runId}/dashboard-engine/generate/status`);
                 if (r.ok) {
                   const d = await r.json();
                   if (d.status !== "generating") {
                     setDashboardGenerating(false);
-                    if (dashboardPollRef.current) {
-                      clearInterval(dashboardPollRef.current);
-                      dashboardPollRef.current = null;
-                    }
+                    dashboardPollRef.current = null;
+                    return;
                   }
                 }
               } catch {
                 /* ignore */
               }
-            }, 3000);
+              dashDelay = Math.min(dashDelay * 1.3, 10000);
+              dashboardPollRef.current = setTimeout(dashPoll, dashDelay);
+            };
+            dashboardPollRef.current = setTimeout(dashPoll, dashDelay);
           }
         } else setDashboardGenerating(false);
       } catch {
@@ -297,7 +315,7 @@ export function useRunDetail(runId: string) {
     return () => {
       cancelled = true;
       if (dashboardPollRef.current) {
-        clearInterval(dashboardPollRef.current);
+        clearTimeout(dashboardPollRef.current);
         dashboardPollRef.current = null;
       }
     };

@@ -39,18 +39,30 @@ export interface PromptLogEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Insert (fire-and-forget safe)
+// Buffered insert (fire-and-forget safe)
 // ---------------------------------------------------------------------------
 
-/**
- * Insert a prompt log entry. Designed to be called fire-and-forget so logging
- * failures never block the pipeline. Errors are caught and logged.
- */
-export async function insertPromptLog(entry: PromptLogEntry): Promise<void> {
+const FLUSH_INTERVAL_MS = 2_000;
+const FLUSH_SIZE = 20;
+let buffer: PromptLogEntry[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleFlush(): void {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flushBuffer();
+  }, FLUSH_INTERVAL_MS);
+}
+
+async function flushBuffer(): Promise<void> {
+  if (buffer.length === 0) return;
+  const batch = buffer;
+  buffer = [];
   try {
     await withPrisma(async (prisma) => {
-      await prisma.forgePromptLog.create({
-        data: {
+      await prisma.forgePromptLog.createMany({
+        data: batch.map((entry) => ({
           logId: entry.logId,
           runId: entry.runId,
           step: entry.step,
@@ -67,16 +79,37 @@ export async function insertPromptLog(entry: PromptLogEntry): Promise<void> {
           totalTokens: entry.tokenUsage?.totalTokens ?? null,
           success: entry.success,
           errorMessage: entry.errorMessage,
-        },
+        })),
       });
     });
   } catch (error) {
-    logger.warn("Failed to insert prompt log entry", {
-      logId: entry.logId,
-      runId: entry.runId,
+    logger.warn("Failed to flush prompt log buffer", {
+      count: batch.length,
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/**
+ * Insert a prompt log entry. Buffers entries and flushes in batches to
+ * reduce DB round-trips. Designed to be called fire-and-forget.
+ */
+export function insertPromptLog(entry: PromptLogEntry): void {
+  buffer.push(entry);
+  if (buffer.length >= FLUSH_SIZE) {
+    flushBuffer();
+  } else {
+    scheduleFlush();
+  }
+}
+
+/** Force-flush any buffered entries (call at pipeline end). */
+export async function flushPromptLogs(): Promise<void> {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  await flushBuffer();
 }
 
 // ---------------------------------------------------------------------------

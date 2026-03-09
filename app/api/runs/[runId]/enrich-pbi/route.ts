@@ -118,15 +118,17 @@ export async function POST(
       }
     }
 
-    // Batch update use cases
+    // Batch update use cases (transaction for atomicity)
     if (updates.length > 0) {
       await withPrisma(async (prisma) => {
-        for (const upd of updates) {
-          await prisma.forgeUseCase.update({
-            where: { id: upd.id },
-            data: { enrichmentTags: JSON.stringify(upd.tags) },
-          });
-        }
+        await prisma.$transaction(
+          updates.map((upd) =>
+            prisma.forgeUseCase.update({
+              where: { id: upd.id },
+              data: { enrichmentTags: JSON.stringify(upd.tags) },
+            }),
+          ),
+        );
       });
     }
 

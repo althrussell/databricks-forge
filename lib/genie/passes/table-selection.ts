@@ -141,9 +141,7 @@ export function runTableSelection(
         normalizedLabel: normalized,
       });
       const mergedTables = [...new Set([...existing.tables, ...group.tables])];
-      const mergedSubdomains = [
-        ...new Set([...existing.subdomains, ...group.subdomains]),
-      ];
+      const mergedSubdomains = [...new Set([...existing.subdomains, ...group.subdomains])];
       const mergedUseCases = [...existing.useCases, ...group.useCases].sort(
         (a, b) => b.overallScore - a.overallScore,
       );
@@ -152,7 +150,8 @@ export function runTableSelection(
         ...group.metricViews.filter(
           (mv) =>
             !existing.metricViews.some(
-              (e) => `${e.catalog}.${e.schema}.${e.name}` === `${mv.catalog}.${mv.schema}.${mv.name}`,
+              (e) =>
+                `${e.catalog}.${e.schema}.${e.name}` === `${mv.catalog}.${mv.schema}.${mv.name}`,
             ),
         ),
       ];

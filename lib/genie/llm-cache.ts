@@ -37,7 +37,7 @@ const FALLBACK_BACKOFF_MS = 5_000;
 
 const MAX_GENIE_CONCURRENT = Math.max(
   1,
-  parseInt(process.env.GENIE_MAX_CONCURRENT_LLM ?? "3", 10) || 3,
+  parseInt(process.env.GENIE_MAX_CONCURRENT_LLM ?? "6", 10) || 6,
 );
 
 // ---------------------------------------------------------------------------

@@ -105,16 +105,21 @@ export async function GET() {
     const covered = tables.filter((t) => t.useCases.length > 0).length;
     const uncovered = tables.filter((t) => t.useCases.length === 0).length;
 
-    return NextResponse.json({
-      tables,
-      hasEstateData: true,
-      stats: {
-        totalTables: tables.length,
-        coveredTables: covered,
-        uncoveredTables: uncovered,
-        coveragePct: tables.length > 0 ? Math.round((covered / tables.length) * 100) : 0,
+    return NextResponse.json(
+      {
+        tables,
+        hasEstateData: true,
+        stats: {
+          totalTables: tables.length,
+          coveredTables: covered,
+          uncoveredTables: uncovered,
+          coveragePct: tables.length > 0 ? Math.round((covered / tables.length) * 100) : 0,
+        },
       },
-    });
+      {
+        headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+      },
+    );
   } catch (error) {
     logger.error("[api/environment/table-coverage] GET failed", {
       error: error instanceof Error ? error.message : String(error),

@@ -12,7 +12,13 @@
  */
 
 import { getReviewEndpoint, getFastServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
-import { chatCompletion, ModelServingError } from "@/lib/dbx/model-serving";
+import {
+  chatCompletion,
+  ModelServingError,
+  type ChatCompletionOptions,
+  type ChatCompletionResponse,
+} from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "@/lib/genie/llm-cache";
 import { logger } from "@/lib/logger";
 import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "./sql-rules";
 import "@/lib/skills/content";
@@ -329,6 +335,20 @@ function isRateLimitError(err: unknown): boolean {
   return err instanceof ModelServingError && err.statusCode === 429;
 }
 
+/**
+ * Route through the Genie LLM cache for genie-* surfaces to avoid
+ * redundant LLM calls when the same SQL is reviewed multiple times.
+ */
+function reviewChatCompletion(
+  opts: ChatCompletionOptions,
+  surface?: string,
+): Promise<ChatCompletionResponse> {
+  if (surface && surface.startsWith("genie-")) {
+    return cachedChatCompletion(opts);
+  }
+  return chatCompletion(opts);
+}
+
 function summariseIssues(issues: ReviewIssue[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const i of issues) {
@@ -358,13 +378,16 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
   const prompt = buildReviewPrompt(sql, { ...opts, requestFix: false });
 
   const callReview = async (ep: string): Promise<ReviewResult> => {
-    const response = await chatCompletion({
-      endpoint: ep,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      maxTokens: opts.maxTokens ?? 4096,
-      responseFormat: "json_object",
-    });
+    const response = await reviewChatCompletion(
+      {
+        endpoint: ep,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        maxTokens: opts.maxTokens ?? 4096,
+        responseFormat: "json_object",
+      },
+      opts.surface,
+    );
     return parseReviewResponse(response.content, false);
   };
 
@@ -435,13 +458,16 @@ export async function reviewAndFixSql(
   const prompt = buildReviewPrompt(sql, { ...opts, requestFix: true });
 
   const callReviewFix = async (ep: string): Promise<ReviewResult> => {
-    const response = await chatCompletion({
-      endpoint: ep,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      maxTokens: opts.maxTokens ?? 8192,
-      responseFormat: "json_object",
-    });
+    const response = await reviewChatCompletion(
+      {
+        endpoint: ep,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        maxTokens: opts.maxTokens ?? 8192,
+        responseFormat: "json_object",
+      },
+      opts.surface,
+    );
     return parseReviewResponse(response.content, true);
   };
 
@@ -522,13 +548,16 @@ export async function reviewBatch(
   const prompt = buildBatchReviewPrompt(items, schemaContext);
 
   const callBatchReview = async (ep: string): Promise<BatchReviewResult[]> => {
-    const response = await chatCompletion({
-      endpoint: ep,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      maxTokens: Math.min(items.length * 1024, 16384),
-      responseFormat: "json_object",
-    });
+    const response = await reviewChatCompletion(
+      {
+        endpoint: ep,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        maxTokens: Math.min(items.length * 1024, 16384),
+        responseFormat: "json_object",
+      },
+      surface,
+    );
     return parseBatchReviewResponse(response.content, items);
   };
 
@@ -536,7 +565,8 @@ export async function reviewBatch(
     const failCount = results.filter((r) => r.result.verdict === "fail").length;
     const warnCount = results.filter((r) => r.result.verdict === "warn").length;
     const scores = results.map((r) => r.result.qualityScore);
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    const avgScore =
+      scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
     logger.info(`SQL batch review complete${label}`, {
       surface,
       totalItems: items.length,

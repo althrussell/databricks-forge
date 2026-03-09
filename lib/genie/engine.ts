@@ -502,45 +502,39 @@ async function processDomain(
     total: allJoins.length,
   });
 
-  // Phase A: Metric views run first so they can be persisted and referenced
-  // by downstream consumers (Genie space assembly, dashboard engine).
-  onProgress("Generating metric views...");
-  const metricViewResult =
-    isMetricViewsEnabled() && config.generateMetricViews
-      ? await runMetricViewProposals({
-          domain: normalizedDomain,
-          tableFqns: tables,
-          metadata,
-          allowlist,
-          useCases,
-          measures: exprResult.measures,
-          dimensions: exprResult.dimensions,
-          joinSpecs: allJoins,
-          columnEnrichments: columnResult.enrichments,
-          endpoint: premiumEndpoint,
-          signal,
-        })
-      : { proposals: [] };
+  // Phase B: Metric views + Passes 3-5 run in parallel -- all depend on
+  // Phase 1 + Phase 2 + joins but are independent of each other.
+  onProgress("Creating trusted assets, instructions, benchmarks & metric views...");
 
-  // Persist metric view proposals to standalone table (best-effort)
-  try {
-    const schemaScope = metadata.ucPath;
-    await saveMetricViewProposals(
-      run.runId,
-      schemaScope,
-      normalizedDomain,
-      metricViewResult.proposals,
-    );
-  } catch (err) {
-    logger.warn("Failed to persist metric view proposals (non-fatal)", {
+  const metricViewPromise = (async () => {
+    if (!isMetricViewsEnabled() || !config.generateMetricViews) return { proposals: [] };
+    const result = await runMetricViewProposals({
       domain: normalizedDomain,
-      error: err instanceof Error ? err.message : String(err),
+      tableFqns: tables,
+      metadata,
+      allowlist,
+      useCases,
+      measures: exprResult.measures,
+      dimensions: exprResult.dimensions,
+      joinSpecs: allJoins,
+      columnEnrichments: columnResult.enrichments,
+      endpoint: premiumEndpoint,
+      signal,
     });
-  }
+    // Persist metric view proposals to standalone table (best-effort)
+    try {
+      const schemaScope = metadata.ucPath;
+      await saveMetricViewProposals(run.runId, schemaScope, normalizedDomain, result.proposals);
+    } catch (err) {
+      logger.warn("Failed to persist metric view proposals (non-fatal)", {
+        domain: normalizedDomain,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return result;
+  })();
 
-  // Phase B: Passes 3-5 run in parallel -- depend on Pass 1 + Pass 2 + joins
-  onProgress("Creating trusted assets, instructions & benchmarks...");
-  const [trustedResult, instructionResult, benchmarkResult] = await Promise.all([
+  const [trustedResult, instructionResult, benchmarkResult, metricViewResult] = await Promise.all([
     // Pass 3: Trusted Asset Authoring (premium -- SQL quality critical)
     config.generateTrustedAssets
       ? runTrustedAssetAuthoring({
@@ -590,6 +584,9 @@ async function processDomain(
           signal,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
+
+    // Metric views (runs alongside Passes 3-5 instead of sequentially before)
+    metricViewPromise,
   ]);
 
   let trustedQueries = trustedResult.queries;

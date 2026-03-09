@@ -21,9 +21,12 @@ import {
   CrossDomainDedupItemSchema,
   validateLLMArray,
 } from "@/lib/validation";
+import { mapWithConcurrency } from "@/lib/genie/concurrency";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { scoreUseCaseConsultingQuality } from "@/lib/pipeline/usecase-scorecard";
+
+const DOMAIN_CONCURRENCY = 5;
 
 export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
   const { run, useCases } = ctx;
@@ -64,44 +67,48 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     assetContext = buildAssetContextForScoring(ctx.discoveryResult);
   }
 
-  // Step 6a: Score per domain
+  // Step 6a: Score per domain (parallel across domains)
   const domains = [...new Set(scored.map((uc) => uc.domain))];
   const bcRecord = bc as unknown as Record<string, string>;
-  let failedScoringDomains = 0;
-  for (let di = 0; di < domains.length; di++) {
-    const domain = domains[di];
-    const domainCases = scored.filter((uc) => uc.domain === domain);
-    if (runId)
-      await updateRunMessage(
-        runId,
-        `Scoring domain: ${domain} (${domainCases.length} use cases, ${di + 1}/${domains.length})...`,
-      );
-    try {
-      await scoreDomain(
-        domainCases,
-        bcRecord,
-        run.config.aiModel,
-        industryKpis,
-        runId,
-        assetContext,
-        benchmarkResult.text,
-        `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`,
-      );
-    } catch (error) {
-      logger.warn("Scoring failed for domain", {
-        domain,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      failedScoringDomains++;
-      // Assign default scores
-      domainCases.forEach((uc) => {
-        uc.priorityScore = 0.5;
-        uc.feasibilityScore = 0.5;
-        uc.impactScore = 0.5;
-        uc.overallScore = 0.5;
-      });
-    }
-  }
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Scoring ${scored.length} use cases across ${domains.length} domains...`,
+    );
+
+  const customerProfileCtx = `Customer maturity: ${run.config.customerMaturity}\nRisk posture: ${run.config.riskPosture}\nTransformation horizon: ${run.config.transformationHorizon}\nAdditional context: ${run.config.additionalContext || "None provided"}`;
+  const scoringResults = await mapWithConcurrency(
+    domains.map((domain) => async () => {
+      const domainCases = scored.filter((uc) => uc.domain === domain);
+      try {
+        await scoreDomain(
+          domainCases,
+          bcRecord,
+          run.config.aiModel,
+          industryKpis,
+          runId,
+          assetContext,
+          benchmarkResult.text,
+          customerProfileCtx,
+        );
+        return { domain, failed: false };
+      } catch (error) {
+        logger.warn("Scoring failed for domain", {
+          domain,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        domainCases.forEach((uc) => {
+          uc.priorityScore = 0.5;
+          uc.feasibilityScore = 0.5;
+          uc.impactScore = 0.5;
+          uc.overallScore = 0.5;
+        });
+        return { domain, failed: true };
+      }
+    }),
+    DOMAIN_CONCURRENCY,
+  );
+  const failedScoringDomains = scoringResults.filter((r) => r.failed).length;
   if (failedScoringDomains > 0) {
     const failureRate = failedScoringDomains / Math.max(domains.length, 1);
     if (failureRate >= 0.4) {
@@ -111,30 +118,30 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
     }
   }
 
-  // Step 6b: Deduplicate per domain
+  // Step 6b: Deduplicate per domain (parallel across domains)
   if (runId)
     await updateRunMessage(runId, `Deduplicating: reviewing ${scored.length} use cases...`);
-  let removedCount = 0;
-  for (const domain of domains) {
-    const domainCases = scored.filter((uc) => uc.domain === domain);
-    if (domainCases.length <= 2) continue;
-
-    try {
-      const toRemove = await deduplicateDomain(
-        domainCases,
-        bcRecord,
-        getFastServingEndpoint(),
-        runId,
-      );
-      removedCount += toRemove.size;
-      scored = scored.filter((uc) => !toRemove.has(uc.useCaseNo));
-    } catch (error) {
-      logger.warn("Dedup failed for domain", {
-        domain,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
+  const dedupResults = await mapWithConcurrency(
+    domains
+      .filter((domain) => scored.filter((uc) => uc.domain === domain).length > 2)
+      .map((domain) => async () => {
+        const domainCases = scored.filter((uc) => uc.domain === domain);
+        try {
+          return await deduplicateDomain(domainCases, bcRecord, getFastServingEndpoint(), runId);
+        } catch (error) {
+          logger.warn("Dedup failed for domain", {
+            domain,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return new Set<number>();
+        }
+      }),
+    DOMAIN_CONCURRENCY,
+  );
+  const allRemovals = new Set<number>();
+  for (const s of dedupResults) for (const n of s) allRemovals.add(n);
+  scored = scored.filter((uc) => !allRemovals.has(uc.useCaseNo));
+  const removedCount = allRemovals.size;
 
   if (runId && removedCount > 0) {
     await updateRunMessage(runId, `Deduplication: removed ${removedCount} near-duplicates`);
@@ -266,42 +273,47 @@ async function scoreDomain(
     { priority: number; feasibility: number; impact: number; overall: number }
   >();
 
-  for (const batch of batches) {
-    const useCaseMarkdown = batch.map(renderScoreRow).join("\n");
+  const batchResults = await Promise.all(
+    batches.map(async (batch) => {
+      const useCaseMarkdown = batch.map(renderScoreRow).join("\n");
 
-    const result = await executeAIQuery({
-      promptKey: "SCORE_USE_CASES_PROMPT",
-      variables: {
-        business_context: JSON.stringify(businessContext),
-        strategic_goals: businessContext.strategicGoals ?? "",
-        business_priorities: businessContext.businessPriorities ?? "",
-        strategic_initiative: businessContext.strategicInitiative ?? "",
-        value_chain: businessContext.valueChain ?? "",
-        revenue_model: businessContext.revenueModel ?? "",
-        industry_kpis: industryKpis,
-        asset_context: assetContext,
-        benchmark_context: benchmarkContext,
-        customer_profile_context: customerProfileContext,
-        use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
-      },
-      modelEndpoint: aiModel,
-      responseFormat: "json_object",
-      runId,
-      step: "scoring",
-      maxTokens: 128000,
-    });
-
-    let rawItems: unknown[];
-    try {
-      rawItems = parseLLMJson(result.rawResponse, "scoring:score") as unknown[];
-    } catch (parseErr) {
-      logger.warn("Failed to parse scoring response JSON", {
-        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      const result = await executeAIQuery({
+        promptKey: "SCORE_USE_CASES_PROMPT",
+        variables: {
+          business_context: JSON.stringify(businessContext),
+          strategic_goals: businessContext.strategicGoals ?? "",
+          business_priorities: businessContext.businessPriorities ?? "",
+          strategic_initiative: businessContext.strategicInitiative ?? "",
+          value_chain: businessContext.valueChain ?? "",
+          revenue_model: businessContext.revenueModel ?? "",
+          industry_kpis: industryKpis,
+          asset_context: assetContext,
+          benchmark_context: benchmarkContext,
+          customer_profile_context: customerProfileContext,
+          use_case_markdown: `| No | Name | Type | Technique | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
+        },
+        modelEndpoint: aiModel,
+        responseFormat: "json_object",
+        runId,
+        step: "scoring",
+        maxTokens: 128000,
       });
-      continue;
-    }
 
-    const items = validateLLMArray(rawItems, ScoreItemSchema, "scoreDomain");
+      let rawItems: unknown[];
+      try {
+        rawItems = parseLLMJson(result.rawResponse, "scoring:score") as unknown[];
+      } catch (parseErr) {
+        logger.warn("Failed to parse scoring response JSON", {
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        });
+        return [];
+      }
+
+      return validateLLMArray(rawItems, ScoreItemSchema, "scoreDomain");
+    }),
+  );
+
+  for (const items of batchResults) {
     for (const item of items) {
       if (isNaN(item.no)) continue;
       scoreMap.set(item.no, {
@@ -341,37 +353,41 @@ async function deduplicateDomain(
   const baseContextTokens = 1500;
   const batches = buildTokenAwareBatches(domainCases, renderDedupRow, baseContextTokens);
 
-  const toRemove = new Set<number>();
+  const batchResults = await Promise.all(
+    batches.map(async (batch) => {
+      const useCaseMarkdown = batch.map(renderDedupRow).join("\n");
 
-  for (const batch of batches) {
-    const useCaseMarkdown = batch.map(renderDedupRow).join("\n");
-
-    const result = await executeAIQuery({
-      promptKey: "REVIEW_USE_CASES_PROMPT",
-      variables: {
-        total_count: String(batch.length),
-        business_name: businessContext.businessName ?? "",
-        strategic_goals: businessContext.strategicGoals ?? "",
-        use_case_markdown: `| No | Domain | Name | Type | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
-      },
-      modelEndpoint: aiModel,
-      responseFormat: "json_object",
-      runId,
-      step: "scoring",
-      maxTokens: 128000,
-    });
-
-    let rawItems: unknown[];
-    try {
-      rawItems = parseLLMJson(result.rawResponse, "scoring:dedup") as unknown[];
-    } catch (parseErr) {
-      logger.warn("Failed to parse dedup response JSON", {
-        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      const result = await executeAIQuery({
+        promptKey: "REVIEW_USE_CASES_PROMPT",
+        variables: {
+          total_count: String(batch.length),
+          business_name: businessContext.businessName ?? "",
+          strategic_goals: businessContext.strategicGoals ?? "",
+          use_case_markdown: `| No | Domain | Name | Type | Statement |\n|---|---|---|---|---|\n${useCaseMarkdown}`,
+        },
+        modelEndpoint: aiModel,
+        responseFormat: "json_object",
+        runId,
+        step: "scoring",
+        maxTokens: 128000,
       });
-      continue;
-    }
 
-    const items = validateLLMArray(rawItems, DedupItemSchema, "deduplicateDomain");
+      let rawItems: unknown[];
+      try {
+        rawItems = parseLLMJson(result.rawResponse, "scoring:dedup") as unknown[];
+      } catch (parseErr) {
+        logger.warn("Failed to parse dedup response JSON", {
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        });
+        return [];
+      }
+
+      return validateLLMArray(rawItems, DedupItemSchema, "deduplicateDomain");
+    }),
+  );
+
+  const toRemove = new Set<number>();
+  for (const items of batchResults) {
     for (const item of items) {
       const action = String(item.action ?? "")
         .trim()

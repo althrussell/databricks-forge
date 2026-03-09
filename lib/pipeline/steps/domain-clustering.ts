@@ -16,9 +16,11 @@ import {
   SubdomainAssignmentSchema,
   validateLLMArray,
 } from "@/lib/validation";
+import { mapWithConcurrency } from "@/lib/genie/concurrency";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 
 const MIN_CASES_PER_DOMAIN = 3;
+const DOMAIN_CONCURRENCY = 5;
 
 export async function runDomainClustering(
   ctx: PipelineContext,
@@ -46,37 +48,37 @@ export async function runDomainClustering(
     });
   }
 
-  // Step 5b: Assign subdomains per domain
+  // Step 5b: Assign subdomains per domain (parallel across domains)
   const domains = [...new Set(updatedCases.map((uc) => uc.domain))];
-  for (let di = 0; di < domains.length; di++) {
-    const domain = domains[di];
-    const domainCases = updatedCases.filter((uc) => uc.domain === domain);
-    if (domainCases.length < 2) continue;
-
-    if (runId)
-      await updateRunMessage(
-        runId,
-        `Assigning subdomains for domain: ${domain} (${di + 1}/${domains.length})...`,
-      );
-    try {
-      await assignSubdomains(
-        domainCases,
-        domain,
-        run.config.businessName,
-        bc,
-        getFastServingEndpoint(),
-        runId,
-      );
-    } catch (error) {
-      logger.warn("Subdomain assignment failed", {
-        domain,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      domainCases.forEach((uc) => {
-        uc.subdomain = "General";
-      });
-    }
-  }
+  const subdomainTasks = domains
+    .filter((domain) => updatedCases.filter((uc) => uc.domain === domain).length >= 2)
+    .map((domain) => async () => {
+      const domainCases = updatedCases.filter((uc) => uc.domain === domain);
+      try {
+        await assignSubdomains(
+          domainCases,
+          domain,
+          run.config.businessName,
+          bc,
+          getFastServingEndpoint(),
+          runId,
+        );
+      } catch (error) {
+        logger.warn("Subdomain assignment failed", {
+          domain,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        domainCases.forEach((uc) => {
+          uc.subdomain = "General";
+        });
+      }
+    });
+  if (runId)
+    await updateRunMessage(
+      runId,
+      `Assigning subdomains across ${subdomainTasks.length} domains...`,
+    );
+  await mapWithConcurrency(subdomainTasks, DOMAIN_CONCURRENCY);
 
   // Step 5c: Merge small domains
   const smallDomainCount = Object.entries(
@@ -123,41 +125,46 @@ async function assignDomains(
 
   const domainMap = new Map<number, string>();
 
-  for (const batch of batches) {
-    const useCasesCsv = batch.map(renderUseCase).join("\n");
+  const batchResults = await Promise.all(
+    batches.map(async (batch) => {
+      const useCasesCsv = batch.map(renderUseCase).join("\n");
 
-    const result = await executeAIQuery({
-      promptKey: "DOMAIN_FINDER_PROMPT",
-      variables: {
-        business_name: businessName,
-        industries: businessContext.industries,
-        business_context: JSON.stringify(businessContext),
-        use_cases_csv: useCasesCsv,
-        previous_violations: "None",
-        output_language: "English",
-        target_domain_count: String(targetDomainCount),
-      },
-      modelEndpoint: aiModel,
-      responseFormat: "json_object",
-      runId,
-      step: "domain-clustering",
-      maxTokens: 128000,
-    });
-
-    let rawItems: unknown[];
-    try {
-      rawItems = parseLLMJson(result.rawResponse, "domain-clustering") as unknown[];
-    } catch (parseErr) {
-      logger.warn("Failed to parse domain assignment JSON", {
-        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      const result = await executeAIQuery({
+        promptKey: "DOMAIN_FINDER_PROMPT",
+        variables: {
+          business_name: businessName,
+          industries: businessContext.industries,
+          business_context: JSON.stringify(businessContext),
+          use_cases_csv: useCasesCsv,
+          previous_violations: "None",
+          output_language: "English",
+          target_domain_count: String(targetDomainCount),
+        },
+        modelEndpoint: aiModel,
+        responseFormat: "json_object",
+        runId,
+        step: "domain-clustering",
+        maxTokens: 128000,
       });
-      batch.forEach((uc) => {
-        uc.domain = "General";
-      });
-      continue;
-    }
 
-    const items = validateLLMArray(rawItems, DomainAssignmentSchema, "assignDomains");
+      let rawItems: unknown[];
+      try {
+        rawItems = parseLLMJson(result.rawResponse, "domain-clustering") as unknown[];
+      } catch (parseErr) {
+        logger.warn("Failed to parse domain assignment JSON", {
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        });
+        batch.forEach((uc) => {
+          uc.domain = "General";
+        });
+        return [];
+      }
+
+      return validateLLMArray(rawItems, DomainAssignmentSchema, "assignDomains");
+    }),
+  );
+
+  for (const items of batchResults) {
     for (const item of items) {
       if (!isNaN(item.no) && item.domain) {
         domainMap.set(item.no, item.domain.trim());
@@ -186,42 +193,47 @@ async function assignSubdomains(
 
   const subdomainMap = new Map<number, string>();
 
-  for (const batch of batches) {
-    const useCasesCsv = batch.map(renderUseCase).join("\n");
+  const batchResults = await Promise.all(
+    batches.map(async (batch) => {
+      const useCasesCsv = batch.map(renderUseCase).join("\n");
 
-    const result = await executeAIQuery({
-      promptKey: "SUBDOMAIN_DETECTOR_PROMPT",
-      variables: {
-        domain_name: domainName,
-        business_name: businessName,
-        industries: businessContext.industries,
-        business_context: JSON.stringify(businessContext),
-        use_cases_csv: useCasesCsv,
-        previous_violations: "None",
-        output_language: "English",
-      },
-      modelEndpoint: aiModel,
-      responseFormat: "json_object",
-      runId,
-      step: "domain-clustering",
-      maxTokens: 128000,
-    });
-
-    let rawItems: unknown[];
-    try {
-      rawItems = parseLLMJson(result.rawResponse, "domain-clustering:subdomain") as unknown[];
-    } catch (parseErr) {
-      logger.warn("Failed to parse subdomain assignment JSON", {
-        domain: domainName,
-        error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      const result = await executeAIQuery({
+        promptKey: "SUBDOMAIN_DETECTOR_PROMPT",
+        variables: {
+          domain_name: domainName,
+          business_name: businessName,
+          industries: businessContext.industries,
+          business_context: JSON.stringify(businessContext),
+          use_cases_csv: useCasesCsv,
+          previous_violations: "None",
+          output_language: "English",
+        },
+        modelEndpoint: aiModel,
+        responseFormat: "json_object",
+        runId,
+        step: "domain-clustering",
+        maxTokens: 128000,
       });
-      batch.forEach((uc) => {
-        uc.subdomain = "General";
-      });
-      continue;
-    }
 
-    const items = validateLLMArray(rawItems, SubdomainAssignmentSchema, "assignSubdomains");
+      let rawItems: unknown[];
+      try {
+        rawItems = parseLLMJson(result.rawResponse, "domain-clustering:subdomain") as unknown[];
+      } catch (parseErr) {
+        logger.warn("Failed to parse subdomain assignment JSON", {
+          domain: domainName,
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        });
+        batch.forEach((uc) => {
+          uc.subdomain = "General";
+        });
+        return [];
+      }
+
+      return validateLLMArray(rawItems, SubdomainAssignmentSchema, "assignSubdomains");
+    }),
+  );
+
+  for (const items of batchResults) {
     for (const item of items) {
       if (!isNaN(item.no) && item.subdomain) {
         subdomainMap.set(item.no, item.subdomain.trim());

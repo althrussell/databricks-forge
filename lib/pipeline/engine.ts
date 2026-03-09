@@ -47,6 +47,7 @@ import {
   completeDashboardJob,
   failDashboardJob,
 } from "@/lib/dashboard/engine-status";
+import { flushPromptLogs } from "@/lib/lakebase/prompt-logs";
 
 // ---------------------------------------------------------------------------
 // Step definitions with progress percentages
@@ -565,6 +566,7 @@ export async function startPipeline(runId: string): Promise<void> {
       }
     }
   } finally {
+    await flushPromptLogs();
     clearRunCancelled(runId);
     activePipelineRuns.delete(runId);
   }
@@ -1054,6 +1056,7 @@ export async function resumePipeline(runId: string): Promise<void> {
       }
     }
   } finally {
+    await flushPromptLogs();
     clearRunCancelled(runId);
     activePipelineRuns.delete(runId);
   }

@@ -422,7 +422,19 @@ export interface AggregateEstateView {
  * Strategy: for each unique tableFqn, keep the record from the most
  * recent scan (by createdAt). Same for histories, lineage edges, and insights.
  */
+let _aggregateCache: { data: AggregateEstateView; ts: number } | null = null;
+const AGGREGATE_CACHE_TTL_MS = 30_000;
+
 export async function getAggregateEstateView(): Promise<AggregateEstateView> {
+  if (_aggregateCache && Date.now() - _aggregateCache.ts < AGGREGATE_CACHE_TTL_MS) {
+    return _aggregateCache.data;
+  }
+  const result = await _getAggregateEstateViewUncached();
+  _aggregateCache = { data: result, ts: Date.now() };
+  return result;
+}
+
+async function _getAggregateEstateViewUncached(): Promise<AggregateEstateView> {
   return withPrisma(async (prisma) => {
     const scans = await prisma.forgeEnvironmentScan.findMany({
       orderBy: { createdAt: "desc" },

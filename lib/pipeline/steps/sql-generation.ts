@@ -44,7 +44,7 @@ const MAX_CONCURRENT_SQL = Math.max(
   parseInt(process.env.SQL_GEN_MAX_CONCURRENT ?? "3", 10) || 3,
 );
 
-const WAVE_DELAY_MS = Math.max(0, parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "2000", 10) || 0);
+const WAVE_DELAY_MS = Math.max(0, parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "500", 10) || 0);
 
 // ---------------------------------------------------------------------------
 // Main entry point
@@ -83,7 +83,13 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   let failed = 0;
 
   // Diagnostic accumulators for summary logging
-  const outcomes: { id: string; name: string; domain: string; status: string; qualityScore?: number }[] = [];
+  const outcomes: {
+    id: string;
+    name: string;
+    domain: string;
+    status: string;
+    qualityScore?: number;
+  }[] = [];
   let hallucinationAttempts = 0;
   let hallucinationFixed = 0;
   let executionFixAttempts = 0;
@@ -116,6 +122,10 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   businessVars.skill_reference = formatContextSections(sqlSkillCtx.contextSections);
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
+
+  // Run-level cache for sample data: keyed by table FQN, stores markdown + structured data.
+  // Avoids redundant warehouse queries when multiple use cases share tables.
+  const sampleDataCache = new Map<string, string>();
 
   // Progress interpolation: SQL generation spans 67% → 95% of overall pipeline
   const PROGRESS_START = 67;
@@ -161,6 +171,7 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
             metadata.foreignKeys,
             run.config.aiModel,
             sampleRows,
+            sampleDataCache,
             runId,
             run.createdBy,
           ),
@@ -216,7 +227,12 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
           uc.sqlCode = null;
           uc.sqlStatus = "failed";
           failed++;
-          outcomes.push({ id: uc.id, name: uc.name, domain, status: `failed: ${reason.substring(0, 100)}` });
+          outcomes.push({
+            id: uc.id,
+            name: uc.name,
+            domain,
+            status: `failed: ${reason.substring(0, 100)}`,
+          });
         }
         completed++;
       }
@@ -297,6 +313,7 @@ async function generateSqlForUseCase(
   allForeignKeys: ForeignKey[],
   aiModel: string,
   sampleRowsPerTable: number,
+  sampleCache: Map<string, string>,
   runId?: string,
   userEmail?: string | null,
 ): Promise<SqlGenResult> {
@@ -351,15 +368,35 @@ async function generateSqlForUseCase(
   );
   const fkMarkdown = buildForeignKeyMarkdown(relevantFKs);
 
-  // Fetch sample data if enabled
+  // Fetch sample data if enabled (with run-level cache to avoid redundant queries)
   let sampleDataSection = "";
   if (sampleRowsPerTable > 0 && uc.tablesInvolved.length > 0) {
-    const sampleResult = await fetchSampleData(uc.tablesInvolved, sampleRowsPerTable, {
-      runId,
-      userEmail,
-      step: "sql-generation",
-    });
-    sampleDataSection = sampleResult.markdown;
+    const uncachedTables = uc.tablesInvolved.filter(
+      (fqn) => !sampleCache.has(fqn.replace(/`/g, "")),
+    );
+    if (uncachedTables.length > 0) {
+      const sampleResult = await fetchSampleData(uncachedTables, sampleRowsPerTable, {
+        runId,
+        userEmail,
+        step: "sql-generation",
+      });
+      // Populate cache: store per-table markdown for reuse by other use cases
+      const lines = sampleResult.markdown.split("\n**");
+      for (const line of lines) {
+        const match = line.match(/^([^\s(]+)/);
+        if (match) {
+          const fqn = match[1].replace(/\*\*/g, "");
+          if (fqn.includes(".")) sampleCache.set(fqn, `**${line}`);
+        }
+      }
+    }
+    // Assemble sample data from cache for this use case's tables
+    const cachedSections = uc.tablesInvolved
+      .map((fqn) => sampleCache.get(fqn.replace(/`/g, "")))
+      .filter(Boolean);
+    if (cachedSections.length > 0) {
+      sampleDataSection = `### SAMPLE DATA (real rows from the tables -- use this to understand data formats, values, and join keys)\n\n${cachedSections.join("\n")}`;
+    }
   }
 
   // Build the per-use-case prompt variables

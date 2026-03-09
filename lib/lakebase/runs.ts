@@ -312,12 +312,21 @@ export async function failOrphanedRunningRun(
 /**
  * Lightweight helper that updates just statusMessage (and optionally progressPct).
  * Called frequently from pipeline steps to report granular progress.
+ * Throttled to at most one write per MIN_INTERVAL_MS to reduce DB load.
  */
+const MIN_PROGRESS_INTERVAL_MS = 500;
+const lastProgressUpdate = new Map<string, number>();
+
 export async function updateRunMessage(
   runId: string,
   statusMessage: string,
   progressPct?: number,
 ): Promise<void> {
+  const now = Date.now();
+  const lastUpdate = lastProgressUpdate.get(runId) ?? 0;
+  if (now - lastUpdate < MIN_PROGRESS_INTERVAL_MS) return;
+  lastProgressUpdate.set(runId, now);
+
   const data: Record<string, unknown> = { statusMessage };
   if (progressPct !== undefined) {
     data.progressPct = progressPct;
