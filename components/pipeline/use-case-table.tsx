@@ -53,6 +53,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
+  Globe,
 } from "lucide-react";
 import { ScoreRadarChart } from "@/components/charts/lazy";
 import { computeOverallScore, effectiveScores } from "@/lib/domain/scoring";
@@ -92,6 +93,7 @@ export function UseCaseTable({
   const [adjImpact, setAdjImpact] = useState(0);
 
   const domains = useMemo(() => [...new Set(useCases.map((uc) => uc.domain))].sort(), [useCases]);
+  const types = useMemo(() => [...new Set(useCases.map((uc) => uc.type))].sort(), [useCases]);
 
   const filtered = useMemo(() => {
     let result = [...useCases];
@@ -243,8 +245,11 @@ export function UseCaseTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="AI">AI</SelectItem>
-              <SelectItem value="Statistical">Statistical</SelectItem>
+              {types.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
@@ -1003,6 +1008,17 @@ function TypeBadge({ type }: { type: string }) {
       >
         <BrainCircuit className="h-3 w-3" />
         AI
+      </Badge>
+    );
+  }
+  if (type === "Geospatial") {
+    return (
+      <Badge
+        variant="outline"
+        className="gap-1 border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+      >
+        <Globe className="h-3 w-3" />
+        Geospatial
       </Badge>
     );
   }
