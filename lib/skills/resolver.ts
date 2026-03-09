@@ -20,11 +20,7 @@ import type {
   SkillSection,
 } from "./types";
 import { EMPTY_RESOLVED_SKILLS } from "./types";
-import {
-  getChunksForIntent,
-  getChunksForGeniePass,
-  getChunksForPipelineStep,
-} from "./registry";
+import { getChunksForIntent, getChunksForGeniePass, getChunksForPipelineStep } from "./registry";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -66,16 +62,14 @@ export function resolveForIntent(
 }
 
 /** Resolve skills for a Genie Engine pass (always rule-based). */
-export function resolveForGeniePass(
-  pass: GeniePass,
-  opts: ResolveOptions = {},
-): ResolvedSkills {
+export function resolveForGeniePass(pass: GeniePass, opts: ResolveOptions = {}): ResolvedSkills {
   const chunks = getChunksForGeniePass(pass);
   if (chunks.length === 0) return EMPTY_RESOLVED_SKILLS;
 
   const isInstructions = pass === "instructions";
   return composeSkills(chunks, {
-    systemBudget: opts.systemBudget ?? (isInstructions ? GENIE_INSTRUCTION_BUDGET : GENIE_PASS_SYSTEM_BUDGET),
+    systemBudget:
+      opts.systemBudget ?? (isInstructions ? GENIE_INSTRUCTION_BUDGET : GENIE_PASS_SYSTEM_BUDGET),
     contextBudget: opts.contextBudget ?? GENIE_PASS_CONTEXT_BUDGET,
   });
 }
@@ -107,10 +101,7 @@ interface ComposeBudget {
  * into system overlay (rules, anti-patterns) and context sections (patterns,
  * examples, vocabulary, kpis), then trimming to budget.
  */
-function composeSkills(
-  chunks: SkillChunk[],
-  budget: ComposeBudget,
-): ResolvedSkills {
+function composeSkills(chunks: SkillChunk[], budget: ComposeBudget): ResolvedSkills {
   const systemCategories = new Set(["rules", "anti-patterns"]);
   const systemChunks = chunks.filter((c) => systemCategories.has(c.category));
   const contextChunks = chunks.filter((c) => !systemCategories.has(c.category));

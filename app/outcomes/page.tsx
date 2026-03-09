@@ -43,18 +43,54 @@ import { staggerContainer, staggerItem } from "@/lib/motion";
 // ---------------------------------------------------------------------------
 
 const COLOR_PALETTE = [
-  { gradient: "from-blue-500/20 to-blue-600/5 border-blue-200 dark:border-blue-800", icon: "text-blue-600 dark:text-blue-400" },
-  { gradient: "from-emerald-500/20 to-emerald-600/5 border-emerald-200 dark:border-emerald-800", icon: "text-emerald-600 dark:text-emerald-400" },
-  { gradient: "from-orange-500/20 to-orange-600/5 border-orange-200 dark:border-orange-800", icon: "text-orange-600 dark:text-orange-400" },
-  { gradient: "from-violet-500/20 to-violet-600/5 border-violet-200 dark:border-violet-800", icon: "text-violet-600 dark:text-violet-400" },
-  { gradient: "from-cyan-500/20 to-cyan-600/5 border-cyan-200 dark:border-cyan-800", icon: "text-cyan-600 dark:text-cyan-400" },
-  { gradient: "from-pink-500/20 to-pink-600/5 border-pink-200 dark:border-pink-800", icon: "text-pink-600 dark:text-pink-400" },
-  { gradient: "from-amber-500/20 to-amber-600/5 border-amber-200 dark:border-amber-800", icon: "text-amber-600 dark:text-amber-400" },
-  { gradient: "from-indigo-500/20 to-indigo-600/5 border-indigo-200 dark:border-indigo-800", icon: "text-indigo-600 dark:text-indigo-400" },
-  { gradient: "from-red-500/20 to-red-600/5 border-red-200 dark:border-red-800", icon: "text-red-600 dark:text-red-400" },
-  { gradient: "from-teal-500/20 to-teal-600/5 border-teal-200 dark:border-teal-800", icon: "text-teal-600 dark:text-teal-400" },
-  { gradient: "from-rose-500/20 to-rose-600/5 border-rose-200 dark:border-rose-800", icon: "text-rose-600 dark:text-rose-400" },
-  { gradient: "from-sky-500/20 to-sky-600/5 border-sky-200 dark:border-sky-800", icon: "text-sky-600 dark:text-sky-400" },
+  {
+    gradient: "from-blue-500/20 to-blue-600/5 border-blue-200 dark:border-blue-800",
+    icon: "text-blue-600 dark:text-blue-400",
+  },
+  {
+    gradient: "from-emerald-500/20 to-emerald-600/5 border-emerald-200 dark:border-emerald-800",
+    icon: "text-emerald-600 dark:text-emerald-400",
+  },
+  {
+    gradient: "from-orange-500/20 to-orange-600/5 border-orange-200 dark:border-orange-800",
+    icon: "text-orange-600 dark:text-orange-400",
+  },
+  {
+    gradient: "from-violet-500/20 to-violet-600/5 border-violet-200 dark:border-violet-800",
+    icon: "text-violet-600 dark:text-violet-400",
+  },
+  {
+    gradient: "from-cyan-500/20 to-cyan-600/5 border-cyan-200 dark:border-cyan-800",
+    icon: "text-cyan-600 dark:text-cyan-400",
+  },
+  {
+    gradient: "from-pink-500/20 to-pink-600/5 border-pink-200 dark:border-pink-800",
+    icon: "text-pink-600 dark:text-pink-400",
+  },
+  {
+    gradient: "from-amber-500/20 to-amber-600/5 border-amber-200 dark:border-amber-800",
+    icon: "text-amber-600 dark:text-amber-400",
+  },
+  {
+    gradient: "from-indigo-500/20 to-indigo-600/5 border-indigo-200 dark:border-indigo-800",
+    icon: "text-indigo-600 dark:text-indigo-400",
+  },
+  {
+    gradient: "from-red-500/20 to-red-600/5 border-red-200 dark:border-red-800",
+    icon: "text-red-600 dark:text-red-400",
+  },
+  {
+    gradient: "from-teal-500/20 to-teal-600/5 border-teal-200 dark:border-teal-800",
+    icon: "text-teal-600 dark:text-teal-400",
+  },
+  {
+    gradient: "from-rose-500/20 to-rose-600/5 border-rose-200 dark:border-rose-800",
+    icon: "text-rose-600 dark:text-rose-400",
+  },
+  {
+    gradient: "from-sky-500/20 to-sky-600/5 border-sky-200 dark:border-sky-800",
+    icon: "text-sky-600 dark:text-sky-400",
+  },
 ] as const;
 
 const GRID_COLS = 3;
@@ -128,7 +164,7 @@ export default function OutcomesPage() {
   const selectedId = searchParams.get("industry");
 
   const selectedIndustry = useMemo(
-    () => (selectedId ? outcomes.find((i) => i.id === selectedId) ?? null : null),
+    () => (selectedId ? (outcomes.find((i) => i.id === selectedId) ?? null) : null),
     [selectedId, outcomes],
   );
 
@@ -192,7 +228,11 @@ export default function OutcomesPage() {
       />
 
       {selectedIndustry ? (
-        <IndustryDetailView industry={selectedIndustry} color={selectedColor} onBack={clearSelection} />
+        <IndustryDetailView
+          industry={selectedIndustry}
+          color={selectedColor}
+          onBack={clearSelection}
+        />
       ) : (
         <>
           {/* Search */}
@@ -456,7 +496,6 @@ function ObjectiveSection({
   objective: IndustryObjective;
   iconColor: string;
 }) {
-
   return (
     <Card>
       <CardHeader>

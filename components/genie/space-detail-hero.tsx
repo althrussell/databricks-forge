@@ -5,12 +5,7 @@ import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fadeInUp } from "@/lib/motion";
-import {
-  ArrowLeft,
-  BrainCircuit,
-  ExternalLink,
-  Loader2,
-} from "lucide-react";
+import { ArrowLeft, BrainCircuit, ExternalLink, Loader2 } from "lucide-react";
 import type { Grade } from "@/lib/genie/health-checks/types";
 
 interface SpaceDetailHeroProps {
@@ -112,7 +107,12 @@ export function SpaceDetailHero({
 
           <div className="hidden shrink-0 items-center gap-2 sm:flex">
             {canImprove && (
-              <Button size="lg" onClick={onImprove} disabled={improving || fixing} className="gap-2">
+              <Button
+                size="lg"
+                onClick={onImprove}
+                disabled={improving || fixing}
+                className="gap-2"
+              >
                 {improving ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (

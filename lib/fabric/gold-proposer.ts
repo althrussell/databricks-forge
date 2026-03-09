@@ -14,6 +14,8 @@ import { getServingEndpoint } from "@/lib/dbx/client";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import "@/lib/skills/content";
+import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 import { mapPbiTypeToSpark } from "./type-mapping";
 import { normalizeIdentifier, normalizeTableName, type NameMapping } from "./name-normalizer";
 import { resolveLabelTag, buildTagDdl, type SensitivityLabelMapping } from "./sensitivity-mapping";
@@ -259,10 +261,13 @@ async function generateDDLWithLLM(
     })
     .join("\n\n");
 
+  const goldSkills = resolveForPipelineStep("sql-generation", { contextBudget: 2000 });
+  const goldSkillBlock = formatContextSections(goldSkills.contextSections);
+
   const prompt = `You are a Databricks SQL expert. Given the following table proposals migrated from Power BI, generate optimal CREATE TABLE DDL for each table.
 
 ${DATABRICKS_SQL_RULES}
-
+${goldSkillBlock ? `\n## Databricks Data Modeling Patterns\n${goldSkillBlock}\n` : ""}
 Requirements:
 - Use DELTA format
 - Add appropriate COMMENT on columns where the PBI name or type change is non-obvious

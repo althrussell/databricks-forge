@@ -31,8 +31,7 @@ export function CoverageGapCard({ coverageData, onClick }: CoverageGapCardProps)
   }
 
   const pct = Math.round(coverageData.overallCoverage * 100);
-  const sentiment =
-    pct >= 75 ? "positive" : pct >= 25 ? "neutral" : "warning";
+  const sentiment = pct >= 75 ? "positive" : pct >= 25 ? "neutral" : "warning";
 
   const borderClass =
     sentiment === "positive"

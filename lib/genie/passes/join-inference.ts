@@ -22,6 +22,8 @@ import {
 import { canonicalKeyGroups } from "../key-synonyms";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
+import "@/lib/skills/content";
+import { resolveForGeniePass, formatContextSections } from "@/lib/skills/resolver";
 
 const TEMPERATURE = 0.1;
 
@@ -73,12 +75,15 @@ Return JSON: { "joins": [{ "leftTable": "catalog.schema.table1", "rightTable": "
     .map(([canonical, variants]) => `- ${canonical}: ${variants.join(", ")}`)
     .join("\n");
 
+  const joinSkills = resolveForGeniePass("joinInference");
+  const joinSkillContext = formatContextSections(joinSkills.contextSections);
+
   const userMessage = `${schemaBlock}
 
 ${existingList ? `### ALREADY KNOWN RELATIONSHIPS (do not duplicate)\n${existingList}\n` : ""}
 
 Identify additional table join relationships from column naming patterns.
-
+${joinSkillContext ? `\n### Data Modeling Patterns\n${joinSkillContext}\n` : ""}
 ### KEY SYNONYM HINTS
 ${synonymHints}`;
 

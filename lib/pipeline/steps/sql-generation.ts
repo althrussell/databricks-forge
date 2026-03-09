@@ -32,6 +32,8 @@ import type {
 import { validateColumnReferences } from "@/lib/validation/sql-columns";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
+import "@/lib/skills/content";
+import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -81,7 +83,7 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   let failed = 0;
 
   // Shared prompt variables (business context -- same for all use cases)
-  const businessVars = {
+  const businessVars: Record<string, string> = {
     business_name: run.config.businessName,
     business_context: JSON.stringify(bc),
     strategic_goals: bc.strategicGoals,
@@ -98,6 +100,10 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
   const geospatialFunctionsSummary = generateGeospatialFunctionsSummary();
   const windowFunctionsSummary = generateWindowFunctionsSummary();
   const lambdaFunctionsSummary = generateLambdaFunctionsSummary();
+
+  // Skill context (computed once, injected into every prompt)
+  const sqlSkillCtx = resolveForPipelineStep("sql-generation", { contextBudget: 3000 });
+  businessVars.skill_reference = formatContextSections(sqlSkillCtx.contextSections);
 
   const sampleRows = run.config.sampleRowsPerTable ?? 0;
 

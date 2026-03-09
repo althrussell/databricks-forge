@@ -10,13 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ExportToolbar } from "@/components/pipeline/export-toolbar";
-import {
-  Copy,
-  GitCompareArrows,
-  ArrowLeft,
-  Zap,
-  MoreHorizontal,
-} from "lucide-react";
+import { Copy, GitCompareArrows, ArrowLeft, Zap, MoreHorizontal } from "lucide-react";
 import type { PipelineRun } from "@/lib/domain/types";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -72,9 +66,7 @@ export function RunHeader({
               {STATUS_LABELS[run.status]}
             </Badge>
           </div>
-          <p className="mt-1 font-mono text-sm text-muted-foreground">
-            {run.config.ucMetadata}
-          </p>
+          <p className="mt-1 font-mono text-sm text-muted-foreground">{run.config.ucMetadata}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Created{" "}
             {new Date(run.createdAt).toLocaleDateString(undefined, {

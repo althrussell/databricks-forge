@@ -325,7 +325,8 @@ export async function buildAssistantContext(
   const lowConfidenceRetrieval = retrievalTopScore !== null && retrievalTopScore < 0.5;
 
   if (lowConfidenceRetrieval) {
-    const hasSkillContent = fullContext.includes("## Platform Expertise") ||
+    const hasSkillContent =
+      fullContext.includes("## Platform Expertise") ||
       fullContext.includes("## Industry Domain Knowledge");
     const confidenceNote = hasSkillContent
       ? "## Retrieval Confidence\nTop retrieval score is low, but platform expertise is available. Lean on domain knowledge and explicitly call out uncertainty where estate-specific context is thin."

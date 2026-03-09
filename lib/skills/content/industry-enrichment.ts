@@ -77,9 +77,7 @@ export function buildIndustrySkillChunks(industryId: string): SkillChunk[] {
  * Build ready-to-inject context sections from an industry outcome map.
  * Convenience wrapper over buildIndustrySkillChunks for direct prompt injection.
  */
-export function buildIndustrySkillSections(
-  industryId: string,
-): SkillSection[] {
+export function buildIndustrySkillSections(industryId: string): SkillSection[] {
   return buildIndustrySkillChunks(industryId).map((c) => ({
     title: c.title,
     content: c.content,
@@ -94,17 +92,13 @@ export function buildDomainQuestionPatterns(industryId: string): string {
   const outcome = getIndustryOutcome(industryId);
   if (!outcome) return "";
 
-  const patterns: string[] = [
-    `Domain Question Patterns for ${outcome.name}:`,
-  ];
+  const patterns: string[] = [`Domain Question Patterns for ${outcome.name}:`];
 
   for (const obj of outcome.objectives) {
     for (const pri of obj.priorities) {
       if (pri.kpis.length === 0) continue;
       const kpi = pri.kpis[0];
-      patterns.push(
-        `- "What is the ${kpi.toLowerCase()} by [dimension] for [time period]?"`,
-      );
+      patterns.push(`- "What is the ${kpi.toLowerCase()} by [dimension] for [time period]?"`);
       if (patterns.length >= 6) break;
     }
     if (patterns.length >= 6) break;
@@ -167,9 +161,7 @@ function extractPersonas(outcome: IndustryOutcome): string | null {
 }
 
 function extractBusinessValue(outcome: IndustryOutcome): string | null {
-  const lines: string[] = [
-    `Business Value Themes for ${outcome.name}:`,
-  ];
+  const lines: string[] = [`Business Value Themes for ${outcome.name}:`];
   let count = 0;
 
   for (const obj of outcome.objectives) {

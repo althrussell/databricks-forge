@@ -5,13 +5,7 @@ import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { fadeInUp } from "@/lib/motion";
-import {
-  ArrowRight,
-  ClipboardCheck,
-  FlaskConical,
-  ListChecks,
-  Play,
-} from "lucide-react";
+import { ArrowRight, ClipboardCheck, FlaskConical, ListChecks, Play } from "lucide-react";
 
 interface SpaceBenchmarksTabProps {
   spaceId: string;

@@ -1,12 +1,18 @@
 /**
  * Genie Space Design skill.
  *
- * Distilled from databricks-genie skill:
- *   - spaces.md (creation workflow, table selection, descriptions, sample questions)
- *   - SKILL.md (best practices, common issues)
+ * Distilled from:
+ *   - External databricks-genie skill (spaces.md, SKILL.md)
+ *   - passes/semantic-expressions.ts (snippet rules, expression constraints)
+ *   - assembler.ts (join SQL rewriting, alias handling, relationship types)
+ *   - time-periods.ts (date filters, fiscal calendars, auto-dimensions)
+ *   - passes/trusted-assets.ts (question style, SQL preservation rules)
+ *   - passes/instruction-generation.ts (banned patterns, character limits)
+ *   - passes/example-query-generation.ts (question complexity tiers)
  *
- * Provides knowledge for Genie instruction generation, benchmark creation,
- * and general Genie space quality.
+ * Covers table selection, descriptions, sample questions, snippet expression
+ * rules, join inference patterns, date filter patterns, question style, and
+ * instruction anti-patterns.
  */
 
 import type { SkillDefinition } from "../types";
@@ -19,7 +25,8 @@ const TABLE_SELECTION_RULES = `Genie Table Selection Rules:
 - Ensure tables have COMMENT metadata on both tables and key columns
 - Define PRIMARY KEY and FOREIGN KEY constraints for relationship discovery
 - Include proper DATE/TIMESTAMP columns for time-based queries
-- Prefer tables with low null rates on important columns`;
+- Prefer tables with low null rates on important columns
+- Maximum 30 data objects per space (tables + views + metric views)`;
 
 const DESCRIPTION_PATTERNS = `Genie Space Description Patterns:
 - Explain table relationships and join logic (e.g. "Tables join on customer_id and product_id")
@@ -27,6 +34,56 @@ const DESCRIPTION_PATTERNS = `Genie Space Description Patterns:
 - Describe the business context and data time range (e.g. "Last 6 months of e-commerce transactions")
 - Include the grain of each table (e.g. "One row per order line item")
 - Mention any important filters or caveats (e.g. "Only active customers, excludes test accounts")`;
+
+const SNIPPET_RULES = `Genie Knowledge Store Expression Rules (CRITICAL):
+- Expressions MUST be SHORT: under 200 characters, single aggregate or simple CASE WHEN
+- GOOD expressions: SUM(CAST(amount AS DECIMAL(18,2))), COUNT(DISTINCT customer_id), status = 'active', DATE_TRUNC('month', order_date)
+- BAD expressions (REJECT these):
+  - Window functions (anything with OVER clause)
+  - Statistical functions: REGR_SLOPE, REGR_R2, CORR, STDDEV, SKEWNESS, KURTOSIS, CUME_DIST
+  - PERCENTILE_APPROX in measure expressions (too complex for snippets)
+  - Nested subqueries (SELECT inside SELECT)
+  - Chained multi-step functions (function of function of function)
+- Maximum 12 snippets per category (measures, dimensions, filters)
+- Maximum 500 characters per snippet description
+- Snippet SQL must reference ONLY columns that exist in the space's tables`;
+
+const JOIN_PATTERNS = `Genie Join Inference Patterns:
+- Join SQL uses alias-based references with backtick quoting: \`alias\`.\`column\`
+- Relationship type encoding via SQL comment: --rt=FROM_RELATIONSHIP_TYPE_ONE_TO_MANY
+- FK discovery: match key synonym groups (customer_id, cust_id, customerid, customer_key all map to the same entity)
+- Alias collision: if right alias equals left alias, append _2 to the right alias
+- Cardinality hints: 1:1, 1:N, N:1, N:M -- derive from PK/FK constraints and column uniqueness
+- Join type: default to LEFT JOIN for dimension lookups, INNER JOIN only when both sides required
+- Maximum join depth: avoid chains longer than 3 hops (performance degrades)`;
+
+const DATE_FILTER_PATTERNS = `Genie Date Filter & Dimension Patterns:
+- Primary date columns: created_at, order_date, transaction_date, event_date, updated_at
+- Auto-generated filters: Last 7 days, Last 30 days, Last 90 days, MTD, QTD, YTD, Last Fiscal Year
+- Auto-generated dimensions: Month (DATE_TRUNC('MONTH', col)), Quarter, Year, Day of Week (DAYOFWEEK)
+- Fiscal calendar SQL: MAKE_DATE(YEAR(date_col) + CASE WHEN MONTH(date_col) >= fiscal_start THEN 0 ELSE -1 END, fiscal_start, 1)
+- MTD filter: date_col >= DATE_TRUNC('MONTH', CURRENT_DATE()) AND date_col < CURRENT_DATE()
+- YTD filter: date_col >= DATE_TRUNC('YEAR', CURRENT_DATE()) AND date_col < CURRENT_DATE()
+- Identifier quoting: use backtick quoting for columns with non-word characters`;
+
+const QUESTION_STYLE = `Genie Sample Question Style Guidelines:
+- Simple questions (<10 words): no column names, no SQL jargon. "What were total sales last month?"
+- Medium questions (<15 words): business concepts, light context. "Show top 10 customers by revenue this quarter"
+- Complex/analytical: can reference joins, comparisons. "Compare average order value by region year over year"
+- NEVER reference PII columns (email, phone, ssn, address, date_of_birth) in sample questions
+- Reference actual column names from the schema to help Genie learn the data vocabulary
+- Cover common analytical patterns: time-based, comparison, top-N, aggregation, trend
+- Maximum 8 SQL example queries per space, maximum 4000 characters per example`;
+
+const INSTRUCTION_ANTI_PATTERNS = `Genie Instruction Anti-Patterns (BANNED content):
+- "sample dataset" or "dataset simulates" -- implies fake data, undermines trust
+- "synthetically curated" or "artificially generated" -- same problem
+- "suitable for any Databricks workload" -- generic marketing, not useful
+- "building data pipelines" or platform feature pitches -- not analyst instructions
+- SQL syntax lessons in text instructions -- teach SQL via example queries and knowledge store instead
+- Overly long instructions -- keep total under 3000 characters for optimal Genie performance
+- Generic instructions that don't reference specific tables, columns, or business rules
+- Instructions that contradict the knowledge store expressions`;
 
 const SAMPLE_QUESTION_PATTERNS = `Genie Sample Question Best Practices:
 - Reference actual column names from the schema (helps Genie learn the data vocabulary)
@@ -37,24 +94,23 @@ const SAMPLE_QUESTION_PATTERNS = `Genie Sample Question Best Practices:
 - Include top-N questions ("top 10", "bottom 5", "highest", "lowest")
 - Include aggregation questions ("total", "average", "count of distinct")`;
 
-const INSTRUCTION_BEST_PRACTICES = `Genie Instruction Best Practices:
-- Keep instructions analyst-facing and operational (not technical SQL lessons)
-- Focus on business entities, key dimensions, and recommended time windows
-- Include ambiguity handling guidance (e.g. "When users say 'revenue', use the total_amount column")
-- Mention the fiscal calendar if relevant (fiscal year start month, YTD interpretation)
-- Avoid dataset marketing language, product pitch text, or generic platform instructions
-- Avoid SQL syntax lessons in text instructions (teach SQL via example queries and knowledge store expressions instead)
-- Keep total instruction text under 3000 characters for optimal Genie performance`;
-
 const skill: SkillDefinition = {
   id: "genie-design",
   name: "Genie Space Design Patterns",
   description:
-    "Table selection, description writing, sample question design, and " +
-    "instruction best practices for creating high-quality Databricks Genie Spaces.",
+    "Table selection, descriptions, snippet expression rules, join inference, " +
+    "date filter patterns, question style, and instruction anti-patterns for " +
+    "high-quality Databricks Genie Spaces.",
   relevance: {
     intents: ["business"],
-    geniePasses: ["instructions", "benchmarks", "columnIntelligence"],
+    geniePasses: [
+      "instructions",
+      "benchmarks",
+      "columnIntelligence",
+      "semanticExpressions",
+      "exampleQueries",
+      "joinInference",
+    ],
   },
   chunks: [
     {
@@ -70,16 +126,40 @@ const skill: SkillDefinition = {
       category: "patterns",
     },
     {
+      id: "genie-snippet-rules",
+      title: "Knowledge Store Expression Rules",
+      content: SNIPPET_RULES,
+      category: "rules",
+    },
+    {
+      id: "genie-join-patterns",
+      title: "Join Inference Patterns",
+      content: JOIN_PATTERNS,
+      category: "patterns",
+    },
+    {
+      id: "genie-date-filters",
+      title: "Date Filter & Dimension Patterns",
+      content: DATE_FILTER_PATTERNS,
+      category: "patterns",
+    },
+    {
+      id: "genie-question-style",
+      title: "Sample Question Style",
+      content: QUESTION_STYLE,
+      category: "patterns",
+    },
+    {
       id: "genie-sample-questions",
-      title: "Sample Question Patterns",
+      title: "Sample Question Best Practices",
       content: SAMPLE_QUESTION_PATTERNS,
       category: "patterns",
     },
     {
-      id: "genie-instruction-practices",
-      title: "Instruction Best Practices",
-      content: INSTRUCTION_BEST_PRACTICES,
-      category: "rules",
+      id: "genie-instruction-anti-patterns",
+      title: "Instruction Anti-Patterns",
+      content: INSTRUCTION_ANTI_PATTERNS,
+      category: "anti-patterns",
     },
   ],
 };

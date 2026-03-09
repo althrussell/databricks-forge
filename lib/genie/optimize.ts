@@ -8,9 +8,12 @@
 import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { reviewSql } from "@/lib/ai/sql-reviewer";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { logger } from "@/lib/logger";
 import type { FeedbackEntry } from "./benchmark-feedback";
 import type { SpaceJson } from "./types";
+import "@/lib/skills/content";
+import { resolveForGeniePass, formatContextSections } from "@/lib/skills/resolver";
 
 export interface OptimizationSuggestion {
   fieldPath: string;
@@ -131,10 +134,17 @@ export async function generateOptimizations(
 
   const configJson = JSON.stringify(space, null, 2).slice(0, 30_000);
 
-  const prompt = OPTIMIZATION_PROMPT.replace("{CONFIG_JSON}", configJson).replace(
-    "{FEEDBACK_TEXT}",
-    feedbackText,
-  );
+  const optSkills = resolveForGeniePass("instructions", { contextBudget: 2500 });
+  const optSkillBlock = formatContextSections(optSkills.contextSections);
+  const skillSection = optSkillBlock
+    ? `\n\n## Genie Best Practices\n${optSkillBlock}\n\n## SQL Quality Rules\n${DATABRICKS_SQL_RULES_COMPACT}`
+    : "";
+
+  const prompt =
+    OPTIMIZATION_PROMPT.replace("{CONFIG_JSON}", configJson).replace(
+      "{FEEDBACK_TEXT}",
+      feedbackText,
+    ) + skillSection;
 
   try {
     const response = await chatCompletion({

@@ -590,8 +590,8 @@ export function UseCaseTable({
                   })()}
                 </div>
 
-                {onUpdate && (
-                  !adjustingScores ? (
+                {onUpdate &&
+                  (!adjustingScores ? (
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -639,14 +639,18 @@ export function UseCaseTable({
                       </div>
 
                       <ScoreSlider
-                        icon={<Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                        icon={
+                          <Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                        }
                         label="Priority"
                         value={adjPriority}
                         systemValue={Math.round(selectedUseCase.priorityScore * 100)}
                         onChange={setAdjPriority}
                       />
                       <ScoreSlider
-                        icon={<Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
+                        icon={
+                          <Gauge className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                        }
                         label="Feasibility"
                         value={adjFeasibility}
                         systemValue={Math.round(selectedUseCase.feasibilityScore * 100)}
@@ -689,8 +693,7 @@ export function UseCaseTable({
                         </Button>
                       )}
                     </div>
-                  )
-                )}
+                  ))}
 
                 {onUpdate && (
                   <div className="flex items-center gap-2">
@@ -772,39 +775,61 @@ export function UseCaseTable({
                   <div className="space-y-5">
                     {/* Compact metadata */}
                     <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                      <MetaInline icon={<Cpu className="h-3 w-3 text-violet-500" />} label="Technique" value={selectedUseCase.analyticsTechnique} />
-                      <MetaInline icon={<Users className="h-3 w-3 text-sky-500" />} label="Beneficiary" value={selectedUseCase.beneficiary} />
-                      <MetaInline icon={<UserCheck className="h-3 w-3 text-emerald-500" />} label="Sponsor" value={selectedUseCase.sponsor} />
+                      <MetaInline
+                        icon={<Cpu className="h-3 w-3 text-violet-500" />}
+                        label="Technique"
+                        value={selectedUseCase.analyticsTechnique}
+                      />
+                      <MetaInline
+                        icon={<Users className="h-3 w-3 text-sky-500" />}
+                        label="Beneficiary"
+                        value={selectedUseCase.beneficiary}
+                      />
+                      <MetaInline
+                        icon={<UserCheck className="h-3 w-3 text-emerald-500" />}
+                        label="Sponsor"
+                        value={selectedUseCase.sponsor}
+                      />
                     </div>
 
                     {/* Enrichment Sources */}
-                    {selectedUseCase.enrichmentTags && selectedUseCase.enrichmentTags.length > 0 && (
-                      <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                          Enrichment Sources
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {selectedUseCase.enrichmentTags.includes("benchmark") && (
-                            <Badge variant="outline" className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400">
-                              <BarChart3 className="h-2.5 w-2.5" />
-                              Benchmark
-                            </Badge>
-                          )}
-                          {selectedUseCase.enrichmentTags.includes("outcome_map") && (
-                            <Badge variant="outline" className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400">
-                              <Target className="h-2.5 w-2.5" />
-                              Outcome Map
-                            </Badge>
-                          )}
-                          {selectedUseCase.enrichmentTags.includes("document") && (
-                            <Badge variant="outline" className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400">
-                              <FileText className="h-2.5 w-2.5" />
-                              Document
-                            </Badge>
-                          )}
+                    {selectedUseCase.enrichmentTags &&
+                      selectedUseCase.enrichmentTags.length > 0 && (
+                        <div>
+                          <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                            Enrichment Sources
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedUseCase.enrichmentTags.includes("benchmark") && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400"
+                              >
+                                <BarChart3 className="h-2.5 w-2.5" />
+                                Benchmark
+                              </Badge>
+                            )}
+                            {selectedUseCase.enrichmentTags.includes("outcome_map") && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400"
+                              >
+                                <Target className="h-2.5 w-2.5" />
+                                Outcome Map
+                              </Badge>
+                            )}
+                            {selectedUseCase.enrichmentTags.includes("document") && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400"
+                              >
+                                <FileText className="h-2.5 w-2.5" />
+                                Document
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* Tables Involved */}
                     {(selectedUseCase.tablesInvolved.length > 0 || editing) && (

@@ -153,9 +153,7 @@ export function DashboardContent({
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {stats.aiCount} AI &middot; {stats.statisticalCount} Statistical
-                  {stats.geospatialCount > 0 && (
-                    <> &middot; {stats.geospatialCount} Geospatial</>
-                  )}
+                  {stats.geospatialCount > 0 && <> &middot; {stats.geospatialCount} Geospatial</>}
                 </p>
                 {latestRun && (
                   <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground/70">
@@ -167,7 +165,10 @@ export function DashboardContent({
             </Card>
           );
           return latestRun ? (
-            <Link href={`/runs/${latestRun.runId}`} className="group sm:col-span-2 lg:col-span-1 lg:row-span-2">
+            <Link
+              href={`/runs/${latestRun.runId}`}
+              className="group sm:col-span-2 lg:col-span-1 lg:row-span-2"
+            >
               {card}
             </Link>
           ) : (
@@ -227,7 +228,9 @@ export function DashboardContent({
           tip={DASHBOARD.avgScore}
           value={`${stats.avgScore}%`}
           detail="Composite quality score"
-          sentiment={stats.avgScore >= 70 ? "positive" : stats.avgScore >= 40 ? "neutral" : "warning"}
+          sentiment={
+            stats.avgScore >= 70 ? "positive" : stats.avgScore >= 40 ? "neutral" : "warning"
+          }
         />
         <KPITile
           icon={<Layers className="h-4 w-4 text-chart-3" />}

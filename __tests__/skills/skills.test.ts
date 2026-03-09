@@ -9,21 +9,26 @@ import {
   getChunksForGeniePass,
   registerSkill,
 } from "@/lib/skills/registry";
-import { resolveForIntent, resolveForGeniePass, resolveForPipelineStep } from "@/lib/skills/resolver";
+import {
+  resolveForIntent,
+  resolveForGeniePass,
+  resolveForPipelineStep,
+} from "@/lib/skills/resolver";
 import { EMPTY_RESOLVED_SKILLS } from "@/lib/skills/types";
 
 // Import static skills (self-register on import)
-import "@/lib/skills/content/databricks-sql-patterns";
-import "@/lib/skills/content/genie-design";
-import "@/lib/skills/content/metric-view-patterns";
-import "@/lib/skills/content/system-tables";
+import "@/lib/skills/content";
 
 describe("Skill Registry", () => {
   it("registers all static skills", () => {
     const skills = getAllSkills();
-    expect(skills.length).toBeGreaterThanOrEqual(4);
+    expect(skills.length).toBeGreaterThanOrEqual(8);
     const ids = skills.map((s) => s.id);
     expect(ids).toContain("databricks-sql-patterns");
+    expect(ids).toContain("databricks-data-modeling");
+    expect(ids).toContain("databricks-ai-functions");
+    expect(ids).toContain("databricks-sql-scripting");
+    expect(ids).toContain("databricks-dashboard-sql");
     expect(ids).toContain("genie-design");
     expect(ids).toContain("metric-view-patterns");
     expect(ids).toContain("system-tables");
@@ -125,11 +130,11 @@ describe("Skill Content Snapshots", () => {
     expect(skills!.chunks.length).toBe(5);
     expect(skills!.chunks.map((c) => c.id)).toMatchInlineSnapshot(`
       [
-        "sql-data-modeling",
-        "sql-liquid-clustering",
-        "sql-performance",
-        "sql-anti-patterns",
-        "sql-scd",
+        "sql-window-recipes",
+        "sql-cte-patterns",
+        "sql-date-idioms",
+        "sql-lambda-patterns",
+        "sql-query-anti-patterns",
       ]
     `);
   });
@@ -137,13 +142,17 @@ describe("Skill Content Snapshots", () => {
   it("genie-design has expected chunks", () => {
     const skills = getAllSkills().find((s) => s.id === "genie-design");
     expect(skills).toBeDefined();
-    expect(skills!.chunks.length).toBe(4);
+    expect(skills!.chunks.length).toBe(8);
     expect(skills!.chunks.map((c) => c.id)).toMatchInlineSnapshot(`
       [
         "genie-table-selection",
         "genie-descriptions",
+        "genie-snippet-rules",
+        "genie-join-patterns",
+        "genie-date-filters",
+        "genie-question-style",
         "genie-sample-questions",
-        "genie-instruction-practices",
+        "genie-instruction-anti-patterns",
       ]
     `);
   });
@@ -151,13 +160,16 @@ describe("Skill Content Snapshots", () => {
   it("metric-view-patterns has expected chunks", () => {
     const skills = getAllSkills().find((s) => s.id === "metric-view-patterns");
     expect(skills).toBeDefined();
-    expect(skills!.chunks.length).toBe(4);
+    expect(skills!.chunks.length).toBe(7);
     expect(skills!.chunks.map((c) => c.id)).toMatchInlineSnapshot(`
       [
         "mv-yaml-reference",
         "mv-query-rules",
         "mv-measure-patterns",
         "mv-dimension-patterns",
+        "mv-join-patterns",
+        "mv-gotchas",
+        "mv-window-examples",
       ]
     `);
   });
@@ -165,12 +177,15 @@ describe("Skill Content Snapshots", () => {
   it("system-tables has expected chunks", () => {
     const skills = getAllSkills().find((s) => s.id === "system-tables");
     expect(skills).toBeDefined();
-    expect(skills!.chunks.length).toBe(3);
+    expect(skills!.chunks.length).toBe(6);
     expect(skills!.chunks.map((c) => c.id)).toMatchInlineSnapshot(`
       [
         "systbl-catalog",
         "systbl-query-patterns",
         "systbl-governance",
+        "systbl-jobs-pipelines",
+        "systbl-storage-compute",
+        "systbl-observability",
       ]
     `);
   });

@@ -12,6 +12,12 @@ import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { sanitizeUserContext } from "./title-generation";
+import "@/lib/skills/content";
+import {
+  resolveForGeniePass,
+  formatContextSections,
+  formatSystemOverlay,
+} from "@/lib/skills/resolver";
 
 const TEMPERATURE = 0.2;
 const MAX_QUERIES = 6;
@@ -184,6 +190,10 @@ async function generateWithEndpoint(
     .map((j) => `- ${j.leftTable} JOIN ${j.rightTable} ON ${j.sql}`)
     .join("\n");
 
+  const exqSkills = resolveForGeniePass("exampleQueries");
+  const exqSkillContext = formatContextSections(exqSkills.contextSections);
+  const exqSystemOverlay = formatSystemOverlay(exqSkills.systemOverlay);
+
   const messages: ChatMessage[] = [
     {
       role: "system",
@@ -191,7 +201,8 @@ async function generateWithEndpoint(
         "You generate Databricks SQL example questions for a Genie data space.\n" +
         'Output strict JSON: {"queries":[{"question":"...","sql":"..."}]}\n' +
         "Rules: only use schema identifiers provided, avoid sensitive columns (email/phone/ssn/address/dob and classified sensitive columns), max 6 queries.\n" +
-        `Question style: ${getQuestionStyleDirective(complexity)}`,
+        `Question style: ${getQuestionStyleDirective(complexity)}` +
+        exqSystemOverlay,
     },
     {
       role: "user",
@@ -199,8 +210,11 @@ async function generateWithEndpoint(
         `Domain: ${sanitizeUserContext(input.domain)}`,
         schemaBlock,
         joinBlock ? `Known joins:\n${joinBlock}` : "Known joins: none",
+        exqSkillContext ? `### Databricks SQL Patterns\n${exqSkillContext}` : "",
         `Generate 3-6 example queries. ${getQuestionStyleDirective(complexity)}`,
-      ].join("\n\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     },
   ];
 

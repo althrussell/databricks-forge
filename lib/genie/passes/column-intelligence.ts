@@ -20,7 +20,11 @@ import type {
 import { buildSchemaContextBlock, type SchemaAllowlist } from "../schema-allowlist";
 import { extractEntityCandidates, extractEntityCandidatesFromSchema } from "../entity-extraction";
 import { mapWithConcurrency } from "../concurrency";
-import { resolveForGeniePass, formatContextSections, buildIndustrySkillSections } from "@/lib/skills";
+import {
+  resolveForGeniePass,
+  formatContextSections,
+  buildIndustrySkillSections,
+} from "@/lib/skills";
 
 const BATCH_SIZE = 15;
 const BATCH_CONCURRENCY = 10;
@@ -47,7 +51,16 @@ export interface ColumnIntelligenceOutput {
 export async function runColumnIntelligence(
   input: ColumnIntelligenceInput,
 ): Promise<ColumnIntelligenceOutput> {
-  const { tableFqns, metadata, config, sampleData, piiClassifications, industryId, endpoint, signal } = input;
+  const {
+    tableFqns,
+    metadata,
+    config,
+    sampleData,
+    piiClassifications,
+    industryId,
+    endpoint,
+    signal,
+  } = input;
 
   // Entity extraction from sample data (or schema fallback)
   let entityCandidates: EntityMatchingCandidate[];
@@ -172,13 +185,15 @@ For each column, provide:
 Return a JSON array of objects with: tableFqn, columnName, description, synonyms, hidden, entityMatchingCandidate`;
 
   const skillsResolved = resolveForGeniePass("columnIntelligence");
-  const skillBlock = skillsResolved.contextSections.length > 0
-    ? formatContextSections(skillsResolved.contextSections) + "\n"
-    : "";
+  const skillBlock =
+    skillsResolved.contextSections.length > 0
+      ? formatContextSections(skillsResolved.contextSections) + "\n"
+      : "";
   const industrySections = industryId ? buildIndustrySkillSections(industryId) : [];
-  const industryBlock = industrySections.length > 0
-    ? `### DOMAIN ENTITY VOCABULARY\n${formatContextSections(industrySections)}\n`
-    : "";
+  const industryBlock =
+    industrySections.length > 0
+      ? `### DOMAIN ENTITY VOCABULARY\n${formatContextSections(industrySections)}\n`
+      : "";
 
   const userMessage = `${schemaBlock}
 

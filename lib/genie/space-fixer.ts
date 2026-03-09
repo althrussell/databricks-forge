@@ -23,6 +23,8 @@ import { chatCompletion } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import type { MetadataSnapshot, TableInfo, ColumnInfo, BusinessContext } from "@/lib/domain/types";
 import type { FixStrategy } from "@/lib/genie/health-checks/types";
+import "@/lib/skills/content";
+import { resolveForGeniePass, formatContextSections } from "@/lib/skills/resolver";
 
 interface FixRequest {
   checkIds: string[];
@@ -130,7 +132,9 @@ function extractSpaceSqlExamples(space: SpaceJson): SpaceSqlContext {
 
   const exampleSqls = (space.instructions?.example_question_sqls ?? []) as SpaceJson[];
   for (const e of exampleSqls) {
-    const question = Array.isArray(e.question) ? String(e.question[0] ?? "") : String(e.question ?? "");
+    const question = Array.isArray(e.question)
+      ? String(e.question[0] ?? "")
+      : String(e.question ?? "");
     const sql = Array.isArray(e.sql) ? String(e.sql[0] ?? "") : String(e.sql ?? "");
     if (question && sql) {
       referenceSql.push({ name: question, question, sql });
@@ -148,13 +152,17 @@ function extractSpaceSqlExamples(space: SpaceJson): SpaceSqlContext {
 
   const benchmarkQuestions = (space.benchmarks?.questions ?? []) as SpaceJson[];
   for (const q of benchmarkQuestions) {
-    const question = Array.isArray(q.question) ? String(q.question[0] ?? "") : String(q.question ?? "");
+    const question = Array.isArray(q.question)
+      ? String(q.question[0] ?? "")
+      : String(q.question ?? "");
     if (!question) continue;
 
     const answers = (q.answer ?? []) as SpaceJson[];
     const sqlAnswer = answers.find((a: SpaceJson) => a.format === "sql");
     const sql = sqlAnswer
-      ? (Array.isArray(sqlAnswer.content) ? String(sqlAnswer.content[0] ?? "") : String(sqlAnswer.content ?? ""))
+      ? Array.isArray(sqlAnswer.content)
+        ? String(sqlAnswer.content[0] ?? "")
+        : String(sqlAnswer.content ?? "")
       : "";
 
     existingBenchmarks.push({
@@ -802,11 +810,14 @@ async function generateSmartSampleQuestions(
   const tableNames = tableFqns.map((f) => f.split(".").pop() ?? f).join(", ");
   const existingExamples = ctx.existingExampleQuestions.slice(0, 5).join("\n- ");
 
+  const sqSkills = resolveForGeniePass("exampleQueries", { contextBudget: 1000 });
+  const sqSkillBlock = formatContextSections(sqSkills.contextSections);
+
   const prompt = `Generate 3 short, user-friendly sample questions for a data exploration space.
 Space: "${ctx.title || "Data Space"}"${ctx.description ? ` -- ${ctx.description}` : ""}
 Tables: ${tableNames || "various tables"}
 ${existingExamples ? `Existing example questions (generate DIFFERENT ones):\n- ${existingExamples}` : ""}
-
+${sqSkillBlock ? `\n### Question Style Guidelines\n${sqSkillBlock}\n` : ""}
 Return ONLY a JSON array of 3 question strings. Keep them simple and conversational.`;
 
   try {

@@ -31,10 +31,14 @@ import type { ImproveStats } from "@/lib/genie/improve-jobs";
 
 const TIPS = {
   tables: "Number of Unity Catalog tables registered as data sources in this Genie Space.",
-  measures: "Aggregate SQL snippets (SUM, COUNT, AVG, etc.) that Genie can use to answer measure-type questions.",
-  sampleQuestions: "Pre-configured natural language questions shown to users as conversation starters.",
-  filters: "Predefined SQL WHERE-clause snippets that Genie applies when users mention specific filter terms.",
-  joins: "JOIN specifications telling Genie how to combine tables. More joins = richer cross-table answers.",
+  measures:
+    "Aggregate SQL snippets (SUM, COUNT, AVG, etc.) that Genie can use to answer measure-type questions.",
+  sampleQuestions:
+    "Pre-configured natural language questions shown to users as conversation starters.",
+  filters:
+    "Predefined SQL WHERE-clause snippets that Genie applies when users mention specific filter terms.",
+  joins:
+    "JOIN specifications telling Genie how to combine tables. More joins = richer cross-table answers.",
   benchmarks: "Test questions with expected answers used to measure and track Genie accuracy.",
 } as const;
 
@@ -89,7 +93,10 @@ export function SpaceOverviewTab({
       className="space-y-6"
     >
       {/* ── Stats Row ── */}
-      <motion.div variants={staggerItem} className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <motion.div
+        variants={staggerItem}
+        className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
+      >
         <SummaryCard
           icon={<Table2 className="h-4 w-4 text-primary" />}
           title="Tables"
@@ -144,23 +151,34 @@ export function SpaceOverviewTab({
             </div>
             <div className="flex justify-between">
               <LabelWithTip label="Status" tip="Current deployment status of the Genie Space." />
-              <Badge variant="outline" className="text-xs">{status}</Badge>
+              <Badge variant="outline" className="text-xs">
+                {status}
+              </Badge>
             </div>
             {metadata?.metricViewCount != null && metadata.metricViewCount > 0 && (
               <div className="flex justify-between">
-                <LabelWithTip label="Metric Views" tip="Unity Catalog metric views attached as data sources." />
+                <LabelWithTip
+                  label="Metric Views"
+                  tip="Unity Catalog metric views attached as data sources."
+                />
                 <span className="font-medium">{metadata.metricViewCount}</span>
               </div>
             )}
             {metadata?.expressionCount != null && metadata.expressionCount > 0 && (
               <div className="flex justify-between">
-                <LabelWithTip label="Expressions" tip="Named SQL expressions (calculated columns) available to Genie." />
+                <LabelWithTip
+                  label="Expressions"
+                  tip="Named SQL expressions (calculated columns) available to Genie."
+                />
                 <span className="font-medium">{metadata.expressionCount}</span>
               </div>
             )}
             {metadata?.exampleSqlCount != null && metadata.exampleSqlCount > 0 && (
               <div className="flex justify-between">
-                <LabelWithTip label="Example SQLs" tip="Question-SQL pairs that teach Genie how to translate specific question patterns." />
+                <LabelWithTip
+                  label="Example SQLs"
+                  tip="Question-SQL pairs that teach Genie how to translate specific question patterns."
+                />
                 <span className="font-medium">{metadata.exampleSqlCount}</span>
               </div>
             )}
@@ -171,11 +189,7 @@ export function SpaceOverviewTab({
       {/* ── Quick Actions ── */}
       <motion.div variants={staggerItem} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {canImprove && (
-          <button
-            className="group text-left"
-            onClick={onImprove}
-            disabled={improving || fixing}
-          >
+          <button className="group text-left" onClick={onImprove} disabled={improving || fixing}>
             <Card className="h-full border-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-md">
               <CardContent className="flex h-full items-center gap-4 pt-6">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/15">
@@ -270,7 +284,12 @@ export function SpaceOverviewTab({
                   <Badge variant="secondary" className="text-xs tabular-nums">
                     {improveProgress.percent}%
                   </Badge>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onCancelImprove}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={onCancelImprove}
+                  >
                     <X className="size-4" />
                   </Button>
                 </div>
@@ -292,7 +311,11 @@ export function SpaceOverviewTab({
 
 // ── Improvement Advice (before/after comparison) ────────────────────
 
-const STAT_LABELS: { key: keyof ImproveStats; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const STAT_LABELS: {
+  key: keyof ImproveStats;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
   { key: "tables", label: "Tables", icon: Table2 },
   { key: "joins", label: "Joins", icon: Sparkles },
   { key: "measures", label: "Measures", icon: BarChart3 },
@@ -331,12 +354,15 @@ export function ImprovementAdvice({
           Why the improved version is better
         </div>
         <p className="text-sm text-muted-foreground">
-          The Genie Engine ran a full analysis across all tables — adding
-          LLM-generated joins, measures, filters, benchmarks, and enriched
-          instructions that the Quick Build did not include.
+          The Genie Engine ran a full analysis across all tables — adding LLM-generated joins,
+          measures, filters, benchmarks, and enriched instructions that the Quick Build did not
+          include.
           {totalAfter > totalBefore && (
             <span className="font-medium text-violet-600 dark:text-violet-400">
-              {" "}The improved configuration is {Math.round(((totalAfter - totalBefore) / Math.max(totalBefore, 1)) * 100)}% richer overall.
+              {" "}
+              The improved configuration is{" "}
+              {Math.round(((totalAfter - totalBefore) / Math.max(totalBefore, 1)) * 100)}% richer
+              overall.
             </span>
           )}
         </p>

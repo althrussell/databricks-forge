@@ -121,7 +121,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Data Sources -> Tables */}
             <AccordionItem value="tables">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={Database} label="Data Sources &rarr; Tables" count={tables.length} />
+                <SectionHeader
+                  icon={Database}
+                  label="Data Sources &rarr; Tables"
+                  count={tables.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -129,7 +133,9 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
                     <div key={i} className="rounded border px-3 py-2">
                       <code className="text-xs font-medium">{t.identifier}</code>
                       {t.description && t.description.length > 0 && (
-                        <p className="mt-1 text-xs text-muted-foreground">{t.description.join(" ")}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t.description.join(" ")}
+                        </p>
                       )}
                     </div>
                   ))}
@@ -143,7 +149,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Data Sources -> Metric Views */}
             <AccordionItem value="metric-views">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={Database} label="Data Sources &rarr; Metric Views" count={metricViews.length} />
+                <SectionHeader
+                  icon={Database}
+                  label="Data Sources &rarr; Metric Views"
+                  count={metricViews.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -162,7 +172,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Instructions -> Text Instructions */}
             <AccordionItem value="text-instructions">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={FileText} label="Instructions &rarr; Text Instructions" count={textInstructions.length} />
+                <SectionHeader
+                  icon={FileText}
+                  label="Instructions &rarr; Text Instructions"
+                  count={textInstructions.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -172,7 +186,9 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
                     </div>
                   ))}
                   {textInstructions.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No text instructions configured.</p>
+                    <p className="text-xs text-muted-foreground">
+                      No text instructions configured.
+                    </p>
                   )}
                 </div>
               </AccordionContent>
@@ -181,7 +197,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Instructions -> Example Question SQLs */}
             <AccordionItem value="example-sqls">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={FileText} label="Instructions &rarr; Example Question SQLs" count={exampleSqls.length} />
+                <SectionHeader
+                  icon={FileText}
+                  label="Instructions &rarr; Example Question SQLs"
+                  count={exampleSqls.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-3">
@@ -201,7 +221,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Instructions -> Join Specs */}
             <AccordionItem value="join-specs">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={Sparkles} label="Instructions &rarr; Join Specs" count={joinSpecs.length} />
+                <SectionHeader
+                  icon={Sparkles}
+                  label="Instructions &rarr; Join Specs"
+                  count={joinSpecs.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-3">
@@ -225,7 +249,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Instructions -> SQL Snippets -> Measures */}
             <AccordionItem value="measures">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={Code} label="SQL Snippets &rarr; Measures" count={measures.length} />
+                <SectionHeader
+                  icon={Code}
+                  label="SQL Snippets &rarr; Measures"
+                  count={measures.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -250,7 +278,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Instructions -> SQL Snippets -> Filters */}
             <AccordionItem value="filters">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={Code} label="SQL Snippets &rarr; Filters" count={filters.length} />
+                <SectionHeader
+                  icon={Code}
+                  label="SQL Snippets &rarr; Filters"
+                  count={filters.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -270,7 +302,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Instructions -> SQL Snippets -> Expressions */}
             <AccordionItem value="expressions">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={Code} label="SQL Snippets &rarr; Expressions" count={expressions.length} />
+                <SectionHeader
+                  icon={Code}
+                  label="SQL Snippets &rarr; Expressions"
+                  count={expressions.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -290,7 +326,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Benchmarks -> Questions */}
             <AccordionItem value="benchmarks">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={FlaskConical} label="Benchmarks &rarr; Questions" count={benchmarks.length} />
+                <SectionHeader
+                  icon={FlaskConical}
+                  label="Benchmarks &rarr; Questions"
+                  count={benchmarks.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
@@ -305,7 +345,9 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
                     </div>
                   ))}
                   {benchmarks.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No benchmark questions configured.</p>
+                    <p className="text-xs text-muted-foreground">
+                      No benchmark questions configured.
+                    </p>
                   )}
                 </div>
               </AccordionContent>
@@ -314,7 +356,11 @@ export function SpaceConfigViewer({ space }: SpaceConfigViewerProps) {
             {/* Config -> Sample Questions */}
             <AccordionItem value="sample-questions">
               <AccordionTrigger className="text-sm">
-                <SectionHeader icon={MessageSquare} label="Config &rarr; Sample Questions" count={sampleQuestions.length} />
+                <SectionHeader
+                  icon={MessageSquare}
+                  label="Config &rarr; Sample Questions"
+                  count={sampleQuestions.length}
+                />
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">

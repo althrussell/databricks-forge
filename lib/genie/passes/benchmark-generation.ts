@@ -26,7 +26,11 @@ import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "../concurrency";
-import { resolveForGeniePass, formatContextSections, buildDomainQuestionPatterns } from "@/lib/skills";
+import {
+  resolveForGeniePass,
+  formatContextSections,
+  buildDomainQuestionPatterns,
+} from "@/lib/skills";
 
 const TEMPERATURE = 0.1;
 const BENCHMARKS_PER_BATCH = 4;
@@ -182,7 +186,10 @@ function buildReferenceSqlBlock(referenceSql?: ReferenceSqlExample[]): string {
   return `### REFERENCE SQL FROM EXISTING SPACE (use the same tables, columns, and patterns)\n${referenceSql
     .slice(0, 8)
     .map((r) => {
-      const sql = r.sql.length > MAX_REF_SQL_CHARS ? r.sql.slice(0, MAX_REF_SQL_CHARS) + "\n-- (truncated)" : r.sql;
+      const sql =
+        r.sql.length > MAX_REF_SQL_CHARS
+          ? r.sql.slice(0, MAX_REF_SQL_CHARS) + "\n-- (truncated)"
+          : r.sql;
       return `Question: ${r.question}\nSQL:\n${sql}`;
     })
     .join("\n\n---\n\n")}`;
@@ -252,9 +259,10 @@ Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "altern
 
   const domainPatterns = industryId ? buildDomainQuestionPatterns(industryId) : "";
   const skillsResolved = resolveForGeniePass("benchmarks");
-  const skillBlock = skillsResolved.contextSections.length > 0
-    ? formatContextSections(skillsResolved.contextSections)
-    : "";
+  const skillBlock =
+    skillsResolved.contextSections.length > 0
+      ? formatContextSections(skillsResolved.contextSections)
+      : "";
 
   const userMessage = `${schemaBlock}
 
