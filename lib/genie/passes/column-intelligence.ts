@@ -20,6 +20,7 @@ import type {
 import { buildSchemaContextBlock, type SchemaAllowlist } from "../schema-allowlist";
 import { extractEntityCandidates, extractEntityCandidatesFromSchema } from "../entity-extraction";
 import { mapWithConcurrency } from "../concurrency";
+import { resolveForGeniePass, formatContextSections, buildIndustrySkillSections } from "@/lib/skills";
 
 const BATCH_SIZE = 15;
 const BATCH_CONCURRENCY = 10;
@@ -32,6 +33,8 @@ export interface ColumnIntelligenceInput {
   config: GenieEngineConfig;
   sampleData: SampleDataCache | null;
   piiClassifications?: SensitivityClassification[];
+  /** Industry ID for domain-specific entity vocabulary. */
+  industryId?: string;
   endpoint: string;
   signal?: AbortSignal;
 }
@@ -44,7 +47,7 @@ export interface ColumnIntelligenceOutput {
 export async function runColumnIntelligence(
   input: ColumnIntelligenceInput,
 ): Promise<ColumnIntelligenceOutput> {
-  const { tableFqns, metadata, config, sampleData, piiClassifications, endpoint, signal } = input;
+  const { tableFqns, metadata, config, sampleData, piiClassifications, industryId, endpoint, signal } = input;
 
   // Entity extraction from sample data (or schema fallback)
   let entityCandidates: EntityMatchingCandidate[];
@@ -91,6 +94,7 @@ export async function runColumnIntelligence(
           sampleData,
           entityCandidates,
           endpoint,
+          industryId,
           signal,
         );
       } catch (err) {
@@ -118,6 +122,7 @@ async function processColumnBatch(
   sampleData: SampleDataCache | null,
   entityCandidates: EntityMatchingCandidate[],
   endpoint: string,
+  industryId?: string,
   signal?: AbortSignal,
 ): Promise<ColumnEnrichment[]> {
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
@@ -166,13 +171,22 @@ For each column, provide:
 
 Return a JSON array of objects with: tableFqn, columnName, description, synonyms, hidden, entityMatchingCandidate`;
 
+  const skillsResolved = resolveForGeniePass("columnIntelligence");
+  const skillBlock = skillsResolved.contextSections.length > 0
+    ? formatContextSections(skillsResolved.contextSections) + "\n"
+    : "";
+  const industrySections = industryId ? buildIndustrySkillSections(industryId) : [];
+  const industryBlock = industrySections.length > 0
+    ? `### DOMAIN ENTITY VOCABULARY\n${formatContextSections(industrySections)}\n`
+    : "";
+
   const userMessage = `${schemaBlock}
 
 ${sampleSection ? `### SAMPLE DATA VALUES\n${sampleSection}` : ""}
 
 ${entitySection ? `### ENTITY MATCHING CANDIDATES\n${entitySection}` : ""}
 
-Analyze ALL columns in the tables above and return the enrichment JSON array.`;
+${industryBlock}${skillBlock}Analyze ALL columns in the tables above and return the enrichment JSON array.`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemMessage },

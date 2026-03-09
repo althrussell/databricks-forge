@@ -368,6 +368,7 @@ async function processDomain(
       config,
       sampleData,
       piiClassifications,
+      industryId: run.config.industry || undefined,
       endpoint: fastEndpoint,
       signal,
     }),
@@ -378,6 +379,7 @@ async function processDomain(
       useCases,
       businessContext: run.businessContext,
       config,
+      industryId: run.config.industry || undefined,
       endpoint: premiumEndpoint,
       signal,
     }),
@@ -569,6 +571,7 @@ async function processDomain(
       tableFqns: tables,
       conversationSummary: run.businessContext?.strategicGoals || "",
       sensitiveColumns,
+      industryId: run.config.industry || undefined,
       signal,
     }),
 
@@ -583,6 +586,7 @@ async function processDomain(
           customerBenchmarks: config.benchmarkQuestions,
           joinSpecs: allJoins,
           endpoint: premiumEndpoint,
+          industryId: run.config.industry || undefined,
           signal,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),

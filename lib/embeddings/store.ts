@@ -115,6 +115,22 @@ export async function deleteAllEmbeddings(): Promise<number> {
   }
 }
 
+/** Delete all embeddings of a given kind (e.g. skill_chunk, industry_kpi). */
+export async function deleteByKind(kind: EmbeddingKind): Promise<number> {
+  const prisma = await getPrisma();
+  try {
+    const result = await prisma.$executeRawUnsafe(
+      "DELETE FROM forge_embeddings WHERE kind = $1",
+      kind,
+    );
+    logger.debug("[embeddings] Deleted by kind", { kind, count: result });
+    return result;
+  } catch {
+    logger.debug("[embeddings] deleteByKind failed (table may not exist)", { kind });
+    return 0;
+  }
+}
+
 /** Delete all embeddings of a given kind for a scan. */
 export async function deleteEmbeddingsByKindAndScan(
   kind: EmbeddingKind,

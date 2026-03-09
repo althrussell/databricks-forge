@@ -33,6 +33,12 @@ import type {
 } from "../types";
 import { buildCompactColumnsBlock } from "../schema-allowlist";
 import { sanitizeUserContext } from "./title-generation";
+import {
+  resolveForGeniePass,
+  formatContextSections,
+  formatSystemOverlay,
+  buildIndustrySkillSections,
+} from "@/lib/skills";
 
 const TEMPERATURE = 0.3;
 const MAX_INSTRUCTION_CHARS = 3000;
@@ -69,6 +75,8 @@ export interface InstructionGenerationInput {
   tableFqns?: string[];
   conversationSummary?: string;
   sensitiveColumns?: Set<string>;
+  /** Industry outcome map ID for domain-specific skill content. */
+  industryId?: string;
   signal?: AbortSignal;
 }
 
@@ -92,6 +100,7 @@ export async function runInstructionGeneration(
     tableFqns,
     conversationSummary,
     sensitiveColumns,
+    industryId,
     signal,
   } = input;
 
@@ -160,6 +169,7 @@ export async function runInstructionGeneration(
         input.joinSpecs,
         conversationSummary,
         sensitiveColumns,
+        industryId,
         signal,
       );
     } catch (err) {
@@ -182,6 +192,7 @@ export async function runInstructionGeneration(
         input.joinSpecs,
         conversationSummary,
         sensitiveColumns,
+        industryId,
         signal,
       );
       if (llmRefined) {
@@ -321,15 +332,20 @@ async function generateLLMInstruction(
   joins: JoinSpecInput[],
   conversationSummary: string | undefined,
   sensitiveColumns: Set<string> | undefined,
+  industryId?: string,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  const systemMessage = [
+  const skillsResolved = resolveForGeniePass("instructions");
+
+  const systemParts = [
     "You are writing one concise instruction block for a Databricks Genie space.",
     "Return plain text only.",
     "Include: business focus, key entities to group by, recommended time windows, and ambiguity handling.",
     "Do not include dataset marketing language, product pitch text, or generic platform instructions.",
     "Do not include SQL syntax lessons; keep this analyst-facing and operational.",
-  ].join(" ");
+  ];
+  const systemMessage = systemParts.join(" ") + formatSystemOverlay(skillsResolved.systemOverlay);
+
   const compactColumns = metadata
     ? buildCompactColumnsBlock(metadata, tableFqns).slice(0, 1600)
     : "";
@@ -338,6 +354,17 @@ async function generateLLMInstruction(
     .map((j) => `${j.leftTable} <-> ${j.rightTable}`)
     .join(", ");
   const safeConversation = sanitizeUserContext(conversationSummary);
+
+  const industrySections = industryId
+    ? buildIndustrySkillSections(industryId)
+    : [];
+  const industryBlock = industrySections.length > 0
+    ? "\n\n" + formatContextSections(industrySections)
+    : "";
+  const skillContextBlock = skillsResolved.contextSections.length > 0
+    ? "\n\n" + formatContextSections(skillsResolved.contextSections)
+    : "";
+
   const context = [
     `Business: ${businessName}`,
     `Domain: ${domain}`,
@@ -353,7 +380,7 @@ async function generateLLMInstruction(
     .filter(Boolean)
     .join("\n");
 
-  const userMessage = `${context}
+  const userMessage = `${context}${industryBlock}${skillContextBlock}
 
 Write 4-6 short bullet points as plain text paragraphs (no markdown bullets) that guide users toward relevant analysis.`;
 

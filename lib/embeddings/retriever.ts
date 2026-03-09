@@ -108,7 +108,10 @@ function inferSourcePriority(result: SearchResult): SourcePriority {
     case "benchmark_context":
       return "IndustryBenchmark";
     case "outcome_map":
+    case "industry_kpi":
       return "AdvisoryGuidance";
+    case "skill_chunk":
+      return "PlatformBestPractice";
     default:
       return "PlatformBestPractice";
   }
@@ -152,6 +155,8 @@ const RAG_PREAMBLE = `The following context is retrieved from multiple sources. 
 - [UPLOADED DOCUMENT: filename] = customer-provided document (may describe aspirational goals, not current state)
 - [INDUSTRY TEMPLATE] = industry outcome map template
 - [INDUSTRY BENCHMARK] = public benchmark prior (advisory only)
+- [PLATFORM SKILL] = Databricks best practices and domain expertise
+- [INDUSTRY KPI] = industry-specific KPIs and success metrics
 
 Prioritise PLATFORM DATA for factual claims. Use UPLOADED DOCUMENT for strategic direction only.`;
 
@@ -176,6 +181,10 @@ export function provenanceLabel(chunk: RetrievedChunk): string {
       return "[INDUSTRY TEMPLATE]";
     case "benchmark_context":
       return "[INDUSTRY BENCHMARK]";
+    case "skill_chunk":
+      return "[PLATFORM SKILL]";
+    case "industry_kpi":
+      return "[INDUSTRY KPI]";
     default:
       return `[${chunk.kind}]`;
   }

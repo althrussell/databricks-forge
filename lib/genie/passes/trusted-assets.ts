@@ -26,6 +26,7 @@ import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "../concurrency";
+import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
 
 const TEMPERATURE = 0.2;
 const BATCH_SIZE = 3;
@@ -215,7 +216,7 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 ${getQuestionRules(questionComplexity ?? "simple")}
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
-}`;
+}` + formatSystemOverlay(resolveForGeniePass("trustedAssets").systemOverlay);
 
   const userMessage = `${schemaBlock}
 
@@ -340,7 +341,7 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 ${getQuestionRules(questionComplexity ?? "simple")}
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
-}`;
+}` + formatSystemOverlay(resolveForGeniePass("trustedAssets").systemOverlay);
 
   const userMessage = `${schemaBlock}
 

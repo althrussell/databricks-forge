@@ -15,6 +15,7 @@ import {
 } from "./context-builder";
 import { extractTableFqnsFromText, mergeTableReferenceLists } from "./context-builder";
 import { buildAssistantMessages, type AssistantPersona } from "./prompts";
+import { resolveForIntent, type AskForgeIntent } from "@/lib/skills";
 import {
   extractSqlBlocks,
   validateSql,
@@ -185,11 +186,20 @@ export async function runAssistantEngine(
 
   const sources = buildSourceReferences(context.chunks);
 
+  let skillsSystemOverlay: string | undefined;
+  try {
+    const resolved = resolveForIntent(intentResult.intent as AskForgeIntent);
+    if (resolved.systemOverlay) skillsSystemOverlay = resolved.systemOverlay;
+  } catch {
+    // non-fatal: skills overlay is optional
+  }
+
   const { system, user } = buildAssistantMessages(
     context.ragContext,
     context.conversationHistory,
     question,
     persona,
+    skillsSystemOverlay,
   );
 
   const llmResponse = await chatCompletionStream(

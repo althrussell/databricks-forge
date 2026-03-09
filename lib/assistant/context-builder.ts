@@ -22,6 +22,12 @@ import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import {
+  resolveForIntent,
+  formatContextSections,
+  buildIndustrySkillSections,
+  type AskForgeIntent,
+} from "@/lib/skills";
 
 export interface TableEnrichment {
   tableFqn: string;
@@ -66,6 +72,7 @@ const INTENT_SCOPES: Record<
       | "documents"
       | "benchmarks"
       | "fabric"
+      | "skills"
       | undefined;
     topK: number;
     minScore: number;
@@ -79,15 +86,18 @@ const INTENT_SCOPES: Record<
     { scope: "estate", topK: 8, minScore: 0.35, useLatestScan: true },
     { scope: "benchmarks", topK: 6, minScore: 0.35 },
     { scope: "fabric", topK: 8, minScore: 0.35, useLatestFabricScan: true },
+    { scope: "skills", topK: 4, minScore: 0.4 },
   ],
   technical: [
     { scope: "estate", topK: 15, minScore: 0.4, useLatestScan: true },
     { scope: "insights", topK: 8, minScore: 0.4, useLatestScan: true },
+    { scope: "skills", topK: 6, minScore: 0.4 },
   ],
   dashboard: [
     { scope: "insights", topK: 10, minScore: 0.4, useLatestScan: true },
     { scope: "usecases", topK: 8, minScore: 0.4, useLatestRun: true },
     { scope: "fabric", topK: 8, minScore: 0.35, useLatestFabricScan: true },
+    { scope: "skills", topK: 4, minScore: 0.4 },
   ],
   navigation: [
     { scope: "estate", topK: 10, minScore: 0.35, useLatestScan: true },
@@ -100,6 +110,7 @@ const INTENT_SCOPES: Record<
     { scope: "usecases", topK: 8, minScore: 0.35, useLatestRun: true },
     { scope: "documents", topK: 5, minScore: 0.35 },
     { scope: "fabric", topK: 6, minScore: 0.35, useLatestFabricScan: true },
+    { scope: "skills", topK: 4, minScore: 0.4 },
   ],
 };
 
@@ -120,6 +131,7 @@ interface RetrievalPlan {
     | "documents"
     | "benchmarks"
     | "fabric"
+    | "skills"
     | undefined;
   topK: number;
   minScore: number;
@@ -224,6 +236,27 @@ export async function buildAssistantContext(
     fullContext += ragContext;
   }
 
+  // --- Strategy 3: Skill knowledge injection (rule-based) ---
+  try {
+    const resolved = resolveForIntent(intent as AskForgeIntent);
+    if (resolved.contextSections.length > 0) {
+      fullContext +=
+        "\n\n## Platform Expertise\n\n" + formatContextSections(resolved.contextSections);
+    }
+
+    if (directContext.industryId) {
+      const industrySections = buildIndustrySkillSections(directContext.industryId);
+      if (industrySections.length > 0) {
+        fullContext +=
+          "\n\n## Industry Domain Knowledge\n\n" + formatContextSections(industrySections);
+      }
+    }
+  } catch (err) {
+    logger.warn("[assistant/context] Skill resolution failed (non-fatal)", {
+      error: String(err),
+    });
+  }
+
   const tables = mergeTableReferenceLists(
     extractTableReferencesFromChunks(chunks),
     extractTableFqnsFromText(directContext.text ?? ""),
@@ -292,9 +325,12 @@ export async function buildAssistantContext(
   const lowConfidenceRetrieval = retrievalTopScore !== null && retrievalTopScore < 0.5;
 
   if (lowConfidenceRetrieval) {
-    fullContext =
-      "## Retrieval Confidence\nTop retrieval score is low. Answer conservatively and explicitly call out uncertainty where context is thin.\n\n" +
-      fullContext;
+    const hasSkillContent = fullContext.includes("## Platform Expertise") ||
+      fullContext.includes("## Industry Domain Knowledge");
+    const confidenceNote = hasSkillContent
+      ? "## Retrieval Confidence\nTop retrieval score is low, but platform expertise is available. Lean on domain knowledge and explicitly call out uncertainty where estate-specific context is thin."
+      : "## Retrieval Confidence\nTop retrieval score is low. Answer conservatively and explicitly call out uncertainty where context is thin.";
+    fullContext = confidenceNote + "\n\n" + fullContext;
   }
 
   return {
