@@ -144,6 +144,7 @@ export function buildAssistantMessages(
   conversationHistory: string,
   question: string,
   persona: AssistantPersona = "business",
+  skillsSystemOverlay?: string,
 ): { system: string; user: string } {
   const overlay =
     persona === "tech"
@@ -151,7 +152,11 @@ export function buildAssistantMessages(
       : persona === "analyst"
         ? ANALYST_PERSONA_OVERLAY
         : BUSINESS_PERSONA_OVERLAY;
-  const system = ASSISTANT_SYSTEM_PROMPT + "\n" + overlay;
+  let system = ASSISTANT_SYSTEM_PROMPT + "\n" + overlay;
+
+  if (skillsSystemOverlay?.trim()) {
+    system += "\n\n" + skillsSystemOverlay;
+  }
 
   const user = CONTEXT_INJECTION_TEMPLATE.replace(
     "{ragContext}",

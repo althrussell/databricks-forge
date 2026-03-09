@@ -29,6 +29,7 @@ import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { generateTimePeriods } from "../time-periods";
+import { resolveForGeniePass, formatContextSections, buildIndustrySkillSections } from "@/lib/skills";
 
 const TEMPERATURE = 0.2;
 
@@ -39,6 +40,8 @@ export interface SemanticExpressionsInput {
   useCases: UseCase[];
   businessContext: BusinessContext | null;
   config: GenieEngineConfig;
+  /** Industry outcome map ID for domain-specific measure patterns. */
+  industryId?: string;
   endpoint: string;
   signal?: AbortSignal;
 }
@@ -52,7 +55,7 @@ export interface SemanticExpressionsOutput {
 export async function runSemanticExpressions(
   input: SemanticExpressionsInput,
 ): Promise<SemanticExpressionsOutput> {
-  const { tableFqns, metadata, allowlist, useCases, businessContext, config, endpoint, signal } =
+  const { tableFqns, metadata, allowlist, useCases, businessContext, config, industryId, endpoint, signal } =
     input;
 
   // Phase A: auto-generate time periods
@@ -83,6 +86,7 @@ export async function runSemanticExpressions(
         businessContext,
         config.glossary,
         endpoint,
+        industryId,
         signal,
       );
       llmMeasures = llmResult.measures
@@ -166,6 +170,7 @@ async function generateLLMExpressions(
   businessContext: BusinessContext | null,
   glossary: GlossaryEntry[],
   endpoint: string,
+  industryId?: string,
   signal?: AbortSignal,
 ): Promise<{
   measures: EnrichedSqlSnippetMeasure[];
@@ -234,6 +239,7 @@ ${glossaryBlock}
 ### USE CASE SQL EXAMPLES
 ${sqlExamples || "(no SQL examples available)"}
 
+${buildSemanticSkillBlock(industryId)}
 Generate measures, filters, and dimensions for a Genie space serving this domain.`;
 
   const messages: ChatMessage[] = [
@@ -332,4 +338,22 @@ function dedup<T>(items: T[], keyFn: (item: T) => string): T[] {
     seen.add(key);
     return true;
   });
+}
+
+function buildSemanticSkillBlock(industryId?: string): string {
+  const parts: string[] = [];
+
+  const skillsResolved = resolveForGeniePass("semanticExpressions");
+  if (skillsResolved.contextSections.length > 0) {
+    parts.push(formatContextSections(skillsResolved.contextSections));
+  }
+
+  if (industryId) {
+    const industrySections = buildIndustrySkillSections(industryId);
+    if (industrySections.length > 0) {
+      parts.push(formatContextSections(industrySections));
+    }
+  }
+
+  return parts.length > 0 ? parts.join("\n\n") : "";
 }

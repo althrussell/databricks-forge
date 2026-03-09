@@ -24,6 +24,7 @@ import { logger } from "@/lib/logger";
 import { parseLLMJson } from "./parse-llm-json";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
+import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
 import type { MetadataSnapshot, UseCase } from "@/lib/domain/types";
 import type {
   MetricViewProposal,
@@ -1696,7 +1697,7 @@ ${joinSpecs.length === 0 ? "- There are NO join relationships — do NOT create 
 
 IMPORTANT:
 - The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.
-- Column references in YAML expr fields must use BARE column names (e.g. \`amount\`, \`franchiseID\`) or JOIN ALIAS prefixes (e.g. \`franchise.franchiseID\`). NEVER use fully-qualified table names as column prefixes (e.g. \`catalog.schema.table.column\` is WRONG — the SQL engine cannot resolve 4-part names in metric view expressions).`;
+- Column references in YAML expr fields must use BARE column names (e.g. \`amount\`, \`franchiseID\`) or JOIN ALIAS prefixes (e.g. \`franchise.franchiseID\`). NEVER use fully-qualified table names as column prefixes (e.g. \`catalog.schema.table.column\` is WRONG — the SQL engine cannot resolve 4-part names in metric view expressions).` + formatSystemOverlay(resolveForGeniePass("metricViews").systemOverlay);
 
   const userMessage = `${schemaBlock}
 

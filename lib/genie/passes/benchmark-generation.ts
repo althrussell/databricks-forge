@@ -26,6 +26,7 @@ import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "../concurrency";
+import { resolveForGeniePass, formatContextSections, buildDomainQuestionPatterns } from "@/lib/skills";
 
 const TEMPERATURE = 0.1;
 const BENCHMARKS_PER_BATCH = 4;
@@ -43,6 +44,8 @@ export interface BenchmarkGenerationInput {
   endpoint: string;
   /** Validated SQL from the existing space, used when useCases is empty. */
   referenceSql?: ReferenceSqlExample[];
+  /** Industry ID for domain-specific question patterns. */
+  industryId?: string;
   signal?: AbortSignal;
 }
 
@@ -69,6 +72,7 @@ export async function runBenchmarkGeneration(
     customerBenchmarks,
     joinSpecs,
     referenceSql,
+    industryId,
     endpoint,
     signal,
   } = input;
@@ -120,6 +124,7 @@ export async function runBenchmarkGeneration(
           refSqlBlock,
           allowlist,
           endpoint,
+          industryId,
           signal,
         );
       } catch (err) {
@@ -196,6 +201,7 @@ async function processBenchmarkBatch(
   refSqlBlock: string,
   allowlist: SchemaAllowlist,
   endpoint: string,
+  industryId?: string,
   signal?: AbortSignal,
 ): Promise<BatchResult> {
   const MAX_SQL_CHARS = 3000;
@@ -244,12 +250,19 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "benchmarks": [{ "question": "...", "expectedSql": "...", "alternatePhrasings": ["..."] }] }`;
 
+  const domainPatterns = industryId ? buildDomainQuestionPatterns(industryId) : "";
+  const skillsResolved = resolveForGeniePass("benchmarks");
+  const skillBlock = skillsResolved.contextSections.length > 0
+    ? formatContextSections(skillsResolved.contextSections)
+    : "";
+
   const userMessage = `${schemaBlock}
 
 ${entityBlock ? `### ENTITY MATCHING VALUES\n${entityBlock}\n` : ""}
 ${joinBlock ? `${joinBlock}\n` : ""}
 ${sqlContextSection}
-
+${domainPatterns ? `### DOMAIN QUESTION PATTERNS\n${domainPatterns}\n` : ""}
+${skillBlock}
 Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alternate phrasings.`;
 
   const messages: ChatMessage[] = [

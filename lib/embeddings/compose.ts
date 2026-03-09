@@ -336,7 +336,15 @@ interface OutcomeMapInput {
     whyChange?: string;
     priorities?: Array<{
       name: string;
-      useCases?: Array<{ name: string; description?: string }>;
+      kpis?: string[];
+      personas?: string[];
+      useCases?: Array<{
+        name: string;
+        description?: string;
+        businessValue?: string;
+        typicalDataEntities?: string[];
+        typicalSourceSystems?: string[];
+      }>;
     }>;
   }>;
   suggestedDomains?: string[];
@@ -358,12 +366,42 @@ export function composeOutcomeMap(om: OutcomeMapInput): string {
     if (obj.whyChange) parts.push(`  Why: ${obj.whyChange}`);
     for (const pri of obj.priorities ?? []) {
       parts.push(`  Priority: ${pri.name}`);
+      if (pri.kpis?.length) parts.push(`    KPIs: ${pri.kpis.join("; ")}`);
+      if (pri.personas?.length) parts.push(`    Personas: ${pri.personas.join(", ")}`);
       for (const uc of pri.useCases ?? []) {
         parts.push(`    Use Case: ${uc.name}${uc.description ? ` — ${uc.description}` : ""}`);
+        if (uc.businessValue) parts.push(`      Value: ${uc.businessValue}`);
+        if (uc.typicalDataEntities?.length) {
+          parts.push(`      Data Entities: ${uc.typicalDataEntities.join(", ")}`);
+        }
+        if (uc.typicalSourceSystems?.length) {
+          parts.push(`      Source Systems: ${uc.typicalSourceSystems.join(", ")}`);
+        }
       }
     }
   }
 
+  return parts.join("\n");
+}
+
+/**
+ * Compose a focused KPI embedding for a single industry priority.
+ * Produces shorter, more targeted chunks that retrieve better for KPI queries.
+ */
+export function composeIndustryKPI(
+  industryName: string,
+  priorityName: string,
+  kpis: string[],
+  personas: string[],
+): string {
+  const parts: string[] = [
+    `Industry: ${industryName}`,
+    `Priority: ${priorityName}`,
+    `KPIs: ${kpis.join("; ")}`,
+  ];
+  if (personas.length > 0) {
+    parts.push(`Personas: ${personas.join(", ")}`);
+  }
   return parts.join("\n");
 }
 

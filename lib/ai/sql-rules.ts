@@ -187,3 +187,37 @@ REVIEW CHECKLIST (evaluate each dimension independently):
    - ai_sys_prompt column present as last column for auditability
    - Only valid named parameters used: modelParameters, responseFormat, failOnError (no systemPrompt or invented names)
 `.trim();
+
+export const DATABRICKS_DATA_MODELING_RULES = `
+DATA MODELING RULES (for schema design, table analysis, and dimensional modeling):
+
+Star Schema:
+- Gold layer should use star schema: denormalized dimensions, normalized facts at the grain of the business event.
+- Silver layer may use OBT or Data Vault for rapid integration and cleansing.
+- Kimball methodology: (1) identify the business process, (2) declare the grain, (3) choose dimensions (who/what/where/when/why/how), (4) identify facts (numeric measures at declared grain).
+- Fact table types: Transaction (one row per event), Periodic Snapshot (one row per entity per period), Accumulating Snapshot (one row per lifecycle).
+
+Keys and Constraints:
+- Use GENERATED ALWAYS AS IDENTITY for surrogate keys; prefer integer surrogates over strings for join performance.
+- Define PRIMARY KEY on dimension surrogate keys and FOREIGN KEY on fact FK columns to help the query optimizer.
+- Highly denormalize dimension tables: flatten many-to-one relationships within a single dimension.
+
+Liquid Clustering:
+- Prefer Liquid Clustering over traditional partitioning for ALL new Delta tables.
+- Choose 1-4 clustering keys; fewer is better for tables under 10 TB.
+- Cluster fact tables by the most commonly filtered foreign keys.
+- Cluster dimension tables by primary key plus common filter columns.
+- Liquid Clustering is NOT compatible with partitioning or Z-ORDER on the same table.
+
+Metadata:
+- Add COMMENT on all tables and columns for AI/BI discoverability.
+- Apply TAGS for governance (PII, sensitivity level, tier).
+- Use DECIMAL(18,2) for financial/monetary values, never FLOAT/DOUBLE.
+
+Anti-Patterns to Avoid:
+- Over-partitioning (>5000 partitions; use Liquid Clustering instead).
+- String surrogate keys (integer IDENTITY columns are faster for joins).
+- Missing PK/FK constraints (deprives the optimizer of relationship information).
+- Missing COMMENT and TAGS (reduces discoverability for AI/BI tools).
+- Filtering on ARRAY/MAP columns in WHERE clauses (no column statistics for data skipping).
+`.trim();
