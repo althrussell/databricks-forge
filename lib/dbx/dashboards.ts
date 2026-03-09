@@ -141,14 +141,51 @@ export async function createDashboard(opts: {
       );
       if (!response.ok) {
         const retryText = await response.text();
-        throw new Error(`Lakeview create dashboard failed (${response.status}): ${retryText}`);
+        if (!retryText.includes("RESOURCE_ALREADY_EXISTS")) {
+          throw new Error(`Lakeview create dashboard failed (${response.status}): ${retryText}`);
+        }
+        return await createDashboardWithSuffix(url, headers, body, opts.displayName, 2);
       }
+    } else if (text.includes("RESOURCE_ALREADY_EXISTS")) {
+      return await createDashboardWithSuffix(url, headers, body, opts.displayName, 2);
     } else {
       throw new Error(`Lakeview create dashboard failed (${response.status}): ${text}`);
     }
   }
 
   return (await response.json()) as LakeviewDashboardResponse;
+}
+
+const MAX_SUFFIX_ATTEMPTS = 5;
+
+async function createDashboardWithSuffix(
+  url: string,
+  headers: HeadersInit,
+  body: Record<string, string>,
+  baseName: string,
+  startSuffix: number,
+): Promise<LakeviewDashboardResponse> {
+  for (let suffix = startSuffix; suffix < startSuffix + MAX_SUFFIX_ATTEMPTS; suffix++) {
+    const suffixedName = `${baseName} (${suffix})`;
+    body.display_name = suffixedName;
+    const retryResponse = await fetchWithTimeout(
+      url,
+      { method: "POST", headers, body: JSON.stringify(body) },
+      TIMEOUTS.WORKSPACE,
+    );
+    if (retryResponse.ok) {
+      logger.info("Dashboard created with suffixed name", { name: suffixedName });
+      return (await retryResponse.json()) as LakeviewDashboardResponse;
+    }
+    const retryText = await retryResponse.text();
+    if (!retryText.includes("RESOURCE_ALREADY_EXISTS")) {
+      throw new Error(`Lakeview create dashboard failed (${retryResponse.status}): ${retryText}`);
+    }
+    logger.warn("Dashboard name still exists, trying next suffix", { name: suffixedName });
+  }
+  throw new Error(
+    `Dashboard "${baseName}" already exists and all suffix attempts (2–${startSuffix + MAX_SUFFIX_ATTEMPTS - 1}) failed`,
+  );
 }
 
 // ---------------------------------------------------------------------------

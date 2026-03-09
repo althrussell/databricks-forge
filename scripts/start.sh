@@ -289,6 +289,37 @@ if [ -x "$PRISMA_BIN" ] && [ -n "$SCHEMA_URL" ]; then
           await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO ' + safeRole);
           await pool.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ' + safeRole);
           console.log('[startup] Native runtime role grants ensured:', role);
+
+          // Transfer ownership of all public-schema tables + sequences to the
+          // native runtime user so it can perform DDL (CREATE INDEX, ALTER TABLE)
+          // at runtime.  Idempotent — only touches objects not already owned by
+          // the target role.  Per-object try/catch keeps active deployments safe.
+          const { rows: ownTables } = await pool.query(
+            \"SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tableowner != \$1\",
+            [role]
+          );
+          let ownershipTransferred = 0;
+          for (const { tablename } of ownTables) {
+            try {
+              const safeT = '\"' + tablename.replace(/\"/g, '\"\"') + '\"';
+              await pool.query('ALTER TABLE public.' + safeT + ' OWNER TO ' + safeRole);
+              ownershipTransferred++;
+            } catch (ownerErr) {
+              console.log('[startup] Could not transfer ownership of table', tablename + ':', ownerErr.message);
+            }
+          }
+          const { rows: ownSeqs } = await pool.query(
+            \"SELECT sequencename FROM pg_sequences WHERE schemaname = 'public'\"
+          );
+          for (const { sequencename } of ownSeqs) {
+            try {
+              const safeS = '\"' + sequencename.replace(/\"/g, '\"\"') + '\"';
+              await pool.query('ALTER SEQUENCE public.' + safeS + ' OWNER TO ' + safeRole);
+            } catch (_) {}
+          }
+          if (ownershipTransferred > 0) {
+            console.log('[startup] Transferred ownership of', ownershipTransferred, 'table(s) to', role);
+          }
         } finally {
           await pool.end();
         }

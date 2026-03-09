@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowUpRight,
+  BrainCircuit,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -30,12 +32,14 @@ import {
   FlaskConical,
   Settings,
   Activity,
+  X,
 } from "lucide-react";
 import { SpaceConfigViewer } from "@/components/genie/space-config-viewer";
 import { OptimizationReview } from "@/components/genie/optimization-review";
 import type { SerializedSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
+import type { ImproveStats, ImproveChange } from "@/lib/genie/improve-jobs";
 
 interface SpaceDetail {
   spaceId: string;
@@ -62,6 +66,22 @@ interface FixResult {
   originalSerializedSpace?: string;
 }
 
+interface ImproveResult {
+  recommendation: { serializedSpace: string; title: string; description: string };
+  originalSerializedSpace: string;
+  changes: ImproveChange[];
+  statsBefore: ImproveStats;
+  statsAfter: ImproveStats;
+}
+
+interface ImproveProgress {
+  status: "generating" | "completed" | "failed" | "cancelled" | "idle";
+  message: string;
+  percent: number;
+  error: string | null;
+  result: ImproveResult | null;
+}
+
 export default function SpaceDetailPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
   const router = useRouter();
@@ -76,6 +96,11 @@ export default function SpaceDetailPage() {
   const [cloning, setCloning] = useState(false);
   const [creating, setCreating] = useState(false);
   const [applying, setApplying] = useState(false);
+
+  const [improving, setImproving] = useState(false);
+  const [improveProgress, setImproveProgress] = useState<ImproveProgress | null>(null);
+  const [improveResult, setImproveResult] = useState<ImproveResult | null>(null);
+  const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -209,6 +234,158 @@ export default function SpaceDetailPage() {
     }
   };
 
+  // -- Improve with Genie Engine -----------------------------------------
+
+  const stopImprovePolling = useCallback(() => {
+    if (improveTimerRef.current) {
+      clearInterval(improveTimerRef.current);
+      improveTimerRef.current = null;
+    }
+  }, []);
+
+  const pollImproveStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/genie-spaces/${spaceId}/improve`);
+      if (!res.ok) return;
+      const data: ImproveProgress = await res.json();
+      setImproveProgress(data);
+
+      if (data.status === "completed" && data.result) {
+        setImproving(false);
+        setImproveResult(data.result);
+        stopImprovePolling();
+        toast.success("Genie Engine improvement complete");
+      } else if (data.status === "failed") {
+        setImproving(false);
+        stopImprovePolling();
+        toast.error(data.error ?? "Improvement failed");
+      } else if (data.status === "cancelled") {
+        setImproving(false);
+        stopImprovePolling();
+      }
+    } catch {
+      // Transient fetch error, keep polling
+    }
+  }, [spaceId, stopImprovePolling]);
+
+  const startImprovePolling = useCallback(() => {
+    stopImprovePolling();
+    improveTimerRef.current = setInterval(pollImproveStatus, 2000);
+  }, [pollImproveStatus, stopImprovePolling]);
+
+  useEffect(() => {
+    return () => stopImprovePolling();
+  }, [stopImprovePolling]);
+
+  // Check for an in-flight improvement on mount (survives navigation)
+  useEffect(() => {
+    if (!spaceId) return;
+    fetch(`/api/genie-spaces/${spaceId}/improve`)
+      .then((r) => r.json())
+      .then((data: ImproveProgress) => {
+        if (data.status === "generating") {
+          setImproving(true);
+          setImproveProgress(data);
+          startImprovePolling();
+        } else if (data.status === "completed" && data.result) {
+          setImproveResult(data.result);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceId]);
+
+  const handleStartImprove = async () => {
+    setImproving(true);
+    setImproveResult(null);
+    setImproveProgress(null);
+    try {
+      const res = await fetch(`/api/genie-spaces/${spaceId}/improve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to start improvement");
+      }
+      startImprovePolling();
+      toast.info("Genie Engine improvement started");
+    } catch (err) {
+      setImproving(false);
+      toast.error(err instanceof Error ? err.message : "Failed to start improvement");
+    }
+  };
+
+  const handleCancelImprove = async () => {
+    try {
+      await fetch(`/api/genie-spaces/${spaceId}/improve`, { method: "DELETE" });
+      setImproving(false);
+      setImproveProgress(null);
+      stopImprovePolling();
+      toast.info("Improvement cancelled");
+    } catch {
+      toast.error("Failed to cancel improvement");
+    }
+  };
+
+  const dismissImproveResult = useCallback(() => {
+    setImproveResult(null);
+    fetch(`/api/genie-spaces/${spaceId}/improve?action=dismiss`, { method: "DELETE" }).catch(
+      () => {},
+    );
+  }, [spaceId]);
+
+  const handleApplyImprove = async (serializedSpace: string) => {
+    setApplying(true);
+    try {
+      const res = await fetch(`/api/genie-spaces/${spaceId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serializedSpace }),
+      });
+      if (!res.ok) throw new Error("Apply failed");
+      toast.success("Improved configuration applied");
+      dismissImproveResult();
+      fetchDetail();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Apply failed");
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleCreateNewFromImprove = async (serializedSpace: string) => {
+    setCreating(true);
+    try {
+      const title = improveResult?.recommendation?.title ?? detail?.title ?? "Space";
+      const res = await fetch("/api/genie-spaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${title} (Improved)`,
+          description: detail?.description ?? "",
+          serializedSpace,
+          domain: detail?.domain ?? "general",
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? "Create failed");
+      }
+      const { spaceId: newSpaceId } = await res.json();
+      toast.success("New improved space created");
+      dismissImproveResult();
+      router.push(`/genie/${newSpaceId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Create new space failed");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const canImprove = !detail?.runId;
+
   if (loading) {
     return (
       <div className="mx-auto max-w-[1400px] space-y-8">
@@ -262,6 +439,41 @@ export default function SpaceDetailPage() {
           onCloneAndApply={handleCloneAndApply}
           onCreateNew={handleCreateNewSpace}
           onCancel={() => setFixResult(null)}
+          applying={applying}
+          cloning={cloning}
+          creating={creating}
+        />
+      </div>
+    );
+  }
+
+  // If an improve result is pending review, show the comparison
+  if (improveResult) {
+    return (
+      <div className="mx-auto max-w-[1400px] space-y-8">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={dismissImproveResult}>
+            <ArrowLeft className="mr-1 size-4" />
+            Back to Space
+          </Button>
+          <h1 className="text-xl font-bold tracking-tight">Genie Engine Improvement Review</h1>
+        </div>
+
+        {/* Improvement advice card */}
+        <ImprovementAdvice
+          statsBefore={improveResult.statsBefore}
+          statsAfter={improveResult.statsAfter}
+        />
+
+        <OptimizationReview
+          changes={improveResult.changes}
+          strategiesRun={["Genie Engine Full Analysis"]}
+          currentSerializedSpace={improveResult.originalSerializedSpace}
+          updatedSerializedSpace={improveResult.recommendation.serializedSpace}
+          onApply={handleApplyImprove}
+          onCloneAndApply={handleCloneAndApply}
+          onCreateNew={handleCreateNewFromImprove}
+          onCancel={dismissImproveResult}
           applying={applying}
           cloning={cloning}
           creating={creating}
@@ -408,6 +620,21 @@ export default function SpaceDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
+                {canImprove && (
+                  <Button
+                    size="sm"
+                    onClick={handleStartImprove}
+                    disabled={improving || fixing}
+                    className="gap-1.5"
+                  >
+                    {improving ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <BrainCircuit className="size-4" />
+                    )}
+                    Improve with Genie Engine
+                  </Button>
+                )}
                 {genieUrl && (
                   <Button size="sm" variant="outline" asChild>
                     <a href={genieUrl} target="_blank" rel="noopener noreferrer">
@@ -438,6 +665,42 @@ export default function SpaceDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Improvement Progress */}
+          {improving && improveProgress && (
+            <Card className="border-violet-200 dark:border-violet-800">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <BrainCircuit className="size-5 shrink-0 animate-pulse text-violet-500" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        Improving with Genie Engine...
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {improveProgress.percent}%
+                      </span>
+                    </div>
+                    <Progress value={improveProgress.percent} className="h-2" />
+                    <p className="text-xs text-muted-foreground">
+                      {improveProgress.message}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/70">
+                      You can navigate away — the engine will keep running.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCancelImprove}
+                    className="shrink-0"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Configuration Tab */}
@@ -707,5 +970,89 @@ function InlineHealthReport({
         })}
       </div>
     </div>
+  );
+}
+
+// -------------------------------------------------------------------------
+// Improvement Advice
+// -------------------------------------------------------------------------
+
+const STAT_LABELS: { key: keyof ImproveStats; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "tables", label: "Tables", icon: Table2 },
+  { key: "joins", label: "Joins", icon: Sparkles },
+  { key: "measures", label: "Measures", icon: BarChart3 },
+  { key: "filters", label: "Filters", icon: Link2 },
+  { key: "dimensions", label: "Expressions", icon: MessageSquare },
+  { key: "benchmarks", label: "Benchmarks", icon: FlaskConical },
+  { key: "sampleQuestions", label: "Sample Questions", icon: MessageSquare },
+  { key: "exampleSqls", label: "Example SQLs", icon: Settings },
+  { key: "metricViews", label: "Metric Views", icon: BarChart3 },
+];
+
+function ImprovementAdvice({
+  statsBefore,
+  statsAfter,
+}: {
+  statsBefore: ImproveStats;
+  statsAfter: ImproveStats;
+}) {
+  const improved = STAT_LABELS.filter(
+    ({ key }) => (statsAfter[key] as number) > (statsBefore[key] as number),
+  );
+  const totalBefore = Object.values(statsBefore).reduce(
+    (s, v) => s + (typeof v === "number" ? v : 0),
+    0,
+  );
+  const totalAfter = Object.values(statsAfter).reduce(
+    (s, v) => s + (typeof v === "number" ? v : 0),
+    0,
+  );
+
+  return (
+    <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BrainCircuit className="size-5 text-violet-500" />
+          Why the improved version is better
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          The Genie Engine ran a full analysis across all tables — adding
+          LLM-generated joins, measures, filters, benchmarks, and enriched
+          instructions that the Quick Build did not include.
+          {totalAfter > totalBefore && (
+            <span className="font-medium text-violet-600 dark:text-violet-400">
+              {" "}The improved configuration is {Math.round(((totalAfter - totalBefore) / Math.max(totalBefore, 1)) * 100)}% richer overall.
+            </span>
+          )}
+        </p>
+
+        {improved.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {improved.map(({ key, label, icon: Icon }) => {
+              const before = statsBefore[key] as number;
+              const after = statsAfter[key] as number;
+              return (
+                <div
+                  key={key}
+                  className="flex items-center gap-2 rounded-md border bg-background px-3 py-2"
+                >
+                  <Icon className="size-4 shrink-0 text-violet-500" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-muted-foreground">{label}</div>
+                    <div className="flex items-baseline gap-1.5 text-sm">
+                      <span className="text-muted-foreground line-through">{before}</span>
+                      <ArrowUpRight className="inline size-3 text-green-500" />
+                      <span className="font-semibold text-green-600">{after}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

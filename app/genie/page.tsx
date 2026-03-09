@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
+  BrainCircuit,
   ExternalLink,
   Sparkles,
   Trash2,
@@ -104,6 +110,12 @@ export default function GenieSpacesPage() {
   const [healthScores, setHealthScores] = useState<Record<string, SpaceHealthReport | null>>({});
   const [healthSheetOpen, setHealthSheetOpen] = useState(false);
   const [healthSheetTarget, setHealthSheetTarget] = useState<SpaceCardData | null>(null);
+  const [improveStatuses, setImproveStatuses] = useState<
+    Record<string, { status: string; percent: number; message: string }>
+  >({});
+  const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spacesRef = useRef(spaces);
+  spacesRef.current = spaces;
 
   const runDiscovery = useCallback(async (spaceIds: string[]) => {
     if (spaceIds.length === 0) return;
@@ -182,6 +194,51 @@ export default function GenieSpacesPage() {
       })
       .catch(() => {});
   }, [fetchSpaces]);
+
+  // Poll for active improvement jobs
+  useEffect(() => {
+    const prevStatuses = new Map<string, string>();
+
+    const pollImproveStatuses = async () => {
+      try {
+        const res = await fetch("/api/genie-spaces/improve-status");
+        if (res.ok) {
+          const data: { jobs: Record<string, { status: string; percent: number; message: string }> } =
+            await res.json();
+          setImproveStatuses(data.jobs);
+
+          for (const [sid, job] of Object.entries(data.jobs)) {
+            const prev = prevStatuses.get(sid);
+            if (prev === "generating" && job.status === "completed") {
+              const space = spacesRef.current.find((s) => s.spaceId === sid);
+              toast.success(
+                `"${space?.title ?? "Space"}" improvement complete — click to review`,
+                {
+                  action: { label: "Review", onClick: () => router.push(`/genie/${sid}`) },
+                  duration: 8000,
+                },
+              );
+            }
+            prevStatuses.set(sid, job.status);
+          }
+
+          const hasActive = Object.values(data.jobs).some((j) => j.status === "generating");
+          if (!hasActive && improveTimerRef.current) {
+            clearInterval(improveTimerRef.current);
+            improveTimerRef.current = null;
+          }
+        }
+      } catch {
+        // Non-critical
+      }
+    };
+
+    pollImproveStatuses();
+    improveTimerRef.current = setInterval(pollImproveStatuses, 5000);
+    return () => {
+      if (improveTimerRef.current) clearInterval(improveTimerRef.current);
+    };
+  }, [router]);
 
   const handleRefresh = () => {
     setLoading(true);
@@ -311,6 +368,7 @@ export default function GenieSpacesPage() {
                       setHealthSheetTarget(space);
                       setHealthSheetOpen(true);
                     }}
+                    improveStatus={improveStatuses[space.spaceId]}
                   />
                 ))}
               </div>
@@ -433,6 +491,7 @@ function SpaceCard({
   healthReport,
   healthLoading,
   onHealthClick,
+  improveStatus,
 }: {
   space: SpaceCardData;
   databricksHost: string;
@@ -441,13 +500,15 @@ function SpaceCard({
   healthReport?: SpaceHealthReport;
   healthLoading?: boolean;
   onHealthClick?: () => void;
+  improveStatus?: { status: string; percent: number; message: string };
 }) {
   const isTrashed = space.status === "trashed";
   const genieUrl = databricksHost ? `${databricksHost}/genie/rooms/${space.spaceId}` : "";
+  const isImproving = improveStatus?.status === "generating";
 
   return (
     <Card
-      className={`${isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"} ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
+      className={`${isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"} ${isImproving ? "ring-1 ring-violet-300 dark:ring-violet-700" : ""} ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
       onClick={onCardClick}
     >
       <CardHeader className="pb-3">
@@ -461,7 +522,19 @@ function SpaceCard({
             )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-1">
-            {!isTrashed && (
+            {isImproving && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex size-7 items-center justify-center">
+                    <BrainCircuit className="size-5 animate-pulse text-violet-500" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Improving with Genie Engine ({improveStatus.percent}%)
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {!isImproving && !isTrashed && (
               <HealthGradeBadge
                 report={healthReport}
                 loading={healthLoading}
