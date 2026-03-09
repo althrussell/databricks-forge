@@ -418,7 +418,7 @@ export default function BenchmarkPage() {
   // Show optimization review when improve results are ready
   if (improveResult) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto max-w-[1400px] space-y-8">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => setImproveResult(null)}>
             <ArrowLeft className="mr-1 size-4" />
@@ -442,7 +442,7 @@ export default function BenchmarkPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1400px] space-y-8">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
           <Link href={`/genie/${spaceId}`}>
