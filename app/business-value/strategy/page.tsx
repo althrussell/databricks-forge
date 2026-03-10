@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import type {
   StrategyDocument,
@@ -156,8 +157,9 @@ export default function StrategyAlignmentPage() {
       setDocs((prev) => [created, ...prev]);
       setTitle("");
       setContent("");
-    } catch {
-      // Error handling could use toast
+      toast.success("Strategy document created");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create strategy document");
     } finally {
       setSubmitLoading(false);
     }
@@ -179,8 +181,9 @@ export default function StrategyAlignmentPage() {
         return next;
       });
       setDeleteTarget(null);
+      toast.success("Strategy document deleted");
     } catch {
-      // Error handling
+      toast.error("Failed to delete strategy document");
     } finally {
       setDeleteLoading(false);
     }

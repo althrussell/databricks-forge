@@ -71,6 +71,13 @@ These are the core TypeScript types used throughout the app:
 | `LineageEdge`      | Directed edge in the data lineage graph          |
 | `ERDGraph`         | Entity-relationship graph (nodes + edges)        |
 | `TableHealthInsight` | Health score + issues + recommendations        |
+| `ValueEstimate`    | Per-use-case financial estimate (low/mid/high)   |
+| `RoadmapPhaseAssignment` | Delivery phase + effort + dependencies     |
+| `UseCaseTrackingEntry` | Lifecycle stage from discovered to measured   |
+| `StakeholderProfile` | Role/department impact profile with champion flags |
+| `ExecutiveSynthesis` | Board-ready findings, recommendations, risks   |
+| `BusinessValuePortfolio` | Cross-run portfolio aggregation             |
+| `StrategyDocument` | Uploaded strategy with parsed initiatives         |
 
 ## Pipeline Steps (Discover Usecases)
 
@@ -83,6 +90,7 @@ The core pipeline runs these steps sequentially:
 5. **domain-clustering** -- Assign domains and subdomains via Model Serving (JSON mode) **[fast]**
 6. **scoring** -- Score **[premium]**, deduplicate **[fast]**, calibrate **[premium]**, and rank use cases
 7. **sql-generation** -- Generate bespoke SQL for each use case via Model Serving (streaming) **[premium]**
+8. **business-value-analysis** -- Financial quantification, roadmap phasing, executive synthesis, stakeholder analysis via Model Serving (JSON mode) **[fast]**
 
 Each step updates progress in Lakebase. The frontend polls for status.
 
@@ -113,6 +121,28 @@ Key modules:
 
 Data model: `GenieEngineConfig`, `GenieEnginePassOutputs`, `SerializedSpace`,
 `GenieSpaceRecommendation`, `GenieEngineRecommendation` (see `lib/genie/types.ts`).
+
+## Business Value Engine (Post-Pipeline)
+
+The Business Value Engine (`lib/pipeline/steps/business-value-analysis.ts`) runs
+as pipeline step 8, producing financially-grounded deliverables from scored use
+cases. See `docs/BUSINESS_VALUE.md` for full documentation.
+
+Key modules:
+- `lib/pipeline/steps/business-value-analysis.ts` -- orchestrator (4 LLM passes)
+- `lib/ai/templates-business-value.ts` -- prompt templates (financial quantification, roadmap phasing, executive synthesis, stakeholder analysis)
+- `lib/lakebase/value-estimates.ts` -- CRUD for `ForgeValueEstimate`
+- `lib/lakebase/roadmap-phases.ts` -- CRUD for `ForgeRoadmapPhase`
+- `lib/lakebase/use-case-tracking.ts` -- CRUD for `ForgeUseCaseTracking`
+- `lib/lakebase/value-captures.ts` -- CRUD for `ForgeValueCapture`
+- `lib/lakebase/strategy-documents.ts` -- CRUD for `ForgeStrategyDocument` + `ForgeStrategyAlignment`
+- `lib/lakebase/stakeholder-profiles.ts` -- CRUD for `ForgeStakeholderProfile`
+- `lib/lakebase/portfolio.ts` -- cross-run portfolio aggregation
+
+Data model: `ForgeValueEstimate`, `ForgeRoadmapPhase`, `ForgeUseCaseTracking`,
+`ForgeValueCapture`, `ForgeStrategyDocument`, `ForgeStrategyAlignment`,
+`ForgeStakeholderProfile` (see Prisma schema). `ForgeRun.synthesisJson` stores
+executive synthesis output.
 
 ## Genie Health Check Engine
 

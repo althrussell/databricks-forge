@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const latestRun = await withPrisma(async (prisma) => {
       return prisma.forgeRun.findFirst({
         where: { status: "completed" },
-        orderBy: { completedAt: "desc" },
+        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
         select: { runId: true },
       });
     });
