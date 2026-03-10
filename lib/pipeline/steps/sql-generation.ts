@@ -578,10 +578,8 @@ async function generateSqlForUseCase(
           });
         } else {
           diag.reviewApplied = true;
-          logger.info("SQL review applied fix", {
+          logger.info("SQL review fix applied", {
             useCaseId: uc.id,
-            qualityScore: review.qualityScore,
-            issueCount: review.issues.length,
           });
           currentSql = review.fixedSql;
         }
@@ -612,7 +610,7 @@ async function generateSqlForUseCase(
 async function trySqlExecution(sql: string): Promise<string | null> {
   // Pipe syntax (|>) is valid Databricks SQL but not supported by EXPLAIN
   if (/\|>/.test(sql)) {
-    logger.info("Skipping EXPLAIN validation for pipe-syntax query");
+    logger.debug("Skipping EXPLAIN validation for pipe-syntax query");
     return null;
   }
   try {
