@@ -117,12 +117,20 @@ export default function GenieSpacesPage() {
     if (spaceIds.length === 0) return;
     setDiscovering(true);
     try {
-      const res = await fetch("/api/genie-spaces/discover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spaceIds }),
-      });
-      if (res.ok) {
+      const BATCH_SIZE = 50;
+      const chunks: string[][] = [];
+      for (let i = 0; i < spaceIds.length; i += BATCH_SIZE) {
+        chunks.push(spaceIds.slice(i, i + BATCH_SIZE));
+      }
+
+      for (const chunk of chunks) {
+        const res = await fetch("/api/genie-spaces/discover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spaceIds: chunk }),
+        });
+        if (!res.ok) continue;
+
         const data: Record<
           string,
           { metadata: SpaceMetadata | null; healthReport: SpaceHealthReport | null }
