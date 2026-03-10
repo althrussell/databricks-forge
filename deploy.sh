@@ -280,11 +280,14 @@ wait_for_app_absent() {
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  # Always back up and strip managed env vars from app.yaml before syncing.
-  # This prevents stale instance-specific config from leaking between deploys
-  # when running multiple app instances from the same repo checkout.
+  # Back up and patch app.yaml with instance-specific env vars for syncing.
+  # Reads from the ORIGINAL repo file (git version) to avoid contamination
+  # from previous deploys that may have left managed vars in the file.
   APP_YAML_BACKUP="$(mktemp)"
   cp "app.yaml" "$APP_YAML_BACKUP"
+
+  # Restore the clean git version first, then patch from that baseline
+  git checkout -- app.yaml 2>/dev/null || true
 
   export APP_NAME
   export LAKEBASE_BOOTSTRAP_USER
@@ -780,10 +783,15 @@ print(json.dumps({
 upload_code() {
   WORKSPACE_PATH="/Workspace/Users/${USER_EMAIL}/${APP_NAME}"
 
+  # Clear stale sync snapshots so concurrent deploys (different --app-name
+  # targets from the same checkout) don't poison each other's state.
+  rm -rf .databricks/sync-snapshots 2>/dev/null || true
+
   local sync_source="."
   local sync_flags="--full"
   if [ "$ARG_PREBUILT" = "true" ]; then
     sync_source="$DEPLOY_PKG"
+    rm -rf "$DEPLOY_PKG/.databricks/sync-snapshots" 2>/dev/null || true
     info "Uploading pre-built package (full sync)..."
   else
     info "Uploading source code (full sync)..."
@@ -792,7 +800,7 @@ upload_code() {
     fi
   fi
 
-  if ! databricks sync $sync_flags "$sync_source" "$WORKSPACE_PATH" 2>/dev/null; then
+  if ! databricks sync $sync_flags "$sync_source" "$WORKSPACE_PATH"; then
     die "Failed to upload code.\n  Try manually: databricks sync $sync_flags $sync_source $WORKSPACE_PATH"
   fi
   ok
