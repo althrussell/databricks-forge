@@ -48,8 +48,14 @@ const BASE_STEPS = [
   {
     key: PipelineStep.SqlGeneration,
     label: "SQL Generation",
-    pct: 100,
+    pct: 80,
     tip: PIPELINE_STEPS["sql-generation"],
+  },
+  {
+    key: PipelineStep.BusinessValueAnalysis,
+    label: "Business Value",
+    pct: 90,
+    tip: PIPELINE_STEPS["business-value-analysis"],
   },
 ];
 
