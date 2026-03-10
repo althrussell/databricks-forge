@@ -141,7 +141,33 @@ export async function GET(
         });
       }
       case "pptx": {
-        const buffer = await generatePptx(run, useCases, lineageDiscoveredFqns, summaries);
+        let pptxSynthesis = null;
+        try {
+          const { withPrisma } = await import("@/lib/prisma");
+          const synthRow = await withPrisma(async (prisma) => {
+            const r = await prisma.forgeRun.findUnique({
+              where: { runId },
+              select: { synthesisJson: true },
+            });
+            return r?.synthesisJson ?? null;
+          });
+          if (synthRow) {
+            try {
+              pptxSynthesis = JSON.parse(synthRow);
+            } catch {
+              /* skip */
+            }
+          }
+        } catch {
+          /* synthesis data optional */
+        }
+        const buffer = await generatePptx(
+          run,
+          useCases,
+          lineageDiscoveredFqns,
+          summaries,
+          pptxSynthesis,
+        );
         insertExportRecord(runId, "pptx");
         logActivity("exported", {
           userId: userEmail,

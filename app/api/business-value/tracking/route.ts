@@ -50,18 +50,19 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { runId, useCaseId, stage, assignedOwner } = body as {
+    const { runId, useCaseId, stage, assignedOwner, notes } = body as {
       runId: string;
       useCaseId: string;
       stage?: TrackingStage;
       assignedOwner?: string;
+      notes?: Array<{ text: string; author?: string; createdAt: string }>;
     };
 
     if (!runId || !useCaseId) {
       return NextResponse.json({ error: "runId and useCaseId required" }, { status: 400 });
     }
 
-    const entry = await upsertTracking(runId, useCaseId, { stage, assignedOwner });
+    const entry = await upsertTracking(runId, useCaseId, { stage, assignedOwner, notes });
     return NextResponse.json(entry);
   } catch (err) {
     logger.error("[api/business-value/tracking] PATCH failed", { error: String(err) });

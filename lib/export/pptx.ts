@@ -16,13 +16,14 @@
 import PptxGenJS from "pptxgenjs";
 import fs from "fs";
 import path from "path";
-import type { PipelineRun, UseCase } from "@/lib/domain/types";
+import type { PipelineRun, UseCase, ExecutiveSynthesis } from "@/lib/domain/types";
 import { groupByDomain, computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
 import {
   buildExecutiveSummaryItems,
   paginateSummaryItems,
   type ExecutiveSummaryLine,
 } from "@/lib/export/pptx-exec-summary";
+import { formatCompactCurrency } from "@/lib/export/brand";
 
 // ---------------------------------------------------------------------------
 // Databricks logo — loaded once from public/databricks-icon.svg as base64 PNG
@@ -211,6 +212,7 @@ export async function generatePptx(
   useCases: UseCase[],
   lineageDiscoveredFqns: string[] = [],
   summaries?: { executiveSummary: string; domainSummaries: Record<string, string> } | null,
+  synthesis?: ExecutiveSynthesis | null,
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const pptx = new PptxGenJS();
@@ -353,6 +355,216 @@ export async function generatePptx(
     });
 
     addFooter(execSlide);
+  }
+
+  // =====================================================================
+  // 2b. SYNTHESIS SLIDES (when BV data available)
+  // =====================================================================
+  if (synthesis) {
+    // Key Findings
+    if (synthesis.keyFindings.length > 0) {
+      const kfSlide = pptx.addSlide();
+      addAccentBar(kfSlide, DB_RED, 0, 0.8, 0.1, 3.0);
+      kfSlide.addText("Key Findings", {
+        x: CONTENT_MARGIN,
+        y: 0.3,
+        w: CONTENT_W,
+        fontSize: 36,
+        bold: true,
+        color: DB_DARK,
+        fontFace: "Calibri",
+      });
+      addRedSeparator(kfSlide, CONTENT_MARGIN, 0.95, 4);
+
+      const kfItems: PptxGenJS.TextProps[] = synthesis.keyFindings.slice(0, 6).flatMap((f) => [
+        {
+          text: f.title,
+          options: {
+            fontSize: 14,
+            bold: true,
+            color: DB_DARK,
+            bullet: true,
+            breakLine: true,
+            paraSpaceAfter: 2,
+          } as PptxGenJS.TextPropsOptions,
+        },
+        {
+          text: f.description,
+          options: {
+            fontSize: 12,
+            color: TEXT_COLOR,
+            breakLine: true,
+            paraSpaceAfter: 10,
+            indentLevel: 1,
+          } as PptxGenJS.TextPropsOptions,
+        },
+      ]);
+
+      kfSlide.addText(kfItems, {
+        x: CONTENT_MARGIN + 0.3,
+        y: 1.2,
+        w: CONTENT_W - 0.6,
+        h: 5.5,
+        valign: "top",
+        fontFace: "Calibri",
+      });
+      addFooter(kfSlide);
+    }
+
+    // Strategic Recommendations
+    if (synthesis.strategicRecommendations.length > 0) {
+      const srSlide = pptx.addSlide();
+      addAccentBar(srSlide, DB_RED, 0, 0.8, 0.1, 3.0);
+      srSlide.addText("Strategic Recommendations", {
+        x: CONTENT_MARGIN,
+        y: 0.3,
+        w: CONTENT_W,
+        fontSize: 36,
+        bold: true,
+        color: DB_DARK,
+        fontFace: "Calibri",
+      });
+      addRedSeparator(srSlide, CONTENT_MARGIN, 0.95, 4);
+
+      const srItems: PptxGenJS.TextProps[] = synthesis.strategicRecommendations
+        .slice(0, 5)
+        .flatMap((r, i) => [
+          {
+            text: `${i + 1}. ${r.title} [${r.priority.toUpperCase()}]`,
+            options: {
+              fontSize: 14,
+              bold: true,
+              color: DB_DARK,
+              breakLine: true,
+              paraSpaceAfter: 2,
+            } as PptxGenJS.TextPropsOptions,
+          },
+          {
+            text: r.description,
+            options: {
+              fontSize: 12,
+              color: TEXT_COLOR,
+              breakLine: true,
+              paraSpaceAfter: 10,
+              indentLevel: 1,
+            } as PptxGenJS.TextPropsOptions,
+          },
+        ]);
+
+      srSlide.addText(srItems, {
+        x: CONTENT_MARGIN + 0.3,
+        y: 1.2,
+        w: CONTENT_W - 0.6,
+        h: 5.5,
+        valign: "top",
+        fontFace: "Calibri",
+      });
+      addFooter(srSlide);
+    }
+
+    // Risk Callouts
+    if (synthesis.riskCallouts.length > 0) {
+      const rcSlide = pptx.addSlide();
+      addAccentBar(rcSlide, DB_RED, 0, 0.8, 0.1, 3.0);
+      rcSlide.addText("Risk Callouts", {
+        x: CONTENT_MARGIN,
+        y: 0.3,
+        w: CONTENT_W,
+        fontSize: 36,
+        bold: true,
+        color: DB_DARK,
+        fontFace: "Calibri",
+      });
+      addRedSeparator(rcSlide, CONTENT_MARGIN, 0.95, 4);
+
+      const rcItems: PptxGenJS.TextProps[] = synthesis.riskCallouts.slice(0, 5).flatMap((r) => [
+        {
+          text: `${r.title} [${r.impact.toUpperCase()} impact]`,
+          options: {
+            fontSize: 14,
+            bold: true,
+            color: DB_RED,
+            bullet: true,
+            breakLine: true,
+            paraSpaceAfter: 2,
+          } as PptxGenJS.TextPropsOptions,
+        },
+        {
+          text: r.description,
+          options: {
+            fontSize: 12,
+            color: TEXT_COLOR,
+            breakLine: true,
+            paraSpaceAfter: 10,
+            indentLevel: 1,
+          } as PptxGenJS.TextPropsOptions,
+        },
+      ]);
+
+      rcSlide.addText(rcItems, {
+        x: CONTENT_MARGIN + 0.3,
+        y: 1.2,
+        w: CONTENT_W - 0.6,
+        h: 5.5,
+        valign: "top",
+        fontFace: "Calibri",
+      });
+      addFooter(rcSlide);
+    }
+
+    // Value Summary
+    {
+      const vsSlide = pptx.addSlide();
+      addAccentBar(vsSlide, DB_RED, 0, 0.8, 0.1, 3.0);
+      vsSlide.addText("Value Summary", {
+        x: CONTENT_MARGIN,
+        y: 0.3,
+        w: CONTENT_W,
+        fontSize: 36,
+        bold: true,
+        color: DB_DARK,
+        fontFace: "Calibri",
+      });
+      addRedSeparator(vsSlide, CONTENT_MARGIN, 0.95, 4);
+
+      const tv = synthesis.totalEstimatedValue;
+      const vsBullets: PptxGenJS.TextProps[] = [
+        {
+          text: `Total estimated annual value: ${formatCompactCurrency(tv.mid)} (${formatCompactCurrency(tv.low)} – ${formatCompactCurrency(tv.high)})`,
+          options: { fontSize: 18, bold: true, color: DB_RED, breakLine: true, paraSpaceAfter: 12 },
+        },
+        {
+          text: `${synthesis.quickWinCount} quick wins identified for immediate value`,
+          options: {
+            fontSize: 16,
+            color: DB_DARK,
+            bullet: true,
+            breakLine: true,
+            paraSpaceAfter: 8,
+          },
+        },
+        {
+          text: `Top domain: ${synthesis.topDomain ?? "N/A"}`,
+          options: {
+            fontSize: 16,
+            color: DB_DARK,
+            bullet: true,
+            breakLine: true,
+            paraSpaceAfter: 8,
+          },
+        },
+      ];
+
+      vsSlide.addText(vsBullets, {
+        x: CONTENT_MARGIN + 0.3,
+        y: 1.2,
+        w: CONTENT_W - 0.6,
+        h: 4.0,
+        valign: "top",
+        fontFace: "Calibri",
+      });
+      addFooter(vsSlide);
+    }
   }
 
   // =====================================================================

@@ -38,6 +38,14 @@ Use these calibration anchors:
 - **Risk Reduction**: Fraud detection (0.5-2% of transaction value), compliance (avoided fines, typically 0.1-1% of revenue)
 - **Efficiency Gain**: Analyst time savings ($100-250K per FTE freed), faster decision cycles (value of speed)
 
+**D4B Industry Benchmarks** (use as additional calibration):
+- Average cost per ad-hoc analyst report: $1,200-$3,500
+- Self-service analytics reduces analyst request queue by 60-80%, freeing 3-7 days per request cycle
+- BI tool consolidation on Databricks typically saves 15-30% of annual analytics tooling spend
+- Organisations with mature data platforms see 2-5x faster time-to-insight vs spreadsheet-driven analysis
+- Data quality automation reduces downstream error remediation costs by 40-60%
+- Centralised governance (Unity Catalog) reduces compliance audit preparation time by 50-70%
+
 Scale your estimates based on:
 - The **data estate size** (table row counts, number of tables involved)
 - The **industry** (financial services has larger absolute values than retail per use case)

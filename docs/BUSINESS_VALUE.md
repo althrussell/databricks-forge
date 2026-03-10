@@ -13,8 +13,9 @@ generation. It executes four LLM passes over the scored use cases to produce:
 3. **Executive Synthesis** -- key findings, strategic recommendations, risk callouts
 4. **Stakeholder Analysis** -- organizational impact mapping and champion identification
 
-Results are persisted in Lakebase, surfaced through five dedicated UI pages, and
-integrated into the dashboard, run detail, Ask Forge, and exports.
+Results are persisted in Lakebase, surfaced through five dedicated UI pages,
+exportable in four portfolio-level formats, and integrated into the dashboard,
+run detail, Ask Forge, and per-run exports.
 
 ---
 
@@ -32,15 +33,22 @@ Pipeline Engine (engine.ts)
         Lakebase (7 tables)
               │
               ▼
-        API Routes (/api/business-value/*)
+        API Routes (/api/business-value/*, /api/export/portfolio)
               │
               ▼
         UI Pages (/business-value/*)
+              │
+              ▼
+        Exports (Excel, PPTX, PDF, D4B Workshop Pack)
 ```
 
 All four passes use `getFastServingEndpoint()` and `responseFormat: "json_object"`.
 Use cases are batched (25 per request) for the financial and roadmap passes to
 stay within token limits.
+
+Financial quantification prompts include **D4B industry benchmarks** (ad-hoc
+report costs, analyst time savings, BI consolidation, data quality automation,
+governance audit reduction) to ground LLM estimates in real-world values.
 
 ---
 
@@ -52,7 +60,7 @@ stay within token limits.
 |-------|-------|---------|
 | `ForgeValueEstimate` | `forge_value_estimates` | Per-use-case financial estimates (low/mid/high, type, confidence) |
 | `ForgeRoadmapPhase` | `forge_roadmap_phases` | Phase assignment with effort, dependencies, enablers |
-| `ForgeUseCaseTracking` | `forge_use_case_tracking` | Lifecycle stage tracking (discovered → measured) |
+| `ForgeUseCaseTracking` | `forge_use_case_tracking` | Lifecycle stage tracking (discovered → measured) + voting data (in `notes` JSON) |
 | `ForgeValueCapture` | `forge_value_captures` | Actual delivered value records |
 | `ForgeStrategyDocument` | `forge_strategy_documents` | Uploaded strategy documents with parsed initiatives |
 | `ForgeStrategyAlignment` | `forge_strategy_alignments` | Strategy-to-use-case alignment and gap analysis |
@@ -77,6 +85,16 @@ Key interfaces: `ValueEstimate`, `RoadmapPhaseAssignment`, `UseCaseTrackingEntry
 `StrategyAlignmentEntry`, `StakeholderProfile`, `ExecutiveSynthesis`,
 `BusinessValuePortfolio` (see `lib/domain/types.ts`).
 
+### Cost Modeling
+
+`lib/domain/cost-modeling.ts` provides:
+
+- **T-shirt to dollar conversion** -- maps EffortEstimate (xs → xl) to FTE months
+  and dollar cost ranges using `FTE_MONTHLY_COST` ($15,000/month)
+- **ROI calculation** -- `calculateRoi(annualValueMid, effort)` returns net ROI
+  percentage, payback period in months, and net value (mid value minus cost)
+- Helper labels and ordering for UI display
+
 ---
 
 ## Pipeline Passes
@@ -93,6 +111,14 @@ Uses calibration anchors:
 - **Revenue Uplift** -- targeting/personalization (2-8% of addressable revenue), churn reduction
 - **Risk Reduction** -- fraud detection (0.5-2% of transaction value), compliance
 - **Efficiency Gain** -- analyst time savings ($100-250K per FTE), faster decision cycles
+
+D4B industry benchmarks injected into the prompt:
+
+- Average cost per ad-hoc analyst report: $1,200--$3,500
+- Analyst time saved by self-service analytics: 3--7 days per month
+- BI tool consolidation savings: 15--30% of licensing costs
+- Data quality automation: 40--60% error reduction
+- Governance audit reduction: 50--70% with lineage/cataloguing
 
 Estimates are scaled by data estate size, industry, feasibility score, and table
 complexity. Conservative by design: low estimate is achievable with poor execution,
@@ -150,14 +176,21 @@ Server component with `<Suspense>` boundary. Aggregates data across all runs via
 
 - Key Findings banner (from latest synthesis)
 - Value Hero Cards: Total Estimated Value, Quick Wins, Delivered Value, Use Case count
+- **Portfolio Velocity Metrics**: conversion funnel (Discovered → Measured),
+  conversion rate, realization rate (delivered/estimated), in-pipeline count
 - Strategic Themes: top domains by value
 - Phase Distribution: Quick Wins / Foundation / Transformation counts
 - Domain Heatmap: table with score, feasibility, use case count, value per domain
+- **Interactive Drill-Down**: expandable domain cards with per-use-case tables
+  including scores, feasibility, effort, estimated value, and **vote buttons**
+- **Export Button** (dropdown): Portfolio Excel, Portfolio PPTX, Executive PDF,
+  D4B Workshop Pack
 
 ### `/business-value/roadmap` -- Implementation Roadmap
 
 Server component. Shows phase-level summary with a Recharts `BarChart`
-(`DeliveryTimelineChart`) for visual delivery timeline.
+(`DeliveryTimelineChart`) for visual delivery timeline. Interactive drill-down
+by phase with effort and dependency details.
 
 ### `/business-value/strategy` -- Strategy Alignment
 
@@ -171,16 +204,68 @@ Supports delete with confirmation dialog.
 Server component. Displays recommended champions, department summary cards,
 full stakeholder table (role, department, use cases, domains, types, change
 complexity, champion/sponsor flags), and skills assessment (aggregate type
-distribution).
+distribution). Interactive drill-down by stakeholder with linked use cases.
 
 ### `/business-value/tracking` -- Value Tracking
 
-Client component. Kanban-style lifecycle tracking from discovery to measured
-value:
+Client component. Lifecycle tracking from discovery to measured value:
 
 - Scorecard: Discovered / Planned + In Progress / Delivered / Measured counts
 - Stage Pipeline: visual bar showing distribution across stages
-- Tracking Table: per-use-case rows with stage dropdown (PATCH to update)
+- Tracking Table with:
+  - Stage dropdown (PATCH to update)
+  - **Inline owner editing** (pencil icon → input → save/cancel)
+  - **Stalled indicators**: amber highlight and "Stalled (Xd)" badge for use cases
+    with no stage change in 14+ days
+  - **Status column**: days since last update, "Today" label for recent changes
+- **Stalled alert banner**: count of stalled use cases with unblock guidance
+- **Value Capture dialog**: record actual delivered value against a use case
+
+---
+
+## Exports
+
+### Per-Run Exports
+
+Per-run PPTX export (`lib/export/pptx.ts`) conditionally includes synthesis
+slides when Business Value data is available:
+
+- Key Findings slide (numbered list)
+- Strategic Recommendations slide (numbered list)
+- Risk Callouts slide (titled + body)
+- Value Summary KPI slide (total value, quick wins value, quick wins count, phases)
+
+Backward-compatible: the `synthesis` parameter is optional.
+
+Per-run Excel export includes a "Business Value" sheet and "Stakeholders" sheet.
+
+### Portfolio Exports
+
+Served from `GET /api/export/portfolio?format=excel|pptx|pdf|workshop`.
+
+| Format | Generator | Description |
+|--------|-----------|-------------|
+| `excel` | `lib/export/portfolio-excel.ts` | 8-sheet workbook (Executive Summary, Key Findings, Recommendations, Risk Callouts, Domain Performance, Delivery Pipeline, Use Cases with cost modeling/ROI, Stakeholders) |
+| `pptx` | `lib/export/portfolio-pptx.ts` | 8-slide Databricks-branded deck (Title, Value Summary KPIs, Findings, Recommendations, Risks, Pipeline, Domains, Stakeholders) |
+| `pdf` | `lib/export/executive-pdf.ts` | 2-page executive brief (Page 1: KPIs + findings + recommendations; Page 2: pipeline + domain heatmap + risks) |
+| `workshop` | `lib/export/workshop-pptx.ts` | D4B Workshop Pack (5 sections: Case for Change with D4B stats, Executive Findings, Delivery Roadmap, Recommended Genie Spaces, Workshop Agenda) |
+
+### Shared Export Infrastructure
+
+- `lib/export/brand.ts` -- centralised Databricks brand constants (`BRAND`, `PPTX`, `EXCEL`, `PDF` palettes) and utilities (`today()`, `formatCompactCurrency()`, `scoreColor()`)
+- `lib/export/excel-helpers.ts` -- reusable ExcelJS utilities (`thinBorder`, `styleHeaderRow`, `styleDataRows`, `styleScoreCell`)
+- `lib/export/pptx-helpers.ts` -- reusable pptxgenjs utilities (`getLogoBase64`, `addFooter`, `addAccentBar`, `addRedSeparator`, `addBrandShapes`, `addTitleSlide`, `addSectionSlide`, `headerCell`, `bodyCell`)
+
+---
+
+## Use Case Voting
+
+Workshop-style prioritisation feature allowing users to vote on use cases:
+
+- `POST /api/business-value/vote` -- cast or toggle a vote (stores in `notes` JSON of `ForgeUseCaseTracking`, no schema changes)
+- `GET /api/business-value/vote?runId=` -- retrieve vote counts per use case
+- `VoteButton` component (compact and full variants) rendered in Portfolio Drill-Down table
+- Voter identity based on current user email; each user can vote once per use case
 
 ---
 
@@ -190,12 +275,17 @@ value:
 |--------|----------|---------|
 | `GET` | `/api/business-value/portfolio` | Aggregated portfolio data |
 | `GET` | `/api/business-value/tracking` | All tracking entries + stage counts |
-| `PATCH` | `/api/business-value/tracking` | Update use case stage or owner |
+| `PATCH` | `/api/business-value/tracking` | Update use case stage, owner, or notes |
+| `GET` | `/api/business-value/value-capture` | List value captures with use case names |
 | `POST` | `/api/business-value/value-capture` | Record actual delivered value |
+| `DELETE` | `/api/business-value/value-capture` | Delete a value capture record |
 | `GET` | `/api/business-value/strategy` | List strategy documents |
 | `POST` | `/api/business-value/strategy` | Create + LLM-parse strategy document |
 | `DELETE` | `/api/business-value/strategy?id=` | Delete strategy document |
 | `GET` | `/api/business-value/strategy/[id]` | Strategy doc with alignments |
+| `GET` | `/api/business-value/vote?runId=` | Vote counts per use case |
+| `POST` | `/api/business-value/vote` | Cast or toggle a vote |
+| `GET` | `/api/export/portfolio?format=` | Portfolio export (excel, pptx, pdf, workshop) |
 | `GET` | `/api/runs/[runId]/business-value` | Full business value data for a run |
 
 ---
@@ -221,11 +311,11 @@ roadmap phase distribution.
 - Action cards: View Portfolio, Generate Business Case, View Stakeholders,
   View Roadmap, Draft Executive Memo
 
-### Exports
+### Run PPTX Export
 
-The Excel export includes a "Business Value" sheet with financial estimates,
-an "Executive Synthesis" sub-section, and a "Stakeholders" sheet when
-business value data is available for the run.
+The per-run PPTX export (`lib/export/pptx.ts`) conditionally includes synthesis
+slides (Key Findings, Strategic Recommendations, Risk Callouts, Value Summary)
+when `synthesisJson` is present on the run record.
 
 ---
 
@@ -234,7 +324,7 @@ business value data is available for the run.
 ```
 lib/
   ai/
-    templates-business-value.ts      4 prompt templates
+    templates-business-value.ts      4 prompt templates (includes D4B benchmarks)
     templates.ts                     Registers prompts in central registry
     agent.ts                         Default temperatures for BV prompts
   pipeline/
@@ -248,9 +338,20 @@ lib/
     value-captures.ts                CRUD for ForgeValueCapture
     strategy-documents.ts            CRUD for ForgeStrategyDocument + Alignment
     stakeholder-profiles.ts          CRUD for ForgeStakeholderProfile
-    portfolio.ts                     Cross-run portfolio aggregation
+    portfolio.ts                     Cross-run portfolio aggregation (+ latestRunId)
   domain/
     types.ts                         ValueEstimate, RoadmapPhase, etc.
+    cost-modeling.ts                 T-shirt sizing, ROI, payback calculations
+  export/
+    brand.ts                         Centralised brand constants (BRAND, PPTX, EXCEL, PDF)
+    excel-helpers.ts                 Shared ExcelJS styling utilities
+    pptx-helpers.ts                  Shared pptxgenjs slide helpers
+    portfolio-excel.ts               8-sheet portfolio Excel generator
+    portfolio-pptx.ts                8-slide portfolio PPTX generator
+    executive-pdf.ts                 2-page executive PDF brief
+    workshop-pptx.ts                 D4B Workshop Pack PPTX generator
+    pptx.ts                          Per-run PPTX (now with optional synthesis slides)
+    excel.ts                         Per-run Excel (Business Value + Stakeholders sheets)
   assistant/
     intent.ts                        "strategic" intent
     prompts.ts                       "strategic" persona overlay
@@ -258,30 +359,43 @@ lib/
 
 app/
   business-value/
-    page.tsx                         Portfolio overview
-    roadmap/page.tsx                 Roadmap page
+    page.tsx                         Portfolio overview (+ velocity metrics, export button)
+    roadmap/page.tsx                 Roadmap page (+ drill-down)
     strategy/page.tsx                Strategy alignment
-    stakeholders/page.tsx            Stakeholder intelligence
-    tracking/page.tsx                Value tracking
+    stakeholders/page.tsx            Stakeholder intelligence (+ drill-down)
+    tracking/page.tsx                Value tracking (+ inline edit, stalled, voting)
   api/
     business-value/
       portfolio/route.ts             GET portfolio
-      tracking/route.ts              GET/PATCH tracking
-      value-capture/route.ts         POST value capture
+      tracking/route.ts              GET/PATCH tracking (stage, owner, notes)
+      value-capture/route.ts         GET/POST/DELETE value capture
+      vote/route.ts                  GET/POST use case voting
       strategy/route.ts              GET/POST/DELETE strategy docs
       strategy/[id]/route.ts         GET strategy with alignments
+    export/
+      portfolio/route.ts             GET portfolio exports (4 formats)
     runs/[runId]/
       business-value/route.ts        GET per-run business value
 
 components/
   business-value/
     delivery-timeline-chart.tsx      Recharts BarChart for roadmap
+    portfolio-drill-down.tsx         Expandable domain cards with vote buttons
+    portfolio-export-button.tsx      4-format dropdown export button
+    value-capture-dialog.tsx         Record actual delivered value
+    vote-button.tsx                  Use case voting (compact + full variants)
   pipeline/
     run-detail/
       business-value-tab.tsx         Run detail BV tab
     sidebar-nav.tsx                  Business Value nav section
   dashboard/
     dashboard-content.tsx            BusinessValueSummary widget
+
+__tests__/
+  domain/
+    cost-modeling.test.ts            Unit tests for cost modeling
+  export/
+    brand.test.ts                    Unit tests for brand constants
 
 prisma/
   schema.prisma                      7 new models (see Data Model above)

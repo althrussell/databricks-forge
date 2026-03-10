@@ -1,11 +1,56 @@
 /**
+ * GET  /api/business-value/value-capture -- list value captures
  * POST /api/business-value/value-capture -- record actual value delivered
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { createValueCapture } from "@/lib/lakebase/value-captures";
+import {
+  createValueCapture,
+  getValueCapturesForRun,
+  deleteValueCapture,
+} from "@/lib/lakebase/value-captures";
+import { withPrisma } from "@/lib/prisma";
 import type { ValueType } from "@/lib/domain/types";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  try {
+    const runId = req.nextUrl.searchParams.get("runId");
+
+    if (runId) {
+      const captures = await getValueCapturesForRun(runId);
+      return NextResponse.json(captures);
+    }
+
+    const rawCaptures = await withPrisma(async (prisma) => {
+      const captures = await prisma.forgeValueCapture.findMany({
+        orderBy: { captureDate: "desc" },
+        take: 500,
+      });
+      const ucIds = [...new Set(captures.map((c) => c.useCaseId))];
+      const useCases =
+        ucIds.length > 0
+          ? await prisma.forgeUseCase.findMany({
+              where: { id: { in: ucIds } },
+              select: { id: true, name: true, domain: true },
+            })
+          : [];
+      const ucMap = new Map(useCases.map((uc) => [uc.id, uc]));
+      return captures.map((c) => ({
+        ...c,
+        useCaseName: ucMap.get(c.useCaseId)?.name ?? null,
+        useCaseDomain: ucMap.get(c.useCaseId)?.domain ?? null,
+      }));
+    });
+
+    return NextResponse.json(rawCaptures);
+  } catch (err) {
+    logger.error("[api/business-value/value-capture] GET failed", { error: String(err) });
+    return NextResponse.json({ error: "Failed to load value captures" }, { status: 500 });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,5 +87,19 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     logger.error("[api/business-value/value-capture] POST failed", { error: String(err) });
     return NextResponse.json({ error: "Failed to record value" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { id } = await req.json();
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    await deleteValueCapture(id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    logger.error("[api/business-value/value-capture] DELETE failed", { error: String(err) });
+    return NextResponse.json({ error: "Failed to delete value capture" }, { status: 500 });
   }
 }
