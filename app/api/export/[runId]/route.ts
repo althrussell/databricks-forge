@@ -13,7 +13,7 @@ import { isValidUUID } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 import { getRunById } from "@/lib/lakebase/runs";
 import { getUseCasesByRunId } from "@/lib/lakebase/usecases";
-import { generateExcel } from "@/lib/export/excel";
+import { generateExcel, type BusinessValueExportData } from "@/lib/export/excel";
 import { generatePptx } from "@/lib/export/pptx";
 import { generatePdf } from "@/lib/export/pdf";
 import { generateNotebooks } from "@/lib/export/notebooks";
@@ -87,7 +87,45 @@ export async function GET(
 
     switch (format) {
       case "excel": {
-        const buffer = await generateExcel(run, useCases, lineageDiscoveredFqns);
+        let bvData: BusinessValueExportData | undefined;
+        try {
+          const [
+            { getValueEstimatesForRun },
+            { getRoadmapPhasesForRun },
+            { getStakeholderProfilesForRun },
+          ] = await Promise.all([
+            import("@/lib/lakebase/value-estimates"),
+            import("@/lib/lakebase/roadmap-phases"),
+            import("@/lib/lakebase/stakeholder-profiles"),
+          ]);
+          const { withPrisma } = await import("@/lib/prisma");
+          const [estimates, phases, stakeholders, synthRow] = await Promise.all([
+            getValueEstimatesForRun(runId),
+            getRoadmapPhasesForRun(runId),
+            getStakeholderProfilesForRun(runId),
+            withPrisma(async (prisma) => {
+              const r = await prisma.forgeRun.findUnique({
+                where: { runId },
+                select: { synthesisJson: true },
+              });
+              return r?.synthesisJson ?? null;
+            }),
+          ]);
+          let synthesis = null;
+          if (synthRow) {
+            try {
+              synthesis = JSON.parse(synthRow);
+            } catch {
+              /* skip */
+            }
+          }
+          if (estimates.length > 0) {
+            bvData = { estimates, phases, synthesis, stakeholders };
+          }
+        } catch {
+          /* business value data optional */
+        }
+        const buffer = await generateExcel(run, useCases, lineageDiscoveredFqns, bvData);
         insertExportRecord(runId, "excel");
         logActivity("exported", {
           userId: userEmail,

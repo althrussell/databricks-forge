@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { resilientFetch } from "@/lib/resilient-fetch";
@@ -16,7 +16,7 @@ import {
 } from "@/components/charts/lazy";
 import { ActivityFeedInline } from "@/components/pipeline/activity-feed";
 import { staggerContainer, staggerItem } from "@/lib/motion";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import {
   BrainCircuit,
   Layers,
@@ -26,6 +26,8 @@ import {
   Plus,
   ArrowRight,
   Sparkles,
+  DollarSign,
+  CheckCircle2,
 } from "lucide-react";
 
 export interface DashboardStats {
@@ -70,6 +72,71 @@ function timeAgo(dateStr: string): string {
   if (days < 30) return `${days}d ago`;
   const months = Math.floor(days / 30);
   return `${months}mo ago`;
+}
+
+function BusinessValueSummary() {
+  const [valueMid, setValueMid] = useState<number | null>(null);
+  const [trackingCount, setTrackingCount] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/business-value/portfolio")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setValueMid(data.totalEstimatedValue?.mid ?? null);
+          const stages = data.byStage ?? {};
+          setTrackingCount(
+            (stages.planned ?? 0) +
+              (stages.in_progress ?? 0) +
+              (stages.delivered ?? 0) +
+              (stages.measured ?? 0),
+          );
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  if (!loaded || (valueMid === null && trackingCount === null)) return null;
+  if (valueMid === 0 && (trackingCount === null || trackingCount === 0)) return null;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {valueMid !== null && valueMid > 0 && (
+        <Link href="/business-value">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardContent className="flex items-center gap-4 pt-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+                <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Estimated Value</p>
+                <p className="text-2xl font-bold">{formatCurrency(valueMid)}</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+      {trackingCount !== null && trackingCount > 0 && (
+        <Link href="/business-value/tracking">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardContent className="flex items-center gap-4 pt-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Implementation Progress</p>
+                <p className="text-2xl font-bold">{trackingCount} use cases in motion</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+    </div>
+  );
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -248,6 +315,13 @@ export function DashboardContent({
           sentiment={successRate === 100 ? "positive" : successRate >= 80 ? "neutral" : "warning"}
         />
       </motion.div>
+
+      {/* ── Business Value Summary ── */}
+      {stats.totalUseCases > 0 && (
+        <motion.div variants={staggerItem}>
+          <BusinessValueSummary />
+        </motion.div>
+      )}
 
       {/* ── Charts ── */}
       {stats.totalUseCases > 0 && (

@@ -34,6 +34,7 @@ import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { runAssetDiscovery } from "./steps/asset-discovery";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
 import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
+import { runBusinessValueAnalysis } from "./steps/business-value-analysis";
 import {
   startJob,
   updateJob,
@@ -79,7 +80,8 @@ const STEPS: StepDef[] = [
   { step: PipelineStep.UsecaseGeneration, progressPct: 45, label: "Generating use cases" },
   { step: PipelineStep.DomainClustering, progressPct: 55, label: "Clustering domains" },
   { step: PipelineStep.Scoring, progressPct: 65, label: "Scoring use cases" },
-  { step: PipelineStep.SqlGeneration, progressPct: 85, label: "Generating SQL" },
+  { step: PipelineStep.SqlGeneration, progressPct: 80, label: "Generating SQL" },
+  { step: PipelineStep.BusinessValueAnalysis, progressPct: 90, label: "Analyzing business value" },
   { step: PipelineStep.GenieRecommendations, progressPct: 100, label: "Building Genie Spaces" },
 ];
 
@@ -493,6 +495,29 @@ export async function startPipeline(runId: string): Promise<void> {
               });
             }
           },
+        );
+      });
+
+      // Step 8: Business Value Analysis (financial quantification, roadmap, synthesis, stakeholders)
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.BusinessValueAnalysis, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.BusinessValueAnalysis,
+          86,
+          undefined,
+          "Analyzing business value and building executive synthesis...",
+        );
+        logger.info("Step 8: Analyzing business value", { runId, step: "business-value-analysis" });
+        await runBusinessValueAnalysis(ctx);
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.BusinessValueAnalysis,
+          90,
+          undefined,
+          "Business value analysis complete",
         );
       });
 

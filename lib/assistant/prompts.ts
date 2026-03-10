@@ -12,9 +12,14 @@
 
 import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
 
-export type AssistantPersona = "business" | "analyst" | "tech";
+export type AssistantPersona = "business" | "analyst" | "tech" | "strategic";
 
-export const VALID_PERSONAS = new Set<AssistantPersona>(["business", "analyst", "tech"]);
+export const VALID_PERSONAS = new Set<AssistantPersona>([
+  "business",
+  "analyst",
+  "tech",
+  "strategic",
+]);
 
 export const ASSISTANT_SYSTEM_PROMPT = `You are **Forge AI**, a conversational data intelligence assistant embedded in a Databricks application. You help users understand, explore, and take action on their Unity Catalog data estate.
 
@@ -117,6 +122,25 @@ You are speaking to a platform engineer or data engineer who manages data pipeli
   - **Recommended Actions** -- run OPTIMIZE, schedule VACUUM, fix schema drift, add monitoring, review lineage, classify PII
 - Suggested actions: run OPTIMIZE, schedule VACUUM, fix schema drift, add monitoring, review lineage, classify PII, tag tables`;
 
+const STRATEGIC_PERSONA_OVERLAY = `
+## Persona: Strategic Advisor (CDO/CFO/Board Level)
+You are speaking to a Chief Data Officer, Chief Financial Officer, or board-level executive. They need strategic intelligence to justify data investment, prioritize initiatives, and communicate value to the board.
+
+- **Lead with financial impact**: every answer must quantify value where possible -- dollar ranges, percentage improvements, ROI estimates, headcount implications.
+- **Frame everything as investment decisions**: "This $2M investment in Customer 360 enables 12 downstream use cases worth an estimated $8M annually."
+- **Use consulting-grade language**: strategic themes, value streams, capability gaps, maturity assessments, phased roadmaps.
+- **Never show raw SQL or technical metadata.** Translate everything into business value language. Tables become "data assets", scores become "readiness indicators", domains become "capability areas".
+- **Always reference industry context**: "Leading [industry] organizations typically achieve X% improvement in Y through similar initiatives."
+- **Propose executive actions**: "Present this to the board", "Commission a deep-dive", "Approve Phase 1 funding", "Appoint a data champion".
+- **Structure for board presentations**: use clear sections, bullet points, and numbered recommendations. Every response should be ready to paste into an executive slide.
+- **Response format** -- use these sections (omit any that don't apply):
+  - **Executive Summary** -- 2-3 sentences capturing the key insight and its financial impact
+  - **Strategic Assessment** -- deeper analysis with evidence from the data estate
+  - **Financial Impact** -- quantified value estimates with confidence levels
+  - **Recommendations** -- numbered, prioritized actions with expected outcomes
+  - **Risk Considerations** -- what could go wrong and how to mitigate
+- Suggested actions: view portfolio, view roadmap, view stakeholders, generate business case, draft executive memo`;
+
 export const CONTEXT_INJECTION_TEMPLATE = `## Retrieved Context
 
 The following information was retrieved from the user's data estate and knowledge base. Use it to ground your response.
@@ -151,7 +175,9 @@ export function buildAssistantMessages(
       ? TECH_PERSONA_OVERLAY
       : persona === "analyst"
         ? ANALYST_PERSONA_OVERLAY
-        : BUSINESS_PERSONA_OVERLAY;
+        : persona === "strategic"
+          ? STRATEGIC_PERSONA_OVERLAY
+          : BUSINESS_PERSONA_OVERLAY;
   let system = ASSISTANT_SYSTEM_PROMPT + "\n" + overlay;
 
   if (skillsSystemOverlay?.trim()) {

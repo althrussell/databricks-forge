@@ -42,6 +42,7 @@ model ForgeRun {
   metadataCacheKey   String?   @map("metadata_cache_key")
   contextSourcesJson String?  @map("context_sources_json")
   schemaSnapshotJson String?  @map("schema_snapshot_json")
+  synthesisJson      String?  @map("synthesis_json")
 
   useCases             ForgeUseCase[]
   exports              ForgeExport[]
@@ -58,6 +59,12 @@ model ForgeRun {
   assetCoverages           ForgeAssetCoverage[]
   qualityMetrics           ForgeQualityMetric[]
   metricViewProposals      ForgeMetricViewProposal[]
+  valueEstimates           ForgeValueEstimate[]
+  roadmapPhases            ForgeRoadmapPhase[]
+  useCaseTracking          ForgeUseCaseTracking[]
+  valueCaptures            ForgeValueCapture[]
+  strategyAlignments       ForgeStrategyAlignment[]
+  stakeholderProfiles      ForgeStakeholderProfile[]
 
   @@map("forge_runs")
 }
@@ -1013,4 +1020,175 @@ model ForgeHealthCheckConfig {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("forge_health_check_config")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Financial Estimates
+// ---------------------------------------------------------------------------
+
+model ForgeValueEstimate {
+  id              String   @id @default(uuid()) @map("estimate_id")
+  runId           String   @map("run_id")
+  useCaseId       String   @map("use_case_id")
+  valueLow        Float    @map("value_low")
+  valueMid        Float    @map("value_mid")
+  valueHigh       Float    @map("value_high")
+  currency        String   @default("USD")
+  valueType       String   @map("value_type") // cost_savings | revenue_uplift | risk_reduction | efficiency_gain
+  confidence      String   @default("medium") // low | medium | high
+  rationale       String?
+  assumptions     String?  // JSON array of assumption strings
+  industryBenchmark String? @map("industry_benchmark")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, useCaseId])
+  @@index([runId])
+  @@map("forge_value_estimates")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Roadmap Phases
+// ---------------------------------------------------------------------------
+
+model ForgeRoadmapPhase {
+  id              String   @id @default(uuid()) @map("phase_id")
+  runId           String   @map("run_id")
+  useCaseId       String   @map("use_case_id")
+  phase           String   // quick_wins | foundation | transformation
+  phaseOrder      Int      @default(0) @map("phase_order")
+  effortEstimate  String?  @map("effort_estimate") // xs | s | m | l | xl
+  dependencies    String?  // JSON array of use case IDs
+  enablers        String?  // JSON array of prerequisite descriptions
+  rationale       String?
+  manualOverride  Boolean  @default(false) @map("manual_override")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, useCaseId])
+  @@index([runId])
+  @@index([phase])
+  @@map("forge_roadmap_phases")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Use Case Lifecycle Tracking
+// ---------------------------------------------------------------------------
+
+model ForgeUseCaseTracking {
+  id              String    @id @default(uuid()) @map("tracking_id")
+  runId           String    @map("run_id")
+  useCaseId       String    @map("use_case_id")
+  stage           String    @default("discovered") // discovered | planned | in_progress | delivered | measured
+  assignedOwner   String?   @map("assigned_owner")
+  plannedDate     DateTime? @map("planned_date")
+  startedDate     DateTime? @map("started_date")
+  deliveredDate   DateTime? @map("delivered_date")
+  measuredDate    DateTime? @map("measured_date")
+  notes           String?   // JSON array of note objects
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, useCaseId])
+  @@index([runId])
+  @@index([stage])
+  @@map("forge_use_case_tracking")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Actual Value Capture
+// ---------------------------------------------------------------------------
+
+model ForgeValueCapture {
+  id              String   @id @default(uuid()) @map("capture_id")
+  runId           String   @map("run_id")
+  useCaseId       String   @map("use_case_id")
+  captureDate     DateTime @map("capture_date")
+  valueType       String   @map("value_type") // cost_savings | revenue_uplift | risk_reduction | efficiency_gain
+  amount          Float
+  currency        String   @default("USD")
+  evidence        String?
+  capturedBy      String?  @map("captured_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([useCaseId])
+  @@map("forge_value_captures")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Strategy Documents
+// ---------------------------------------------------------------------------
+
+model ForgeStrategyDocument {
+  id                String   @id @default(uuid()) @map("strategy_id")
+  title             String
+  rawContent        String   @map("raw_content")
+  parsedInitiatives String?  @map("parsed_initiatives") // JSON: StrategyInitiative[]
+  alignmentScore    Float?   @map("alignment_score")
+  status            String   @default("draft") // draft | analyzed | archived
+  createdBy         String?  @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
+
+  alignments ForgeStrategyAlignment[]
+
+  @@index([status])
+  @@map("forge_strategy_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Strategy-to-UseCase Alignment
+// ---------------------------------------------------------------------------
+
+model ForgeStrategyAlignment {
+  id              String   @id @default(uuid()) @map("alignment_id")
+  strategyId      String   @map("strategy_id")
+  runId           String   @map("run_id")
+  initiativeIndex Int      @map("initiative_index")
+  useCaseId       String?  @map("use_case_id")
+  confidence      Float    @default(0)
+  gapType         String?  @map("gap_type") // supported | partial | blocked | unmatched
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  strategy ForgeStrategyDocument @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  run      ForgeRun              @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([strategyId])
+  @@index([runId])
+  @@index([useCaseId])
+  @@map("forge_strategy_alignments")
+}
+
+// ---------------------------------------------------------------------------
+// Business Value: Stakeholder Intelligence
+// ---------------------------------------------------------------------------
+
+model ForgeStakeholderProfile {
+  id               String   @id @default(uuid()) @map("profile_id")
+  runId            String   @map("run_id")
+  role             String
+  department       String
+  useCaseCount     Int      @default(0) @map("use_case_count")
+  totalValue       Float    @default(0) @map("total_value")
+  domains          String?  // JSON array of domain names
+  useCaseTypes     String?  @map("use_case_types") // JSON: { AI: n, Statistical: n, Geospatial: n }
+  changeComplexity String?  @map("change_complexity") // low | medium | high
+  isChampion       Boolean  @default(false) @map("is_champion")
+  isSponsor        Boolean  @default(false) @map("is_sponsor")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  run ForgeRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([department])
+  @@map("forge_stakeholder_profiles")
 }

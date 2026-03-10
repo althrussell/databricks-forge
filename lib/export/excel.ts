@@ -8,7 +8,14 @@
  */
 
 import ExcelJS from "exceljs";
-import type { PipelineRun, UseCase } from "@/lib/domain/types";
+import type {
+  PipelineRun,
+  UseCase,
+  ValueEstimate,
+  RoadmapPhaseAssignment,
+  ExecutiveSynthesis,
+  StakeholderProfile,
+} from "@/lib/domain/types";
 import { computeDomainStats, effectiveScores } from "@/lib/domain/scoring";
 
 // ---------------------------------------------------------------------------
@@ -110,10 +117,18 @@ function annotateTableFqn(fqn: string, lineageFqns: Set<string>): string {
   return lineageFqns.has(fqn) ? `${fqn} (via lineage)` : fqn;
 }
 
+export interface BusinessValueExportData {
+  estimates: ValueEstimate[];
+  phases: RoadmapPhaseAssignment[];
+  synthesis: ExecutiveSynthesis | null;
+  stakeholders: StakeholderProfile[];
+}
+
 export async function generateExcel(
   run: PipelineRun,
   useCases: UseCase[],
   lineageDiscoveredFqns: string[] = [],
+  businessValueData?: BusinessValueExportData,
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const workbook = new ExcelJS.Workbook();
@@ -375,6 +390,128 @@ export async function generateExcel(
       activeCell: "B2",
     },
   ];
+
+  // =====================================================================
+  // 4. BUSINESS VALUE SHEET (if data available)
+  // =====================================================================
+  if (businessValueData && businessValueData.estimates.length > 0) {
+    const bvSheet = workbook.addWorksheet("Business Value");
+    bvSheet.columns = [
+      { header: "Use Case", key: "name", width: 35 },
+      { header: "Domain", key: "domain", width: 18 },
+      { header: "Value Type", key: "valueType", width: 16 },
+      { header: "Low ($)", key: "valueLow", width: 14 },
+      { header: "Mid ($)", key: "valueMid", width: 14 },
+      { header: "High ($)", key: "valueHigh", width: 14 },
+      { header: "Confidence", key: "confidence", width: 12 },
+      { header: "Phase", key: "phase", width: 16 },
+      { header: "Effort", key: "effort", width: 10 },
+      { header: "Rationale", key: "rationale", width: 50 },
+    ];
+
+    const phaseMap = new Map(businessValueData.phases.map((p) => [p.useCaseId, p]));
+    const useCaseMap = new Map(useCases.map((uc) => [uc.id, uc]));
+
+    for (const est of businessValueData.estimates) {
+      const uc = useCaseMap.get(est.useCaseId);
+      const phase = phaseMap.get(est.useCaseId);
+      bvSheet.addRow({
+        name: uc?.name ?? est.useCaseId,
+        domain: uc?.domain ?? "",
+        valueType: est.valueType.replace(/_/g, " "),
+        valueLow: est.valueLow,
+        valueMid: est.valueMid,
+        valueHigh: est.valueHigh,
+        confidence: est.confidence,
+        phase: phase?.phase?.replace(/_/g, " ") ?? "",
+        effort: phase?.effortEstimate ?? "",
+        rationale: est.rationale ?? "",
+      });
+    }
+
+    styleHeaderRow(bvSheet);
+    styleDataRows(bvSheet, 2, bvSheet.rowCount);
+
+    for (let r = 2; r <= bvSheet.rowCount; r++) {
+      const row = bvSheet.getRow(r);
+      for (const c of [4, 5, 6]) {
+        row.getCell(c).numFmt = "#,##0";
+      }
+    }
+
+    bvSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 10 } };
+    bvSheet.views = [{ state: "frozen", xSplit: 1, ySplit: 1, activeCell: "B2" }];
+
+    // Synthesis sub-sheet
+    if (businessValueData.synthesis) {
+      const synthSheet = workbook.addWorksheet("Executive Synthesis");
+      synthSheet.columns = [
+        { header: "Type", key: "type", width: 22 },
+        { header: "Title", key: "title", width: 35 },
+        { header: "Description", key: "description", width: 70 },
+        { header: "Priority / Impact", key: "level", width: 16 },
+      ];
+
+      const syn = businessValueData.synthesis;
+      for (const f of syn.keyFindings) {
+        synthSheet.addRow({
+          type: "Key Finding",
+          title: f.title,
+          description: f.description,
+          level: f.severity,
+        });
+      }
+      for (const r of syn.strategicRecommendations) {
+        synthSheet.addRow({
+          type: "Recommendation",
+          title: r.title,
+          description: r.description,
+          level: r.priority,
+        });
+      }
+      for (const r of syn.riskCallouts) {
+        synthSheet.addRow({
+          type: "Risk Callout",
+          title: r.title,
+          description: r.description,
+          level: r.impact,
+        });
+      }
+
+      styleHeaderRow(synthSheet);
+      styleDataRows(synthSheet, 2, synthSheet.rowCount);
+    }
+
+    // Stakeholders sub-sheet
+    if (businessValueData.stakeholders.length > 0) {
+      const stSheet = workbook.addWorksheet("Stakeholders");
+      stSheet.columns = [
+        { header: "Role", key: "role", width: 28 },
+        { header: "Department", key: "department", width: 20 },
+        { header: "Use Cases", key: "useCaseCount", width: 12 },
+        { header: "Total Value ($)", key: "totalValue", width: 16 },
+        { header: "Change Complexity", key: "changeComplexity", width: 18 },
+        { header: "Champion", key: "isChampion", width: 12 },
+        { header: "Sponsor", key: "isSponsor", width: 12 },
+      ];
+
+      for (const s of businessValueData.stakeholders) {
+        stSheet.addRow({
+          role: s.role,
+          department: s.department,
+          useCaseCount: s.useCaseCount,
+          totalValue: s.totalValue,
+          changeComplexity: s.changeComplexity ?? "",
+          isChampion: s.isChampion ? "Yes" : "",
+          isSponsor: s.isSponsor ? "Yes" : "",
+        });
+      }
+
+      styleHeaderRow(stSheet);
+      styleDataRows(stSheet, 2, stSheet.rowCount);
+      stSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
+    }
+  }
 
   // =====================================================================
   // Generate buffer

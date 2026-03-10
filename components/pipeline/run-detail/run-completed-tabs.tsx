@@ -10,6 +10,7 @@ import { OutcomeMapTabContent } from "./outcome-map-tab-content";
 import { UseCasesTabContent } from "./use-cases-tab-content";
 import { AIObservabilityTab } from "./ai-observability-tab";
 import { PromptVersionsCard } from "./prompt-versions-card";
+import { BusinessValueTab } from "./business-value-tab";
 import { RUN_DETAIL } from "@/lib/help-text";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
@@ -112,6 +113,14 @@ export function RunCompletedTabs({
             <TooltipContent>{RUN_DETAIL.tabDashboards}</TooltipContent>
           </Tooltip>
         )}
+        {useCases.length > 0 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger value="business-value">Business Value</TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Financial estimates, roadmap, and executive synthesis</TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <TabsTrigger value="observability" onClick={onFetchPromptLogs}>
@@ -166,6 +175,12 @@ export function RunCompletedTabs({
       {useCases.length > 0 && (
         <TabsContent value="dashboards" className="pt-4">
           <DashboardsTab runId={run.runId} />
+        </TabsContent>
+      )}
+
+      {useCases.length > 0 && (
+        <TabsContent value="business-value" className="pt-4">
+          <BusinessValueTab runId={runId} />
         </TabsContent>
       )}
 

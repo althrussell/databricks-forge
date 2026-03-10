@@ -40,6 +40,16 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    label: "Business Value",
+    items: [
+      { href: "/business-value", label: "Portfolio", icon: PortfolioIcon },
+      { href: "/business-value/roadmap", label: "Roadmap", icon: RoadmapIcon },
+      { href: "/business-value/strategy", label: "Strategy", icon: StrategyIcon },
+      { href: "/business-value/stakeholders", label: "Stakeholders", icon: StakeholdersIcon },
+      { href: "/business-value/tracking", label: "Value Tracking", icon: TrackingIcon },
+    ],
+  },
+  {
     label: "Deploy",
     items: [
       { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
@@ -535,6 +545,98 @@ function ConnectionsIcon({ className }: { className?: string }) {
       <path d="M9 17H7A5 5 0 0 1 7 7h2" />
       <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
       <line x1="8" x2="16" y1="12" y2="12" />
+    </svg>
+  );
+}
+
+function PortfolioIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </svg>
+  );
+}
+
+function RoadmapIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 7 17l-5-5" />
+      <path d="m22 10-7.5 7.5L13 16" />
+    </svg>
+  );
+}
+
+function StrategyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function StakeholdersIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function TrackingIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
   );
 }
