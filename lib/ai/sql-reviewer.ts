@@ -399,9 +399,12 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
       verdict: result.verdict,
       qualityScore: result.qualityScore,
       issueCount: result.issues.length,
+      endpoint,
+    });
+    logger.debug("SQL review detail", {
+      surface: opts.surface,
       issueCategories: summariseIssues(result.issues),
       topIssues: topIssueMessages(result.issues),
-      endpoint,
     });
 
     return result;
@@ -421,9 +424,12 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
             verdict: result.verdict,
             qualityScore: result.qualityScore,
             issueCount: result.issues.length,
+            endpoint: fallback,
+          });
+          logger.debug("SQL review detail (fallback)", {
+            surface: opts.surface,
             issueCategories: summariseIssues(result.issues),
             topIssues: topIssueMessages(result.issues),
-            endpoint: fallback,
           });
           return result;
         } catch (fallbackErr) {
@@ -479,11 +485,14 @@ export async function reviewAndFixSql(
       verdict: result.verdict,
       qualityScore: result.qualityScore,
       issueCount: result.issues.length,
+      hasFix: !!result.fixedSql,
+      endpoint,
+    });
+    logger.debug("SQL review+fix detail", {
+      surface: opts.surface,
       issueCategories: summariseIssues(result.issues),
       topIssues: topIssueMessages(result.issues),
-      hasFix: !!result.fixedSql,
       sqlPreview: sql.substring(0, 120),
-      endpoint,
     });
 
     return result;
@@ -503,11 +512,14 @@ export async function reviewAndFixSql(
             verdict: result.verdict,
             qualityScore: result.qualityScore,
             issueCount: result.issues.length,
+            hasFix: !!result.fixedSql,
+            endpoint: fallback,
+          });
+          logger.debug("SQL review+fix detail (fallback)", {
+            surface: opts.surface,
             issueCategories: summariseIssues(result.issues),
             topIssues: topIssueMessages(result.issues),
-            hasFix: !!result.fixedSql,
             sqlPreview: sql.substring(0, 120),
-            endpoint: fallback,
           });
           return result;
         } catch (fallbackErr) {

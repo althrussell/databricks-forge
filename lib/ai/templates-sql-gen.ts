@@ -95,19 +95,33 @@ When using \`ai_query()\`, use this model endpoint: \`{sql_model_serving}\`
 - **ROW LIMIT (CRITICAL)**: ALWAYS \`LIMIT\` the input to \`ai_query()\` or \`ai_gen()\` to at most **1000 rows**. AI function calls are expensive per row -- unbounded queries can cost thousands of dollars. Filter or aggregate data BEFORE passing to AI functions
 - When using \`ai_query()\`, include \`modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024)\`
 - **VALID NAMED PARAMETERS ONLY**: ai_query() accepts ONLY these named parameters: \`modelParameters\`, \`responseFormat\`, \`failOnError\`. NEVER use \`systemPrompt\`, \`system_prompt\`, or any other parameter name -- they will cause UNRECOGNIZED_PARAMETER_NAME errors. Embed persona/system instructions inside the request string via CONCAT.
-- **STRUCTURED OUTPUT (MANDATORY PATTERN)**: When using \`failOnError => false\`, the result field is ALWAYS STRING regardless of \`responseFormat\`. Do NOT use \`responseFormat\` with \`failOnError => false\` -- accessing nested struct fields on the result (e.g. \`ai_result.result.field\`) will cause INVALID_EXTRACT_BASE_FIELD_TYPE errors. Instead use this pattern:
+- **STRUCTURED OUTPUT (MANDATORY PATTERN)**: When using \`failOnError => false\`, the result field is ALWAYS STRING regardless of \`responseFormat\`. Do NOT use \`responseFormat\` with \`failOnError => false\` -- accessing nested struct fields on the result (e.g. \`ai_result.result.field\`) will cause INVALID_EXTRACT_BASE_FIELD_TYPE errors. Instead use this multi-CTE pattern:
   1. Include JSON format instructions in the prompt text via CONCAT: \`'Respond ONLY with valid JSON in this format: {"field1": "value", "field2": 0}'\`
-  2. Call \`ai_query(endpoint, prompt, modelParameters => named_struct(...), failOnError => false) AS ai_result\`
-  3. Parse the STRING result: \`from_json(ai_result.result, 'STRUCT<field1: TYPE, field2: TYPE>') AS parsed_result\`
-  4. Access parsed fields: \`parsed_result.field1\`, \`parsed_result.field2\`; access errors: \`ai_result.errorMessage\`
+  2. **CTE 1** -- call ai_query: \`SELECT *, ai_query(endpoint, prompt, modelParameters => named_struct(...), failOnError => false) AS ai_result FROM prompt_builder LIMIT 1000\`
+  3. **CTE 2** -- parse JSON in a SEPARATE CTE: \`SELECT *, from_json(ai_result.result, 'STRUCT<field1: TYPE, field2: TYPE>') AS parsed_result FROM ai_inference\`
+  4. **Final SELECT** -- access parsed fields: \`parsed_result.field1\`, \`parsed_result.field2\`; access errors: \`ai_result.errorMessage\`
   **ALIAS NAMING**: ALWAYS use exactly \`ai_result\` for the ai_query output and \`parsed_result\` for the from_json output. NEVER abbreviate to \`parsed\`, \`result\`, \`ai_res\`, or other variations.
+  **CRITICAL**: Each step MUST be in its own CTE. NEVER put \`ai_query()\` and \`from_json()\` in the same SELECT -- that is sibling alias reuse and will fail at runtime.
   Example:
   \`\`\`
-  ai_query('{sql_model_serving}', ai_prompt, modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024), failOnError => false) AS ai_result,
-  from_json(ai_result.result, 'STRUCT<confidence: INT, category: STRING, reasoning: STRING>') AS parsed_result
+  -- CTE: call ai_query
+  ai_inference AS (
+    SELECT *, ai_query('{sql_model_serving}', ai_prompt, modelParameters => named_struct('temperature', 0.3, 'max_tokens', 1024), failOnError => false) AS ai_result
+    FROM prompt_builder
+    LIMIT 1000
+  ),
+  -- CTE: parse JSON (MUST be a separate CTE)
+  parsed AS (
+    SELECT *, from_json(ai_result.result, 'STRUCT<confidence: INT, category: STRING, reasoning: STRING>') AS parsed_result
+    FROM ai_inference
+  )
+  -- Final SELECT: access parsed fields
+  SELECT parsed_result.confidence, parsed_result.category, parsed_result.reasoning, ai_result.errorMessage, ai_prompt AS ai_sys_prompt
+  FROM parsed
   \`\`\`
-  **WRONG** (will be rejected): \`... AS parsed\`, \`parsed.confidence\`, \`res.field\`
-  **CORRECT**: \`... AS parsed_result\`, \`parsed_result.confidence\`
+  **WRONG** (sibling alias reuse -- runtime error):
+  \`SELECT ai_query(...) AS ai_result, from_json(ai_result.result, ...) AS parsed_result, parsed_result.field1\`
+  **CORRECT**: \`ai_result\` in one CTE, \`from_json()\` in the next CTE, field access in the final SELECT
 - **ERROR HANDLING FOR BATCH**: When processing many rows, ALWAYS use \`failOnError => false\` so one bad row does not abort the entire query. Access raw result string via \`ai_result.result\`, errors via \`ai_result.errorMessage\`, and parsed fields via \`from_json()\` as described above
 - **PERSONA ENRICHMENT (MANDATORY)**: Every \`ai_query()\` persona MUST include business context. Do NOT use generic personas. Pattern:
   \`CONCAT('You are a [Role] for {business_name} focused on [relevant business context]. Strategic goals include: [relevant goals]. Analyze...')\`
