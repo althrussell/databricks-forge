@@ -93,7 +93,42 @@ Key interfaces: `ValueEstimate`, `RoadmapPhaseAssignment`, `UseCaseTrackingEntry
   and dollar cost ranges using `FTE_MONTHLY_COST` ($15,000/month)
 - **ROI calculation** -- `calculateRoi(annualValueMid, effort)` returns net ROI
   percentage, payback period in months, and net value (mid value minus cost)
+- **LOE matrix estimation** -- `estimateLOEFromModelType(modelType, mcCount)` uses
+  the Master Repository 4x3 matrix (model type x data criticality) to derive
+  effort directly from use case characteristics (maps to `s`/`m`/`l`)
+- **Data access feasibility** -- `estimateDataAccessFeasibility(industryId, assetIds)`
+  scores 0-1 based on Databricks connectivity ratings (Lakeflow, UC Federation,
+  Lakebridge) for referenced data assets
 - Helper labels and ordering for UI display
+
+### Strategy Alignment
+
+`lib/domain/strategy-alignment.ts` provides deterministic strategy alignment
+using the Master Repository's strategic taxonomy:
+
+- **`buildStrategyAlignmentMap(industryId, useCaseNames)`** -- fuzzy-matches
+  pipeline use cases against Master Repository strategic imperatives and pillars
+  (exact, substring, then token overlap with 40% threshold)
+- **`buildStrategyAlignmentPrompt(industryId, useCaseNames)`** -- compact markdown
+  summary injected into the Executive Synthesis prompt for strategy-aware findings
+
+The Executive Synthesis pass (Pass 3) automatically includes strategy alignment
+context when industry enrichment data is available.
+
+### Master Repository Enrichment
+
+The Master Repository (`scripts/convert-master-repo.mjs`) enriches the industry
+outcome maps with structured benchmark, data asset, and strategic alignment data:
+
+- **562 reference use cases** across 11 industries with benchmarks, model types,
+  strategic imperatives, and data asset mappings (MC/VA criticality)
+- **398 data assets** with Databricks connectivity scores
+- Data flows through the **LLM Skills system** (`lib/skills/content/industry-enrichment.ts`)
+  as 5 additional chunk extractors: benchmark context, model type guidance,
+  strategic alignment, data asset requirements, and LOE patterns
+- Embedded into **pgvector** as `industry_benchmark` and `industry_data_asset`
+  entity kinds for RAG retrieval
+- CLI update process: `npm run sync-master-repo -- --input path/to/xlsx`
 
 ---
 
@@ -341,7 +376,12 @@ lib/
     portfolio.ts                     Cross-run portfolio aggregation (+ latestRunId)
   domain/
     types.ts                         ValueEstimate, RoadmapPhase, etc.
-    cost-modeling.ts                 T-shirt sizing, ROI, payback calculations
+    cost-modeling.ts                 T-shirt sizing, ROI, LOE matrix, data access feasibility
+    strategy-alignment.ts            Deterministic strategy alignment from Master Repository
+    industry-outcomes/
+      master-repo-types.ts           MasterRepoUseCase, ReferenceDataAsset types
+      master-repo-registry.ts        Enrichment data lookup by industry ID
+      *.enrichment.ts                Auto-generated enrichment modules (11 industries)
   export/
     brand.ts                         Centralised brand constants (BRAND, PPTX, EXCEL, PDF)
     excel-helpers.ts                 Shared ExcelJS styling utilities
@@ -393,9 +433,19 @@ components/
 
 __tests__/
   domain/
-    cost-modeling.test.ts            Unit tests for cost modeling
+    cost-modeling.test.ts            Unit tests for cost modeling + LOE matrix + feasibility
+    benchmarks.test.ts               Benchmark pack validation (baseline + master-repo)
   export/
     brand.test.ts                    Unit tests for brand constants
+
+scripts/
+  convert-master-repo.mjs            XLSX → TypeScript/JSON conversion for Master Repository
+  seed-benchmarks.mjs                Seed benchmark records to Lakebase (includes master-repo packs)
+
+data/
+  benchmark/
+    *-baseline.json                  Curated baseline benchmark packs
+    *-master.json                    Master Repository benchmark packs (auto-generated)
 
 prisma/
   schema.prisma                      7 new models (see Data Model above)

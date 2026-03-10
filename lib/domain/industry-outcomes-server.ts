@@ -9,6 +9,8 @@
  */
 
 import { INDUSTRY_OUTCOMES, getIndustryOutcome, type IndustryOutcome } from "./industry-outcomes";
+import { getMasterRepoEnrichment } from "./industry-outcomes/master-repo-registry";
+import type { MasterRepoUseCase } from "./industry-outcomes/master-repo-types";
 
 // ---------------------------------------------------------------------------
 // Dynamic Registry (built-in + custom from Lakebase)
@@ -301,6 +303,15 @@ export async function buildReferenceUseCasesPrompt(
     "",
   ];
 
+  // Build lookup of Master Repository enrichment by use case name
+  const enrichment = getMasterRepoEnrichment(industryId);
+  const enrichmentIndex = new Map<string, MasterRepoUseCase>();
+  if (enrichment) {
+    for (const uc of enrichment.useCases) {
+      enrichmentIndex.set(uc.name.toLowerCase(), uc);
+    }
+  }
+
   let count = 0;
   for (const objective of industry.objectives) {
     if (count >= maxUseCases) break;
@@ -318,7 +329,27 @@ export async function buildReferenceUseCasesPrompt(
         if (!isRelevant(`${uc.name} ${uc.description}`) && domainTokens.length > 0) {
           continue;
         }
-        lines.push(`- **${uc.name}**: ${uc.description}`);
+        let line = `- **${uc.name}**: ${uc.description}`;
+
+        // Append Master Repository enrichment (benchmark, model type, strategy)
+        const mr = enrichmentIndex.get(uc.name.toLowerCase());
+        if (mr) {
+          const extras: string[] = [];
+          if (mr.benchmarkImpact && mr.kpiTarget) {
+            extras.push(`KPI: ${mr.kpiTarget} (${mr.benchmarkImpact})`);
+          }
+          if (mr.modelType) {
+            extras.push(`Model: ${mr.modelType}`);
+          }
+          if (mr.strategicImperative) {
+            extras.push(`Strategy: ${mr.strategicImperative}`);
+          }
+          if (extras.length > 0) {
+            line += ` [${extras.join(" | ")}]`;
+          }
+        }
+
+        lines.push(line);
         count++;
       }
       lines.push("");
@@ -360,6 +391,7 @@ export async function buildIndustryContextPrompt(industryId: string): Promise<st
 
 /**
  * Build industry KPIs string for scoring prompt enrichment.
+ * Includes benchmark impacts from Master Repository when available.
  */
 export async function buildIndustryKPIsPrompt(industryId: string): Promise<string> {
   const industry = await getIndustryOutcomeAsync(industryId);
@@ -376,6 +408,23 @@ export async function buildIndustryKPIsPrompt(industryId: string): Promise<strin
     for (const priority of objective.priorities) {
       if (priority.kpis.length > 0) {
         lines.push(`**${priority.name}**: ${priority.kpis.join("; ")}`);
+      }
+    }
+  }
+
+  // Append benchmark calibration data from Master Repository
+  const enrichment = getMasterRepoEnrichment(industryId);
+  if (enrichment) {
+    const benchmarks = enrichment.useCases
+      .filter((uc) => uc.benchmarkImpact && uc.kpiTarget)
+      .slice(0, 10);
+
+    if (benchmarks.length > 0) {
+      lines.push("");
+      lines.push("**Industry Benchmark Calibration:**");
+      for (const uc of benchmarks) {
+        const src = uc.benchmarkSource ? ` (${uc.benchmarkSource})` : "";
+        lines.push(`- ${uc.name}: ${uc.kpiTarget} ${uc.benchmarkImpact}${src}`);
       }
     }
   }

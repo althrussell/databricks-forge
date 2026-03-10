@@ -73,9 +73,7 @@ function kpiBox(
     .text(label, x + 5, y + 30, { width: w - 10, align: "center" });
 }
 
-export async function generateExecutivePdf(
-  portfolio: BusinessValuePortfolio,
-): Promise<Buffer> {
+export async function generateExecutivePdf(portfolio: BusinessValuePortfolio): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Uint8Array[] = [];
     const doc = new PDFDocument({

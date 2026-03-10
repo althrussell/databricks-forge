@@ -157,9 +157,12 @@ ${USER_DATA_DEFENCE}
 **Financial Estimates:**
 {value_summary}
 
+**Strategy Alignment:**
+{strategy_alignment}
+
 # Instructions
 
-Synthesize ALL the analysis inputs into a concise executive briefing. This must be the kind of output a CDO can present to the board in 5 minutes.
+Synthesize ALL the analysis inputs into a concise executive briefing. This must be the kind of output a CDO can present to the board in 5 minutes. When strategy alignment data is available, reference how discovered use cases map to industry-recognized strategic imperatives.
 
 Produce EXACTLY:
 1. **3-5 Key Findings** -- the most important things a data leader needs to know. Mix opportunities and risks. Each finding should be specific to THIS business, not generic.
