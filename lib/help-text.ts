@@ -79,6 +79,8 @@ export const PIPELINE_STEPS = {
     "Scores use cases on 4 dimensions, deduplicates similar ones, and applies quality calibration.",
   "sql-generation":
     "Generates bespoke SQL for each use case, validated against your actual table schemas.",
+  "business-value-analysis":
+    "Quantifies financial value, builds implementation roadmap, generates executive synthesis, and identifies stakeholders.",
 } as const;
 
 // ── Export formats ──────────────────────────────────────────────────
