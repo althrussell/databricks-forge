@@ -221,6 +221,7 @@ Analyze the beneficiary and sponsor fields from each use case. Normalize them in
   {
     "role": "Chief Marketing Officer",
     "department": "Marketing",
+    "use_case_ids": ["uc-id-1", "uc-id-2"],
     "use_case_count": 8,
     "domains": ["Customer Intelligence", "Revenue Optimization"],
     "use_case_types": { "AI": 5, "Statistical": 3, "Geospatial": 0 },
@@ -231,6 +232,7 @@ Analyze the beneficiary and sponsor fields from each use case. Normalize them in
 ]
 \`\`\`
 
+use_case_ids: array of use_case_id values from the input that this stakeholder is beneficiary or sponsor of
 change_complexity: low (reporting/dashboards) | medium (new tools/processes) | high (organizational restructuring, new skills)
 is_champion: true if this stakeholder should champion the program (highest value + involvement)
 is_sponsor: true if this stakeholder appears as sponsor on use cases`;

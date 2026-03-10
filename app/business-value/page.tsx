@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,11 +12,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageHeader } from "@/components/page-header";
-import { getPortfolioData } from "@/lib/lakebase/portfolio";
+import { getPortfolioData, getPortfolioUseCases } from "@/lib/lakebase/portfolio";
 import { formatCurrency } from "@/lib/utils";
 import type { BusinessValuePortfolio } from "@/lib/domain/types";
+import type { PortfolioUseCase } from "@/lib/lakebase/portfolio";
+import {
+  TrendingUp,
+  Zap,
+  DollarSign,
+  BarChart3,
+  AlertTriangle,
+  Lightbulb,
+  Target,
+  ArrowRight,
+  Clock,
+  Layers,
+  ShieldCheck,
+} from "lucide-react";
+import { PortfolioDrillDown } from "@/components/business-value/portfolio-drill-down";
 
 export const dynamic = "force-dynamic";
 
@@ -24,52 +39,45 @@ function PortfolioSkeleton() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-28 rounded-xl" />
+          <Skeleton key={i} className="h-32 rounded-xl" />
         ))}
       </div>
-      <Skeleton className="h-64 w-full" />
-      <Skeleton className="h-48 w-full" />
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <Skeleton className="h-64 w-full rounded-xl" />
     </div>
   );
 }
 
-function formatValueRange(low: number, mid: number, high: number): string {
-  if (low === 0 && mid === 0 && high === 0) return "$0";
-  return `${formatCurrency(low)} - ${formatCurrency(high)}`;
+function formatValueRange(low: number, high: number): string {
+  if (low === 0 && high === 0) return "$0";
+  return `${formatCurrency(low)} – ${formatCurrency(high)}`;
 }
 
-function InsightCard({
-  title,
-  description,
-  severity,
-}: {
-  title: string;
-  description: string;
-  severity: "opportunity" | "risk" | "insight";
-}) {
-  const borderColor =
-    severity === "opportunity"
-      ? "border-l-green-500"
-      : severity === "risk"
-        ? "border-l-red-500"
-        : "border-l-blue-500";
+function SeverityIcon({ severity }: { severity: "opportunity" | "risk" | "insight" }) {
+  if (severity === "opportunity") return <TrendingUp className="h-4 w-4 text-emerald-500" />;
+  if (severity === "risk") return <AlertTriangle className="h-4 w-4 text-red-400" />;
+  return <Lightbulb className="h-4 w-4 text-blue-400" />;
+}
 
+function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
+  const cls =
+    priority === "high"
+      ? "bg-red-500/15 text-red-400 border-red-500/30"
+      : priority === "medium"
+        ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+        : "bg-slate-500/15 text-slate-400 border-slate-500/30";
   return (
-    <Card className={`border-l-4 ${borderColor}`}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
+    <Badge variant="outline" className={cls}>
+      {priority}
+    </Badge>
   );
 }
 
 async function PortfolioContent() {
   let portfolio: BusinessValuePortfolio;
+  let useCases: PortfolioUseCase[];
   try {
-    portfolio = await getPortfolioData();
+    [portfolio, useCases] = await Promise.all([getPortfolioData(), getPortfolioUseCases()]);
   } catch {
     return (
       <Card>
@@ -103,105 +111,107 @@ async function PortfolioContent() {
 
   const synthesis = portfolio.latestSynthesis;
   const keyFindings = synthesis?.keyFindings ?? [];
-  const displayFindings = keyFindings.slice(0, 5);
+  const recommendations = synthesis?.strategicRecommendations ?? [];
+  const risks = synthesis?.riskCallouts ?? [];
 
   const topDomains = [...portfolio.byDomain]
-    .sort((a, b) => (b.valueMid || b.useCaseCount) - (a.valueMid || a.useCaseCount))
-    .slice(0, 6);
+    .sort((a, b) => b.valueMid - a.valueMid || b.useCaseCount - a.useCaseCount)
+    .slice(0, 8);
+  const maxDomainValue = Math.max(...topDomains.map((d) => d.valueMid || d.useCaseCount), 1);
 
-  const maxDomainValue = Math.max(
-    ...portfolio.byDomain.map((d) => d.valueMid || d.useCaseCount),
-    1,
-  );
+  const totalPhaseCount = Object.values(portfolio.byPhase).reduce((s, p) => s + p.count, 0);
 
   return (
     <div className="space-y-8">
-      {displayFindings.length > 0 && (
-        <section>
-          <h2 className="mb-4 text-lg font-semibold">Key Findings</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {displayFindings.map((f, i) => (
-              <InsightCard
-                key={i}
-                title={f.title}
-                description={f.description}
-                severity={f.severity}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Hero KPI Strip */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-emerald-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <DollarSign className="h-3.5 w-3.5" />
+              Total Estimated Value
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">
+              {formatValueRange(
+                portfolio.totalEstimatedValue.low,
+                portfolio.totalEstimatedValue.high,
+              )}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Mid-point: {formatCurrency(portfolio.totalEstimatedValue.mid)}
+            </p>
+          </CardContent>
+        </Card>
 
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">Value Overview</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Estimated Value
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {formatValueRange(
-                  portfolio.totalEstimatedValue.low,
-                  portfolio.totalEstimatedValue.mid,
-                  portfolio.totalEstimatedValue.high,
-                )}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Quick Wins
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {synthesis?.quickWinCount ?? portfolio.byPhase.quick_wins.count}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Delivered Value
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(portfolio.deliveredValue)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Use Cases</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{portfolio.totalUseCases}</p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Zap className="h-3.5 w-3.5" />
+              Quick Wins
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">
+              {portfolio.byPhase.quick_wins.count}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Ready to start in 0–3 months</p>
+          </CardContent>
+        </Card>
 
-      {topDomains.length > 0 && (
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-blue-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Delivered Value
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">
+              {formatCurrency(portfolio.deliveredValue)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {portfolio.byStage.delivered + portfolio.byStage.measured} use cases delivered
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-violet-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Use Cases
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{portfolio.totalUseCases}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Across {portfolio.byDomain.length} domains
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Executive Insights */}
+      {keyFindings.length > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-semibold">Strategic Themes</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {topDomains.map((d) => (
-              <Card key={d.domain}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">{d.domain}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold">
-                      {formatCurrency(d.valueMid || d.useCaseCount * 1000)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {d.useCaseCount} use cases
-                    </span>
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <Target className="h-4 w-4 text-primary" />
+            Key Findings
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {keyFindings.slice(0, 6).map((f, i) => (
+              <Card key={i} className="group transition-colors hover:border-primary/30">
+                <CardContent className="pt-4 pb-4">
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <SeverityIcon severity={f.severity} />
+                      <span className="text-sm font-medium leading-tight">{f.title}</span>
+                    </div>
+                    {f.domain && (
+                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                        {f.domain}
+                      </Badge>
+                    )}
                   </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{f.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -209,99 +219,192 @@ async function PortfolioContent() {
         </section>
       )}
 
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">Phase Distribution</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Quick Wins</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{portfolio.byPhase.quick_wins.count}</p>
-              <p className="text-xs text-muted-foreground">0-3 months</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Foundation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{portfolio.byPhase.foundation.count}</p>
-              <p className="text-xs text-muted-foreground">3-9 months</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Transformation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{portfolio.byPhase.transformation.count}</p>
-              <p className="text-xs text-muted-foreground">9-18 months</p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {portfolio.byDomain.length > 0 && (
+      {/* Delivery Pipeline */}
+      {totalPhaseCount > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-semibold">Domain Heatmap</h2>
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <Clock className="h-4 w-4 text-primary" />
+            Delivery Pipeline
+          </h2>
+          <Card>
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center gap-2">
+                {(
+                  [
+                    {
+                      key: "quick_wins" as const,
+                      label: "Quick Wins",
+                      time: "0–3 mo",
+                      color: "bg-amber-500",
+                    },
+                    {
+                      key: "foundation" as const,
+                      label: "Foundation",
+                      time: "3–9 mo",
+                      color: "bg-blue-500",
+                    },
+                    {
+                      key: "transformation" as const,
+                      label: "Transformation",
+                      time: "9–18 mo",
+                      color: "bg-violet-500",
+                    },
+                  ] as const
+                ).map((phase, idx) => {
+                  const count = portfolio.byPhase[phase.key].count;
+                  const pct = totalPhaseCount > 0 ? (count / totalPhaseCount) * 100 : 0;
+                  return (
+                    <div
+                      key={phase.key}
+                      className="flex items-center gap-2"
+                      style={{ flex: pct || 1 }}
+                    >
+                      {idx > 0 && (
+                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                      )}
+                      <div className="w-full">
+                        <div className="mb-1 flex items-baseline justify-between">
+                          <span className="text-xs font-medium">{phase.label}</span>
+                          <span className="text-xs text-muted-foreground">{phase.time}</span>
+                        </div>
+                        <div className="relative h-10 w-full overflow-hidden rounded-md bg-muted/50">
+                          <div
+                            className={`absolute inset-y-0 left-0 ${phase.color} opacity-20`}
+                            style={{ width: "100%" }}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-lg font-bold">{count}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* Domain Heatmap */}
+      {topDomains.length > 0 && (
+        <section>
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <Layers className="h-4 w-4 text-primary" />
+            Domain Performance
+          </h2>
           <Card>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Domain</TableHead>
-                    <TableHead className="text-right">Score</TableHead>
-                    <TableHead className="text-right">Feasibility</TableHead>
-                    <TableHead className="text-right">Use Cases</TableHead>
                     <TableHead className="text-right">Value</TableHead>
+                    <TableHead className="text-right">Use Cases</TableHead>
+                    <TableHead className="text-right">Avg Score</TableHead>
+                    <TableHead className="text-right">Feasibility</TableHead>
+                    <TableHead className="w-[200px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...portfolio.byDomain]
-                    .sort((a, b) => (b.valueMid || b.useCaseCount) - (a.valueMid || a.useCaseCount))
-                    .map((d) => {
-                      const intensity = (d.valueMid || d.useCaseCount) / maxDomainValue;
-                      const bg =
-                        intensity > 0.7
-                          ? "bg-primary/15"
-                          : intensity > 0.4
-                            ? "bg-primary/8"
-                            : intensity > 0
-                              ? "bg-primary/4"
-                              : "";
-                      return (
-                        <TableRow key={d.domain} className={bg}>
-                          <TableCell className="font-medium">{d.domain}</TableCell>
-                          <TableCell className="text-right">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{(d.avgScore * 100).toFixed(0)}%</span>
-                              </TooltipTrigger>
-                              <TooltipContent>Overall score</TooltipContent>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{(d.avgFeasibility * 100).toFixed(0)}%</span>
-                              </TooltipTrigger>
-                              <TooltipContent>Feasibility score</TooltipContent>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell className="text-right">{d.useCaseCount}</TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(d.valueMid || d.useCaseCount * 1000)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                  {topDomains.map((d) => {
+                    const intensity = (d.valueMid || d.useCaseCount) / maxDomainValue;
+                    return (
+                      <TableRow key={d.domain}>
+                        <TableCell className="font-medium">{d.domain}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {formatCurrency(d.valueMid)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{d.useCaseCount}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {(d.avgScore * 100).toFixed(0)}%
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {(d.avgFeasibility * 100).toFixed(0)}%
+                        </TableCell>
+                        <TableCell>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-primary/60 transition-all"
+                              style={{ width: `${(intensity * 100).toFixed(0)}%` }}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </section>
       )}
+
+      {/* Strategic Recommendations + Risk Callouts */}
+      {(recommendations.length > 0 || risks.length > 0) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {recommendations.length > 0 && (
+            <section>
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Strategic Recommendations
+              </h2>
+              <div className="space-y-3">
+                {recommendations.slice(0, 5).map((r, i) => (
+                  <Card key={i}>
+                    <CardContent className="flex items-start gap-3 pt-4 pb-4">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{r.title}</span>
+                          <PriorityBadge priority={r.priority} />
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {r.description}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {risks.length > 0 && (
+            <section>
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                <AlertTriangle className="h-4 w-4 text-red-400" />
+                Risk Callouts
+              </h2>
+              <div className="space-y-3">
+                {risks.slice(0, 5).map((r, i) => (
+                  <Card key={i} className="border-red-500/10">
+                    <CardContent className="flex items-start gap-3 pt-4 pb-4">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-xs font-bold text-red-400">
+                        !
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{r.title}</span>
+                          <PriorityBadge priority={r.impact} />
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {r.description}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* Drill-Down (client component) */}
+      {useCases.length > 0 && <PortfolioDrillDown useCases={useCases} />}
     </div>
   );
 }

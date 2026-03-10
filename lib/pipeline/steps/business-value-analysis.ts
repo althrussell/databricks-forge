@@ -22,10 +22,11 @@ import type {
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
-import { upsertValueEstimates } from "@/lib/lakebase/value-estimates";
+import { upsertValueEstimates, getValueEstimatesForRun } from "@/lib/lakebase/value-estimates";
 import { upsertRoadmapPhases } from "@/lib/lakebase/roadmap-phases";
 import { replaceStakeholderProfiles } from "@/lib/lakebase/stakeholder-profiles";
 import { bulkInitTracking } from "@/lib/lakebase/use-case-tracking";
+import { updateRunMessage } from "@/lib/lakebase/runs";
 import { withPrisma } from "@/lib/prisma";
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,14 @@ async function runFinancialQuantification(
     batches.push(useCases.slice(i, i + batchSize));
   }
 
-  for (const batch of batches) {
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx];
+    if (batches.length > 1) {
+      await updateRunMessage(
+        run.runId,
+        `Quantifying financial value (batch ${batchIdx + 1} of ${batches.length})...`,
+      );
+    }
     const variables: Record<string, string> = {
       business_name: run.config.businessName,
       industries: bc.industries,
@@ -237,14 +245,43 @@ async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]):
       responseFormat: "json_object",
     });
 
-    const synthesis = safeParse<ExecutiveSynthesis>(result.rawResponse, {
-      keyFindings: [],
-      strategicRecommendations: [],
-      riskCallouts: [],
+    type RawSynthesis = {
+      key_findings?: Array<{
+        title: string;
+        description: string;
+        domain: string | null;
+        severity: string;
+      }>;
+      strategic_recommendations?: Array<{
+        title: string;
+        description: string;
+        priority: string;
+      }>;
+      risk_callouts?: Array<{
+        title: string;
+        description: string;
+        impact: string;
+      }>;
+    };
+    const raw = safeParse<RawSynthesis>(result.rawResponse, {});
+
+    const synthesis: ExecutiveSynthesis = {
+      keyFindings: (raw.key_findings ?? []).map((f) => ({
+        ...f,
+        severity: f.severity as "opportunity" | "risk" | "insight",
+      })),
+      strategicRecommendations: (raw.strategic_recommendations ?? []).map((r) => ({
+        ...r,
+        priority: r.priority as "high" | "medium" | "low",
+      })),
+      riskCallouts: (raw.risk_callouts ?? []).map((r) => ({
+        ...r,
+        impact: r.impact as "high" | "medium" | "low",
+      })),
       totalEstimatedValue: { low: 0, mid: 0, high: 0, currency: "USD" },
       quickWinCount: 0,
       topDomain: null,
-    });
+    };
 
     if (synthesis.keyFindings.length > 0 || synthesis.strategicRecommendations.length > 0) {
       synthesis.quickWinCount = useCases.filter(
@@ -301,6 +338,7 @@ async function runStakeholderAnalysis(ctx: PipelineContext, useCases: UseCase[])
     type RawProfile = {
       role: string;
       department: string;
+      use_case_ids?: string[];
       use_case_count: number;
       domains: string[];
       use_case_types: Record<string, number>;
@@ -311,19 +349,26 @@ async function runStakeholderAnalysis(ctx: PipelineContext, useCases: UseCase[])
     const profiles = safeParse<RawProfile[]>(result.rawResponse, []);
 
     if (profiles.length > 0) {
+      const estimates = await getValueEstimatesForRun(run.runId);
+      const valueByUseCase = new Map(estimates.map((e) => [e.useCaseId, e.valueMid]));
+
       await replaceStakeholderProfiles(
         run.runId,
-        profiles.map((p) => ({
-          role: p.role || "Unknown",
-          department: p.department || "Unknown",
-          useCaseCount: p.use_case_count ?? 0,
-          totalValue: 0,
-          domains: p.domains ?? [],
-          useCaseTypes: p.use_case_types ?? {},
-          changeComplexity: p.change_complexity || "medium",
-          isChampion: p.is_champion ?? false,
-          isSponsor: p.is_sponsor ?? false,
-        })),
+        profiles.map((p) => {
+          const ucIds = p.use_case_ids ?? [];
+          const totalValue = ucIds.reduce((sum, id) => sum + (valueByUseCase.get(id) ?? 0), 0);
+          return {
+            role: p.role || "Unknown",
+            department: p.department || "Unknown",
+            useCaseCount: p.use_case_count ?? 0,
+            totalValue,
+            domains: p.domains ?? [],
+            useCaseTypes: p.use_case_types ?? {},
+            changeComplexity: p.change_complexity || "medium",
+            isChampion: p.is_champion ?? false,
+            isSponsor: p.is_sponsor ?? false,
+          };
+        }),
       );
     }
   } catch (err) {
@@ -353,10 +398,19 @@ export async function runBusinessValueAnalysis(ctx: PipelineContext): Promise<vo
     useCases.map((u) => u.id),
   );
 
+  const runId = ctx.run.runId;
+
   // Run passes in sequence (each is a single LLM call, fast model)
+  await updateRunMessage(runId, "Quantifying financial value estimates...", 86);
   await runFinancialQuantification(ctx, useCases);
+
+  await updateRunMessage(runId, "Building implementation roadmap phases...", 87);
   await runRoadmapPhasing(ctx, useCases);
+
+  await updateRunMessage(runId, "Generating executive synthesis...", 88);
   await runExecutiveSynthesis(ctx, useCases);
+
+  await updateRunMessage(runId, "Analyzing stakeholder profiles...", 89);
   await runStakeholderAnalysis(ctx, useCases);
 
   logger.info("[business-value] Business value analysis complete");

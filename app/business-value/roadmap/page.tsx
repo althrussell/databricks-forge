@@ -1,45 +1,75 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
-import { getPortfolioData } from "@/lib/lakebase/portfolio";
-import { DeliveryTimelineChart } from "@/components/business-value/delivery-timeline-chart";
+import { getPortfolioData, getPortfolioUseCases } from "@/lib/lakebase/portfolio";
+import { formatCurrency } from "@/lib/utils";
 import type { RoadmapPhase } from "@/lib/domain/types";
+import type { PortfolioUseCase } from "@/lib/lakebase/portfolio";
+import { ArrowRight, Clock } from "lucide-react";
+import { RoadmapPhaseDetail } from "@/components/business-value/roadmap-phase-detail";
 
 export const dynamic = "force-dynamic";
 
-const PHASE_CONFIG: Record<RoadmapPhase, { label: string; timeframe: string }> = {
-  quick_wins: { label: "Quick Wins", timeframe: "0-3 months" },
-  foundation: { label: "Foundation", timeframe: "3-9 months" },
-  transformation: { label: "Transformation", timeframe: "9-18 months" },
+const PHASE_CONFIG: Record<
+  RoadmapPhase,
+  { label: string; timeframe: string; description: string; bgTint: string }
+> = {
+  quick_wins: {
+    label: "Quick Wins",
+    timeframe: "0–3 months",
+    description: "High-impact, low-effort initiatives ready to deliver value immediately",
+    bgTint: "bg-amber-500/10",
+  },
+  foundation: {
+    label: "Foundation",
+    timeframe: "3–9 months",
+    description: "Core capabilities and infrastructure that enable advanced analytics",
+    bgTint: "bg-blue-500/10",
+  },
+  transformation: {
+    label: "Transformation",
+    timeframe: "9–18 months",
+    description: "Strategic, high-complexity programs that reshape how the business operates",
+    bgTint: "bg-violet-500/10",
+  },
 };
 
 function RoadmapSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <Skeleton className="h-32 w-full rounded-xl" />
+      <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-32 rounded-xl" />
+          <Skeleton key={i} className="h-48 rounded-xl" />
         ))}
       </div>
-      <Skeleton className="h-64 w-full" />
     </div>
   );
 }
 
+const EFFORT_LABELS: Record<string, string> = {
+  xs: "XS",
+  s: "Small",
+  m: "Medium",
+  l: "Large",
+  xl: "XL",
+};
+
 async function RoadmapContent() {
   let portfolio;
+  let useCases: PortfolioUseCase[];
   try {
-    portfolio = await getPortfolioData();
+    [portfolio, useCases] = await Promise.all([getPortfolioData(), getPortfolioUseCases()]);
   } catch {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16">
           <p className="text-muted-foreground">Failed to load roadmap data.</p>
           <Button asChild variant="outline" className="mt-4">
-            <Link href="/runs">Select a run to see detailed roadmap</Link>
+            <Link href="/configure">Run a discovery pipeline first</Link>
           </Button>
         </CardContent>
       </Card>
@@ -51,67 +81,94 @@ async function RoadmapContent() {
 
   if (totalPhases === 0) {
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <p className="text-muted-foreground">No roadmap phases yet.</p>
-            <Button asChild variant="outline" className="mt-4">
-              <Link href="/runs">Select a run to see detailed roadmap</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <p className="text-muted-foreground">No roadmap phases yet.</p>
+          <Button asChild variant="outline" className="mt-4">
+            <Link href="/configure">Run a discovery pipeline first</Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   const phaseOrder: RoadmapPhase[] = ["quick_wins", "foundation", "transformation"];
-  const chartData = phaseOrder.map((phase) => ({
-    name: PHASE_CONFIG[phase].label,
-    count: byPhase[phase].count,
-  }));
+
+  const phaseUseCases = new Map<string, PortfolioUseCase[]>();
+  for (const uc of useCases) {
+    if (!uc.phase) continue;
+    const arr = phaseUseCases.get(uc.phase) ?? [];
+    arr.push(uc);
+    phaseUseCases.set(uc.phase, arr);
+  }
+
+  const totalValue = useCases.reduce((s, u) => s + u.valueMid, 0);
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">Phase Summary</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {phaseOrder.map((phase) => {
-            const config = PHASE_CONFIG[phase];
-            const { count } = byPhase[phase];
-            return (
-              <Card key={phase}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">{config.label}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-xs text-muted-foreground">{config.timeframe}</p>
-                  <p className="text-2xl font-bold">{count}</p>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/runs">View Details</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
+      {/* Timeline Overview */}
+      <Card>
+        <CardContent className="pt-5 pb-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Clock className="h-4 w-4 text-primary" />
+              Delivery Timeline
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {totalPhases} use cases · {formatCurrency(totalValue)} total value
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {phaseOrder.map((phase, idx) => {
+              const config = PHASE_CONFIG[phase];
+              const count = byPhase[phase].count;
+              const pct = totalPhases > 0 ? (count / totalPhases) * 100 : 0;
+              const phaseValue = (phaseUseCases.get(phase) ?? []).reduce(
+                (s, u) => s + u.valueMid,
+                0,
+              );
+              return (
+                <div
+                  key={phase}
+                  className="flex items-center gap-2"
+                  style={{ flex: Math.max(pct, 10) }}
+                >
+                  {idx > 0 && <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
+                  <div className="w-full">
+                    <div className="mb-1 flex items-baseline justify-between">
+                      <span className="text-xs font-medium">{config.label}</span>
+                      <span className="text-[10px] text-muted-foreground">{config.timeframe}</span>
+                    </div>
+                    <div
+                      className={`relative h-12 w-full overflow-hidden rounded-lg ${config.bgTint}`}
+                    >
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-lg font-bold tabular-nums">{count}</span>
+                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                          {formatCurrency(phaseValue)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
-      <section>
-        <DeliveryTimelineChart phases={chartData} />
-      </section>
-
-      <section>
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-sm text-muted-foreground">
-              Select a run to see detailed roadmap with use case assignments and dependencies.
-            </p>
-            <Button asChild variant="link" className="mt-2">
-              <Link href="/runs">Select a run to see detailed roadmap</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
+      {/* Phase Detail Cards */}
+      <RoadmapPhaseDetail
+        phases={phaseOrder.map((phase) => ({
+          phase,
+          config: PHASE_CONFIG[phase],
+          useCases: (phaseUseCases.get(phase) ?? []).sort(
+            (a, b) => b.overallScore - a.overallScore,
+          ),
+          totalValue: (phaseUseCases.get(phase) ?? []).reduce((s, u) => s + u.valueMid, 0),
+        }))}
+        effortLabels={EFFORT_LABELS}
+      />
     </div>
   );
 }
