@@ -5,6 +5,7 @@
 # Usage:
 #   ./deploy.sh                          Interactive (pick a warehouse)
 #   ./deploy.sh --warehouse "Name"       Non-interactive
+#   ./deploy.sh --prebuilt               Build locally, deploy pre-compiled bundle (fastest)
 #   ./deploy.sh --profile "my-profile"   Use a specific CLI profile
 #   ./deploy.sh --app-name "forge-demo"  Deploy as a separate named instance
 #   ./deploy.sh --destroy                Remove the app
@@ -74,6 +75,7 @@ ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=false
 ARG_SEED_BENCHMARK_INDUSTRIES=""
 ARG_BENCHMARK_ADMINS=""
 ARG_ENABLE_METRIC_VIEWS=false
+ARG_PREBUILT=false
 ARG_DESTROY=false
 
 print_usage() {
@@ -125,6 +127,8 @@ Options:
   --benchmark-admins CSV     Comma-separated emails allowed to manage benchmarks.
                              If unset, all authenticated users can manage them.
   --enable-metric-views      Enable metric view generation (off by default)
+  --prebuilt                  Build locally and deploy pre-compiled standalone bundle.
+                             Eliminates remote npm install + npm run build (~3x faster).
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -156,6 +160,7 @@ while [[ $# -gt 0 ]]; do
     --seed-benchmark-industries) ARG_SEED_BENCHMARK_INDUSTRIES="$2"; shift 2 ;;
     --benchmark-admins) ARG_BENCHMARK_ADMINS="$2"; shift 2 ;;
     --enable-metric-views) ARG_ENABLE_METRIC_VIEWS=true; shift ;;
+    --prebuilt)            ARG_PREBUILT=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -390,6 +395,132 @@ restore_app_yaml() {
     mv "$APP_YAML_BACKUP" "app.yaml"
     APP_YAML_BACKUP=""
   fi
+}
+
+# -------------------------------------------------------------------------
+# Pre-built package assembly
+#
+# Builds the Next.js standalone bundle locally, then assembles a minimal
+# deploy directory that the Databricks Apps platform can run without
+# npm install (full) or npm run build.
+#
+# The deploy package includes:
+#   - Standalone server (server.js + bundled node_modules + .next/)
+#   - Runtime scripts (start.sh, provision-lakebase.mjs, seed-benchmarks.mjs)
+#   - Prisma schema (for prisma db push at startup)
+#   - Benchmark data (for optional seed)
+#   - app.yaml
+#   - A minimal package.json with only prisma + pg (no build script)
+#   - A .prebuilt marker file for start.sh detection
+# -------------------------------------------------------------------------
+DEPLOY_PKG=".deploy-pkg"
+
+assemble_prebuilt() {
+  printf "\n  Assembling pre-built deploy package...\n"
+
+  # -- Install Linux sharp binaries for cross-platform build ---------------
+  info "Installing Linux sharp binaries..."
+  if npm install --no-save --no-audit --no-fund --force \
+       @img/sharp-linux-x64 @img/sharp-libvips-linux-x64 2>/dev/null; then
+    ok
+  else
+    ok "skipped (non-critical)"
+  fi
+
+  # -- Local build ---------------------------------------------------------
+  info "Building locally (prisma generate + next build)..."
+  if ! npm run build 2>&1 | tail -3; then
+    die "Local build failed. Fix errors and retry."
+  fi
+  ok
+
+  # -- Locate standalone root (Next.js nests it under the project path) ----
+  local standalone_root=".next/standalone"
+  local nested
+  nested=$(find "$standalone_root" -name "server.js" -maxdepth 6 -not -path "*/node_modules/*" | head -1)
+  if [ -z "$nested" ]; then
+    die "server.js not found in $standalone_root. Build may have failed."
+  fi
+  local standalone_app_dir
+  standalone_app_dir=$(dirname "$nested")
+
+  # -- Clean and create deploy package directory ---------------------------
+  info "Assembling $DEPLOY_PKG/..."
+  rm -rf "$DEPLOY_PKG"
+  mkdir -p "$DEPLOY_PKG"
+
+  # Copy the standalone app (server.js, node_modules, .next/, package.json)
+  cp -a "$standalone_app_dir/." "$DEPLOY_PKG/"
+
+  # Replace public/ with the postbuild copy (has fonts, all static assets)
+  rm -rf "$DEPLOY_PKG/public"
+  if [ -d "$standalone_root/public" ]; then
+    cp -a "$standalone_root/public" "$DEPLOY_PKG/public"
+  fi
+
+  # Copy .next/static/ (postbuild.sh puts it in standalone root)
+  if [ -d "$standalone_root/.next/static" ]; then
+    mkdir -p "$DEPLOY_PKG/.next"
+    cp -a "$standalone_root/.next/static" "$DEPLOY_PKG/.next/static"
+  fi
+
+  # -- Strip macOS-only sharp binaries (saves ~16MB) -----------------------
+  rm -rf "$DEPLOY_PKG/node_modules/@img/sharp-darwin-arm64" \
+         "$DEPLOY_PKG/node_modules/@img/sharp-libvips-darwin-arm64" \
+         "$DEPLOY_PKG/node_modules/@img/sharp-darwin-x64" \
+         "$DEPLOY_PKG/node_modules/@img/sharp-libvips-darwin-x64" \
+         2>/dev/null || true
+
+  # -- Strip typescript (saves ~20MB; only needed by prisma config which
+  #    the platform's lean npm install of prisma handles separately) --------
+  rm -rf "$DEPLOY_PKG/node_modules/typescript" 2>/dev/null || true
+
+  # -- Copy runtime scripts ------------------------------------------------
+  mkdir -p "$DEPLOY_PKG/scripts"
+  cp scripts/start.sh "$DEPLOY_PKG/scripts/"
+  cp scripts/provision-lakebase.mjs "$DEPLOY_PKG/scripts/"
+  cp scripts/seed-benchmarks.mjs "$DEPLOY_PKG/scripts/"
+
+  # -- Copy prisma schema + config -----------------------------------------
+  mkdir -p "$DEPLOY_PKG/prisma"
+  cp prisma/schema.prisma "$DEPLOY_PKG/prisma/"
+  cp prisma.config.ts "$DEPLOY_PKG/"
+
+  # -- Copy benchmark data (for optional seed) -----------------------------
+  if [ -d "data/benchmark" ]; then
+    mkdir -p "$DEPLOY_PKG/data/benchmark"
+    cp data/benchmark/*.json "$DEPLOY_PKG/data/benchmark/" 2>/dev/null || true
+  fi
+
+  # -- Write minimal package.json (no build script, runtime deps only) -----
+  # The platform detects package.json → runs npm install (fast, 2 deps)
+  # → skips npm run build (no build script defined).
+  local prisma_ver pg_ver
+  prisma_ver=$(node -e "console.log(require('./package.json').devDependencies?.prisma || require('./package.json').dependencies?.prisma || '7')")
+  pg_ver=$(node -e "console.log(require('./package.json').dependencies?.pg || '8')")
+
+  cat > "$DEPLOY_PKG/package.json" <<PKGJSON
+{
+  "name": "databricks-forge-prebuilt",
+  "private": true,
+  "dependencies": {
+    "prisma": "${prisma_ver}",
+    "pg": "${pg_ver}",
+    "dotenv": "^16.0.0",
+    "typescript": "^5.0.0"
+  }
+}
+PKGJSON
+
+  # -- Write .prebuilt marker file -----------------------------------------
+  echo "assembled=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEPLOY_PKG/.prebuilt"
+
+  # -- Report package size -------------------------------------------------
+  local pkg_size
+  pkg_size=$(du -sh "$DEPLOY_PKG" | cut -f1)
+  local pkg_files
+  pkg_files=$(find "$DEPLOY_PKG" -type f | wc -l | tr -d ' ')
+  ok "${pkg_size} / ${pkg_files} files"
 }
 
 # -------------------------------------------------------------------------
@@ -645,14 +776,25 @@ print(json.dumps({
 }
 
 # -------------------------------------------------------------------------
-# Step 5: Upload source code
+# Step 5: Upload source code (or pre-built package)
 # -------------------------------------------------------------------------
 upload_code() {
-  info "Uploading source code..."
   WORKSPACE_PATH="/Workspace/Users/${USER_EMAIL}/${APP_NAME}"
 
-  if ! databricks sync . "$WORKSPACE_PATH" 2>/dev/null; then
-    die "Failed to upload code.\n  Try manually: databricks sync . $WORKSPACE_PATH"
+  local sync_source="."
+  local sync_flags=""
+  if [ "$ARG_PREBUILT" = "true" ]; then
+    sync_source="$DEPLOY_PKG"
+    info "Uploading pre-built package..."
+  else
+    info "Uploading source code..."
+    if [ -f ".databricksignore" ]; then
+      sync_flags="--exclude-from .databricksignore"
+    fi
+  fi
+
+  if ! databricks sync $sync_flags "$sync_source" "$WORKSPACE_PATH" 2>/dev/null; then
+    die "Failed to upload code.\n  Try manually: databricks sync $sync_flags $sync_source $WORKSPACE_PATH"
   fi
   ok
 }
@@ -721,6 +863,7 @@ print_success() {
   printf "    URL: %s\n" "$app_url"
   printf "\n"
   printf "    App name:     %s\n" "$APP_NAME"
+  printf "    Deploy mode:  %s\n" "$( [ "$ARG_PREBUILT" = "true" ] && echo "pre-built (local build)" || echo "source (remote build)" )"
   printf "\n"
   printf "    Resources:\n"
   printf "      SQL Warehouse:    %s\n" "$WAREHOUSE_NAME"
@@ -831,6 +974,13 @@ main() {
   wait_for_stable_state
   configure_app
   prepare_app_yaml
+
+  if [ "$ARG_PREBUILT" = "true" ]; then
+    assemble_prebuilt
+    # Copy the (possibly patched) app.yaml into the deploy package
+    cp app.yaml "$DEPLOY_PKG/app.yaml"
+  fi
+
   upload_code
   start_compute
   deploy_app

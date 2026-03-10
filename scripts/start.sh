@@ -428,12 +428,19 @@ fi
 # Pass runtime Lakebase metadata to the server. In Databricks Apps mode,
 # runtime connections should use short-lived credentials + pooler endpoint,
 # not the startup direct URL used for DDL.
+#
+# Pre-built mode: server.js is at the project root (already there).
+# Source mode:    server.js is inside .next/standalone/.
 # ---------------------------------------------------------------------------
 
 export PORT="${DATABRICKS_APP_PORT:-8000}"
 echo "[startup] Starting server on port $PORT..."
 
-cd .next/standalone
+if [ -f ".prebuilt" ]; then
+  echo "[startup] Pre-built deployment detected."
+else
+  cd .next/standalone
+fi
 
 if [ -n "$LAKEBASE_STARTUP_URL" ]; then
   echo "[startup] Passing Lakebase runtime contract to server."

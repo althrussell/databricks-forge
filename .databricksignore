@@ -1,0 +1,17 @@
+# Dev-only files -- not needed at runtime on Databricks Apps
+__tests__/
+docs/
+.cursor/
+.github/
+.databricks/
+coverage/
+RELEASE_NOTES_*.md
+AGENTS.md
+*.test.ts
+*.test.tsx
+.DS_Store
+.prettierrc
+.prettierignore
+.env.local.example
+.env
+.deploy-pkg/
