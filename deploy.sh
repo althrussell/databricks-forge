@@ -785,6 +785,13 @@ upload_code() {
   local sync_flags=""
   if [ "$ARG_PREBUILT" = "true" ]; then
     sync_source="$DEPLOY_PKG"
+    # Clean the workspace first -- databricks sync doesn't remove stale files
+    # from previous source-mode deploys. Without this, old source files
+    # (package.json with build script, app/layout.tsx, etc.) would persist
+    # and the platform would attempt a full Next.js build from stale sources.
+    info "Cleaning workspace for pre-built deploy..."
+    databricks workspace delete --recursive "$WORKSPACE_PATH" 2>/dev/null || true
+    ok
     info "Uploading pre-built package..."
   else
     info "Uploading source code..."
