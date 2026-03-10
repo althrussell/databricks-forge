@@ -781,18 +781,14 @@ upload_code() {
   WORKSPACE_PATH="/Workspace/Users/${USER_EMAIL}/${APP_NAME}"
 
   local sync_source="."
-  local sync_flags=""
+  local sync_flags="--full"
   if [ "$ARG_PREBUILT" = "true" ]; then
     sync_source="$DEPLOY_PKG"
-    # --full ensures stale files from previous source-mode deploys are removed.
-    # Without this, old source files (package.json with build script,
-    # app/layout.tsx, etc.) persist and the platform attempts a full build.
-    sync_flags="--full"
     info "Uploading pre-built package (full sync)..."
   else
-    info "Uploading source code..."
+    info "Uploading source code (full sync)..."
     if [ -f ".databricksignore" ]; then
-      sync_flags="--exclude-from .databricksignore"
+      sync_flags="--full --exclude-from .databricksignore"
     fi
   fi
 
