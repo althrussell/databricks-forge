@@ -1,31 +1,70 @@
 # Release Notes -- 2026-03-10
 
-**Databricks Forge AI v0.19.0**
+**Databricks Forge AI v0.20.0**
 
 ---
 
 ## New Features
 
-### Score Insights -- Rationale and Sub-Factor Breakdowns
+### Business Value Engine
 
-Users previously saw opaque score percentages (e.g. "66% Feasibility") with no explanation of how they were derived. The LLM was already reasoning through detailed sub-factors internally but was instructed to discard that reasoning. This release surfaces it.
+A new post-pipeline intelligence layer that transforms discovered use cases into financially-grounded, boardroom-ready deliverables. Pipeline Step 8 runs four LLM passes automatically after scoring completes.
 
-**LLM-Generated Rationale:**
-- Each score dimension (Priority, Feasibility, Impact) now includes a brief natural-language rationale explaining the key drivers behind the score.
-- Priority scores include 4 sub-factor scores: ROI, Strategic Alignment, Time to Value, and Reusability (with weights).
-- Feasibility scores include 8 sub-factor scores: Data Availability, Data Accessibility, Architecture Fitness, Team Skills, Domain Knowledge, People Allocation, Budget Allocation, and Time to Production.
+**Financial Quantification:**
+- Per-use-case dollar-range estimates (low / mid / high) across four value types: cost savings, revenue uplift, risk reduction, and efficiency gain.
+- Calibrated against industry benchmarks with confidence ratings and documented assumptions.
+- Batched processing (25 use cases per LLM request) for token efficiency.
 
-**Consulting Quality Signals:**
-- The deterministic consulting scorecard (Strategic Alignment, Measurable Value, Implementation Feasibility, Evidence Strength, Novelty, Boardroom Defensibility) is now persisted and surfaced in the UI.
+**Roadmap Phasing:**
+- Automatic assignment to Quick Wins (0-3 months), Foundation (3-9 months), or Transformation (9-18 months) phases.
+- Includes effort estimates (XS-XL), dependency chains between use cases, and enabler descriptions.
 
-**UI:**
-- New "Score Insights" panel in the use case detail sheet with expandable per-dimension sections showing rationale text and horizontal factor-score bars (green/amber/red by tier).
+**Executive Synthesis:**
+- Board-ready briefing with 3-5 key findings, 3-5 strategic recommendations, and 2-3 risk callouts.
+- Specific to the customer's business context -- not generic advice.
 
-**Exports:**
-- Excel, CSV, PDF, and PPTX exports now include score rationale text so insights travel with the deliverable.
+**Stakeholder Analysis:**
+- Maps use case beneficiaries and sponsors into structured role/department profiles.
+- Identifies champions and sponsors, assesses change complexity per stakeholder.
 
-**Backward Compatible:**
-- Both new database columns are nullable; existing use cases display as they do today (no insights section when rationale is absent). Runs created before this version are unaffected.
+### Business Value UI (5 new pages)
+
+- **Portfolio Overview** (`/business-value`) -- value hero cards, key findings, strategic themes, phase distribution, and domain heatmap.
+- **Implementation Roadmap** (`/business-value/roadmap`) -- phase summary cards with delivery timeline bar chart.
+- **Strategy Alignment** (`/business-value/strategy`) -- upload strategy documents, LLM-parsed initiatives, gap analysis (supported / partial / blocked).
+- **Stakeholder Intelligence** (`/business-value/stakeholders`) -- champion cards, department summary, full stakeholder table with change complexity badges.
+- **Value Tracking** (`/business-value/tracking`) -- lifecycle tracking from discovered → planned → in progress → delivered → measured, with inline stage updates.
+
+---
+
+## Improvements
+
+### Dashboard Integration
+- New Business Value Summary widget on the main dashboard showing Total Estimated Value and Implementation Progress, linking to the dedicated pages.
+
+### Run Detail Enhancement
+- New "Business Value" tab on the run detail page displaying per-run value summary, executive synthesis, value by category, and roadmap phase distribution.
+
+### Ask Forge Strategic Intelligence
+- New `strategic` intent classification for questions about ROI, business cases, stakeholder impact, and executive summaries.
+- New `strategic` persona overlay tuned for CDO/CFO/Board-level audience with consulting language and financial framing.
+- Five new action cards: View Portfolio, Generate Business Case, View Stakeholders, View Roadmap, Draft Executive Memo.
+
+### Enhanced Exports
+- Excel exports now include a "Business Value" sheet with financial estimates, an "Executive Synthesis" section, and a "Stakeholders" sheet when data is available.
+
+### Sidebar Navigation
+- New "Business Value" section in the sidebar with five navigation items (Portfolio, Roadmap, Strategy, Stakeholders, Value Tracking).
+
+---
+
+## Other Changes
+
+- Added 7 new Lakebase tables (`forge_value_estimates`, `forge_roadmap_phases`, `forge_use_case_tracking`, `forge_value_captures`, `forge_strategy_documents`, `forge_strategy_alignments`, `forge_stakeholder_profiles`) with cascade deletes from `ForgeRun`.
+- Added `synthesisJson` field to `ForgeRun` for executive synthesis persistence.
+- Added `formatCurrency` utility function for consistent K/M/B currency formatting.
+- New comprehensive documentation at `docs/BUSINESS_VALUE.md`.
+- All new pages use `PageHeader` component and established styling patterns (`mx-auto max-w-[1400px]`, `rounded-xl` skeletons, `font-semibold` section headings).
 
 ---
 
@@ -33,6 +72,6 @@ Users previously saw opaque score percentages (e.g. "66% Feasibility") with no e
 
 | Hash | Summary |
 |---|---|
-| `3d78b58` | Add score insights: surface rationale and sub-factor breakdowns behind use case scores |
+| `dac3937` | Add Business Value Engine: financial quantification, roadmap phasing, executive synthesis, and stakeholder analysis |
 
-**Uncommitted changes:** Version bump to 0.19.0, this release notes file.
+**Uncommitted changes:** Version bump to 0.20.0, this release notes file.
