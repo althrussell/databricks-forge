@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
 import { ChevronDown, Layers, Clock } from "lucide-react";
+import { VoteButton } from "@/components/business-value/vote-button";
 import type { PortfolioUseCase } from "@/lib/lakebase/portfolio";
 
 type GroupMode = "domain" | "phase";
@@ -32,9 +33,24 @@ const EFFORT_LABELS: Record<string, string> = {
   xl: "XL",
 };
 
-export function PortfolioDrillDown({ useCases }: { useCases: PortfolioUseCase[] }) {
+export function PortfolioDrillDown({
+  useCases,
+  runId,
+}: {
+  useCases: PortfolioUseCase[];
+  runId?: string;
+}) {
   const [mode, setMode] = useState<GroupMode>("domain");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [votes, setVotes] = useState<Record<string, { total: number; voters: string[] }>>({});
+
+  useEffect(() => {
+    if (!runId) return;
+    fetch(`/api/business-value/vote?runId=${runId}`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setVotes)
+      .catch(() => {});
+  }, [runId]);
 
   const groups = useMemo(() => {
     const map = new Map<string, PortfolioUseCase[]>();
@@ -137,6 +153,7 @@ export function PortfolioDrillDown({ useCases }: { useCases: PortfolioUseCase[] 
                         <TableHead className="text-right">Feasibility</TableHead>
                         <TableHead>Effort</TableHead>
                         <TableHead className="text-right">Est. Value</TableHead>
+                        {runId && <TableHead className="text-center">Vote</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -183,6 +200,16 @@ export function PortfolioDrillDown({ useCases }: { useCases: PortfolioUseCase[] 
                           <TableCell className="text-right font-medium tabular-nums">
                             {formatCurrency(uc.valueMid)}
                           </TableCell>
+                          {runId && (
+                            <TableCell className="text-center">
+                              <VoteButton
+                                runId={runId}
+                                useCaseId={uc.id}
+                                initialCount={votes[uc.id]?.total ?? 0}
+                                compact
+                              />
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>

@@ -32,7 +32,9 @@ function safeParse<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
-export async function getPortfolioData(): Promise<BusinessValuePortfolio> {
+export async function getPortfolioData(): Promise<
+  BusinessValuePortfolio & { latestRunId: string | null }
+> {
   return withPrisma(async (prisma) => {
     const latestRun = await prisma.forgeRun.findFirst({
       where: { status: "completed", synthesisJson: { not: null } },
@@ -137,6 +139,7 @@ export async function getPortfolioData(): Promise<BusinessValuePortfolio> {
       byDomain,
       deliveredValue: deliveredAgg._sum.amount ?? 0,
       latestSynthesis: synthesis,
+      latestRunId: latestRun?.runId ?? null,
     };
   });
 }

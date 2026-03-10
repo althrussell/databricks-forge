@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -20,7 +21,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Search, Rocket, CheckCircle, BarChart3 } from "lucide-react";
+import {
+  Loader2,
+  Search,
+  Rocket,
+  CheckCircle,
+  BarChart3,
+  AlertTriangle,
+  Pencil,
+  Check,
+} from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import type { TrackingStage } from "@/lib/domain/types";
 
@@ -63,6 +73,8 @@ const PIPELINE_COLORS: Record<TrackingStage, string> = {
   measured: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100",
 };
 
+const STALE_DAYS = 14;
+
 function truncateId(id: string): string {
   if (id.length <= 12) return id;
   return `${id.slice(0, 8)}...`;
@@ -75,11 +87,23 @@ function formatDate(iso: string): string {
   });
 }
 
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
+function isStalled(entry: TrackingEntry): boolean {
+  const stage = entry.stage as TrackingStage;
+  if (stage === "delivered" || stage === "measured") return false;
+  return daysSince(entry.updatedAt) >= STALE_DAYS;
+}
+
 export default function ValueTrackingPage() {
   const [data, setData] = useState<TrackingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<Set<string>>(new Set());
+  const [editingOwner, setEditingOwner] = useState<string | null>(null);
+  const [ownerDraft, setOwnerDraft] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -114,6 +138,29 @@ export default function ValueTrackingPage() {
       await fetchData();
     } catch {
       setError("Failed to update stage");
+    } finally {
+      setUpdating((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const handleOwnerSave = async (runId: string, useCaseId: string) => {
+    const key = `${runId}:${useCaseId}`;
+    setUpdating((prev) => new Set(prev).add(key));
+    try {
+      const res = await fetch("/api/business-value/tracking", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, useCaseId, assignedOwner: ownerDraft || null }),
+      });
+      if (!res.ok) throw new Error("Failed to update owner");
+      setEditingOwner(null);
+      await fetchData();
+    } catch {
+      setError("Failed to update owner");
     } finally {
       setUpdating((prev) => {
         const next = new Set(prev);
@@ -172,6 +219,7 @@ export default function ValueTrackingPage() {
   };
   const entries = data?.entries ?? [];
   const plannedPlusInProgress = byStage.planned + byStage.in_progress;
+  const stalledCount = entries.filter(isStalled).length;
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-8">
@@ -242,6 +290,21 @@ export default function ValueTrackingPage() {
         </div>
       </section>
 
+      {stalledCount > 0 && (
+        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardContent className="flex items-center gap-3 py-3 px-4">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="text-sm">
+              <span className="font-semibold text-amber-700 dark:text-amber-300">
+                {stalledCount} use case{stalledCount !== 1 ? "s" : ""}
+              </span>{" "}
+              stalled for {STALE_DAYS}+ days without a stage change. Review assignments and unblock
+              progress.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <section>
         <h2 className="mb-4 text-base font-semibold">Tracking Table</h2>
         {entries.length === 0 ? (
@@ -263,6 +326,7 @@ export default function ValueTrackingPage() {
                     <TableHead>Stage</TableHead>
                     <TableHead>Assigned Owner</TableHead>
                     <TableHead>Last Updated</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead className="w-[140px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -271,8 +335,14 @@ export default function ValueTrackingPage() {
                     const key = `${entry.runId}:${entry.useCaseId}`;
                     const isUpdating = updating.has(key);
                     const stage = entry.stage as TrackingStage;
+                    const stalled = isStalled(entry);
+                    const days = daysSince(entry.updatedAt);
+                    const isEditOwner = editingOwner === key;
                     return (
-                      <TableRow key={entry.id}>
+                      <TableRow
+                        key={entry.id}
+                        className={stalled ? "bg-amber-50/50 dark:bg-amber-950/10" : ""}
+                      >
                         <TableCell className="font-mono text-xs">
                           {truncateId(entry.useCaseId)}
                         </TableCell>
@@ -282,11 +352,59 @@ export default function ValueTrackingPage() {
                             {STAGES.find((s) => s.value === stage)?.label ?? stage}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {entry.assignedOwner ?? "-"}
+                        <TableCell>
+                          {isEditOwner ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                className="h-7 w-[120px] text-xs"
+                                placeholder="Owner name"
+                                value={ownerDraft}
+                                onChange={(e) => setOwnerDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter")
+                                    handleOwnerSave(entry.runId, entry.useCaseId);
+                                  if (e.key === "Escape") setEditingOwner(null);
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleOwnerSave(entry.runId, entry.useCaseId)}
+                              >
+                                <Check className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              className="group flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                setEditingOwner(key);
+                                setOwnerDraft(entry.assignedOwner ?? "");
+                              }}
+                            >
+                              {entry.assignedOwner || "—"}
+                              <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                            </button>
+                          )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
+                        <TableCell className="text-muted-foreground text-sm tabular-nums">
                           {formatDate(entry.updatedAt)}
+                        </TableCell>
+                        <TableCell>
+                          {stalled ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                              <AlertTriangle className="h-3 w-3" />
+                              Stalled ({days}d)
+                            </span>
+                          ) : days > 0 ? (
+                            <span className="text-xs text-muted-foreground">{days}d ago</span>
+                          ) : (
+                            <span className="text-xs text-green-600 dark:text-green-400">
+                              Today
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Select

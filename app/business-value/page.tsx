@@ -31,6 +31,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { PortfolioDrillDown } from "@/components/business-value/portfolio-drill-down";
+import { PortfolioExportButton } from "@/components/business-value/portfolio-export-button";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,7 @@ function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
 }
 
 async function PortfolioContent() {
-  let portfolio: BusinessValuePortfolio;
+  let portfolio: BusinessValuePortfolio & { latestRunId: string | null };
   let useCases: PortfolioUseCase[];
   try {
     [portfolio, useCases] = await Promise.all([getPortfolioData(), getPortfolioUseCases()]);
@@ -188,6 +189,98 @@ async function PortfolioContent() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Velocity Metrics -- Conversion Funnel */}
+      {portfolio.totalUseCases > 0 && (
+        <section>
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            Portfolio Velocity
+          </h2>
+          <Card>
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center gap-0 overflow-hidden rounded-lg">
+                {(
+                  [
+                    {
+                      label: "Discovered",
+                      count: portfolio.byStage.discovered,
+                      color: "bg-slate-200 dark:bg-slate-700",
+                    },
+                    {
+                      label: "Planned",
+                      count: portfolio.byStage.planned,
+                      color: "bg-blue-200 dark:bg-blue-800",
+                    },
+                    {
+                      label: "In Progress",
+                      count: portfolio.byStage.in_progress,
+                      color: "bg-amber-200 dark:bg-amber-800",
+                    },
+                    {
+                      label: "Delivered",
+                      count: portfolio.byStage.delivered,
+                      color: "bg-green-200 dark:bg-green-800",
+                    },
+                    {
+                      label: "Measured",
+                      count: portfolio.byStage.measured,
+                      color: "bg-emerald-200 dark:bg-emerald-800",
+                    },
+                  ] as const
+                ).map((s) => {
+                  const pct =
+                    portfolio.totalUseCases > 0
+                      ? Math.max(5, Math.round((s.count / portfolio.totalUseCases) * 100))
+                      : 20;
+                  return (
+                    <div
+                      key={s.label}
+                      className={`flex flex-col items-center justify-center py-3 ${s.color}`}
+                      style={{ width: `${pct}%`, minWidth: 60 }}
+                    >
+                      <span className="text-lg font-bold tabular-nums">{s.count}</span>
+                      <span className="text-[10px] font-medium opacity-80">{s.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span>
+                  Conversion rate:{" "}
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {portfolio.totalUseCases > 0
+                      ? Math.round(
+                          ((portfolio.byStage.delivered + portfolio.byStage.measured) /
+                            portfolio.totalUseCases) *
+                            100,
+                        )
+                      : 0}
+                    %
+                  </span>
+                </span>
+                {portfolio.deliveredValue > 0 && portfolio.totalEstimatedValue.mid > 0 && (
+                  <span>
+                    Realization rate:{" "}
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {Math.round(
+                        (portfolio.deliveredValue / portfolio.totalEstimatedValue.mid) * 100,
+                      )}
+                      %
+                    </span>
+                  </span>
+                )}
+                <span>
+                  In pipeline:{" "}
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {portfolio.byStage.planned + portfolio.byStage.in_progress}
+                  </span>
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       {/* Executive Insights */}
       {keyFindings.length > 0 && (
@@ -404,7 +497,9 @@ async function PortfolioContent() {
       )}
 
       {/* Drill-Down (client component) */}
-      {useCases.length > 0 && <PortfolioDrillDown useCases={useCases} />}
+      {useCases.length > 0 && (
+        <PortfolioDrillDown useCases={useCases} runId={portfolio.latestRunId ?? undefined} />
+      )}
     </div>
   );
 }
@@ -415,6 +510,7 @@ export default function BusinessValuePage() {
       <PageHeader
         title="Business Value Portfolio"
         subtitle="Executive overview of data-driven value across your organization"
+        actions={<PortfolioExportButton />}
       />
 
       <Suspense fallback={<PortfolioSkeleton />}>
