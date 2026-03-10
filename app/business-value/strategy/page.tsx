@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import type {
@@ -250,7 +250,7 @@ export default function StrategyAlignmentPage() {
       </Card>
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold">Existing Strategies</h2>
+        <h2 className="mb-4 text-base font-semibold">Existing Strategies</h2>
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -292,11 +292,9 @@ export default function StrategyAlignmentPage() {
                         onClick={() => handleExpand(doc.id)}
                         disabled={!doc.parsedInitiatives?.length}
                       >
-                        {expandedId === doc.id ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform duration-200 ${expandedId === doc.id ? "rotate-180" : ""}`}
+                        />
                       </Button>
                       <Button
                         variant="ghost"

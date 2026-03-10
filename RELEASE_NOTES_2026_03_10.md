@@ -1,32 +1,53 @@
 # Release Notes -- 2026-03-10
 
-**Databricks Forge AI v0.20.1**
+**Databricks Forge AI v0.21.0**
 
 ---
 
-## Bug Fixes
+## New Features
 
-- **SQL gen prompt: contradictory structured-output example** -- The `ai_query()` / `from_json()` example in `USE_CASE_SQL_GEN_PROMPT` showed sibling alias reuse in a single SELECT block, directly contradicting the rule that forbids it. The LLM followed the example over the rule, causing 9 of 16 generated queries to fail SQL review with score 42. Replaced with a correct multi-CTE pattern and added explicit WRONG/CORRECT callouts.
+### Business Value Drill-Down Components
+Portfolio, Roadmap, and Stakeholder Intelligence pages now feature interactive drill-down sections that let executives explore use cases grouped by domain or phase without navigating away to individual runs. Expandable accordion cards with animated chevrons reveal detailed tables of use cases including scores, feasibility, effort, and estimated value.
+
+### Redesigned Executive Dashboard Surfaces
+All Business Value pages (Portfolio, Roadmap, Stakeholders, Value Tracking) have been redesigned with a consistent KPI card system featuring colored accent bars, hover shadow effects, tabular number alignment, and icon-labelled metrics for a polished executive experience.
 
 ---
 
 ## Improvements
 
-### Quieter SQL review logs
-- Verbose review detail (`issueCategories`, `topIssues`, `sqlPreview`) demoted from `info` to `debug` in `sql-reviewer.ts`. Production logs now show a clean one-liner per review: verdict, score, issue count, and whether a fix was included.
-- `"SQL review applied fix"` log in the pipeline no longer reports the misleading pre-fix quality score (the fix had already been applied and passed EXPLAIN).
-- `"Skipping EXPLAIN validation for pipe-syntax query"` demoted from `info` to `debug` -- routine and not actionable.
+### Pipeline Progress Granularity
+Business Value Analysis (step 8) now reports granular progress updates for each of its four sub-steps (financial quantification, roadmap phasing, executive synthesis, stakeholder analysis) and per-batch progress during financial quantification, preventing the UI from appearing stuck at 86%.
+
+### Stakeholder Value Computation
+Stakeholder profiles now correctly compute total estimated value by cross-referencing use case IDs from the LLM response with value estimates, resolving the previous $0 display issue.
+
+### Sidebar Navigation Reorganization
+Outcome Maps moved under Business Value. Genie Spaces moved under Explore (after Runs). Benchmarks moved to bottom of Business Value. Deploy section removed.
 
 ---
 
-## Commits (5)
+## Bug Fixes
+- **Executive Synthesis TypeError** -- Fixed crash caused by snake_case/camelCase mismatch when parsing LLM response; added explicit field mapping with safe defaults.
+- **Sidebar Multi-Highlight** -- Parent nav items no longer stay highlighted when a child route is active; uses exact match for parent items.
+- **Value Tracking timeStyle Crash** -- Changed `toLocaleDateString()` to `toLocaleString()` to support the `timeStyle` option.
+- **Tailwind JIT Dynamic Classes** -- Replaced dynamically constructed class names (e.g. `bg-${color}-500/10`) with literal strings so Tailwind can detect them.
+
+---
+
+## Other Changes
+- Removed unused imports across all modified Business Value components
+- Added `tabular-nums` to all numeric columns for consistent alignment
+- Consistent section heading size (`text-base`) across all Business Value pages
+- Strategy page chevron animation aligned with other expandable sections
+
+---
+
+## Commits (2)
 
 | Hash | Summary |
 |---|---|
-| `c8ca804` | Fix contradictory ai_query/from_json example in SQL gen prompt and quiet review logs |
-| `9e3aa97` | Merge pull request #93 from althrussell/feat/business-value-section |
-| `dd2689e` | Fix exhaustive return in getPersonaWeights for strategic persona |
-| `03b8731` | Fix pipeline resume flow, add toast feedback, and update AGENTS.md |
-| `dac3937` | Add Business Value Engine: financial quantification, roadmap phasing, executive synthesis, and stakeholder analysis |
+| `49e1e99` | Fix BV pipeline progress, exec synthesis crash, and enhance Business Value UX |
+| `800f933` | Merge pull request #94 from althrussell/fix/sql-gen-prompt-logs |
 
-**Uncommitted changes:** Version bump to 0.20.1, this release notes file.
+**Uncommitted changes:** Version bump to 0.21.0 in package.json, updated release notes.

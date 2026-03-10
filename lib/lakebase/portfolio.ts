@@ -10,6 +10,19 @@ import type {
   RoadmapPhase,
 } from "@/lib/domain/types";
 
+export type PortfolioUseCase = {
+  id: string;
+  name: string;
+  domain: string;
+  type: string;
+  overallScore: number;
+  feasibilityScore: number;
+  businessValue: string;
+  valueMid: number;
+  phase: RoadmapPhase | null;
+  effortEstimate: string | null;
+};
+
 function safeParse<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
@@ -72,12 +85,29 @@ export async function getPortfolioData(): Promise<BusinessValuePortfolio> {
         _count: { _all: true },
         _avg: { feasibilityScore: true, overallScore: true },
       });
+
+      const domainUseCases = await prisma.forgeUseCase.findMany({
+        where: { runId: latestRun.runId },
+        select: { id: true, domain: true },
+      });
+      const domainEstimates = await prisma.forgeValueEstimate.findMany({
+        where: { runId: latestRun.runId },
+        select: { useCaseId: true, valueMid: true },
+      });
+      const valueByUc = new Map(domainEstimates.map((e) => [e.useCaseId, e.valueMid]));
+      const domainValueMap = new Map<string, number>();
+      for (const uc of domainUseCases) {
+        if (!uc.domain) continue;
+        const prev = domainValueMap.get(uc.domain) ?? 0;
+        domainValueMap.set(uc.domain, prev + (valueByUc.get(uc.id) ?? 0));
+      }
+
       for (const g of domainGroups) {
         if (g.domain) {
           byDomain.push({
             domain: g.domain,
             useCaseCount: g._count._all,
-            valueMid: 0,
+            valueMid: domainValueMap.get(g.domain) ?? 0,
             avgFeasibility: g._avg.feasibilityScore ?? 0,
             avgScore: g._avg.overallScore ?? 0,
           });
@@ -108,5 +138,58 @@ export async function getPortfolioData(): Promise<BusinessValuePortfolio> {
       deliveredValue: deliveredAgg._sum.amount ?? 0,
       latestSynthesis: synthesis,
     };
+  });
+}
+
+export async function getPortfolioUseCases(): Promise<PortfolioUseCase[]> {
+  return withPrisma(async (prisma) => {
+    const latestRun = await prisma.forgeRun.findFirst({
+      where: { status: "completed" },
+      orderBy: { completedAt: "desc" },
+      select: { runId: true },
+    });
+    if (!latestRun) return [];
+
+    const useCases = await prisma.forgeUseCase.findMany({
+      where: { runId: latestRun.runId },
+      select: {
+        id: true,
+        name: true,
+        domain: true,
+        type: true,
+        overallScore: true,
+        feasibilityScore: true,
+        businessValue: true,
+      },
+      orderBy: { overallScore: "desc" },
+    });
+
+    const estimates = await prisma.forgeValueEstimate.findMany({
+      where: { runId: latestRun.runId },
+      select: { useCaseId: true, valueMid: true },
+    });
+    const valueMap = new Map(estimates.map((e) => [e.useCaseId, e.valueMid]));
+
+    const phases = await prisma.forgeRoadmapPhase.findMany({
+      where: { runId: latestRun.runId },
+      select: { useCaseId: true, phase: true, effortEstimate: true },
+    });
+    const phaseMap = new Map(phases.map((p) => [p.useCaseId, p]));
+
+    return useCases.map((uc) => {
+      const p = phaseMap.get(uc.id);
+      return {
+        id: uc.id,
+        name: uc.name ?? "Untitled",
+        domain: uc.domain ?? "Uncategorized",
+        type: uc.type ?? "Unknown",
+        overallScore: uc.overallScore ?? 0,
+        feasibilityScore: uc.feasibilityScore ?? 0,
+        businessValue: uc.businessValue ?? "",
+        valueMid: valueMap.get(uc.id) ?? 0,
+        phase: (p?.phase as RoadmapPhase) ?? null,
+        effortEstimate: p?.effortEstimate ?? null,
+      };
+    });
   });
 }

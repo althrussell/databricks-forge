@@ -35,6 +35,7 @@ const navSections: NavSection[] = [
       { href: "/ask-forge", label: "Ask Forge", icon: AskForgeIcon, requiresEmbedding: true },
       { href: "/configure", label: "New Discovery", icon: PlusIcon },
       { href: "/runs", label: "Runs", icon: ListIcon },
+      { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
       { href: "/runs/compare", label: "Compare", icon: CompareIcon },
       { href: "/environment", label: "Estate", icon: EnvironmentIcon },
     ],
@@ -47,14 +48,8 @@ const navSections: NavSection[] = [
       { href: "/business-value/strategy", label: "Strategy", icon: StrategyIcon },
       { href: "/business-value/stakeholders", label: "Stakeholders", icon: StakeholdersIcon },
       { href: "/business-value/tracking", label: "Value Tracking", icon: TrackingIcon },
-    ],
-  },
-  {
-    label: "Deploy",
-    items: [
-      { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
       { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
-      { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
+      { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
     ],
   },
   {
@@ -139,8 +134,13 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
           )}
           <div className="space-y-0.5">
             {section.items.map((item) => {
+              const isParent = section.items.some(
+                (s) => s !== item && s.href.startsWith(item.href),
+              );
               const isActive =
-                item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+                item.href === "/" || isParent
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
 
               const link = (
                 <Link

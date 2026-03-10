@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, Rocket, CheckCircle, BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import type { TrackingStage } from "@/lib/domain/types";
 
@@ -69,7 +69,7 @@ function truncateId(id: string): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleString(undefined, {
     dateStyle: "short",
     timeStyle: "short",
   });
@@ -181,44 +181,54 @@ export default function ValueTrackingPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Discovered</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{byStage.discovered}</p>
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-slate-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Search className="h-3.5 w-3.5" />
+              Discovered
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{byStage.discovered}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Awaiting prioritization</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Rocket className="h-3.5 w-3.5" />
               Planned + In Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{plannedPlusInProgress}</p>
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{plannedPlusInProgress}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Active implementation</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Delivered</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{byStage.delivered}</p>
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-emerald-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <CheckCircle className="h-3.5 w-3.5" />
+              Delivered
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{byStage.delivered}</p>
+            <p className="mt-1 text-xs text-muted-foreground">In production</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Measured</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{byStage.measured}</p>
+        <Card className="relative overflow-hidden transition-shadow hover:shadow-md">
+          <div className="absolute inset-y-0 left-0 w-1 bg-blue-500" />
+          <CardContent className="pt-5 pb-5 pl-5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Measured
+            </div>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{byStage.measured}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Value validated</p>
           </CardContent>
         </Card>
       </div>
 
       <section>
-        <h2 className="mb-4 text-lg font-semibold">Stage Pipeline</h2>
+        <h2 className="mb-4 text-base font-semibold">Stage Pipeline</h2>
         <div className="flex flex-wrap items-stretch gap-0 rounded-lg border bg-muted/30 overflow-hidden">
           {STAGES.map((s, i) => (
             <div
@@ -233,7 +243,7 @@ export default function ValueTrackingPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 text-lg font-semibold">Tracking Table</h2>
+        <h2 className="mb-4 text-base font-semibold">Tracking Table</h2>
         {entries.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16">
