@@ -16,3 +16,8 @@ AGENTS.md
 .env
 .deploy-pkg/
 *.md
+
+# Build artifacts and dependencies (platform runs npm install + npm run build)
+node_modules/
+.next/
+lib/generated/
