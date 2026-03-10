@@ -60,12 +60,14 @@ describe("benchmark provenance validation", () => {
 describe("benchmark seed pack files", () => {
   const BENCHMARK_DIR = join(process.cwd(), "data", "benchmark");
   const files = readdirSync(BENCHMARK_DIR).filter((f) => f.endsWith(".json"));
+  const baselineFiles = files.filter((f) => !f.endsWith("-master.json"));
+  const masterFiles = files.filter((f) => f.endsWith("-master.json"));
 
   it("has at least one benchmark file", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  for (const file of files) {
+  for (const file of baselineFiles) {
     describe(file, () => {
       const raw = JSON.parse(readFileSync(join(BENCHMARK_DIR, file), "utf-8"));
 
@@ -103,6 +105,38 @@ describe("benchmark seed pack files", () => {
       it("has all source_urls from the public allowlist", () => {
         for (const r of raw.records) {
           expect(isPublicSourceUrl(r.source_url)).toBe(true);
+        }
+      });
+    });
+  }
+
+  for (const file of masterFiles) {
+    describe(file, () => {
+      const raw = JSON.parse(readFileSync(join(BENCHMARK_DIR, file), "utf-8"));
+
+      it("has valid $schema marker", () => {
+        expect(raw.$schema).toBe("master-repository-benchmarks");
+      });
+
+      it("has at least one record", () => {
+        expect(raw.records.length).toBeGreaterThan(0);
+      });
+
+      it("has all record industry fields matching pack industry", () => {
+        for (const r of raw.records) {
+          if (r.industry) {
+            expect(r.industry).toBe(raw.industry);
+          }
+        }
+      });
+
+      it("has all records with required fields", () => {
+        for (const r of raw.records) {
+          expect(r.kind).toBeTruthy();
+          expect(r.title).toBeTruthy();
+          expect(r.summary).toBeTruthy();
+          expect(r.source_url).toBeTruthy();
+          expect(typeof r.confidence).toBe("number");
         }
       });
     });

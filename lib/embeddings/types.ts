@@ -30,6 +30,8 @@ export const EMBEDDING_KINDS = [
   "fabric_artifact",
   "skill_chunk",
   "industry_kpi",
+  "industry_benchmark",
+  "industry_data_asset",
 ] as const;
 
 export type EmbeddingKind = (typeof EMBEDDING_KINDS)[number];
@@ -48,9 +50,9 @@ export const SEARCH_SCOPES: Record<string, readonly EmbeddingKind[]> = {
   genie: ["genie_recommendation", "genie_question"],
   insights: ["environment_insight", "table_health", "data_product"],
   documents: ["document_chunk"],
-  benchmarks: ["benchmark_context", "outcome_map"],
+  benchmarks: ["benchmark_context", "outcome_map", "industry_benchmark"],
   fabric: ["fabric_dataset", "fabric_measure", "fabric_report", "fabric_artifact"],
-  skills: ["skill_chunk", "industry_kpi"],
+  skills: ["skill_chunk", "industry_kpi", "industry_benchmark", "industry_data_asset"],
   all: EMBEDDING_KINDS,
 };
 

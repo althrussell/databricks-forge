@@ -1,6 +1,6 @@
 {
   "name": "databricks-forge",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "scripts": {
@@ -18,6 +18,7 @@
     "seed:benchmarks": "node scripts/seed-benchmarks.mjs",
     "seed:benchmarks:all-industries": "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES=true node scripts/seed-benchmarks.mjs",
     "seed:benchmarks:industries": "FORGE_SEED_BENCHMARKS=true FORGE_SEED_BENCHMARK_INDUSTRIES=${FORGE_SEED_BENCHMARK_INDUSTRIES:-banking} node scripts/seed-benchmarks.mjs",
+    "sync-master-repo": "node scripts/convert-master-repo.mjs",
     "version:patch": "bash scripts/bump-version.sh patch",
     "version:minor": "bash scripts/bump-version.sh minor",
     "version:major": "bash scripts/bump-version.sh major"

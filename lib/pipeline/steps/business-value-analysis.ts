@@ -28,6 +28,7 @@ import { replaceStakeholderProfiles } from "@/lib/lakebase/stakeholder-profiles"
 import { bulkInitTracking } from "@/lib/lakebase/use-case-tracking";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { withPrisma } from "@/lib/prisma";
+import { buildStrategyAlignmentPrompt } from "@/lib/domain/strategy-alignment";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -226,6 +227,13 @@ async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]):
     `Top 15 use cases:\n${topUseCases.map((u) => `- ${u.name} (${u.domain}, score: ${u.overallScore.toFixed(2)}): ${u.businessValue}`).join("\n")}`,
   ].join("\n");
 
+  const strategyAlignment = run.config.industry
+    ? buildStrategyAlignmentPrompt(
+        run.config.industry,
+        useCases.map((u) => u.name),
+      )
+    : null;
+
   const variables: Record<string, string> = {
     business_name: run.config.businessName,
     industries: bc.industries,
@@ -234,6 +242,7 @@ async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]):
     use_case_summary: useCaseSummary,
     estate_summary: "Estate scan data available in full pipeline context",
     value_summary: `${useCases.length} use cases scored and ranked`,
+    strategy_alignment: strategyAlignment || "No industry strategy alignment data available.",
   };
 
   try {

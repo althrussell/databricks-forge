@@ -21,6 +21,21 @@ const ALLOWLIST = [
   "itu.int",
   "era.europa.eu",
   "deloitte.com",
+  "bcg.com",
+  "gartner.com",
+  "accenture.com",
+  "bain.com",
+  "capgemini.com",
+  "pwc.com",
+  "ey.com",
+  "kpmg.com",
+  "idc.com",
+  "forrester.com",
+  "statista.com",
+  "grandviewresearch.com",
+  "fortunebusinessinsights.com",
+  "precedenceresearch.com",
+  "marketsandmarkets.com",
 ];
 
 function isAllowed(sourceUrl) {
