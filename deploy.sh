@@ -280,10 +280,9 @@ wait_for_app_absent() {
 APP_YAML_BACKUP=""
 
 prepare_app_yaml() {
-  if [ "$APP_NAME" = "databricks-forge" ] && [ -z "$LAKEBASE_BOOTSTRAP_USER" ] && [ -z "$LAKEBASE_AUTH_MODE" ] && [ -z "$LAKEBASE_NATIVE_USER" ] && [ -z "$LAKEBASE_NATIVE_PASSWORD" ] && [ -z "$LAKEBASE_RUNTIME_MODE" ] && [ "$LAKEBASE_ENABLE_POOLER_EXPERIMENT" != "true" ] && [ "$SEED_BENCHMARKS" != "true" ] && [ "$SEED_BENCHMARKS_ALL_INDUSTRIES" != "true" ] && [ -z "$SEED_BENCHMARK_INDUSTRIES" ] && [ -z "$BENCHMARK_ADMINS" ] && [ "$ENABLE_METRIC_VIEWS" != "true" ]; then
-    return
-  fi
-
+  # Always back up and strip managed env vars from app.yaml before syncing.
+  # This prevents stale instance-specific config from leaking between deploys
+  # when running multiple app instances from the same repo checkout.
   APP_YAML_BACKUP="$(mktemp)"
   cp "app.yaml" "$APP_YAML_BACKUP"
 

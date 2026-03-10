@@ -43,7 +43,7 @@ env:
   - name: DATABRICKS_REVIEW_ENDPOINT
     valueFrom: serving-endpoint-review
   - name: FORGE_APP_NAME
-    value: "forge-retail-banking-demo"
+    value: "forge-super-demo"
   - name: LAKEBASE_BOOTSTRAP_USER
     value: "al.thrussell@databricks.com"
   - name: LAKEBASE_ENABLE_POOLER_EXPERIMENT
