@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,16 +10,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SearchBar } from "@/components/search/search-bar";
 import { AskForgePanel } from "@/components/assistant/ask-forge-panel";
 
-const sans = Plus_Jakarta_Sans({
+const sans = localFont({
+  src: [
+    { path: "../public/fonts/PlusJakartaSans-latin.woff2", style: "normal", weight: "300 800" },
+    { path: "../public/fonts/PlusJakartaSans-italic-latin.woff2", style: "italic", weight: "300 800" },
+  ],
   variable: "--font-jakarta",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
-const mono = JetBrains_Mono({
+const mono = localFont({
+  src: [{ path: "../public/fonts/JetBrainsMono-latin.woff2", style: "normal", weight: "400 600" }],
   variable: "--font-jetbrains",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
