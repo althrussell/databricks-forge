@@ -54,6 +54,10 @@ function getPersonaWeights(persona: AssistantPersona): ScoringWeights {
       return { citation: 0.1, grounding: 0.4, actionSafety: 0.3, confidence: 0.2 };
     case "tech":
       return { citation: 0.2, grounding: 0.35, actionSafety: 0.3, confidence: 0.15 };
+    case "strategic":
+      return { citation: 0.05, grounding: 0.4, actionSafety: 0.3, confidence: 0.25 };
+    default:
+      return { citation: 0.0, grounding: 0.45, actionSafety: 0.3, confidence: 0.25 };
   }
 }
 
