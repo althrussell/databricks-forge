@@ -27,7 +27,6 @@ import {
   ArrowRight,
   Sparkles,
   DollarSign,
-  CheckCircle2,
 } from "lucide-react";
 
 export interface DashboardStats {
@@ -76,66 +75,35 @@ function timeAgo(dateStr: string): string {
 
 function BusinessValueSummary() {
   const [valueMid, setValueMid] = useState<number | null>(null);
-  const [trackingCount, setTrackingCount] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     fetch("/api/business-value/portfolio")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) {
-          setValueMid(data.totalEstimatedValue?.mid ?? null);
-          const stages = data.byStage ?? {};
-          setTrackingCount(
-            (stages.planned ?? 0) +
-              (stages.in_progress ?? 0) +
-              (stages.delivered ?? 0) +
-              (stages.measured ?? 0),
-          );
-        }
+        if (data) setValueMid(data.totalEstimatedValue?.mid ?? null);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, []);
 
-  if (!loaded || (valueMid === null && trackingCount === null)) return null;
-  if (valueMid === 0 && (trackingCount === null || trackingCount === 0)) return null;
+  if (!loaded || valueMid === null || valueMid === 0) return null;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {valueMid !== null && valueMid > 0 && (
-        <Link href="/business-value">
-          <Card className="transition-shadow hover:shadow-md">
-            <CardContent className="flex items-center gap-4 pt-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
-                <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Estimated Value</p>
-                <p className="text-2xl font-bold">{formatCurrency(valueMid)}</p>
-              </div>
-              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-      )}
-      {trackingCount !== null && trackingCount > 0 && (
-        <Link href="/business-value/tracking">
-          <Card className="transition-shadow hover:shadow-md">
-            <CardContent className="flex items-center gap-4 pt-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Implementation Progress</p>
-                <p className="text-2xl font-bold">{trackingCount} use cases in motion</p>
-              </div>
-              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-      )}
-    </div>
+    <Link href="/business-value" className="group flex-1">
+      <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
+        <CardContent className="flex h-full items-center gap-4 pt-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-green-100 transition-colors group-hover:bg-green-200 dark:bg-green-900/30 dark:group-hover:bg-green-900/50">
+            <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <p className="font-semibold">Business Value</p>
+            <p className="text-xs text-muted-foreground">{formatCurrency(valueMid)} estimated</p>
+          </div>
+          <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -193,91 +161,20 @@ export function DashboardContent({
       variants={staggerContainer}
       initial="hidden"
       animate="visible"
-      className="space-y-8"
+      className="space-y-6"
     >
-      {/* ── Hero metric + Quick actions ── */}
-      <motion.div variants={staggerItem} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Hero metric tile */}
-        {(() => {
-          const latestRun = stats.recentRuns.find((r) => r.status === "completed");
-          const card = (
-            <Card
-              className={cn(
-                "relative overflow-hidden border-primary/20 sm:col-span-2 lg:col-span-1 lg:row-span-2",
-                latestRun && "hover:-translate-y-0.5 hover:shadow-md",
-              )}
-            >
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2">
-                  <BrainCircuit className="h-4 w-4 text-primary" />
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Use Cases Generated
-                  </p>
-                  <InfoTip tip={DASHBOARD.useCases} />
-                </div>
-                <p className="mt-3 text-5xl font-extrabold tracking-tight text-primary">
-                  {stats.totalUseCases.toLocaleString()}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {stats.aiCount} AI &middot; {stats.statisticalCount} Statistical
-                  {stats.geospatialCount > 0 && <> &middot; {stats.geospatialCount} Geospatial</>}
-                </p>
-                {latestRun && (
-                  <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground/70">
-                    from {latestRun.businessName}
-                    <ArrowRight className="h-3 w-3" />
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-          return latestRun ? (
-            <Link
-              href={`/runs/${latestRun.runId}`}
-              className="group sm:col-span-2 lg:col-span-1 lg:row-span-2"
-            >
-              {card}
-            </Link>
-          ) : (
-            <div className="sm:col-span-2 lg:col-span-1 lg:row-span-2">{card}</div>
-          );
-        })()}
-
-        {/* Quick action: New Discovery */}
-        <Link href="/configure" className="group">
-          <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
-            <CardContent className="flex h-full items-center gap-4 pt-6">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/15">
-                <Plus className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold">New Discovery</p>
-                <p className="text-xs text-muted-foreground">Configure a pipeline run</p>
-              </div>
-              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
-            </CardContent>
-          </Card>
-        </Link>
-
-        {/* Quick action: Ask Forge */}
-        <Link href="/ask-forge" className="group">
-          <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
-            <CardContent className="flex h-full items-center gap-4 pt-6">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 transition-colors group-hover:bg-chart-2/15">
-                <Sparkles className="h-5 w-5 text-chart-2" />
-              </div>
-              <div>
-                <p className="font-semibold">Ask Forge</p>
-                <p className="text-xs text-muted-foreground">Chat with your data estate</p>
-              </div>
-              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
-            </CardContent>
-          </Card>
-        </Link>
-      </motion.div>
-
-      {/* ── Secondary KPI tiles ── */}
-      <motion.div variants={staggerItem} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── KPI tiles ── */}
+      <motion.div
+        variants={staggerItem}
+        className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
+      >
+        <KPITile
+          icon={<BrainCircuit className="h-4 w-4 text-primary" />}
+          label="Use Cases"
+          tip={DASHBOARD.useCases}
+          value={stats.totalUseCases.toLocaleString()}
+          detail={`${stats.aiCount} AI · ${stats.statisticalCount} Statistical${stats.geospatialCount > 0 ? ` · ${stats.geospatialCount} Geo` : ""}`}
+        />
         <KPITile
           icon={<Activity className="h-4 w-4 text-chart-2" />}
           label="Total Runs"
@@ -316,12 +213,40 @@ export function DashboardContent({
         />
       </motion.div>
 
-      {/* ── Business Value Summary ── */}
-      {stats.totalUseCases > 0 && (
-        <motion.div variants={staggerItem}>
-          <BusinessValueSummary />
-        </motion.div>
-      )}
+      {/* ── Quick actions + Business value ── */}
+      <motion.div variants={staggerItem} className="flex flex-col gap-4 sm:flex-row">
+        <Link href="/configure" className="group flex-1">
+          <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="flex h-full items-center gap-4 pt-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/15">
+                <Plus className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold">New Discovery</p>
+                <p className="text-xs text-muted-foreground">Configure a pipeline run</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/ask-forge" className="group flex-1">
+          <Card className="h-full hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="flex h-full items-center gap-4 pt-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 transition-colors group-hover:bg-chart-2/15">
+                <Sparkles className="h-5 w-5 text-chart-2" />
+              </div>
+              <div>
+                <p className="font-semibold">Ask Forge</p>
+                <p className="text-xs text-muted-foreground">Chat with your data estate</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        {stats.totalUseCases > 0 && <BusinessValueSummary />}
+      </motion.div>
 
       {/* ── Charts ── */}
       {stats.totalUseCases > 0 && (
@@ -336,7 +261,7 @@ export function DashboardContent({
         </motion.div>
       )}
 
-      {/* ── Recent Runs + Activity (side by side) ── */}
+      {/* ── Recent Runs + Activity ── */}
       <motion.div variants={staggerItem} className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader className="pb-2">
