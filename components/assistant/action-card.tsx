@@ -12,6 +12,9 @@ import {
   Download,
   ExternalLink,
   Eye,
+  TrendingUp,
+  FileText,
+  Users,
 } from "lucide-react";
 
 export interface ActionCardData {
@@ -39,6 +42,11 @@ const ACTION_CONFIG: Record<
   export_report: { icon: <Download className="size-3.5" />, variant: "secondary" },
   view_run: { icon: <Eye className="size-3.5" />, variant: "secondary" },
   ask_genie: { icon: <ExternalLink className="size-3.5" />, variant: "outline" },
+  view_portfolio: { icon: <TrendingUp className="size-3.5" />, variant: "default" },
+  generate_business_case: { icon: <FileText className="size-3.5" />, variant: "outline" },
+  view_stakeholders: { icon: <Users className="size-3.5" />, variant: "secondary" },
+  view_roadmap: { icon: <Rocket className="size-3.5" />, variant: "secondary" },
+  draft_executive_memo: { icon: <FileText className="size-3.5" />, variant: "outline" },
 };
 
 export function ActionCard({ action, onAction }: ActionCardProps) {

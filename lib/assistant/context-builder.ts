@@ -112,6 +112,13 @@ const INTENT_SCOPES: Record<
     { scope: "fabric", topK: 6, minScore: 0.35, useLatestFabricScan: true },
     { scope: "skills", topK: 4, minScore: 0.4 },
   ],
+  strategic: [
+    { scope: "usecases", topK: 15, minScore: 0.3, useLatestRun: true },
+    { scope: "estate", topK: 10, minScore: 0.3, useLatestScan: true },
+    { scope: "benchmarks", topK: 8, minScore: 0.3 },
+    { scope: "documents", topK: 5, minScore: 0.3 },
+    { scope: "skills", topK: 4, minScore: 0.4 },
+  ],
 };
 
 interface DirectContextResult {

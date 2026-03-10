@@ -59,7 +59,12 @@ export interface ActionCard {
     | "start_discovery"
     | "export_report"
     | "view_run"
-    | "ask_genie";
+    | "ask_genie"
+    | "view_portfolio"
+    | "generate_business_case"
+    | "view_stakeholders"
+    | "view_roadmap"
+    | "draft_executive_memo";
   label: string;
   payload: Record<string, unknown>;
 }
@@ -652,6 +657,24 @@ function buildActions(
       const [dashAction] = actions.splice(dashIdx, 1);
       actions.unshift(dashAction);
     }
+  }
+
+  if (intent === "strategic") {
+    actions.push({
+      type: "view_portfolio",
+      label: "View Portfolio",
+      payload: {},
+    });
+    actions.push({
+      type: "view_roadmap",
+      label: "View Roadmap",
+      payload: {},
+    });
+    actions.push({
+      type: "view_stakeholders",
+      label: "View Stakeholders",
+      payload: {},
+    });
   }
 
   return actions;

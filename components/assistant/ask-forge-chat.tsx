@@ -131,6 +131,7 @@ const PERSONA_META: Record<AssistantPersona, { icon: React.ReactNode; label: str
   business: { icon: <Target className="size-3.5" />, label: "Business" },
   analyst: { icon: <Briefcase className="size-3.5" />, label: "Analyst" },
   tech: { icon: <Wrench className="size-3.5" />, label: "Tech" },
+  strategic: { icon: <Target className="size-3.5" />, label: "Strategic" },
 };
 
 // ---------------------------------------------------------------------------
@@ -376,6 +377,17 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         window.open(action.payload.url as string, "_blank");
       } else if (action.type === "export_report") {
         router.push("/environment?tab=overview");
+      } else if (action.type === "view_portfolio") {
+        router.push("/business-value");
+      } else if (action.type === "view_stakeholders") {
+        router.push("/business-value/stakeholders");
+      } else if (action.type === "view_roadmap") {
+        router.push("/business-value/roadmap");
+      } else if (
+        action.type === "generate_business_case" ||
+        action.type === "draft_executive_memo"
+      ) {
+        router.push("/business-value");
       }
     };
 

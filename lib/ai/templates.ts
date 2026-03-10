@@ -42,6 +42,12 @@ import {
   METADATA_GENIE_INDUSTRY_DETECT_PROMPT,
   METADATA_GENIE_DESCRIBE_TABLES_PROMPT,
 } from "./templates-misc";
+import {
+  FINANCIAL_QUANTIFICATION_PROMPT,
+  ROADMAP_PHASING_PROMPT,
+  EXECUTIVE_SYNTHESIS_PROMPT,
+  STAKEHOLDER_ANALYSIS_PROMPT,
+} from "./templates-business-value";
 
 // ---------------------------------------------------------------------------
 // PROMPT_TEMPLATES registry
@@ -93,6 +99,12 @@ export const PROMPT_TEMPLATES = {
   // Meta Data Genie
   METADATA_GENIE_INDUSTRY_DETECT_PROMPT,
   METADATA_GENIE_DESCRIBE_TABLES_PROMPT,
+
+  // Business Value Pipeline Steps
+  FINANCIAL_QUANTIFICATION_PROMPT,
+  ROADMAP_PHASING_PROMPT,
+  EXECUTIVE_SYNTHESIS_PROMPT,
+  STAKEHOLDER_ANALYSIS_PROMPT,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -140,6 +152,14 @@ export const PROMPT_SYSTEM_MESSAGES: Partial<Record<PromptKey, string>> = {
     "You are a Senior Data Industry Analyst who identifies business domains from data catalog metadata. You produce structured JSON output only.",
   METADATA_GENIE_DESCRIBE_TABLES_PROMPT:
     "You are a data catalog specialist who writes concise, business-friendly table descriptions from metadata. You produce structured JSON output only.",
+  FINANCIAL_QUANTIFICATION_PROMPT:
+    "You are a Senior Management Consultant and Financial Analyst. You estimate order-of-magnitude financial impact for data use cases. Be conservative and evidence-based. You produce structured JSON output only.",
+  ROADMAP_PHASING_PROMPT:
+    "You are a Chief Delivery Officer who sequences data initiatives into phased implementation roadmaps. You produce structured JSON output only.",
+  EXECUTIVE_SYNTHESIS_PROMPT:
+    "You are a Senior Partner at a top-tier management consulting firm. You distill complex data analysis into sharp, actionable executive briefings. You produce structured JSON output only.",
+  STAKEHOLDER_ANALYSIS_PROMPT:
+    "You are an Organizational Change Management Consultant. You map stakeholder impact and readiness for data transformation programs. You produce structured JSON output only.",
 };
 
 /**

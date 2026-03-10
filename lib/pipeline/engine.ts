@@ -34,6 +34,7 @@ import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { runAssetDiscovery } from "./steps/asset-discovery";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
 import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
+import { runBusinessValueAnalysis } from "./steps/business-value-analysis";
 import {
   startJob,
   updateJob,
@@ -79,7 +80,8 @@ const STEPS: StepDef[] = [
   { step: PipelineStep.UsecaseGeneration, progressPct: 45, label: "Generating use cases" },
   { step: PipelineStep.DomainClustering, progressPct: 55, label: "Clustering domains" },
   { step: PipelineStep.Scoring, progressPct: 65, label: "Scoring use cases" },
-  { step: PipelineStep.SqlGeneration, progressPct: 85, label: "Generating SQL" },
+  { step: PipelineStep.SqlGeneration, progressPct: 80, label: "Generating SQL" },
+  { step: PipelineStep.BusinessValueAnalysis, progressPct: 90, label: "Analyzing business value" },
   { step: PipelineStep.GenieRecommendations, progressPct: 100, label: "Building Genie Spaces" },
 ];
 
@@ -496,6 +498,29 @@ export async function startPipeline(runId: string): Promise<void> {
         );
       });
 
+      // Step 8: Business Value Analysis (financial quantification, roadmap, synthesis, stakeholders)
+      checkCancelled(ctx.signal);
+      await logStep(PipelineStep.BusinessValueAnalysis, async () => {
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.BusinessValueAnalysis,
+          86,
+          undefined,
+          "Analyzing business value and building executive synthesis...",
+        );
+        logger.info("Step 8: Analyzing business value", { runId, step: "business-value-analysis" });
+        await runBusinessValueAnalysis(ctx);
+        await updateRunStatus(
+          runId,
+          "running",
+          PipelineStep.BusinessValueAnalysis,
+          90,
+          undefined,
+          "Business value analysis complete",
+        );
+      });
+
       // Generate vector embeddings for use cases + business context (best-effort)
       try {
         const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
@@ -650,6 +675,12 @@ export async function resumePipeline(runId: string): Promise<void> {
     if (completedSteps.has(PipelineStep.TableFiltering)) {
       const tables = await getRunFilteredTables(runId);
       if (tables) ctx.filteredTables = tables;
+    }
+
+    // Restore use cases (persisted after step 7)
+    if (completedSteps.has(PipelineStep.UsecaseGeneration)) {
+      const { getUseCasesByRunId } = await import("@/lib/lakebase/usecases");
+      ctx.useCases = await getUseCasesByRunId(runId);
     }
 
     logger.info("Resuming pipeline", {
@@ -946,46 +977,76 @@ export async function resumePipeline(runId: string): Promise<void> {
         });
       }
 
-      // Persist use cases
-      logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
-      const { withPrisma } = await import("@/lib/prisma");
-      await withPrisma(async (prisma) => {
-        await prisma.$transaction(
-          async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-            await tx.forgeUseCase.deleteMany({ where: { runId } });
-            if (ctx.useCases.length > 0) {
-              await tx.forgeUseCase.createMany({
-                data: ctx.useCases.map((uc) => ({
-                  id: uc.id,
-                  runId: uc.runId,
-                  useCaseNo: uc.useCaseNo,
-                  name: uc.name,
-                  type: uc.type,
-                  analyticsTechnique: uc.analyticsTechnique,
-                  statement: uc.statement,
-                  solution: uc.solution,
-                  businessValue: uc.businessValue,
-                  beneficiary: uc.beneficiary,
-                  sponsor: uc.sponsor,
-                  domain: uc.domain,
-                  subdomain: uc.subdomain,
-                  tablesInvolved: JSON.stringify(uc.tablesInvolved),
-                  priorityScore: uc.priorityScore,
-                  feasibilityScore: uc.feasibilityScore,
-                  impactScore: uc.impactScore,
-                  overallScore: uc.overallScore,
-                  sqlCode: uc.sqlCode,
-                  sqlStatus: uc.sqlStatus,
-                })),
-              });
-            }
-          },
-        );
-      });
+      // Persist use cases only if we re-ran generation/scoring/SQL steps
+      if (resumeIndex <= 7) {
+        logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
+        const { withPrisma } = await import("@/lib/prisma");
+        await withPrisma(async (prisma) => {
+          await prisma.$transaction(
+            async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+              await tx.forgeUseCase.deleteMany({ where: { runId } });
+              if (ctx.useCases.length > 0) {
+                await tx.forgeUseCase.createMany({
+                  data: ctx.useCases.map((uc) => ({
+                    id: uc.id,
+                    runId: uc.runId,
+                    useCaseNo: uc.useCaseNo,
+                    name: uc.name,
+                    type: uc.type,
+                    analyticsTechnique: uc.analyticsTechnique,
+                    statement: uc.statement,
+                    solution: uc.solution,
+                    businessValue: uc.businessValue,
+                    beneficiary: uc.beneficiary,
+                    sponsor: uc.sponsor,
+                    domain: uc.domain,
+                    subdomain: uc.subdomain,
+                    tablesInvolved: JSON.stringify(uc.tablesInvolved),
+                    priorityScore: uc.priorityScore,
+                    feasibilityScore: uc.feasibilityScore,
+                    impactScore: uc.impactScore,
+                    overallScore: uc.overallScore,
+                    sqlCode: uc.sqlCode,
+                    sqlStatus: uc.sqlStatus,
+                  })),
+                });
+              }
+            },
+          );
+        });
+      }
 
-      // Step 8: Genie Recommendations
+      // Step 8: Business Value Analysis
       if (resumeIndex <= 8) {
-        // Genie recommendations are handled by the background engine below
+        checkCancelled(ctx.signal);
+        await logStep(PipelineStep.BusinessValueAnalysis, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessValueAnalysis,
+            86,
+            undefined,
+            "Analyzing business value and building executive synthesis...",
+          );
+          logger.info("Step 8: Analyzing business value", {
+            runId,
+            step: "business-value-analysis",
+          });
+          await runBusinessValueAnalysis(ctx);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessValueAnalysis,
+            90,
+            undefined,
+            "Business value analysis complete",
+          );
+        });
+      }
+
+      // Step 9: Genie Recommendations (handled by the background engine below)
+      if (resumeIndex <= 9) {
+        // no-op — Genie Engine runs in background after completion
       }
 
       // Generate vector embeddings for use cases + business context (best-effort)

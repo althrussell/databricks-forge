@@ -10,7 +10,13 @@ import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
-export type AssistantIntent = "business" | "technical" | "dashboard" | "navigation" | "exploration";
+export type AssistantIntent =
+  | "business"
+  | "technical"
+  | "dashboard"
+  | "navigation"
+  | "exploration"
+  | "strategic";
 
 export interface IntentClassification {
   intent: AssistantIntent;
@@ -27,6 +33,7 @@ Classify the user's question into exactly ONE of these intents:
 - "dashboard": Questions that ask to visualise, chart, trend, or compare data -- the answer is best served as a dashboard (e.g. "Show me churn by region", "Trend of revenue over time")
 - "navigation": Questions that are really looking for a specific entity -- a table, use case, domain, or document (e.g. "Find customer tables", "Show me the orders use case")
 - "exploration": Open-ended questions about the data estate, risks, opportunities, domains, or general investigation (e.g. "What PII risks exist in Finance?", "What's in the Sales domain?")
+- "strategic": Questions about executive strategy, business cases, stakeholder mapping, implementation roadmap, value quantification, or board-level summaries (e.g. "Write an executive summary", "Draft a business case", "What should I present to the CFO?", "Who are the key stakeholders?", "What is our implementation roadmap?")
 
 Respond with a JSON object: { "intent": "<intent>", "confidence": <0.0-1.0>, "reasoning": "<one sentence>" }`;
 
@@ -58,6 +65,7 @@ export async function classifyIntent(question: string): Promise<IntentClassifica
       "dashboard",
       "navigation",
       "exploration",
+      "strategic",
     ];
     if (!valid.includes(intent)) throw new Error(`Invalid intent: ${intent}`);
 
@@ -92,6 +100,16 @@ function heuristicClassify(question: string): IntentClassification {
   const navPatterns = /\b(find|where is|show the|navigate|go to|open|locate)\b/;
   if (navPatterns.test(q)) {
     return { intent: "navigation", confidence: 0.6, reasoning: "Heuristic: navigation pattern" };
+  }
+
+  const strategicPatterns =
+    /\b(executive|business case|cfo|cdo|cio|board|stakeholder|roadmap|implementation plan|strategy|strategic|briefing|memo|value (tracking|realization)|portfolio|champion|change management)\b/;
+  if (strategicPatterns.test(q)) {
+    return {
+      intent: "strategic",
+      confidence: 0.7,
+      reasoning: "Heuristic: strategic/executive pattern",
+    };
   }
 
   const businessPatterns =

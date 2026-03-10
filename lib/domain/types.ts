@@ -18,6 +18,7 @@ export enum PipelineStep {
   DomainClustering = "domain-clustering",
   Scoring = "scoring",
   SqlGeneration = "sql-generation",
+  BusinessValueAnalysis = "business-value-analysis",
   GenieRecommendations = "genie-recommendations",
 }
 
@@ -647,4 +648,154 @@ export interface ERDGraph {
     implicitCount: number;
     lineageCount: number;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Business Value Types
+// ---------------------------------------------------------------------------
+
+export type ValueType = "cost_savings" | "revenue_uplift" | "risk_reduction" | "efficiency_gain";
+export type ValueConfidence = "low" | "medium" | "high";
+export type RoadmapPhase = "quick_wins" | "foundation" | "transformation";
+export type EffortEstimate = "xs" | "s" | "m" | "l" | "xl";
+export type TrackingStage = "discovered" | "planned" | "in_progress" | "delivered" | "measured";
+export type StrategyGapType = "supported" | "partial" | "blocked" | "unmatched";
+
+export interface ValueEstimate {
+  id: string;
+  runId: string;
+  useCaseId: string;
+  valueLow: number;
+  valueMid: number;
+  valueHigh: number;
+  currency: string;
+  valueType: ValueType;
+  confidence: ValueConfidence;
+  rationale: string | null;
+  assumptions: string[];
+  industryBenchmark: string | null;
+}
+
+export interface RoadmapPhaseAssignment {
+  id: string;
+  runId: string;
+  useCaseId: string;
+  phase: RoadmapPhase;
+  phaseOrder: number;
+  effortEstimate: EffortEstimate | null;
+  dependencies: string[];
+  enablers: string[];
+  rationale: string | null;
+  manualOverride: boolean;
+}
+
+export interface UseCaseTrackingEntry {
+  id: string;
+  runId: string;
+  useCaseId: string;
+  stage: TrackingStage;
+  assignedOwner: string | null;
+  plannedDate: string | null;
+  startedDate: string | null;
+  deliveredDate: string | null;
+  measuredDate: string | null;
+  notes: Array<{ text: string; author?: string; createdAt: string }>;
+}
+
+export interface ValueCaptureEntry {
+  id: string;
+  runId: string;
+  useCaseId: string;
+  captureDate: string;
+  valueType: ValueType;
+  amount: number;
+  currency: string;
+  evidence: string | null;
+  capturedBy: string | null;
+}
+
+export interface StrategyInitiative {
+  index: number;
+  name: string;
+  description: string;
+  expectedOutcomes: string[];
+  dataRequirements: string[];
+}
+
+export interface StrategyDocument {
+  id: string;
+  title: string;
+  rawContent: string;
+  parsedInitiatives: StrategyInitiative[];
+  alignmentScore: number | null;
+  status: "draft" | "analyzed" | "archived";
+}
+
+export interface StrategyAlignmentEntry {
+  id: string;
+  strategyId: string;
+  runId: string;
+  initiativeIndex: number;
+  useCaseId: string | null;
+  confidence: number;
+  gapType: StrategyGapType | null;
+  notes: string | null;
+}
+
+export interface StakeholderProfile {
+  id: string;
+  runId: string;
+  role: string;
+  department: string;
+  useCaseCount: number;
+  totalValue: number;
+  domains: string[];
+  useCaseTypes: Record<string, number>;
+  changeComplexity: "low" | "medium" | "high" | null;
+  isChampion: boolean;
+  isSponsor: boolean;
+}
+
+export interface ExecutiveSynthesis {
+  keyFindings: Array<{
+    title: string;
+    description: string;
+    domain: string | null;
+    severity: "opportunity" | "risk" | "insight";
+  }>;
+  strategicRecommendations: Array<{
+    title: string;
+    description: string;
+    priority: "high" | "medium" | "low";
+  }>;
+  riskCallouts: Array<{
+    title: string;
+    description: string;
+    impact: "high" | "medium" | "low";
+  }>;
+  totalEstimatedValue: {
+    low: number;
+    mid: number;
+    high: number;
+    currency: string;
+  };
+  quickWinCount: number;
+  topDomain: string | null;
+}
+
+/** Portfolio-level aggregation across all runs. */
+export interface BusinessValuePortfolio {
+  totalUseCases: number;
+  totalEstimatedValue: { low: number; mid: number; high: number; currency: string };
+  byStage: Record<TrackingStage, number>;
+  byPhase: Record<RoadmapPhase, { count: number; valueMid: number }>;
+  byDomain: Array<{
+    domain: string;
+    useCaseCount: number;
+    valueMid: number;
+    avgFeasibility: number;
+    avgScore: number;
+  }>;
+  deliveredValue: number;
+  latestSynthesis: ExecutiveSynthesis | null;
 }
