@@ -30,6 +30,7 @@ import {
   Trash2,
   ArrowLeft,
 } from "lucide-react";
+import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   CommentTableNav,
   type TableSummary,
@@ -65,8 +66,7 @@ export default function AICommentsPage() {
   const [loading, setLoading] = useState(true);
 
   // Setup state
-  const [selectedCatalogs, setSelectedCatalogs] = useState<string[]>([]);
-  const [availableCatalogs, setAvailableCatalogs] = useState<string[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedIndustry, setSelectedIndustry] = useState<string>("none");
   const [genProgress, setGenProgress] = useState<{ phase: string; pct: number; detail: string }>({
@@ -78,15 +78,13 @@ export default function AICommentsPage() {
   // SSE abort controller for generation cancellation
   const [genAbort, setGenAbort] = useState<AbortController | null>(null);
 
-  // -- Load existing jobs + available catalogs + industries on mount --
+  // -- Load existing jobs + industries on mount --
   useEffect(() => {
     Promise.all([
       fetch("/api/environment/comments").then((r) => (r.ok ? r.json() : { jobs: [] })),
-      fetch("/api/metadata?type=catalogs").then((r) => (r.ok ? r.json() : { catalogs: [] })),
       fetch("/api/industries").then((r) => (r.ok ? r.json() : { industries: [] })),
-    ]).then(([jobsData, catData, indData]) => {
+    ]).then(([jobsData, indData]) => {
       setJobs(jobsData.jobs ?? []);
-      setAvailableCatalogs(catData.catalogs?.map((c: { name: string }) => c.name ?? c) ?? []);
       setIndustries(indData.industries ?? []);
       setLoading(false);
 
@@ -137,9 +135,20 @@ export default function AICommentsPage() {
 
   // -- Generate comments --
   const handleGenerate = useCallback(async () => {
-    if (selectedCatalogs.length === 0) {
-      toast.error("Select at least one catalog");
+    if (selectedSources.length === 0) {
+      toast.error("Select at least one catalog, schema, or table");
       return;
+    }
+
+    // Parse selectedSources into catalogs / schemas / tables buckets
+    const catalogs = new Set<string>();
+    const schemas: string[] = [];
+    const tables: string[] = [];
+    for (const src of selectedSources) {
+      const parts = src.replace(/`/g, "").split(".");
+      if (parts.length === 1) catalogs.add(parts[0]);
+      else if (parts.length === 2) { catalogs.add(parts[0]); schemas.push(src); }
+      else if (parts.length >= 3) { catalogs.add(parts[0]); tables.push(src); }
     }
 
     const abort = new AbortController();
@@ -152,7 +161,9 @@ export default function AICommentsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          catalogs: selectedCatalogs,
+          catalogs: Array.from(catalogs),
+          schemas: schemas.length > 0 ? schemas : undefined,
+          tables: tables.length > 0 ? tables : undefined,
           industryId: selectedIndustry === "none" ? undefined : selectedIndustry,
         }),
         signal: abort.signal,
@@ -216,7 +227,7 @@ export default function AICommentsPage() {
     } finally {
       setGenAbort(null);
     }
-  }, [selectedCatalogs, selectedIndustry, loadJobData]);
+  }, [selectedSources, selectedIndustry, loadJobData]);
 
   // -- Update proposals --
   const handleUpdateProposals = useCallback(
@@ -438,37 +449,17 @@ export default function AICommentsPage() {
       {pageState === "setup" && !loading && (
         <div className="space-y-6">
           <Card>
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="pt-6 space-y-6">
               <div>
-                <h3 className="text-sm font-medium mb-2">Select Catalogs</h3>
+                <h3 className="text-sm font-medium mb-2">Select Scope</h3>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Choose which Unity Catalog catalogs to scan for tables and columns.
+                  Browse Unity Catalog and select catalogs, schemas, or individual tables to generate
+                  AI-powered descriptions for.
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {availableCatalogs.map((cat) => {
-                    const selected = selectedCatalogs.includes(cat);
-                    return (
-                      <Badge
-                        key={cat}
-                        variant={selected ? "default" : "outline"}
-                        className="cursor-pointer select-none text-xs"
-                        onClick={() =>
-                          setSelectedCatalogs((prev) =>
-                            selected ? prev.filter((c) => c !== cat) : [...prev, cat],
-                          )
-                        }
-                      >
-                        {cat}
-                        {selected && <span className="ml-1">x</span>}
-                      </Badge>
-                    );
-                  })}
-                  {availableCatalogs.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No catalogs found. Ensure the SQL warehouse is running.
-                    </p>
-                  )}
-                </div>
+                <CatalogBrowser
+                  selectedSources={selectedSources}
+                  onSelectionChange={setSelectedSources}
+                />
               </div>
 
               <div>
@@ -494,7 +485,7 @@ export default function AICommentsPage() {
               <div className="pt-2">
                 <Button
                   onClick={handleGenerate}
-                  disabled={selectedCatalogs.length === 0}
+                  disabled={selectedSources.length === 0}
                   size="lg"
                 >
                   <Sparkles className="mr-2 h-4 w-4" />
