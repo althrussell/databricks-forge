@@ -48,7 +48,7 @@
     "@codemirror/view": "^6.39.15",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-pg": "^7.4.1",
-    "@prisma/client": "^7.4.1",
+    "@prisma/client": "^7.5.0",
     "@tailwindcss/typography": "^0.5.19",
     "@xyflow/react": "^12.10.1",
     "class-variance-authority": "^0.7.1",
