@@ -3,10 +3,12 @@
 /**
  * AI Comments page -- /environment/comments
  *
- * Three states:
- * 1. Setup -- scope selection + industry picker + generate button
- * 2. Generating -- progress stream
- * 3. Review -- three-panel table-by-table review with inline editing
+ * States:
+ * 1. Jobs list  -- default landing (shows all jobs + "New Job" button)
+ * 2. Generating -- progress card (inline, after modal closes)
+ * 3. Review     -- three-panel table-by-table review with inline editing
+ *
+ * The scope selection + industry picker lives in a Dialog triggered by "New Job".
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,13 +22,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Sparkles,
   Loader2,
   MessageSquare,
   ChevronRight,
-  History,
+  Plus,
   Trash2,
   ArrowLeft,
 } from "lucide-react";
@@ -39,7 +48,7 @@ import {
   type CommentProgressData,
 } from "@/components/environment/comment-progress-card";
 
-type PageState = "setup" | "generating" | "review" | "history";
+type PageState = "jobs" | "generating" | "review";
 
 interface CommentJob {
   id: string;
@@ -53,7 +62,7 @@ interface CommentJob {
 
 export default function AICommentsPage() {
   // -- State --
-  const [pageState, setPageState] = useState<PageState>("setup");
+  const [pageState, setPageState] = useState<PageState>("jobs");
   const [jobs, setJobs] = useState<CommentJob[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -63,7 +72,8 @@ export default function AICommentsPage() {
   const [applying, setApplying] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Setup state
+  // New-job modal state
+  const [newJobOpen, setNewJobOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedIndustry, setSelectedIndustry] = useState<string>("none");
@@ -106,12 +116,10 @@ export default function AICommentsPage() {
       setProposals(data.proposals ?? []);
       setTableSummary(data.tableSummary ?? []);
 
-      // Select first table if none selected
       if (data.tableSummary?.length > 0) {
         setSelectedTable((prev) => prev ?? data.tableSummary[0].tableFqn);
       }
 
-      // Check permissions for all tables
       const fqns = (data.tableSummary ?? []).map((t: TableSummary) => t.tableFqn);
       if (fqns.length > 0) {
         fetch("/api/environment/comments/check-permissions", {
@@ -130,17 +138,13 @@ export default function AICommentsPage() {
     }
   }, []);
 
-  // -- Generate comments --
+  // -- Generate comments (from modal) --
   const handleGenerate = useCallback(async () => {
     if (selectedSources.length === 0) {
       toast.error("Select at least one catalog, schema, or table");
       return;
     }
 
-    // Parse selectedSources into catalogs / schemas / tables buckets.
-    // CatalogBrowser returns FQNs like "catalog", "catalog.schema",
-    // "catalog.schema.table". The generate API expects bare schema names
-    // scoped per-catalog, so strip the catalog prefix from schemas.
     const catalogs = new Set<string>();
     const schemas: string[] = [];
     const tables: string[] = [];
@@ -150,13 +154,14 @@ export default function AICommentsPage() {
         catalogs.add(parts[0]);
       } else if (parts.length === 2) {
         catalogs.add(parts[0]);
-        schemas.push(parts[1]); // bare schema name, not catalog.schema
+        schemas.push(parts[1]);
       } else if (parts.length >= 3) {
         catalogs.add(parts[0]);
         tables.push(src);
       }
     }
 
+    setNewJobOpen(false);
     setPageState("generating");
     setGenProgress(null);
 
@@ -182,11 +187,11 @@ export default function AICommentsPage() {
       startProgressPolling(newJobId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Generation failed");
-      setPageState("setup");
+      setPageState("jobs");
     }
   }, [selectedSources, selectedIndustry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // -- Poll progress endpoint (same pattern as estate scan) --
+  // -- Poll progress --
   const startProgressPolling = useCallback(
     (jobId: string) => {
       if (pollTimerRef) clearInterval(pollTimerRef);
@@ -202,8 +207,9 @@ export default function AICommentsPage() {
             if (consecutiveMisses >= maxConsecutiveMisses) {
               clearInterval(timer);
               setPollTimerRef(null);
-              toast.error("Lost contact with generation. Check history tab.");
-              setPageState("setup");
+              toast.error("Lost contact with generation. Check job list.");
+              setPageState("jobs");
+              reloadJobs();
             }
             return;
           }
@@ -218,6 +224,7 @@ export default function AICommentsPage() {
             setActiveJobId(jobId);
             await loadJobData(jobId);
             setPageState("review");
+            reloadJobs();
             toast.success("Generation complete", {
               description: `${prog.tablesGenerated ?? 0} tables, ${prog.columnsGenerated ?? 0} columns`,
             });
@@ -225,7 +232,8 @@ export default function AICommentsPage() {
             clearInterval(timer);
             setPollTimerRef(null);
             toast.error(prog.message || "Generation failed");
-            setPageState("setup");
+            setPageState("jobs");
+            reloadJobs();
           }
         } catch {
           consecutiveMisses++;
@@ -234,15 +242,27 @@ export default function AICommentsPage() {
 
       setPollTimerRef(timer);
     },
-    [loadJobData, pollTimerRef],
+    [loadJobData, pollTimerRef], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Cleanup poll timer on unmount
   useEffect(() => {
     return () => {
       if (pollTimerRef) clearInterval(pollTimerRef);
     };
   }, [pollTimerRef]);
+
+  // -- Refresh the jobs list --
+  const reloadJobs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/environment/comments");
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(data.jobs ?? []);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // -- Update proposals --
   const handleUpdateProposals = useCallback(
@@ -256,7 +276,6 @@ export default function AICommentsPage() {
         });
         if (!res.ok) throw new Error("Failed to update");
 
-        // Optimistically update local state
         setProposals((prev) =>
           prev.map((p) => {
             const upd = updates.find((u) => u.id === p.id);
@@ -270,7 +289,6 @@ export default function AICommentsPage() {
           }),
         );
 
-        // Recompute table summary
         await loadJobData(activeJobId);
       } catch {
         toast.error("Failed to update proposals");
@@ -372,6 +390,28 @@ export default function AICommentsPage() {
     [activeJobId, proposals, loadJobData],
   );
 
+  // -- Resync table --
+  const handleResyncTable = useCallback(
+    async (tableFqn: string) => {
+      if (!activeJobId) return;
+      try {
+        const res = await fetch(`/api/environment/comments/${activeJobId}/resync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tableFqn }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Resync failed");
+
+        toast.success(`Refreshed ${data.updated} comments for ${tableFqn.split(".").pop()}`);
+        await loadJobData(activeJobId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Resync failed");
+      }
+    },
+    [activeJobId, loadJobData],
+  );
+
   // -- Next table --
   const handleNextTable = useCallback(() => {
     if (!selectedTable) return;
@@ -380,10 +420,11 @@ export default function AICommentsPage() {
     setSelectedTable(tableSummary[nextIdx].tableFqn);
   }, [selectedTable, tableSummary]);
 
-  // -- Resume a job from history --
-  const handleResumeJob = useCallback(
+  // -- Open a job for review --
+  const handleOpenJob = useCallback(
     async (jobId: string) => {
       setActiveJobId(jobId);
+      setSelectedTable(null);
       await loadJobData(jobId);
       setPageState("review");
     },
@@ -434,7 +475,7 @@ export default function AICommentsPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                setPageState("setup");
+                setPageState("jobs");
                 setActiveJobId(null);
                 setProposals([]);
                 setTableSummary([]);
@@ -442,78 +483,113 @@ export default function AICommentsPage() {
               }}
             >
               <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-              New Job
+              All Jobs
             </Button>
           )}
-          {pageState !== "history" && jobs.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setPageState("history")}>
-              <History className="mr-1 h-3.5 w-3.5" />
-              History ({jobs.length})
+          {pageState !== "generating" && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setSelectedSources([]);
+                setSelectedIndustry("none");
+                setNewJobOpen(true);
+              }}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              New Job
             </Button>
           )}
         </div>
       </div>
 
       {/* ---------------------------------------------------------------- */}
-      {/* State: Setup                                                      */}
+      {/* State: Jobs list (default landing)                                */}
       {/* ---------------------------------------------------------------- */}
-      {pageState === "setup" && !loading && (
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="pt-6 space-y-6">
-              <div>
-                <h3 className="text-sm font-medium mb-2">Select Scope</h3>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Browse Unity Catalog and select catalogs, schemas, or individual tables to
-                  generate AI-powered descriptions for.
-                </p>
-                <CatalogBrowser
-                  selectedSources={selectedSources}
-                  onSelectionChange={setSelectedSources}
-                />
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium mb-2">Industry Context (optional)</h3>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Select an industry to enrich descriptions with domain-specific terminology.
-                </p>
-                <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
-                  <SelectTrigger className="w-[300px]">
-                    <SelectValue placeholder="No industry (generic descriptions)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No industry</SelectItem>
-                    {industries.map((ind) => (
-                      <SelectItem key={ind.id} value={ind.id}>
-                        {ind.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="pt-2">
-                <Button onClick={handleGenerate} disabled={selectedSources.length === 0} size="lg">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate AI Comments
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Empty state illustration */}
-          {jobs.length === 0 && (
+      {pageState === "jobs" && !loading && (
+        <div>
+          {jobs.length === 0 ? (
             <Card>
-              <CardContent className="py-12 text-center">
+              <CardContent className="py-16 text-center">
                 <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground/50" />
                 <p className="mt-4 font-medium">No comment jobs yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Select catalogs above and generate AI-powered descriptions for your tables and
-                  columns. Review, edit, and apply them directly to Unity Catalog.
+                <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+                  Generate AI-powered descriptions for your tables and columns. Review, edit, and
+                  apply them directly to Unity Catalog.
                 </p>
+                <Button
+                  className="mt-6"
+                  onClick={() => {
+                    setSelectedSources([]);
+                    setSelectedIndustry("none");
+                    setNewJobOpen(true);
+                  }}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Create Your First Job
+                </Button>
               </CardContent>
             </Card>
+          ) : (
+            <div className="space-y-2">
+              {jobs.map((job) => (
+                <Card
+                  key={job.id}
+                  className="transition-colors hover:border-foreground/20 cursor-pointer"
+                  onClick={() => handleOpenJob(job.id)}
+                >
+                  <CardContent className="flex items-center gap-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {new Date(job.createdAt).toLocaleDateString()}{" "}
+                          {new Date(job.createdAt).toLocaleTimeString()}
+                        </span>
+                        <Badge
+                          variant={
+                            job.status === "completed"
+                              ? "default"
+                              : job.status === "failed"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {job.status}
+                        </Badge>
+                        {job.industryId && <Badge variant="outline">{job.industryId}</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {job.tableCount} tables, {job.columnCount} columns
+                        {job.appliedCount > 0 && `, ${job.appliedCount} applied`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenJob(job.id);
+                        }}
+                      >
+                        <ChevronRight className="mr-1 h-3.5 w-3.5" />
+                        Open
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteJob(job.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -542,7 +618,6 @@ export default function AICommentsPage() {
       {pageState === "review" && (
         <div className="flex flex-col" style={{ height: "calc(100vh - 200px)" }}>
           <div className="flex flex-1 overflow-hidden rounded-lg border">
-            {/* Left: table navigator */}
             <div className="w-64 shrink-0">
               <CommentTableNav
                 tables={tableSummary}
@@ -550,8 +625,6 @@ export default function AICommentsPage() {
                 onSelectTable={setSelectedTable}
               />
             </div>
-
-            {/* Center: review panel */}
             <div className="flex-1 overflow-hidden">
               {selectedTable && currentTableProposals.length > 0 ? (
                 <CommentReviewPanel
@@ -561,6 +634,7 @@ export default function AICommentsPage() {
                   onUpdateProposals={handleUpdateProposals}
                   onApplyTable={handleApplyTable}
                   onUndoTable={handleUndoTable}
+                  onResyncTable={handleResyncTable}
                   onNextTable={handleNextTable}
                 />
               ) : (
@@ -572,8 +646,6 @@ export default function AICommentsPage() {
               )}
             </div>
           </div>
-
-          {/* Bottom: action bar */}
           <CommentActionBar
             acceptedCount={globalCounts.accepted}
             appliedCount={globalCounts.applied}
@@ -586,76 +658,6 @@ export default function AICommentsPage() {
         </div>
       )}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* State: History                                                     */}
-      {/* ---------------------------------------------------------------- */}
-      {pageState === "history" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setPageState("setup")}>
-              <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-              Back
-            </Button>
-            <h2 className="text-lg font-semibold">Comment Job History</h2>
-          </div>
-
-          {jobs.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No comment jobs found.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {jobs.map((job) => (
-                <Card key={job.id}>
-                  <CardContent className="flex items-center gap-4 py-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {new Date(job.createdAt).toLocaleDateString()}{" "}
-                          {new Date(job.createdAt).toLocaleTimeString()}
-                        </span>
-                        <Badge
-                          variant={
-                            job.status === "completed"
-                              ? "default"
-                              : job.status === "failed"
-                                ? "destructive"
-                                : "secondary"
-                          }
-                        >
-                          {job.status}
-                        </Badge>
-                        {job.industryId && <Badge variant="outline">{job.industryId}</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {job.tableCount} tables, {job.columnCount} columns
-                        {job.appliedCount > 0 && `, ${job.appliedCount} applied`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleResumeJob(job.id)}>
-                        <ChevronRight className="mr-1 h-3.5 w-3.5" />
-                        Open
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteJob(job.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Loading state */}
       {loading && (
         <Card>
@@ -664,6 +666,64 @@ export default function AICommentsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* New Job Dialog                                                    */}
+      {/* ---------------------------------------------------------------- */}
+      <Dialog open={newJobOpen} onOpenChange={setNewJobOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Comment Job</DialogTitle>
+            <DialogDescription>
+              Select the Unity Catalog scope and optionally choose an industry for domain-specific
+              descriptions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-2">
+            <div>
+              <h3 className="text-sm font-medium mb-2">Select Scope</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Browse Unity Catalog and select catalogs, schemas, or individual tables.
+              </p>
+              <CatalogBrowser
+                selectedSources={selectedSources}
+                onSelectionChange={setSelectedSources}
+              />
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2">Industry Context (optional)</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Enrich descriptions with domain-specific terminology.
+              </p>
+              <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
+                <SelectTrigger className="w-[300px]">
+                  <SelectValue placeholder="No industry (generic descriptions)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No industry</SelectItem>
+                  {industries.map((ind) => (
+                    <SelectItem key={ind.id} value={ind.id}>
+                      {ind.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setNewJobOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleGenerate} disabled={selectedSources.length === 0}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate AI Comments
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

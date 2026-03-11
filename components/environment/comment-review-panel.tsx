@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, X, ChevronRight, Pencil, Lock, Undo2, AlertCircle } from "lucide-react";
+import { Check, X, ChevronRight, Pencil, Lock, Undo2, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Proposal {
@@ -31,6 +31,7 @@ interface CommentReviewPanelProps {
   ) => Promise<void>;
   onApplyTable: (tableFqn: string) => Promise<void>;
   onUndoTable: (tableFqn: string) => Promise<void>;
+  onResyncTable?: (tableFqn: string) => Promise<void>;
   onNextTable: () => void;
 }
 
@@ -41,11 +42,13 @@ export function CommentReviewPanel({
   onUpdateProposals,
   onApplyTable,
   onUndoTable,
+  onResyncTable,
   onNextTable,
 }: CommentReviewPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [applyingTable, setApplyingTable] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
 
   const tableProposal = proposals.find((p) => !p.columnName);
   const columnProposals = proposals.filter((p) => p.columnName);
@@ -88,6 +91,16 @@ export function CommentReviewPanel({
     }
   }, [onApplyTable, tableFqn]);
 
+  const handleResync = useCallback(async () => {
+    if (!onResyncTable) return;
+    setResyncing(true);
+    try {
+      await onResyncTable(tableFqn);
+    } finally {
+      setResyncing(false);
+    }
+  }, [onResyncTable, tableFqn]);
+
   const parts = tableFqn.split(".");
 
   return (
@@ -105,6 +118,18 @@ export function CommentReviewPanel({
                 <Lock className="mr-1 h-3 w-3" />
                 Read-only
               </Badge>
+            )}
+            {onResyncTable && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResync}
+                disabled={resyncing}
+                title="Refresh current comments from Unity Catalog"
+              >
+                <RefreshCw className={cn("mr-1 h-3.5 w-3.5", resyncing && "animate-spin")} />
+                Resync
+              </Button>
             )}
             {appliedCount > 0 && (
               <Button variant="outline" size="sm" onClick={() => onUndoTable(tableFqn)}>
@@ -163,9 +188,9 @@ export function CommentReviewPanel({
                 )}
               </div>
               {tableProposal.errorMessage && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-destructive">
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  {tableProposal.errorMessage}
+                <div className="mt-2 flex items-start gap-2 text-xs text-destructive">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span className="break-all line-clamp-2">{tableProposal.errorMessage}</span>
                 </div>
               )}
             </CardContent>
@@ -236,9 +261,9 @@ export function CommentReviewPanel({
                       <span className="text-xs">{p.editedComment ?? p.proposedComment}</span>
                     )}
                     {p.errorMessage && (
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-destructive">
-                        <AlertCircle className="h-3 w-3" />
-                        {p.errorMessage}
+                      <div className="mt-1 flex items-start gap-1 text-[10px] text-destructive">
+                        <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                        <span className="break-all line-clamp-2">{p.errorMessage}</span>
                       </div>
                     )}
                   </div>

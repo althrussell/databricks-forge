@@ -115,6 +115,23 @@ export async function markProposalsUndone(proposalIds: string[]): Promise<void> 
   });
 }
 
+/** Batch-update the originalComment field on existing proposals. */
+export async function updateOriginalComments(
+  updates: Array<{ id: string; originalComment: string | null }>,
+): Promise<void> {
+  if (updates.length === 0) return;
+  await withPrisma(async (prisma) => {
+    await prisma.$transaction(
+      updates.map((u) =>
+        prisma.forgeCommentProposal.update({
+          where: { id: u.id },
+          data: { originalComment: u.originalComment },
+        }),
+      ),
+    );
+  });
+}
+
 /** Distinct table FQNs in a job, with aggregated status counts. */
 export async function getJobTableSummary(jobId: string): Promise<
   Array<{

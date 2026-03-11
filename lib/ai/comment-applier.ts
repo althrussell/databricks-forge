@@ -19,9 +19,10 @@ import {
   type CommentProposal,
 } from "@/lib/lakebase/comment-proposals";
 import { updateCommentJobStatus } from "@/lib/lakebase/comment-jobs";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
+import { logger } from "@/lib/logger";
 
 const APPLY_CONCURRENCY = 5;
-const DELAY_BETWEEN_BATCHES_MS = 100;
 
 /** Table types that support ALTER COLUMN COMMENT. */
 const COLUMN_COMMENT_SUPPORTED_TYPES = new Set(["MANAGED", "EXTERNAL", "DELTA"]);
@@ -177,6 +178,38 @@ export function buildColumnCommentDDL(
 }
 
 /**
+ * Build a single ALTER TABLE/VIEW statement that sets comments on multiple
+ * columns at once, e.g.:
+ *
+ *   ALTER TABLE `cat`.`sch`.`tbl` ALTER COLUMN
+ *     `col1` COMMENT 'desc1',
+ *     `col2` COMMENT 'desc2';
+ *
+ * One DDL = one Delta metadata transaction = no DELTA_METADATA_CHANGED conflict.
+ */
+export function buildBatchColumnCommentDDL(
+  fqn: string,
+  columns: Array<{ columnName: string; comment: string | null }>,
+  tableType?: string,
+): string {
+  if (columns.length === 0) throw new Error("No columns to update");
+  if (columns.length === 1) {
+    return buildColumnCommentDDL(fqn, columns[0].columnName, columns[0].comment, tableType);
+  }
+
+  const quoted = quoteFqn(fqn);
+  const keyword = tableType && VIEW_TYPES.has(tableType.toUpperCase()) ? "VIEW" : "TABLE";
+
+  const clauses = columns.map((c) => {
+    const safeCol = validateIdentifier(c.columnName, "column");
+    const escapedComment = c.comment === null ? "''" : `'${escapeComment(c.comment)}'`;
+    return `\`${safeCol}\` COMMENT ${escapedComment}`;
+  });
+
+  return `ALTER ${keyword} ${quoted} ALTER COLUMN ${clauses.join(", ")}`;
+}
+
+/**
  * Returns true if column-level comments are supported for the given table type.
  * Column comments require Delta Lake tables or views with column mapping enabled.
  */
@@ -184,6 +217,24 @@ export function supportsColumnComments(tableType?: string | null): boolean {
   if (!tableType) return true; // optimistic default
   const upper = tableType.toUpperCase();
   return COLUMN_COMMENT_SUPPORTED_TYPES.has(upper) || VIEW_TYPES.has(upper);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Group proposals by tableFqn, preserving insertion order. */
+function groupByTable(proposals: CommentProposal[]): Map<string, CommentProposal[]> {
+  const map = new Map<string, CommentProposal[]>();
+  for (const p of proposals) {
+    let arr = map.get(p.tableFqn);
+    if (!arr) {
+      arr = [];
+      map.set(p.tableFqn, arr);
+    }
+    arr.push(p);
+  }
+  return map;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +250,11 @@ export interface ApplyResult {
 
 /**
  * Apply accepted proposals as DDL statements to Unity Catalog.
- * Executes with bounded concurrency and tracks per-proposal errors.
+ *
+ * Groups proposals by table so all column comments for a single table are
+ * applied in one `ALTER TABLE ... ALTER COLUMN col1 COMMENT '...', col2 ...`
+ * statement. This avoids DELTA_METADATA_CHANGED conflicts from concurrent
+ * metadata writes to the same table. Tables are processed in parallel.
  *
  * @param tableTypes - optional map of FQN -> table type for correct DDL generation
  */
@@ -213,86 +268,102 @@ export async function applyProposals(
 
   const result: ApplyResult = { applied: 0, failed: 0, skipped: 0, errors: [] };
   let completed = 0;
+  const total = proposals.length;
 
-  for (let i = 0; i < proposals.length; i += APPLY_CONCURRENCY) {
-    const batch = proposals.slice(i, i + APPLY_CONCURRENCY);
+  const tableGroups = groupByTable(proposals);
 
-    const batchResults = await Promise.allSettled(
-      batch.map(async (proposal) => {
-        const tblType = tableTypes?.get(proposal.tableFqn.toLowerCase());
+  await mapWithConcurrency(
+    Array.from(tableGroups.entries()).map(([tableFqn, tableProposals]) => async () => {
+      const tblType = tableTypes?.get(tableFqn.toLowerCase());
 
-        // Skip column comments for table types that don't support them
-        if (proposal.columnName && !supportsColumnComments(tblType)) {
-          return {
-            proposalId: proposal.id,
-            success: false,
-            skipped: true,
-            error: `Column comments not supported for ${tblType ?? "unknown"} table type`,
-          };
-        }
-
-        const comment = proposal.editedComment ?? proposal.proposedComment;
-        const ddl = proposal.columnName
-          ? buildColumnCommentDDL(proposal.tableFqn, proposal.columnName, comment, tblType)
-          : buildTableCommentDDL(proposal.tableFqn, comment);
-
+      // --- 1. Table-level comment (always a separate COMMENT ON TABLE) ---
+      const tableProposal = tableProposals.find((p) => !p.columnName);
+      if (tableProposal) {
+        const comment = tableProposal.editedComment ?? tableProposal.proposedComment;
         try {
-          await executeSQL(ddl);
-          return { proposalId: proposal.id, success: true };
+          await executeSQL(buildTableCommentDDL(tableFqn, comment));
+          await markProposalsApplied([tableProposal.id]);
+          result.applied++;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          return { proposalId: proposal.id, success: false, error: msg };
-        }
-      }),
-    );
-
-    const appliedIds: string[] = [];
-
-    for (let j = 0; j < batchResults.length; j++) {
-      const settled = batchResults[j];
-      const proposal = batch[j];
-
-      if (settled.status === "fulfilled" && settled.value.success) {
-        appliedIds.push(settled.value.proposalId);
-        result.applied++;
-      } else {
-        const errorMsg =
-          settled.status === "fulfilled"
-            ? settled.value.error!
-            : settled.reason instanceof Error
-              ? settled.reason.message
-              : String(settled.reason);
-
-        const isSkipped =
-          settled.status === "fulfilled" && "skipped" in settled.value && settled.value.skipped;
-        if (isSkipped) {
-          result.skipped++;
-        } else {
           result.failed++;
+          result.errors.push({
+            proposalId: tableProposal.id,
+            tableFqn,
+            columnName: null,
+            error: msg,
+          });
+          await markProposalFailed(tableProposal.id, msg).catch(() => {});
         }
-        result.errors.push({
-          proposalId: proposal.id,
-          tableFqn: proposal.tableFqn,
-          columnName: proposal.columnName,
-          error: errorMsg,
-        });
-
-        await markProposalFailed(proposal.id, errorMsg).catch(() => {});
+        completed++;
+        onProgress?.(completed, total);
       }
 
-      completed++;
-    }
+      // --- 2. Column-level comments (batched into one ALTER TABLE) ---
+      const columnProposals = tableProposals.filter((p) => p.columnName);
+      if (columnProposals.length === 0) return;
 
-    if (appliedIds.length > 0) {
-      await markProposalsApplied(appliedIds);
-    }
+      // Check table type support
+      const unsupported = !supportsColumnComments(tblType);
+      if (unsupported) {
+        for (const p of columnProposals) {
+          const msg = `Column comments not supported for ${tblType ?? "unknown"} table type`;
+          result.skipped++;
+          result.errors.push({ proposalId: p.id, tableFqn, columnName: p.columnName, error: msg });
+          await markProposalFailed(p.id, msg).catch(() => {});
+          completed++;
+        }
+        onProgress?.(completed, total);
+        return;
+      }
 
-    onProgress?.(completed, proposals.length);
+      // Build batched DDL
+      const columns = columnProposals.map((p) => ({
+        columnName: p.columnName!,
+        comment: p.editedComment ?? p.proposedComment,
+      }));
 
-    if (i + APPLY_CONCURRENCY < proposals.length) {
-      await new Promise((r) => setTimeout(r, DELAY_BETWEEN_BATCHES_MS));
-    }
-  }
+      try {
+        const ddl = buildBatchColumnCommentDDL(tableFqn, columns, tblType);
+        await executeSQL(ddl);
+
+        // All succeeded
+        await markProposalsApplied(columnProposals.map((p) => p.id));
+        result.applied += columnProposals.length;
+        completed += columnProposals.length;
+        onProgress?.(completed, total);
+      } catch (batchErr) {
+        // Batched DDL failed -- fall back to per-column sequential execution
+        logger.warn("[comment-applier] Batched column DDL failed, falling back to per-column", {
+          tableFqn,
+          error: batchErr instanceof Error ? batchErr.message : String(batchErr),
+        });
+
+        for (const p of columnProposals) {
+          const comment = p.editedComment ?? p.proposedComment;
+          try {
+            const ddl = buildColumnCommentDDL(tableFqn, p.columnName!, comment, tblType);
+            await executeSQL(ddl);
+            await markProposalsApplied([p.id]);
+            result.applied++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            result.failed++;
+            result.errors.push({
+              proposalId: p.id,
+              tableFqn,
+              columnName: p.columnName,
+              error: msg,
+            });
+            await markProposalFailed(p.id, msg).catch(() => {});
+          }
+          completed++;
+          onProgress?.(completed, total);
+        }
+      }
+    }),
+    APPLY_CONCURRENCY,
+  );
 
   const finalStatus = result.failed === 0 && result.skipped === 0 ? "completed" : "ready";
   await updateCommentJobStatus(jobId, finalStatus, {
@@ -309,7 +380,9 @@ export async function applyProposals(
 
 /**
  * Undo previously applied proposals by restoring original comments.
- * Correctly handles null (no comment) vs empty string (empty comment).
+ *
+ * Uses the same group-by-table + batched DDL strategy as applyProposals
+ * to avoid DELTA_METADATA_CHANGED conflicts.
  */
 export async function undoProposals(
   jobId: string,
@@ -319,71 +392,80 @@ export async function undoProposals(
 ): Promise<ApplyResult> {
   const result: ApplyResult = { applied: 0, failed: 0, skipped: 0, errors: [] };
   let completed = 0;
+  const total = proposals.length;
 
-  for (let i = 0; i < proposals.length; i += APPLY_CONCURRENCY) {
-    const batch = proposals.slice(i, i + APPLY_CONCURRENCY);
+  const tableGroups = groupByTable(proposals);
 
-    const batchResults = await Promise.allSettled(
-      batch.map(async (proposal) => {
-        const tblType = tableTypes?.get(proposal.tableFqn.toLowerCase());
-        const ddl = proposal.columnName
-          ? buildColumnCommentDDL(
-              proposal.tableFqn,
-              proposal.columnName,
-              proposal.originalComment,
-              tblType,
-            )
-          : buildTableCommentDDL(proposal.tableFqn, proposal.originalComment);
+  await mapWithConcurrency(
+    Array.from(tableGroups.entries()).map(([tableFqn, tableProposals]) => async () => {
+      const tblType = tableTypes?.get(tableFqn.toLowerCase());
 
+      // --- 1. Table-level comment ---
+      const tableProposal = tableProposals.find((p) => !p.columnName);
+      if (tableProposal) {
         try {
-          await executeSQL(ddl);
-          return { proposalId: proposal.id, success: true };
+          await executeSQL(buildTableCommentDDL(tableFqn, tableProposal.originalComment));
+          await markProposalsUndone([tableProposal.id]);
+          result.applied++;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          return { proposalId: proposal.id, success: false, error: msg };
+          result.failed++;
+          result.errors.push({
+            proposalId: tableProposal.id,
+            tableFqn,
+            columnName: null,
+            error: msg,
+          });
         }
-      }),
-    );
-
-    const undoneIds: string[] = [];
-
-    for (let j = 0; j < batchResults.length; j++) {
-      const settled = batchResults[j];
-      const proposal = batch[j];
-
-      if (settled.status === "fulfilled" && settled.value.success) {
-        undoneIds.push(settled.value.proposalId);
-        result.applied++;
-      } else {
-        const errorMsg =
-          settled.status === "fulfilled"
-            ? settled.value.error!
-            : settled.reason instanceof Error
-              ? settled.reason.message
-              : String(settled.reason);
-
-        result.failed++;
-        result.errors.push({
-          proposalId: proposal.id,
-          tableFqn: proposal.tableFqn,
-          columnName: proposal.columnName,
-          error: errorMsg,
-        });
+        completed++;
+        onProgress?.(completed, total);
       }
 
-      completed++;
-    }
+      // --- 2. Column-level comments (batched) ---
+      const columnProposals = tableProposals.filter((p) => p.columnName);
+      if (columnProposals.length === 0) return;
 
-    if (undoneIds.length > 0) {
-      await markProposalsUndone(undoneIds);
-    }
+      const columns = columnProposals.map((p) => ({
+        columnName: p.columnName!,
+        comment: p.originalComment,
+      }));
 
-    onProgress?.(completed, proposals.length);
+      try {
+        const ddl = buildBatchColumnCommentDDL(tableFqn, columns, tblType);
+        await executeSQL(ddl);
+        await markProposalsUndone(columnProposals.map((p) => p.id));
+        result.applied += columnProposals.length;
+        completed += columnProposals.length;
+        onProgress?.(completed, total);
+      } catch (batchErr) {
+        logger.warn("[comment-applier] Batched undo DDL failed, falling back to per-column", {
+          tableFqn,
+          error: batchErr instanceof Error ? batchErr.message : String(batchErr),
+        });
 
-    if (i + APPLY_CONCURRENCY < proposals.length) {
-      await new Promise((r) => setTimeout(r, DELAY_BETWEEN_BATCHES_MS));
-    }
-  }
+        for (const p of columnProposals) {
+          try {
+            const ddl = buildColumnCommentDDL(tableFqn, p.columnName!, p.originalComment, tblType);
+            await executeSQL(ddl);
+            await markProposalsUndone([p.id]);
+            result.applied++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            result.failed++;
+            result.errors.push({
+              proposalId: p.id,
+              tableFqn,
+              columnName: p.columnName,
+              error: msg,
+            });
+          }
+          completed++;
+          onProgress?.(completed, total);
+        }
+      }
+    }),
+    APPLY_CONCURRENCY,
+  );
 
   return result;
 }

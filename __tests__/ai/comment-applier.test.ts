@@ -24,6 +24,7 @@ import {
   validateCommentText,
   buildTableCommentDDL,
   buildColumnCommentDDL,
+  buildBatchColumnCommentDDL,
   supportsColumnComments,
   checkPermissions,
   applyProposals,
@@ -37,7 +38,9 @@ const mockMarkApplied = vi.mocked(markProposalsApplied);
 const mockMarkFailed = vi.mocked(markProposalFailed);
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  // Re-apply default resolved values after reset
+  mockExecuteSQL.mockResolvedValue({ columns: [], rows: [], totalRowCount: 0 });
 });
 
 // ---------------------------------------------------------------------------
@@ -348,6 +351,60 @@ describe("supportsColumnComments", () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildBatchColumnCommentDDL
+// ---------------------------------------------------------------------------
+
+describe("buildBatchColumnCommentDDL", () => {
+  it("builds multi-column ALTER TABLE for Delta tables", () => {
+    const result = buildBatchColumnCommentDDL("cat.sch.tbl", [
+      { columnName: "col1", comment: "First column" },
+      { columnName: "col2", comment: "Second column" },
+    ]);
+    expect(result).toBe(
+      "ALTER TABLE `cat`.`sch`.`tbl` ALTER COLUMN `col1` COMMENT 'First column', `col2` COMMENT 'Second column'",
+    );
+  });
+
+  it("builds ALTER VIEW for view types", () => {
+    const result = buildBatchColumnCommentDDL(
+      "cat.sch.v1",
+      [
+        { columnName: "a", comment: "A col" },
+        { columnName: "b", comment: "B col" },
+      ],
+      "VIEW",
+    );
+    expect(result).toContain("ALTER VIEW");
+  });
+
+  it("falls back to single-column DDL for one column", () => {
+    const result = buildBatchColumnCommentDDL("cat.sch.tbl", [
+      { columnName: "col1", comment: "Only column" },
+    ]);
+    expect(result).toBe("ALTER TABLE `cat`.`sch`.`tbl` ALTER COLUMN `col1` COMMENT 'Only column'");
+  });
+
+  it("escapes quotes in comments", () => {
+    const result = buildBatchColumnCommentDDL("cat.sch.tbl", [
+      { columnName: "col1", comment: "it's a test" },
+      { columnName: "col2", comment: "normal" },
+    ]);
+    expect(result).toContain("it''s a test");
+  });
+
+  it("uses empty string for null comments", () => {
+    const result = buildBatchColumnCommentDDL("cat.sch.tbl", [
+      { columnName: "col1", comment: null },
+    ]);
+    expect(result).toContain("COMMENT ''");
+  });
+
+  it("throws for empty columns array", () => {
+    expect(() => buildBatchColumnCommentDDL("cat.sch.tbl", [])).toThrow("No columns to update");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // checkPermissions
 // ---------------------------------------------------------------------------
 
@@ -499,14 +556,14 @@ describe("applyProposals", () => {
     expect(mockExecuteSQL).not.toHaveBeenCalled();
   });
 
-  it("handles mixed success and failure", async () => {
+  it("handles mixed success and failure across tables", async () => {
     mockExecuteSQL
       .mockResolvedValueOnce({ columns: [], rows: [], totalRowCount: 0 })
       .mockRejectedValueOnce(new Error("Failed"));
 
     const result = await applyProposals("j1", [
-      makeProposal({ id: "p1" }),
-      makeProposal({ id: "p2" }),
+      makeProposal({ id: "p1", tableFqn: "cat.sch.tbl1" }),
+      makeProposal({ id: "p2", tableFqn: "cat.sch.tbl2" }),
     ]);
 
     expect(result.applied).toBe(1);
