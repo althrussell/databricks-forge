@@ -45,7 +45,7 @@
     "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/state": "^6.5.4",
     "@codemirror/theme-one-dark": "^6.1.3",
-    "@codemirror/view": "^6.39.15",
+    "@codemirror/view": "^6.39.17",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
