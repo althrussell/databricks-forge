@@ -11,7 +11,7 @@ function makeTable(
   fqn: string,
   overrides: Partial<IntelligenceTableInput> = {},
 ): IntelligenceTableInput {
-  const parts = fqn.split(".");
+  const _parts = fqn.split(".");
   return {
     fqn,
     columns: [

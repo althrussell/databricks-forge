@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { LineageGraph, DataDomain, ForeignKey } from "@/lib/domain/types";
+import type { LineageGraph, ForeignKey } from "@/lib/domain/types";
 import type { IntelligenceTableInput } from "@/lib/metadata/context-builder";
 
 // ---------------------------------------------------------------------------
