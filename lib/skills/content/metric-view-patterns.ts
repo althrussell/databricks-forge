@@ -137,13 +137,51 @@ const WINDOW_EXAMPLES = `Metric View Window Measure Examples:
     name: MoM Growth
     expr: (MEASURE(Current Month Revenue) - MEASURE(Previous Month Revenue)) / MEASURE(Previous Month Revenue) * 100`;
 
+const BEST_PRACTICES = `Metric View Best Practices:
+- Start with atomic measures (SUM, COUNT, AVG), then build complex KPIs using MEASURE() composability
+- Composability: reference other measures via MEASURE(other_measure) instead of duplicating SQL logic
+  Example: Revenue per Order = MEASURE(Total Revenue) / MEASURE(Order Count)
+- Model business-friendly dimensions: use CASE, DATE_TRUNC, etc. to turn cryptic codes into clear labels
+- Be intentional with the global filter: scope KPIs consistently (e.g. exclude test data, old records)
+- Use joins to model star/snowflake schemas: fact table as source, dimension tables via joins
+- Leverage window measures for moving averages, running totals, period-over-period (avoid reimplementing in each query)
+- Use metric views as the semantic layer for AI/BI and Genie: enforce consistent KPIs, stay within Genie table limits
+- Manage governance via Unity Catalog: register metric views in UC, use group ownership for collaborative editing`;
+
+const SEMANTIC_METADATA = `Metric View Semantic Metadata (for Genie and AI/BI discoverability):
+- comment: on measures and dimensions, describe the business meaning concisely
+  Example: comment: "Net revenue after refunds and discounts"
+- format: on measures, specify display format for dashboards and Genie
+  Supported: "percent", "currency", "number", "decimal(N)"
+  Example: format: "currency"
+- synonyms: on dimensions, list alternative names for Genie natural language matching
+  Example: synonyms: ["region", "territory", "geo"]
+- display_name: on measures/dimensions, human-friendly label if the name field uses snake_case
+  Example: display_name: "Total Revenue"`;
+
+const VALIDATION_RULES = `Metric View YAML Validation Rules (SQL Ref Spec):
+- Measure expr MUST contain an aggregate function (SUM, COUNT, AVG, MIN, MAX, COUNT DISTINCT, PERCENTILE_APPROX)
+- Measure expr MUST NOT contain: JOIN, GROUP BY, HAVING, QUALIFY, ORDER BY, LIMIT
+- Measure expr MUST NOT contain window functions (OVER clause) -- use the window: block instead
+- Dimension expr MUST NOT contain aggregate functions
+- source: MUST be a fully qualified three-part name (catalog.schema.table)
+- Join source: MUST be a fully qualified three-part name
+- Join alias MUST NOT collide with any source column name
+- Dimension name MUST NOT collide with any join alias
+- Measure name MUST NOT shadow a source column name (causes NESTED_AGGREGATE_FUNCTION)
+- All joined column references must use the form: join_alias.column_name
+- MEASURE() composability: derived measures referencing MEASURE(other) must still wrap in an aggregate context
+- format: values must be one of: "percent", "currency", "number", or "decimal(N)"
+- version: must be "1.1" (string, not numeric 1.1)`;
+
 const skill: SkillDefinition = {
   id: "metric-view-patterns",
   name: "Metric View YAML Patterns",
   description:
-    "Unity Catalog metric view YAML specification, measure patterns " +
-    "(ratio, filtered, window), dimension patterns, join definitions, " +
-    "gotchas, and query rules (MEASURE(), GROUP BY ALL).",
+    "Unity Catalog metric view YAML specification, best practices, " +
+    "measure patterns (ratio, filtered, window, composable), dimension patterns, " +
+    "join definitions, semantic metadata (format, synonyms, comments), " +
+    "gotchas, validation rules, and query rules (MEASURE(), GROUP BY ALL).",
   relevance: {
     intents: ["dashboard", "technical"],
     geniePasses: ["metricViews", "semanticExpressions"],
@@ -156,6 +194,12 @@ const skill: SkillDefinition = {
       content: YAML_REFERENCE,
       category: "patterns",
       maxCharBudget: 2500,
+    },
+    {
+      id: "mv-best-practices",
+      title: "Metric View Best Practices",
+      content: BEST_PRACTICES,
+      category: "patterns",
     },
     {
       id: "mv-query-rules",
@@ -182,6 +226,12 @@ const skill: SkillDefinition = {
       category: "patterns",
     },
     {
+      id: "mv-semantic-metadata",
+      title: "Semantic Metadata for Genie",
+      content: SEMANTIC_METADATA,
+      category: "patterns",
+    },
+    {
       id: "mv-gotchas",
       title: "Metric View Gotchas",
       content: MV_GOTCHAS,
@@ -192,6 +242,12 @@ const skill: SkillDefinition = {
       title: "Window Measure Examples",
       content: WINDOW_EXAMPLES,
       category: "examples",
+    },
+    {
+      id: "mv-validation-rules",
+      title: "Validation Rules (SQL Ref Spec)",
+      content: VALIDATION_RULES,
+      category: "rules",
     },
   ],
 };

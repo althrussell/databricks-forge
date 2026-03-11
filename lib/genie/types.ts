@@ -142,14 +142,27 @@ export function defaultGenieEngineConfig(): GenieEngineConfig {
 // Engine Pass Outputs
 // ---------------------------------------------------------------------------
 
-export interface ColumnEnrichment {
-  tableFqn: string;
-  columnName: string;
-  description: string | null;
-  synonyms: string[];
-  hidden: boolean;
-  entityMatchingCandidate: boolean;
-}
+// Canonical definitions live in lib/metric-views/types.ts; imported here for
+// use in local interfaces and re-exported for backward compatibility.
+import type {
+  ColumnEnrichment as _ColumnEnrichment,
+  EnrichedSqlSnippetMeasure as _EnrichedSqlSnippetMeasure,
+  EnrichedSqlSnippetDimension as _EnrichedSqlSnippetDimension,
+  JoinSource as _JoinSource,
+  JoinConfidence as _JoinConfidence,
+  JoinSpecInput as _JoinSpecInput,
+  MetricViewProposal as _MetricViewProposal,
+  MetricViewClassification as _MetricViewClassification,
+} from "@/lib/metric-views/types";
+
+export type ColumnEnrichment = _ColumnEnrichment;
+export type EnrichedSqlSnippetMeasure = _EnrichedSqlSnippetMeasure;
+export type EnrichedSqlSnippetDimension = _EnrichedSqlSnippetDimension;
+export type JoinSource = _JoinSource;
+export type JoinConfidence = _JoinConfidence;
+export type JoinSpecInput = _JoinSpecInput;
+export type MetricViewProposal = _MetricViewProposal;
+export type MetricViewClassification = _MetricViewClassification;
 
 export interface EntityMatchingCandidate {
   tableFqn: string;
@@ -160,22 +173,7 @@ export interface EntityMatchingCandidate {
   conversationalMappings: string[];
 }
 
-export interface EnrichedSqlSnippetMeasure {
-  name: string;
-  sql: string;
-  synonyms: string[];
-  instructions: string;
-}
-
 export interface EnrichedSqlSnippetFilter {
-  name: string;
-  sql: string;
-  synonyms: string[];
-  instructions: string;
-  isTimePeriod: boolean;
-}
-
-export interface EnrichedSqlSnippetDimension {
   name: string;
   sql: string;
   synonyms: string[];
@@ -203,23 +201,6 @@ export interface TrustedAssetFunction {
   description: string;
 }
 
-export interface MetricViewProposal {
-  name: string;
-  description: string;
-  yaml: string;
-  ddl: string;
-  sourceTables: string[];
-  hasJoins: boolean;
-  hasFilteredMeasures: boolean;
-  hasWindowMeasures: boolean;
-  hasMaterialization: boolean;
-  validationStatus: "valid" | "warning" | "error";
-  validationIssues: string[];
-}
-
-export type JoinSource = "fk" | "override" | "sql_mined" | "llm" | "heuristic";
-export type JoinConfidence = "high" | "medium" | "low";
-
 export interface JoinDiagnostic {
   status: "accepted" | "rejected";
   source: JoinSource;
@@ -228,14 +209,6 @@ export interface JoinDiagnostic {
   rightTable?: string;
   sql?: string;
   reason: string;
-}
-
-/** Input join spec for engine passes (leftTable, rightTable, sql; relationshipType optional). */
-export interface JoinSpecInput {
-  leftTable: string;
-  rightTable: string;
-  sql: string;
-  relationshipType?: string;
 }
 
 /** Aggregated output from all engine passes for a single domain. */

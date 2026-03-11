@@ -989,6 +989,82 @@ export function validateMetricViewYaml(
     }
   }
 
+  // SQL ref spec: measure expr must contain an aggregate function (except for
+  // MEASURE() composability references which are derived measures)
+  const aggFnPattern = new RegExp(`\\b(${AGG_FNS}|MEASURE)\\s*\\(`, "i");
+  for (const exprLine of measureExprs) {
+    const exprValue = exprLine.replace(/^\s*expr:\s*/, "").trim();
+    if (exprValue && !aggFnPattern.test(exprValue)) {
+      issues.push(
+        `Measure expr must contain an aggregate function (SUM, COUNT, AVG, etc.) or MEASURE() reference: ${exprLine.trim()}`,
+      );
+    }
+  }
+
+  // SQL ref spec: measure expr must not contain prohibited SQL clauses
+  const PROHIBITED_MEASURE_PATTERNS = [
+    { re: /\bJOIN\b/i, label: "JOIN" },
+    { re: /\bGROUP\s+BY\b/i, label: "GROUP BY" },
+    { re: /\bHAVING\b/i, label: "HAVING" },
+    { re: /\bQUALIFY\b/i, label: "QUALIFY" },
+    { re: /\bORDER\s+BY\b/i, label: "ORDER BY" },
+    { re: /\bLIMIT\b/i, label: "LIMIT" },
+  ];
+  for (const exprLine of measureExprs) {
+    for (const { re, label } of PROHIBITED_MEASURE_PATTERNS) {
+      if (re.test(exprLine)) {
+        issues.push(`Measure expr must not contain ${label}: ${exprLine.trim()}`);
+      }
+    }
+  }
+
+  // SQL ref spec: dimension expr must not contain aggregate functions
+  const dimsIdx2 = yaml.indexOf("dimensions:");
+  const dimsEnd2 = yaml.indexOf("measures:");
+  if (dimsIdx2 !== -1) {
+    const dimBlock2 =
+      dimsEnd2 > dimsIdx2 ? yaml.slice(dimsIdx2, dimsEnd2) : yaml.slice(dimsIdx2);
+    const dimExprs = dimBlock2.match(/expr:\s*.+/g) ?? [];
+    const aggOnlyPattern = new RegExp(`\\b(${AGG_FNS})\\s*\\(`, "i");
+    for (const exprLine of dimExprs) {
+      const exprValue = exprLine.replace(/^\s*expr:\s*/, "").trim();
+      if (aggOnlyPattern.test(exprValue)) {
+        issues.push(
+          `Dimension expr must not contain aggregate functions (those belong in measures): ${exprLine.trim()}`,
+        );
+      }
+    }
+  }
+
+  // SQL ref spec: validate format: values on measures
+  const formatMatches = yaml.matchAll(/format:\s*["']?([^"'\n]+)["']?/g);
+  const VALID_FORMATS = new Set(["percent", "currency", "number"]);
+  for (const fm of formatMatches) {
+    const fmt = fm[1].trim().toLowerCase();
+    if (!VALID_FORMATS.has(fmt) && !/^decimal\(\d+\)$/.test(fmt)) {
+      issues.push(
+        `Invalid format: "${fm[1].trim()}" — must be one of: percent, currency, number, decimal(N)`,
+      );
+    }
+  }
+
+  // SQL ref spec: version must be string "1.1"
+  const versionMatch = yaml.match(/version:\s*(.+)/);
+  if (versionMatch) {
+    const vVal = versionMatch[1].trim().replace(/^["']|["']$/g, "");
+    if (vVal !== "1.1") {
+      issues.push(`version must be "1.1", found "${vVal}"`);
+    }
+  }
+
+  // SQL ref spec: source must be three-part FQN
+  if (sourceMatch) {
+    const parts = sourceMatch[1].split(".");
+    if (parts.length !== 3) {
+      issues.push(`source must be a fully qualified three-part name (catalog.schema.table), found "${sourceMatch[1]}"`);
+    }
+  }
+
   // Detect flat joins that reference sibling join aliases (snowflake nesting issue).
   // Top-level joins must only reference `source` in their `on:` clause.
   issues.push(...detectFlatSnowflakeJoins(yaml));

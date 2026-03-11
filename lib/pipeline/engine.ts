@@ -32,6 +32,7 @@ import { applyDeterministicQualityFilter } from "./usecase-quality";
 import { computeRunQualityBaseline } from "./run-quality";
 import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { runAssetDiscovery } from "./steps/asset-discovery";
+import { ensureCommentEnrichment } from "./comment-prerequisite";
 import { runGenieRecommendations } from "./steps/genie-recommendations";
 import { runDashboardRecommendations } from "./steps/dashboard-recommendations";
 import { runBusinessValueAnalysis } from "./steps/business-value-analysis";
@@ -248,6 +249,31 @@ export async function startPipeline(runId: string): Promise<void> {
             summary,
           );
         });
+      }
+
+      // Step 2c: Comment Enrichment (runs Comment Engine as a prerequisite)
+      checkCancelled(ctx.signal);
+      {
+        await updateRunMessage(runId, "Enriching metadata with AI-generated comments...");
+        const commentResult = await ensureCommentEnrichment(
+          ctx.metadata!,
+          ctx.run.config.industry ?? undefined,
+          ctx.run.businessContext?.strategicGoals,
+          runId,
+          ctx.signal,
+        );
+        if (commentResult.enriched) {
+          const msg = commentResult.reused
+            ? `Reused AI comments: ${commentResult.tablesEnriched} tables, ${commentResult.columnsEnriched} columns enriched`
+            : `AI Comment Engine: ${commentResult.tablesEnriched} tables, ${commentResult.columnsEnriched} columns enriched`;
+          await updateRunMessage(runId, msg);
+          logger.info("Comment enrichment complete", {
+            runId,
+            ...commentResult,
+          });
+        } else {
+          logger.info("Comment enrichment skipped or failed, continuing with UC comments", { runId });
+        }
       }
 
       // Step 3: Table Filtering

@@ -48,6 +48,10 @@ interface DeployableAsset {
   ddl: string;
   description?: string;
   hasError: boolean;
+  classification?: "reuse" | "improve" | "new";
+  rationale?: string;
+  existingFqn?: string;
+  subdomain?: string;
 }
 
 interface AssetResult {
@@ -145,6 +149,10 @@ export function GenieDeployModal({
           ddl: mv.ddl,
           description: mv.description,
           hasError: mv.validationStatus === "error",
+          classification: mv.classification,
+          rationale: mv.rationale,
+          existingFqn: mv.existingFqn,
+          subdomain: mv.subdomain,
         });
       }
     }
@@ -797,6 +805,29 @@ function SelectAssetsStep({
                     >
                       {asset.type === "metric_view" ? "Metric View" : "Function"}
                     </Badge>
+                    {asset.classification && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] shrink-0 ${
+                          asset.classification === "reuse"
+                            ? "border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+                            : asset.classification === "improve"
+                              ? "border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
+                              : "border-sky-500/50 text-sky-600 bg-sky-50 dark:bg-sky-950/30"
+                        }`}
+                      >
+                        {asset.classification === "reuse"
+                          ? "Reuse Existing"
+                          : asset.classification === "improve"
+                            ? "Improve Existing"
+                            : "New"}
+                      </Badge>
+                    )}
+                    {asset.subdomain && (
+                      <span className="text-[9px] text-muted-foreground shrink-0">
+                        {asset.subdomain}
+                      </span>
+                    )}
                     {asset.hasError && (
                       <Badge variant="destructive" className="text-[9px] shrink-0">
                         <AlertTriangle className="mr-0.5 h-2.5 w-2.5" />
@@ -807,6 +838,16 @@ function SelectAssetsStep({
                   {asset.description && (
                     <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
                       {asset.description}
+                    </p>
+                  )}
+                  {asset.rationale && (
+                    <p className="text-[10px] text-muted-foreground/70 mt-0.5 line-clamp-1 italic">
+                      {asset.rationale}
+                    </p>
+                  )}
+                  {asset.existingFqn && (
+                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                      Existing: <code className="font-mono">{asset.existingFqn}</code>
                     </p>
                   )}
                 </div>
