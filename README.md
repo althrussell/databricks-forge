@@ -51,8 +51,9 @@ Native password rotation and rollback examples:
 ```
 
 The deploy script discovers your SQL Warehouses, lets you pick one, creates
-the app, uploads the code, and deploys. Models default to
-`databricks-claude-sonnet-4-6`. The whole process takes 3-5 minutes.
+the app, uploads the code, and deploys. The premium model defaults to
+`databricks-claude-opus-4-6` and the fast model to `databricks-claude-sonnet-4-6`.
+The whole process takes 3-5 minutes.
 
 ### Step 2: Deploy completes
 
@@ -108,7 +109,7 @@ Pull the latest changes and re-run `./deploy.sh`. The script detects the existin
 | `DATABRICKS_CLIENT_ID` | Service principal OAuth client ID | Auto-injected by platform |
 | `DATABRICKS_CLIENT_SECRET` | Service principal OAuth client secret | Auto-injected by platform |
 | `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID | Set by `deploy.sh` in `app.yaml` |
-| `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
+| `DATABRICKS_SERVING_ENDPOINT` | Premium Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-opus-4-6`) |
 | `DATABRICKS_SERVING_ENDPOINT_FAST` | Fast Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-claude-sonnet-4-6`) |
 | `DATABRICKS_EMBEDDING_ENDPOINT` | Embedding Model Serving endpoint name | Set by `deploy.sh` (default: `databricks-qwen3-embedding-0-6b`) |
 | `LAKEBASE_ENDPOINT_NAME` | Lakebase endpoint resource name | Auto-generated at startup by `scripts/provision-lakebase.mjs` |
@@ -183,15 +184,27 @@ databricks apps logs databricks-forge --follow
 
 ## What It Does
 
-1. **Configure** -- enter your business name, select Unity Catalog scope, and set priorities.
-2. **Discover** -- a 7-step AI pipeline extracts metadata, generates use cases, clusters them into business domains, scores them, and generates runnable SQL. See [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) for the full breakdown.
-3. **Export** -- download results as Excel, PowerPoint, or PDF, or deploy SQL notebooks directly to your workspace.
+1. **Configure** -- enter your business name, select Unity Catalog scope, choose your industry, and set priorities.
+2. **Discover** -- a 10-step AI pipeline extracts metadata, generates use cases, clusters them into business domains, scores them, generates runnable SQL, quantifies business value, and produces Genie Space recommendations. See [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) for the full breakdown.
+3. **Analyse** -- review scored use cases, explore business value estimates, implementation roadmap, stakeholder mapping, and executive synthesis.
+4. **Activate** -- deploy Genie Spaces, AI/BI dashboards, SQL notebooks, and AI catalog comments. Export results as Excel, PowerPoint, PDF, or portfolio deliverables.
+5. **Track** -- follow use cases from discovery through delivery to measured business value, with voting, stalled alerts, and value capture.
 
 ### Key Features
 
 - Discovers both **AI** use cases (ai_forecast, ai_classify, ai_query, etc.) and **Statistical** use cases (anomaly detection, trend analysis, geospatial, etc.)
 - Scores every use case on **priority**, **feasibility**, **impact**, and **overall value**
 - Automatically clusters use cases into **business domains and subdomains**
+- **Business Value Intelligence** -- financial quantification (dollar-range estimates), roadmap phasing, executive synthesis, and stakeholder analysis
+- **Genie Space generation** -- multi-pass engine producing column intelligence, semantic SQL, trusted queries, benchmarks, and metric view proposals
+- **Genie Space health checks** -- deterministic scoring, automated fix workflow, and benchmark feedback loop for continuous improvement
+- **AI/BI dashboards** -- auto-generated Lakeview dashboard recommendations per domain
+- **AI catalog comments** -- industry-aware table and column descriptions with bulk apply/undo
+- **Ask Forge** -- RAG-powered conversational assistant with SQL proposals, dashboard actions, and Genie Space deployment
+- **Data estate intelligence** -- environment scanning with health scoring, lineage, ERD, governance gap analysis
+- **Industry benchmarks** -- 562 reference use cases across 11 industries grounding LLM outputs in real-world data
+- **Knowledge Base** -- upload strategy packs, data dictionaries, and governance policies to enrich AI context
+- **Fabric / Power BI migration** -- scan PBI workspaces, propose gold schema DDL, translate DAX to SQL
 - Deduplicates and ranks results so the highest-value opportunities surface first
 - Supports **20+ languages** for generated documentation
 - **Real-time status messages** during pipeline execution (e.g. "Filtering tables (batch 2 of 5)...")
@@ -215,17 +228,22 @@ databricks apps logs databricks-forge --follow
 
 ## Pipeline Steps
 
-The "Discover Usecases" pipeline runs 7 steps sequentially. The frontend polls for progress in real time.
+The "Discover Usecases" pipeline runs 10 steps. The frontend polls for progress in real time.
 
 | Step | Name | What it does | Progress |
 | --- | --- | --- | --- |
 | 1 | **Business Context** | Generates strategic goals, value chain, and revenue model via Model Serving | 10% |
-| 2 | **Metadata Extraction** | Queries `information_schema` for tables, columns, and foreign keys | 20% |
-| 3 | **Table Filtering** | Classifies tables as business-relevant vs technical via Model Serving (JSON mode) | 30% |
-| 4 | **Use Case Generation** | Generates AI and statistical use cases in parallel batches via Model Serving (JSON mode) | 45% |
-| 5 | **Domain Clustering** | Assigns domains and subdomains via Model Serving, merges small domains | 55% |
-| 6 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via Model Serving | 65% |
-| 7 | **SQL Generation** | Generates runnable Databricks SQL per use case via Model Serving (streaming) | 95% |
+| 2 | **Metadata Extraction** | Queries `information_schema` for tables, columns, foreign keys, and metric views | 18% |
+| 3 | **Asset Discovery** | Discovers existing Genie Spaces, dashboards, and metric views in scope (optional) | 22% |
+| 4 | **Table Filtering** | Classifies tables as business-relevant vs technical via Model Serving (JSON mode) | 30% |
+| 5 | **Use Case Generation** | Generates AI and statistical use cases in parallel batches via Model Serving (JSON mode) | 45% |
+| 6 | **Domain Clustering** | Assigns domains and subdomains via Model Serving, merges small domains | 55% |
+| 7 | **Scoring & Dedup** | Scores on priority/feasibility/impact, removes duplicates via Model Serving | 65% |
+| 8 | **SQL Generation** | Generates runnable Databricks SQL per use case via Model Serving (streaming) | 80% |
+| 9 | **Business Value Analysis** | Financial quantification, roadmap phasing, executive synthesis, stakeholder analysis | 90% |
+| 10 | **Genie Recommendations** | Multi-pass Genie Space generation with benchmarks and metric view proposals (background) | 100% |
+
+The Dashboard Engine also runs in the background alongside step 10, producing AI/BI dashboard recommendations per domain.
 
 Each step updates its status and a human-readable **status message** in Lakebase (e.g. "Scanning catalog main...", "Scoring domain: Customer Analytics (14 use cases)..."). The frontend polls every 3 seconds and displays the latest message alongside the progress stepper.
 
@@ -268,12 +286,23 @@ Use `deploy.sh` for deterministic password lifecycle:
 
 ## Export Formats
 
+### Per-Run Exports
+
 | Format | Library | What you get |
 | --- | --- | --- |
-| **Excel** | exceljs | 3-sheet workbook: Summary, Use Cases (filterable), Domains |
-| **PowerPoint** | pptxgenjs | Title slide, executive summary, domain breakdown, top 10 use cases |
-| **PDF** | pdfkit | Databricks-branded A4 landscape report with cover page, executive summary, domain breakdown, and individual use case pages |
+| **Excel** | exceljs | Multi-sheet workbook: Summary, Use Cases, Domains, Business Value, Stakeholders |
+| **PowerPoint** | pptxgenjs | Executive deck with optional synthesis slides (findings, recommendations, risks, value summary) |
+| **PDF** | pdfkit | Databricks-branded A4 landscape report with cover page, executive summary, domains, and use cases |
 | **Notebooks** | Workspace REST API | One SQL notebook per domain, deployed to `/Shared/forge_gen/` via the app service principal |
+
+### Portfolio Exports (cross-run)
+
+| Format | What you get |
+| --- | --- |
+| **Portfolio Excel** | 8-sheet workbook: Executive Summary, Key Findings, Recommendations, Risk Callouts, Domain Performance, Delivery Pipeline, Use Cases with ROI, Stakeholders |
+| **Portfolio PowerPoint** | 8-slide Databricks-branded deck with KPIs, findings, recommendations, and delivery roadmap |
+| **Executive PDF** | 2-page brief: KPIs, key findings, recommendations, pipeline, domain heatmap, and risks |
+| **D4B Workshop Pack** | 5-section workshop deck: Case for Change, Executive Findings, Delivery Roadmap, Recommended Genie Spaces, Workshop Agenda |
 
 ---
 
@@ -320,14 +349,23 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 
 | Document | Description |
 | --- | --- |
+| [WHY_FORGE.md](WHY_FORGE.md) | **Why Forge?** -- customer-facing value proposition and full feature overview |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **User guide** -- step-by-step walkthrough of every feature with screenshots |
 | [FORGE_ANALYSIS.md](FORGE_ANALYSIS.md) | **Comprehensive analysis guide** -- pipeline logic, scoring methodology, prompt engineering, data flow diagrams |
 | [ESTATE_ANALYSIS.md](ESTATE_ANALYSIS.md) | **Estate scan guide** -- environment intelligence pipeline, health scoring, lineage |
+| [ASK_FORGE.md](ASK_FORGE.md) | **Ask Forge** -- conversational assistant architecture, intent classification, RAG, actions |
+| [docs/BUSINESS_VALUE.md](docs/BUSINESS_VALUE.md) | **Business Value Engine** -- financial quantification, roadmap, stakeholders, exports |
+| [docs/GENIE_ENGINE.md](docs/GENIE_ENGINE.md) | **Genie Engine** -- multi-pass Genie Space generator architecture and best practices |
+| [docs/GENIE_HEALTHCHECK_ENGINE.md](docs/GENIE_HEALTHCHECK_ENGINE.md) | **Genie Health Check Engine** -- deterministic scoring, fix workflow, benchmark feedback |
+| [docs/DASHBOARD_ENGINE.md](docs/DASHBOARD_ENGINE.md) | **Dashboard Engine** -- AI/BI dashboard recommendation generator |
+| [docs/COMMENT_ENGINE.md](docs/COMMENT_ENGINE.md) | **Comment Engine** -- AI catalog comment generation |
+| [docs/SQL_ENGINE.md](docs/SQL_ENGINE.md) | **SQL Engine** -- grounded SQL generation and validation across all surfaces |
+| [docs/SKILLS_KNOWLEDGE_BASE.md](docs/SKILLS_KNOWLEDGE_BASE.md) | **Skills and Knowledge Base** -- composable domain knowledge and document RAG |
+| [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
+| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | Industry benchmarks catalog |
 | [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) | **Security architecture** -- data flows, threat mitigations, auth model, compliance posture |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture and Lakebase schema |
-| [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
 | [docs/PROMPTS.md](docs/PROMPTS.md) | Prompt template catalog |
-| [docs/GENIE_ENGINE.md](docs/GENIE_ENGINE.md) | Genie Engine architecture, configuration, and best practices |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment and local dev guide |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines and development setup |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting process |
