@@ -4,11 +4,12 @@
  * Deleting ForgeRun rows cascades to 10+ child tables (use cases,
  * exports, prompt logs, Genie data, dashboards, background jobs, etc.).
  * Environment scans cascade to details, histories, lineage, and insights.
+ * Deleting ForgeCommentJob cascades to ForgeCommentProposal.
  *
  * Standalone tables (no cascade parent) are deleted explicitly:
  * metadata cache, prompt templates, activity logs, outcome maps,
- * documents, conversations, assistant logs, benchmark records, and
- * metadata genie spaces.
+ * documents, conversations, assistant logs, benchmark records,
+ * metadata genie spaces, and AI comment jobs.
  *
  * The forge_embeddings table (pgvector, managed outside Prisma) is
  * also truncated so no stale vectors survive a factory reset.
@@ -40,6 +41,7 @@ export async function deleteAllData(): Promise<void> {
     await prisma.$transaction([
       prisma.forgeEnvironmentScan.deleteMany(),
       prisma.forgeRun.deleteMany(),
+      prisma.forgeCommentJob.deleteMany(),
       prisma.forgeMetadataCache.deleteMany(),
       prisma.forgePromptTemplate.deleteMany(),
       prisma.forgeActivityLog.deleteMany(),
