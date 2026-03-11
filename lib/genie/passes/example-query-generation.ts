@@ -1,6 +1,6 @@
 import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "../llm-cache";
-import { parseLLMJson } from "./parse-llm-json";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import {
   buildSchemaContextBlock,
   validateSqlExpression,

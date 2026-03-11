@@ -42,6 +42,10 @@ This app runs as a **Databricks App**. Authentication is automatic:
 /app          Routes + UI (pages, layouts, API routes)
 /components   Shared UI components (shadcn primitives, pipeline-specific)
 /lib          Data, auth, config, scoring, AI, pipeline logic
+  /ports      Abstract interfaces for DI (LLMClient, SqlExecutor, SkillResolver, Logger, EngineProgress)
+    /defaults Databricks wiring: concrete port implementations
+  /toolkit    Shared cross-engine utilities (concurrency, parse-llm-json, llm-cache, sql-rules, token-budget, retry)
+  /sql-engine Unified SQL generation + validation + review pipeline
   /dbx        Databricks SQL client, Model Serving client, Workspace API
   /queries    SQL text + row-to-type mappers
   /domain     TypeScript types + scoring logic
@@ -306,8 +310,27 @@ API routes:
 | SQL review         | `getReviewEndpoint()` routes SQL quality review to dedicated review model (`databricks-gpt-5-4` via `serving-endpoint-review`); `lib/ai/sql-reviewer.ts` provides `reviewSql()`, `reviewAndFixSql()`, `reviewBatch()`; opt-in per surface via `isReviewEnabled()` |
 | Embeddings         | `lib/embeddings/client.ts` -- `databricks-qwen3-embedding-0-6b` (1024-dim) via `getEmbeddingEndpoint()`; batched (16/req) with 429/5xx retry |
 | Vector search      | `lib/embeddings/store.ts` -- pgvector in Lakebase; `forge_embeddings` table with HNSW index; 12 entity kinds covering all estate + pipeline data |
-| LLM cache + retry  | `lib/genie/llm-cache.ts` -- in-memory SHA-256-keyed cache (10min TTL) with 429/5xx retry |
-| Concurrency        | `lib/genie/concurrency.ts` -- bounded-concurrency utility for parallel domains and batches |
+| LLM cache + retry  | `lib/toolkit/llm-cache.ts` -- in-memory SHA-256-keyed cache (10min TTL) with 429/5xx retry |
+| Concurrency        | `lib/toolkit/concurrency.ts` -- bounded-concurrency utility for parallel domains and batches |
+| Toolkit            | `lib/toolkit/` -- shared utilities relocated from engine-specific paths for cross-engine reuse |
+| Port interfaces    | `lib/ports/` -- abstract DI interfaces (LLMClient, SqlExecutor, SkillResolver, Logger, EngineProgress) |
+| SQL Engine         | `lib/sql-engine/` -- unified generate/validate/review/fix pipeline behind LLMClient port |
+
+## Engine Portability Architecture
+
+All four primary engines (Comment, Genie, Dashboard, Health Check) accept optional
+`deps` objects for dependency injection:
+
+- **`CommentEngineDeps`** -- LLM client, logger, pre-built schema context, industry context
+- **`GenieEngineDeps`** -- LLM client, logger
+- **`DashboardEngineDeps`** -- LLM client, logger, reviewAndFixSql, isReviewEnabled
+- **Health Check** -- injectable `reviewBatch` and `isReviewEnabled` functions via setter
+
+Default Databricks implementations live in `lib/ports/defaults/` and wire the
+ports to the concrete infrastructure (`model-serving`, `sql.ts`, `logger`, `skills/resolver`).
+
+Shared utilities live in `lib/toolkit/` with deprecated re-export stubs at the
+original paths for backward compatibility.
 
 ## Key Constraints
 

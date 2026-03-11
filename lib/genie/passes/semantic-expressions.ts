@@ -9,9 +9,9 @@
  */
 
 import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "../llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { logger } from "@/lib/logger";
-import { parseLLMJson } from "./parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import type { MetadataSnapshot, UseCase, BusinessContext } from "@/lib/domain/types";
 import type {
   GenieEngineConfig,
@@ -25,7 +25,7 @@ import {
   validateSqlExpression,
   type SchemaAllowlist,
 } from "../schema-allowlist";
-import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { generateTimePeriods } from "../time-periods";

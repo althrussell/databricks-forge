@@ -6,15 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Check,
-  X,
-  ChevronRight,
-  Pencil,
-  Lock,
-  Undo2,
-  AlertCircle,
-} from "lucide-react";
+import { Check, X, ChevronRight, Pencil, Lock, Undo2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Proposal {
@@ -70,9 +62,7 @@ export function CommentReviewPanel({
 
   const saveEdit = useCallback(
     async (proposal: Proposal) => {
-      await onUpdateProposals([
-        { id: proposal.id, status: "accepted", editedComment: editValue },
-      ]);
+      await onUpdateProposals([{ id: proposal.id, status: "accepted", editedComment: editValue }]);
       setEditingId(null);
     },
     [editValue, onUpdateProposals],
@@ -117,11 +107,7 @@ export function CommentReviewPanel({
               </Badge>
             )}
             {appliedCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onUndoTable(tableFqn)}
-              >
+              <Button variant="outline" size="sm" onClick={() => onUndoTable(tableFqn)}>
                 <Undo2 className="mr-1 h-3.5 w-3.5" />
                 Undo
               </Button>
@@ -137,12 +123,8 @@ export function CommentReviewPanel({
                 <span className="text-sm font-medium">Table Comment</span>
                 <ProposalActions
                   proposal={tableProposal}
-                  onAccept={() =>
-                    onUpdateProposals([{ id: tableProposal.id, status: "accepted" }])
-                  }
-                  onReject={() =>
-                    onUpdateProposals([{ id: tableProposal.id, status: "rejected" }])
-                  }
+                  onAccept={() => onUpdateProposals([{ id: tableProposal.id, status: "accepted" }])}
+                  onReject={() => onUpdateProposals([{ id: tableProposal.id, status: "rejected" }])}
                   onEdit={() => startEdit(tableProposal)}
                 />
               </div>
@@ -166,11 +148,7 @@ export function CommentReviewPanel({
                       <Button size="sm" onClick={() => saveEdit(tableProposal)}>
                         Save
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditingId(null)}
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
                         Cancel
                       </Button>
                     </div>
@@ -227,14 +205,10 @@ export function CommentReviewPanel({
                   )}
                 >
                   <div className="px-3 py-2">
-                    <span className="text-xs font-mono font-medium">
-                      {p.columnName}
-                    </span>
+                    <span className="text-xs font-mono font-medium">{p.columnName}</span>
                   </div>
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    {p.originalComment ?? (
-                      <span className="italic">No comment</span>
-                    )}
+                    {p.originalComment ?? <span className="italic">No comment</span>}
                   </div>
                   <div className="px-3 py-2">
                     {editingId === p.id ? (
@@ -259,9 +233,7 @@ export function CommentReviewPanel({
                         </div>
                       </div>
                     ) : (
-                      <span className="text-xs">
-                        {p.editedComment ?? p.proposedComment}
-                      </span>
+                      <span className="text-xs">{p.editedComment ?? p.proposedComment}</span>
                     )}
                     {p.errorMessage && (
                       <div className="mt-1 flex items-center gap-1 text-[10px] text-destructive">
@@ -338,9 +310,12 @@ function CommentCard({
             variant="secondary"
             className={cn(
               "text-[9px]",
-              status === "accepted" && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-              status === "rejected" && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-              status === "applied" && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+              status === "accepted" &&
+                "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+              status === "rejected" &&
+                "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+              status === "applied" &&
+                "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
             )}
           >
             {status}
@@ -375,7 +350,10 @@ function ProposalActions({
 }) {
   if (proposal.status === "applied") {
     return (
-      <Badge variant="secondary" className="text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+      <Badge
+        variant="secondary"
+        className="text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+      >
         Applied
       </Badge>
     );
@@ -403,13 +381,7 @@ function ProposalActions({
       >
         <X className="h-3.5 w-3.5" />
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={btnSize}
-        onClick={onEdit}
-        title="Edit"
-      >
+      <Button variant="ghost" size="icon" className={btnSize} onClick={onEdit} title="Edit">
         <Pencil className="h-3 w-3" />
       </Button>
     </div>

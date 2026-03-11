@@ -13,7 +13,11 @@ import { AskForgePanel } from "@/components/assistant/ask-forge-panel";
 const sans = localFont({
   src: [
     { path: "../public/fonts/PlusJakartaSans-latin.woff2", style: "normal", weight: "300 800" },
-    { path: "../public/fonts/PlusJakartaSans-italic-latin.woff2", style: "italic", weight: "300 800" },
+    {
+      path: "../public/fonts/PlusJakartaSans-italic-latin.woff2",
+      style: "italic",
+      weight: "300 800",
+    },
   ],
   variable: "--font-jakarta",
   display: "swap",

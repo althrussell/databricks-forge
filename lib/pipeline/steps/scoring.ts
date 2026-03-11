@@ -6,9 +6,9 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
+import { buildTokenAwareBatches } from "@/lib/toolkit/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
@@ -21,7 +21,7 @@ import {
   CrossDomainDedupItemSchema,
   validateLLMArray,
 } from "@/lib/validation";
-import { mapWithConcurrency } from "@/lib/genie/concurrency";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import type { PipelineContext, ScoreRationale, UseCase } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { scoreUseCaseConsultingQuality } from "@/lib/pipeline/usecase-scorecard";

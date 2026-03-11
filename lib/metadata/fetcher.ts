@@ -145,7 +145,11 @@ export async function fetchEnrichedMetadata(
         logger.debug("[metadata-fetcher] Tags unavailable", { scope: scopeLabel });
       }
 
-      onProgress?.("metadata-fetch", 30, `${scopeLabel}: ${tables.length} tables, ${columns.length} columns`);
+      onProgress?.(
+        "metadata-fetch",
+        30,
+        `${scopeLabel}: ${tables.length} tables, ${columns.length} columns`,
+      );
       onCounters?.({ tablesFound: allTables.length, columnsFound: allColumns.length });
     } catch (err) {
       logger.warn("[metadata-fetcher] Scope failed, skipping", {

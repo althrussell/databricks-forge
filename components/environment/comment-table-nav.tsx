@@ -4,14 +4,7 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Search,
-  Database,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  AlertCircle,
-} from "lucide-react";
+import { Search, Database, CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TableSummary {
@@ -41,11 +34,23 @@ function getTableStatus(t: TableSummary) {
 
 const STATUS_CONFIG = {
   pending: { icon: Clock, color: "text-muted-foreground", bg: "bg-muted/50" },
-  accepted: { icon: CheckCircle2, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/20" },
+  accepted: {
+    icon: CheckCircle2,
+    color: "text-green-600 dark:text-green-400",
+    bg: "bg-green-50 dark:bg-green-950/20",
+  },
   rejected: { icon: XCircle, color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
-  applied: { icon: CheckCircle2, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/20" },
+  applied: {
+    icon: CheckCircle2,
+    color: "text-blue-600 dark:text-blue-400",
+    bg: "bg-blue-50 dark:bg-blue-950/20",
+  },
   failed: { icon: AlertCircle, color: "text-destructive", bg: "bg-destructive/5" },
-  mixed: { icon: Clock, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/20" },
+  mixed: {
+    icon: Clock,
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-950/20",
+  },
 } as const;
 
 export function CommentTableNav({ tables, selectedTable, onSelectTable }: CommentTableNavProps) {
@@ -66,9 +71,7 @@ export function CommentTableNav({ tables, selectedTable, onSelectTable }: Commen
     return Array.from(map.values());
   }, [tables, search]);
 
-  const reviewed = tables.filter(
-    (t) => t.accepted + t.rejected + t.applied === t.total,
-  ).length;
+  const reviewed = tables.filter((t) => t.accepted + t.rejected + t.applied === t.total).length;
 
   return (
     <div className="flex h-full flex-col border-r">

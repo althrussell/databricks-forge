@@ -8,9 +8,9 @@
  * @module ai/comment-engine/column-pass
  */
 
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { mapWithConcurrency } from "@/lib/genie/concurrency";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
@@ -23,9 +23,7 @@ const COLUMN_CONCURRENCY = 8;
 // Rendering
 // ---------------------------------------------------------------------------
 
-function renderColumnList(
-  columns: ColumnCommentInput["columns"],
-): string {
+function renderColumnList(columns: ColumnCommentInput["columns"]): string {
   return columns
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((c) => {
@@ -42,9 +40,7 @@ function renderColumnList(
     .join("\n");
 }
 
-function renderRelatedTables(
-  related: ColumnCommentInput["relatedTables"],
-): string {
+function renderRelatedTables(related: ColumnCommentInput["relatedTables"]): string {
   if (related.length === 0) return "No closely related tables identified.";
 
   return related
@@ -88,12 +84,12 @@ export async function runColumnCommentPass(
       columnTablesProcessed: completed,
     });
 
-    const dataAssetBlock = input.dataAssetId && input.dataAssetDescription
-      ? `Data Asset: ${input.dataAssetId} -- ${input.dataAssetDescription}`
-      : "";
+    const dataAssetBlock =
+      input.dataAssetId && input.dataAssetDescription
+        ? `Data Asset: ${input.dataAssetId} -- ${input.dataAssetDescription}`
+        : "";
 
-    const prompt = COLUMN_COMMENT_PROMPT
-      .replace("{industry_context}", industryContext)
+    const prompt = COLUMN_COMMENT_PROMPT.replace("{industry_context}", industryContext)
       .replace("{table_fqn}", input.tableFqn)
       .replace("{table_description}", input.tableDescription)
       .replace("{table_domain}", input.tableDomain ?? "Unknown")

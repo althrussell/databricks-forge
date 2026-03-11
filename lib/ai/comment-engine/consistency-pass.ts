@@ -10,9 +10,9 @@
  * @module ai/comment-engine/consistency-pass
  */
 
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
+import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
@@ -72,9 +72,10 @@ export async function runConsistencyReview(
 
   const endpoint = getFastServingEndpoint();
 
-  const basePrompt = CONSISTENCY_REVIEW_PROMPT
-    .replace("{schema_summary}", schemaSummary)
-    .replace("{descriptions_list}", "");
+  const basePrompt = CONSISTENCY_REVIEW_PROMPT.replace("{schema_summary}", schemaSummary).replace(
+    "{descriptions_list}",
+    "",
+  );
 
   const baseTokens = estimateTokens(basePrompt);
   const batches = buildTokenAwareBatches(entries, renderDescriptionEntry, baseTokens);
@@ -86,9 +87,10 @@ export async function runConsistencyReview(
 
     const descList = batch.map(renderDescriptionEntry).join("\n");
 
-    const prompt = CONSISTENCY_REVIEW_PROMPT
-      .replace("{schema_summary}", schemaSummary)
-      .replace("{descriptions_list}", descList);
+    const prompt = CONSISTENCY_REVIEW_PROMPT.replace("{schema_summary}", schemaSummary).replace(
+      "{descriptions_list}",
+      descList,
+    );
 
     const messages: ChatMessage[] = [{ role: "user", content: prompt }];
 

@@ -12,7 +12,7 @@
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { isReviewEnabled } from "@/lib/dbx/client";
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";

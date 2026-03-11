@@ -12,7 +12,7 @@ import type {
   EnrichedSqlSnippetFilter,
 } from "@/lib/genie/types";
 import type { FilterCandidate } from "./types";
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
 import "@/lib/skills/content";
 import { resolveForIntent, formatContextSections } from "@/lib/skills/resolver";
 

@@ -22,7 +22,7 @@
  */
 
 import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "../llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { logger } from "@/lib/logger";
 import type { BusinessContext, MetadataSnapshot } from "@/lib/domain/types";
 import type {

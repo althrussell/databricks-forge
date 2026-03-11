@@ -10,7 +10,7 @@
  * answering questions, synthesising context, and proposing actions.
  */
 
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
 
 export type AssistantPersona = "business" | "analyst" | "tech" | "strategic";
 

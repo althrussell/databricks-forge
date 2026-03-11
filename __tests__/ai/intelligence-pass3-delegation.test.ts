@@ -14,7 +14,17 @@ vi.mock("@/lib/metadata/context-builder", () => ({
         catalog: "cat",
         schema: "schema",
         tableName: "orders",
-        columns: [{ name: "id", dataType: "BIGINT", ordinalPosition: 1, isNullable: true, comment: null, inferredRole: "pk", inferredFkTarget: null }],
+        columns: [
+          {
+            name: "id",
+            dataType: "BIGINT",
+            ordinalPosition: 1,
+            isNullable: true,
+            comment: null,
+            inferredRole: "pk",
+            inferredFkTarget: null,
+          },
+        ],
         comment: null,
         tableType: "TABLE",
         format: null,
@@ -35,14 +45,19 @@ vi.mock("@/lib/metadata/context-builder", () => ({
     relationships: [],
     lineageEdges: [],
     foreignKeys: [],
-    namingConventions: { dominantConvention: "snake_case", commonPrefixes: [], commonSuffixes: [], hasMedallionPattern: false },
+    namingConventions: {
+      dominantConvention: "snake_case",
+      commonPrefixes: [],
+      commonSuffixes: [],
+      hasMedallionPattern: false,
+    },
     schemaSummary: "### SCHEMA OVERVIEW\n1 tables across 1 schema(s)",
   })),
 }));
 
 vi.mock("@/lib/ai/comment-engine/table-pass", () => ({
   runTableCommentPass: vi.fn(() =>
-    Promise.resolve(new Map([["cat.schema.orders", "Tracks sales orders with lifecycle state"]]))
+    Promise.resolve(new Map([["cat.schema.orders", "Tracks sales orders with lifecycle state"]])),
   ),
   buildLineageContextBlock: vi.fn(() => "No lineage data available."),
 }));
@@ -53,11 +68,11 @@ vi.mock("@/lib/dbx/model-serving", () => ({
       content: "[]",
       model: "test",
       finishReason: "stop",
-    })
+    }),
   ),
 }));
 
-vi.mock("@/lib/genie/passes/parse-llm-json", () => ({
+vi.mock("@/lib/toolkit/parse-llm-json", () => ({
   parseLLMJson: vi.fn(() => []),
 }));
 
@@ -65,7 +80,7 @@ vi.mock("@/lib/ai/templates", () => ({
   formatPrompt: vi.fn((_key: string, _vars: Record<string, string>) => "mock prompt"),
 }));
 
-vi.mock("@/lib/ai/token-budget", () => ({
+vi.mock("@/lib/toolkit/token-budget", () => ({
   buildTokenAwareBatches: vi.fn((items: unknown[]) => [items]),
   estimateTokens: vi.fn(() => 100),
   truncateColumns: vi.fn((cols: unknown[], max: number) => ({
@@ -132,7 +147,7 @@ describe("intelligence layer Pass 3 delegation", () => {
     expect(buildSchemaContextFromIntelligence).toHaveBeenCalledTimes(1);
     expect(runTableCommentPass).toHaveBeenCalledTimes(1);
     expect(result.generatedDescriptions.get("cat.schema.orders")).toBe(
-      "Tracks sales orders with lifecycle state"
+      "Tracks sales orders with lifecycle state",
     );
   });
 
@@ -142,8 +157,15 @@ describe("intelligence layer Pass 3 delegation", () => {
       buildDataAssetContext: vi.fn(() =>
         Promise.resolve({
           text: "Data asset context...",
-          assets: [{ id: "asset-1", name: "Customer Accounts", description: "Account data", assetFamily: "CRM" }],
-        })
+          assets: [
+            {
+              id: "asset-1",
+              name: "Customer Accounts",
+              description: "Account data",
+              assetFamily: "CRM",
+            },
+          ],
+        }),
       ),
       buildUseCaseLinkageContext: vi.fn(() => Promise.resolve("Use case linkages...")),
     }));
@@ -223,7 +245,8 @@ describe("intelligence layer Pass 3 delegation", () => {
       },
     );
 
-    const adapterCall = (buildSchemaContextFromIntelligence as ReturnType<typeof vi.fn>).mock.calls[0];
+    const adapterCall = (buildSchemaContextFromIntelligence as ReturnType<typeof vi.fn>).mock
+      .calls[0];
     expect(adapterCall[3]).toEqual(fks);
   });
 

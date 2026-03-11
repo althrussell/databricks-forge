@@ -36,8 +36,10 @@ import { runExampleQueryGeneration } from "./passes/example-query-generation";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { isValidTable } from "./schema-allowlist";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
-import { mapWithConcurrency } from "./concurrency";
-import { logger } from "@/lib/logger";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
+import { logger as defaultLogger } from "@/lib/logger";
+import type { Logger } from "@/lib/ports/logger";
+import type { LLMClient } from "@/lib/ports/llm-client";
 import type { DiscoveredGenieSpace } from "@/lib/discovery/types";
 import { tableHasSynonymPair } from "./key-synonyms";
 import { normalizeDomainLabel } from "./domain-normalization";
@@ -51,6 +53,17 @@ export class EngineCancelledError extends Error {
     super("Genie Engine generation was cancelled");
     this.name = "EngineCancelledError";
   }
+}
+
+/**
+ * Injectable dependencies for the Genie Engine.
+ *
+ * When provided, the engine uses these instead of hard-coded imports.
+ * LLM client injection cascades to individual passes in future phases.
+ */
+export interface GenieEngineDeps {
+  llm?: LLMClient;
+  logger?: Logger;
 }
 
 export interface GenieEngineInput {
@@ -73,6 +86,8 @@ export interface GenieEngineInput {
     totalDomains: number,
     completedDomainName?: string,
   ) => void;
+  /** Injectable dependencies for portability and testing. */
+  deps?: GenieEngineDeps;
 }
 
 export interface GenieEngineResult {
@@ -104,13 +119,15 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     domainFilter,
     signal,
     onProgress,
+    deps,
   } = input;
 
+  const log: Logger = deps?.logger ?? defaultLogger;
   const premiumEndpoint = run.config.aiModel;
   const fastEndpoint = getFastServingEndpoint();
   const allowlist = buildSchemaAllowlist(metadata);
 
-  logger.info("Genie Engine starting", {
+  log.info("Genie Engine starting", {
     runId: run.runId,
     useCaseCount: useCases.length,
     tableCount: metadata.tableCount,
@@ -134,12 +151,12 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     config.maxAutoSpaces > 0 ? filteredGroups.slice(0, config.maxAutoSpaces) : filteredGroups;
 
   if (domainGroups.length === 0) {
-    logger.warn("No domain groups produced", { runId: run.runId, domainFilter });
+    log.warn("No domain groups produced", { runId: run.runId, domainFilter });
     return { recommendations: [], passOutputs: [], failedDomains: [] };
   }
 
   if (domainGroups.length < filteredGroups.length) {
-    logger.info("Domain count capped by maxAutoSpaces", {
+    log.info("Domain count capped by maxAutoSpaces", {
       maxAutoSpaces: config.maxAutoSpaces,
       totalAvailable: filteredGroups.length,
       processing: domainGroups.length,
@@ -162,7 +179,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         existingSpaceByDomain.set(group.domain, bestMatch.space);
       }
     }
-    logger.info("Existing space mapping", {
+    log.info("Existing space mapping", {
       totalExisting: existingSpaces.length,
       domainsWithExisting: existingSpaceByDomain.size,
       mapped: Array.from(existingSpaceByDomain.entries()).map(
@@ -171,7 +188,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     });
   }
 
-  logger.info("Pass 0 complete: table selection", {
+  log.info("Pass 0 complete: table selection", {
     domainCount: domainGroups.length,
     totalDomains: allDomainGroups.length,
     filtered: !!domainFilter?.length,
@@ -192,7 +209,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       }
 
       if (group.tables.length === 0) {
-        logger.info("Skipping domain with no tables", { domain: group.domain });
+        log.info("Skipping domain with no tables", { domain: group.domain });
         completedDomainCount++;
         return null;
       }
@@ -218,6 +235,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
               completedDomainCount,
               totalDomainCount,
             ),
+          log,
         );
 
         const space = assembleSerializedSpace(outputs, {
@@ -275,7 +293,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
           group.domain,
         );
 
-        logger.info("Domain processed", {
+        log.info("Domain processed", {
           domain: group.domain,
           tables: outputs.tables.length,
           measures: outputs.measures.length,
@@ -290,7 +308,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         if (err instanceof EngineCancelledError) throw err;
         completedDomainCount++;
         const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.error("Failed to process domain", {
+        log.error("Failed to process domain", {
           domain: group.domain,
           error: errorMsg,
         });
@@ -318,13 +336,13 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   recommendations.sort((a, b) => b.useCaseCount - a.useCaseCount);
 
   if (failedDomains.length > 0) {
-    logger.warn("Some domains failed during Genie Engine run", {
+    log.warn("Some domains failed during Genie Engine run", {
       runId: run.runId,
       failedDomains,
     });
   }
 
-  logger.info("Genie Engine complete", {
+  log.info("Genie Engine complete", {
     runId: run.runId,
     recommendationCount: recommendations.length,
     failedDomainCount: failedDomains.length,
@@ -345,6 +363,7 @@ async function processDomain(
   fastEndpoint: string,
   signal: AbortSignal | undefined,
   onProgress: (msg: string) => void,
+  log: Logger,
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
   const normalizedDomain = normalizeDomainLabel(domain);
@@ -434,6 +453,7 @@ async function processDomain(
     tableSet,
     existingJoinKeys,
     allowlist,
+    log,
   ).map((j) => ({ ...j, source: "sql_mined" as const, confidence: "medium" as const }));
 
   let llmInferredJoins: Array<{
@@ -467,7 +487,7 @@ async function processDomain(
         confidence: "medium" as const,
       }));
     } catch (err) {
-      logger.warn("LLM join inference failed, continuing with FK + SQL-inferred joins", {
+      log.warn("LLM join inference failed, continuing with FK + SQL-inferred joins", {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -494,7 +514,7 @@ async function processDomain(
     `engine_join:${normalizedDomain}`,
   );
 
-  logger.info("Join specs assembled", {
+  log.info("Join specs assembled", {
     domain: normalizedDomain,
     fkJoins: fkAndOverrideJoins.length,
     sqlInferred: sqlInferredJoins.length,
@@ -526,7 +546,7 @@ async function processDomain(
       const schemaScope = metadata.ucPath;
       await saveMetricViewProposals(run.runId, schemaScope, normalizedDomain, result.proposals);
     } catch (err) {
-      logger.warn("Failed to persist metric view proposals (non-fatal)", {
+      log.warn("Failed to persist metric view proposals (non-fatal)", {
         domain: normalizedDomain,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -649,6 +669,7 @@ function inferJoinsFromUseCaseSql(
   tableSet: Set<string>,
   existingJoinKeys: Set<string>,
   allowlist: ReturnType<typeof buildSchemaAllowlist>,
+  log: Logger = defaultLogger,
 ): Array<{ leftTable: string; rightTable: string; sql: string; relationshipType: "many_to_one" }> {
   const discovered = new Map<string, { leftTable: string; rightTable: string; sql: string }>();
 
@@ -700,7 +721,7 @@ function inferJoinsFromUseCaseSql(
 
       // Skip complex ON clauses (AND/OR) -- we can only reliably parse simple equi-joins
       if (/\b(AND|OR)\b/i.test(onCondition)) {
-        logger.debug("Skipping complex ON clause in join inference", {
+        log.debug("Skipping complex ON clause in join inference", {
           leftTable,
           rightTable,
           onCondition: onCondition.substring(0, 100),
@@ -727,7 +748,7 @@ function inferJoinsFromUseCaseSql(
   }));
 
   if (results.length > 0) {
-    logger.info("Inferred joins from use case SQL", {
+    log.info("Inferred joins from use case SQL", {
       count: results.length,
       pairs: results.map((j) => `${j.leftTable} -> ${j.rightTable}`),
     });

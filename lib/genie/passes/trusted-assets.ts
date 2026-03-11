@@ -6,9 +6,9 @@
  */
 
 import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "../llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { logger } from "@/lib/logger";
-import { parseLLMJson } from "./parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import type { UseCase, MetadataSnapshot } from "@/lib/domain/types";
 import type {
   TrustedAssetQuery,
@@ -22,10 +22,10 @@ import {
   validateSqlExpression,
   type SchemaAllowlist,
 } from "../schema-allowlist";
-import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
-import { mapWithConcurrency } from "../concurrency";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
 
 const TEMPERATURE = 0.2;

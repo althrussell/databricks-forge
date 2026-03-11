@@ -73,7 +73,15 @@ describe("generateComments", () => {
           schema: "sch",
           tableName: "customers",
           columns: [
-            { name: "id", dataType: "BIGINT", ordinalPosition: 1, isNullable: false, comment: "Old ID comment", inferredRole: "pk", inferredFkTarget: null },
+            {
+              name: "id",
+              dataType: "BIGINT",
+              ordinalPosition: 1,
+              isNullable: false,
+              comment: "Old ID comment",
+              inferredRole: "pk",
+              inferredFkTarget: null,
+            },
           ],
           comment: "Old table comment",
           tableType: "TABLE",
@@ -95,7 +103,12 @@ describe("generateComments", () => {
       relationships: [],
       lineageEdges: [],
       foreignKeys: [],
-      namingConventions: { dominantConvention: "snake_case" as const, commonPrefixes: [], commonSuffixes: [], hasMedallionPattern: false },
+      namingConventions: {
+        dominantConvention: "snake_case" as const,
+        commonPrefixes: [],
+        commonSuffixes: [],
+        hasMedallionPattern: false,
+      },
       schemaSummary: "",
     } as SchemaContext;
 
@@ -165,9 +178,9 @@ describe("generateComments", () => {
   it("marks job as failed when engine throws", async () => {
     mockEngine.mockRejectedValue(new Error("LLM timeout"));
 
-    await expect(
-      generateComments({ jobId: "j1", catalogs: ["cat"] }),
-    ).rejects.toThrow("LLM timeout");
+    await expect(generateComments({ jobId: "j1", catalogs: ["cat"] })).rejects.toThrow(
+      "LLM timeout",
+    );
 
     expect(mockUpdateStatus).toHaveBeenCalledWith("j1", "failed", {
       errorMessage: "LLM timeout",

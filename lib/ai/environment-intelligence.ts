@@ -18,8 +18,12 @@
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
 import { formatPrompt } from "@/lib/ai/templates";
-import { buildTokenAwareBatches, estimateTokens, truncateColumns } from "@/lib/ai/token-budget";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import {
+  buildTokenAwareBatches,
+  estimateTokens,
+  truncateColumns,
+} from "@/lib/toolkit/token-budget";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { logger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
 import { buildSchemaContextFromIntelligence } from "@/lib/metadata/context-builder";
@@ -104,7 +108,6 @@ function renderPIITable(t: TableInput): string {
   const suffix = omitted > 0 ? `, ... +${omitted} more` : "";
   return `- ${t.fqn}: [${colStr}${suffix}]`;
 }
-
 
 function renderRedundancyTable(t: TableInput): string {
   const { truncated, omitted } = truncateColumns(t.columns, MAX_COLS_REDUNDANCY);
@@ -516,11 +519,8 @@ async function passEnhancedDescriptions(
   let useCaseLinkage = "";
   if (options.industryId) {
     try {
-      const {
-        buildIndustryContextPrompt,
-        buildDataAssetContext,
-        buildUseCaseLinkageContext,
-      } = await import("@/lib/domain/industry-outcomes-server");
+      const { buildIndustryContextPrompt, buildDataAssetContext, buildUseCaseLinkageContext } =
+        await import("@/lib/domain/industry-outcomes-server");
       industryContext = await buildIndustryContextPrompt(options.industryId);
       const assetResult = await buildDataAssetContext(options.industryId);
       dataAssetContext = assetResult.text;

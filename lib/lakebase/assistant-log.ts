@@ -75,9 +75,8 @@ export async function createAssistantLog(input: CreateAssistantLogInput): Promis
           ? JSON.stringify(input.referencedTables)
           : null,
         actionsJson: input.actions ? JSON.stringify(input.actions) : null,
-        sqlBlocksJson: input.sqlBlocks && input.sqlBlocks.length > 0
-          ? JSON.stringify(input.sqlBlocks)
-          : null,
+        sqlBlocksJson:
+          input.sqlBlocks && input.sqlBlocks.length > 0 ? JSON.stringify(input.sqlBlocks) : null,
         persona: input.persona,
       },
     });

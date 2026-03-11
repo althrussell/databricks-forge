@@ -19,11 +19,11 @@ import type { DashboardDesign, DashboardRecommendation, FilterCandidate } from "
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { fetchTableInfoBatch, fetchColumnsBatch } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
-import { mapWithConcurrency } from "@/lib/genie/concurrency";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { validateDatasetSql } from "./validation";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
 import { getServingEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";

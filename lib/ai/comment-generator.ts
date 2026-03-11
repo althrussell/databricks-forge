@@ -96,9 +96,7 @@ export async function generateComments(
     }> = [];
 
     for (const [fqnLower, description] of result.tableComments) {
-      const table = result.schemaContext.tables.find(
-        (t) => t.fqn.toLowerCase() === fqnLower,
-      );
+      const table = result.schemaContext.tables.find((t) => t.fqn.toLowerCase() === fqnLower);
       proposals.push({
         tableFqn: table?.fqn ?? fqnLower,
         columnName: null,
@@ -108,13 +106,9 @@ export async function generateComments(
     }
 
     for (const [fqnLower, colMap] of result.columnComments) {
-      const table = result.schemaContext.tables.find(
-        (t) => t.fqn.toLowerCase() === fqnLower,
-      );
+      const table = result.schemaContext.tables.find((t) => t.fqn.toLowerCase() === fqnLower);
       for (const [colName, description] of colMap) {
-        const col = table?.columns.find(
-          (c) => c.name.toLowerCase() === colName.toLowerCase(),
-        );
+        const col = table?.columns.find((c) => c.name.toLowerCase() === colName.toLowerCase());
         proposals.push({
           tableFqn: table?.fqn ?? fqnLower,
           columnName: colName,

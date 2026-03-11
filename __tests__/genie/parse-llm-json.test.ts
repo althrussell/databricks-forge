@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 
 describe("parseLLMJson", () => {
   it("parses plain JSON object", () => {

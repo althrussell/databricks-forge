@@ -448,9 +448,10 @@ export async function buildIndustryKPIsPrompt(industryId: string): Promise<strin
  * This gives an LLM the industry's standard data vocabulary so it can
  * understand what tables represent and use industry-appropriate terminology.
  */
-export async function buildDataAssetContext(
-  industryId: string,
-): Promise<{ text: string; assets: Array<{ id: string; name: string; description: string; assetFamily: string }> }> {
+export async function buildDataAssetContext(industryId: string): Promise<{
+  text: string;
+  assets: Array<{ id: string; name: string; description: string; assetFamily: string }>;
+}> {
   const enrichment = getMasterRepoEnrichment(industryId);
   const industry = await getIndustryOutcomeAsync(industryId);
 
@@ -512,7 +513,10 @@ export async function buildUseCaseLinkageContext(
     "",
   ];
 
-  const useCasesByAsset = new Map<string, Array<{ name: string; criticality: string; impact: string }>>();
+  const useCasesByAsset = new Map<
+    string,
+    Array<{ name: string; criticality: string; impact: string }>
+  >();
 
   for (const uc of enrichment.useCases) {
     for (const assetId of uc.dataAssetIds ?? []) {
@@ -522,9 +526,8 @@ export async function buildUseCaseLinkageContext(
 
       const criticality = uc.dataAssetCriticality?.[assetId] ?? "VA";
       const critLabel = criticality === "MC" ? "Mission-Critical" : "Value-Add";
-      const impact = uc.benchmarkImpact && uc.kpiTarget
-        ? `${uc.kpiTarget} ${uc.benchmarkImpact}`
-        : "";
+      const impact =
+        uc.benchmarkImpact && uc.kpiTarget ? `${uc.kpiTarget} ${uc.benchmarkImpact}` : "";
 
       useCasesByAsset.get(assetId)!.push({
         name: uc.name,

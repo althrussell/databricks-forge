@@ -7,7 +7,7 @@
 
 import { executeSQLMapped, executeSQL, type SqlColumn } from "@/lib/dbx/sql";
 import { validateIdentifier } from "@/lib/validation";
-import { withRetry } from "@/lib/dbx/retry";
+import { withRetry } from "@/lib/toolkit/retry";
 import { logger } from "@/lib/logger";
 import type { TableInfo, ColumnInfo, ForeignKey, MetricViewInfo } from "@/lib/domain/types";
 

@@ -7,7 +7,10 @@ import type { IntelligenceTableInput } from "@/lib/metadata/context-builder";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeTable(fqn: string, overrides: Partial<IntelligenceTableInput> = {}): IntelligenceTableInput {
+function makeTable(
+  fqn: string,
+  overrides: Partial<IntelligenceTableInput> = {},
+): IntelligenceTableInput {
   const parts = fqn.split(".");
   return {
     fqn,
@@ -144,10 +147,7 @@ describe("buildSchemaContextFromIntelligence", () => {
   });
 
   it("extracts lineage edges from graph", () => {
-    const tables = [
-      makeTable("cat.schema.raw_events"),
-      makeTable("cat.schema.clean_events"),
-    ];
+    const tables = [makeTable("cat.schema.raw_events"), makeTable("cat.schema.clean_events")];
 
     const lineageGraph: LineageGraph = {
       edges: [
@@ -175,10 +175,7 @@ describe("buildSchemaContextFromIntelligence", () => {
   });
 
   it("builds schema summary text", () => {
-    const tables = [
-      makeTable("cat.schema.customers"),
-      makeTable("cat.schema.orders"),
-    ];
+    const tables = [makeTable("cat.schema.customers"), makeTable("cat.schema.orders")];
 
     const domains: DataDomain[] = [
       {

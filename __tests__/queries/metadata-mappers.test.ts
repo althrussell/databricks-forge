@@ -130,7 +130,9 @@ describe("buildSchemaMarkdown", () => {
 
     const md = buildSchemaMarkdown(tables, columns, 80, overrides);
 
-    expect(md).toContain("### cat.s.orders -- Enriched: tracks all sales orders with status lifecycle");
+    expect(md).toContain(
+      "### cat.s.orders -- Enriched: tracks all sales orders with status lifecycle",
+    );
     expect(md).not.toContain("Old comment from UC");
     expect(md).toContain("### cat.s.customers -- Customer records");
   });

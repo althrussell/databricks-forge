@@ -2,7 +2,7 @@
  * SQL generation and fix pipeline step prompts.
  */
 
-import { DATABRICKS_SQL_RULES } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
 import { USER_DATA_DEFENCE } from "./templates-shared";
 
 export const USE_CASE_SQL_GEN_PROMPT = `### PERSONA

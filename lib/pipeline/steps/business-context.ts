@@ -7,7 +7,7 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";

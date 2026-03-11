@@ -23,14 +23,7 @@ export type TableRole =
   | "snapshot"
   | "unknown";
 
-export type ColumnRole =
-  | "pk"
-  | "fk"
-  | "timestamp"
-  | "flag"
-  | "measure"
-  | "code"
-  | "free_text";
+export type ColumnRole = "pk" | "fk" | "timestamp" | "flag" | "measure" | "code" | "free_text";
 
 export type WriteFrequency =
   | "streaming"

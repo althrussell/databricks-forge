@@ -238,6 +238,27 @@ export interface MetricViewForDashboard {
 }
 
 // ---------------------------------------------------------------------------
+// Engine Dependencies (DI)
+// ---------------------------------------------------------------------------
+
+/**
+ * Injectable dependencies for the Dashboard Engine.
+ *
+ * When provided via `DashboardEngineInput.deps`, the engine uses these
+ * instead of hard-coded imports. This enables portability and testing.
+ */
+export interface DashboardEngineDeps {
+  /** LLM client. Falls back to chatCompletion from model-serving. */
+  llm?: import("@/lib/ports/llm-client").LLMClient;
+  /** Logger. Falls back to @/lib/logger. */
+  logger?: import("@/lib/ports/logger").Logger;
+  /** SQL review function. Falls back to reviewAndFixSql. */
+  reviewAndFixSql?: typeof import("@/lib/ai/sql-reviewer").reviewAndFixSql;
+  /** Review enabled gate. Falls back to isReviewEnabled. */
+  isReviewEnabled?: (surface?: string) => boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Engine Input / Output
 // ---------------------------------------------------------------------------
 
@@ -250,6 +271,8 @@ export interface DashboardEngineInput {
   existingDashboards?: import("@/lib/discovery/types").DiscoveredDashboard[];
   domainFilter?: string[];
   onProgress?: (message: string, percent: number) => void;
+  /** Injectable dependencies for portability and testing. */
+  deps?: DashboardEngineDeps;
 }
 
 export interface DashboardEngineResult {

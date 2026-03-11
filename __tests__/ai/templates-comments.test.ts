@@ -44,8 +44,7 @@ describe("TABLE_COMMENT_PROMPT", () => {
   });
 
   it("all placeholders are replaceable without residual placeholder patterns", () => {
-    const replaced = TABLE_COMMENT_PROMPT
-      .replace("{industry_context}", "Banking industry")
+    const replaced = TABLE_COMMENT_PROMPT.replace("{industry_context}", "Banking industry")
       .replace("{business_context_block}", "Retail banking focus")
       .replace("{data_asset_context}", "A01: Customer Master")
       .replace("{use_case_linkage}", "A01 powers personalization")
@@ -97,8 +96,7 @@ describe("COLUMN_COMMENT_PROMPT", () => {
   });
 
   it("all placeholders are replaceable without residual placeholder patterns", () => {
-    const replaced = COLUMN_COMMENT_PROMPT
-      .replace("{industry_context}", "Banking")
+    const replaced = COLUMN_COMMENT_PROMPT.replace("{industry_context}", "Banking")
       .replace("{table_fqn}", "cat.sch.tbl")
       .replace("{table_description}", "Customer transactions")
       .replace("{table_domain}", "Transaction")
@@ -134,9 +132,10 @@ describe("CONSISTENCY_REVIEW_PROMPT", () => {
   });
 
   it("all placeholders are replaceable", () => {
-    const replaced = CONSISTENCY_REVIEW_PROMPT
-      .replace("{schema_summary}", "2 tables")
-      .replace("{descriptions_list}", "- TABLE: cat.sch.tbl: desc");
+    const replaced = CONSISTENCY_REVIEW_PROMPT.replace("{schema_summary}", "2 tables").replace(
+      "{descriptions_list}",
+      "- TABLE: cat.sch.tbl: desc",
+    );
 
     expect(replaced).not.toMatch(/\{[a-z_]+\}/);
   });

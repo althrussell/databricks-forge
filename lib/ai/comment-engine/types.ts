@@ -5,6 +5,40 @@
  */
 
 import type { SchemaContext } from "@/lib/metadata/types";
+import type { LLMClient } from "@/lib/ports/llm-client";
+import type { Logger } from "@/lib/ports/logger";
+
+// ---------------------------------------------------------------------------
+// Dependency Injection
+// ---------------------------------------------------------------------------
+
+/**
+ * Optional injectable dependencies for the Comment Engine.
+ *
+ * When provided, the engine uses these instead of hard-coded imports.
+ * This enables portability: callers can supply a pre-built schema context,
+ * a custom LLM client, or a different logger.
+ */
+export interface CommentEngineDeps {
+  /** LLM client for all generation passes. Falls back to cachedChatCompletion. */
+  llm?: LLMClient;
+  /** Logger. Falls back to @/lib/logger. */
+  logger?: Logger;
+  /**
+   * Pre-built schema context. When provided, the engine skips Phase 0+1
+   * (metadata fetch + classification) entirely, making it portable to
+   * environments without a Databricks SQL warehouse.
+   */
+  schemaContext?: SchemaContext;
+  /** Pre-built industry context prompt. When provided, skips the domain module lookup. */
+  industryContext?: string;
+  /** Pre-built data asset context text. */
+  dataAssetContext?: string;
+  /** Pre-built data asset list for use case linkage. */
+  dataAssetList?: Array<{ id: string; name: string; description: string; assetFamily: string }>;
+  /** Pre-built use case linkage context. */
+  useCaseLinkage?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -40,13 +74,11 @@ export interface CommentEngineConfig {
   onProgress?: CommentProgressCallback;
   /** Structured counter updates for the in-memory progress tracker. */
   onMetadataProgress?: (counters: MetadataCounters) => void;
+  /** Injectable dependencies for portability. Falls back to defaults. */
+  deps?: CommentEngineDeps;
 }
 
-export type CommentProgressCallback = (
-  phase: string,
-  pct: number,
-  detail?: string,
-) => void;
+export type CommentProgressCallback = (phase: string, pct: number, detail?: string) => void;
 
 // ---------------------------------------------------------------------------
 // Result

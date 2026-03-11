@@ -8,7 +8,7 @@
 import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { reviewSql } from "@/lib/ai/sql-reviewer";
-import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import { logger } from "@/lib/logger";
 import type { FeedbackEntry } from "./benchmark-feedback";
 import type { SpaceJson } from "./types";

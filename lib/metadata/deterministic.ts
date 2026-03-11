@@ -70,10 +70,7 @@ function detectConvention(name: string): "snake_case" | "camelCase" | "PascalCas
   return "mixed";
 }
 
-export function detectNamingSignals(
-  schemaName: string,
-  tableName: string,
-): NamingSignals {
+export function detectNamingSignals(schemaName: string, tableName: string): NamingSignals {
   return {
     prefixTier: detectTierFromName(schemaName, tableName),
     prefixRole: detectRoleFromName(tableName),
@@ -99,7 +96,11 @@ const COLUMN_ROLE_RULES: Array<{ pattern: RegExp; role: ColumnRole }> = [
   { pattern: /_ts$/i, role: "timestamp" },
   { pattern: /_date$/i, role: "timestamp" },
   { pattern: /_time$/i, role: "timestamp" },
-  { pattern: /^(created|updated|modified|deleted|inserted|processed|ingested)_(at|on|date|time|ts|timestamp)$/i, role: "timestamp" },
+  {
+    pattern:
+      /^(created|updated|modified|deleted|inserted|processed|ingested)_(at|on|date|time|ts|timestamp)$/i,
+    role: "timestamp",
+  },
   { pattern: /^(timestamp|event_time|load_time)$/i, role: "timestamp" },
   // Flags / booleans
   { pattern: /^(is|has|can|should|was|did|allow|enable)_/i, role: "flag" },
@@ -295,7 +296,13 @@ export function analyzeWriteFrequency(
 // ---------------------------------------------------------------------------
 
 export function enrichColumns(
-  columns: Array<{ name: string; dataType: string; ordinalPosition: number; isNullable: boolean; comment: string | null }>,
+  columns: Array<{
+    name: string;
+    dataType: string;
+    ordinalPosition: number;
+    isNullable: boolean;
+    comment: string | null;
+  }>,
   sourceTableFqn: string,
   allTableFqns: string[],
 ): EnrichedColumn[] {
@@ -343,7 +350,8 @@ export function buildSchemaNamingProfile(
   }
 
   const sortedConventions = Array.from(conventions.entries()).sort((a, b) => b[1] - a[1]);
-  const dominantConvention = (sortedConventions[0]?.[0] ?? "mixed") as SchemaNamingProfile["dominantConvention"];
+  const dominantConvention = (sortedConventions[0]?.[0] ??
+    "mixed") as SchemaNamingProfile["dominantConvention"];
 
   const minPrefixCount = Math.max(2, tables.length * 0.05);
   const commonPrefixes = Array.from(prefixes.entries())

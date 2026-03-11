@@ -8,10 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { getCommentJob, deleteCommentJob } from "@/lib/lakebase/comment-jobs";
-import {
-  getProposalsForJob,
-  getJobTableSummary,
-} from "@/lib/lakebase/comment-proposals";
+import { getProposalsForJob, getJobTableSummary } from "@/lib/lakebase/comment-proposals";
 import { logActivity } from "@/lib/lakebase/activity-log";
 
 export async function GET(

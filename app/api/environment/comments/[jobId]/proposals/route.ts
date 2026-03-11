@@ -29,10 +29,7 @@ export async function PATCH(
     };
 
     if (!Array.isArray(proposals) || proposals.length === 0) {
-      return NextResponse.json(
-        { error: "proposals array is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "proposals array is required" }, { status: 400 });
     }
 
     for (const p of proposals) {

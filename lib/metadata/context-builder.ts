@@ -459,9 +459,7 @@ function buildSchemaSummaryText(
         const relTargets = rels
           .map((r) => {
             const other =
-              r.sourceTable.toLowerCase() === t.fqn.toLowerCase()
-                ? r.targetTable
-                : r.sourceTable;
+              r.sourceTable.toLowerCase() === t.fqn.toLowerCase() ? r.targetTable : r.sourceTable;
             return other.split(".").pop();
           })
           .slice(0, 5);

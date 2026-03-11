@@ -11,7 +11,7 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { executeSQLMapped } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
 import { validateIdentifier } from "@/lib/validation";

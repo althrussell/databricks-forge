@@ -31,14 +31,8 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
-import {
-  CommentTableNav,
-  type TableSummary,
-} from "@/components/environment/comment-table-nav";
-import {
-  CommentReviewPanel,
-  type Proposal,
-} from "@/components/environment/comment-review-panel";
+import { CommentTableNav, type TableSummary } from "@/components/environment/comment-table-nav";
+import { CommentReviewPanel, type Proposal } from "@/components/environment/comment-review-panel";
 import { CommentActionBar } from "@/components/environment/comment-action-bar";
 import {
   CommentProgressCard,
@@ -87,17 +81,13 @@ export default function AICommentsPage() {
       setLoading(false);
 
       // Auto-resume: if a job is generating, resume polling. If ready, go to review.
-      const generating = (jobsData.jobs ?? []).find(
-        (j: CommentJob) => j.status === "generating",
-      );
+      const generating = (jobsData.jobs ?? []).find((j: CommentJob) => j.status === "generating");
       if (generating) {
         setActiveJobId(generating.id);
         setPageState("generating");
         startProgressPolling(generating.id);
       } else {
-        const ready = (jobsData.jobs ?? []).find(
-          (j: CommentJob) => j.status === "ready",
-        );
+        const ready = (jobsData.jobs ?? []).find((j: CommentJob) => j.status === "ready");
         if (ready) {
           setActiveJobId(ready.id);
           loadJobData(ready.id);
@@ -274,7 +264,8 @@ export default function AICommentsPage() {
             return {
               ...p,
               status: upd.status,
-              editedComment: upd.editedComment !== undefined ? upd.editedComment ?? null : p.editedComment,
+              editedComment:
+                upd.editedComment !== undefined ? (upd.editedComment ?? null) : p.editedComment,
             };
           }),
         );
@@ -360,9 +351,7 @@ export default function AICommentsPage() {
   const handleUndoTable = useCallback(
     async (tableFqn: string) => {
       if (!activeJobId) return;
-      const applied = proposals.filter(
-        (p) => p.tableFqn === tableFqn && p.status === "applied",
-      );
+      const applied = proposals.filter((p) => p.tableFqn === tableFqn && p.status === "applied");
       if (applied.length === 0) return;
 
       try {
@@ -402,18 +391,15 @@ export default function AICommentsPage() {
   );
 
   // -- Delete job --
-  const handleDeleteJob = useCallback(
-    async (jobId: string) => {
-      try {
-        await fetch(`/api/environment/comments/${jobId}`, { method: "DELETE" });
-        setJobs((prev) => prev.filter((j) => j.id !== jobId));
-        toast.success("Job deleted");
-      } catch {
-        toast.error("Failed to delete job");
-      }
-    },
-    [],
-  );
+  const handleDeleteJob = useCallback(async (jobId: string) => {
+    try {
+      await fetch(`/api/environment/comments/${jobId}`, { method: "DELETE" });
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      toast.success("Job deleted");
+    } catch {
+      toast.error("Failed to delete job");
+    }
+  }, []);
 
   // -- Derived state --
   const currentTableProposals = useMemo(
@@ -478,8 +464,8 @@ export default function AICommentsPage() {
               <div>
                 <h3 className="text-sm font-medium mb-2">Select Scope</h3>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Browse Unity Catalog and select catalogs, schemas, or individual tables to generate
-                  AI-powered descriptions for.
+                  Browse Unity Catalog and select catalogs, schemas, or individual tables to
+                  generate AI-powered descriptions for.
                 </p>
                 <CatalogBrowser
                   selectedSources={selectedSources}
@@ -508,11 +494,7 @@ export default function AICommentsPage() {
               </div>
 
               <div className="pt-2">
-                <Button
-                  onClick={handleGenerate}
-                  disabled={selectedSources.length === 0}
-                  size="lg"
-                >
+                <Button onClick={handleGenerate} disabled={selectedSources.length === 0} size="lg">
                   <Sparkles className="mr-2 h-4 w-4" />
                   Generate AI Comments
                 </Button>
@@ -645,9 +627,7 @@ export default function AICommentsPage() {
                         >
                           {job.status}
                         </Badge>
-                        {job.industryId && (
-                          <Badge variant="outline">{job.industryId}</Badge>
-                        )}
+                        {job.industryId && <Badge variant="outline">{job.industryId}</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {job.tableCount} tables, {job.columnCount} columns
@@ -655,11 +635,7 @@ export default function AICommentsPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleResumeJob(job.id)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleResumeJob(job.id)}>
                         <ChevronRight className="mr-1 h-3.5 w-3.5" />
                         Open
                       </Button>
