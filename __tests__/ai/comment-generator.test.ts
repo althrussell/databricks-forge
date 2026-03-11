@@ -1,30 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/dbx/client", () => ({
-  getFastServingEndpoint: vi.fn(() => "test-endpoint"),
-}));
-
-vi.mock("@/lib/genie/llm-cache", () => ({
-  cachedChatCompletion: vi.fn(),
-}));
-
-vi.mock("@/lib/genie/concurrency", () => ({
-  mapWithConcurrency: vi.fn((tasks: Array<() => Promise<unknown>>, _concurrency: number) =>
-    Promise.all(tasks.map((fn) => fn())),
-  ),
-}));
-
-vi.mock("@/lib/genie/passes/parse-llm-json", () => ({
-  parseLLMJson: vi.fn((raw: string) => JSON.parse(raw)),
-}));
-
-vi.mock("@/lib/queries/metadata", () => ({
-  listColumns: vi.fn(),
-  fetchTableComments: vi.fn(),
-}));
-
-vi.mock("@/lib/domain/industry-outcomes-server", () => ({
-  buildIndustryContextPrompt: vi.fn(),
+vi.mock("@/lib/ai/comment-engine/engine", () => ({
+  runCommentEngine: vi.fn(),
 }));
 
 vi.mock("@/lib/lakebase/comment-proposals", () => ({
@@ -39,26 +16,37 @@ vi.mock("@/lib/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
-import { listColumns, fetchTableComments } from "@/lib/queries/metadata";
-import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
+import { runCommentEngine } from "@/lib/ai/comment-engine/engine";
 import { createProposals } from "@/lib/lakebase/comment-proposals";
 import { updateCommentJobStatus } from "@/lib/lakebase/comment-jobs";
 import { generateComments, importFromScan } from "@/lib/ai/comment-generator";
+import type { CommentEngineResult } from "@/lib/ai/comment-engine/types";
+import type { SchemaContext } from "@/lib/metadata/types";
 
-const mockLLM = vi.mocked(cachedChatCompletion);
-const mockListColumns = vi.mocked(listColumns);
-const mockFetchComments = vi.mocked(fetchTableComments);
-const mockIndustryPrompt = vi.mocked(buildIndustryContextPrompt);
+const mockEngine = vi.mocked(runCommentEngine);
 const mockCreateProposals = vi.mocked(createProposals);
 const mockUpdateStatus = vi.mocked(updateCommentJobStatus);
 
-function llmResponse(content: string) {
+function makeEngineResult(overrides: Partial<CommentEngineResult> = {}): CommentEngineResult {
   return {
-    content,
-    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    model: "test-model",
-    finishReason: "stop" as const,
+    tableComments: new Map(),
+    columnComments: new Map(),
+    schemaContext: {
+      tables: [],
+      relationships: [],
+      lineageEdges: [],
+      foreignKeys: [],
+      namingConventions: {
+        dominantConvention: "snake_case",
+        commonPrefixes: [],
+        commonSuffixes: [],
+        hasMedallionPattern: false,
+      },
+      schemaSummary: "",
+    } as SchemaContext,
+    consistencyFixes: [],
+    stats: { tables: 0, columns: 0, skipped: 0, consistencyFixesApplied: 0, durationMs: 100 },
+    ...overrides,
   };
 }
 
@@ -67,21 +55,52 @@ beforeEach(() => {
 });
 
 describe("generateComments", () => {
-  it("fetches metadata, calls LLM, and persists proposals", async () => {
-    mockListColumns.mockResolvedValue([
-      { tableFqn: "cat.sch.tbl1", columnName: "id", dataType: "INT", ordinalPosition: 1, isNullable: false, comment: null },
-      { tableFqn: "cat.sch.tbl1", columnName: "name", dataType: "STRING", ordinalPosition: 2, isNullable: true, comment: "Customer name" },
+  it("delegates to Comment Engine and persists proposals", async () => {
+    const tableComments = new Map([["cat.sch.customers", "Customer dimension"]]);
+    const columnComments = new Map([
+      ["cat.sch.customers", new Map([["id", "Unique customer identifier"]])],
     ]);
-    mockFetchComments.mockResolvedValue(new Map());
+    const schemaContext = {
+      tables: [
+        {
+          fqn: "cat.sch.customers",
+          catalog: "cat",
+          schema: "sch",
+          tableName: "customers",
+          columns: [
+            { name: "id", dataType: "BIGINT", ordinalPosition: 1, isNullable: false, comment: "Old ID comment", inferredRole: "pk", inferredFkTarget: null },
+          ],
+          comment: "Old table comment",
+          tableType: "TABLE",
+          format: "delta",
+          tags: [],
+          owner: null,
+          sizeInBytes: null,
+          writeFrequency: null,
+          lastModified: null,
+          domain: "Customer",
+          role: "dimension",
+          tier: "gold",
+          dataAssetId: null,
+          dataAssetName: null,
+          relatedTableFqns: [],
+          namingSignals: { prefixTier: null, prefixRole: null, convention: "snake_case" as const },
+        },
+      ],
+      relationships: [],
+      lineageEdges: [],
+      foreignKeys: [],
+      namingConventions: { dominantConvention: "snake_case" as const, commonPrefixes: [], commonSuffixes: [], hasMedallionPattern: false },
+      schemaSummary: "",
+    } as SchemaContext;
 
-    mockLLM.mockResolvedValueOnce(
-      llmResponse(JSON.stringify([{ table_fqn: "cat.sch.tbl1", description: "Customer master table" }])),
-    );
-    mockLLM.mockResolvedValueOnce(
-      llmResponse(JSON.stringify([
-        { column_name: "id", description: "Unique customer identifier" },
-        { column_name: "name", description: null },
-      ])),
+    mockEngine.mockResolvedValue(
+      makeEngineResult({
+        tableComments,
+        columnComments,
+        schemaContext,
+        stats: { tables: 1, columns: 1, skipped: 0, consistencyFixesApplied: 0, durationMs: 500 },
+      }),
     );
 
     const result = await generateComments({
@@ -91,15 +110,24 @@ describe("generateComments", () => {
     });
 
     expect(result.tableCount).toBe(1);
-    expect(result.columnCount).toBe(1); // only "id" -- "name" had null description
-    expect(mockCreateProposals).toHaveBeenCalledTimes(1);
+    expect(result.columnCount).toBe(1);
     expect(mockUpdateStatus).toHaveBeenCalledWith("j1", "generating");
     expect(mockUpdateStatus).toHaveBeenCalledWith("j1", "ready", { tableCount: 1, columnCount: 1 });
+    expect(mockCreateProposals).toHaveBeenCalledTimes(1);
+
+    // Verify proposals include original comments
+    const proposals = mockCreateProposals.mock.calls[0][1];
+    const tableProp = proposals.find((p: Record<string, unknown>) => !p.columnName);
+    expect(tableProp?.originalComment).toBe("Old table comment");
+    expect(tableProp?.proposedComment).toBe("Customer dimension");
+
+    const colProp = proposals.find((p: Record<string, unknown>) => p.columnName === "id");
+    expect(colProp?.originalComment).toBe("Old ID comment");
+    expect(colProp?.proposedComment).toBe("Unique customer identifier");
   });
 
-  it("returns zero counts when no tables found", async () => {
-    mockListColumns.mockResolvedValue([]);
-    mockFetchComments.mockResolvedValue(new Map());
+  it("returns zero counts when engine returns empty", async () => {
+    mockEngine.mockResolvedValue(makeEngineResult());
 
     const result = await generateComments({
       jobId: "j1",
@@ -108,103 +136,50 @@ describe("generateComments", () => {
 
     expect(result.tableCount).toBe(0);
     expect(result.columnCount).toBe(0);
-    expect(mockLLM).not.toHaveBeenCalled();
+    expect(mockCreateProposals).not.toHaveBeenCalled();
   });
 
-  it("filters by specific table FQNs", async () => {
-    mockListColumns.mockResolvedValue([
-      { tableFqn: "cat.sch.t1", columnName: "id", dataType: "INT", ordinalPosition: 1, isNullable: false, comment: null },
-      { tableFqn: "cat.sch.t2", columnName: "id", dataType: "INT", ordinalPosition: 1, isNullable: false, comment: null },
-    ]);
-    mockFetchComments.mockResolvedValue(new Map());
-    mockLLM.mockResolvedValue(
-      llmResponse(JSON.stringify([{ table_fqn: "cat.sch.t1", description: "Table 1" }])),
-    );
-
-    const result = await generateComments({
-      jobId: "j1",
-      catalogs: ["cat"],
-      schemas: ["sch"],
-      tables: ["cat.sch.t1"],
-    });
-
-    // Only t1 should be processed, not t2
-    expect(result.tableCount).toBe(1);
-  });
-
-  it("uses industry context when industryId provided", async () => {
-    mockListColumns.mockResolvedValue([
-      { tableFqn: "cat.sch.tbl", columnName: "id", dataType: "INT", ordinalPosition: 1, isNullable: false, comment: null },
-    ]);
-    mockFetchComments.mockResolvedValue(new Map());
-    mockIndustryPrompt.mockResolvedValue("### INDUSTRY CONTEXT (Banking)");
-    mockLLM.mockResolvedValue(
-      llmResponse(JSON.stringify([{ table_fqn: "cat.sch.tbl", description: "Banking transactions" }])),
-    );
+  it("passes industryId and businessContext to engine", async () => {
+    mockEngine.mockResolvedValue(makeEngineResult());
 
     await generateComments({
       jobId: "j1",
       catalogs: ["cat"],
       industryId: "banking",
+      businessContext: "Retail banking focus",
     });
 
-    expect(mockIndustryPrompt).toHaveBeenCalledWith("banking");
-    // Verify the prompt includes the industry context
-    const callArgs = mockLLM.mock.calls[0][0];
-    expect(callArgs.messages[0].content).toContain("Banking");
+    const engineCall = mockEngine.mock.calls[0];
+    expect(engineCall[0]).toEqual({ catalogs: ["cat"], schemas: undefined, tables: undefined });
+    expect(engineCall[1]).toMatchObject({
+      industryId: "banking",
+      businessContext: "Retail banking focus",
+    });
   });
 
-  it("reports progress via callback", async () => {
-    mockListColumns.mockResolvedValue([
-      { tableFqn: "cat.sch.tbl", columnName: "id", dataType: "INT", ordinalPosition: 1, isNullable: false, comment: null },
-    ]);
-    mockFetchComments.mockResolvedValue(new Map());
-    mockLLM.mockResolvedValue(llmResponse(JSON.stringify([])));
+  it("marks job as failed when engine throws", async () => {
+    mockEngine.mockRejectedValue(new Error("LLM timeout"));
 
-    const progress: Array<{ phase: string; pct: number }> = [];
+    await expect(
+      generateComments({ jobId: "j1", catalogs: ["cat"] }),
+    ).rejects.toThrow("LLM timeout");
+
+    expect(mockUpdateStatus).toHaveBeenCalledWith("j1", "failed", {
+      errorMessage: "LLM timeout",
+    });
+  });
+
+  it("passes abort signal to engine", async () => {
+    const controller = new AbortController();
+    mockEngine.mockResolvedValue(makeEngineResult());
 
     await generateComments({
       jobId: "j1",
       catalogs: ["cat"],
-      onProgress: (phase, pct) => progress.push({ phase, pct }),
+      signal: controller.signal,
     });
 
-    expect(progress.some((p) => p.phase === "metadata")).toBe(true);
-    expect(progress.some((p) => p.phase === "tables")).toBe(true);
-    expect(progress.some((p) => p.phase === "columns")).toBe(true);
-  });
-
-  it("skips catalogs with metadata errors and returns zero counts", async () => {
-    mockListColumns.mockRejectedValue(new Error("Connection refused"));
-    mockFetchComments.mockResolvedValue(new Map());
-
-    const result = await generateComments({
-      jobId: "j1",
-      catalogs: ["cat"],
-    });
-
-    // Gracefully returns zero rather than crashing
-    expect(result.tableCount).toBe(0);
-    expect(result.columnCount).toBe(0);
-    expect(mockLLM).not.toHaveBeenCalled();
-  });
-
-  it("continues when a table batch fails", async () => {
-    mockListColumns.mockResolvedValue([
-      { tableFqn: "cat.sch.tbl", columnName: "id", dataType: "INT", ordinalPosition: 1, isNullable: false, comment: null },
-    ]);
-    mockFetchComments.mockResolvedValue(new Map());
-    // Table LLM fails
-    mockLLM.mockRejectedValueOnce(new Error("LLM timeout"));
-    mockLLM.mockResolvedValueOnce(llmResponse(JSON.stringify([])));
-
-    const result = await generateComments({
-      jobId: "j1",
-      catalogs: ["cat"],
-    });
-
-    // Should not throw -- graceful degradation
-    expect(result.tableCount).toBe(0);
+    expect(mockEngine.mock.calls[0][1]?.signal).toBe(controller.signal);
   });
 });
 
@@ -225,7 +200,7 @@ describe("importFromScan", () => {
       },
     ]);
 
-    expect(result.tableCount).toBe(1); // only tbl1 has a generated description
+    expect(result.tableCount).toBe(1);
     expect(result.columnCount).toBe(0);
     expect(mockCreateProposals).toHaveBeenCalledWith("j1", [
       {

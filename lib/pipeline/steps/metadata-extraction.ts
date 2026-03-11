@@ -196,6 +196,7 @@ export async function runMetadataExtraction(
         accessibleScopes,
         dc,
         runId,
+        config.industry || undefined,
       );
     } catch (error) {
       logger.error("[metadata-extraction] Enrichment pass failed (non-fatal)", {
@@ -260,6 +261,7 @@ async function runEnrichmentPass(
   scopes: Array<{ catalog: string; schema?: string }>,
   depthConfig: DiscoveryDepthConfig,
   runId?: string,
+  industryId?: string,
 ): Promise<LineageGraph> {
   const scanId = uuidv4();
   const startTime = Date.now();
@@ -422,6 +424,8 @@ async function runEnrichmentPass(
     intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
       endpoint,
       businessName: undefined,
+      industryId,
+      foreignKeys: allFKs,
       onProgress: (pass, pct) => {
         if (runId && pct === 0) {
           updateRunMessage(runId, `Intelligence: ${pass}...`).catch((e) =>
@@ -450,6 +454,17 @@ async function runEnrichmentPass(
     for (const [fqn, desc] of intelligenceResult.generatedDescriptions) {
       const detail = details.find((d) => d.fqn === fqn);
       if (detail) detail.generatedDescription = desc;
+    }
+
+    // Rebuild schemaMarkdown so downstream steps (use case gen, scoring)
+    // benefit from LLM-generated descriptions
+    if (intelligenceResult.generatedDescriptions.size > 0) {
+      snapshot.schemaMarkdown = buildSchemaMarkdown(
+        snapshot.tables,
+        snapshot.columns,
+        80,
+        intelligenceResult.generatedDescriptions,
+      );
     }
 
     // Apply sensitivity levels

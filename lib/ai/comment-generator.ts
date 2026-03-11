@@ -1,29 +1,20 @@
 /**
- * AI Comment generation engine.
+ * AI Comment generation -- facade layer.
+ *
+ * Delegates to the Comment Engine (`lib/ai/comment-engine/engine.ts`)
+ * for the actual generation, then persists proposals to Lakebase and
+ * updates the job record. This module preserves the existing API
+ * contract consumed by the SSE route and frontend.
  *
  * Two entry paths:
- * 1. From existing estate scan / pipeline run data (pre-populated, no LLM call).
- * 2. Fresh generation from UC metadata + LLM.
- *
- * Both paths produce CommentProposal rows persisted to Lakebase.
+ * 1. Fresh generation from UC metadata + Comment Engine (LLM-powered).
+ * 2. Import from an existing estate scan (pre-populated, no LLM call).
  */
 
-import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
-import { mapWithConcurrency } from "@/lib/genie/concurrency";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { listColumns, fetchTableComments } from "@/lib/queries/metadata";
-import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
+import { runCommentEngine } from "./comment-engine/engine";
 import { createProposals } from "@/lib/lakebase/comment-proposals";
 import { updateCommentJobStatus } from "@/lib/lakebase/comment-jobs";
-import { TABLE_COMMENT_PROMPT, COLUMN_COMMENT_PROMPT } from "./templates-comments";
 import { logger } from "@/lib/logger";
-import type { ColumnInfo } from "@/lib/domain/types";
-
-const TABLE_BATCH_SIZE = 15;
-const COLUMN_BATCH_CONCURRENCY = 8;
-const TEMPERATURE = 0.2;
 
 export type ProgressCallback = (phase: string, pct: number, detail?: string) => void;
 
@@ -44,7 +35,7 @@ export interface GenerateCommentsResult {
 }
 
 /**
- * Run full LLM-powered comment generation for the given scope.
+ * Run full Comment Engine generation for the given scope.
  * Writes proposals to Lakebase and updates the job record.
  */
 export async function generateComments(
@@ -52,209 +43,25 @@ export async function generateComments(
 ): Promise<GenerateCommentsResult> {
   const { jobId, catalogs, schemas, tables, industryId, businessContext, signal, onProgress } =
     input;
-  const endpoint = getFastServingEndpoint();
 
   try {
     await updateCommentJobStatus(jobId, "generating");
-    onProgress?.("metadata", 0, "Fetching table metadata from Unity Catalog...");
 
-    // --- 1. Fetch metadata ---
-    const allColumns: ColumnInfo[] = [];
-    const allComments = new Map<string, string>();
+    // Delegate to the Comment Engine
+    const result = await runCommentEngine(
+      { catalogs, schemas, tables },
+      {
+        industryId,
+        businessContext,
+        enableConsistencyReview: true,
+        enableLineage: true,
+        enableHistory: true,
+        signal,
+        onProgress,
+      },
+    );
 
-    for (const catalog of catalogs) {
-      if (signal?.aborted) throw new Error("Cancelled");
-      const schemaList = schemas ?? [undefined];
-      for (const schema of schemaList) {
-        try {
-          const [cols, comments] = await Promise.all([
-            listColumns(catalog, schema as string | undefined),
-            fetchTableComments(catalog, schema as string | undefined),
-          ]);
-          for (const c of cols) allColumns.push(c);
-          for (const [fqn, comment] of comments) allComments.set(fqn, comment);
-        } catch (err) {
-          const schemaLabel = schema ? `${catalog}.${schema}` : catalog;
-          logger.warn("[comment-generator] Skipping scope with invalid metadata", {
-            scope: schemaLabel,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          onProgress?.("metadata", 0, `Skipped ${schemaLabel} (${err instanceof Error ? err.message : "error"})`);
-        }
-      }
-    }
-
-    // Group columns by table
-    const columnsByTable = new Map<string, ColumnInfo[]>();
-    for (const col of allColumns) {
-      const fqn = col.tableFqn.toLowerCase();
-      if (!columnsByTable.has(fqn)) columnsByTable.set(fqn, []);
-      columnsByTable.get(fqn)!.push(col);
-    }
-
-    // Determine target tables (filter if specific tables requested)
-    let targetFqns = Array.from(columnsByTable.keys());
-    if (tables && tables.length > 0) {
-      const lowerSet = new Set(tables.map((t) => t.toLowerCase()));
-      targetFqns = targetFqns.filter((fqn) => lowerSet.has(fqn));
-    }
-
-    if (targetFqns.length === 0) {
-      await updateCommentJobStatus(jobId, "ready", { tableCount: 0, columnCount: 0 });
-      return { tableCount: 0, columnCount: 0 };
-    }
-
-    onProgress?.("metadata", 100, `Found ${targetFqns.length} tables`);
-
-    // --- 2. Build industry context ---
-    let industryContext = "";
-    if (industryId) {
-      industryContext = await buildIndustryContextPrompt(industryId);
-    }
-
-    // --- 3. Generate table comments ---
-    onProgress?.("tables", 0, "Generating table descriptions...");
-
-    const tableBatches: string[][] = [];
-    for (let i = 0; i < targetFqns.length; i += TABLE_BATCH_SIZE) {
-      tableBatches.push(targetFqns.slice(i, i + TABLE_BATCH_SIZE));
-    }
-
-    const tableDescriptions = new Map<string, string>();
-    let batchIdx = 0;
-
-    for (const batch of tableBatches) {
-      if (signal?.aborted) throw new Error("Cancelled");
-
-      const tableList = batch
-        .map((fqn) => {
-          const cols = columnsByTable.get(fqn) ?? [];
-          const colNames = cols
-            .sort((a, b) => a.ordinalPosition - b.ordinalPosition)
-            .map((c) => `${c.columnName} (${c.dataType})`)
-            .join(", ");
-          const existing = allComments.get(fqn) ?? allComments.get(fqn.toLowerCase());
-          const existingLine = existing ? `  Current comment: "${existing}"` : "";
-          return `- ${fqn}: [${colNames}]${existingLine}`;
-        })
-        .join("\n");
-
-      const prompt = TABLE_COMMENT_PROMPT.replace("{industry_context}", industryContext)
-        .replace("{business_context}", businessContext ?? "")
-        .replace("{table_list}", tableList)
-        .replace("{lineage_context}", "");
-
-      const messages: ChatMessage[] = [{ role: "user", content: prompt }];
-
-      try {
-        const resp = await cachedChatCompletion({
-          endpoint,
-          messages,
-          temperature: TEMPERATURE,
-          responseFormat: "json_object",
-          signal,
-        });
-
-        const parsed = parseLLMJson(resp.content, "table-comments") as Array<{
-          table_fqn: string;
-          description: string;
-        }>;
-
-        for (const item of parsed) {
-          if (item.table_fqn && item.description) {
-            tableDescriptions.set(item.table_fqn.toLowerCase(), item.description);
-          }
-        }
-      } catch (err) {
-        logger.warn("[comment-generator] Table batch failed", {
-          batch: batch.slice(0, 3),
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-
-      batchIdx++;
-      onProgress?.(
-        "tables",
-        Math.round((batchIdx / tableBatches.length) * 100),
-        `${tableDescriptions.size} of ${targetFqns.length} tables`,
-      );
-    }
-
-    // --- 4. Generate column comments (parallel per-table) ---
-    onProgress?.("columns", 0, "Generating column descriptions...");
-
-    const columnResults: Array<{ tableFqn: string; columnName: string; description: string }> = [];
-
-    const columnTasks = targetFqns.map((fqn) => async () => {
-      if (signal?.aborted) return [];
-
-      const cols = columnsByTable.get(fqn) ?? [];
-      if (cols.length === 0) return [];
-
-      const tableDesc =
-        tableDescriptions.get(fqn) ??
-        allComments.get(fqn) ??
-        "No description available";
-
-      const columnList = cols
-        .sort((a, b) => a.ordinalPosition - b.ordinalPosition)
-        .map((c) => {
-          const parts = [`- ${c.columnName}: ${c.dataType}${c.isNullable ? " (nullable)" : ""}`];
-          if (c.comment) parts.push(`  Current comment: "${c.comment}"`);
-          return parts.join("\n");
-        })
-        .join("\n");
-
-      const prompt = COLUMN_COMMENT_PROMPT.replace("{industry_context}", industryContext)
-        .replace("{table_fqn}", fqn)
-        .replace("{table_description}", tableDesc)
-        .replace("{column_list}", columnList);
-
-      const messages: ChatMessage[] = [{ role: "user", content: prompt }];
-
-      try {
-        const resp = await cachedChatCompletion({
-          endpoint,
-          messages,
-          temperature: TEMPERATURE,
-          responseFormat: "json_object",
-          signal,
-        });
-
-        const parsed = parseLLMJson(resp.content, "column-comments") as Array<{
-          column_name: string;
-          description: string | null;
-        }>;
-
-        return parsed
-          .filter((item) => item.column_name && item.description)
-          .map((item) => ({
-            tableFqn: fqn,
-            columnName: item.column_name,
-            description: item.description!,
-          }));
-      } catch (err) {
-        logger.warn("[comment-generator] Column batch failed", {
-          table: fqn,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return [];
-      }
-    });
-
-    const columnBatchResults = await mapWithConcurrency(columnTasks, COLUMN_BATCH_CONCURRENCY);
-
-    for (const batch of columnBatchResults) {
-      for (const item of batch) {
-        columnResults.push(item);
-      }
-    }
-
-    onProgress?.("columns", 100, `${columnResults.length} column descriptions generated`);
-
-    // --- 5. Persist proposals ---
-    onProgress?.("saving", 0, "Saving proposals...");
-
+    // Persist proposals to Lakebase
     const proposals: Array<{
       tableFqn: string;
       columnName?: string | null;
@@ -263,40 +70,53 @@ export async function generateComments(
     }> = [];
 
     // Table-level proposals
-    for (const [fqn, description] of tableDescriptions) {
-      const originalFqn = targetFqns.find((f) => f === fqn) ?? fqn;
+    for (const [fqnLower, description] of result.tableComments) {
+      const table = result.schemaContext.tables.find(
+        (t) => t.fqn.toLowerCase() === fqnLower,
+      );
       proposals.push({
-        tableFqn: originalFqn,
+        tableFqn: table?.fqn ?? fqnLower,
         columnName: null,
-        originalComment: allComments.get(fqn) ?? null,
+        originalComment: table?.comment ?? null,
         proposedComment: description,
       });
     }
 
     // Column-level proposals
-    for (const item of columnResults) {
-      const col = allColumns.find(
-        (c) =>
-          c.tableFqn.toLowerCase() === item.tableFqn.toLowerCase() &&
-          c.columnName.toLowerCase() === item.columnName.toLowerCase(),
+    for (const [fqnLower, colMap] of result.columnComments) {
+      const table = result.schemaContext.tables.find(
+        (t) => t.fqn.toLowerCase() === fqnLower,
       );
-      proposals.push({
-        tableFqn: item.tableFqn,
-        columnName: item.columnName,
-        originalComment: col?.comment ?? null,
-        proposedComment: item.description,
-      });
+      for (const [colName, description] of colMap) {
+        const col = table?.columns.find(
+          (c) => c.name.toLowerCase() === colName.toLowerCase(),
+        );
+        proposals.push({
+          tableFqn: table?.fqn ?? fqnLower,
+          columnName: colName,
+          originalComment: col?.comment ?? null,
+          proposedComment: description,
+        });
+      }
     }
 
     if (proposals.length > 0) {
       await createProposals(jobId, proposals);
     }
 
-    const tableCount = tableDescriptions.size;
-    const columnCount = columnResults.length;
+    const tableCount = result.stats.tables;
+    const columnCount = result.stats.columns;
 
     await updateCommentJobStatus(jobId, "ready", { tableCount, columnCount });
     onProgress?.("done", 100, `${tableCount} table + ${columnCount} column descriptions ready`);
+
+    logger.info("[comment-generator] Generation complete", {
+      jobId,
+      tableCount,
+      columnCount,
+      durationMs: result.stats.durationMs,
+      consistencyFixesApplied: result.stats.consistencyFixesApplied,
+    });
 
     return { tableCount, columnCount };
   } catch (err) {
@@ -335,9 +155,6 @@ export async function importFromScan(
         proposedComment: detail.generatedDescription,
       });
     }
-
-    // Column-level descriptions are not generated during estate scan;
-    // the user can trigger fresh LLM generation via the full generation flow.
   }
 
   if (proposals.length > 0) {

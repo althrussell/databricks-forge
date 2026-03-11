@@ -326,6 +326,7 @@ export async function runStandaloneEnrichment(
       intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
         endpoint,
         discoveryResult,
+        foreignKeys: allFKs,
         onProgress: (pass) => {
           updateScanProgress(scanId, {
             llmPass: pass,
