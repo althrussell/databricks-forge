@@ -145,15 +145,24 @@ export default function AICommentsPage() {
       return;
     }
 
-    // Parse selectedSources into catalogs / schemas / tables buckets
+    // Parse selectedSources into catalogs / schemas / tables buckets.
+    // CatalogBrowser returns FQNs like "catalog", "catalog.schema",
+    // "catalog.schema.table". The generate API expects bare schema names
+    // scoped per-catalog, so strip the catalog prefix from schemas.
     const catalogs = new Set<string>();
     const schemas: string[] = [];
     const tables: string[] = [];
     for (const src of selectedSources) {
       const parts = src.replace(/`/g, "").split(".");
-      if (parts.length === 1) catalogs.add(parts[0]);
-      else if (parts.length === 2) { catalogs.add(parts[0]); schemas.push(src); }
-      else if (parts.length >= 3) { catalogs.add(parts[0]); tables.push(src); }
+      if (parts.length === 1) {
+        catalogs.add(parts[0]);
+      } else if (parts.length === 2) {
+        catalogs.add(parts[0]);
+        schemas.push(parts[1]); // bare schema name, not catalog.schema
+      } else if (parts.length >= 3) {
+        catalogs.add(parts[0]);
+        tables.push(src);
+      }
     }
 
     const abort = new AbortController();
