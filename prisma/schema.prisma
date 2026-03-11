@@ -713,6 +713,8 @@ model ForgeAssistantLog {
   userId          String?  @map("user_id")
   sourcesJson     String?  @map("sources_json")
   referencedTablesJson String? @map("referenced_tables_json")
+  actionsJson     String?  @map("actions_json")
+  sqlBlocksJson   String?  @map("sql_blocks_json")
   persona         String?  @map("persona")
   createdAt       DateTime @default(now()) @map("created_at")
   qualityMetrics  ForgeQualityMetric[]

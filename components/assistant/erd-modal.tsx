@@ -1,19 +1,66 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { X, Loader2, Network } from "lucide-react";
-import type { ERDGraph } from "@/lib/domain/types";
+import { Badge } from "@/components/ui/badge";
+import { X, Loader2, Network, Minus, Plus, Maximize2 } from "lucide-react";
+import type { ERDGraph, ERDEdge } from "@/lib/domain/types";
 
 interface ErdModalProps {
   tableFqns: string[];
   onClose: () => void;
 }
 
+function filterGraphByHops(
+  fullGraph: ERDGraph,
+  seedFqns: string[],
+  hops: number,
+): ERDGraph {
+  const relevant = new Set(seedFqns);
+
+  for (let hop = 0; hop < hops; hop++) {
+    const frontier = new Set<string>();
+    for (const edge of fullGraph.edges) {
+      if (relevant.has(edge.source) && !relevant.has(edge.target)) {
+        frontier.add(edge.target);
+      }
+      if (relevant.has(edge.target) && !relevant.has(edge.source)) {
+        frontier.add(edge.source);
+      }
+    }
+    for (const fqn of frontier) relevant.add(fqn);
+  }
+
+  const filteredEdges: ERDEdge[] = fullGraph.edges.filter(
+    (e) => relevant.has(e.source) && relevant.has(e.target),
+  );
+
+  return {
+    nodes: fullGraph.nodes.filter((n) => relevant.has(n.tableFqn)),
+    edges: filteredEdges,
+    domains: [
+      ...new Set(
+        fullGraph.nodes
+          .filter((n) => relevant.has(n.tableFqn) && n.domain)
+          .map((n) => n.domain!),
+      ),
+    ],
+    stats: {
+      fkCount: filteredEdges.filter((e) => e.edgeType === "fk").length,
+      implicitCount: filteredEdges.filter((e) => e.edgeType === "implicit").length,
+      lineageCount: filteredEdges.filter((e) => e.edgeType === "lineage").length,
+    },
+  };
+}
+
 export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
+  const router = useRouter();
+  const [fullGraph, setFullGraph] = React.useState<ERDGraph | null>(null);
   const [graph, setGraph] = React.useState<ERDGraph | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [hopDepth, setHopDepth] = React.useState(1);
   const [ERDViewer, setERDViewer] = React.useState<React.ComponentType<{ graph: ERDGraph }> | null>(
     null,
   );
@@ -29,40 +76,10 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
       try {
         const resp = await fetch("/api/environment/aggregate/erd?format=json&includeLineage=true");
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const fullGraph: ERDGraph = await resp.json();
-
-        // Build set with 1-hop neighbors
-        const relevantFqns = new Set(tableFqns);
-        for (const edge of fullGraph.edges) {
-          if (relevantFqns.has(edge.source) || relevantFqns.has(edge.target)) {
-            relevantFqns.add(edge.source);
-            relevantFqns.add(edge.target);
-          }
-        }
-
-        const filteredEdges = fullGraph.edges.filter(
-          (e) => relevantFqns.has(e.source) && relevantFqns.has(e.target),
-        );
-
-        const filteredGraph: ERDGraph = {
-          nodes: fullGraph.nodes.filter((n) => relevantFqns.has(n.tableFqn)),
-          edges: filteredEdges,
-          domains: [
-            ...new Set(
-              fullGraph.nodes
-                .filter((n) => relevantFqns.has(n.tableFqn) && n.domain)
-                .map((n) => n.domain!),
-            ),
-          ],
-          stats: {
-            fkCount: filteredEdges.filter((e) => e.edgeType === "fk").length,
-            implicitCount: filteredEdges.filter((e) => e.edgeType === "implicit").length,
-            lineageCount: filteredEdges.filter((e) => e.edgeType === "lineage").length,
-          },
-        };
-
+        const data: ERDGraph = await resp.json();
         if (!cancelled) {
-          setGraph(filteredGraph);
+          setFullGraph(data);
+          setGraph(filterGraphByHops(data, tableFqns, 1));
           setLoading(false);
         }
       } catch (err) {
@@ -80,12 +97,20 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
   }, [tableFqns]);
 
   React.useEffect(() => {
+    if (fullGraph) {
+      setGraph(filterGraphByHops(fullGraph, tableFqns, hopDepth));
+    }
+  }, [hopDepth, fullGraph, tableFqns]);
+
+  React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const maxHops = 3;
 
   return (
     <div
@@ -100,13 +125,61 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
           <div className="flex items-center gap-2">
             <Network className="size-5 text-primary" />
             <h2 className="text-base font-semibold">Entity Relationship Diagram</h2>
-            <span className="text-sm text-muted-foreground">
-              {graph ? `${graph.nodes.length} tables, ${graph.edges.length} relationships` : ""}
-            </span>
+            {graph && (
+              <span className="text-sm text-muted-foreground">
+                {graph.nodes.length} tables, {graph.edges.length} relationships
+              </span>
+            )}
           </div>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
-            <X className="size-4" />
-          </Button>
+
+          <div className="flex items-center gap-3">
+            {/* Hop depth controls */}
+            {!loading && !error && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Lineage depth</span>
+                <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={hopDepth <= 0}
+                    onClick={() => setHopDepth((d) => Math.max(0, d - 1))}
+                  >
+                    <Minus className="size-3" />
+                  </Button>
+                  <Badge variant="secondary" className="min-w-[2rem] justify-center text-[10px]">
+                    {hopDepth === 0 ? "Seed only" : `${hopDepth} hop${hopDepth > 1 ? "s" : ""}`}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={hopDepth >= maxHops}
+                    onClick={() => setHopDepth((d) => Math.min(maxHops, d + 1))}
+                  >
+                    <Plus className="size-3" />
+                  </Button>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs text-muted-foreground"
+                  onClick={() => {
+                    router.push("/environment?tab=erd");
+                    onClose();
+                  }}
+                >
+                  <Maximize2 className="size-3" />
+                  Full ERD
+                </Button>
+              </div>
+            )}
+
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
+              <X className="size-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Body */}

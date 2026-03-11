@@ -33,6 +33,7 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - SQL Warehouse is bound as an app resource (no hardcoded warehouse IDs).
 - Embedding endpoint (`serving-endpoint-embedding`) defaults to `databricks-qwen3-embedding-0-6b`.
 - Review endpoint (`serving-endpoint-review`) defaults to `databricks-gpt-5-4` for LLM-as-reviewer SQL quality checks.
+- Lakebase scale-to-zero is enforced at every startup (default: 300s timeout). Override with `LAKEBASE_SCALE_TO_ZERO_TIMEOUT` or `--lakebase-no-scale-to-zero`.
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
 
 ## Folder Contract

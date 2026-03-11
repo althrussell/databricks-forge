@@ -38,6 +38,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { GenieBuilderModal } from "./genie-builder-modal";
+import { ErdModal } from "./erd-modal";
 
 // ---------------------------------------------------------------------------
 // Types (exported for consumers)
@@ -172,6 +173,8 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       tableEnrichments?: TableEnrichmentData[];
       sqlBlocks?: string[];
     } | null>(null);
+    const [erdModalTables, setErdModalTables] = React.useState<string[] | null>(null);
+    const [pendingAction, setPendingAction] = React.useState<string | null>(null);
     const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
     const sessionId = externalSessionId ?? fallbackSessionId;
     const inputRef = React.useRef<HTMLTextAreaElement>(null);
@@ -328,6 +331,9 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     }));
 
     const handleAction = (action: ActionCardData, msgSqlBlocks?: string[]) => {
+      setPendingAction(action.type);
+      const clearPending = () => setTimeout(() => setPendingAction(null), 300);
+
       if (action.type === "run_sql" && action.payload.sql) {
         const allBlocks =
           msgSqlBlocks && msgSqlBlocks.length > 0 ? msgSqlBlocks : [action.payload.sql as string];
@@ -337,6 +343,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           setActiveSql(action.payload.sql as string);
           setDeploySql(null);
         }
+        clearPending();
       } else if (action.type === "deploy_notebook" && action.payload.sql) {
         if (onDeploySql) {
           onDeploySql(action.payload.sql as string);
@@ -344,10 +351,12 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           setDeploySql(action.payload.sql as string);
           setActiveSql(null);
         }
+        clearPending();
       } else if (action.type === "deploy_dashboard") {
         if (onDeployDashboard) {
           onDeployDashboard(action.payload);
         }
+        clearPending();
       } else if (action.type === "view_tables") {
         if (action.payload.fqn) {
           router.push(`/environment/table/${encodeURIComponent(action.payload.fqn as string)}`);
@@ -356,10 +365,15 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             `/environment/table/${encodeURIComponent(action.payload.tables[0] as string)}`,
           );
         } else {
-          router.push("/environment?tab=tables");
+          const tables = Array.isArray(action.payload.tables) ? action.payload.tables : [];
+          const highlightParam = tables.length > 0
+            ? `&highlight=${encodeURIComponent((tables as string[]).join(","))}`
+            : "";
+          router.push(`/environment?tab=tables${highlightParam}`);
         }
       } else if (action.type === "view_erd") {
-        router.push("/environment?tab=erd");
+        setErdModalTables((action.payload.tables as string[]) ?? []);
+        clearPending();
       } else if (action.type === "create_genie_space") {
         setGenieModalPayload({
           tables: (action.payload.tables as string[]) ?? [],
@@ -369,12 +383,14 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           sqlBlocks: (action.payload.sqlBlocks as string[]) || undefined,
         });
         setGenieModalOpen(true);
+        clearPending();
       } else if (action.type === "start_discovery") {
         router.push("/configure");
       } else if (action.type === "view_run" && action.payload.runId) {
         router.push(`/runs/${action.payload.runId}`);
       } else if (action.type === "ask_genie" && action.payload.url) {
         window.open(action.payload.url as string, "_blank");
+        clearPending();
       } else if (action.type === "export_report") {
         router.push("/environment?tab=overview");
       } else if (action.type === "view_portfolio") {
@@ -388,6 +404,8 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         action.type === "draft_executive_memo"
       ) {
         router.push("/business-value");
+      } else {
+        clearPending();
       }
     };
 
@@ -650,6 +668,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                       <ActionCardList
                         actions={msg.actions}
                         onAction={(a) => handleAction(a, msg.sqlBlocks)}
+                        pendingAction={pendingAction}
                       />
                     </div>
                   )}
@@ -761,6 +780,13 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             conversationSummary={genieModalPayload.conversationSummary}
             tableEnrichments={genieModalPayload.tableEnrichments}
             sqlBlocks={genieModalPayload.sqlBlocks}
+          />
+        )}
+
+        {erdModalTables && erdModalTables.length > 0 && (
+          <ErdModal
+            tableFqns={erdModalTables}
+            onClose={() => setErdModalTables(null)}
           />
         )}
       </div>

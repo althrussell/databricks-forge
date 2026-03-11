@@ -22,6 +22,9 @@
 # Optional Lakebase OAuth runtime behavior:
 #   ./deploy.sh --lakebase-runtime-mode "oauth_direct_only|pooler_preferred"
 #               --lakebase-enable-pooler-experiment
+# Optional Lakebase scale-to-zero (enabled by default, 300s timeout):
+#   ./deploy.sh --lakebase-scale-to-zero-timeout 600
+#               --lakebase-no-scale-to-zero
 # Optional benchmark seeding behavior:
 #   ./deploy.sh --seed-benchmarks --seed-benchmarks-all-industries
 #               --seed-benchmark-industries "banking,hls,rcg"
@@ -70,6 +73,8 @@ ARG_ROTATE_LAKEBASE_NATIVE_PASSWORD=false
 ARG_PRINT_GENERATED_NATIVE_PASSWORD=false
 ARG_LAKEBASE_RUNTIME_MODE=""
 ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=false
+ARG_LAKEBASE_SCALE_TO_ZERO_TIMEOUT=""
+ARG_LAKEBASE_NO_SCALE_TO_ZERO=false
 ARG_SEED_BENCHMARKS=false
 ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=false
 ARG_SEED_BENCHMARK_INDUSTRIES=""
@@ -117,6 +122,11 @@ Options:
                              oauth_direct_only (default), pooler_preferred
   --lakebase-enable-pooler-experiment
                              Enables pooler attempts for future testing
+  --lakebase-scale-to-zero-timeout SECONDS
+                             Scale-to-zero inactivity timeout in seconds
+                             (default: 300, minimum: 60)
+  --lakebase-no-scale-to-zero
+                             Explicitly disable scale-to-zero (always-on compute)
   --seed-benchmarks          Seed benchmark catalog during app startup
   --seed-benchmarks-all-industries
                              Include generated baseline records for every
@@ -155,6 +165,8 @@ while [[ $# -gt 0 ]]; do
     --print-generated-native-password) ARG_PRINT_GENERATED_NATIVE_PASSWORD=true; shift ;;
     --lakebase-runtime-mode) ARG_LAKEBASE_RUNTIME_MODE="$2"; shift 2 ;;
     --lakebase-enable-pooler-experiment) ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT=true; shift ;;
+    --lakebase-scale-to-zero-timeout) ARG_LAKEBASE_SCALE_TO_ZERO_TIMEOUT="$2"; shift 2 ;;
+    --lakebase-no-scale-to-zero) ARG_LAKEBASE_NO_SCALE_TO_ZERO=true; shift ;;
     --seed-benchmarks) ARG_SEED_BENCHMARKS=true; shift ;;
     --seed-benchmarks-all-industries) ARG_SEED_BENCHMARKS_ALL_INDUSTRIES=true; shift ;;
     --seed-benchmark-industries) ARG_SEED_BENCHMARK_INDUSTRIES="$2"; shift 2 ;;
@@ -188,6 +200,8 @@ PRINT_GENERATED_NATIVE_PASSWORD="${ARG_PRINT_GENERATED_NATIVE_PASSWORD}"
 GENERATED_NATIVE_PASSWORD=false
 LAKEBASE_RUNTIME_MODE="${ARG_LAKEBASE_RUNTIME_MODE:-}"
 LAKEBASE_ENABLE_POOLER_EXPERIMENT="${ARG_LAKEBASE_ENABLE_POOLER_EXPERIMENT}"
+LAKEBASE_SCALE_TO_ZERO_TIMEOUT="${ARG_LAKEBASE_SCALE_TO_ZERO_TIMEOUT:-}"
+LAKEBASE_NO_SCALE_TO_ZERO="${ARG_LAKEBASE_NO_SCALE_TO_ZERO}"
 SEED_BENCHMARKS="${ARG_SEED_BENCHMARKS}"
 SEED_BENCHMARKS_ALL_INDUSTRIES="${ARG_SEED_BENCHMARKS_ALL_INDUSTRIES}"
 SEED_BENCHMARK_INDUSTRIES="${ARG_SEED_BENCHMARK_INDUSTRIES:-}"
@@ -234,6 +248,10 @@ fi
 
 if [[ -n "$LAKEBASE_RUNTIME_MODE" && "$LAKEBASE_RUNTIME_MODE" != "oauth_direct_only" && "$LAKEBASE_RUNTIME_MODE" != "pooler_preferred" ]]; then
   die "Invalid --lakebase-runtime-mode '$LAKEBASE_RUNTIME_MODE'. Expected oauth_direct_only or pooler_preferred."
+fi
+
+if [[ "$LAKEBASE_NO_SCALE_TO_ZERO" = "true" && -n "$LAKEBASE_SCALE_TO_ZERO_TIMEOUT" ]]; then
+  die "Cannot combine --lakebase-no-scale-to-zero with --lakebase-scale-to-zero-timeout."
 fi
 
 # -------------------------------------------------------------------------
@@ -296,6 +314,8 @@ prepare_app_yaml() {
   export LAKEBASE_NATIVE_PASSWORD
   export LAKEBASE_RUNTIME_MODE
   export LAKEBASE_ENABLE_POOLER_EXPERIMENT
+  export LAKEBASE_SCALE_TO_ZERO_TIMEOUT
+  export LAKEBASE_NO_SCALE_TO_ZERO
   export SEED_BENCHMARKS
   export SEED_BENCHMARKS_ALL_INDUSTRIES
   export SEED_BENCHMARK_INDUSTRIES
@@ -312,6 +332,8 @@ native_user = os.environ.get("LAKEBASE_NATIVE_USER", "").strip()
 native_password = os.environ.get("LAKEBASE_NATIVE_PASSWORD", "")
 runtime_mode = os.environ.get("LAKEBASE_RUNTIME_MODE", "").strip()
 pooler_experiment = os.environ.get("LAKEBASE_ENABLE_POOLER_EXPERIMENT", "").strip().lower() == "true"
+scale_to_zero_timeout = os.environ.get("LAKEBASE_SCALE_TO_ZERO_TIMEOUT", "").strip()
+no_scale_to_zero = os.environ.get("LAKEBASE_NO_SCALE_TO_ZERO", "").strip().lower() == "true"
 seed_benchmarks = os.environ.get("SEED_BENCHMARKS", "").strip().lower() == "true"
 seed_benchmarks_all = os.environ.get("SEED_BENCHMARKS_ALL_INDUSTRIES", "").strip().lower() == "true"
 seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").strip()
@@ -335,6 +357,7 @@ def is_managed_name_line(s: str) -> bool:
         or "LAKEBASE_NATIVE_PASSWORD" in t
         or "LAKEBASE_RUNTIME_MODE" in t
         or "LAKEBASE_ENABLE_POOLER_EXPERIMENT" in t
+        or "LAKEBASE_SCALE_TO_ZERO_TIMEOUT" in t
         or "FORGE_SEED_BENCHMARKS" in t
         or "FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES" in t
         or "FORGE_SEED_BENCHMARK_INDUSTRIES" in t
@@ -375,6 +398,12 @@ if runtime_mode:
     out.append(f'    value: "{runtime_mode}"')
 out.append("  - name: LAKEBASE_ENABLE_POOLER_EXPERIMENT")
 out.append(f'    value: "{"true" if pooler_experiment else "false"}"')
+if no_scale_to_zero:
+    out.append("  - name: LAKEBASE_SCALE_TO_ZERO_TIMEOUT")
+    out.append('    value: "disabled"')
+elif scale_to_zero_timeout:
+    out.append("  - name: LAKEBASE_SCALE_TO_ZERO_TIMEOUT")
+    out.append(f'    value: "{scale_to_zero_timeout}"')
 out.append("  - name: FORGE_SEED_BENCHMARKS")
 out.append(f'    value: "{"true" if seed_benchmarks else "false"}"')
 out.append("  - name: FORGE_SEED_BENCHMARKS_ALL_INDUSTRIES")

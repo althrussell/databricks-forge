@@ -50,7 +50,6 @@ import {
   RotateCcw,
   ThumbsUp,
   ThumbsDown,
-  BookOpen,
   ChevronDown,
   ChevronRight,
   Globe,

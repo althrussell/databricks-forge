@@ -512,6 +512,23 @@ export function ConfigForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedPriorities(
+                  selectedPriorities.length === BUSINESS_PRIORITIES.length
+                    ? []
+                    : [...BUSINESS_PRIORITIES],
+                )
+              }
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              {selectedPriorities.length === BUSINESS_PRIORITIES.length
+                ? "Deselect all"
+                : "Select all"}
+            </button>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {BUSINESS_PRIORITIES.map((priority) => (
               <label key={priority} className="flex items-center gap-2 text-sm">

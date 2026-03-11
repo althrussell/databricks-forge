@@ -17,6 +17,12 @@ export interface SourceCardInput {
   metadata: Record<string, unknown> | null;
 }
 
+export interface ActionCardInput {
+  type: string;
+  label: string;
+  payload: Record<string, unknown>;
+}
+
 export interface CreateAssistantLogInput {
   sessionId: string;
   question: string;
@@ -32,6 +38,8 @@ export interface CreateAssistantLogInput {
   userId?: string;
   sources?: SourceCardInput[];
   referencedTables?: string[];
+  actions?: ActionCardInput[];
+  sqlBlocks?: string[];
   persona?: string;
 }
 
@@ -65,6 +73,10 @@ export async function createAssistantLog(input: CreateAssistantLogInput): Promis
         sourcesJson: input.sources ? JSON.stringify(input.sources) : null,
         referencedTablesJson: input.referencedTables
           ? JSON.stringify(input.referencedTables)
+          : null,
+        actionsJson: input.actions ? JSON.stringify(input.actions) : null,
+        sqlBlocksJson: input.sqlBlocks && input.sqlBlocks.length > 0
+          ? JSON.stringify(input.sqlBlocks)
           : null,
         persona: input.persona,
       },

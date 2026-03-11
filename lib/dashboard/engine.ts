@@ -165,7 +165,7 @@ async function processDomain(
   businessName: string,
   businessContext: import("@/lib/domain/types").BusinessContext | null,
   genieRecommendations?: GenieEngineRecommendation[],
-  runId?: string,
+  _runId?: string,
 ): Promise<DashboardRecommendation | null> {
   const columnSchemas = buildColumnSchemas(metadata, group.tables);
   const genieOutputs = getGenieOutputsForDomain(group.domain, genieRecommendations);

@@ -454,6 +454,8 @@ export async function runAssistantEngine(
     userId: userId ?? undefined,
     sources,
     referencedTables: reconciledTables,
+    actions,
+    sqlBlocks,
     persona,
   })
     .then((logId) => {

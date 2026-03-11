@@ -15,6 +15,7 @@ import {
   TrendingUp,
   FileText,
   Users,
+  Loader2,
 } from "lucide-react";
 
 export interface ActionCardData {
@@ -26,6 +27,7 @@ export interface ActionCardData {
 interface ActionCardProps {
   action: ActionCardData;
   onAction: (action: ActionCardData) => void;
+  loading?: boolean;
 }
 
 const ACTION_CONFIG: Record<
@@ -49,7 +51,7 @@ const ACTION_CONFIG: Record<
   draft_executive_memo: { icon: <FileText className="size-3.5" />, variant: "outline" },
 };
 
-export function ActionCard({ action, onAction }: ActionCardProps) {
+export function ActionCard({ action, onAction, loading }: ActionCardProps) {
   const config = ACTION_CONFIG[action.type] ?? {
     icon: <Play className="size-3.5" />,
     variant: "outline" as const,
@@ -60,9 +62,10 @@ export function ActionCard({ action, onAction }: ActionCardProps) {
       variant={config.variant}
       size="sm"
       className="h-8 gap-1.5 text-xs"
+      disabled={loading}
       onClick={() => onAction(action)}
     >
-      {config.icon}
+      {loading ? <Loader2 className="size-3.5 animate-spin" /> : config.icon}
       {action.label}
     </Button>
   );
@@ -71,9 +74,11 @@ export function ActionCard({ action, onAction }: ActionCardProps) {
 export function ActionCardList({
   actions,
   onAction,
+  pendingAction,
 }: {
   actions: ActionCardData[];
   onAction: (action: ActionCardData) => void;
+  pendingAction?: string | null;
 }) {
   if (actions.length === 0) return null;
 
@@ -82,7 +87,12 @@ export function ActionCardList({
       <p className="text-xs font-medium text-muted-foreground">Actions</p>
       <div className="flex flex-wrap gap-2">
         {actions.map((action, i) => (
-          <ActionCard key={i} action={action} onAction={onAction} />
+          <ActionCard
+            key={i}
+            action={action}
+            onAction={onAction}
+            loading={pendingAction === action.type}
+          />
         ))}
       </div>
     </div>
