@@ -68,7 +68,7 @@ export default function AICommentsPage() {
   const [selectedCatalogs, setSelectedCatalogs] = useState<string[]>([]);
   const [availableCatalogs, setAvailableCatalogs] = useState<string[]>([]);
   const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
-  const [selectedIndustry, setSelectedIndustry] = useState<string>("");
+  const [selectedIndustry, setSelectedIndustry] = useState<string>("none");
   const [genProgress, setGenProgress] = useState<{ phase: string; pct: number; detail: string }>({
     phase: "",
     pct: 0,
@@ -153,7 +153,7 @@ export default function AICommentsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           catalogs: selectedCatalogs,
-          industryId: selectedIndustry || undefined,
+          industryId: selectedIndustry === "none" ? undefined : selectedIndustry,
         }),
         signal: abort.signal,
       });
@@ -481,7 +481,7 @@ export default function AICommentsPage() {
                     <SelectValue placeholder="No industry (generic descriptions)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No industry</SelectItem>
+                    <SelectItem value="none">No industry</SelectItem>
                     {industries.map((ind) => (
                       <SelectItem key={ind.id} value={ind.id}>
                         {ind.name}
