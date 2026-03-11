@@ -26,7 +26,7 @@ import {
   type StreamCallback,
   type TokenUsage,
 } from "@/lib/dbx/model-serving";
-import { assertWithinBudget, MAX_PROMPT_TOKENS } from "@/lib/ai/token-budget";
+import { assertWithinBudget, MAX_PROMPT_TOKENS } from "@/lib/toolkit/token-budget";
 import { addJitter, DEFAULT_429_BACKOFF_MS } from "@/lib/dbx/rate-limiter";
 import { getFallbackEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
@@ -315,7 +315,7 @@ export async function executeAIQuery(options: AIQueryOptions): Promise<AIQueryRe
         // 429 rate-limit: retryable with jittered backoff
         if (isRateLimitError(lastError)) {
           const baseRetryMs =
-            (lastError instanceof ModelServingError && lastError.retryAfterMs)
+            lastError instanceof ModelServingError && lastError.retryAfterMs
               ? lastError.retryAfterMs
               : DEFAULT_429_BACKOFF_MS;
           const retryAfterMs = addJitter(baseRetryMs);
@@ -429,7 +429,6 @@ function isRateLimitError(error: Error): boolean {
   }
   return error.message.includes("(429)") || error.message.includes("REQUEST_LIMIT_EXCEEDED");
 }
-
 
 /**
  * Check if an error is non-retryable (4xx client errors, excluding 429).
@@ -598,7 +597,7 @@ export async function executeAIQueryStream(
     if (attempt > 0 && lastError) {
       if (!isRateLimitError(lastError)) break;
       const baseRetryMs =
-        (lastError instanceof ModelServingError && lastError.retryAfterMs)
+        lastError instanceof ModelServingError && lastError.retryAfterMs
           ? lastError.retryAfterMs
           : DEFAULT_429_BACKOFF_MS;
       const retryAfterMs = addJitter(baseRetryMs);

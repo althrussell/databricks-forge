@@ -116,7 +116,7 @@ export function validateCommentText(comment: string): void {
     if (pattern.test(comment)) {
       throw new Error(
         `Comment contains a disallowed SQL pattern: "${comment.match(pattern)?.[0]}". ` +
-        "Comments must be plain descriptive text, not SQL statements.",
+          "Comments must be plain descriptive text, not SQL statements.",
       );
     }
   }
@@ -223,7 +223,12 @@ export async function applyProposals(
 
         // Skip column comments for table types that don't support them
         if (proposal.columnName && !supportsColumnComments(tblType)) {
-          return { proposalId: proposal.id, success: false, skipped: true, error: `Column comments not supported for ${tblType ?? "unknown"} table type` };
+          return {
+            proposalId: proposal.id,
+            success: false,
+            skipped: true,
+            error: `Column comments not supported for ${tblType ?? "unknown"} table type`,
+          };
         }
 
         const comment = proposal.editedComment ?? proposal.proposedComment;
@@ -258,7 +263,8 @@ export async function applyProposals(
               ? settled.reason.message
               : String(settled.reason);
 
-        const isSkipped = settled.status === "fulfilled" && "skipped" in settled.value && settled.value.skipped;
+        const isSkipped =
+          settled.status === "fulfilled" && "skipped" in settled.value && settled.value.skipped;
         if (isSkipped) {
           result.skipped++;
         } else {
@@ -321,7 +327,12 @@ export async function undoProposals(
       batch.map(async (proposal) => {
         const tblType = tableTypes?.get(proposal.tableFqn.toLowerCase());
         const ddl = proposal.columnName
-          ? buildColumnCommentDDL(proposal.tableFqn, proposal.columnName, proposal.originalComment, tblType)
+          ? buildColumnCommentDDL(
+              proposal.tableFqn,
+              proposal.columnName,
+              proposal.originalComment,
+              tblType,
+            )
           : buildTableCommentDDL(proposal.tableFqn, proposal.originalComment);
 
         try {

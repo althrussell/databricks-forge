@@ -7,9 +7,9 @@
  * @module ai/comment-engine/table-pass
  */
 
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
+import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
@@ -40,9 +40,10 @@ function renderTableInput(t: TableCommentInput): string {
     .slice(0, MAX_COLS_TABLE_PASS)
     .map((c) => c.name)
     .join(", ");
-  const extra = t.columns.length > MAX_COLS_TABLE_PASS
-    ? ` +${t.columns.length - MAX_COLS_TABLE_PASS} more`
-    : "";
+  const extra =
+    t.columns.length > MAX_COLS_TABLE_PASS
+      ? ` +${t.columns.length - MAX_COLS_TABLE_PASS} more`
+      : "";
 
   const parts = [`- **${t.fqn}** [${cols}${extra}]`];
 
@@ -117,9 +118,11 @@ export async function runTableCommentPass(
 
   const endpoint = getFastServingEndpoint();
 
-  const basePrompt = TABLE_COMMENT_PROMPT
-    .replace("{industry_context}", context.industryContext)
-    .replace("{business_context_block}", context.businessContext ? `### BUSINESS CONTEXT\n${context.businessContext}` : "")
+  const basePrompt = TABLE_COMMENT_PROMPT.replace("{industry_context}", context.industryContext)
+    .replace(
+      "{business_context_block}",
+      context.businessContext ? `### BUSINESS CONTEXT\n${context.businessContext}` : "",
+    )
     .replace("{data_asset_context}", context.dataAssetContext)
     .replace("{use_case_linkage}", context.useCaseLinkage)
     .replace("{schema_summary}", context.schemaSummary)
@@ -138,9 +141,11 @@ export async function runTableCommentPass(
 
     const tableList = batch.map(renderTableInput).join("\n\n");
 
-    const prompt = TABLE_COMMENT_PROMPT
-      .replace("{industry_context}", context.industryContext)
-      .replace("{business_context_block}", context.businessContext ? `### BUSINESS CONTEXT\n${context.businessContext}` : "")
+    const prompt = TABLE_COMMENT_PROMPT.replace("{industry_context}", context.industryContext)
+      .replace(
+        "{business_context_block}",
+        context.businessContext ? `### BUSINESS CONTEXT\n${context.businessContext}` : "",
+      )
       .replace("{data_asset_context}", context.dataAssetContext)
       .replace("{use_case_linkage}", context.useCaseLinkage)
       .replace("{schema_summary}", context.schemaSummary)

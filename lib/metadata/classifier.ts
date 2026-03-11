@@ -9,9 +9,9 @@
  * @module metadata/classifier
  */
 
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
+import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
@@ -86,9 +86,10 @@ function renderTableForClassifier(t: ClassifierInput): string {
     .slice(0, MAX_COLS_CLASSIFIER)
     .map((c) => `${c.name}(${c.dataType})`)
     .join(", ");
-  const extra = t.columns.length > MAX_COLS_CLASSIFIER
-    ? ` +${t.columns.length - MAX_COLS_CLASSIFIER} more`
-    : "";
+  const extra =
+    t.columns.length > MAX_COLS_CLASSIFIER
+      ? ` +${t.columns.length - MAX_COLS_CLASSIFIER} more`
+      : "";
 
   const parts = [`- ${t.fqn}: [${cols}${extra}]`];
 
@@ -138,15 +139,20 @@ export async function classifySchema(
   if (hintsWithTier.length > 0 || hintsWithRole.length > 0) {
     deterministicHints = [
       "Deterministic analysis detected:",
-      hintsWithTier.length > 0 ? `- ${hintsWithTier.length} tables have tier prefixes (bronze_, silver_, gold_, etc.)` : "",
-      hintsWithRole.length > 0 ? `- ${hintsWithRole.length} tables have role prefixes (dim_, fact_, stg_, etc.)` : "",
+      hintsWithTier.length > 0
+        ? `- ${hintsWithTier.length} tables have tier prefixes (bronze_, silver_, gold_, etc.)`
+        : "",
+      hintsWithRole.length > 0
+        ? `- ${hintsWithRole.length} tables have role prefixes (dim_, fact_, stg_, etc.)`
+        : "",
       "These hints are provided per-table above. Respect them unless clearly incorrect.",
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
 
   // Build base prompt for token estimation
-  const basePrompt = SCHEMA_INTELLIGENCE_PROMPT
-    .replace("{data_asset_context}", dataAssetContext)
+  const basePrompt = SCHEMA_INTELLIGENCE_PROMPT.replace("{data_asset_context}", dataAssetContext)
     .replace("{table_list}", "")
     .replace("{deterministic_hints}", deterministicHints);
 
@@ -162,8 +168,7 @@ export async function classifySchema(
     if (signal?.aborted) throw new Error("Cancelled");
 
     const tableList = batch.map(renderTableForClassifier).join("\n");
-    const prompt = SCHEMA_INTELLIGENCE_PROMPT
-      .replace("{data_asset_context}", dataAssetContext)
+    const prompt = SCHEMA_INTELLIGENCE_PROMPT.replace("{data_asset_context}", dataAssetContext)
       .replace("{table_list}", tableList)
       .replace("{deterministic_hints}", deterministicHints);
 
@@ -250,7 +255,15 @@ export async function classifySchema(
 // ---------------------------------------------------------------------------
 
 const VALID_ROLES = new Set<TableRole>([
-  "fact", "dimension", "staging", "lookup", "bridge", "audit", "config", "snapshot", "unknown",
+  "fact",
+  "dimension",
+  "staging",
+  "lookup",
+  "bridge",
+  "audit",
+  "config",
+  "snapshot",
+  "unknown",
 ]);
 
 const VALID_TIERS = new Set<DataTier>(["bronze", "silver", "gold", "unknown"]);

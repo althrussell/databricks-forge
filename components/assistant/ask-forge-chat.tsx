@@ -366,9 +366,10 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           );
         } else {
           const tables = Array.isArray(action.payload.tables) ? action.payload.tables : [];
-          const highlightParam = tables.length > 0
-            ? `&highlight=${encodeURIComponent((tables as string[]).join(","))}`
-            : "";
+          const highlightParam =
+            tables.length > 0
+              ? `&highlight=${encodeURIComponent((tables as string[]).join(","))}`
+              : "";
           router.push(`/environment?tab=tables${highlightParam}`);
         }
       } else if (action.type === "view_erd") {
@@ -784,10 +785,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         )}
 
         {erdModalTables && erdModalTables.length > 0 && (
-          <ErdModal
-            tableFqns={erdModalTables}
-            onClose={() => setErdModalTables(null)}
-          />
+          <ErdModal tableFqns={erdModalTables} onClose={() => setErdModalTables(null)} />
         )}
       </div>
     );

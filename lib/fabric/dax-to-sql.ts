@@ -16,7 +16,7 @@
 
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
-import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";

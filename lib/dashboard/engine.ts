@@ -21,15 +21,17 @@ import type {
   FilterCandidate,
 } from "./types";
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts";
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
-import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
-import { isReviewEnabled } from "@/lib/dbx/client";
-import { mapWithConcurrency } from "@/lib/genie/concurrency";
+import { reviewAndFixSql as defaultReviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled as defaultIsReviewEnabled } from "@/lib/dbx/client";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { validateDatasetSql } from "./validation";
-import { logger } from "@/lib/logger";
+import { logger as defaultLogger } from "@/lib/logger";
+import type { Logger } from "@/lib/ports/logger";
+import type { LLMClient } from "@/lib/ports/llm-client";
 import type { DiscoveredDashboard } from "@/lib/discovery/types";
 
 const TEMPERATURE = 0.3;
@@ -165,9 +167,16 @@ async function processDomain(
   endpoint: string,
   businessName: string,
   businessContext: import("@/lib/domain/types").BusinessContext | null,
-  genieRecommendations?: GenieEngineRecommendation[],
-  _runId?: string,
+  genieRecommendations: GenieEngineRecommendation[] | undefined,
+  _runId: string | undefined,
+  deps: {
+    llm?: LLMClient;
+    log: Logger;
+    reviewFn: typeof defaultReviewAndFixSql;
+    isReviewEnabledFn: (surface?: string) => boolean;
+  },
 ): Promise<DashboardRecommendation | null> {
+  const { log, reviewFn, isReviewEnabledFn } = deps;
   const columnSchemas = buildColumnSchemas(metadata, group.tables);
   const genieOutputs = getGenieOutputsForDomain(group.domain, genieRecommendations);
   const filterCandidates = getFilterCandidatesForDomain(metadata, group.tables, genieOutputs);
@@ -191,23 +200,35 @@ async function processDomain(
     { role: "user", content: prompt },
   ];
 
-  logger.info("Dashboard Engine: calling LLM for domain", {
+  log.info("Dashboard Engine: calling LLM for domain", {
     domain: group.domain,
     useCaseCount: group.useCases.length,
     tableCount: group.tables.length,
   });
 
-  const result = await chatCompletion({
-    endpoint,
-    messages,
-    temperature: TEMPERATURE,
-    responseFormat: "json_object",
-  });
+  let resultContent: string;
+  if (deps.llm) {
+    const resp = await deps.llm.chat({
+      endpoint,
+      messages,
+      temperature: TEMPERATURE,
+      responseFormat: "json_object",
+    });
+    resultContent = resp.content;
+  } else {
+    const result = await chatCompletion({
+      endpoint,
+      messages,
+      temperature: TEMPERATURE,
+      responseFormat: "json_object",
+    });
+    resultContent = result.content;
+  }
 
-  const parsed = parseLLMJson(result.content, "dashboard:engine") as DashboardDesign;
+  const parsed = parseLLMJson(resultContent, "dashboard:engine") as DashboardDesign;
 
   if (!parsed.datasets || !parsed.widgets || parsed.datasets.length === 0) {
-    logger.warn("Dashboard Engine: LLM returned empty design", {
+    log.warn("Dashboard Engine: LLM returned empty design", {
       domain: group.domain,
     });
     return null;
@@ -220,27 +241,27 @@ async function processDomain(
     validateSqlExpression(dashAllowlist, ds.sql, `dashboard:${ds.name}`, true),
   );
   if (parsed.datasets.length < originalCount) {
-    logger.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
+    log.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
       domain: group.domain,
       dropped: originalCount - parsed.datasets.length,
       remaining: parsed.datasets.length,
     });
   }
   if (parsed.datasets.length === 0) {
-    logger.warn("Dashboard Engine: all datasets had invalid SQL references", {
+    log.warn("Dashboard Engine: all datasets had invalid SQL references", {
       domain: group.domain,
     });
     return null;
   }
 
   // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
-  if (isReviewEnabled("dashboard")) {
+  if (isReviewEnabledFn("dashboard")) {
     const schemaCtx = columnSchemas.join("\n");
     const REVIEW_CONCURRENCY = 3;
     const reviewed = await mapWithConcurrency(
       parsed.datasets.map((ds) => async () => {
         if (!ds.sql) return ds;
-        const review = await reviewAndFixSql(ds.sql, {
+        const review = await reviewFn(ds.sql, {
           schemaContext: schemaCtx,
           surface: "dashboard",
         });
@@ -248,19 +269,19 @@ async function processDomain(
           if (
             validateSqlExpression(dashAllowlist, review.fixedSql, `dashboard_fix:${ds.name}`, true)
           ) {
-            logger.info("Dashboard Engine: review applied fix", {
+            log.info("Dashboard Engine: review applied fix", {
               dataset: ds.name,
               qualityScore: review.qualityScore,
             });
             return { ...ds, sql: review.fixedSql };
           }
-          logger.warn("Dashboard Engine: review fix failed schema validation, keeping original", {
+          log.warn("Dashboard Engine: review fix failed schema validation, keeping original", {
             dataset: ds.name,
           });
           return ds;
         }
         if (review.verdict === "fail") {
-          logger.warn("Dashboard Engine: review rejected dataset", {
+          log.warn("Dashboard Engine: review rejected dataset", {
             dataset: ds.name,
             issues: review.issues.map((i) => i.message),
           });
@@ -272,7 +293,7 @@ async function processDomain(
     );
     parsed.datasets = reviewed.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
     if (parsed.datasets.length === 0) {
-      logger.warn("Dashboard Engine: all datasets rejected by review", {
+      log.warn("Dashboard Engine: all datasets rejected by review", {
         domain: group.domain,
       });
       return null;
@@ -289,7 +310,7 @@ async function processDomain(
   );
   parsed.datasets = explainResults.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
   if (parsed.datasets.length === 0) {
-    logger.warn("Dashboard Engine: all datasets failed EXPLAIN validation", {
+    log.warn("Dashboard Engine: all datasets failed EXPLAIN validation", {
       domain: group.domain,
     });
     return null;
@@ -330,13 +351,20 @@ export async function runDashboardEngine(
     existingDashboards = [],
     domainFilter,
     onProgress,
+    deps: inputDeps,
   } = input;
+
+  const log: Logger = inputDeps?.logger ?? defaultLogger;
+  const llm: LLMClient | undefined = inputDeps?.llm;
+  const reviewFn = inputDeps?.reviewAndFixSql ?? defaultReviewAndFixSql;
+  const isReviewEnabledFn = inputDeps?.isReviewEnabled ?? defaultIsReviewEnabled;
+  const wireDeps = { llm, log, reviewFn, isReviewEnabledFn };
 
   const endpoint = run.config.aiModel;
   const businessName = run.config.businessName;
   const businessContext = run.businessContext;
 
-  logger.info("Dashboard Engine starting", {
+  log.info("Dashboard Engine starting", {
     runId: run.runId,
     useCaseCount: useCases.length,
     tableCount: metadata.tableCount,
@@ -350,7 +378,7 @@ export async function runDashboardEngine(
     : allGroups;
 
   if (domainGroups.length === 0) {
-    logger.warn("No domain groups for dashboard generation", {
+    log.warn("No domain groups for dashboard generation", {
       runId: run.runId,
       domainFilter,
     });
@@ -374,14 +402,14 @@ export async function runDashboardEngine(
       }
     }
     if (existingDashboardByDomain.size > 0) {
-      logger.info("Existing dashboard mapping", {
+      log.info("Existing dashboard mapping", {
         totalExisting: existingDashboards.length,
         domainsWithExisting: existingDashboardByDomain.size,
       });
     }
   }
 
-  logger.info("Dashboard Engine: processing domains", {
+  log.info("Dashboard Engine: processing domains", {
     domainCount: domainGroups.length,
     domains: domainGroups.map((g) => g.domain),
   });
@@ -402,6 +430,7 @@ export async function runDashboardEngine(
         businessContext,
         genieRecommendations,
         run.runId,
+        wireDeps,
       );
 
       if (rec) {
@@ -412,14 +441,14 @@ export async function runDashboardEngine(
           rec.changeSummary = `Enhancement of "${existingDash.displayName}": ${rec.datasetCount} datasets, ${rec.widgetCount} widgets (existing has ${existingDash.datasetCount} datasets, ${existingDash.widgetCount} widgets)`;
         }
         recommendations.push(rec);
-        logger.info("Dashboard Engine: domain complete", {
+        log.info("Dashboard Engine: domain complete", {
           domain: group.domain,
           datasets: rec.datasetCount,
           widgets: rec.widgetCount,
         });
       }
     } catch (err) {
-      logger.error("Dashboard Engine: domain failed", {
+      log.error("Dashboard Engine: domain failed", {
         domain: group.domain,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -428,7 +457,7 @@ export async function runDashboardEngine(
 
   onProgress?.("Dashboard generation complete", 100);
 
-  logger.info("Dashboard Engine complete", {
+  log.info("Dashboard Engine complete", {
     runId: run.runId,
     recommendationCount: recommendations.length,
     domains: recommendations.map((r) => r.domain),

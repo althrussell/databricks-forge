@@ -31,17 +31,11 @@ export async function POST(
       const idSet = new Set(proposalIds);
       toUndo = allProposals.filter((p) => idSet.has(p.id) && p.status === "applied");
     } else {
-      return NextResponse.json(
-        { error: "Provide proposalIds or set all=true" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Provide proposalIds or set all=true" }, { status: 400 });
     }
 
     if (toUndo.length === 0) {
-      return NextResponse.json(
-        { error: "No applied proposals to undo" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "No applied proposals to undo" }, { status: 400 });
     }
 
     const result = await undoProposals(jobId, toUndo);

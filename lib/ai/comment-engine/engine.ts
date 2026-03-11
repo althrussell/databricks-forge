@@ -24,8 +24,9 @@ import {
 import { runTableCommentPass, buildLineageContextBlock } from "./table-pass";
 import { runColumnCommentPass } from "./column-pass";
 import { runConsistencyReview, applyConsistencyFixes } from "./consistency-pass";
-import { logger } from "@/lib/logger";
+import { logger as defaultLogger } from "@/lib/logger";
 import type { SchemaContext, MetadataScope } from "@/lib/metadata/types";
+import type { Logger } from "@/lib/ports/logger";
 import type {
   CommentEngineConfig,
   CommentEngineResult,
@@ -52,11 +53,13 @@ export async function runCommentEngine(
     signal,
     onProgress,
     onMetadataProgress,
+    deps,
   } = config;
 
+  const log: Logger = deps?.logger ?? defaultLogger;
   const counters: MetadataCounters = {};
 
-  logger.info("[comment-engine] Starting", {
+  log.info("[comment-engine] Starting", {
     catalogs: scope.catalogs,
     schemas: scope.schemas?.length,
     tables: scope.tables?.length,
@@ -64,45 +67,54 @@ export async function runCommentEngine(
     enableConsistencyReview,
     enableLineage,
     enableHistory,
+    prebuiltSchemaContext: !!deps?.schemaContext,
   });
 
   // =======================================================================
-  // Phase 0+1: Build Schema Context
+  // Phase 0+1: Build Schema Context (skipped when pre-built context provided)
   // =======================================================================
-  onProgress?.("schema-context", 0, "Building schema context...");
+  let industryContext = deps?.industryContext ?? "";
+  let dataAssetText = deps?.dataAssetContext ?? "";
+  let dataAssetList = deps?.dataAssetList ?? [];
+  let useCaseLinkage = deps?.useCaseLinkage ?? "";
+  let schemaContext: SchemaContext;
 
-  // Load industry data assets if industry selected
-  let industryContext = "";
-  let dataAssetText = "";
-  let dataAssetList: Array<{ id: string; name: string; description: string; assetFamily: string }> = [];
+  if (deps?.schemaContext) {
+    schemaContext = deps.schemaContext;
+    log.info("[comment-engine] Using pre-built schema context", {
+      tables: schemaContext.tables.length,
+    });
+  } else {
+    onProgress?.("schema-context", 0, "Building schema context...");
 
-  if (industryId) {
-    const [icPrompt, daContext] = await Promise.all([
-      buildIndustryContextPrompt(industryId),
-      buildDataAssetContext(industryId),
-    ]);
-    industryContext = icPrompt;
-    dataAssetText = daContext.text;
-    dataAssetList = daContext.assets;
+    if (industryId && !deps?.industryContext) {
+      const [icPrompt, daContext] = await Promise.all([
+        buildIndustryContextPrompt(industryId),
+        buildDataAssetContext(industryId),
+      ]);
+      industryContext = icPrompt;
+      dataAssetText = daContext.text;
+      dataAssetList = daContext.assets;
+    }
+
+    schemaContext = await buildSchemaContext(scope, {
+      industryId,
+      dataAssetNames: dataAssetList,
+      includeLineage: enableLineage,
+      includeHistory: enableHistory,
+      signal,
+      onProgress: (_phase, pct, detail) => {
+        onProgress?.("schema-context", Math.round(pct * 0.3), detail);
+      },
+      onMetadataCounters: (mc) => {
+        Object.assign(counters, mc);
+        onMetadataProgress?.(counters);
+      },
+    });
   }
 
-  const schemaContext: SchemaContext = await buildSchemaContext(scope, {
-    industryId,
-    dataAssetNames: dataAssetList,
-    includeLineage: enableLineage,
-    includeHistory: enableHistory,
-    signal,
-    onProgress: (_phase, pct, detail) => {
-      onProgress?.("schema-context", Math.round(pct * 0.3), detail);
-    },
-    onMetadataCounters: (mc) => {
-      Object.assign(counters, mc);
-      onMetadataProgress?.(counters);
-    },
-  });
-
   if (schemaContext.tables.length === 0) {
-    logger.warn("[comment-engine] No tables found in schema context");
+    log.warn("[comment-engine] No tables found in schema context");
     return emptyResult(schemaContext, Date.now() - startTime);
   }
 
@@ -114,9 +126,8 @@ export async function runCommentEngine(
 
   if (signal?.aborted) throw new Error("Cancelled");
 
-  // Build use case linkage for matched data assets
-  let useCaseLinkage = "";
-  if (industryId) {
+  // Build use case linkage for matched data assets (unless pre-built)
+  if (!useCaseLinkage && industryId) {
     const matchedAssetIds = schemaContext.tables
       .map((t) => t.dataAssetId)
       .filter((id): id is string => id !== null);
@@ -231,18 +242,14 @@ export async function runCommentEngine(
     };
   });
 
-  const columnComments = await runColumnCommentPass(
-    columnInputs,
-    industryContext,
-    {
-      signal,
-      onProgress,
-      onCounters: (c) => {
-        Object.assign(counters, c);
-        onMetadataProgress?.(counters);
-      },
+  const columnComments = await runColumnCommentPass(columnInputs, industryContext, {
+    signal,
+    onProgress,
+    onCounters: (c) => {
+      Object.assign(counters, c);
+      onMetadataProgress?.(counters);
     },
-  );
+  });
 
   if (signal?.aborted) throw new Error("Cancelled");
 
@@ -258,7 +265,7 @@ export async function runCommentEngine(
   }> = [];
   let fixesApplied = 0;
 
-  if (enableConsistencyReview && (tableComments.size + columnComments.size) > 0) {
+  if (enableConsistencyReview && tableComments.size + columnComments.size > 0) {
     onProgress?.("consistency", 0, "Reviewing consistency...");
 
     try {
@@ -271,13 +278,13 @@ export async function runCommentEngine(
 
       if (consistencyFixes.length > 0) {
         fixesApplied = applyConsistencyFixes(tableComments, columnComments, consistencyFixes);
-        logger.info("[comment-engine] Consistency fixes applied", {
+        log.info("[comment-engine] Consistency fixes applied", {
           found: consistencyFixes.length,
           applied: fixesApplied,
         });
       }
     } catch (err) {
-      logger.warn("[comment-engine] Consistency review failed, skipping", {
+      log.warn("[comment-engine] Consistency review failed, skipping", {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -286,13 +293,10 @@ export async function runCommentEngine(
   // =======================================================================
   // Done
   // =======================================================================
-  const totalColumns = Array.from(columnComments.values()).reduce(
-    (sum, m) => sum + m.size,
-    0,
-  );
+  const totalColumns = Array.from(columnComments.values()).reduce((sum, m) => sum + m.size, 0);
   const durationMs = Date.now() - startTime;
 
-  logger.info("[comment-engine] Complete", {
+  log.info("[comment-engine] Complete", {
     tables: tableComments.size,
     columns: totalColumns,
     consistencyFixes: consistencyFixes.length,

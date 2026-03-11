@@ -66,7 +66,12 @@ export async function listCommentJobs(): Promise<CommentJob[]> {
 export async function updateCommentJobStatus(
   jobId: string,
   status: CommentJobStatus,
-  extra?: { tableCount?: number; columnCount?: number; appliedCount?: number; errorMessage?: string },
+  extra?: {
+    tableCount?: number;
+    columnCount?: number;
+    appliedCount?: number;
+    errorMessage?: string;
+  },
 ): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeCommentJob.update({

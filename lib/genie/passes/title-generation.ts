@@ -1,7 +1,7 @@
 import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "../llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { logger } from "@/lib/logger";
-import { parseLLMJson } from "./parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 
 const TEMPERATURE = 0.2;
 const MAX_TITLE_WORDS = 7;

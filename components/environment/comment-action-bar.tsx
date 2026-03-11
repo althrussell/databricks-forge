@@ -30,13 +30,19 @@ export function CommentActionBar({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 text-sm">
           {acceptedCount > 0 && (
-            <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+            <Badge
+              variant="secondary"
+              className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            >
               <Check className="mr-1 h-3 w-3" />
               {acceptedCount} ready to apply
             </Badge>
           )}
           {appliedCount > 0 && (
-            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+            <Badge
+              variant="secondary"
+              className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+            >
               {appliedCount} applied
             </Badge>
           )}

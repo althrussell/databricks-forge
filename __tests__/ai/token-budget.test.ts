@@ -8,7 +8,7 @@ import {
   truncateColumns,
   truncateComment,
   MAX_PROMPT_TOKENS,
-} from "@/lib/ai/token-budget";
+} from "@/lib/toolkit/token-budget";
 
 describe("estimateTokens", () => {
   it("returns 0 for empty string", () => {

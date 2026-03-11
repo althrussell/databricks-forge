@@ -18,9 +18,9 @@ import {
   type ChatCompletionOptions,
   type ChatCompletionResponse,
 } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "@/lib/genie/llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { logger } from "@/lib/logger";
-import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "./sql-rules";
+import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "@/lib/toolkit/sql-rules";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 

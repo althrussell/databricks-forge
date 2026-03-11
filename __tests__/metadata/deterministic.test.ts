@@ -217,11 +217,17 @@ describe("inferRelationshipsFromNaming", () => {
       },
       {
         fqn: "c.s.customers",
-        columns: [{ name: "id", dataType: "BIGINT" }, { name: "name", dataType: "STRING" }],
+        columns: [
+          { name: "id", dataType: "BIGINT" },
+          { name: "name", dataType: "STRING" },
+        ],
       },
       {
         fqn: "c.s.products",
-        columns: [{ name: "id", dataType: "BIGINT" }, { name: "title", dataType: "STRING" }],
+        columns: [
+          { name: "id", dataType: "BIGINT" },
+          { name: "title", dataType: "STRING" },
+        ],
       },
     ];
 
@@ -250,9 +256,7 @@ describe("inferRelationshipsFromNaming", () => {
     ];
 
     const rels = inferRelationshipsFromNaming(tables);
-    const customerRels = rels.filter(
-      (r) => r.sourceColumn === "customer_id",
-    );
+    const customerRels = rels.filter((r) => r.sourceColumn === "customer_id");
     expect(customerRels.length).toBe(1);
   });
 });
@@ -297,8 +301,20 @@ describe("enrichColumns", () => {
   it("adds inferred roles and FK targets", () => {
     const columns = [
       { name: "id", dataType: "BIGINT", ordinalPosition: 1, isNullable: false, comment: null },
-      { name: "customer_id", dataType: "BIGINT", ordinalPosition: 2, isNullable: true, comment: null },
-      { name: "total_amount", dataType: "DECIMAL", ordinalPosition: 3, isNullable: true, comment: "Order total" },
+      {
+        name: "customer_id",
+        dataType: "BIGINT",
+        ordinalPosition: 2,
+        isNullable: true,
+        comment: null,
+      },
+      {
+        name: "total_amount",
+        dataType: "DECIMAL",
+        ordinalPosition: 3,
+        isNullable: true,
+        comment: "Order total",
+      },
     ];
 
     const enriched = enrichColumns(columns, "c.s.orders", ["c.s.orders", "c.s.customers"]);
@@ -332,7 +348,10 @@ describe("buildSchemaNamingProfile", () => {
 
   it("detects common suffixes", () => {
     const tables = [
-      { tableName: "orders", columns: [{ name: "order_id" }, { name: "customer_id" }, { name: "created_at" }] },
+      {
+        tableName: "orders",
+        columns: [{ name: "order_id" }, { name: "customer_id" }, { name: "created_at" }],
+      },
       { tableName: "customers", columns: [{ name: "customer_id" }, { name: "updated_at" }] },
       { tableName: "products", columns: [{ name: "product_id" }, { name: "created_at" }] },
     ];

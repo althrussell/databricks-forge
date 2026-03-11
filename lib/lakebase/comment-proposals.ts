@@ -4,13 +4,7 @@
 
 import { withPrisma } from "@/lib/prisma";
 
-export type ProposalStatus =
-  | "pending"
-  | "accepted"
-  | "rejected"
-  | "applied"
-  | "undone"
-  | "failed";
+export type ProposalStatus = "pending" | "accepted" | "rejected" | "applied" | "undone" | "failed";
 
 export interface CommentProposal {
   id: string;
@@ -94,9 +88,7 @@ export async function updateProposalStatuses(
   });
 }
 
-export async function markProposalsApplied(
-  proposalIds: string[],
-): Promise<void> {
+export async function markProposalsApplied(proposalIds: string[]): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeCommentProposal.updateMany({
       where: { id: { in: proposalIds } },
@@ -105,10 +97,7 @@ export async function markProposalsApplied(
   });
 }
 
-export async function markProposalFailed(
-  proposalId: string,
-  errorMessage: string,
-): Promise<void> {
+export async function markProposalFailed(proposalId: string, errorMessage: string): Promise<void> {
   await withPrisma(async (prisma) => {
     await prisma.forgeCommentProposal.update({
       where: { id: proposalId },
@@ -127,9 +116,7 @@ export async function markProposalsUndone(proposalIds: string[]): Promise<void> 
 }
 
 /** Distinct table FQNs in a job, with aggregated status counts. */
-export async function getJobTableSummary(
-  jobId: string,
-): Promise<
+export async function getJobTableSummary(jobId: string): Promise<
   Array<{
     tableFqn: string;
     total: number;
@@ -149,12 +136,26 @@ export async function getJobTableSummary(
 
     const map = new Map<
       string,
-      { total: number; pending: number; accepted: number; rejected: number; applied: number; failed: number }
+      {
+        total: number;
+        pending: number;
+        accepted: number;
+        rejected: number;
+        applied: number;
+        failed: number;
+      }
     >();
 
     for (const row of rows) {
       if (!map.has(row.tableFqn)) {
-        map.set(row.tableFqn, { total: 0, pending: 0, accepted: 0, rejected: 0, applied: 0, failed: 0 });
+        map.set(row.tableFqn, {
+          total: 0,
+          pending: 0,
+          accepted: 0,
+          rejected: 0,
+          applied: 0,
+          failed: 0,
+        });
       }
       const entry = map.get(row.tableFqn)!;
       const count = row._count.id;

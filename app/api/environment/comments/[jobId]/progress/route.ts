@@ -11,10 +11,7 @@ import { getCommentProgress } from "@/lib/ai/comment-engine/progress";
 import { getCommentJob } from "@/lib/lakebase/comment-jobs";
 import { isValidUUID } from "@/lib/validation";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ jobId: string }> },
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
 
   if (!isValidUUID(jobId)) {

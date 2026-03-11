@@ -31,7 +31,11 @@ vi.mock("@/lib/logger", () => ({
 
 import { runCommentEngine } from "@/lib/ai/comment-engine/engine";
 import { buildSchemaContext } from "@/lib/metadata/context-builder";
-import { buildIndustryContextPrompt, buildDataAssetContext, buildUseCaseLinkageContext } from "@/lib/domain/industry-outcomes-server";
+import {
+  buildIndustryContextPrompt,
+  buildDataAssetContext,
+  buildUseCaseLinkageContext,
+} from "@/lib/domain/industry-outcomes-server";
 import { runTableCommentPass } from "@/lib/ai/comment-engine/table-pass";
 import { runColumnCommentPass } from "@/lib/ai/comment-engine/column-pass";
 import { runConsistencyReview } from "@/lib/ai/comment-engine/consistency-pass";
@@ -50,8 +54,24 @@ function makeSchemaContext(overrides: Partial<SchemaContext> = {}): SchemaContex
         schema: "sch",
         tableName: "customers",
         columns: [
-          { name: "id", dataType: "BIGINT", ordinalPosition: 1, isNullable: false, comment: null, inferredRole: "pk", inferredFkTarget: null },
-          { name: "name", dataType: "STRING", ordinalPosition: 2, isNullable: true, comment: null, inferredRole: null, inferredFkTarget: null },
+          {
+            name: "id",
+            dataType: "BIGINT",
+            ordinalPosition: 1,
+            isNullable: false,
+            comment: null,
+            inferredRole: "pk",
+            inferredFkTarget: null,
+          },
+          {
+            name: "name",
+            dataType: "STRING",
+            ordinalPosition: 2,
+            isNullable: true,
+            comment: null,
+            inferredRole: null,
+            inferredFkTarget: null,
+          },
         ],
         comment: null,
         tableType: "TABLE",
@@ -75,9 +95,33 @@ function makeSchemaContext(overrides: Partial<SchemaContext> = {}): SchemaContex
         schema: "sch",
         tableName: "orders",
         columns: [
-          { name: "id", dataType: "BIGINT", ordinalPosition: 1, isNullable: false, comment: null, inferredRole: "pk", inferredFkTarget: null },
-          { name: "customer_id", dataType: "BIGINT", ordinalPosition: 2, isNullable: false, comment: null, inferredRole: "fk", inferredFkTarget: "cat.sch.customers" },
-          { name: "total_amount", dataType: "DECIMAL", ordinalPosition: 3, isNullable: true, comment: null, inferredRole: "measure", inferredFkTarget: null },
+          {
+            name: "id",
+            dataType: "BIGINT",
+            ordinalPosition: 1,
+            isNullable: false,
+            comment: null,
+            inferredRole: "pk",
+            inferredFkTarget: null,
+          },
+          {
+            name: "customer_id",
+            dataType: "BIGINT",
+            ordinalPosition: 2,
+            isNullable: false,
+            comment: null,
+            inferredRole: "fk",
+            inferredFkTarget: "cat.sch.customers",
+          },
+          {
+            name: "total_amount",
+            dataType: "DECIMAL",
+            ordinalPosition: 3,
+            isNullable: true,
+            comment: null,
+            inferredRole: "measure",
+            inferredFkTarget: null,
+          },
         ],
         comment: "Order records",
         tableType: "TABLE",
@@ -120,9 +164,7 @@ describe("runCommentEngine", () => {
   });
 
   it("returns empty result when no tables found", async () => {
-    vi.mocked(buildSchemaContext).mockResolvedValue(
-      makeSchemaContext({ tables: [] }),
-    );
+    vi.mocked(buildSchemaContext).mockResolvedValue(makeSchemaContext({ tables: [] }));
 
     const result = await runCommentEngine({ catalogs: ["cat"] });
 
@@ -176,7 +218,14 @@ describe("runCommentEngine", () => {
     vi.mocked(buildIndustryContextPrompt).mockResolvedValue("### INDUSTRY CONTEXT (Banking)");
     vi.mocked(buildDataAssetContext).mockResolvedValue({
       text: "### INDUSTRY DATA ASSETS",
-      assets: [{ id: "A01", name: "Customer Master", description: "Golden record", assetFamily: "Customer" }],
+      assets: [
+        {
+          id: "A01",
+          name: "Customer Master",
+          description: "Golden record",
+          assetFamily: "Customer",
+        },
+      ],
     });
     vi.mocked(buildUseCaseLinkageContext).mockResolvedValue("### DATA ASSET BUSINESS CONTEXT");
     vi.mocked(runTableCommentPass).mockResolvedValue(new Map());
@@ -194,10 +243,7 @@ describe("runCommentEngine", () => {
     vi.mocked(runTableCommentPass).mockResolvedValue(new Map([["cat.sch.customers", "desc"]]));
     vi.mocked(runColumnCommentPass).mockResolvedValue(new Map());
 
-    await runCommentEngine(
-      { catalogs: ["cat"] },
-      { enableConsistencyReview: false },
-    );
+    await runCommentEngine({ catalogs: ["cat"] }, { enableConsistencyReview: false });
 
     expect(runConsistencyReview).not.toHaveBeenCalled();
   });
@@ -251,8 +297,18 @@ describe("runCommentEngine", () => {
     vi.mocked(buildDataAssetContext).mockResolvedValue({
       text: "### INDUSTRY DATA ASSETS",
       assets: [
-        { id: "A01", name: "Customer Master", description: "Golden customer record", assetFamily: "Customer" },
-        { id: "A06", name: "Transaction Ledger", description: "Core transaction records", assetFamily: "Transaction" },
+        {
+          id: "A01",
+          name: "Customer Master",
+          description: "Golden customer record",
+          assetFamily: "Customer",
+        },
+        {
+          id: "A06",
+          name: "Transaction Ledger",
+          description: "Core transaction records",
+          assetFamily: "Transaction",
+        },
       ],
     });
     vi.mocked(runTableCommentPass).mockResolvedValue(new Map());

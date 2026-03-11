@@ -47,9 +47,9 @@ import {
   validateSqlExpression,
   type SchemaAllowlist,
 } from "./schema-allowlist";
-import { cachedChatCompletion } from "./llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "./passes/parse-llm-json";
-import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/ai/sql-rules";
+import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import "@/lib/skills/content";
 import {

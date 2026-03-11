@@ -18,10 +18,10 @@
  */
 
 import { type ChatMessage } from "@/lib/dbx/model-serving";
-import { cachedChatCompletion } from "../llm-cache";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
-import { parseLLMJson } from "./parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";

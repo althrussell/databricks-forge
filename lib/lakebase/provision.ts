@@ -542,14 +542,16 @@ async function ensureScaleToZero(): Promise<void> {
       return;
     }
     logger.info("[provision] Disabling scale-to-zero (explicitly requested)...");
-    const patchResp = await lakebaseApi(
-      "PATCH",
-      `${epName}?update_mask=spec.no_suspension`,
-      { name: epName, spec: { no_suspension: true } },
-    );
+    const patchResp = await lakebaseApi("PATCH", `${epName}?update_mask=spec.no_suspension`, {
+      name: epName,
+      spec: { no_suspension: true },
+    });
     if (!patchResp.ok) {
       const text = await patchResp.text();
-      logger.warn("[provision] Failed to disable scale-to-zero", { status: patchResp.status, text });
+      logger.warn("[provision] Failed to disable scale-to-zero", {
+        status: patchResp.status,
+        text,
+      });
       return;
     }
     const op = await patchResp.json();

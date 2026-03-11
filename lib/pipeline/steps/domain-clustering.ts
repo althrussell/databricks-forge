@@ -6,9 +6,9 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { buildTokenAwareBatches } from "@/lib/ai/token-budget";
+import { buildTokenAwareBatches } from "@/lib/toolkit/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
 import {
@@ -16,7 +16,7 @@ import {
   SubdomainAssignmentSchema,
   validateLLMArray,
 } from "@/lib/validation";
-import { mapWithConcurrency } from "@/lib/genie/concurrency";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import type { PipelineContext, UseCase } from "@/lib/domain/types";
 
 const MIN_CASES_PER_DOMAIN = 3;

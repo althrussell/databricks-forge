@@ -192,7 +192,8 @@ async function ensureScaleToZero(epName) {
   }
   const detail = await detResp.json();
 
-  const currentDuration = detail.status?.suspend_timeout_duration || detail.spec?.suspend_timeout_duration || null;
+  const currentDuration =
+    detail.status?.suspend_timeout_duration || detail.spec?.suspend_timeout_duration || null;
   const currentNoSuspension = detail.spec?.no_suspension === true;
 
   if (desiredTimeout === null) {
@@ -201,11 +202,10 @@ async function ensureScaleToZero(epName) {
       return;
     }
     log("Disabling scale-to-zero (explicitly requested)...");
-    const patchResp = await api(
-      "PATCH",
-      `${epName}?update_mask=spec.no_suspension`,
-      { name: epName, spec: { no_suspension: true } },
-    );
+    const patchResp = await api("PATCH", `${epName}?update_mask=spec.no_suspension`, {
+      name: epName,
+      spec: { no_suspension: true },
+    });
     if (!patchResp.ok) {
       const text = await patchResp.text();
       log(`WARNING: Failed to disable scale-to-zero (${patchResp.status}): ${text}`);

@@ -14,10 +14,7 @@ export async function POST(request: NextRequest) {
     const { tableFqns } = body as { tableFqns: string[] };
 
     if (!Array.isArray(tableFqns) || tableFqns.length === 0) {
-      return NextResponse.json(
-        { error: "tableFqns array is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "tableFqns array is required" }, { status: 400 });
     }
 
     const results = await checkPermissions(tableFqns);

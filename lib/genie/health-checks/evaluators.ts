@@ -6,9 +6,52 @@
  */
 
 import type { CheckDefinition, CheckResult } from "./types";
-import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
-import { isReviewEnabled } from "@/lib/dbx/client";
+import {
+  reviewBatch as defaultReviewBatch,
+  type BatchReviewItem,
+  type BatchReviewResult,
+} from "@/lib/ai/sql-reviewer";
+import { isReviewEnabled as defaultIsReviewEnabled } from "@/lib/dbx/client";
 import type { SpaceJson } from "@/lib/genie/types";
+
+// ---------------------------------------------------------------------------
+// Injectable dependencies for portability
+// ---------------------------------------------------------------------------
+
+export type ReviewBatchFn = (
+  items: BatchReviewItem[],
+  surface?: string,
+  schemaContext?: string,
+) => Promise<BatchReviewResult[]>;
+
+export type IsReviewEnabledFn = (surface?: string) => boolean;
+
+let _reviewBatchFn: ReviewBatchFn = defaultReviewBatch;
+let _isReviewEnabledFn: IsReviewEnabledFn = defaultIsReviewEnabled;
+
+/**
+ * Override the SQL review implementation used by the health check engine.
+ * Call before `runHealthCheck()` + `enrichReportWithSqlQuality()` to
+ * inject an alternative review backend or a test stub.
+ */
+export function setHealthCheckReviewFn(fn: ReviewBatchFn): void {
+  _reviewBatchFn = fn;
+}
+
+/**
+ * Override the review-enabled gate function.
+ */
+export function setHealthCheckReviewEnabledFn(fn: IsReviewEnabledFn): void {
+  _isReviewEnabledFn = fn;
+}
+
+/**
+ * Reset to default Databricks implementations.
+ */
+export function resetHealthCheckDeps(): void {
+  _reviewBatchFn = defaultReviewBatch;
+  _isReviewEnabledFn = defaultIsReviewEnabled;
+}
 
 /**
  * Resolve a dot-notation path (with optional `[*]` array wildcards) against
@@ -373,7 +416,7 @@ export async function resolveSqlQualityChecks(_space: SpaceJson): Promise<CheckR
       continue;
     }
 
-    const batchResults = await reviewBatch(items, "health-check-sql-quality");
+    const batchResults = await _reviewBatchFn(items, "health-check-sql-quality");
     const scores = batchResults.map((r) => r.result.qualityScore);
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
     const failCount = batchResults.filter((r) => r.result.verdict === "fail").length;
@@ -392,7 +435,7 @@ export async function resolveSqlQualityChecks(_space: SpaceJson): Promise<CheckR
 }
 
 function evaluateSqlQuality(space: SpaceJson, check: CheckDefinition): CheckResult {
-  if (!isReviewEnabled("health-check-sql-quality")) {
+  if (!_isReviewEnabledFn("health-check-sql-quality")) {
     return buildResult(check, true, "SQL quality review not enabled (no review endpoint)");
   }
 

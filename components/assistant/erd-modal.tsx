@@ -12,11 +12,7 @@ interface ErdModalProps {
   onClose: () => void;
 }
 
-function filterGraphByHops(
-  fullGraph: ERDGraph,
-  seedFqns: string[],
-  hops: number,
-): ERDGraph {
+function filterGraphByHops(fullGraph: ERDGraph, seedFqns: string[], hops: number): ERDGraph {
   const relevant = new Set(seedFqns);
 
   for (let hop = 0; hop < hops; hop++) {
@@ -41,9 +37,7 @@ function filterGraphByHops(
     edges: filteredEdges,
     domains: [
       ...new Set(
-        fullGraph.nodes
-          .filter((n) => relevant.has(n.tableFqn) && n.domain)
-          .map((n) => n.domain!),
+        fullGraph.nodes.filter((n) => relevant.has(n.tableFqn) && n.domain).map((n) => n.domain!),
       ),
     ],
     stats: {

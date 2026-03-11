@@ -33,17 +33,11 @@ export async function POST(
         (p) => idSet.has(p.id) && (p.status === "accepted" || p.status === "pending"),
       );
     } else {
-      return NextResponse.json(
-        { error: "Provide proposalIds or set all=true" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Provide proposalIds or set all=true" }, { status: 400 });
     }
 
     if (toApply.length === 0) {
-      return NextResponse.json(
-        { error: "No eligible proposals to apply" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "No eligible proposals to apply" }, { status: 400 });
     }
 
     const result = await applyProposals(jobId, toApply);

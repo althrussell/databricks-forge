@@ -3,13 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  RefreshCw,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronUp, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface EmbeddingStats {
   enabled: boolean;

@@ -6,7 +6,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import {
   generateAIFunctionsSummary,
   generateStatisticalFunctionsSummary,
@@ -16,7 +16,7 @@ import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/meta
 import { buildReferenceUseCasesPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
 import { persistManifest, deriveTags, type EnrichmentTag } from "@/lib/pipeline/context-manifest";
-import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
+import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";

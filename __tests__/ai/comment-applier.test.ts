@@ -127,19 +127,27 @@ describe("validateCommentText", () => {
   });
 
   it("rejects DELETE FROM", () => {
-    expect(() => validateCommentText("DELETE FROM users WHERE id=1")).toThrow("disallowed SQL pattern");
+    expect(() => validateCommentText("DELETE FROM users WHERE id=1")).toThrow(
+      "disallowed SQL pattern",
+    );
   });
 
   it("rejects INSERT INTO", () => {
-    expect(() => validateCommentText("INSERT INTO users VALUES (1)")).toThrow("disallowed SQL pattern");
+    expect(() => validateCommentText("INSERT INTO users VALUES (1)")).toThrow(
+      "disallowed SQL pattern",
+    );
   });
 
   it("rejects UPDATE SET", () => {
-    expect(() => validateCommentText("UPDATE users SET name='x'")).toThrow("disallowed SQL pattern");
+    expect(() => validateCommentText("UPDATE users SET name='x'")).toThrow(
+      "disallowed SQL pattern",
+    );
   });
 
   it("rejects ALTER TABLE", () => {
-    expect(() => validateCommentText("ALTER TABLE users ADD COLUMN")).toThrow("disallowed SQL pattern");
+    expect(() => validateCommentText("ALTER TABLE users ADD COLUMN")).toThrow(
+      "disallowed SQL pattern",
+    );
   });
 
   it("rejects CREATE TABLE", () => {
@@ -167,7 +175,9 @@ describe("validateCommentText", () => {
   });
 
   it("rejects semicolon followed by destructive keyword", () => {
-    expect(() => validateCommentText("safe text; DROP something")).toThrow("disallowed SQL pattern");
+    expect(() => validateCommentText("safe text; DROP something")).toThrow(
+      "disallowed SQL pattern",
+    );
   });
 
   it("is case-insensitive", () => {
@@ -344,7 +354,10 @@ describe("supportsColumnComments", () => {
 describe("checkPermissions", () => {
   it("detects MODIFY permission from grants output", async () => {
     mockExecuteSQL.mockResolvedValueOnce({
-      columns: [{ name: "principal", typeName: "STRING", position: 0 }, { name: "action_type", typeName: "STRING", position: 1 }],
+      columns: [
+        { name: "principal", typeName: "STRING", position: 0 },
+        { name: "action_type", typeName: "STRING", position: 1 },
+      ],
       rows: [["user@example.com", "MODIFY"]],
       totalRowCount: 1,
     });
@@ -480,11 +493,7 @@ describe("applyProposals", () => {
   it("skips column proposals for unsupported table types", async () => {
     const types = new Map([["cat.sch.tbl", "CSV"]]);
 
-    const result = await applyProposals(
-      "j1",
-      [makeProposal({ columnName: "col1" })],
-      types,
-    );
+    const result = await applyProposals("j1", [makeProposal({ columnName: "col1" })], types);
 
     expect(result.skipped).toBe(1);
     expect(mockExecuteSQL).not.toHaveBeenCalled();
@@ -543,9 +552,7 @@ describe("undoProposals", () => {
 
     await undoProposals("j1", [makeApplied({ originalComment: null })]);
 
-    expect(mockExecuteSQL).toHaveBeenCalledWith(
-      "COMMENT ON TABLE `cat`.`sch`.`tbl` IS NULL",
-    );
+    expect(mockExecuteSQL).toHaveBeenCalledWith("COMMENT ON TABLE `cat`.`sch`.`tbl` IS NULL");
   });
 
   it("restores empty string when original was empty", async () => {
@@ -553,8 +560,6 @@ describe("undoProposals", () => {
 
     await undoProposals("j1", [makeApplied({ originalComment: "" })]);
 
-    expect(mockExecuteSQL).toHaveBeenCalledWith(
-      "COMMENT ON TABLE `cat`.`sch`.`tbl` IS ''",
-    );
+    expect(mockExecuteSQL).toHaveBeenCalledWith("COMMENT ON TABLE `cat`.`sch`.`tbl` IS ''");
   });
 });
