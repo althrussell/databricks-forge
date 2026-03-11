@@ -1194,3 +1194,53 @@ model ForgeStakeholderProfile {
   @@index([department])
   @@map("forge_stakeholder_profiles")
 }
+
+// ---------------------------------------------------------------------------
+// AI Comments: Comment Generation Jobs
+// ---------------------------------------------------------------------------
+
+model ForgeCommentJob {
+  id           String   @id @default(uuid()) @map("job_id")
+  scanId       String?  @map("scan_id")
+  runId        String?  @map("run_id")
+  scopeJson    String   @map("scope_json")
+  industryId   String?  @map("industry_id")
+  status       String   @default("draft") // draft | generating | ready | applying | completed | failed
+  tableCount   Int      @default(0) @map("table_count")
+  columnCount  Int      @default(0) @map("column_count")
+  appliedCount Int      @default(0) @map("applied_count")
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  proposals ForgeCommentProposal[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("forge_comment_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// AI Comments: Per-Table/Column Comment Proposals
+// ---------------------------------------------------------------------------
+
+model ForgeCommentProposal {
+  id              String    @id @default(uuid()) @map("proposal_id")
+  jobId           String    @map("job_id")
+  tableFqn        String    @map("table_fqn")
+  columnName      String?   @map("column_name")
+  originalComment String?   @map("original_comment")
+  proposedComment String    @map("proposed_comment")
+  editedComment   String?   @map("edited_comment")
+  status          String    @default("pending") // pending | accepted | rejected | applied | undone | failed
+  errorMessage    String?   @map("error_message")
+  appliedAt       DateTime? @map("applied_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  job ForgeCommentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([tableFqn])
+  @@index([status])
+  @@map("forge_comment_proposals")
+}
