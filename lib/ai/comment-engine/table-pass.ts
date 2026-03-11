@@ -13,7 +13,7 @@ import { buildTokenAwareBatches, estimateTokens } from "@/lib/ai/token-budget";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
-import type { TableCommentInput, CommentProgressCallback } from "./types";
+import type { TableCommentInput, CommentProgressCallback, MetadataCounters } from "./types";
 import { TABLE_COMMENT_PROMPT } from "./prompts";
 
 // ---------------------------------------------------------------------------
@@ -104,16 +104,19 @@ export function buildLineageContextBlock(
 export async function runTableCommentPass(
   tables: TableCommentInput[],
   context: TablePassContext,
-  options: { signal?: AbortSignal; onProgress?: CommentProgressCallback } = {},
+  options: {
+    signal?: AbortSignal;
+    onProgress?: CommentProgressCallback;
+    onCounters?: (counters: Partial<MetadataCounters>) => void;
+  } = {},
 ): Promise<Map<string, string>> {
-  const { signal, onProgress } = options;
+  const { signal, onProgress, onCounters } = options;
   const descriptions = new Map<string, string>();
 
   if (tables.length === 0) return descriptions;
 
   const endpoint = getFastServingEndpoint();
 
-  // Build the static portion of the prompt for token estimation
   const basePrompt = TABLE_COMMENT_PROMPT
     .replace("{industry_context}", context.industryContext)
     .replace("{business_context_block}", context.businessContext ? `### BUSINESS CONTEXT\n${context.businessContext}` : "")
@@ -125,6 +128,8 @@ export async function runTableCommentPass(
 
   const baseTokens = estimateTokens(basePrompt);
   const batches = buildTokenAwareBatches(tables, renderTableInput, baseTokens);
+
+  onCounters?.({ tableBatches: batches.length, tableBatchesDone: 0, tablesGenerated: 0 });
 
   let batchIdx = 0;
 
@@ -171,11 +176,12 @@ export async function runTableCommentPass(
     }
 
     batchIdx++;
-    onProgress?.(
-      "tables",
-      Math.round((batchIdx / batches.length) * 100),
-      `${descriptions.size}/${tables.length} tables described`,
-    );
+    const detail = `Batch ${batchIdx}/${batches.length} — ${descriptions.size}/${tables.length} tables described`;
+    onProgress?.("tables", Math.round((batchIdx / batches.length) * 100), detail);
+    onCounters?.({
+      tableBatchesDone: batchIdx,
+      tablesGenerated: descriptions.size,
+    });
   }
 
   return descriptions;

@@ -10,6 +10,22 @@ import type { SchemaContext } from "@/lib/metadata/types";
 // Config
 // ---------------------------------------------------------------------------
 
+/** Structured counters for the in-memory progress tracker. */
+export interface MetadataCounters {
+  tablesFound?: number;
+  columnsFound?: number;
+  lineageEdgesFound?: number;
+  enrichedCount?: number;
+  enrichTotal?: number;
+  tablesGenerated?: number;
+  columnsGenerated?: number;
+  columnTablesProcessed?: number;
+  currentTable?: string | null;
+  tableBatches?: number;
+  tableBatchesDone?: number;
+  consistencyFixes?: number;
+}
+
 export interface CommentEngineConfig {
   industryId?: string;
   businessContext?: string;
@@ -20,7 +36,10 @@ export interface CommentEngineConfig {
   /** Fetch Delta history + DESCRIBE DETAIL. Default: true. */
   enableHistory?: boolean;
   signal?: AbortSignal;
+  /** Phase-level progress (phase name + human-readable detail). */
   onProgress?: CommentProgressCallback;
+  /** Structured counter updates for the in-memory progress tracker. */
+  onMetadataProgress?: (counters: MetadataCounters) => void;
 }
 
 export type CommentProgressCallback = (

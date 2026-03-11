@@ -29,11 +29,6 @@ import {
   History,
   Trash2,
   ArrowLeft,
-  Check,
-  Database,
-  Table2,
-  Columns3,
-  Save,
 } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
@@ -45,6 +40,10 @@ import {
   type Proposal,
 } from "@/components/environment/comment-review-panel";
 import { CommentActionBar } from "@/components/environment/comment-action-bar";
+import {
+  CommentProgressCard,
+  type CommentProgressData,
+} from "@/components/environment/comment-progress-card";
 
 type PageState = "setup" | "generating" | "review" | "history";
 
@@ -74,14 +73,8 @@ export default function AICommentsPage() {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedIndustry, setSelectedIndustry] = useState<string>("none");
-  const [genProgress, setGenProgress] = useState<{ phase: string; pct: number; detail: string }>({
-    phase: "",
-    pct: 0,
-    detail: "",
-  });
-
-  // SSE abort controller for generation cancellation
-  const [genAbort, setGenAbort] = useState<AbortController | null>(null);
+  const [genProgress, setGenProgress] = useState<CommentProgressData | null>(null);
+  const [pollTimerRef, setPollTimerRef] = useState<ReturnType<typeof setInterval> | null>(null);
 
   // -- Load existing jobs + industries on mount --
   useEffect(() => {
@@ -93,14 +86,23 @@ export default function AICommentsPage() {
       setIndustries(indData.industries ?? []);
       setLoading(false);
 
-      // Auto-resume if a job is in progress
-      const active = (jobsData.jobs ?? []).find(
-        (j: CommentJob) => j.status === "ready" || j.status === "generating",
+      // Auto-resume: if a job is generating, resume polling. If ready, go to review.
+      const generating = (jobsData.jobs ?? []).find(
+        (j: CommentJob) => j.status === "generating",
       );
-      if (active) {
-        setActiveJobId(active.id);
-        loadJobData(active.id);
-        setPageState("review");
+      if (generating) {
+        setActiveJobId(generating.id);
+        setPageState("generating");
+        startProgressPolling(generating.id);
+      } else {
+        const ready = (jobsData.jobs ?? []).find(
+          (j: CommentJob) => j.status === "ready",
+        );
+        if (ready) {
+          setActiveJobId(ready.id);
+          loadJobData(ready.id);
+          setPageState("review");
+        }
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -165,10 +167,8 @@ export default function AICommentsPage() {
       }
     }
 
-    const abort = new AbortController();
-    setGenAbort(abort);
     setPageState("generating");
-    setGenProgress({ phase: "starting", pct: 0, detail: "Starting generation..." });
+    setGenProgress(null);
 
     try {
       const res = await fetch("/api/environment/comments/generate", {
@@ -180,70 +180,79 @@ export default function AICommentsPage() {
           tables: tables.length > 0 ? tables : undefined,
           industryId: selectedIndustry === "none" ? undefined : selectedIndustry,
         }),
-        signal: abort.signal,
       });
 
-      if (!res.ok || !res.body) {
-        throw new Error("Generation failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to start generation");
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            const event = line.slice(7);
-            const nextLine = lines[lines.indexOf(line) + 1];
-            if (nextLine?.startsWith("data: ")) {
-              let data: Record<string, unknown>;
-              try {
-                data = JSON.parse(nextLine.slice(6));
-              } catch {
-                continue; // malformed JSON, skip this SSE frame
-              }
-
-              if (event === "started") {
-                setActiveJobId(data.jobId as string);
-              } else if (event === "progress") {
-                setGenProgress({
-                  phase: data.phase as string,
-                  pct: data.pct as number,
-                  detail: (data.detail as string) ?? "",
-                });
-              } else if (event === "complete") {
-                setActiveJobId(data.jobId as string);
-                await loadJobData(data.jobId as string);
-                setPageState("review");
-                toast.success("Generation complete", {
-                  description: `${data.tableCount} tables, ${data.columnCount} columns`,
-                });
-              } else if (event === "error") {
-                throw new Error((data.message as string) || "Generation failed");
-              }
-            }
-          }
-        }
-      }
+      const { jobId: newJobId } = await res.json();
+      setActiveJobId(newJobId);
+      startProgressPolling(newJobId);
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        toast.info("Generation cancelled");
-      } else {
-        toast.error(err instanceof Error ? err.message : "Generation failed");
-      }
+      toast.error(err instanceof Error ? err.message : "Generation failed");
       setPageState("setup");
-    } finally {
-      setGenAbort(null);
     }
-  }, [selectedSources, selectedIndustry, loadJobData]);
+  }, [selectedSources, selectedIndustry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // -- Poll progress endpoint (same pattern as estate scan) --
+  const startProgressPolling = useCallback(
+    (jobId: string) => {
+      if (pollTimerRef) clearInterval(pollTimerRef);
+
+      let consecutiveMisses = 0;
+      const maxConsecutiveMisses = 10;
+
+      const timer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/environment/comments/${jobId}/progress`);
+          if (!res.ok) {
+            consecutiveMisses++;
+            if (consecutiveMisses >= maxConsecutiveMisses) {
+              clearInterval(timer);
+              setPollTimerRef(null);
+              toast.error("Lost contact with generation. Check history tab.");
+              setPageState("setup");
+            }
+            return;
+          }
+
+          consecutiveMisses = 0;
+          const prog: CommentProgressData = await res.json();
+          setGenProgress(prog);
+
+          if (prog.phase === "complete") {
+            clearInterval(timer);
+            setPollTimerRef(null);
+            setActiveJobId(jobId);
+            await loadJobData(jobId);
+            setPageState("review");
+            toast.success("Generation complete", {
+              description: `${prog.tablesGenerated ?? 0} tables, ${prog.columnsGenerated ?? 0} columns`,
+            });
+          } else if (prog.phase === "failed") {
+            clearInterval(timer);
+            setPollTimerRef(null);
+            toast.error(prog.message || "Generation failed");
+            setPageState("setup");
+          }
+        } catch {
+          consecutiveMisses++;
+        }
+      }, 2_000);
+
+      setPollTimerRef(timer);
+    },
+    [loadJobData, pollTimerRef],
+  );
+
+  // Cleanup poll timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef) clearInterval(pollTimerRef);
+    };
+  }, [pollTimerRef]);
 
   // -- Update proposals --
   const handleUpdateProposals = useCallback(
@@ -531,82 +540,18 @@ export default function AICommentsPage() {
       {/* State: Generating                                                 */}
       {/* ---------------------------------------------------------------- */}
       {pageState === "generating" && (
-        <Card>
-          <CardContent className="py-8 px-8 max-w-lg mx-auto">
-            <h3 className="text-lg font-semibold mb-6">Generating AI Comments</h3>
-
-            {/* Step indicators */}
-            <div className="space-y-4">
-              {[
-                { key: "metadata", icon: Database, label: "Scanning Unity Catalog metadata" },
-                { key: "tables", icon: Table2, label: "Generating table descriptions" },
-                { key: "columns", icon: Columns3, label: "Generating column descriptions" },
-                { key: "saving", icon: Save, label: "Saving proposals" },
-              ].map((step) => {
-                const phase = genProgress.phase;
-                const stepOrder = ["metadata", "tables", "columns", "saving", "done"];
-                const currentIdx = stepOrder.indexOf(phase);
-                const stepIdx = stepOrder.indexOf(step.key);
-                const isComplete = currentIdx > stepIdx;
-                const isActive = phase === step.key;
-                const isPending = currentIdx < stepIdx;
-
-                return (
-                  <div key={step.key} className="flex items-start gap-3">
-                    <div className="mt-0.5 flex-shrink-0">
-                      {isComplete ? (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary">
-                          <Check className="h-3.5 w-3.5 text-primary-foreground" />
-                        </div>
-                      ) : isActive ? (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-primary">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                        </div>
-                      ) : (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-muted-foreground/30">
-                          <step.icon className="h-3 w-3 text-muted-foreground/40" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium ${isPending ? "text-muted-foreground/50" : ""}`}>
-                        {step.label}
-                      </p>
-                      {isActive && genProgress.detail && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {genProgress.detail}
-                        </p>
-                      )}
-                      {isActive && genProgress.pct > 0 && (
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-muted">
-                            <div
-                              className="h-1.5 rounded-full bg-primary transition-all duration-300"
-                              style={{ width: `${genProgress.pct}%` }}
-                            />
-                          </div>
-                          <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">
-                            {genProgress.pct}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => genAbort?.abort()}
-              >
-                Cancel
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="max-w-2xl mx-auto space-y-4">
+          {genProgress ? (
+            <CommentProgressCard progress={genProgress} />
+          ) : (
+            <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10">
+              <CardContent className="py-8 flex items-center justify-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                <span className="text-sm text-muted-foreground">Starting generation...</span>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* ---------------------------------------------------------------- */}

@@ -151,6 +151,15 @@ export interface SchemaContext {
 // Builder Options
 // ---------------------------------------------------------------------------
 
+/** Structured counters for the metadata fetch progress. */
+export interface MetadataFetchCounters {
+  tablesFound?: number;
+  columnsFound?: number;
+  lineageEdgesFound?: number;
+  enrichedCount?: number;
+  enrichTotal?: number;
+}
+
 export interface SchemaContextOptions {
   industryId?: string;
   /** Reference Data Assets to guide classification (from industry outcome maps). */
@@ -159,6 +168,8 @@ export interface SchemaContextOptions {
   includeHistory?: boolean;
   signal?: AbortSignal;
   onProgress?: (phase: string, pct: number, detail?: string) => void;
+  /** Structured counter updates for downstream progress trackers. */
+  onMetadataCounters?: (counters: MetadataFetchCounters) => void;
 }
 
 export interface MetadataScope {

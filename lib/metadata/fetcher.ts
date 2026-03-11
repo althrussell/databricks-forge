@@ -28,7 +28,7 @@ import type {
   TableDetail,
   TableHistorySummary,
 } from "@/lib/domain/types";
-import type { MetadataScope } from "./types";
+import type { MetadataScope, MetadataFetchCounters } from "./types";
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -56,6 +56,7 @@ export interface FetchOptions {
   lineageDepth?: number;
   signal?: AbortSignal;
   onProgress?: (phase: string, pct: number, detail?: string) => void;
+  onCounters?: (counters: MetadataFetchCounters) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,7 @@ export async function fetchEnrichedMetadata(
     lineageDepth = 3,
     signal,
     onProgress,
+    onCounters,
   } = options;
 
   onProgress?.("metadata-fetch", 0, "Probing access permissions...");
@@ -144,6 +146,7 @@ export async function fetchEnrichedMetadata(
       }
 
       onProgress?.("metadata-fetch", 30, `${scopeLabel}: ${tables.length} tables, ${columns.length} columns`);
+      onCounters?.({ tablesFound: allTables.length, columnsFound: allColumns.length });
     } catch (err) {
       logger.warn("[metadata-fetcher] Scope failed, skipping", {
         scope: scopeLabel,
@@ -179,6 +182,7 @@ export async function fetchEnrichedMetadata(
         targetTableFqn: e.targetTableFqn,
       }));
       onProgress?.("metadata-fetch", 60, `Lineage: ${lineageEdges.length} edges`);
+      onCounters?.({ lineageEdgesFound: lineageEdges.length });
     } catch (err) {
       logger.warn("[metadata-fetcher] Lineage unavailable, continuing without", {
         error: err instanceof Error ? err.message : String(err),
@@ -205,6 +209,7 @@ export async function fetchEnrichedMetadata(
       const enriched = await enrichTablesInBatches(enrichInput, 5, (completed, total) => {
         const pct = 70 + Math.round((completed / total) * 25);
         onProgress?.("metadata-fetch", pct, `Enriching ${completed}/${total} tables`);
+        onCounters?.({ enrichedCount: completed, enrichTotal: total });
       });
 
       for (const [fqn, result] of enriched) {

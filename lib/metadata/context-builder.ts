@@ -48,7 +48,7 @@ export async function buildSchemaContext(
   scope: MetadataScope,
   options: SchemaContextOptions = {},
 ): Promise<SchemaContext> {
-  const { signal, onProgress } = options;
+  const { signal, onProgress, onMetadataCounters } = options;
 
   // --- Phase 0a: Fetch raw metadata ---
   onProgress?.("schema-context", 0, "Fetching metadata...");
@@ -59,6 +59,9 @@ export async function buildSchemaContext(
     signal,
     onProgress: (phase, pct, detail) => {
       onProgress?.(phase, Math.round(pct * 0.4), detail);
+    },
+    onCounters: (c) => {
+      onMetadataCounters?.(c);
     },
   });
 

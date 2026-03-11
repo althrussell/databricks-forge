@@ -31,6 +31,7 @@ import type {
   CommentEngineResult,
   TableCommentInput,
   ColumnCommentInput,
+  MetadataCounters,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,10 @@ export async function runCommentEngine(
     enableHistory = true,
     signal,
     onProgress,
+    onMetadataProgress,
   } = config;
+
+  const counters: MetadataCounters = {};
 
   logger.info("[comment-engine] Starting", {
     catalogs: scope.catalogs,
@@ -91,12 +95,22 @@ export async function runCommentEngine(
     onProgress: (_phase, pct, detail) => {
       onProgress?.("schema-context", Math.round(pct * 0.3), detail);
     },
+    onMetadataCounters: (mc) => {
+      Object.assign(counters, mc);
+      onMetadataProgress?.(counters);
+    },
   });
 
   if (schemaContext.tables.length === 0) {
     logger.warn("[comment-engine] No tables found in schema context");
     return emptyResult(schemaContext, Date.now() - startTime);
   }
+
+  // Update counters after schema context is built
+  counters.tablesFound = schemaContext.tables.length;
+  counters.columnsFound = schemaContext.tables.reduce((s, t) => s + t.columns.length, 0);
+  counters.lineageEdgesFound = schemaContext.lineageEdges.length;
+  onMetadataProgress?.(counters);
 
   if (signal?.aborted) throw new Error("Cancelled");
 
@@ -146,7 +160,14 @@ export async function runCommentEngine(
       schemaSummary: schemaContext.schemaSummary,
       lineageContext,
     },
-    { signal, onProgress },
+    {
+      signal,
+      onProgress,
+      onCounters: (c) => {
+        Object.assign(counters, c);
+        onMetadataProgress?.(counters);
+      },
+    },
   );
 
   if (signal?.aborted) throw new Error("Cancelled");
@@ -213,7 +234,14 @@ export async function runCommentEngine(
   const columnComments = await runColumnCommentPass(
     columnInputs,
     industryContext,
-    { signal, onProgress },
+    {
+      signal,
+      onProgress,
+      onCounters: (c) => {
+        Object.assign(counters, c);
+        onMetadataProgress?.(counters);
+      },
+    },
   );
 
   if (signal?.aborted) throw new Error("Cancelled");

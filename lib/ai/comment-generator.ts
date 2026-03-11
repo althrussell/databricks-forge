@@ -3,8 +3,8 @@
  *
  * Delegates to the Comment Engine (`lib/ai/comment-engine/engine.ts`)
  * for the actual generation, then persists proposals to Lakebase and
- * updates the job record. This module preserves the existing API
- * contract consumed by the SSE route and frontend.
+ * updates the job record. Uses the in-memory progress tracker so the
+ * frontend can poll `/api/environment/comments/[jobId]/progress`.
  *
  * Two entry paths:
  * 1. Fresh generation from UC metadata + Comment Engine (LLM-powered).
@@ -12,11 +12,14 @@
  */
 
 import { runCommentEngine } from "./comment-engine/engine";
+import {
+  initCommentProgress,
+  updateCommentProgress,
+  type CommentPhase,
+} from "./comment-engine/progress";
 import { createProposals } from "@/lib/lakebase/comment-proposals";
 import { updateCommentJobStatus } from "@/lib/lakebase/comment-jobs";
 import { logger } from "@/lib/logger";
-
-export type ProgressCallback = (phase: string, pct: number, detail?: string) => void;
 
 export interface GenerateCommentsInput {
   jobId: string;
@@ -26,7 +29,6 @@ export interface GenerateCommentsInput {
   industryId?: string;
   businessContext?: string;
   signal?: AbortSignal;
-  onProgress?: ProgressCallback;
 }
 
 export interface GenerateCommentsResult {
@@ -34,20 +36,30 @@ export interface GenerateCommentsResult {
   columnCount: number;
 }
 
+// Phase mapping from engine callback strings to our progress tracker phases
+const ENGINE_PHASE_MAP: Record<string, CommentPhase> = {
+  "schema-context": "fetching-metadata",
+  tables: "generating-tables",
+  columns: "generating-columns",
+  consistency: "consistency-review",
+  done: "complete",
+};
+
 /**
  * Run full Comment Engine generation for the given scope.
  * Writes proposals to Lakebase and updates the job record.
+ * Reports progress via the in-memory tracker (poll-friendly).
  */
 export async function generateComments(
   input: GenerateCommentsInput,
 ): Promise<GenerateCommentsResult> {
-  const { jobId, catalogs, schemas, tables, industryId, businessContext, signal, onProgress } =
-    input;
+  const { jobId, catalogs, schemas, tables, industryId, businessContext, signal } = input;
+
+  initCommentProgress(jobId);
 
   try {
     await updateCommentJobStatus(jobId, "generating");
 
-    // Delegate to the Comment Engine
     const result = await runCommentEngine(
       { catalogs, schemas, tables },
       {
@@ -57,11 +69,25 @@ export async function generateComments(
         enableLineage: true,
         enableHistory: true,
         signal,
-        onProgress,
+        onProgress: (phase, _pct, detail) => {
+          const mappedPhase = ENGINE_PHASE_MAP[phase] ?? "fetching-metadata";
+          updateCommentProgress(jobId, {
+            phase: mappedPhase,
+            message: detail ?? "",
+          });
+        },
+        onMetadataProgress: (counters) => {
+          updateCommentProgress(jobId, counters);
+        },
       },
     );
 
     // Persist proposals to Lakebase
+    updateCommentProgress(jobId, {
+      phase: "saving",
+      message: "Persisting proposals to database...",
+    });
+
     const proposals: Array<{
       tableFqn: string;
       columnName?: string | null;
@@ -69,7 +95,6 @@ export async function generateComments(
       proposedComment: string;
     }> = [];
 
-    // Table-level proposals
     for (const [fqnLower, description] of result.tableComments) {
       const table = result.schemaContext.tables.find(
         (t) => t.fqn.toLowerCase() === fqnLower,
@@ -82,7 +107,6 @@ export async function generateComments(
       });
     }
 
-    // Column-level proposals
     for (const [fqnLower, colMap] of result.columnComments) {
       const table = result.schemaContext.tables.find(
         (t) => t.fqn.toLowerCase() === fqnLower,
@@ -108,7 +132,14 @@ export async function generateComments(
     const columnCount = result.stats.columns;
 
     await updateCommentJobStatus(jobId, "ready", { tableCount, columnCount });
-    onProgress?.("done", 100, `${tableCount} table + ${columnCount} column descriptions ready`);
+
+    updateCommentProgress(jobId, {
+      phase: "complete",
+      message: `${tableCount} table + ${columnCount} column descriptions ready`,
+      tablesGenerated: tableCount,
+      columnsGenerated: columnCount,
+      consistencyFixes: result.stats.consistencyFixesApplied,
+    });
 
     logger.info("[comment-generator] Generation complete", {
       jobId,
@@ -122,6 +153,10 @@ export async function generateComments(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await updateCommentJobStatus(jobId, "failed", { errorMessage: msg });
+    updateCommentProgress(jobId, {
+      phase: "failed",
+      message: msg,
+    });
     throw err;
   }
 }

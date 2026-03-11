@@ -12,6 +12,11 @@ vi.mock("@/lib/lakebase/comment-jobs", () => ({
   updateCommentJobStatus: vi.fn(),
 }));
 
+vi.mock("@/lib/ai/comment-engine/progress", () => ({
+  initCommentProgress: vi.fn(),
+  updateCommentProgress: vi.fn(),
+}));
+
 vi.mock("@/lib/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

@@ -14,7 +14,7 @@ import { mapWithConcurrency } from "@/lib/genie/concurrency";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
-import type { ColumnCommentInput, CommentProgressCallback } from "./types";
+import type { ColumnCommentInput, CommentProgressCallback, MetadataCounters } from "./types";
 import { COLUMN_COMMENT_PROMPT } from "./prompts";
 
 const COLUMN_CONCURRENCY = 8;
@@ -60,20 +60,33 @@ function renderRelatedTables(
 export async function runColumnCommentPass(
   inputs: ColumnCommentInput[],
   industryContext: string,
-  options: { signal?: AbortSignal; onProgress?: CommentProgressCallback } = {},
+  options: {
+    signal?: AbortSignal;
+    onProgress?: CommentProgressCallback;
+    onCounters?: (counters: Partial<MetadataCounters>) => void;
+  } = {},
 ): Promise<Map<string, Map<string, string>>> {
-  const { signal, onProgress } = options;
+  const { signal, onProgress, onCounters } = options;
   const results = new Map<string, Map<string, string>>();
 
   if (inputs.length === 0) return results;
 
   const endpoint = getFastServingEndpoint();
   let completed = 0;
+  let totalColumnsGenerated = 0;
 
   const tasks = inputs.map((input) => async () => {
     if (signal?.aborted) return;
 
-    if (input.columns.length === 0) return;
+    if (input.columns.length === 0) {
+      completed++;
+      return;
+    }
+
+    onCounters?.({
+      currentTable: input.tableFqn.split(".").pop() ?? input.tableFqn,
+      columnTablesProcessed: completed,
+    });
 
     const dataAssetBlock = input.dataAssetId && input.dataAssetDescription
       ? `Data Asset: ${input.dataAssetId} -- ${input.dataAssetDescription}`
@@ -114,6 +127,7 @@ export async function runColumnCommentPass(
 
       if (tableResults.size > 0) {
         results.set(input.tableFqn.toLowerCase(), tableResults);
+        totalColumnsGenerated += tableResults.size;
       }
     } catch (err) {
       logger.warn("[comment-engine:column-pass] Table failed", {
@@ -123,11 +137,14 @@ export async function runColumnCommentPass(
     }
 
     completed++;
-    onProgress?.(
-      "columns",
-      Math.round((completed / inputs.length) * 100),
-      `${completed}/${inputs.length} tables processed`,
-    );
+    const tableName = input.tableFqn.split(".").pop() ?? input.tableFqn;
+    const detail = `${completed}/${inputs.length} tables — ${tableName}`;
+    onProgress?.("columns", Math.round((completed / inputs.length) * 100), detail);
+    onCounters?.({
+      columnTablesProcessed: completed,
+      columnsGenerated: totalColumnsGenerated,
+      currentTable: completed < inputs.length ? null : null,
+    });
   });
 
   await mapWithConcurrency(tasks, COLUMN_CONCURRENCY);
