@@ -285,7 +285,6 @@ export function GenieDeployModal({
   }
 
   async function checkDepsAndDeploy() {
-    const schema = targetSchema[0] ?? defaultSchema;
     setCheckingDeps(true);
 
     try {

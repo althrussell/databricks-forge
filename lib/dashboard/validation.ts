@@ -11,7 +11,6 @@
 
 import { executeSQL } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
-import type { MetricViewForDashboard } from "./types";
 
 /**
  * Validate dashboard dataset SQL via EXPLAIN dry-run.
