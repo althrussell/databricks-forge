@@ -56,7 +56,18 @@ const ENGINE_PHASE_MAP: Record<string, CommentPhase> = {
 export async function generateComments(
   input: GenerateCommentsInput,
 ): Promise<GenerateCommentsResult> {
-  const { jobId, catalogs, schemas, tables, excludedSchemas, excludedTables, exclusionPatterns, industryId, businessContext, signal } = input;
+  const {
+    jobId,
+    catalogs,
+    schemas,
+    tables,
+    excludedSchemas,
+    excludedTables,
+    exclusionPatterns,
+    industryId,
+    businessContext,
+    signal,
+  } = input;
 
   initCommentProgress(jobId);
 

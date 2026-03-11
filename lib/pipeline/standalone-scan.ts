@@ -165,7 +165,12 @@ export async function runStandaloneEnrichment(
         if (excludedSchemaSet.has(schemaPath)) return true;
         if (exPatterns.length > 0) {
           const [cat, sch, tbl] = parts;
-          if (exPatterns.some((p) => globMatch(p, cat) || globMatch(p, sch) || (tbl && globMatch(p, tbl)))) return true;
+          if (
+            exPatterns.some(
+              (p) => globMatch(p, cat) || globMatch(p, sch) || (tbl && globMatch(p, tbl)),
+            )
+          )
+            return true;
         }
         return false;
       };

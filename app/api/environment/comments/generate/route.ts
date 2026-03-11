@@ -17,7 +17,19 @@ import { logger } from "@/lib/logger";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobId, catalogs, schemas, tables, industryId, scanId, runId, businessContext, excludedSchemas, excludedTables, exclusionPatterns } = body;
+    const {
+      jobId,
+      catalogs,
+      schemas,
+      tables,
+      industryId,
+      scanId,
+      runId,
+      businessContext,
+      excludedSchemas,
+      excludedTables,
+      exclusionPatterns,
+    } = body;
 
     let effectiveJobId = jobId;
     if (!effectiveJobId) {

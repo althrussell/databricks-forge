@@ -401,9 +401,7 @@ function EmptyDashboard() {
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 shadow-sm ring-1 ring-primary/10">
               <BrainCircuit className="h-8 w-8 text-primary" />
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              Welcome to Forge
-            </h2>
+            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Welcome to Forge</h2>
             <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
               Discover high-value data use cases from your Unity Catalog metadata. Configure your
               business context, point at your catalogs, and let AI generate scored, actionable

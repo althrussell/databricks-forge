@@ -125,7 +125,8 @@ async function runPlanningPrePass(
     .map((m) => `${m.name}: ${m.sql}`)
     .join("\n");
 
-  const systemMessage = `You are a Databricks SQL architect planning Unity Catalog metric views for a data estate.
+  const systemMessage =
+    `You are a Databricks SQL architect planning Unity Catalog metric views for a data estate.
 
 Your task is to decide WHAT metric views to create, which existing ones to reuse or improve, and provide rationale for each decision.
 
@@ -200,22 +201,22 @@ Plan the metric views for this data estate.`;
       string,
       unknown
     >;
-    const views: PlannedMetricView[] = (
-      Array.isArray(parsed.views) ? parsed.views : []
-    ).map((v: Record<string, unknown>) => ({
-      name: String(v.name ?? ""),
-      subdomain: String(v.subdomain ?? ""),
-      classification: validateClassification(String(v.classification ?? "new")),
-      rationale: String(v.rationale ?? ""),
-      existingFqn: v.existingFqn ? String(v.existingFqn) : undefined,
-      focusTables: Array.isArray(v.focusTables) ? v.focusTables.map(String) : [],
-      suggestedMeasures: Array.isArray(v.suggestedMeasures)
-        ? v.suggestedMeasures.map(String)
-        : [],
-      suggestedDimensions: Array.isArray(v.suggestedDimensions)
-        ? v.suggestedDimensions.map(String)
-        : [],
-    }));
+    const views: PlannedMetricView[] = (Array.isArray(parsed.views) ? parsed.views : []).map(
+      (v: Record<string, unknown>) => ({
+        name: String(v.name ?? ""),
+        subdomain: String(v.subdomain ?? ""),
+        classification: validateClassification(String(v.classification ?? "new")),
+        rationale: String(v.rationale ?? ""),
+        existingFqn: v.existingFqn ? String(v.existingFqn) : undefined,
+        focusTables: Array.isArray(v.focusTables) ? v.focusTables.map(String) : [],
+        suggestedMeasures: Array.isArray(v.suggestedMeasures)
+          ? v.suggestedMeasures.map(String)
+          : [],
+        suggestedDimensions: Array.isArray(v.suggestedDimensions)
+          ? v.suggestedDimensions.map(String)
+          : [],
+      }),
+    );
 
     const summary = String(parsed.summary ?? "Metric view plan generated.");
 
@@ -356,15 +357,10 @@ export async function runMetricViewEngineV2(
   }
 
   for (const [subdomainKey, plans] of plansBySubdomain) {
-    const subGroup = subdomainGroups.find(
-      (g) => g.subdomain.toLowerCase() === subdomainKey,
-    );
+    const subGroup = subdomainGroups.find((g) => g.subdomain.toLowerCase() === subdomainKey);
     if (!subGroup) continue;
 
-    const relevantExisting = filterRelevantExistingViews(
-      existingMetricViews,
-      subGroup.tables,
-    );
+    const relevantExisting = filterRelevantExistingViews(existingMetricViews, subGroup.tables);
 
     // Build enhanced context to inject into the inner engine's domain label
     // which becomes part of the LLM prompt
@@ -373,12 +369,7 @@ export async function runMetricViewEngineV2(
         ? ` (existing views to consider: ${relevantExisting.map((mv) => mv.name).join(", ")})`
         : "";
 
-    const planGuidanceCtx = plans
-      .map(
-        (p) =>
-          `${p.name} (${p.classification})`,
-      )
-      .join(", ");
+    const planGuidanceCtx = plans.map((p) => `${p.name} (${p.classification})`).join(", ");
 
     const domainLabel = planGuidanceCtx
       ? `${domain} / ${subGroup.subdomain} [plan: ${planGuidanceCtx}]${existingCtx}`
@@ -390,22 +381,20 @@ export async function runMetricViewEngineV2(
       metadata,
       allowlist,
       useCases: subGroup.useCases,
-      measures: measures.filter((m) =>
-        plans.some((p) =>
-          p.suggestedMeasures.length === 0 ||
-          p.suggestedMeasures.some(
-            (sm) => m.name.toLowerCase().includes(sm.toLowerCase()),
+      measures:
+        measures.filter((m) =>
+          plans.some(
+            (p) =>
+              p.suggestedMeasures.length === 0 ||
+              p.suggestedMeasures.some((sm) => m.name.toLowerCase().includes(sm.toLowerCase())),
           ),
-        ),
-      ).length > 0
-        ? measures
-        : measures,
+        ).length > 0
+          ? measures
+          : measures,
       dimensions,
       joinSpecs,
       columnEnrichments: columnEnrichments.filter((e) =>
-        subGroup.tables.some(
-          (t) => t.toLowerCase() === e.tableFqn.toLowerCase(),
-        ),
+        subGroup.tables.some((t) => t.toLowerCase() === e.tableFqn.toLowerCase()),
       ),
       endpoint,
       signal,
@@ -445,9 +434,7 @@ export async function runMetricViewEngineV2(
         dimensions,
         joinSpecs,
         columnEnrichments: columnEnrichments.filter((e) =>
-          subGroup.tables.some(
-            (t) => t.toLowerCase() === e.tableFqn.toLowerCase(),
-          ),
+          subGroup.tables.some((t) => t.toLowerCase() === e.tableFqn.toLowerCase()),
         ),
         endpoint,
         signal,

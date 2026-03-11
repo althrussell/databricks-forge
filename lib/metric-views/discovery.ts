@@ -26,14 +26,18 @@ function parseMetricViewYaml(yaml: string): {
   const sourceTable = sourceMatch ? sourceMatch[1].trim() : null;
 
   const dimensions: string[] = [];
-  const dimBlock = yaml.match(/dimensions:\s*\n((?:\s+-[\s\S]*?)?)(?=\n\w|\nmeasures:|\njoins:|\nfilter:|$)/);
+  const dimBlock = yaml.match(
+    /dimensions:\s*\n((?:\s+-[\s\S]*?)?)(?=\n\w|\nmeasures:|\njoins:|\nfilter:|$)/,
+  );
   if (dimBlock) {
     const nameMatches = dimBlock[1].matchAll(/- name:\s*(\S+)/g);
     for (const m of nameMatches) dimensions.push(m[1]);
   }
 
   const measures: string[] = [];
-  const measBlock = yaml.match(/measures:\s*\n((?:\s+-[\s\S]*?)?)(?=\n\w|\ndimensions:|\njoins:|\nfilter:|$)/);
+  const measBlock = yaml.match(
+    /measures:\s*\n((?:\s+-[\s\S]*?)?)(?=\n\w|\ndimensions:|\njoins:|\nfilter:|$)/,
+  );
   if (measBlock) {
     const nameMatches = measBlock[1].matchAll(/- name:\s*(\S+)/g);
     for (const m of nameMatches) measures.push(m[1]);

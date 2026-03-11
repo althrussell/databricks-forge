@@ -531,9 +531,7 @@ async function processDomain(
     if (!isMetricViewsEnabled() || !config.generateMetricViews) return { proposals: [] };
 
     // Deep discovery: fetch existing UC metric views with full YAML definitions
-    const existingViews = await discoverExistingMetricViews(
-      [metadata.ucPath],
-    ).catch((err) => {
+    const existingViews = await discoverExistingMetricViews([metadata.ucPath]).catch((err) => {
       log.warn("Metric view discovery failed, continuing without existing views", {
         error: err instanceof Error ? err.message : String(err),
       });

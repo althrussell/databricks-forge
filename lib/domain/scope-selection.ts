@@ -70,11 +70,7 @@ export function matchesAnyPattern(fqn: string, patterns: string[]): boolean {
 /**
  * Check whether `path` is explicitly excluded OR matched by an exclusion pattern.
  */
-export function isExcluded(
-  path: string,
-  excludes: string[],
-  patterns: string[],
-): boolean {
+export function isExcluded(path: string, excludes: string[], patterns: string[]): boolean {
   const lower = path.toLowerCase();
   if (excludes.some((e) => e.toLowerCase() === lower)) return true;
   return matchesAnyPattern(path, patterns);
@@ -103,10 +99,7 @@ export function isCoveredByExclusion(
  * Check whether `path` is implicitly included via a parent inclusion.
  * E.g. if "catalog" is included, "catalog.schema" is covered.
  */
-export function isCoveredByInclusion(
-  path: string,
-  includes: string[],
-): boolean {
+export function isCoveredByInclusion(path: string, includes: string[]): boolean {
   const lower = path.toLowerCase();
   const parts = lower.split(".");
   for (let i = 1; i < parts.length; i++) {
@@ -135,9 +128,7 @@ export function matchPatternPreview(
 ): PatternMatchPreview[] {
   return patterns.map((pattern) => ({
     pattern,
-    matches: loadedFqns.filter((fqn) =>
-      fqn.split(".").some((seg) => globMatch(pattern, seg)),
-    ),
+    matches: loadedFqns.filter((fqn) => fqn.split(".").some((seg) => globMatch(pattern, seg))),
   }));
 }
 

@@ -272,7 +272,9 @@ export async function startPipeline(runId: string): Promise<void> {
             ...commentResult,
           });
         } else {
-          logger.info("Comment enrichment skipped or failed, continuing with UC comments", { runId });
+          logger.info("Comment enrichment skipped or failed, continuing with UC comments", {
+            runId,
+          });
         }
       }
 

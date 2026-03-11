@@ -61,13 +61,16 @@ export function MetricViewDeployModal({
   const [targetSchema, setTargetSchema] = useState<string[]>(defaultSchema ? [defaultSchema] : []);
   const [outcomes, setOutcomes] = useState<DeployOutcome[]>([]);
 
-  const handleSchemaChange = useCallback((sources: string[], _excluded?: string[], _patterns?: string[]) => {
-    if (sources.length > 1) {
-      setTargetSchema([sources[sources.length - 1]]);
-    } else {
-      setTargetSchema(sources);
-    }
-  }, []);
+  const handleSchemaChange = useCallback(
+    (sources: string[], _excluded?: string[], _patterns?: string[]) => {
+      if (sources.length > 1) {
+        setTargetSchema([sources[sources.length - 1]]);
+      } else {
+        setTargetSchema(sources);
+      }
+    },
+    [],
+  );
 
   const executeDeploy = useCallback(async () => {
     setStep("deploying");
