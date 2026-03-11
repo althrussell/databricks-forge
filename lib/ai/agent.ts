@@ -27,6 +27,7 @@ import {
   type TokenUsage,
 } from "@/lib/dbx/model-serving";
 import { assertWithinBudget, MAX_PROMPT_TOKENS } from "@/lib/ai/token-budget";
+import { addJitter, DEFAULT_429_BACKOFF_MS } from "@/lib/dbx/rate-limiter";
 import { getFallbackEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { insertPromptLog } from "@/lib/lakebase/prompt-logs";
@@ -136,13 +137,14 @@ export function clearRunCancelled(runId: string): void {
 
 const MAX_CONCURRENT_LLM_CALLS = Math.max(
   1,
-  parseInt(process.env.LLM_MAX_CONCURRENT ?? "64", 10) || 64,
+  parseInt(process.env.LLM_MAX_CONCURRENT ?? "10", 10) || 10,
 );
 
 /**
  * Simple async semaphore to cap total in-flight LLM calls across all
- * pipeline steps. Prevents 429 rate-limit storms on customer workspaces.
- * Override with LLM_MAX_CONCURRENT env var (default: 64).
+ * pipeline steps. Works as a secondary cap alongside the global rate
+ * limiter in model-serving.ts.
+ * Override with LLM_MAX_CONCURRENT env var (default: 10).
  */
 class Semaphore {
   private current = 0;
@@ -268,12 +270,12 @@ export async function executeAIQuery(options: AIQueryOptions): Promise<AIQueryRe
 
       try {
         if (attempt > 0) {
-          const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+          const backoffMs = addJitter(Math.min(2000 * Math.pow(2, attempt - 1), 10000));
           logger.info("FMAPI retrying", {
             promptKey: options.promptKey,
             attempt,
             maxRetries,
-            backoffMs,
+            backoffMs: Math.round(backoffMs),
           });
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
         }
@@ -310,12 +312,16 @@ export async function executeAIQuery(options: AIQueryOptions): Promise<AIQueryRe
           error: lastError.message,
         });
 
-        // 429 rate-limit: retryable with longer backoff
+        // 429 rate-limit: retryable with jittered backoff
         if (isRateLimitError(lastError)) {
-          const retryAfterMs = extractRetryAfterMs(lastError) ?? 60_000;
-          logger.warn("FMAPI rate-limited (429), backing off", {
+          const baseRetryMs =
+            (lastError instanceof ModelServingError && lastError.retryAfterMs)
+              ? lastError.retryAfterMs
+              : DEFAULT_429_BACKOFF_MS;
+          const retryAfterMs = addJitter(baseRetryMs);
+          logger.warn("FMAPI rate-limited (429), backing off with jitter", {
             promptKey: options.promptKey,
-            retryAfterMs,
+            retryAfterMs: Math.round(retryAfterMs),
           });
           await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
           continue;
@@ -424,14 +430,6 @@ function isRateLimitError(error: Error): boolean {
   return error.message.includes("(429)") || error.message.includes("REQUEST_LIMIT_EXCEEDED");
 }
 
-/**
- * Extract Retry-After delay from error message or default to null.
- */
-function extractRetryAfterMs(error: Error): number | null {
-  const match = error.message.match(/retry[- ]?after[:\s]*(\d+)/i);
-  if (match) return parseInt(match[1], 10) * 1000;
-  return null;
-}
 
 /**
  * Check if an error is non-retryable (4xx client errors, excluding 429).
@@ -599,11 +597,15 @@ export async function executeAIQueryStream(
 
     if (attempt > 0 && lastError) {
       if (!isRateLimitError(lastError)) break;
-      const retryAfterMs = extractRetryAfterMs(lastError) ?? 60_000;
-      logger.warn("FMAPI streaming rate-limited (429), backing off", {
+      const baseRetryMs =
+        (lastError instanceof ModelServingError && lastError.retryAfterMs)
+          ? lastError.retryAfterMs
+          : DEFAULT_429_BACKOFF_MS;
+      const retryAfterMs = addJitter(baseRetryMs);
+      logger.warn("FMAPI streaming rate-limited (429), backing off with jitter", {
         promptKey: options.promptKey,
         attempt,
-        retryAfterMs,
+        retryAfterMs: Math.round(retryAfterMs),
       });
       await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
     }

@@ -27,6 +27,7 @@ import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assem
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
+import { mapWithConcurrency } from "@/lib/genie/concurrency";
 import { validateDatasetSql } from "./validation";
 import { logger } from "@/lib/logger";
 import type { DiscoveredDashboard } from "@/lib/discovery/types";
@@ -235,8 +236,9 @@ async function processDomain(
   // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
   if (isReviewEnabled("dashboard")) {
     const schemaCtx = columnSchemas.join("\n");
-    const reviewed = await Promise.all(
-      parsed.datasets.map(async (ds) => {
+    const REVIEW_CONCURRENCY = 3;
+    const reviewed = await mapWithConcurrency(
+      parsed.datasets.map((ds) => async () => {
         if (!ds.sql) return ds;
         const review = await reviewAndFixSql(ds.sql, {
           schemaContext: schemaCtx,
@@ -266,6 +268,7 @@ async function processDomain(
         }
         return ds;
       }),
+      REVIEW_CONCURRENCY,
     );
     parsed.datasets = reviewed.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
     if (parsed.datasets.length === 0) {

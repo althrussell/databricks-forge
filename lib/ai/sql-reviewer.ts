@@ -335,6 +335,10 @@ function isRateLimitError(err: unknown): boolean {
   return err instanceof ModelServingError && err.statusCode === 429;
 }
 
+function getRateLimitRetryMs(err: unknown): number | undefined {
+  return err instanceof ModelServingError ? err.retryAfterMs : undefined;
+}
+
 /**
  * Route through the Genie LLM cache for genie-* surfaces to avoid
  * redundant LLM calls when the same SQL is reviewed multiple times.
@@ -416,6 +420,7 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
           surface: opts.surface,
           originalEndpoint: endpoint,
           fallbackEndpoint: fallback,
+          retryAfterMs: getRateLimitRetryMs(err),
         });
         try {
           const result = await callReview(fallback);
@@ -504,6 +509,7 @@ export async function reviewAndFixSql(
           surface: opts.surface,
           originalEndpoint: endpoint,
           fallbackEndpoint: fallback,
+          retryAfterMs: getRateLimitRetryMs(err),
         });
         try {
           const result = await callReviewFix(fallback);
@@ -602,6 +608,7 @@ export async function reviewBatch(
           originalEndpoint: endpoint,
           fallbackEndpoint: fallback,
           itemCount: items.length,
+          retryAfterMs: getRateLimitRetryMs(err),
         });
         try {
           const results = await callBatchReview(fallback);

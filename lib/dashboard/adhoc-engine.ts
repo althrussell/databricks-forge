@@ -23,6 +23,7 @@ import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { fetchTableInfoBatch, fetchColumnsBatch } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { mapWithConcurrency } from "@/lib/genie/concurrency";
 import { validateDatasetSql } from "./validation";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
 import { getServingEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
@@ -301,8 +302,9 @@ export async function runAdHocDashboardEngine(
   // LLM review gate: review + fix each dataset SQL via the dedicated review endpoint
   if (isReviewEnabled("adhoc-dashboard")) {
     const schemaCtx = columnSchemas.join("\n");
-    const reviewed = await Promise.all(
-      design.datasets.map(async (ds) => {
+    const REVIEW_CONCURRENCY = 3;
+    const reviewed = await mapWithConcurrency(
+      design.datasets.map((ds) => async () => {
         if (!ds.sql) return ds;
         const review = await reviewAndFixSql(ds.sql, {
           schemaContext: schemaCtx,
@@ -337,6 +339,7 @@ export async function runAdHocDashboardEngine(
         }
         return ds;
       }),
+      REVIEW_CONCURRENCY,
     );
     design.datasets = reviewed.filter((ds): ds is NonNullable<typeof ds> => ds !== null);
     if (design.datasets.length === 0) {

@@ -20,6 +20,7 @@
 
 import { getConfig, getAppHeaders } from "./client";
 import { fetchWithTimeout } from "./fetch-with-timeout";
+import { globalRateLimiter, DEFAULT_429_BACKOFF_MS } from "./rate-limiter";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,28 @@ const LLM_TIMEOUT_MS = 300_000; // 5 minutes
 const LLM_STREAM_TIMEOUT_MS = 600_000; // 10 minutes
 
 // ---------------------------------------------------------------------------
+// Retry-After header parsing
+// ---------------------------------------------------------------------------
+
+function parseRetryAfterHeader(resp: Response): number {
+  const header = resp.headers.get("Retry-After");
+  if (!header) return DEFAULT_429_BACKOFF_MS;
+
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) {
+    const delayMs = date - Date.now();
+    return delayMs > 0 ? delayMs : DEFAULT_429_BACKOFF_MS;
+  }
+
+  return DEFAULT_429_BACKOFF_MS;
+}
+
+// ---------------------------------------------------------------------------
 // Chat Completions (non-streaming)
 // ---------------------------------------------------------------------------
 
@@ -111,6 +134,8 @@ const LLM_STREAM_TIMEOUT_MS = 600_000; // 10 minutes
  *
  * Uses the OpenAI-compatible `/serving-endpoints/{endpoint}/invocations`
  * path with the chat completions payload format.
+ *
+ * All calls pass through the global rate limiter to prevent 429 storms.
  */
 export async function chatCompletion(
   options: ChatCompletionOptions,
@@ -132,27 +157,37 @@ export async function chatCompletion(
     body.response_format = { type: "json_object" };
   }
 
-  const resp = await fetchWithTimeout(
-    url,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    },
-    LLM_TIMEOUT_MS,
-    options.signal,
-  );
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new ModelServingError(
-      `Model Serving request failed (${resp.status}): ${text}`,
-      resp.status,
+  await globalRateLimiter.acquire();
+  try {
+    const resp = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      },
+      LLM_TIMEOUT_MS,
+      options.signal,
     );
-  }
 
-  const data = await resp.json();
-  return parseCompletionResponse(data);
+    if (!resp.ok) {
+      const text = await resp.text();
+      const retryAfterMs = resp.status === 429 ? parseRetryAfterHeader(resp) : undefined;
+      if (retryAfterMs) {
+        globalRateLimiter.backoff(retryAfterMs);
+      }
+      throw new ModelServingError(
+        `Model Serving request failed (${resp.status}): ${text}`,
+        resp.status,
+        retryAfterMs,
+      );
+    }
+
+    const data = await resp.json();
+    return parseCompletionResponse(data);
+  } finally {
+    globalRateLimiter.release();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +200,8 @@ export async function chatCompletion(
  * Invokes the same endpoint with `stream: true`. Calls `onChunk` for each
  * content delta as it arrives. Returns the final assembled response with
  * accumulated content and usage stats.
+ *
+ * All calls pass through the global rate limiter to prevent 429 storms.
  */
 export async function chatCompletionStream(
   options: ChatCompletionOptions,
@@ -188,30 +225,40 @@ export async function chatCompletionStream(
     body.response_format = { type: "json_object" };
   }
 
-  const resp = await fetchWithTimeout(
-    url,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    },
-    LLM_STREAM_TIMEOUT_MS,
-    options.signal,
-  );
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new ModelServingError(
-      `Model Serving streaming request failed (${resp.status}): ${text}`,
-      resp.status,
+  await globalRateLimiter.acquire();
+  try {
+    const resp = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      },
+      LLM_STREAM_TIMEOUT_MS,
+      options.signal,
     );
-  }
 
-  if (!resp.body) {
-    throw new ModelServingError("Streaming response has no body", 0);
-  }
+    if (!resp.ok) {
+      const text = await resp.text();
+      const retryAfterMs = resp.status === 429 ? parseRetryAfterHeader(resp) : undefined;
+      if (retryAfterMs) {
+        globalRateLimiter.backoff(retryAfterMs);
+      }
+      throw new ModelServingError(
+        `Model Serving streaming request failed (${resp.status}): ${text}`,
+        resp.status,
+        retryAfterMs,
+      );
+    }
 
-  return parseSSEStream(resp.body, onChunk);
+    if (!resp.body) {
+      throw new ModelServingError("Streaming response has no body", 0);
+    }
+
+    return parseSSEStream(resp.body, onChunk);
+  } finally {
+    globalRateLimiter.release();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -324,9 +371,13 @@ export class ModelServingError extends Error {
   /** HTTP status code from the Model Serving endpoint. */
   readonly statusCode: number;
 
-  constructor(message: string, statusCode: number) {
+  /** Parsed Retry-After delay in ms (set on 429 responses). */
+  readonly retryAfterMs?: number;
+
+  constructor(message: string, statusCode: number, retryAfterMs?: number) {
     super(message);
     this.name = "ModelServingError";
     this.statusCode = statusCode;
+    this.retryAfterMs = retryAfterMs;
   }
 }
