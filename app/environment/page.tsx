@@ -75,6 +75,7 @@ const ERDViewer = dynamic(
 export default function EstatePage() {
   const searchParams = useSearchParams();
   const highlightFqn = useMemo(() => searchParams.get("highlight") ?? "", [searchParams]);
+  const tabParam = useMemo(() => searchParams.get("tab") ?? "", [searchParams]);
 
   const [viewMode, setViewMode] = useState<ViewMode>("aggregate");
   const [aggregate, setAggregate] = useState<AggregateData | null>(null);
@@ -84,12 +85,20 @@ export default function EstatePage() {
   const [governanceQuality, setGovernanceQuality] = useState<GovernanceQualityStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
+  const [activeTab, setActiveTab] = useState("summary");
   const [embeddingEnabled, setEmbeddingEnabled] = useState(false);
   const [semanticSourceIds, setSemanticSourceIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (highlightFqn) setSearchFilter(highlightFqn);
-  }, [highlightFqn]);
+    if (tabParam) setActiveTab(tabParam);
+  }, [tabParam]);
+
+  useEffect(() => {
+    if (highlightFqn) {
+      setSearchFilter(highlightFqn);
+      if (!tabParam) setActiveTab("tables");
+    }
+  }, [highlightFqn, tabParam]);
 
   useEffect(() => {
     const settings = loadSettings();
@@ -419,8 +428,17 @@ export default function EstatePage() {
     if (semanticSourceIds.size > 0) {
       return semanticSourceIds.has(t.tableFqn);
     }
+    if (!searchFilter) return true;
+    // Support comma-separated FQNs from deep-link highlights
+    if (searchFilter.includes(",")) {
+      const fqns = searchFilter.split(",").map((f) => f.trim().toLowerCase());
+      return fqns.some(
+        (fqn) =>
+          t.tableFqn.toLowerCase().includes(fqn) ||
+          (t.dataDomain ?? "").toLowerCase().includes(fqn),
+      );
+    }
     return (
-      !searchFilter ||
       t.tableFqn.toLowerCase().includes(searchFilter.toLowerCase()) ||
       (t.dataDomain ?? "").toLowerCase().includes(searchFilter.toLowerCase())
     );
@@ -584,7 +602,7 @@ export default function EstatePage() {
         </Card>
       ) : (
         /* Tabbed content (aggregate or single-scan) */
-        <Tabs defaultValue="summary" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="summary">Summary</TabsTrigger>
             <TabsTrigger value="tables">Tables ({activeDetails.length})</TabsTrigger>

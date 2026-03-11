@@ -501,6 +501,86 @@ async function generateDbCredential(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Scale-to-zero enforcement
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SCALE_TO_ZERO_TIMEOUT = 300;
+
+function getDesiredScaleToZeroTimeout(): number | null {
+  const raw = process.env.LAKEBASE_SCALE_TO_ZERO_TIMEOUT ?? "";
+  if (raw === "disabled" || raw === "false" || raw === "off") return null;
+  if (raw === "" || raw === "default") return DEFAULT_SCALE_TO_ZERO_TIMEOUT;
+  const parsed = parseInt(raw, 10);
+  if (isNaN(parsed) || parsed < 0) return DEFAULT_SCALE_TO_ZERO_TIMEOUT;
+  if (parsed === 0) return null;
+  return Math.max(parsed, 60);
+}
+
+async function ensureScaleToZero(): Promise<void> {
+  const desiredTimeout = getDesiredScaleToZeroTimeout();
+  const { name: epName } = await resolveEndpoint();
+
+  const detResp = await lakebaseApi("GET", epName);
+  if (!detResp.ok) {
+    logger.warn("[provision] Could not read endpoint for scale-to-zero check, skipping", {
+      status: detResp.status,
+    });
+    return;
+  }
+  const detail: {
+    spec?: { no_suspension?: boolean; suspend_timeout_duration?: string };
+    status?: { suspend_timeout_duration?: string };
+  } = await detResp.json();
+
+  const currentDuration =
+    detail.status?.suspend_timeout_duration ?? detail.spec?.suspend_timeout_duration ?? null;
+  const currentNoSuspension = detail.spec?.no_suspension === true;
+
+  if (desiredTimeout === null) {
+    if (currentNoSuspension) {
+      logger.info("[provision] Scale-to-zero already disabled (as requested)");
+      return;
+    }
+    logger.info("[provision] Disabling scale-to-zero (explicitly requested)...");
+    const patchResp = await lakebaseApi(
+      "PATCH",
+      `${epName}?update_mask=spec.no_suspension`,
+      { name: epName, spec: { no_suspension: true } },
+    );
+    if (!patchResp.ok) {
+      const text = await patchResp.text();
+      logger.warn("[provision] Failed to disable scale-to-zero", { status: patchResp.status, text });
+      return;
+    }
+    const op = await patchResp.json();
+    if (op.name && !op.done) await pollOperation(op.name);
+    logger.info("[provision] Scale-to-zero disabled");
+    return;
+  }
+
+  const desiredDuration = `${desiredTimeout}s`;
+  if (!currentNoSuspension && currentDuration === desiredDuration) {
+    logger.info("[provision] Scale-to-zero already enabled", { timeout: desiredDuration });
+    return;
+  }
+
+  logger.info("[provision] Enabling scale-to-zero...", { timeout: desiredDuration });
+  const patchResp = await lakebaseApi(
+    "PATCH",
+    `${epName}?update_mask=spec.suspend_timeout_duration,spec.no_suspension`,
+    { name: epName, spec: { suspend_timeout_duration: desiredDuration, no_suspension: false } },
+  );
+  if (!patchResp.ok) {
+    const text = await patchResp.text();
+    logger.warn("[provision] Failed to enable scale-to-zero", { status: patchResp.status, text });
+    return;
+  }
+  const op = await patchResp.json();
+  if (op.name && !op.done) await pollOperation(op.name);
+  logger.info("[provision] Scale-to-zero enabled", { timeout: desiredDuration });
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -535,14 +615,23 @@ export function canAutoProvision(): boolean {
 
 /**
  * Ensure the Lakebase Autoscale project exists, creating it on first boot.
+ * Also enforces scale-to-zero configuration on the production endpoint.
  * Idempotent -- subsequent calls are near-instant.
  */
 export async function ensureLakebaseProject(): Promise<void> {
   if (await projectExists()) {
     logger.info("[provision] Lakebase project exists", { projectId: getProjectId() });
-    return;
+  } else {
+    await createProject();
   }
-  await createProject();
+
+  try {
+    await ensureScaleToZero();
+  } catch (err) {
+    logger.warn("[provision] Scale-to-zero enforcement failed (non-fatal)", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**

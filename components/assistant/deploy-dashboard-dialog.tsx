@@ -101,7 +101,7 @@ export function DeployDashboardDialog({ open, payload, onOpenChange }: DeployDas
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <LayoutDashboard className="size-5 text-primary" />
@@ -128,9 +128,9 @@ export function DeployDashboardDialog({ open, payload, onOpenChange }: DeployDas
                   <p className="mb-1.5 text-xs font-medium text-muted-foreground">
                     Referenced Tables
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex max-h-[100px] flex-wrap gap-1.5 overflow-y-auto">
                     {tables.map((t) => (
-                      <Badge key={t} variant="outline" className="text-[10px]">
+                      <Badge key={t} variant="outline" className="shrink-0 text-[10px]">
                         {t}
                       </Badge>
                     ))}
@@ -157,7 +157,7 @@ export function DeployDashboardDialog({ open, payload, onOpenChange }: DeployDas
               {sqlBlocks.length > 0 && (
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-muted-foreground">SQL Context</p>
-                  <pre className="max-h-[120px] overflow-auto rounded-md bg-muted p-3 text-xs">
+                  <pre className="max-h-[120px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
                     <code>{sqlBlocks[0]}</code>
                   </pre>
                   {sqlBlocks.length > 1 && (

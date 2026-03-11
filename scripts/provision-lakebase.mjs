@@ -167,6 +167,79 @@ async function pollOp(name) {
 }
 
 // ---------------------------------------------------------------------------
+// Scale-to-zero configuration
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SCALE_TO_ZERO_TIMEOUT = 300;
+
+function getDesiredScaleToZeroTimeout() {
+  const raw = process.env.LAKEBASE_SCALE_TO_ZERO_TIMEOUT ?? "";
+  if (raw === "disabled" || raw === "false" || raw === "off") return null;
+  if (raw === "" || raw === "default") return DEFAULT_SCALE_TO_ZERO_TIMEOUT;
+  const parsed = parseInt(raw, 10);
+  if (isNaN(parsed) || parsed < 0) return DEFAULT_SCALE_TO_ZERO_TIMEOUT;
+  if (parsed === 0) return null;
+  return Math.max(parsed, 60);
+}
+
+async function ensureScaleToZero(epName) {
+  const desiredTimeout = getDesiredScaleToZeroTimeout();
+
+  const detResp = await api("GET", epName);
+  if (!detResp.ok) {
+    log(`WARNING: Could not read endpoint for scale-to-zero check (${detResp.status}), skipping.`);
+    return;
+  }
+  const detail = await detResp.json();
+
+  const currentDuration = detail.status?.suspend_timeout_duration || detail.spec?.suspend_timeout_duration || null;
+  const currentNoSuspension = detail.spec?.no_suspension === true;
+
+  if (desiredTimeout === null) {
+    if (currentNoSuspension) {
+      log("Scale-to-zero already disabled (as requested).");
+      return;
+    }
+    log("Disabling scale-to-zero (explicitly requested)...");
+    const patchResp = await api(
+      "PATCH",
+      `${epName}?update_mask=spec.no_suspension`,
+      { name: epName, spec: { no_suspension: true } },
+    );
+    if (!patchResp.ok) {
+      const text = await patchResp.text();
+      log(`WARNING: Failed to disable scale-to-zero (${patchResp.status}): ${text}`);
+      return;
+    }
+    const op = await patchResp.json();
+    if (op.name && !op.done) await pollOp(op.name);
+    log("Scale-to-zero disabled.");
+    return;
+  }
+
+  const desiredDuration = `${desiredTimeout}s`;
+  if (!currentNoSuspension && currentDuration === desiredDuration) {
+    log(`Scale-to-zero already enabled (timeout: ${desiredDuration}).`);
+    return;
+  }
+
+  log(`Enabling scale-to-zero (timeout: ${desiredDuration})...`);
+  const patchResp = await api(
+    "PATCH",
+    `${epName}?update_mask=spec.suspend_timeout_duration,spec.no_suspension`,
+    { name: epName, spec: { suspend_timeout_duration: desiredDuration, no_suspension: false } },
+  );
+  if (!patchResp.ok) {
+    const text = await patchResp.text();
+    log(`WARNING: Failed to enable scale-to-zero (${patchResp.status}): ${text}`);
+    return;
+  }
+  const op = await patchResp.json();
+  if (op.name && !op.done) await pollOp(op.name);
+  log(`Scale-to-zero enabled (timeout: ${desiredDuration}).`);
+}
+
+// ---------------------------------------------------------------------------
 // Endpoint + username + credential
 // ---------------------------------------------------------------------------
 
@@ -308,6 +381,9 @@ async function main() {
     getEndpointHost(),
     getUsername(),
   ]);
+
+  await ensureScaleToZero(epName);
+
   const poolerHost = derivePoolerHost(epHost);
 
   for (let gen = 1; gen <= CREDENTIAL_MAX_GENERATIONS; gen++) {

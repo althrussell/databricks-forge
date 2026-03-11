@@ -26,6 +26,12 @@ export interface ConversationSourceCard {
   metadata: Record<string, unknown> | null;
 }
 
+export interface ConversationActionCard {
+  type: string;
+  label: string;
+  payload: Record<string, unknown>;
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
@@ -36,6 +42,8 @@ export interface ConversationMessage {
   feedbackRating?: string;
   sources?: ConversationSourceCard[];
   referencedTables?: string[];
+  actions?: ConversationActionCard[];
+  sqlBlocks?: string[];
   createdAt: string;
   logId: string;
 }
@@ -133,6 +141,8 @@ export async function getConversationWithMessages(
         feedbackRating: true,
         sourcesJson: true,
         referencedTablesJson: true,
+        actionsJson: true,
+        sqlBlocksJson: true,
         createdAt: true,
       },
     });
@@ -149,6 +159,8 @@ export async function getConversationWithMessages(
       if (log.response) {
         let sources: ConversationSourceCard[] | undefined;
         let referencedTables: string[] | undefined;
+        let actions: ConversationActionCard[] | undefined;
+        let sqlBlocks: string[] | undefined;
         try {
           if (log.sourcesJson) sources = JSON.parse(log.sourcesJson);
         } catch {
@@ -156,6 +168,16 @@ export async function getConversationWithMessages(
         }
         try {
           if (log.referencedTablesJson) referencedTables = JSON.parse(log.referencedTablesJson);
+        } catch {
+          /* ignore malformed JSON */
+        }
+        try {
+          if (log.actionsJson) actions = JSON.parse(log.actionsJson);
+        } catch {
+          /* ignore malformed JSON */
+        }
+        try {
+          if (log.sqlBlocksJson) sqlBlocks = JSON.parse(log.sqlBlocksJson);
         } catch {
           /* ignore malformed JSON */
         }
@@ -170,6 +192,8 @@ export async function getConversationWithMessages(
           feedbackRating: log.feedbackRating ?? undefined,
           sources,
           referencedTables,
+          actions,
+          sqlBlocks,
           createdAt: log.createdAt.toISOString(),
           logId: log.id,
         });
