@@ -6,6 +6,7 @@
 #   ./deploy.sh                          Interactive (pick a warehouse)
 #   ./deploy.sh --warehouse "Name"       Non-interactive
 #   ./deploy.sh --prebuilt               Build locally, deploy pre-compiled bundle (fastest)
+#   ./deploy.sh --full                   Full sync (default: diff sync — only changed files)
 #   ./deploy.sh --profile "my-profile"   Use a specific CLI profile
 #   ./deploy.sh --app-name "forge-demo"  Deploy as a separate named instance
 #   ./deploy.sh --destroy                Remove the app
@@ -81,6 +82,7 @@ ARG_SEED_BENCHMARK_INDUSTRIES=""
 ARG_BENCHMARK_ADMINS=""
 ARG_ENABLE_METRIC_VIEWS=false
 ARG_PREBUILT=false
+ARG_FULL_SYNC=false
 ARG_DESTROY=false
 
 print_usage() {
@@ -139,6 +141,8 @@ Options:
   --enable-metric-views      Enable metric view generation (off by default)
   --prebuilt                  Build locally and deploy pre-compiled standalone bundle.
                              Eliminates remote npm install + npm run build (~3x faster).
+  --full                      Full sync: upload all files (slower, but guarantees clean state).
+                             Default is diff sync: only upload changed files since last deploy.
   --destroy                   Remove the app and clean up workspace files
   -h, --help              Show this help message
 
@@ -173,6 +177,7 @@ while [[ $# -gt 0 ]]; do
     --benchmark-admins) ARG_BENCHMARK_ADMINS="$2"; shift 2 ;;
     --enable-metric-views) ARG_ENABLE_METRIC_VIEWS=true; shift ;;
     --prebuilt)            ARG_PREBUILT=true; shift ;;
+    --full)                ARG_FULL_SYNC=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
     -h|--help)        print_usage; exit 0 ;;
     *)                printf "\n  ERROR: Unknown flag: %s\n  Run ./deploy.sh --help\n\n" "$1" >&2; exit 1 ;;
@@ -258,6 +263,7 @@ fi
 # Output helpers
 # -------------------------------------------------------------------------
 die()  { printf "\n  ERROR: %s\n\n" "$1" >&2; exit 1; }
+warn() { printf "\n  WARN: %s\n" "$1" >&2; }
 info() { printf "  %-48s" "$1"; }
 ok()   { if [ -n "${1:-}" ]; then printf "OK  (%s)\n" "$1"; else printf "OK\n"; fi; }
 
@@ -812,25 +818,48 @@ print(json.dumps({
 upload_code() {
   WORKSPACE_PATH="/Workspace/Users/${USER_EMAIL}/${APP_NAME}"
 
-  # Clear stale sync snapshots so concurrent deploys (different --app-name
-  # targets from the same checkout) don't poison each other's state.
-  rm -rf .databricks/sync-snapshots 2>/dev/null || true
-
   local sync_source="."
-  local sync_flags="--full"
+  local sync_flags=""
+  local sync_label="diff"
+
   if [ "$ARG_PREBUILT" = "true" ]; then
     sync_source="$DEPLOY_PKG"
+    # Prebuilt always does full sync (no prior snapshot to diff against)
+    sync_flags="--full"
+    sync_label="full"
     rm -rf "$DEPLOY_PKG/.databricks/sync-snapshots" 2>/dev/null || true
     info "Uploading pre-built package (full sync)..."
-  else
-    info "Uploading source code (full sync)..."
+  elif [ "$ARG_FULL_SYNC" = "true" ]; then
+    # Explicit --full: clear snapshots and do a complete upload
+    rm -rf .databricks/sync-snapshots 2>/dev/null || true
+    sync_flags="--full"
+    sync_label="full"
     if [ -f ".databricksignore" ]; then
       sync_flags="--full --exclude-from .databricksignore"
     fi
+    info "Uploading source code (full sync)..."
+  else
+    # Default: diff sync — only changed files since last deploy
+    if [ -f ".databricksignore" ]; then
+      sync_flags="--exclude-from .databricksignore"
+    fi
+    info "Uploading source code (diff sync — only changed files)..."
   fi
 
   if ! databricks sync $sync_flags "$sync_source" "$WORKSPACE_PATH"; then
-    die "Failed to upload code.\n  Try manually: databricks sync $sync_flags $sync_source $WORKSPACE_PATH"
+    if [ "$sync_label" = "diff" ]; then
+      warn "Diff sync failed. Retrying with full sync..."
+      rm -rf .databricks/sync-snapshots 2>/dev/null || true
+      sync_flags="--full"
+      if [ -f ".databricksignore" ]; then
+        sync_flags="--full --exclude-from .databricksignore"
+      fi
+      if ! databricks sync $sync_flags "$sync_source" "$WORKSPACE_PATH"; then
+        die "Full sync also failed.\n  Try manually: databricks sync $sync_flags $sync_source $WORKSPACE_PATH"
+      fi
+    else
+      die "Failed to upload code.\n  Try manually: databricks sync $sync_flags $sync_source $WORKSPACE_PATH"
+    fi
   fi
   ok
 }
