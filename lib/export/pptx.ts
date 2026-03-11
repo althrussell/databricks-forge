@@ -80,7 +80,7 @@ function addFooter(slide: PptxGenJS.Slide, variant: "light" | "dark" = "light"):
   if (logo) {
     slide.addImage({ data: logo, x: CONTENT_MARGIN, y: 6.98, w: 0.25, h: 0.26 });
   }
-  slide.addText(`Databricks Forge AI  |  ${today()}`, {
+  slide.addText(`Databricks Forge  |  ${today()}`, {
     x: CONTENT_MARGIN + 0.35,
     y: 7.0,
     w: CONTENT_W - 0.35,
@@ -217,7 +217,7 @@ export async function generatePptx(
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
-  pptx.author = "Databricks Forge AI";
+  pptx.author = "Databricks Forge";
   pptx.title = `${run.config.businessName} - Use Case Catalog`;
 
   const domainStats = computeDomainStats(useCases);
@@ -247,7 +247,7 @@ export async function generatePptx(
   // Red separator above the title
   addRedSeparator(titleSlide, 1.5, 1.3, 3.5);
 
-  titleSlide.addText("Databricks Forge AI", {
+  titleSlide.addText("Databricks Forge", {
     x: 1.5,
     y: 1.6,
     w: 10,

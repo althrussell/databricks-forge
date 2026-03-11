@@ -84,7 +84,7 @@ export async function generatePortfolioPptx(
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
-  pptx.author = "Databricks Forge AI";
+  pptx.author = "Databricks Forge";
   pptx.title = "Business Value Portfolio";
 
   const syn = portfolio.latestSynthesis;

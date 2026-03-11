@@ -1,6 +1,6 @@
 # Quick Start
 
-Deploy Databricks Forge AI to your workspace in three steps.
+Deploy Databricks Forge to your workspace in three steps.
 
 ## Prerequisites
 

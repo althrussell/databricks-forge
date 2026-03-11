@@ -105,6 +105,7 @@ export default function SettingsPage() {
 
   const handleClearLocalData = () => {
     if (typeof window !== "undefined") {
+      localStorage.removeItem("forge-settings");
       localStorage.removeItem("forge-ai-settings");
       setSampleRowsPerTable(0);
       setDefaultExportFormat("excel");

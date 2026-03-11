@@ -1,4 +1,4 @@
-# Contributing to Databricks Forge AI
+# Contributing to Databricks Forge
 
 Thank you for your interest in contributing! This project is maintained by the
 Databricks Field Engineering team and welcomes community contributions.

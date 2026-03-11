@@ -1,6 +1,6 @@
 # Estate Analysis -- How the Data Estate Intelligence Engine Works
 
-> A comprehensive guide to the environment scanning pipeline, metadata enrichment, LLM intelligence layer, lineage walking, health scoring, ERD generation, aggregate estate view, and executive reporting behind Databricks Forge AI.
+> A comprehensive guide to the environment scanning pipeline, metadata enrichment, LLM intelligence layer, lineage walking, health scoring, ERD generation, aggregate estate view, and executive reporting behind Databricks Forge.
 
 ---
 

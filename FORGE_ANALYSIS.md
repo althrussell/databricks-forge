@@ -1,6 +1,6 @@
 # Forge Analysis -- How the Discovery Engine Works
 
-> A comprehensive guide to the analysis pipeline, scoring methodology, prompt engineering, and data flow behind Databricks Forge AI.
+> A comprehensive guide to the analysis pipeline, scoring methodology, prompt engineering, and data flow behind Databricks Forge.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## Overview
 
-Databricks Forge AI discovers data-driven use cases from Unity Catalog metadata using a 7-step LLM-powered pipeline. The engine:
+Databricks Forge discovers data-driven use cases from Unity Catalog metadata using a 7-step LLM-powered pipeline. The engine:
 
 1. Understands your business through AI-generated strategic context
 2. Scans Unity Catalog metadata (table names, columns, types, foreign keys)
@@ -49,7 +49,7 @@ All LLM calls use direct REST calls to Databricks Model Serving (chat completion
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          DATABRICKS FORGE AI                           │
+│                          DATABRICKS FORGE                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌──────────┐    ┌──────────────┐    ┌──────────────┐                  │

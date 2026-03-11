@@ -1,6 +1,6 @@
-# Databricks Forge AI -- User Guide
+# Databricks Forge -- User Guide
 
-This guide walks through every feature of Databricks Forge AI. It assumes the app is already deployed and you can access it in your browser. For deployment instructions, see the [README](../README.md).
+This guide walks through every feature of Databricks Forge. It assumes the app is already deployed and you can access it in your browser. For deployment instructions, see the [README](../README.md).
 
 ---
 

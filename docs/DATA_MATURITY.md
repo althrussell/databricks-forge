@@ -1,6 +1,6 @@
 # Data Maturity Score
 
-The Data Maturity Score is the headline metric Databricks Forge AI produces for
+The Data Maturity Score is the headline metric Databricks Forge produces for
 each estate scan. It is the number an SA quotes in an account review -- a single
 0-100 composite that reflects how well a customer's data platform is governed,
 architected, operated, and leveraged for analytics.

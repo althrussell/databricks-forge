@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =========================================================================
-# Databricks Forge AI — One-command deployment
+# Databricks Forge — One-command deployment
 #
 # Usage:
 #   ./deploy.sh                          Interactive (pick a warehouse)
@@ -87,7 +87,7 @@ ARG_DESTROY=false
 
 print_usage() {
   cat <<'USAGE'
-Databricks Forge AI — One-command deployment
+Databricks Forge — One-command deployment
 
 Usage:
   ./deploy.sh                                  Interactive deployment
@@ -924,7 +924,7 @@ print_success() {
 
   printf "\n"
   printf "  ==========================================================\n"
-  printf "    Databricks Forge AI is live!\n"
+  printf "    Databricks Forge is live!\n"
   printf "    URL: %s\n" "$app_url"
   printf "\n"
   printf "    App name:     %s\n" "$APP_NAME"
@@ -968,7 +968,7 @@ print_success() {
 # Destroy
 # -------------------------------------------------------------------------
 destroy() {
-  printf "\n  Removing Databricks Forge AI...\n"
+  printf "\n  Removing Databricks Forge...\n"
 
   info "Stopping app..."
   local stop_err
@@ -1024,7 +1024,7 @@ main() {
   trap restore_app_yaml EXIT
 
   printf "\n"
-  printf "  Databricks Forge AI -- Deployment\n"
+  printf "  Databricks Forge -- Deployment\n"
   printf "  ==================================\n"
 
   check_prerequisites

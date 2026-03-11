@@ -1,7 +1,7 @@
 # Genie Engine
 
 > Technical guide for the multi-pass, LLM-powered Genie Space generator in
-> Databricks Forge AI.
+> Databricks Forge.
 
 The Genie Engine analyses Unity Catalog metadata, pipeline use cases, and
 optional sample data to produce production-grade Databricks Genie Spaces.
@@ -81,7 +81,7 @@ contains every knowledge store object the Databricks Genie API supports.
 
 ## Model Routing
 
-All pipelines in Forge AI use a **dual-endpoint strategy** to balance quality
+All pipelines in Forge use a **dual-endpoint strategy** to balance quality
 and speed. SQL-critical and creatively demanding passes run on the premium
 model (Claude Opus) while classification, enrichment, and metadata passes run
 on a faster model (Claude Sonnet) at 3-5x lower latency.
@@ -152,7 +152,7 @@ errors with exponential backoff (2 retries, 1s/2s backoff).
 
 ## Pipeline Integration
 
-The Genie Engine runs as **Step 8** of the Forge AI discovery pipeline
+The Genie Engine runs as **Step 8** of the Forge discovery pipeline
 (`lib/pipeline/steps/genie-recommendations.ts`). It is triggered automatically
 after SQL generation completes.
 

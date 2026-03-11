@@ -123,7 +123,7 @@ function addFooter(slide: PptxGenJS.Slide, variant: "light" | "dark" = "light"):
   if (logo) {
     slide.addImage({ data: logo, x: CONTENT_MARGIN, y: 6.98, w: 0.25, h: 0.26 });
   }
-  slide.addText(`Databricks Forge AI Executive Briefing  |  ${today()}`, {
+  slide.addText(`Databricks Forge Executive Briefing  |  ${today()}`, {
     x: CONTENT_MARGIN + 0.35,
     y: 7.0,
     w: CONTENT_W - 0.35,
@@ -200,7 +200,7 @@ export async function generateExecutiveBriefing(
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
-  pptx.author = "Databricks Forge AI";
+  pptx.author = "Databricks Forge";
   pptx.title = `${discovery?.businessName ?? "Data Estate"} - Executive Briefing`;
 
   // Compute scores

@@ -4,7 +4,7 @@
 
 ## Summary
 
-Extend Databricks Forge AI to recommend industry best-practice gold data models,
+Extend Databricks Forge to recommend industry best-practice gold data models,
 perform gap analysis against a customer's existing estate, and generate actionable
 DDL/pipeline recommendations -- complementing the existing Genie Space and Dashboard
 advisory capabilities.

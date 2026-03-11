@@ -1,13 +1,13 @@
-# Databricks Forge AI
+# Databricks Forge
 
 > **IMPORTANT: This is NOT a Databricks product.** This project was built by the Databricks Field Engineering team as a field accelerator. It is provided "as-is" subject to the [Databricks License](LICENSE) with no warranty and no official support. See [NOTICE](NOTICE) for support policy.
 
 **Transform your Unity Catalog metadata into actionable, AI-generated use cases.**
 
-Databricks Forge AI is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
+Databricks Forge is a web application deployed as a [Databricks App](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html). Point it at your catalogs and schemas, and it uses LLM-powered analysis (via Databricks Model Serving) to discover, score, and export data-driven use cases -- without ever reading your actual data.
 
 <p align="center">
-  <img src="public/forge_home.png" alt="Databricks Forge AI — Home" width="100%" />
+  <img src="public/forge_home.png" alt="Databricks Forge — Home" width="100%" />
 </p>
 
 ---
@@ -75,7 +75,7 @@ The platform will:
 
 ### Step 3: Verify
 
-Open the app URL in your browser. You should see the Forge AI dashboard.
+Open the app URL in your browser. You should see the Forge dashboard.
 
 You can also check the health endpoint:
 

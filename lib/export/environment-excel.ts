@@ -202,7 +202,7 @@ export interface ScanWithRelations {
  */
 export async function generateEnvironmentExcel(scan: ScanWithRelations): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Databricks Forge AI";
+  wb.creator = "Databricks Forge";
   wb.created = new Date();
 
   addExecutiveSummary(wb, scan);

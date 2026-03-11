@@ -177,9 +177,9 @@ const FEATURES = [
 
 const FAQ = [
   {
-    question: "What data does Forge AI access?",
+    question: "What data does Forge access?",
     answer:
-      "Forge AI reads only metadata (table names, column names, data types, foreign keys) from your Unity Catalog information_schema. No row-level data is accessed unless you enable data sampling in Settings, which reads a small number of sample rows for column profiling. Sampled data is not persisted.",
+      "Forge reads only metadata (table names, column names, data types, foreign keys) from your Unity Catalog information_schema. No row-level data is accessed unless you enable data sampling in Settings, which reads a small number of sample rows for column profiling. Sampled data is not persisted.",
   },
   {
     question: "What happens if the pipeline fails?",
@@ -194,7 +194,7 @@ const FAQ = [
   {
     question: "What are Genie Spaces?",
     answer:
-      "Genie Spaces are Databricks workspaces where business users can ask natural language questions that get translated into SQL. Forge AI generates pre-configured Genie Spaces with semantic expressions, filters, benchmark queries, and metric views based on your metadata and use cases.",
+      "Genie Spaces are Databricks workspaces where business users can ask natural language questions that get translated into SQL. Forge generates pre-configured Genie Spaces with semantic expressions, filters, benchmark queries, and metric views based on your metadata and use cases.",
   },
   {
     question: "What are Industry Outcome Maps?",
@@ -229,7 +229,7 @@ const FAQ = [
   {
     question: "What embedding endpoint do I need?",
     answer:
-      "Forge AI uses the databricks-qwen3-embedding-0-6b model (1024-dimensional vectors) via a Model Serving endpoint. Configure the endpoint name in Settings under Semantic Search & RAG. When enabled, it powers Ask Forge's RAG, Knowledge Base, semantic search in the Estate tab, and run comparison overlap analysis.",
+      "Forge uses the databricks-qwen3-embedding-0-6b model (1024-dimensional vectors) via a Model Serving endpoint. Configure the endpoint name in Settings under Semantic Search & RAG. When enabled, it powers Ask Forge's RAG, Knowledge Base, semantic search in the Estate tab, and run comparison overlap analysis.",
   },
   {
     question: "Is my data sent outside my workspace?",
@@ -273,7 +273,7 @@ const SHORTCUTS = [
 export default function HelpPage() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-8">
-      <PageHeader title="Help" subtitle="Learn how to get the most from Forge AI." />
+      <PageHeader title="Help" subtitle="Learn how to get the most from Forge." />
 
       {/* Quick Start */}
       <Card>
@@ -317,7 +317,7 @@ export default function HelpPage() {
             Feature Guide
           </CardTitle>
           <CardDescription>
-            Everything Forge AI can do — click to expand each feature.
+            Everything Forge can do — click to expand each feature.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
@@ -493,7 +493,7 @@ export default function HelpPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Forge AI reads only metadata (table and column names, data types, foreign keys) from
+            Forge reads only metadata (table and column names, data types, foreign keys) from
             your Unity Catalog. No row-level data is accessed unless data sampling is explicitly
             enabled in Settings — sampled data is sent to the LLM but never persisted.
           </p>

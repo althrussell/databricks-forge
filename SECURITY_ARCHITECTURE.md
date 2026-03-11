@@ -1,7 +1,7 @@
-# Security Architecture -- Databricks Forge AI
+# Security Architecture -- Databricks Forge
 
 > This document describes the security architecture, data flows, threat
-> mitigations, and compliance posture of Databricks Forge AI. It is
+> mitigations, and compliance posture of Databricks Forge. It is
 > intended for security reviewers, architects, and compliance teams
 > evaluating the application prior to deployment.
 
@@ -30,7 +30,7 @@
 
 ## 1. Application Overview
 
-Databricks Forge AI is a web application that discovers data-driven
+Databricks Forge is a web application that discovers data-driven
 use cases from Unity Catalog metadata. Users configure a business context,
 point at their Unity Catalog catalogs/schemas, and the application generates
 scored, categorised use cases with optional SQL code.

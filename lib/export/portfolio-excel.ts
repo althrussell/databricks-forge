@@ -34,7 +34,7 @@ export async function generatePortfolioExcel(
   stakeholders: StakeholderProfile[],
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Databricks Forge AI";
+  wb.creator = "Databricks Forge";
   wb.created = new Date();
 
   const syn = portfolio.latestSynthesis;
@@ -75,7 +75,7 @@ export async function generatePortfolioExcel(
     },
     { metric: "", value: "" },
     { metric: "Generated", value: new Date().toISOString() },
-    { metric: "Report By", value: "Databricks Forge AI" },
+    { metric: "Report By", value: "Databricks Forge" },
   ];
 
   sumRows.forEach((r) => sumSheet.addRow(r));

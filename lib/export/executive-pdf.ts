@@ -36,7 +36,7 @@ function footer(doc: PDFKit.PDFDocument, variant: "light" | "dark" = "light") {
   doc
     .fontSize(9)
     .fillColor(c)
-    .text(`Databricks Forge AI  |  ${today()}`, M + 20, PAGE_H - 35, {
+    .text(`Databricks Forge  |  ${today()}`, M + 20, PAGE_H - 35, {
       width: CW - 20,
       align: "right",
     });
@@ -82,7 +82,7 @@ export async function generateExecutivePdf(portfolio: BusinessValuePortfolio): P
       bufferPages: true,
       info: {
         Title: "Business Value Executive Brief",
-        Author: "Databricks Forge AI",
+        Author: "Databricks Forge",
       },
     });
 

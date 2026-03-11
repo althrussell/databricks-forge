@@ -2,7 +2,7 @@
 
 > Technical guide for Genie Space discovery, deterministic health checking,
 > optimization review with diff preview, and the benchmark feedback loop
-> in Databricks Forge AI.
+> in Databricks Forge.
 
 The Health Check Engine discovers Genie Spaces in the workspace (with OBO
 authentication), scores them against a configurable checklist of best practices,

@@ -8,7 +8,7 @@
 
 ## Overview
 
-Ask Forge is a RAG-powered conversational assistant embedded in Databricks Forge AI.
+Ask Forge is a RAG-powered conversational assistant embedded in Databricks Forge.
 Users ask natural-language questions about their data estate and receive grounded
 answers enriched with real metadata, executable SQL, lineage context, and
 actionable deployment options. Every response cites its sources and is traceable
@@ -166,7 +166,7 @@ The final context string is assembled in order:
 
 Builds the system and user messages for the LLM.
 
-**System prompt** defines the Forge AI persona with strict grounding rules:
+**System prompt** defines the Forge persona with strict grounding rules:
 
 - Never assume or invent table/column names
 - Never say "assuming you have X" -- only reference what exists in the context

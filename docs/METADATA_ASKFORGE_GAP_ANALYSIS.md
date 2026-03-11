@@ -2,7 +2,7 @@
 
 ## Executive intent
 
-Databricks Forge AI is designed to convert Unity Catalog metadata into high-confidence, execution-ready intelligence:
+Databricks Forge is designed to convert Unity Catalog metadata into high-confidence, execution-ready intelligence:
 
 - Discover what data a customer actually has.
 - Transform that into use cases, estate insights, and governance signals.

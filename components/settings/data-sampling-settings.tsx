@@ -65,7 +65,7 @@ export function DataSamplingSettings({
             <div className="text-sm text-muted-foreground">
               <p className="font-medium text-foreground">Privacy &amp; data access</p>
               <p className="mt-1">
-                When data sampling is enabled, Forge AI reads a small number of rows from each table
+                When data sampling is enabled, Forge reads a small number of rows from each table
                 during use case discovery and SQL generation. This data is sent to the AI model
                 alongside the schema so it can understand real data values, formats, and patterns --
                 producing better use cases and more accurate SQL. Sampled data is{" "}

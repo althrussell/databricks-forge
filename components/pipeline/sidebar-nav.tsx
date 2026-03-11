@@ -236,7 +236,7 @@ export function SidebarNav() {
                 transition={{ duration: 0.15 }}
                 className="overflow-hidden whitespace-nowrap"
               >
-                Forge AI
+                Forge
               </motion.span>
             )}
           </AnimatePresence>
@@ -289,7 +289,7 @@ export function MobileNav() {
               height={23}
               className="shrink-0"
             />
-            <span>Forge AI</span>
+            <span>Forge</span>
           </Link>
         </div>
         <NavLinks onNavigate={() => setOpen(false)} />

@@ -65,7 +65,7 @@ export async function generateGapReportExcel(
   businessName: string,
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Databricks Forge AI";
+  wb.creator = "Databricks Forge";
   wb.created = new Date();
 
   // -------------------------------------------------------------------------

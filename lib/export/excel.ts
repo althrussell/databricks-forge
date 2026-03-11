@@ -132,7 +132,7 @@ export async function generateExcel(
 ): Promise<Buffer> {
   const lineageFqnSet = new Set(lineageDiscoveredFqns);
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Databricks Forge AI";
+  workbook.creator = "Databricks Forge";
   workbook.created = new Date();
 
   // =====================================================================
@@ -188,7 +188,7 @@ export async function generateExcel(
 
   summaryRows.push({ property: "", value: "" }); // spacer
   summaryRows.push({ property: "Generated", value: new Date().toISOString() });
-  summaryRows.push({ property: "Report By", value: "Databricks Forge AI" });
+  summaryRows.push({ property: "Report By", value: "Databricks Forge" });
 
   summaryRows.forEach((row) => summarySheet.addRow(row));
   styleHeaderRow(summarySheet);
