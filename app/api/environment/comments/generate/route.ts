@@ -10,6 +10,9 @@ import { getCommentJob, createCommentJob } from "@/lib/lakebase/comment-jobs";
 import { generateComments } from "@/lib/ai/comment-generator";
 import { logger } from "@/lib/logger";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -56,15 +59,25 @@ export async function POST(request: NextRequest) {
       tables?: string[];
     };
 
-    // SSE stream with abort propagation
-    const abortController = new AbortController();
-    request.signal.addEventListener("abort", () => abortController.abort());
+    // Separate abort controller for the engine -- only fires on explicit
+    // user cancellation, NOT when the HTTP connection drops. This ensures
+    // generation completes and results are persisted even if the SSE stream
+    // is interrupted by a timeout or network glitch.
+    const engineAbort = new AbortController();
+
+    // Track whether the SSE stream is still writable
+    let streamClosed = false;
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         const send = (event: string, data: unknown) => {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          if (streamClosed) return;
+          try {
+            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          } catch {
+            streamClosed = true;
+          }
         };
 
         try {
@@ -77,7 +90,7 @@ export async function POST(request: NextRequest) {
             tables: scope.tables,
             industryId: job.industryId ?? undefined,
             businessContext: businessContext ?? undefined,
-            signal: abortController.signal,
+            signal: engineAbort.signal,
             onProgress: (phase, pct, detail) => {
               send("progress", { phase, pct, detail });
             },
@@ -97,8 +110,22 @@ export async function POST(request: NextRequest) {
             message: err instanceof Error ? err.message : "Generation failed",
           });
         } finally {
-          controller.close();
+          streamClosed = true;
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
         }
+      },
+      cancel() {
+        // Client disconnected -- do NOT abort the engine. The generation
+        // will finish in the background and persist results to Lakebase.
+        // The user can refresh the page and see the completed job.
+        streamClosed = true;
+        logger.info("[comment-generate] SSE stream cancelled by client", {
+          jobId: effectiveJobId,
+        });
       },
     });
 
