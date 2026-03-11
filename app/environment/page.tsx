@@ -115,6 +115,8 @@ export default function EstatePage() {
 
   // New scan form
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [excludedSources, setExcludedSources] = useState<string[]>([]);
+  const [exclusionPatterns, setExclusionPatterns] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<ScanProgressData | null>(null);
 
@@ -226,7 +228,12 @@ export default function EstatePage() {
       const resp = await fetch("/api/environment-scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ucMetadata: scope, lineageDepth: depthCfg.lineageDepth }),
+        body: JSON.stringify({
+          ucMetadata: scope,
+          lineageDepth: depthCfg.lineageDepth,
+          excludedScope: excludedSources.join(", ") || undefined,
+          exclusionPatterns: exclusionPatterns.join(", ") || undefined,
+        }),
       });
       if (!resp.ok) throw new Error("Failed to start scan");
       const data = await resp.json();
@@ -546,7 +553,13 @@ export default function EstatePage() {
           <CardContent className="space-y-4">
             <CatalogBrowser
               selectedSources={selectedSources}
-              onSelectionChange={setSelectedSources}
+              excludedSources={excludedSources}
+              exclusionPatterns={exclusionPatterns}
+              onSelectionChange={(sources, excluded, patterns) => {
+                setSelectedSources(sources);
+                setExcludedSources(excluded);
+                setExclusionPatterns(patterns);
+              }}
             />
 
             <div className="flex items-center justify-between">

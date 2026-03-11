@@ -36,6 +36,7 @@ import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environm
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { getServingEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
+import { parseExcludedString, parsePatternsString, globMatch } from "@/lib/domain/scope-selection";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import type {
   MetadataSnapshot,
@@ -159,6 +160,62 @@ export async function runMetadataExtraction(
     throw new Error(
       `No tables found for UC metadata scope: ${config.ucMetadata}. Check permissions and paths.`,
     );
+  }
+
+  // --- Phase 1b: Apply exclusions (explicit + patterns) ---
+  const excludedPaths = parseExcludedString(config.excludedScope);
+  const exPatterns = parsePatternsString(config.exclusionPatterns);
+
+  if (excludedPaths.length > 0 || exPatterns.length > 0) {
+    const excludedSchemaSet = new Set(
+      excludedPaths.filter((p) => p.split(".").length === 2).map((p) => p.toLowerCase()),
+    );
+    const excludedTableSet = new Set(
+      excludedPaths.filter((p) => p.split(".").length >= 3).map((p) => p.toLowerCase()),
+    );
+
+    const beforeCount = allTables.length;
+    const isTableExcluded = (fqn: string): boolean => {
+      const lower = fqn.toLowerCase();
+      if (excludedTableSet.has(lower)) return true;
+      const parts = lower.split(".");
+      const schemaPath = `${parts[0]}.${parts[1]}`;
+      if (excludedSchemaSet.has(schemaPath)) return true;
+      if (exPatterns.length > 0) {
+        const [cat, sch, tbl] = parts;
+        if (exPatterns.some((p) => globMatch(p, cat) || globMatch(p, sch) || (tbl && globMatch(p, tbl)))) return true;
+      }
+      return false;
+    };
+
+    const excludedFqns = new Set<string>();
+    for (let i = allTables.length - 1; i >= 0; i--) {
+      if (isTableExcluded(allTables[i].fqn)) {
+        excludedFqns.add(allTables[i].fqn.toLowerCase());
+        allTables.splice(i, 1);
+      }
+    }
+    // Also filter columns and FKs for excluded tables
+    for (let i = allColumns.length - 1; i >= 0; i--) {
+      if (excludedFqns.has(allColumns[i].tableFqn.toLowerCase())) {
+        allColumns.splice(i, 1);
+      }
+    }
+
+    if (allTables.length < beforeCount) {
+      logger.info("[metadata-extraction] Applied exclusions", {
+        excludedPaths,
+        patterns: exPatterns,
+        removedCount: beforeCount - allTables.length,
+        remaining: allTables.length,
+      });
+      if (runId) {
+        await updateRunMessage(
+          runId,
+          `Excluded ${beforeCount - allTables.length} tables via exclusion rules. ${allTables.length} tables remain.`,
+        );
+      }
+    }
   }
 
   const schemaMarkdown = buildSchemaMarkdown(allTables, allColumns);

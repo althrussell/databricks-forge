@@ -193,8 +193,7 @@ export function GenieDeployModal({
   }, [allAssets, selectedAssets]);
 
   // Schema selection -- single-select in CatalogBrowser "schema" mode
-  const handleSchemaChange = useCallback((sources: string[]) => {
-    // Keep only the most recently added schema (single-select)
+  const handleSchemaChange = useCallback((sources: string[], _excluded?: string[], _patterns?: string[]) => {
     if (sources.length > 1) {
       setTargetSchema([sources[sources.length - 1]]);
     } else {
@@ -830,7 +829,7 @@ function SchemaStep({
   defaultSchema,
 }: {
   targetSchema: string[];
-  onSchemaChange: (sources: string[]) => void;
+  onSchemaChange: (sources: string[], excluded: string[], patterns: string[]) => void;
   defaultSchema: string;
 }) {
   return (

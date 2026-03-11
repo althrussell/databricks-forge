@@ -95,6 +95,8 @@ export const DEFAULT_DEPTH_CONFIGS: Record<DiscoveryDepth, DiscoveryDepthConfig>
 export interface PipelineRunConfig {
   businessName: string;
   ucMetadata: string;
+  excludedScope: string;
+  exclusionPatterns: string;
   operation: Operation;
   businessDomains: string;
   businessPriorities: BusinessPriority[];

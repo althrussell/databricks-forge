@@ -38,6 +38,9 @@ export async function POST(request: NextRequest) {
         ? Math.min(Math.max(Math.round(body.lineageDepth), 1), 10)
         : undefined;
     const assetDiscoveryEnabled = body.assetDiscoveryEnabled === true;
+    const excludedScope = typeof body.excludedScope === "string" ? body.excludedScope : undefined;
+    const exclusionPatterns =
+      typeof body.exclusionPatterns === "string" ? body.exclusionPatterns : undefined;
 
     if (!ucMetadata || typeof ucMetadata !== "string") {
       logger.warn("[api/environment-scan] ucMetadata is required", {
@@ -53,14 +56,19 @@ export async function POST(request: NextRequest) {
     const { runStandaloneEnrichment } = await import("@/lib/pipeline/standalone-scan");
 
     // Fire and forget -- the scan runs asynchronously
-    runStandaloneEnrichment(scanId, ucMetadata, lineageDepth, assetDiscoveryEnabled).catch(
-      (error) => {
-        logger.error("[api/environment-scan] Standalone scan failed", {
-          scanId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      },
-    );
+    runStandaloneEnrichment(
+      scanId,
+      ucMetadata,
+      lineageDepth,
+      assetDiscoveryEnabled,
+      excludedScope,
+      exclusionPatterns,
+    ).catch((error) => {
+      logger.error("[api/environment-scan] Standalone scan failed", {
+        scanId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     return NextResponse.json({ scanId }, { status: 201 });
   } catch (error) {

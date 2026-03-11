@@ -108,6 +108,8 @@ export function ConfigForm({
   const [businessName, setBusinessName] = useState("");
   const [industry, setIndustry] = useState("");
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [excludedSources, setExcludedSources] = useState<string[]>([]);
+  const [exclusionPatterns, setExclusionPatterns] = useState<string[]>([]);
   const [manualMode, setManualMode] = useState(false);
   const [manualInput, setManualInput] = useState("");
   const [businessDomains, setBusinessDomains] = useState<string[]>([]);
@@ -254,6 +256,8 @@ export function ConfigForm({
         body: JSON.stringify({
           businessName: businessName.trim(),
           ucMetadata,
+          excludedScope: excludedSources.join(", "),
+          exclusionPatterns: exclusionPatterns.join(", "),
           industry,
           businessDomains: businessDomains.join(", "),
           businessPriorities: selectedPriorities,
@@ -471,8 +475,12 @@ export function ConfigForm({
               <>
                 <CatalogBrowser
                   selectedSources={selectedSources}
-                  onSelectionChange={(sources) => {
+                  excludedSources={excludedSources}
+                  exclusionPatterns={exclusionPatterns}
+                  onSelectionChange={(sources, excluded, patterns) => {
                     setSelectedSources(sources);
+                    setExcludedSources(excluded);
+                    setExclusionPatterns(patterns);
                     if (fieldErrors.ucMetadata)
                       setFieldErrors((prev) => {
                         const next = { ...prev };

@@ -17,7 +17,7 @@ import { logger } from "@/lib/logger";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobId, catalogs, schemas, tables, industryId, scanId, runId, businessContext } = body;
+    const { jobId, catalogs, schemas, tables, industryId, scanId, runId, businessContext, excludedSchemas, excludedTables, exclusionPatterns } = body;
 
     let effectiveJobId = jobId;
     if (!effectiveJobId) {
@@ -25,7 +25,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "catalogs required" }, { status: 400 });
       }
       const job = await createCommentJob({
-        scopeJson: JSON.stringify({ catalogs, schemas, tables }),
+        scopeJson: JSON.stringify({
+          catalogs,
+          schemas,
+          tables,
+          ...(excludedSchemas?.length && { excludedSchemas }),
+          ...(excludedTables?.length && { excludedTables }),
+          ...(exclusionPatterns?.length && { exclusionPatterns }),
+        }),
         industryId,
         scanId,
         runId,
@@ -47,6 +54,9 @@ export async function POST(request: NextRequest) {
       catalogs: string[];
       schemas?: string[];
       tables?: string[];
+      excludedSchemas?: string[];
+      excludedTables?: string[];
+      exclusionPatterns?: string[];
     };
 
     // Fire-and-forget -- do NOT await.
@@ -56,6 +66,9 @@ export async function POST(request: NextRequest) {
       catalogs: scope.catalogs,
       schemas: scope.schemas,
       tables: scope.tables,
+      excludedSchemas: scope.excludedSchemas,
+      excludedTables: scope.excludedTables,
+      exclusionPatterns: scope.exclusionPatterns,
       industryId: job.industryId ?? undefined,
       businessContext: businessContext ?? undefined,
     }).catch((err) => {

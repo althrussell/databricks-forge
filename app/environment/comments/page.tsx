@@ -75,6 +75,8 @@ export default function AICommentsPage() {
   // New-job modal state
   const [newJobOpen, setNewJobOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [excludedSources, setExcludedSources] = useState<string[]>([]);
+  const [exclusionPatterns, setExclusionPatterns] = useState<string[]>([]);
   const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedIndustry, setSelectedIndustry] = useState<string>("none");
   const [genProgress, setGenProgress] = useState<CommentProgressData | null>(null);
@@ -161,6 +163,14 @@ export default function AICommentsPage() {
       }
     }
 
+    const exSchemas: string[] = [];
+    const exTables: string[] = [];
+    for (const ex of excludedSources) {
+      const parts = ex.replace(/`/g, "").split(".");
+      if (parts.length === 2) exSchemas.push(ex);
+      else if (parts.length >= 3) exTables.push(ex);
+    }
+
     setNewJobOpen(false);
     setPageState("generating");
     setGenProgress(null);
@@ -173,6 +183,9 @@ export default function AICommentsPage() {
           catalogs: Array.from(catalogs),
           schemas: schemas.length > 0 ? schemas : undefined,
           tables: tables.length > 0 ? tables : undefined,
+          excludedSchemas: exSchemas.length > 0 ? exSchemas : undefined,
+          excludedTables: exTables.length > 0 ? exTables : undefined,
+          exclusionPatterns: exclusionPatterns.length > 0 ? exclusionPatterns : undefined,
           industryId: selectedIndustry === "none" ? undefined : selectedIndustry,
         }),
       });
@@ -688,7 +701,13 @@ export default function AICommentsPage() {
               </p>
               <CatalogBrowser
                 selectedSources={selectedSources}
-                onSelectionChange={setSelectedSources}
+                excludedSources={excludedSources}
+                exclusionPatterns={exclusionPatterns}
+                onSelectionChange={(sources, excluded, patterns) => {
+                  setSelectedSources(sources);
+                  setExcludedSources(excluded);
+                  setExclusionPatterns(patterns);
+                }}
               />
             </div>
 

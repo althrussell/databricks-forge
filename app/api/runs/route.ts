@@ -38,6 +38,8 @@ export async function POST(request: NextRequest) {
     const config: PipelineRunConfig = {
       businessName: body.businessName,
       ucMetadata: body.ucMetadata,
+      excludedScope: body.excludedScope ?? "",
+      exclusionPatterns: body.exclusionPatterns ?? "",
       operation: (body.operation ?? "Discover Usecases") as Operation,
       businessDomains: body.businessDomains ?? "",
       businessPriorities: (body.businessPriorities ?? ["Increase Revenue"]) as BusinessPriority[],

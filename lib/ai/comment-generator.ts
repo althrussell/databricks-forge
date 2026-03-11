@@ -26,6 +26,9 @@ export interface GenerateCommentsInput {
   catalogs: string[];
   schemas?: string[];
   tables?: string[];
+  excludedSchemas?: string[];
+  excludedTables?: string[];
+  exclusionPatterns?: string[];
   industryId?: string;
   businessContext?: string;
   signal?: AbortSignal;
@@ -53,7 +56,7 @@ const ENGINE_PHASE_MAP: Record<string, CommentPhase> = {
 export async function generateComments(
   input: GenerateCommentsInput,
 ): Promise<GenerateCommentsResult> {
-  const { jobId, catalogs, schemas, tables, industryId, businessContext, signal } = input;
+  const { jobId, catalogs, schemas, tables, excludedSchemas, excludedTables, exclusionPatterns, industryId, businessContext, signal } = input;
 
   initCommentProgress(jobId);
 
@@ -61,7 +64,14 @@ export async function generateComments(
     await updateCommentJobStatus(jobId, "generating");
 
     const result = await runCommentEngine(
-      { catalogs, schemas, tables },
+      {
+        catalogs,
+        schemas,
+        tables,
+        ...(excludedSchemas?.length && { excludedSchemas }),
+        ...(excludedTables?.length && { excludedTables }),
+        ...(exclusionPatterns?.length && { exclusionPatterns }),
+      },
       {
         industryId,
         businessContext,

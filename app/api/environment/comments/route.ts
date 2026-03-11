@@ -22,13 +22,20 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { catalogs, schemas, tables, industryId, scanId, runId } = body;
+    const { catalogs, schemas, tables, industryId, scanId, runId, excludedSchemas, excludedTables, exclusionPatterns } = body;
 
     if (!catalogs || !Array.isArray(catalogs) || catalogs.length === 0) {
       return NextResponse.json({ error: "At least one catalog is required" }, { status: 400 });
     }
 
-    const scopeJson = JSON.stringify({ catalogs, schemas, tables });
+    const scopeJson = JSON.stringify({
+      catalogs,
+      schemas,
+      tables,
+      ...(excludedSchemas?.length && { excludedSchemas }),
+      ...(excludedTables?.length && { excludedTables }),
+      ...(exclusionPatterns?.length && { exclusionPatterns }),
+    });
     const job = await createCommentJob({
       scopeJson,
       industryId: industryId ?? undefined,
