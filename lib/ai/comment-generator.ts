@@ -63,14 +63,24 @@ export async function generateComments(
     const allComments = new Map<string, string>();
 
     for (const catalog of catalogs) {
+      if (signal?.aborted) throw new Error("Cancelled");
       const schemaList = schemas ?? [undefined];
       for (const schema of schemaList) {
-        const [cols, comments] = await Promise.all([
-          listColumns(catalog, schema as string | undefined),
-          fetchTableComments(catalog, schema as string | undefined),
-        ]);
-        for (const c of cols) allColumns.push(c);
-        for (const [fqn, comment] of comments) allComments.set(fqn, comment);
+        try {
+          const [cols, comments] = await Promise.all([
+            listColumns(catalog, schema as string | undefined),
+            fetchTableComments(catalog, schema as string | undefined),
+          ]);
+          for (const c of cols) allColumns.push(c);
+          for (const [fqn, comment] of comments) allComments.set(fqn, comment);
+        } catch (err) {
+          const schemaLabel = schema ? `${catalog}.${schema}` : catalog;
+          logger.warn("[comment-generator] Skipping scope with invalid metadata", {
+            scope: schemaLabel,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          onProgress?.("metadata", 0, `Skipped ${schemaLabel} (${err instanceof Error ? err.message : "error"})`);
+        }
       }
     }
 

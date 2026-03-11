@@ -195,28 +195,30 @@ export default function AICommentsPage() {
             const event = line.slice(7);
             const nextLine = lines[lines.indexOf(line) + 1];
             if (nextLine?.startsWith("data: ")) {
+              let data: Record<string, unknown>;
               try {
-                const data = JSON.parse(nextLine.slice(6));
-                if (event === "started") {
-                  setActiveJobId(data.jobId);
-                } else if (event === "progress") {
-                  setGenProgress({
-                    phase: data.phase,
-                    pct: data.pct,
-                    detail: data.detail ?? "",
-                  });
-                } else if (event === "complete") {
-                  setActiveJobId(data.jobId);
-                  await loadJobData(data.jobId);
-                  setPageState("review");
-                  toast.success("Generation complete", {
-                    description: `${data.tableCount} tables, ${data.columnCount} columns`,
-                  });
-                } else if (event === "error") {
-                  throw new Error(data.message);
-                }
-              } catch (_parseErr) {
-                // SSE parse error, continue
+                data = JSON.parse(nextLine.slice(6));
+              } catch {
+                continue; // malformed JSON, skip this SSE frame
+              }
+
+              if (event === "started") {
+                setActiveJobId(data.jobId as string);
+              } else if (event === "progress") {
+                setGenProgress({
+                  phase: data.phase as string,
+                  pct: data.pct as number,
+                  detail: (data.detail as string) ?? "",
+                });
+              } else if (event === "complete") {
+                setActiveJobId(data.jobId as string);
+                await loadJobData(data.jobId as string);
+                setPageState("review");
+                toast.success("Generation complete", {
+                  description: `${data.tableCount} tables, ${data.columnCount} columns`,
+                });
+              } else if (event === "error") {
+                throw new Error((data.message as string) || "Generation failed");
               }
             }
           }

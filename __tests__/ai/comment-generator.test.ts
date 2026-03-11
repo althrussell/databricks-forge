@@ -174,17 +174,19 @@ describe("generateComments", () => {
     expect(progress.some((p) => p.phase === "columns")).toBe(true);
   });
 
-  it("sets status to failed on error", async () => {
+  it("skips catalogs with metadata errors and returns zero counts", async () => {
     mockListColumns.mockRejectedValue(new Error("Connection refused"));
     mockFetchComments.mockResolvedValue(new Map());
 
-    await expect(
-      generateComments({ jobId: "j1", catalogs: ["cat"] }),
-    ).rejects.toThrow("Connection refused");
-
-    expect(mockUpdateStatus).toHaveBeenCalledWith("j1", "failed", {
-      errorMessage: "Connection refused",
+    const result = await generateComments({
+      jobId: "j1",
+      catalogs: ["cat"],
     });
+
+    // Gracefully returns zero rather than crashing
+    expect(result.tableCount).toBe(0);
+    expect(result.columnCount).toBe(0);
+    expect(mockLLM).not.toHaveBeenCalled();
   });
 
   it("continues when a table batch fails", async () => {
