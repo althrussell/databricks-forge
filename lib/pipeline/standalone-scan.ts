@@ -28,6 +28,7 @@ import { discoverExistingAssets } from "@/lib/discovery/asset-scanner";
 import { computeCoverage } from "@/lib/discovery/coverage";
 import { saveDiscoveryResults } from "@/lib/lakebase/discovered-assets";
 import { logger } from "@/lib/logger";
+import { parseExcludedString, parsePatternsString, globMatch } from "@/lib/domain/scope-selection";
 import type {
   EnvironmentScan,
   TableDetail,
@@ -59,6 +60,8 @@ export async function runStandaloneEnrichment(
   ucMetadata: string,
   lineageDepth = 5,
   assetDiscoveryEnabled = false,
+  excludedScope?: string,
+  exclusionPatternsStr?: string,
 ): Promise<void> {
   const startTime = Date.now();
   const scopes = parseUCMetadata(ucMetadata);
@@ -139,6 +142,58 @@ export async function runStandaloneEnrichment(
         message: "No tables found. Check scope and permissions.",
       });
       return;
+    }
+
+    // Apply exclusions (explicit + patterns)
+    const excludedPaths = parseExcludedString(excludedScope);
+    const exPatterns = parsePatternsString(exclusionPatternsStr);
+
+    if (excludedPaths.length > 0 || exPatterns.length > 0) {
+      const excludedSchemaSet = new Set(
+        excludedPaths.filter((p) => p.split(".").length === 2).map((p) => p.toLowerCase()),
+      );
+      const excludedTableSet = new Set(
+        excludedPaths.filter((p) => p.split(".").length >= 3).map((p) => p.toLowerCase()),
+      );
+
+      const beforeCount = allTables.length;
+      const isTableExcluded = (fqn: string): boolean => {
+        const lower = fqn.toLowerCase();
+        if (excludedTableSet.has(lower)) return true;
+        const parts = lower.split(".");
+        const schemaPath = `${parts[0]}.${parts[1]}`;
+        if (excludedSchemaSet.has(schemaPath)) return true;
+        if (exPatterns.length > 0) {
+          const [cat, sch, tbl] = parts;
+          if (exPatterns.some((p) => globMatch(p, cat) || globMatch(p, sch) || (tbl && globMatch(p, tbl)))) return true;
+        }
+        return false;
+      };
+
+      const excludedFqns = new Set<string>();
+      for (let i = allTables.length - 1; i >= 0; i--) {
+        if (isTableExcluded(allTables[i].fqn)) {
+          excludedFqns.add(allTables[i].fqn.toLowerCase());
+          allTables.splice(i, 1);
+        }
+      }
+      for (let i = allColumns.length - 1; i >= 0; i--) {
+        if (excludedFqns.has(allColumns[i].tableFqn.toLowerCase())) {
+          allColumns.splice(i, 1);
+        }
+      }
+
+      if (allTables.length < beforeCount) {
+        logger.info("[standalone-scan] Applied exclusions", {
+          excludedPaths,
+          patterns: exPatterns,
+          removedCount: beforeCount - allTables.length,
+          remaining: allTables.length,
+        });
+        updateScanProgress(scanId, {
+          message: `Excluded ${beforeCount - allTables.length} tables via exclusion rules. ${allTables.length} tables remain.`,
+        });
+      }
     }
 
     updateScanProgress(scanId, {

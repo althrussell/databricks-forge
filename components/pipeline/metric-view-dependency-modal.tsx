@@ -112,7 +112,7 @@ export function MetricViewDependencyModal({
     }
   }
 
-  function handleSchemaChange(sources: string[]) {
+  function handleSchemaChange(sources: string[], _excluded?: string[], _patterns?: string[]) {
     if (sources.length > 1) {
       setTargetSchema([sources[sources.length - 1]]);
     } else {

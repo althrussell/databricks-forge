@@ -37,6 +37,8 @@ function dbRowToRun(row: {
   runId: string;
   businessName: string;
   ucMetadata: string;
+  excludedScope: string | null;
+  exclusionPatterns: string | null;
   operation: string;
   businessPriorities: string | null;
   strategicGoals: string | null;
@@ -62,6 +64,8 @@ function dbRowToRun(row: {
     config: {
       businessName: row.businessName,
       ucMetadata: row.ucMetadata,
+      excludedScope: row.excludedScope ?? "",
+      exclusionPatterns: row.exclusionPatterns ?? "",
       operation: row.operation as PipelineRunConfig["operation"],
       businessDomains: row.businessDomains ?? "",
       businessPriorities: parseJSON<BusinessPriority[]>(row.businessPriorities, []),
@@ -210,6 +214,8 @@ export async function createRun(
         runId,
         businessName: config.businessName,
         ucMetadata: config.ucMetadata,
+        excludedScope: config.excludedScope || null,
+        exclusionPatterns: config.exclusionPatterns || null,
         operation: config.operation,
         businessPriorities: JSON.stringify(config.businessPriorities),
         strategicGoals: config.strategicGoals,

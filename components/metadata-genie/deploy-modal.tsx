@@ -50,7 +50,7 @@ export function MetadataGenieDeployModal({
   const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSchemaChange = useCallback((sources: string[]) => {
+  const handleSchemaChange = useCallback((sources: string[], _excluded?: string[], _patterns?: string[]) => {
     if (sources.length > 1) {
       setTargetSchema([sources[sources.length - 1]]);
     } else {

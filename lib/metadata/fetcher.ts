@@ -21,6 +21,7 @@ import {
 import { enrichTablesInBatches, getTableTags } from "@/lib/queries/metadata-detail";
 import { walkLineage } from "@/lib/queries/lineage";
 import { logger } from "@/lib/logger";
+import { globMatch } from "@/lib/domain/scope-selection";
 import type {
   TableInfo,
   ColumnInfo,
@@ -169,6 +170,53 @@ export async function fetchEnrichedMetadata(
   if (scope.tables && scope.tables.length > 0) {
     const lowerSet = new Set(scope.tables.map((t) => t.toLowerCase()));
     targetTables = allTables.filter((t) => lowerSet.has(t.fqn.toLowerCase()));
+  }
+
+  // Apply explicit schema exclusions
+  if (scope.excludedSchemas && scope.excludedSchemas.length > 0) {
+    const excludeSet = new Set(scope.excludedSchemas.map((s) => s.toLowerCase()));
+    const before = targetTables.length;
+    targetTables = targetTables.filter((t) => {
+      const parts = t.fqn.split(".");
+      const schemaPath = `${parts[0]}.${parts[1]}`.toLowerCase();
+      return !excludeSet.has(schemaPath);
+    });
+    if (targetTables.length < before) {
+      logger.info("[metadata-fetcher] Applied schema exclusions", {
+        excluded: scope.excludedSchemas,
+        removedCount: before - targetTables.length,
+      });
+    }
+  }
+
+  // Apply explicit table exclusions
+  if (scope.excludedTables && scope.excludedTables.length > 0) {
+    const excludeSet = new Set(scope.excludedTables.map((t) => t.toLowerCase()));
+    const before = targetTables.length;
+    targetTables = targetTables.filter((t) => !excludeSet.has(t.fqn.toLowerCase()));
+    if (targetTables.length < before) {
+      logger.info("[metadata-fetcher] Applied table exclusions", {
+        excluded: scope.excludedTables,
+        removedCount: before - targetTables.length,
+      });
+    }
+  }
+
+  // Apply glob pattern exclusions (match against each segment name)
+  if (scope.exclusionPatterns && scope.exclusionPatterns.length > 0) {
+    const before = targetTables.length;
+    targetTables = targetTables.filter((t) => {
+      const [cat, sch, tbl] = t.fqn.split(".");
+      return !scope.exclusionPatterns!.some(
+        (p) => globMatch(p, cat) || globMatch(p, sch) || (tbl && globMatch(p, tbl)),
+      );
+    });
+    if (targetTables.length < before) {
+      logger.info("[metadata-fetcher] Applied pattern exclusions", {
+        patterns: scope.exclusionPatterns,
+        removedCount: before - targetTables.length,
+      });
+    }
   }
 
   if (signal?.aborted) throw new Error("Cancelled");

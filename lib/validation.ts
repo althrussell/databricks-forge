@@ -120,6 +120,8 @@ export function isSafeId(value: string): boolean {
 export const CreateRunSchema = z.object({
   businessName: z.string().min(1, "businessName is required").max(500),
   ucMetadata: z.string().min(1, "ucMetadata is required").max(1000),
+  excludedScope: z.string().max(2000).optional().default(""),
+  exclusionPatterns: z.string().max(1000).optional().default(""),
   operation: z.string().max(200).optional().default("Discover Usecases"),
   businessDomains: z.string().max(2000).optional().default(""),
   businessPriorities: z.array(z.string()).optional().default(["Increase Revenue"]),

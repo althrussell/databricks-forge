@@ -169,4 +169,10 @@ export interface MetadataScope {
   catalogs: string[];
   schemas?: string[];
   tables?: string[];
+  /** Explicitly excluded schema paths (e.g. "catalog.schema"). */
+  excludedSchemas?: string[];
+  /** Explicitly excluded table FQNs (e.g. "catalog.schema.table"). */
+  excludedTables?: string[];
+  /** Glob patterns matched against names at every level (catalog, schema, table). */
+  exclusionPatterns?: string[];
 }
