@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { getProposalsForJob } from "@/lib/lakebase/comment-proposals";
 import { applyProposals } from "@/lib/ai/comment-applier";
+import { logActivity } from "@/lib/lakebase/activity-log";
 
 export async function POST(
   request: NextRequest,
@@ -46,6 +47,11 @@ export async function POST(
     }
 
     const result = await applyProposals(jobId, toApply);
+
+    logActivity("applied_comments", {
+      resourceId: jobId,
+      metadata: { applied: result.applied, failed: result.failed, skipped: result.skipped },
+    });
 
     return NextResponse.json({
       applied: result.applied,

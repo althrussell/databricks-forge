@@ -11,6 +11,7 @@ import {
   listCommentJobs,
   createCommentJob,
 } from "@/lib/lakebase/comment-jobs";
+import { logActivity } from "@/lib/lakebase/activity-log";
 
 export async function GET() {
   try {
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
       industryId: industryId ?? undefined,
       scanId: scanId ?? undefined,
       runId: runId ?? undefined,
+    });
+
+    logActivity("created_comment_job", {
+      resourceId: job.id,
+      metadata: { catalogs, industryId },
     });
 
     return NextResponse.json({ job }, { status: 201 });

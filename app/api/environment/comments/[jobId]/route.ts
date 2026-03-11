@@ -12,6 +12,7 @@ import {
   getProposalsForJob,
   getJobTableSummary,
 } from "@/lib/lakebase/comment-proposals";
+import { logActivity } from "@/lib/lakebase/activity-log";
 
 export async function GET(
   _request: NextRequest,
@@ -42,6 +43,7 @@ export async function DELETE(
   try {
     const { jobId } = await params;
     await deleteCommentJob(jobId);
+    logActivity("deleted_comment_job", { resourceId: jobId });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });

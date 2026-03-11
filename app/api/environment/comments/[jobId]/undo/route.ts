@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { getProposalsForJob } from "@/lib/lakebase/comment-proposals";
 import { undoProposals } from "@/lib/ai/comment-applier";
+import { logActivity } from "@/lib/lakebase/activity-log";
 
 export async function POST(
   request: NextRequest,
@@ -44,6 +45,11 @@ export async function POST(
     }
 
     const result = await undoProposals(jobId, toUndo);
+
+    logActivity("undone_comments", {
+      resourceId: jobId,
+      metadata: { undone: result.applied, failed: result.failed },
+    });
 
     return NextResponse.json({
       undone: result.applied,

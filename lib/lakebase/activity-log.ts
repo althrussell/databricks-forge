@@ -20,7 +20,11 @@ export type ActivityAction =
   | "failed"
   | "deleted_run"
   | "exported"
-  | "updated_run_industry";
+  | "updated_run_industry"
+  | "created_comment_job"
+  | "applied_comments"
+  | "undone_comments"
+  | "deleted_comment_job";
 
 export interface ActivityLogEntry {
   activityId: string;

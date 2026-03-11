@@ -275,6 +275,28 @@ API routes:
 - **SQL quality rules** -- all SQL-generating prompts must import rules from `lib/ai/sql-rules.ts` (never inline ad-hoc rules)
 - **Privacy** -- only metadata (schemas, table/column names) is read; no row-level data access
 
+## New Feature Integration Checklist
+
+Every new feature that adds Prisma models, Lakebase tables, API routes, or UI
+pages **must** complete all items below before the work is considered done.
+
+| # | Integration Point | What to Do |
+|---|---|---|
+| 1 | **Factory reset** (`lib/lakebase/reset.ts`) | Add `prisma.<model>.deleteMany()` to `deleteAllData()`. Child tables with `onDelete: Cascade` are handled automatically. |
+| 2 | **Activity logging** (`lib/lakebase/activity-log.ts`) | Add new `ActivityAction` members for user actions (create, apply, delete, etc.) and call `logActivity()` from API routes. |
+| 3 | **Navigation** (`components/pipeline/sidebar-nav.tsx`) | Add the page to the appropriate nav section. |
+| 4 | **Documentation** (`AGENTS.md`) | Document key modules, data model, and API routes in this file. |
+| 5 | **Prisma schema** (`prisma/schema.prisma`) | Define models with indexes, relations, `@@map`. Run `npx prisma generate` after changes. |
+| 6 | **SQL injection protection** | Identifiers → `validateFqn()` / `validateIdentifier()`. String literals → `escapeComment()`. Destructive patterns → blocklist. Never interpolate user input into raw SQL. |
+| 7 | **Reuse existing components** | Catalog selection → `CatalogBrowser`. Industry list → `GET /api/industries`. Never use `value=""` on Radix `<SelectItem>`. |
+
+Optional (case-by-case):
+
+| # | Integration Point | When Needed |
+|---|---|---|
+| 8 | **Stats** (`app/api/stats/route.ts`) | If the feature should show counts on the main dashboard. |
+| 9 | **Embeddings** (`lib/embeddings/store.ts`) | If the data should be searchable via Ask Forge RAG. |
+
 ## Testing Expectations
 
 - Unit tests for prompt template building (snapshot tests)
