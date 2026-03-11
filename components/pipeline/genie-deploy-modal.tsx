@@ -201,13 +201,16 @@ export function GenieDeployModal({
   }, [allAssets, selectedAssets]);
 
   // Schema selection -- single-select in CatalogBrowser "schema" mode
-  const handleSchemaChange = useCallback((sources: string[], _excluded?: string[], _patterns?: string[]) => {
-    if (sources.length > 1) {
-      setTargetSchema([sources[sources.length - 1]]);
-    } else {
-      setTargetSchema(sources);
-    }
-  }, []);
+  const handleSchemaChange = useCallback(
+    (sources: string[], _excluded?: string[], _patterns?: string[]) => {
+      if (sources.length > 1) {
+        setTargetSchema([sources[sources.length - 1]]);
+      } else {
+        setTargetSchema(sources);
+      }
+    },
+    [],
+  );
 
   // Group assets by domain for display
   const assetsByDomain = useMemo(() => {

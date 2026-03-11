@@ -1022,8 +1022,7 @@ export function validateMetricViewYaml(
   const dimsIdx2 = yaml.indexOf("dimensions:");
   const dimsEnd2 = yaml.indexOf("measures:");
   if (dimsIdx2 !== -1) {
-    const dimBlock2 =
-      dimsEnd2 > dimsIdx2 ? yaml.slice(dimsIdx2, dimsEnd2) : yaml.slice(dimsIdx2);
+    const dimBlock2 = dimsEnd2 > dimsIdx2 ? yaml.slice(dimsIdx2, dimsEnd2) : yaml.slice(dimsIdx2);
     const dimExprs = dimBlock2.match(/expr:\s*.+/g) ?? [];
     const aggOnlyPattern = new RegExp(`\\b(${AGG_FNS})\\s*\\(`, "i");
     for (const exprLine of dimExprs) {
@@ -1061,7 +1060,9 @@ export function validateMetricViewYaml(
   if (sourceMatch) {
     const parts = sourceMatch[1].split(".");
     if (parts.length !== 3) {
-      issues.push(`source must be a fully qualified three-part name (catalog.schema.table), found "${sourceMatch[1]}"`);
+      issues.push(
+        `source must be a fully qualified three-part name (catalog.schema.table), found "${sourceMatch[1]}"`,
+      );
     }
   }
 

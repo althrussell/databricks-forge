@@ -316,9 +316,7 @@ export default function HelpPage() {
             <Search className="h-5 w-5" />
             Feature Guide
           </CardTitle>
-          <CardDescription>
-            Everything Forge can do — click to expand each feature.
-          </CardDescription>
+          <CardDescription>Everything Forge can do — click to expand each feature.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
           {FEATURES.map((feature, i) => {
@@ -493,9 +491,9 @@ export default function HelpPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Forge reads only metadata (table and column names, data types, foreign keys) from
-            your Unity Catalog. No row-level data is accessed unless data sampling is explicitly
-            enabled in Settings — sampled data is sent to the LLM but never persisted.
+            Forge reads only metadata (table and column names, data types, foreign keys) from your
+            Unity Catalog. No row-level data is accessed unless data sampling is explicitly enabled
+            in Settings — sampled data is sent to the LLM but never persisted.
           </p>
           <p className="text-sm text-muted-foreground">
             All LLM calls go through your workspace&apos;s Model Serving endpoints — no data leaves

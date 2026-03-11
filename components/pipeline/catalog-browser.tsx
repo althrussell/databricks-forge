@@ -23,10 +23,7 @@ import {
   Undo2,
   Filter,
 } from "lucide-react";
-import {
-  globMatch,
-  validateExclusionPattern,
-} from "@/lib/domain/scope-selection";
+import { globMatch, validateExclusionPattern } from "@/lib/domain/scope-selection";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -183,7 +180,9 @@ export function CatalogBrowser({
       if (ready) await fetchCatalogs();
     }
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [warmupWarehouse, fetchCatalogs]);
 
   // ── Auto-expand default path ───────────────────────────────────────────
@@ -217,7 +216,9 @@ export function CatalogBrowser({
       ),
     );
     try {
-      const res = await fetch(`/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`);
+      const res = await fetch(
+        `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`,
+      );
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error ?? "Failed to fetch schemas");
@@ -232,7 +233,12 @@ export function CatalogBrowser({
                 loading: false,
                 fetchedAt: Date.now(),
                 schemas: schemaNames.map((s) => ({
-                  name: s, expanded: false, loading: false, error: null, tables: [], fetchedAt: null,
+                  name: s,
+                  expanded: false,
+                  loading: false,
+                  error: null,
+                  tables: [],
+                  fetchedAt: null,
                 })),
               }
             : c,
@@ -242,7 +248,11 @@ export function CatalogBrowser({
       setCatalogs((prev) =>
         prev.map((c) =>
           c.name === catalogName
-            ? { ...c, loading: false, error: err instanceof Error ? err.message : "Failed to load schemas" }
+            ? {
+                ...c,
+                loading: false,
+                error: err instanceof Error ? err.message : "Failed to load schemas",
+              }
             : c,
         ),
       );
@@ -256,12 +266,20 @@ export function CatalogBrowser({
     const isStale = !cat.fetchedAt || Date.now() - cat.fetchedAt > STALE_THRESHOLD_MS;
     const hasFreshData = cat.schemas.length > 0 && !isStale;
     if (hasFreshData) {
-      setCatalogs((prev) => prev.map((c) => (c.name === catalogName ? { ...c, expanded: !c.expanded } : c)));
+      setCatalogs((prev) =>
+        prev.map((c) => (c.name === catalogName ? { ...c, expanded: !c.expanded } : c)),
+      );
       return;
     }
-    setCatalogs((prev) => prev.map((c) => (c.name === catalogName ? { ...c, expanded: true, loading: true, error: null } : c)));
+    setCatalogs((prev) =>
+      prev.map((c) =>
+        c.name === catalogName ? { ...c, expanded: true, loading: true, error: null } : c,
+      ),
+    );
     try {
-      const res = await fetch(`/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`);
+      const res = await fetch(
+        `/api/metadata?type=schemas&catalog=${encodeURIComponent(catalogName)}`,
+      );
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error ?? "Failed to fetch schemas");
@@ -276,7 +294,12 @@ export function CatalogBrowser({
                 loading: false,
                 fetchedAt: Date.now(),
                 schemas: schemaNames.map((s) => ({
-                  name: s, expanded: false, loading: false, error: null, tables: [], fetchedAt: null,
+                  name: s,
+                  expanded: false,
+                  loading: false,
+                  error: null,
+                  tables: [],
+                  fetchedAt: null,
                 })),
               }
             : c,
@@ -286,7 +309,11 @@ export function CatalogBrowser({
       setCatalogs((prev) =>
         prev.map((c) =>
           c.name === catalogName
-            ? { ...c, loading: false, error: err instanceof Error ? err.message : "Failed to load schemas" }
+            ? {
+                ...c,
+                loading: false,
+                error: err instanceof Error ? err.message : "Failed to load schemas",
+              }
             : c,
         ),
       );
@@ -316,12 +343,19 @@ export function CatalogBrowser({
       const data = await res.json();
       const tables: TableNode[] = (data.tables ?? []).map(
         (t: { tableName: string; fqn: string; comment: string | null; tableType: string }) => ({
-          name: t.tableName, fqn: t.fqn, comment: t.comment, tableType: t.tableType,
+          name: t.tableName,
+          fqn: t.fqn,
+          comment: t.comment,
+          tableType: t.tableType,
         }),
       );
       updateSchema((s) => ({ ...s, loading: false, fetchedAt: Date.now(), tables }));
     } catch (err) {
-      updateSchema((s) => ({ ...s, loading: false, error: err instanceof Error ? err.message : "Failed to load tables" }));
+      updateSchema((s) => ({
+        ...s,
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to load tables",
+      }));
     }
   }, []);
 
@@ -341,7 +375,10 @@ export function CatalogBrowser({
     if (!sch) return;
     const isStale = !sch.fetchedAt || Date.now() - sch.fetchedAt > STALE_THRESHOLD_MS;
     const hasFreshData = sch.tables.length > 0 && !isStale;
-    if (hasFreshData) { updateSchema((s) => ({ ...s, expanded: !s.expanded })); return; }
+    if (hasFreshData) {
+      updateSchema((s) => ({ ...s, expanded: !s.expanded }));
+      return;
+    }
     updateSchema((s) => ({ ...s, expanded: true, loading: true, error: null }));
     try {
       const res = await fetch(
@@ -354,12 +391,19 @@ export function CatalogBrowser({
       const data = await res.json();
       const tables: TableNode[] = (data.tables ?? []).map(
         (t: { tableName: string; fqn: string; comment: string | null; tableType: string }) => ({
-          name: t.tableName, fqn: t.fqn, comment: t.comment, tableType: t.tableType,
+          name: t.tableName,
+          fqn: t.fqn,
+          comment: t.comment,
+          tableType: t.tableType,
         }),
       );
       updateSchema((s) => ({ ...s, loading: false, fetchedAt: Date.now(), tables }));
     } catch (err) {
-      updateSchema((s) => ({ ...s, loading: false, error: err instanceof Error ? err.message : "Failed to load tables" }));
+      updateSchema((s) => ({
+        ...s,
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to load tables",
+      }));
     }
   };
 
@@ -369,11 +413,14 @@ export function CatalogBrowser({
     if (!searchLower) return catalogs;
     return catalogs.filter((c) => {
       if (c.name.toLowerCase().includes(searchLower)) return true;
-      if (c.schemas.some((s) => {
-        if (s.name.toLowerCase().includes(searchLower)) return true;
-        if (s.tables.some((t) => t.name.toLowerCase().includes(searchLower))) return true;
-        return false;
-      })) return true;
+      if (
+        c.schemas.some((s) => {
+          if (s.name.toLowerCase().includes(searchLower)) return true;
+          if (s.tables.some((t) => t.name.toLowerCase().includes(searchLower))) return true;
+          return false;
+        })
+      )
+        return true;
       return false;
     });
   }, [catalogs, searchLower]);
@@ -404,7 +451,11 @@ export function CatalogBrowser({
   };
 
   const removeSource = (source: string) => {
-    emitChange(selectedSources.filter((s) => s !== source), excludedSources, exclusionPatterns);
+    emitChange(
+      selectedSources.filter((s) => s !== source),
+      excludedSources,
+      exclusionPatterns,
+    );
   };
 
   const excludeSource = (source: string) => {
@@ -414,7 +465,11 @@ export function CatalogBrowser({
   };
 
   const restoreExcluded = (source: string) => {
-    emitChange(selectedSources, excludedSources.filter((e) => e !== source), exclusionPatterns);
+    emitChange(
+      selectedSources,
+      excludedSources.filter((e) => e !== source),
+      exclusionPatterns,
+    );
   };
 
   const isCoveredBy = (path: string) => {
@@ -433,15 +488,25 @@ export function CatalogBrowser({
     const trimmed = patternInput.trim();
     if (!trimmed) return;
     const err = validateExclusionPattern(trimmed);
-    if (err) { setPatternError(err); return; }
-    if (exclusionPatterns.includes(trimmed)) { setPatternError("Pattern already added"); return; }
+    if (err) {
+      setPatternError(err);
+      return;
+    }
+    if (exclusionPatterns.includes(trimmed)) {
+      setPatternError("Pattern already added");
+      return;
+    }
     setPatternError(null);
     setPatternInput("");
     emitChange(selectedSources, excludedSources, [...exclusionPatterns, trimmed]);
   };
 
   const removePattern = (pattern: string) => {
-    emitChange(selectedSources, excludedSources, exclusionPatterns.filter((p) => p !== pattern));
+    emitChange(
+      selectedSources,
+      excludedSources,
+      exclusionPatterns.filter((p) => p !== pattern),
+    );
   };
 
   // Count how many loaded tree nodes match a pattern (best-effort preview)
@@ -562,7 +627,13 @@ export function CatalogBrowser({
               className="h-7 pl-7 text-xs"
             />
           </div>
-          <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 gap-1 text-xs" onClick={refreshCatalogs}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 gap-1 text-xs"
+            onClick={refreshCatalogs}
+          >
             <RefreshCw className="h-3 w-3" />
             Refresh
           </Button>
@@ -611,8 +682,16 @@ export function CatalogBrowser({
                 type="text"
                 placeholder="Exclude by pattern (e.g. stg_*, *_backup, __databricks*)"
                 value={patternInput}
-                onChange={(e) => { setPatternInput(e.target.value); setPatternError(null); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPattern(); } }}
+                onChange={(e) => {
+                  setPatternInput(e.target.value);
+                  setPatternError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addPattern();
+                  }
+                }}
                 className="h-7 pl-7 text-xs"
               />
             </div>
@@ -628,9 +707,7 @@ export function CatalogBrowser({
               Exclude
             </Button>
           </div>
-          {patternError && (
-            <p className="text-xs text-destructive">{patternError}</p>
-          )}
+          {patternError && <p className="text-xs text-destructive">{patternError}</p>}
 
           {exclusionPatterns.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -812,7 +889,11 @@ function CatalogRow({
           catalogExcluded ? "opacity-50" : ""
         }`}
       >
-        <button type="button" onClick={onToggleCatalog} className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={onToggleCatalog}
+          className="flex shrink-0 items-center gap-1"
+        >
           {showExpanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           ) : (
@@ -821,7 +902,11 @@ function CatalogRow({
           <Database className={`h-4 w-4 ${catalogExcluded ? "text-red-400" : "text-orange-500"}`} />
         </button>
 
-        <button type="button" onClick={onToggleCatalog} className={`flex-1 text-left text-sm font-medium ${catalogExcluded ? "line-through text-muted-foreground" : ""}`}>
+        <button
+          type="button"
+          onClick={onToggleCatalog}
+          className={`flex-1 text-left text-sm font-medium ${catalogExcluded ? "line-through text-muted-foreground" : ""}`}
+        >
           <HighlightMatch text={catalog.name} query={searchFilter} />
         </button>
 
@@ -830,7 +915,10 @@ function CatalogRow({
           variant="ghost"
           size="sm"
           className="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-60 hover:!opacity-100"
-          onClick={(e) => { e.stopPropagation(); onRefreshCatalog(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRefreshCatalog();
+          }}
           title="Refresh schemas"
         >
           <RefreshCw className="h-3 w-3" />
@@ -888,13 +976,25 @@ function CatalogRow({
             <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-destructive">
               <AlertCircle className="h-3 w-3" />
               {catalog.error}
-              <button type="button" onClick={onRefreshCatalog} className="ml-1 underline hover:no-underline">Retry</button>
+              <button
+                type="button"
+                onClick={onRefreshCatalog}
+                className="ml-1 underline hover:no-underline"
+              >
+                Retry
+              </button>
             </div>
           )}
           {!catalog.loading && !catalog.error && catalog.schemas.length === 0 && (
             <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
               No schemas found
-              <button type="button" onClick={onRefreshCatalog} className="underline hover:no-underline">Retry</button>
+              <button
+                type="button"
+                onClick={onRefreshCatalog}
+                className="underline hover:no-underline"
+              >
+                Retry
+              </button>
             </div>
           )}
           {filteredSchemas.map((schema) => (
@@ -992,7 +1092,11 @@ function SchemaRow({
           isSchemaMode && schemaSelected ? "bg-violet-50 dark:bg-violet-950/30" : ""
         } ${effectivelyExcluded ? "opacity-50" : ""}`}
       >
-        <button type="button" onClick={handleSchemaClick} className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={handleSchemaClick}
+          className="flex shrink-0 items-center gap-1"
+        >
           {isSchemaMode ? (
             schemaSelected ? (
               <Check className="h-3.5 w-3.5 text-green-600" />
@@ -1004,7 +1108,11 @@ function SchemaRow({
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           )}
-          {!isSchemaMode && <Layers className={`h-3.5 w-3.5 ${effectivelyExcluded ? "text-red-400" : "text-blue-500"}`} />}
+          {!isSchemaMode && (
+            <Layers
+              className={`h-3.5 w-3.5 ${effectivelyExcluded ? "text-red-400" : "text-blue-500"}`}
+            />
+          )}
         </button>
 
         <button
@@ -1020,10 +1128,14 @@ function SchemaRow({
         >
           <HighlightMatch text={schema.name} query={searchFilter} />
           {!isSchemaMode && schema.tables.length > 0 && (
-            <span className="ml-1.5 text-[10px] text-muted-foreground/60">({schema.tables.length})</span>
+            <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+              ({schema.tables.length})
+            </span>
           )}
           {!isSchemaMode && schemaCovered && !schemaSelected && !effectivelyExcluded && (
-            <span className="ml-1.5 text-[10px] text-muted-foreground/60">(included via catalog)</span>
+            <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+              (included via catalog)
+            </span>
           )}
           {effectivelyExcluded && (
             <span className="ml-1.5 text-[10px] text-red-500/70">(excluded)</span>
@@ -1036,7 +1148,10 @@ function SchemaRow({
             variant="ghost"
             size="sm"
             className="h-5 w-5 shrink-0 p-0 opacity-0 group-hover/schema:opacity-60 hover:!opacity-100"
-            onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRefresh();
+            }}
             title="Refresh tables"
           >
             <RefreshCw className="h-2.5 w-2.5" />
@@ -1045,7 +1160,9 @@ function SchemaRow({
 
         {isSchemaMode ? (
           schemaSelected ? (
-            <Badge variant="outline" className="text-[9px] text-green-600 border-green-200">Selected</Badge>
+            <Badge variant="outline" className="text-[9px] text-green-600 border-green-200">
+              Selected
+            </Badge>
           ) : null
         ) : effectivelyExcluded && isExcludedExplicit(schemaPath) ? (
           <Button
@@ -1107,13 +1224,21 @@ function SchemaRow({
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-destructive">
               <AlertCircle className="h-3 w-3" />
               {schema.error}
-              <button type="button" onClick={onRefresh} className="ml-1 underline hover:no-underline">Retry</button>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="ml-1 underline hover:no-underline"
+              >
+                Retry
+              </button>
             </div>
           )}
           {!schema.loading && !schema.error && schema.tables.length === 0 && (
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
               No tables found
-              <button type="button" onClick={onRefresh} className="underline hover:no-underline">Retry</button>
+              <button type="button" onClick={onRefresh} className="underline hover:no-underline">
+                Retry
+              </button>
             </div>
           )}
           {tablesToShow.map((table, idx) => {
@@ -1130,7 +1255,9 @@ function SchemaRow({
                   tableExcluded ? "opacity-50" : ""
                 }`}
               >
-                <TableProperties className={`h-3.5 w-3.5 shrink-0 ${tableExcluded ? "text-red-400" : "text-emerald-500"}`} />
+                <TableProperties
+                  className={`h-3.5 w-3.5 shrink-0 ${tableExcluded ? "text-red-400" : "text-emerald-500"}`}
+                />
                 <span
                   className={`flex-1 truncate text-xs ${
                     tableExcluded

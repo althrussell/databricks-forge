@@ -59,9 +59,7 @@ export function mapSubdomainsToTables(
   // but weren't referenced by any use case
   if (dataDomains) {
     for (const dd of dataDomains) {
-      const key = dd.subdomain
-        ? `${dd.domain}|||${dd.subdomain}`
-        : `${dd.domain}|||${dd.domain}`;
+      const key = dd.subdomain ? `${dd.domain}|||${dd.subdomain}` : `${dd.domain}|||${dd.domain}`;
       const group = groups.get(key);
       if (group) {
         for (const t of dd.tables) {

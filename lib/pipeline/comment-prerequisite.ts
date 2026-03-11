@@ -14,10 +14,7 @@
  */
 
 import { listCommentJobs, type CommentJob, createCommentJob } from "@/lib/lakebase/comment-jobs";
-import {
-  getProposalsForJob,
-  type CommentProposal,
-} from "@/lib/lakebase/comment-proposals";
+import { getProposalsForJob, type CommentProposal } from "@/lib/lakebase/comment-proposals";
 import { generateComments } from "@/lib/ai/comment-generator";
 import { logger } from "@/lib/logger";
 import type { MetadataSnapshot } from "@/lib/domain/types";
@@ -163,9 +160,7 @@ export async function ensureCommentEnrichment(
 
     // Check for a fresh existing job
     const existingJobs = await listCommentJobs();
-    const freshJob = existingJobs.find((job) =>
-      isJobFresh(job, requiredCatalogs, requiredSchemas),
-    );
+    const freshJob = existingJobs.find((job) => isJobFresh(job, requiredCatalogs, requiredSchemas));
 
     if (freshJob) {
       logger.info("Found fresh Comment Engine run, reusing proposals", {
@@ -176,10 +171,7 @@ export async function ensureCommentEnrichment(
       });
 
       const proposals = await getProposalsForJob(freshJob.id);
-      const { tablesEnriched, columnsEnriched } = mergeProposalsIntoMetadata(
-        metadata,
-        proposals,
-      );
+      const { tablesEnriched, columnsEnriched } = mergeProposalsIntoMetadata(metadata, proposals);
 
       return {
         enriched: tablesEnriched > 0 || columnsEnriched > 0,
@@ -221,10 +213,7 @@ export async function ensureCommentEnrichment(
     });
 
     const proposals = await getProposalsForJob(job.id);
-    const { tablesEnriched, columnsEnriched } = mergeProposalsIntoMetadata(
-      metadata,
-      proposals,
-    );
+    const { tablesEnriched, columnsEnriched } = mergeProposalsIntoMetadata(metadata, proposals);
 
     return {
       enriched: tablesEnriched > 0 || columnsEnriched > 0,

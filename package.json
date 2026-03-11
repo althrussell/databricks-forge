@@ -1,8 +1,27 @@
 {
   "name": "databricks-forge",
   "version": "0.24.0",
+  "description": "AI-powered use case discovery from Unity Catalog metadata -- turn your data estate into actionable insights",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/althrussell/databricks-forge.git"
+  },
+  "homepage": "https://github.com/althrussell/databricks-forge#readme",
+  "bugs": {
+    "url": "https://github.com/althrussell/databricks-forge/issues"
+  },
+  "keywords": [
+    "databricks",
+    "unity-catalog",
+    "ai",
+    "use-case-discovery",
+    "genie",
+    "data-intelligence",
+    "llm",
+    "nextjs"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build && sh scripts/postbuild.sh",

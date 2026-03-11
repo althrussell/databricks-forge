@@ -22,7 +22,17 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { catalogs, schemas, tables, industryId, scanId, runId, excludedSchemas, excludedTables, exclusionPatterns } = body;
+    const {
+      catalogs,
+      schemas,
+      tables,
+      industryId,
+      scanId,
+      runId,
+      excludedSchemas,
+      excludedTables,
+      exclusionPatterns,
+    } = body;
 
     if (!catalogs || !Array.isArray(catalogs) || catalogs.length === 0) {
       return NextResponse.json({ error: "At least one catalog is required" }, { status: 400 });

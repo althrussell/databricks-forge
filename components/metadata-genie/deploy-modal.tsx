@@ -50,13 +50,16 @@ export function MetadataGenieDeployModal({
   const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSchemaChange = useCallback((sources: string[], _excluded?: string[], _patterns?: string[]) => {
-    if (sources.length > 1) {
-      setTargetSchema([sources[sources.length - 1]]);
-    } else {
-      setTargetSchema(sources);
-    }
-  }, []);
+  const handleSchemaChange = useCallback(
+    (sources: string[], _excluded?: string[], _patterns?: string[]) => {
+      if (sources.length > 1) {
+        setTargetSchema([sources[sources.length - 1]]);
+      } else {
+        setTargetSchema(sources);
+      }
+    },
+    [],
+  );
 
   const handleDeploy = useCallback(async () => {
     if (targetSchema.length === 0) return;
