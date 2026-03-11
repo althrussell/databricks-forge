@@ -29,6 +29,11 @@ import {
   History,
   Trash2,
   ArrowLeft,
+  Check,
+  Database,
+  Table2,
+  Columns3,
+  Save,
 } from "lucide-react";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
@@ -516,31 +521,79 @@ export default function AICommentsPage() {
       {/* ---------------------------------------------------------------- */}
       {pageState === "generating" && (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="mt-4 font-medium">Generating AI comments...</p>
-            <p className="mt-2 text-sm text-muted-foreground">{genProgress.detail}</p>
-            {genProgress.pct > 0 && (
-              <div className="mt-4 w-64">
-                <div className="h-2 rounded-full bg-muted">
-                  <div
-                    className="h-2 rounded-full bg-primary transition-all duration-300"
-                    style={{ width: `${genProgress.pct}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-center text-xs text-muted-foreground">
-                  {genProgress.phase} -- {genProgress.pct}%
-                </p>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-4"
-              onClick={() => genAbort?.abort()}
-            >
-              Cancel
-            </Button>
+          <CardContent className="py-8 px-8 max-w-lg mx-auto">
+            <h3 className="text-lg font-semibold mb-6">Generating AI Comments</h3>
+
+            {/* Step indicators */}
+            <div className="space-y-4">
+              {[
+                { key: "metadata", icon: Database, label: "Scanning Unity Catalog metadata" },
+                { key: "tables", icon: Table2, label: "Generating table descriptions" },
+                { key: "columns", icon: Columns3, label: "Generating column descriptions" },
+                { key: "saving", icon: Save, label: "Saving proposals" },
+              ].map((step) => {
+                const phase = genProgress.phase;
+                const stepOrder = ["metadata", "tables", "columns", "saving", "done"];
+                const currentIdx = stepOrder.indexOf(phase);
+                const stepIdx = stepOrder.indexOf(step.key);
+                const isComplete = currentIdx > stepIdx;
+                const isActive = phase === step.key;
+                const isPending = currentIdx < stepIdx;
+
+                return (
+                  <div key={step.key} className="flex items-start gap-3">
+                    <div className="mt-0.5 flex-shrink-0">
+                      {isComplete ? (
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary">
+                          <Check className="h-3.5 w-3.5 text-primary-foreground" />
+                        </div>
+                      ) : isActive ? (
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-primary">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                        </div>
+                      ) : (
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-muted-foreground/30">
+                          <step.icon className="h-3 w-3 text-muted-foreground/40" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium ${isPending ? "text-muted-foreground/50" : ""}`}>
+                        {step.label}
+                      </p>
+                      {isActive && genProgress.detail && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {genProgress.detail}
+                        </p>
+                      )}
+                      {isActive && genProgress.pct > 0 && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-muted">
+                            <div
+                              className="h-1.5 rounded-full bg-primary transition-all duration-300"
+                              style={{ width: `${genProgress.pct}%` }}
+                            />
+                          </div>
+                          <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">
+                            {genProgress.pct}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => genAbort?.abort()}
+              >
+                Cancel
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
