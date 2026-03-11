@@ -7,7 +7,7 @@
  */
 
 import { withPrisma } from "@/lib/prisma";
-import type { MetricViewProposal } from "@/lib/genie/types";
+import type { MetricViewProposal } from "@/lib/metric-views/types";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -19,12 +19,16 @@ export interface StoredMetricViewProposal {
   runId: string | null;
   schemaScope: string;
   domain: string | null;
+  subdomain: string | null;
   name: string;
   description: string | null;
   yaml: string;
   ddl: string;
   sourceTables: string[];
   hasJoins: boolean;
+  classification: string | null;
+  rationale: string | null;
+  existingFqn: string | null;
   validationStatus: string;
   validationIssues: string[];
   deploymentStatus: string;
@@ -43,12 +47,16 @@ function dbRowToStored(row: {
   runId: string | null;
   schemaScope: string;
   domain: string | null;
+  subdomain: string | null;
   name: string;
   description: string | null;
   yaml: string;
   ddl: string;
   sourceTablesJson: string | null;
   hasJoins: boolean;
+  classification: string | null;
+  rationale: string | null;
+  existingFqn: string | null;
   validationStatus: string;
   validationIssues: string | null;
   deploymentStatus: string;
@@ -76,12 +84,16 @@ function dbRowToStored(row: {
     runId: row.runId,
     schemaScope: row.schemaScope,
     domain: row.domain,
+    subdomain: row.subdomain,
     name: row.name,
     description: row.description,
     yaml: row.yaml,
     ddl: row.ddl,
     sourceTables,
     hasJoins: row.hasJoins,
+    classification: row.classification,
+    rationale: row.rationale,
+    existingFqn: row.existingFqn,
     validationStatus: row.validationStatus,
     validationIssues,
     deploymentStatus: row.deploymentStatus,
@@ -136,12 +148,16 @@ export async function saveMetricViewProposals(
             runId,
             schemaScope,
             domain,
+            subdomain: p.subdomain ?? null,
             name: p.name,
             description: p.description || null,
             yaml: p.yaml,
             ddl: p.ddl,
             sourceTablesJson: JSON.stringify(p.sourceTables),
             hasJoins: p.hasJoins,
+            classification: p.classification ?? null,
+            rationale: p.rationale ?? null,
+            existingFqn: p.existingFqn ?? null,
             validationStatus: p.validationStatus,
             validationIssues: JSON.stringify(p.validationIssues),
             deploymentStatus: "proposed",

@@ -1,0 +1,481 @@
+/**
+ * Metric View Engine v2 -- subdomain-level generation with three-tier
+ * classification (reuse / improve / new) and an LLM planning pre-pass.
+ *
+ * Orchestration flow:
+ * 1. Deep discovery of existing UC metric views in scope
+ * 2. Map subdomains to tables via use case metadata
+ * 3. For each subdomain, run a planning pre-pass where the LLM decides
+ *    which metric views to create/reuse/improve and why
+ * 4. Generate YAML proposals per subdomain (delegates to the existing
+ *    runMetricViewProposals for validation, auto-fix, and repair)
+ * 5. Merge all proposals with classification metadata
+ *
+ * The engine can be called from:
+ * - Genie engine (Pass 6) -- receives measures/dimensions/joins from earlier passes
+ * - Standalone API -- uses lightweight seed for measures/dimensions
+ */
+
+import { type ChatMessage } from "@/lib/dbx/model-serving";
+import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
+import { logger } from "@/lib/logger";
+import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
+import type { UseCase, MetadataSnapshot, DataDomain } from "@/lib/domain/types";
+import type {
+  MetricViewProposal,
+  MetricViewClassification,
+  ExistingMetricViewDetail,
+  EnrichedSqlSnippetMeasure,
+  EnrichedSqlSnippetDimension,
+  ColumnEnrichment,
+  JoinSpecInput,
+} from "./types";
+import { mapSubdomainsToTables, type SubdomainTableGroup } from "./subdomain-mapper";
+import { filterRelevantExistingViews } from "./discovery";
+import {
+  runMetricViewProposals,
+  type MetricViewProposalsInput,
+} from "@/lib/genie/passes/metric-view-proposals";
+import type { SchemaAllowlist } from "@/lib/genie/schema-allowlist";
+
+const PLANNING_TEMPERATURE = 0.15;
+
+// ---------------------------------------------------------------------------
+// Engine input / output
+// ---------------------------------------------------------------------------
+
+export interface MetricViewEngineV2Input {
+  domain: string;
+  useCases: UseCase[];
+  dataDomains?: DataDomain[];
+  metadata: MetadataSnapshot;
+  allowlist: SchemaAllowlist;
+  existingMetricViews: ExistingMetricViewDetail[];
+  measures: EnrichedSqlSnippetMeasure[];
+  dimensions: EnrichedSqlSnippetDimension[];
+  joinSpecs: JoinSpecInput[];
+  columnEnrichments: ColumnEnrichment[];
+  businessContext?: string;
+  industryContext?: string;
+  endpoint: string;
+  signal?: AbortSignal;
+}
+
+export interface MetricViewEngineV2Output {
+  proposals: MetricViewProposal[];
+  subdomainGroups: SubdomainTableGroup[];
+  planSummary: string;
+}
+
+// ---------------------------------------------------------------------------
+// Planning pre-pass
+// ---------------------------------------------------------------------------
+
+interface PlannedMetricView {
+  name: string;
+  subdomain: string;
+  classification: MetricViewClassification;
+  rationale: string;
+  existingFqn?: string;
+  focusTables: string[];
+  suggestedMeasures: string[];
+  suggestedDimensions: string[];
+}
+
+interface PlanningResult {
+  views: PlannedMetricView[];
+  summary: string;
+}
+
+async function runPlanningPrePass(
+  subdomainGroups: SubdomainTableGroup[],
+  existingViews: ExistingMetricViewDetail[],
+  measures: EnrichedSqlSnippetMeasure[],
+  columnEnrichments: ColumnEnrichment[],
+  businessContext: string | undefined,
+  industryContext: string | undefined,
+  endpoint: string,
+  signal?: AbortSignal,
+): Promise<PlanningResult> {
+  const subdomainSummary = subdomainGroups
+    .map((g) => {
+      const tableList = g.tables.slice(0, 10).join(", ");
+      const ucSummary = g.useCases
+        .slice(0, 3)
+        .map((uc) => uc.name)
+        .join("; ");
+      return `- **${g.subdomain}** (${g.domain}): ${g.tables.length} tables [${tableList}], use cases: ${ucSummary}`;
+    })
+    .join("\n");
+
+  const existingSummary =
+    existingViews.length > 0
+      ? existingViews
+          .map((mv) => {
+            const dims = mv.dimensions.join(", ") || "unknown";
+            const meass = mv.measures.join(", ") || "unknown";
+            return `- ${mv.fqn}: dims=[${dims}], measures=[${meass}], source=${mv.sourceTable ?? "unknown"}`;
+          })
+          .join("\n")
+      : "(none found)";
+
+  const availableMeasures = measures
+    .slice(0, 20)
+    .map((m) => `${m.name}: ${m.sql}`)
+    .join("\n");
+
+  const systemMessage = `You are a Databricks SQL architect planning Unity Catalog metric views for a data estate.
+
+Your task is to decide WHAT metric views to create, which existing ones to reuse or improve, and provide rationale for each decision.
+
+## Best Practices
+- Start with atomic measures, build complex KPIs via composability (MEASURE() referencing other measures)
+- Model business-friendly dimensions (CASE, DATE_TRUNC for readable labels)
+- Use global filter: to scope KPIs consistently
+- One metric view per focused analytical concern (not one mega-view per domain)
+- Prioritise metric views that serve the most use cases and stakeholders
+- Leverage existing metric views when they already solve the need well
+
+## Classification Rules
+- **reuse**: An existing metric view already covers this analytical need well. Reference it as-is.
+- **improve**: An existing metric view partially covers this need but could benefit from additional measures, dimensions, or better naming/comments.
+- **new**: No existing metric view covers this analytical concern. Create one.
+
+${businessContext ? `## Business Context\n${businessContext}\n` : ""}
+${industryContext ? `## Industry Context\n${industryContext}\n` : ""}
+
+## Output Format (JSON)
+{
+  "summary": "1-2 sentence overview of the metric view plan",
+  "views": [
+    {
+      "name": "metric_view_name",
+      "subdomain": "subdomain name",
+      "classification": "reuse|improve|new",
+      "rationale": "Why this view, and why this classification",
+      "existingFqn": "catalog.schema.view (only for reuse/improve)",
+      "focusTables": ["catalog.schema.table1"],
+      "suggestedMeasures": ["total_revenue", "order_count"],
+      "suggestedDimensions": ["order_month", "region"]
+    }
+  ]
+}
+
+RULES:
+- Be selective: propose only metric views that deliver clear value for the given use cases
+- Do NOT create metric views for subdomains with only 1 table and no meaningful measures
+- Do NOT propose more than 3 metric views per subdomain
+- For "reuse", just reference the existing view FQN (no YAML generation needed)
+- For "improve", reference the existing FQN and describe what to add/change` +
+    formatSystemOverlay(resolveForGeniePass("metricViews").systemOverlay);
+
+  const userMessage = `## Subdomains and Tables
+${subdomainSummary}
+
+## Existing Metric Views in Unity Catalog
+${existingSummary}
+
+## Available Measures (from semantic analysis)
+${availableMeasures || "(none)"}
+
+Plan the metric views for this data estate.`;
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemMessage },
+    { role: "user", content: userMessage },
+  ];
+
+  try {
+    const result = await cachedChatCompletion({
+      endpoint,
+      messages,
+      temperature: PLANNING_TEMPERATURE,
+      maxTokens: 8192,
+      responseFormat: "json_object",
+      signal,
+    });
+
+    const parsed = parseLLMJson(result.content ?? "", "metric-views:plan") as Record<
+      string,
+      unknown
+    >;
+    const views: PlannedMetricView[] = (
+      Array.isArray(parsed.views) ? parsed.views : []
+    ).map((v: Record<string, unknown>) => ({
+      name: String(v.name ?? ""),
+      subdomain: String(v.subdomain ?? ""),
+      classification: validateClassification(String(v.classification ?? "new")),
+      rationale: String(v.rationale ?? ""),
+      existingFqn: v.existingFqn ? String(v.existingFqn) : undefined,
+      focusTables: Array.isArray(v.focusTables) ? v.focusTables.map(String) : [],
+      suggestedMeasures: Array.isArray(v.suggestedMeasures)
+        ? v.suggestedMeasures.map(String)
+        : [],
+      suggestedDimensions: Array.isArray(v.suggestedDimensions)
+        ? v.suggestedDimensions.map(String)
+        : [],
+    }));
+
+    const summary = String(parsed.summary ?? "Metric view plan generated.");
+
+    logger.info("Metric view planning pre-pass complete", {
+      totalPlanned: views.length,
+      reuse: views.filter((v) => v.classification === "reuse").length,
+      improve: views.filter((v) => v.classification === "improve").length,
+      new: views.filter((v) => v.classification === "new").length,
+    });
+
+    return { views, summary };
+  } catch (err) {
+    logger.warn("Metric view planning pre-pass failed, proceeding with default generation", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { views: [], summary: "Planning failed; using default generation." };
+  }
+}
+
+function validateClassification(value: string): MetricViewClassification {
+  if (value === "reuse" || value === "improve" || value === "new") return value;
+  return "new";
+}
+
+// ---------------------------------------------------------------------------
+// Main engine
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the full Metric View Engine v2:
+ * 1. Map subdomains to tables
+ * 2. Filter existing views relevant to each subdomain
+ * 3. Run planning pre-pass
+ * 4. For "new" and "improve" plans, generate YAML via the existing engine
+ * 5. For "reuse" plans, create pass-through proposals
+ */
+export async function runMetricViewEngineV2(
+  input: MetricViewEngineV2Input,
+): Promise<MetricViewEngineV2Output> {
+  const {
+    domain,
+    useCases,
+    dataDomains,
+    metadata,
+    allowlist,
+    existingMetricViews,
+    measures,
+    dimensions,
+    joinSpecs,
+    columnEnrichments,
+    businessContext,
+    industryContext,
+    endpoint,
+    signal,
+  } = input;
+
+  // Step 1: Map subdomains to tables
+  const subdomainGroups = mapSubdomainsToTables(useCases, dataDomains);
+
+  if (subdomainGroups.length === 0) {
+    logger.info("No subdomain groups found, falling back to domain-level generation");
+    const result = await runMetricViewProposals({
+      domain,
+      tableFqns: useCases.flatMap((uc) => uc.tablesInvolved ?? []),
+      metadata,
+      allowlist,
+      useCases,
+      measures,
+      dimensions,
+      joinSpecs,
+      columnEnrichments,
+      endpoint,
+      signal,
+    });
+    return {
+      proposals: result.proposals.map((p) => ({
+        ...p,
+        classification: "new" as const,
+        rationale: "Generated at domain level (no subdomain data available).",
+      })),
+      subdomainGroups: [],
+      planSummary: "Fallback: domain-level generation (no subdomain data).",
+    };
+  }
+
+  // Step 2: Run planning pre-pass
+  const plan = await runPlanningPrePass(
+    subdomainGroups,
+    existingMetricViews,
+    measures,
+    columnEnrichments,
+    businessContext,
+    industryContext,
+    endpoint,
+    signal,
+  );
+
+  const allProposals: MetricViewProposal[] = [];
+
+  // Step 3: Handle "reuse" plans (no generation needed)
+  for (const planned of plan.views.filter((v) => v.classification === "reuse")) {
+    const existing = existingMetricViews.find(
+      (mv) => mv.fqn.toLowerCase() === planned.existingFqn?.toLowerCase(),
+    );
+    if (existing) {
+      allProposals.push({
+        name: existing.name,
+        description: `Existing metric view recommended for reuse. ${planned.rationale}`,
+        yaml: existing.yaml ?? "",
+        ddl: "",
+        sourceTables: existing.sourceTable ? [existing.sourceTable] : [],
+        hasJoins: existing.joinTargets.length > 0,
+        hasFilteredMeasures: false,
+        hasWindowMeasures: false,
+        hasMaterialization: false,
+        validationStatus: "valid",
+        validationIssues: [],
+        classification: "reuse",
+        rationale: planned.rationale,
+        existingFqn: planned.existingFqn,
+        subdomain: planned.subdomain,
+      });
+    }
+  }
+
+  // Step 4: Generate "new" and "improve" proposals per subdomain
+  const generationPlans = plan.views.filter(
+    (v) => v.classification === "new" || v.classification === "improve",
+  );
+
+  // Group generation plans by subdomain for batch efficiency
+  const plansBySubdomain = new Map<string, PlannedMetricView[]>();
+  for (const p of generationPlans) {
+    const key = p.subdomain.toLowerCase();
+    const group = plansBySubdomain.get(key) ?? [];
+    group.push(p);
+    plansBySubdomain.set(key, group);
+  }
+
+  for (const [subdomainKey, plans] of plansBySubdomain) {
+    const subGroup = subdomainGroups.find(
+      (g) => g.subdomain.toLowerCase() === subdomainKey,
+    );
+    if (!subGroup) continue;
+
+    const relevantExisting = filterRelevantExistingViews(
+      existingMetricViews,
+      subGroup.tables,
+    );
+
+    // Build enhanced context to inject into the inner engine's domain label
+    // which becomes part of the LLM prompt
+    const existingCtx =
+      relevantExisting.length > 0
+        ? ` (existing views to consider: ${relevantExisting.map((mv) => mv.name).join(", ")})`
+        : "";
+
+    const planGuidanceCtx = plans
+      .map(
+        (p) =>
+          `${p.name} (${p.classification})`,
+      )
+      .join(", ");
+
+    const domainLabel = planGuidanceCtx
+      ? `${domain} / ${subGroup.subdomain} [plan: ${planGuidanceCtx}]${existingCtx}`
+      : `${domain} / ${subGroup.subdomain}${existingCtx}`;
+
+    const genInput: MetricViewProposalsInput = {
+      domain: domainLabel,
+      tableFqns: subGroup.tables,
+      metadata,
+      allowlist,
+      useCases: subGroup.useCases,
+      measures: measures.filter((m) =>
+        plans.some((p) =>
+          p.suggestedMeasures.length === 0 ||
+          p.suggestedMeasures.some(
+            (sm) => m.name.toLowerCase().includes(sm.toLowerCase()),
+          ),
+        ),
+      ).length > 0
+        ? measures
+        : measures,
+      dimensions,
+      joinSpecs,
+      columnEnrichments: columnEnrichments.filter((e) =>
+        subGroup.tables.some(
+          (t) => t.toLowerCase() === e.tableFqn.toLowerCase(),
+        ),
+      ),
+      endpoint,
+      signal,
+    };
+
+    const result = await runMetricViewProposals(genInput);
+
+    for (const proposal of result.proposals) {
+      // Match generated proposal to its plan entry
+      const matchedPlan = plans.find(
+        (p) =>
+          p.name.toLowerCase() === proposal.name.toLowerCase() ||
+          proposal.name.toLowerCase().includes(p.name.toLowerCase().replace(/\s+/g, "_")),
+      );
+
+      allProposals.push({
+        ...proposal,
+        classification: matchedPlan?.classification ?? "new",
+        rationale: matchedPlan?.rationale ?? "Generated for this subdomain.",
+        existingFqn: matchedPlan?.existingFqn,
+        subdomain: subGroup.subdomain,
+      });
+    }
+  }
+
+  // Step 5: If the planning pre-pass returned nothing (fallback), generate at domain level
+  if (plan.views.length === 0) {
+    logger.info("Planning pre-pass returned no views, falling back to per-subdomain generation");
+    for (const subGroup of subdomainGroups.slice(0, 5)) {
+      const result = await runMetricViewProposals({
+        domain: `${domain} / ${subGroup.subdomain}`,
+        tableFqns: subGroup.tables,
+        metadata,
+        allowlist,
+        useCases: subGroup.useCases,
+        measures,
+        dimensions,
+        joinSpecs,
+        columnEnrichments: columnEnrichments.filter((e) =>
+          subGroup.tables.some(
+            (t) => t.toLowerCase() === e.tableFqn.toLowerCase(),
+          ),
+        ),
+        endpoint,
+        signal,
+      });
+
+      for (const proposal of result.proposals) {
+        allProposals.push({
+          ...proposal,
+          classification: "new",
+          rationale: "Generated for subdomain (planning pre-pass unavailable).",
+          subdomain: subGroup.subdomain,
+        });
+      }
+    }
+  }
+
+  logger.info("Metric View Engine v2 complete", {
+    domain,
+    subdomains: subdomainGroups.length,
+    totalProposals: allProposals.length,
+    reuse: allProposals.filter((p) => p.classification === "reuse").length,
+    improve: allProposals.filter((p) => p.classification === "improve").length,
+    new: allProposals.filter((p) => p.classification === "new").length,
+  });
+
+  return {
+    proposals: allProposals,
+    subdomainGroups,
+    planSummary: plan.summary,
+  };
+}

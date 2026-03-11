@@ -28,8 +28,9 @@ import { runSemanticExpressions } from "./passes/semantic-expressions";
 import { runTrustedAssetAuthoring } from "./passes/trusted-assets";
 import { runInstructionGeneration } from "./passes/instruction-generation";
 import { runBenchmarkGeneration } from "./passes/benchmark-generation";
-import { runMetricViewProposals } from "./passes/metric-view-proposals";
 import { isMetricViewsEnabled } from "./metric-views-config";
+import { runMetricViewEngineV2 } from "@/lib/metric-views/engine";
+import { discoverExistingMetricViews } from "@/lib/metric-views/discovery";
 import { runJoinInference } from "./passes/join-inference";
 import { runTitleGeneration } from "./passes/title-generation";
 import { runExampleQueryGeneration } from "./passes/example-query-generation";
@@ -528,19 +529,33 @@ async function processDomain(
 
   const metricViewPromise = (async () => {
     if (!isMetricViewsEnabled() || !config.generateMetricViews) return { proposals: [] };
-    const result = await runMetricViewProposals({
+
+    // Deep discovery: fetch existing UC metric views with full YAML definitions
+    const existingViews = await discoverExistingMetricViews(
+      [metadata.ucPath],
+    ).catch((err) => {
+      log.warn("Metric view discovery failed, continuing without existing views", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    });
+
+    // Run the v2 engine with subdomain-level generation and three-tier classification
+    const result = await runMetricViewEngineV2({
       domain: normalizedDomain,
-      tableFqns: tables,
+      useCases,
       metadata,
       allowlist,
-      useCases,
+      existingMetricViews: existingViews,
       measures: exprResult.measures,
       dimensions: exprResult.dimensions,
       joinSpecs: allJoins,
       columnEnrichments: columnResult.enrichments,
+      businessContext: run.businessContext?.strategicGoals,
       endpoint: premiumEndpoint,
       signal,
     });
+
     // Persist metric view proposals to standalone table (best-effort)
     try {
       const schemaScope = metadata.ucPath;

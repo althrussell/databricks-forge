@@ -160,16 +160,19 @@ describe("Skill Content Snapshots", () => {
   it("metric-view-patterns has expected chunks", () => {
     const skills = getAllSkills().find((s) => s.id === "metric-view-patterns");
     expect(skills).toBeDefined();
-    expect(skills!.chunks.length).toBe(7);
+    expect(skills!.chunks.length).toBe(10);
     expect(skills!.chunks.map((c) => c.id)).toMatchInlineSnapshot(`
       [
         "mv-yaml-reference",
+        "mv-best-practices",
         "mv-query-rules",
         "mv-measure-patterns",
         "mv-dimension-patterns",
         "mv-join-patterns",
+        "mv-semantic-metadata",
         "mv-gotchas",
         "mv-window-examples",
+        "mv-validation-rules",
       ]
     `);
   });

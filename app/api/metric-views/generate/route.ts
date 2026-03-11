@@ -11,11 +11,12 @@ import { getServingEndpoint } from "@/lib/dbx/client";
 import { listTables, listColumns, listForeignKeys } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
 import { runMetricViewProposals } from "@/lib/genie/passes/metric-view-proposals";
-import { buildLightweightSeed } from "@/lib/genie/passes/lightweight-seed";
+import { buildLightweightSeed } from "@/lib/metric-views/seed";
+import { discoverExistingMetricViews } from "@/lib/metric-views/discovery";
 import { saveMetricViewProposals } from "@/lib/lakebase/metric-view-proposals";
 import { logger } from "@/lib/logger";
 import type { MetadataSnapshot } from "@/lib/domain/types";
-import type { JoinSpecInput } from "@/lib/genie/types";
+import type { JoinSpecInput } from "@/lib/metric-views/types";
 
 interface RequestBody {
   schemaScope: string;
@@ -75,6 +76,9 @@ export async function POST(request: NextRequest) {
     // Build lightweight seed (no LLM needed)
     const { measures, dimensions, columnEnrichments } = buildLightweightSeed(tableFqns, metadata);
 
+    // Discover existing metric views (best-effort)
+    const existingViews = await discoverExistingMetricViews([schemaScope]).catch(() => []);
+
     // Generate metric view proposals
     const result = await runMetricViewProposals({
       domain: schemaScope,
@@ -89,8 +93,15 @@ export async function POST(request: NextRequest) {
       endpoint,
     });
 
+    // Tag proposals as "new" (standalone path doesn't have subdomain context for classification)
+    const taggedProposals = result.proposals.map((p) => ({
+      ...p,
+      classification: "new" as const,
+      rationale: "Standalone generation (no pipeline context).",
+    }));
+
     // Persist proposals
-    await saveMetricViewProposals(null, schemaScope, null, result.proposals);
+    await saveMetricViewProposals(null, schemaScope, null, taggedProposals);
 
     logger.info("Standalone metric view generation complete", {
       schemaScope,
@@ -98,9 +109,10 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      proposals: result.proposals,
+      proposals: taggedProposals,
       schemaScope,
       tableCount: tableFqns.length,
+      existingMetricViews: existingViews.length,
     });
   } catch (err) {
     logger.error("Standalone metric view generation failed", {

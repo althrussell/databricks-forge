@@ -257,12 +257,16 @@ model ForgeMetricViewProposal {
   runId            String?   @map("run_id")
   schemaScope      String    @map("schema_scope")
   domain           String?
+  subdomain        String?
   name             String
   description      String?
   yaml             String
   ddl              String
   sourceTablesJson String?   @map("source_tables_json")
   hasJoins         Boolean   @default(false) @map("has_joins")
+  classification   String?   @map("classification")
+  rationale        String?
+  existingFqn      String?   @map("existing_fqn")
   validationStatus String    @default("pending") @map("validation_status")
   validationIssues String?   @map("validation_issues")
   deploymentStatus String    @default("proposed") @map("deployment_status")
@@ -276,6 +280,7 @@ model ForgeMetricViewProposal {
   @@index([runId])
   @@index([schemaScope])
   @@index([deployedFqn])
+  @@index([subdomain])
   @@map("forge_metric_view_proposals")
 }
 
