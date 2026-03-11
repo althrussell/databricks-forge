@@ -90,7 +90,7 @@ on a faster model (Claude Sonnet) at 3-5x lower latency.
 
 | Env Variable | Resource Key | Default | Purpose |
 |---|---|---|---|
-| `DATABRICKS_SERVING_ENDPOINT` | `serving-endpoint` | `databricks-claude-opus-4-6` | Premium model for SQL generation and quality-critical tasks |
+| `DATABRICKS_SERVING_ENDPOINT` | `serving-endpoint` | `databricks-claude-opus-4-6` | Premium model for SQL generation and quality-critical passes |
 | `DATABRICKS_SERVING_ENDPOINT_FAST` | `serving-endpoint-fast` | Falls back to premium | Fast model for classification and enrichment tasks |
 
 The fast endpoint is **opt-in**: if `serving-endpoint-fast` is not configured
@@ -130,7 +130,7 @@ routing table.
 
 ### Concurrency Architecture
 
-Domains are processed with bounded concurrency (up to 3 in parallel).
+Domains are processed with bounded concurrency (up to 10 in parallel).
 Within each domain, the pass dependency graph is optimized for maximum
 parallelism:
 
@@ -152,9 +152,9 @@ errors with exponential backoff (2 retries, 1s/2s backoff).
 
 ## Pipeline Integration
 
-The Genie Engine runs as **Step 8** of the Forge discovery pipeline
+The Genie Engine runs as **Step 10** of the Forge discovery pipeline
 (`lib/pipeline/steps/genie-recommendations.ts`). It is triggered automatically
-after SQL generation completes.
+after Business Value Analysis completes and runs in the background.
 
 **Inputs received from earlier steps:**
 
@@ -162,7 +162,7 @@ after SQL generation completes.
 |---|---|
 | `PipelineRun` (config, business context) | Step 1: Business Context |
 | `MetadataSnapshot` (tables, columns, FKs, metric views) | Step 2: Metadata Extraction |
-| `UseCase[]` (scored, domain-assigned, with SQL) | Steps 3-7 |
+| `UseCase[]` (scored, domain-assigned, with SQL) | Steps 4-8 |
 | `SampleDataCache` (optional row samples) | Step 2 (when data sampling enabled) |
 
 **Outputs written to Lakebase:**
@@ -256,7 +256,7 @@ Each expression includes `synonyms` (colloquial names users might type) and
 **Module:** `lib/genie/passes/join-inference.ts`
 
 An LLM-driven pass that discovers implicit table relationships from schema
-and column naming conventions. Runs only when fewer than 2 joins are found
+and column naming conventions. Runs only when fewer than 3 joins are found
 from FK metadata + overrides + SQL inference (avoids redundant calls when
 relationships are already well-defined).
 
@@ -1140,23 +1140,40 @@ LLM refinement or add custom SQL expressions.
 
 ---
 
+## Related Documentation
+
+- **[GENIE_HEALTHCHECK_ENGINE.md](GENIE_HEALTHCHECK_ENGINE.md)** -- deterministic health scoring, automated fix workflow, optimization review with diff preview, and benchmark feedback loop for any Genie Space (Forge-generated or imported)
+- **[SQL_ENGINE.md](SQL_ENGINE.md)** -- grounded SQL generation and validation pipeline used by Genie passes (semantic expressions, benchmarks, trusted assets, metric views)
+
+---
+
 ## File Reference
 
 ### Core Engine
 
 | File | Purpose |
 |---|---|
-| `lib/genie/engine.ts` | Main orchestrator -- runs all 7 passes |
+| `lib/genie/engine.ts` | Main orchestrator -- runs all passes per domain |
 | `lib/genie/assembler.ts` | Builds SerializedSpace v2 payload |
 | `lib/genie/types.ts` | All TypeScript types and interfaces |
 | `lib/genie/schema-allowlist.ts` | Schema grounding and validation |
 | `lib/genie/time-periods.ts` | Auto date filter/dimension generation |
 | `lib/genie/entity-extraction.ts` | Entity matching candidate identification |
 | `lib/genie/engine-status.ts` | In-memory async job status tracker |
-| `lib/genie/llm-cache.ts` | In-memory LLM response cache + retry logic |
-| `lib/genie/concurrency.ts` | Bounded-concurrency execution utility |
+| `lib/genie/adhoc-engine.ts` | Ad-hoc fast/full Genie generation from table list |
 | `lib/genie/recommend.ts` | Legacy deterministic fallback generator |
 | `lib/genie/benchmark-runner.ts` | Benchmark execution via Conversation API |
+| `lib/genie/space-health-check.ts` | Deterministic health scorer (see [GENIE_HEALTHCHECK_ENGINE.md](GENIE_HEALTHCHECK_ENGINE.md)) |
+| `lib/genie/space-fixer.ts` | Fix strategy router and metadata builder |
+| `lib/genie/space-cache.ts` | In-memory serialized_space cache (5min TTL) |
+| `lib/genie/space-metadata.ts` | Metadata extraction from serialized_space |
+| `lib/genie/benchmark-feedback.ts` | Feedback-to-fix analysis |
+| `lib/genie/optimize.ts` | Field-level optimization from benchmark feedback |
+| `lib/genie/join-diagnostics.ts` | Join candidate evaluation |
+| `lib/genie/domain-normalization.ts` | Domain name normalization |
+| `lib/metric-views/engine.ts` | Metric view engine v2 (used by Pass 6) |
+| `lib/toolkit/llm-cache.ts` | In-memory LLM response cache + retry logic |
+| `lib/toolkit/concurrency.ts` | Bounded-concurrency execution utility |
 | `lib/ai/sql-rules.ts` | Shared Databricks SQL quality rules (full + compact) |
 
 ### Engine Passes
@@ -1191,10 +1208,20 @@ LLM refinement or add custom SQL expressions.
 
 | File | Purpose |
 |---|---|
-| `components/pipeline/genie-workbench.tsx` | Main workbench with tabs |
+| `components/pipeline/genie-workbench.tsx` | Main workbench with tabs (pipeline run context) |
 | `components/pipeline/genie-config-editor.tsx` | Per-run config editor |
 | `components/pipeline/genie-spaces-tab.tsx` | Overview table and deploy |
 | `components/pipeline/genie-space-preview.tsx` | Deep preview with inline edit |
+| `components/genie/space-overview-tab.tsx` | Space detail overview tab |
+| `components/genie/space-health-tab.tsx` | Health check inline report |
+| `components/genie/space-detail-hero.tsx` | Space detail header hero |
+| `components/genie/space-config-viewer.tsx` | Read-only accordion config viewer |
+| `components/genie/space-benchmarks-tab.tsx` | Benchmark test runner UI |
+| `components/genie/space-diff-viewer.tsx` | Side-by-side config diff viewer |
+| `components/genie/optimization-review.tsx` | Selectable optimization suggestions |
+| `components/genie/import-space-dialog.tsx` | Import external space (JSON paste) |
+| `components/genie/health-detail-sheet.tsx` | Health report slide-out panel |
+| `components/genie/health-check-settings.tsx` | Health check configuration UI |
 
 ### API Routes
 

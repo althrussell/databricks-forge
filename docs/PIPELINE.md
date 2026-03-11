@@ -4,7 +4,7 @@
 
 ## Pipeline Overview
 
-The pipeline runs 7 core steps sequentially (plus an optional 8th Genie Engine step). Each step:
+The pipeline runs 10 steps. Each step:
 
 - Receives the current pipeline state (run config + accumulated results)
 - Executes SQL queries (metadata) and/or Model Serving calls (LLM via chat completions API)
@@ -12,21 +12,27 @@ The pipeline runs 7 core steps sequentially (plus an optional 8th Genie Engine s
 - Updates `progress_pct` and `current_step` on the run record
 
 ```
-[1] Business Context      (10%)
-        │
-[2] Metadata Extraction   (25%)
-        │
-[3] Table Filtering       (35%)
-        │
-[4] Use Case Generation   (55%)
-        │
-[5] Domain Clustering     (70%)
-        │
-[6] Scoring & Dedup       (85%)
-        │
-[7] SQL Generation        (100%)
-        │
-[8] Genie Engine          (optional, post-pipeline)
+ [1] Business Context         (10%)
+         │
+ [2] Metadata Extraction      (18%)
+         │
+ [3] Asset Discovery          (22%)  ← optional
+         │
+ [4] Table Filtering          (30%)
+         │
+ [5] Use Case Generation      (45%)
+         │
+ [6] Domain Clustering        (55%)
+         │
+ [7] Scoring & Dedup          (65%)
+         │
+ [8] SQL Generation           (80%)
+         │
+ [9] Business Value Analysis  (90%)
+         │
+[10] Genie Recommendations   (100%)  ← background
+         │
+     Dashboard Engine                 ← background (parallel with Genie)
 ```
 
 ---
@@ -45,15 +51,18 @@ endpoint falls back to the premium endpoint -- all behaviour is unchanged.
 |---|---|---|
 | 1. Business Context | **Fast** | Structured JSON output (industries, goals, priorities) |
 | 2. Metadata Extraction | None (SQL) | Pure SQL queries against `information_schema` |
-| 3. Table Filtering | **Fast** | Binary classification (business vs technical) |
-| 4. Use Case Generation | **Premium** | Creative generation with schema grounding -- quality-critical |
-| 5. Domain Clustering | **Fast** | Taxonomy assignment (3 sub-passes: domain, subdomain, merge) |
-| 6a. Scoring | **Premium** | Nuanced judgment on multiple scoring dimensions |
-| 6b. Dedup (per-domain) | **Fast** | Binary classification (keep vs remove) |
-| 6c. Dedup (cross-domain) | **Fast** | Binary classification (keep vs remove) |
-| 6d. Calibration | **Premium** | Global score adjustment requires contextual reasoning |
-| 7. SQL Generation | **Premium** | SQL correctness is critical |
-| 8. Genie Engine | Mixed | See [GENIE_ENGINE.md](GENIE_ENGINE.md#model-routing) |
+| 3. Asset Discovery | None (SQL/API) | Discovers existing Genie Spaces, dashboards, metric views |
+| 4. Table Filtering | **Fast** | Binary classification (business vs technical) |
+| 5. Use Case Generation | **Premium** | Creative generation with schema grounding -- quality-critical |
+| 6. Domain Clustering | **Fast** | Taxonomy assignment (3 sub-passes: domain, subdomain, merge) |
+| 7a. Scoring | **Premium** | Nuanced judgment on multiple scoring dimensions |
+| 7b. Dedup (per-domain) | **Fast** | Binary classification (keep vs remove) |
+| 7c. Dedup (cross-domain) | **Fast** | Binary classification (keep vs remove) |
+| 7d. Calibration | **Premium** | Global score adjustment requires contextual reasoning |
+| 8. SQL Generation | **Premium** | SQL correctness is critical |
+| 9. Business Value Analysis | **Fast** | Financial quantification, roadmap, synthesis, stakeholders |
+| 10. Genie Engine | Mixed | See [GENIE_ENGINE.md](GENIE_ENGINE.md#model-routing) |
+| -- Dashboard Engine | **Premium** | All passes are quality-critical |
 
 ---
 
@@ -125,7 +134,34 @@ continue with accessible metadata. Fail the step only if zero tables are found.
 
 ---
 
-## Step 3: Table Filtering
+## Step 3: Asset Discovery
+
+**File:** `lib/pipeline/steps/asset-discovery.ts`
+
+**Purpose:** Discover existing Genie Spaces, dashboards, and metric views within
+the scoped catalogs and schemas. This step is optional and runs when
+`assetDiscoveryEnabled` is set in the run config.
+
+**Prompts:** None (API + SQL queries)
+
+**Inputs:**
+- `MetadataSnapshot` (from Step 2)
+
+**Process:**
+1. Query workspace for existing Genie Spaces via the Genie API
+2. Query `information_schema` for metric views (`table_type = 'METRIC_VIEW'`)
+3. Discover Lakeview dashboards via the Workspace API
+4. Persist discovered assets in the pipeline context for later steps
+
+**Output:** Discovered asset lists (Genie Spaces, dashboards, metric views)
+available to the Genie Engine and Dashboard Engine for enhancement recommendations.
+
+**Error handling:** If discovery fails for any asset type, log a warning and
+continue with empty results. This step never blocks pipeline execution.
+
+---
+
+## Step 4: Table Filtering
 
 **File:** `lib/pipeline/steps/table-filtering.ts`
 
@@ -152,7 +188,7 @@ that batch (fail-open to avoid missing use cases).
 
 ---
 
-## Step 4: Use Case Generation
+## Step 5: Use Case Generation
 
 **File:** `lib/pipeline/steps/usecase-generation.ts`
 
@@ -184,7 +220,7 @@ that fail after retries.
 
 ---
 
-## Step 5: Domain Clustering
+## Step 6: Domain Clustering
 
 **File:** `lib/pipeline/steps/domain-clustering.ts`
 
@@ -212,7 +248,7 @@ that fail after retries.
 
 ---
 
-## Step 6: Scoring & Deduplication
+## Step 7: Scoring & Deduplication
 
 **File:** `lib/pipeline/steps/scoring.ts`
 
@@ -243,7 +279,7 @@ If dedup fails, keep all use cases.
 
 ---
 
-## Step 7: SQL Generation
+## Step 8: SQL Generation
 
 **File:** `lib/pipeline/steps/sql-generation.ts`
 
@@ -254,8 +290,8 @@ Databricks SQL that demonstrates the analytical technique.
 
 **Inputs:**
 - `business_context` (from Step 1)
-- `schema_markdown` with business tables (from Step 3)
-- Use cases with domains and scores (from Step 6)
+- `schema_markdown` with business tables (from Step 4)
+- Use cases with domains and scores (from Step 7)
 - Optional sample data (if data sampling is enabled)
 
 **Process:**
@@ -271,12 +307,47 @@ and continue with the next use case.
 
 ---
 
-## Step 8: Genie Engine (Optional)
+## Step 9: Business Value Analysis
+
+**File:** `lib/pipeline/steps/business-value-analysis.ts`
+
+**Purpose:** Generate financially-grounded deliverables from scored use cases:
+dollar-range estimates, delivery roadmap, executive synthesis, and stakeholder
+profiles.
+
+See [docs/BUSINESS_VALUE.md](BUSINESS_VALUE.md) for full documentation.
+
+**Prompts:**
+- `FINANCIAL_QUANTIFICATION_PROMPT` -- dollar-range estimates per use case
+- `ROADMAP_PHASING_PROMPT` -- delivery timeline and effort
+- `EXECUTIVE_SYNTHESIS_PROMPT` -- board-ready findings and recommendations
+- `STAKEHOLDER_ANALYSIS_PROMPT` -- organisational impact mapping
+
+**Inputs:**
+- `business_context` (from Step 1)
+- Scored use cases with SQL (from Steps 7-8)
+- Industry benchmarks (when available)
+
+**Process:**
+1. Financial Quantification: estimate value for each use case (low/mid/high ranges)
+2. Roadmap Phasing: assign to Quick Wins / Foundation / Transformation phases
+3. Executive Synthesis: generate key findings, recommendations, and risks
+4. Stakeholder Analysis: map impact to roles/departments with champion flags
+
+**Output:** `ForgeValueEstimate`, `ForgeRoadmapPhase`, executive synthesis JSON,
+and `ForgeStakeholderProfile` records persisted in Lakebase.
+
+**Error handling:** Each pass runs independently. If any pass fails, the others
+still execute. Failed passes log warnings but do not block pipeline completion.
+
+---
+
+## Step 10: Genie Recommendations (Background)
 
 **File:** `lib/genie/engine.ts`
 
 **Purpose:** Generate Databricks Genie Space recommendations from the pipeline
-results. This is a post-pipeline step triggered from the Genie Workbench UI.
+results. Runs in the background after Business Value Analysis completes.
 
 See [docs/GENIE_ENGINE.md](GENIE_ENGINE.md) for full documentation of the
 Genie Engine, its configuration, LLM passes, assembler, and deployment.
@@ -290,3 +361,7 @@ Genie Engine, its configuration, LLM passes, assembler, and deployment.
 4. Assemble all outputs into a `SerializedSpace` v2 JSON payload
 5. Persist recommendations in `forge_genie_recommendations`
 6. User can review, edit, and deploy spaces from the Genie Workbench
+
+The Dashboard Engine also runs in the background alongside Genie, generating
+AI/BI (Lakeview) dashboard recommendations per domain. See
+[docs/DASHBOARD_ENGINE.md](DASHBOARD_ENGINE.md) for full documentation.

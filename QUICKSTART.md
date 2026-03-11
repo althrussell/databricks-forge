@@ -26,7 +26,8 @@ cd databricks-forge
 
 The script discovers your SQL Warehouses, lets you pick one, and handles
 everything else automatically -- resource bindings, user authorization scopes,
-code upload, and deployment. Models default to `databricks-claude-sonnet-4-6`.
+code upload, and deployment. The premium model defaults to
+`databricks-claude-opus-4-6` and the fast model to `databricks-claude-sonnet-4-6`.
 
 No manual configuration steps. Zero UI clicks.
 
@@ -69,15 +70,17 @@ All flags are optional. Combine as needed.
 | `--warehouse "Name"` | Skip the interactive warehouse prompt |
 | `--profile "name"` | Use a specific Databricks CLI profile |
 | `--prebuilt` | Build locally and deploy pre-compiled bundle (fastest, no remote build) |
+| `--full` | Full sync: upload all files. Default is diff sync (only changed files since last deploy) |
 | `--destroy` | Remove the app and clean up workspace files |
 
 ### Model endpoints
 
 | Flag | Default |
 |------|---------|
-| `--endpoint "name"` | `databricks-claude-sonnet-4-6` (premium) |
+| `--endpoint "name"` | `databricks-claude-opus-4-6` (premium) |
 | `--fast-endpoint "name"` | `databricks-claude-sonnet-4-6` (fast/classification) |
 | `--embedding-endpoint "name"` | `databricks-qwen3-embedding-0-6b` (1024-dim) |
+| `--review-endpoint "name"` | `databricks-gpt-5-4` (SQL quality review) |
 
 ### Lakebase (database)
 
@@ -91,6 +94,14 @@ All flags are optional. Combine as needed.
 | `--lakebase-bootstrap-user "email"` | Bootstrap OAuth role/grants for this user at startup |
 | `--lakebase-runtime-mode "oauth_direct_only\|pooler_preferred"` | Connection routing strategy |
 | `--lakebase-enable-pooler-experiment` | Enable pooler for future testing |
+| `--lakebase-scale-to-zero-timeout SECONDS` | Scale-to-zero inactivity timeout (default: 300, min: 60) |
+| `--lakebase-no-scale-to-zero` | Disable scale-to-zero (always-on compute) |
+
+### Feature flags
+
+| Flag | Description |
+|------|-------------|
+| `--enable-metric-views` | Enable metric view generation (off by default) |
 
 ### Benchmark catalog
 
@@ -111,7 +122,7 @@ All flags are optional. Combine as needed.
 ./deploy.sh --prebuilt --warehouse "My SQL Warehouse"
 
 # Custom model endpoints
-./deploy.sh --endpoint "my-custom-model" --fast-endpoint "my-fast-model"
+./deploy.sh --endpoint "my-custom-model" --fast-endpoint "my-fast-model" --review-endpoint "my-review-model"
 
 # Seed benchmarks for banking and healthcare
 ./deploy.sh --seed-benchmarks --seed-benchmark-industries "banking,hls"

@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Business Value Engine runs as **Pipeline Step 8**, immediately after SQL
+The Business Value Engine runs as **Pipeline Step 9**, immediately after SQL
 generation. It executes four LLM passes over the scored use cases to produce:
 
 1. **Financial Quantification** -- dollar-range estimates per use case
@@ -23,7 +23,7 @@ run detail, Ask Forge, and per-run exports.
 
 ```
 Pipeline Engine (engine.ts)
-  └── runBusinessValueAnalysis(ctx)  [Step 8, ~90% progress]
+  └── runBusinessValueAnalysis(ctx)  [Step 9, ~90% progress]
         ├── Pass 1: Financial Quantification  [fast model, JSON mode]
         ├── Pass 2: Roadmap Phasing           [fast model, JSON mode]
         ├── Pass 3: Executive Synthesis       [fast model, JSON mode]
@@ -364,7 +364,7 @@ lib/
     agent.ts                         Default temperatures for BV prompts
   pipeline/
     steps/
-      business-value-analysis.ts     Step 8 orchestrator (4 LLM passes)
+      business-value-analysis.ts     Step 9 orchestrator (4 LLM passes)
     engine.ts                        Integrates step 8 into pipeline
   lakebase/
     value-estimates.ts               CRUD for ForgeValueEstimate

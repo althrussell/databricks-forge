@@ -1,63 +1,35 @@
 # Release Notes -- 2026-03-12
 
-**Databricks Forge v0.24.0**
-
----
-
-## New Features
-
-### Unity Catalog Browser: Include/Exclude Scope Selection
-The shared CatalogBrowser component now supports **exclusions** alongside inclusions. Users can include broad scope (entire catalogs or schemas) and then carve out specific items they don't want to scan, generate comments for, or discover use cases from.
-
-- **Tree-based exclusion**: hover over any implicitly-included schema or table to reveal an "Exclude" button. Excluded items show with strikethrough styling and a red icon, with a one-click "Restore" action.
-- **Wildcard pattern exclusion**: a new pattern input field allows glob-style exclusions (e.g. `stg_*`, `*_backup`, `__databricks*`). Patterns match at every level -- catalog, schema, and table names. Each pattern appears as a removable pill with a best-effort match count from loaded tree data.
-- **Scope Summary panel**: a clear two-section summary below the tree shows green "Included" pills and red "Excluded" pills (both explicit and pattern-based), each removable with one click.
-
-### Shared Scope Selection Module (`lib/domain/scope-selection.ts`)
-New pure-logic module with zero framework dependencies, reusable across frontend and backend:
-- `ScopeSelection` type (includes, excludes, exclusionPatterns)
-- Glob pattern matching (`globMatch`, `globToRegex`, `matchesAnyPattern`)
-- Exclusion resolution (`isExcluded`, `isCoveredByExclusion`)
-- Serialization helpers for all persistence formats
-- Pattern validation (`validateExclusionPattern`)
+**Databricks Forge v0.24.1**
 
 ---
 
 ## Improvements
 
-### Backend Exclusion Filtering
-All three metadata pipelines now apply exclusion filtering after table discovery:
-- **Metadata Fetcher** (`lib/metadata/fetcher.ts`): explicit schema/table exclusions + glob pattern matching
-- **Pipeline Metadata Extraction** (`lib/pipeline/steps/metadata-extraction.ts`): exclusion filtering with progress reporting
-- **Standalone Scan** (`lib/pipeline/standalone-scan.ts`): exclusion filtering with progress reporting
+### Comprehensive Documentation Cleanup
+All major documentation files updated to reflect the current 10-step pipeline scope. Key corrections:
 
-Column data is also filtered to match excluded tables, preventing orphan column processing.
+- **QUICKSTART.md** -- corrected `--endpoint` default from `databricks-claude-sonnet-4-6` to `databricks-claude-opus-4-6`; added 5 missing flags (`--full`, `--review-endpoint`, `--enable-metric-views`, `--lakebase-scale-to-zero-timeout`, `--lakebase-no-scale-to-zero`); fixed intro text to distinguish premium vs fast endpoints.
+- **WHY_FORGE.md** -- major rewrite adding Business Value Intelligence, Genie Space management (health checks, benchmarks, fix workflow), AI/BI Dashboard Recommendations, AI Catalog Comments, Value Tracking, Knowledge Base, Fabric/Power BI Migration, Industry Benchmarks, and portfolio exports. Added screenshot placeholders for 6 new features.
+- **README.md** -- pipeline updated from 7 to 10 steps (added Asset Discovery, Business Value Analysis, renumbered Genie to Step 10); expanded "What It Does" to 5-phase lifecycle; added 12 key features (Business Value, Genie health, Dashboards, AI Comments, Ask Forge, Estate Intelligence, Benchmarks, Knowledge Base, Fabric migration); fixed model defaults; added portfolio export table; expanded Further Documentation to 22 entries.
+- **docs/GENIE_ENGINE.md** -- Step 8 to Step 10; fixed join inference threshold (2 to 3); fixed domain concurrency (3 to 10); updated toolkit paths (`lib/toolkit/` not `lib/genie/`); added 12 new file references; added health check cross-references; expanded UI components table.
+- **docs/BUSINESS_VALUE.md** -- Step 8 to Step 9 throughout (prose, diagram, file map).
+- **docs/PIPELINE.md** -- updated from 7+1 optional steps to 10 steps; added Asset Discovery (Step 3) and Business Value Analysis (Step 9); renumbered Genie to Step 10 (background); added Dashboard Engine as parallel background step; fixed progress percentages; updated Model Routing table.
 
-### Persistence and API Support
-- `ForgeRun` and `ForgeEnvironmentScan` Prisma models gain `excluded_scope` and `exclusion_patterns` columns
-- `ForgeCommentJob.scopeJson` extended with `excludedSchemas`, `excludedTables`, `exclusionPatterns`
-- All four scope-accepting API routes updated: `POST /api/runs`, `POST /api/environment-scan`, `POST /api/environment/comments`, `POST /api/environment/comments/generate`
-- `PipelineRunConfig` type extended with `excludedScope` and `exclusionPatterns` fields
-- `MetadataScope` type extended with `excludedSchemas`, `excludedTables`, `exclusionPatterns`
+### New Engine Documentation
+Three new comprehensive documentation files:
 
-### All Consumers Updated
-All 8 CatalogBrowser consumers updated for the new callback signature. The three primary entry points (Discovery Runs, Comment Runs, Estate Scans) fully wire exclusion state through to their respective APIs. The five schema-mode consumers (Genie deploy, metric view deploy, etc.) accept the new signature with no behavioral change.
-
----
-
-## Other Changes
-
-- Zod validation schema `CreateRunSchema` extended with optional `excludedScope` and `exclusionPatterns` fields
-- Comment Engine (`lib/ai/comment-generator.ts`) `GenerateCommentsInput` extended to pass exclusions through to `runCommentEngine`
-- 23 files changed, ~700 insertions
-- Zero typecheck errors, zero lint errors
+- **docs/COMMENT_ENGINE.md** -- documents the 4-phase AI Comment Engine (schema context, table comments, column comments, consistency review), configuration, DI, progress tracking, DDL execution, API routes, and UI.
+- **docs/DASHBOARD_ENGINE.md** -- documents the Dashboard Engine in both pipeline and ad-hoc modes, SQL validation (3-stage), Lakeview assembler, deployment, API routes, and UI.
+- **docs/SKILLS_KNOWLEDGE_BASE.md** -- documents the Skills system (9 static modules, registry, resolver, relevance targeting), Knowledge Base (upload flow, categories, embedding), and RAG integration (scopes, retrieval, provenance reranking).
 
 ---
 
-## Commits (1)
+## Commits (2)
 
 | Hash | Summary |
 |---|---|
-| `124a717` | Add include/exclude scope selection with wildcard patterns to CatalogBrowser |
+| `4233215` | Comprehensive documentation cleanup to match current 10-step pipeline scope |
+| `(pending)` | Bump version to 0.24.1, update release notes |
 
-**Uncommitted changes:** None expected after commit.
+**Uncommitted changes:** package.json version bump, RELEASE_NOTES_2026_03_12.md update.
