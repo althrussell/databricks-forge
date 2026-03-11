@@ -22,6 +22,9 @@ import { buildTokenAwareBatches, estimateTokens, truncateColumns } from "@/lib/a
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { logger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
+import { buildSchemaContextFromIntelligence } from "@/lib/metadata/context-builder";
+import { runTableCommentPass, buildLineageContextBlock } from "@/lib/ai/comment-engine/table-pass";
+import type { TableCommentInput } from "@/lib/ai/comment-engine/types";
 import type {
   AnalyticsMaturityAssessment,
   ColumnInfo,
@@ -52,6 +55,10 @@ export interface IntelligenceOptions {
   onProgress?: (pass: string, percent: number) => void;
   /** Discovered analytics assets (Genie spaces, dashboards, metric views) for maturity assessment. */
   discoveryResult?: DiscoveryResult | null;
+  /** Industry outcome map id -- when set, Pass 3 uses industry context for richer descriptions. */
+  industryId?: string;
+  /** Foreign key constraints from information_schema (enables richer schema context for Pass 3). */
+  foreignKeys?: import("@/lib/domain/types").ForeignKey[];
 }
 
 /** Input table info for the intelligence layer. */
@@ -78,8 +85,6 @@ const MAX_COLS_REDUNDANCY = 20;
 const MAX_COLS_RELATIONSHIPS = 25;
 /** Max columns to include in domain categorisation pass. */
 const MAX_COLS_DOMAIN = 10;
-/** Max columns to include in descriptions pass. */
-const MAX_COLS_DESCRIPTIONS = 15;
 
 // ---------------------------------------------------------------------------
 // Rendering helpers (used for both prompt building and token estimation)
@@ -100,13 +105,6 @@ function renderPIITable(t: TableInput): string {
   return `- ${t.fqn}: [${colStr}${suffix}]`;
 }
 
-function renderDescriptionTable(t: TableInput): string {
-  const cols = t.columns
-    .slice(0, MAX_COLS_DESCRIPTIONS)
-    .map((c) => c.name)
-    .join(", ");
-  return `- ${t.fqn}: columns=[${cols}]${t.tags.length > 0 ? ` tags=[${t.tags.join(", ")}]` : ""}`;
-}
 
 function renderRedundancyTable(t: TableInput): string {
   const { truncated, omitted } = truncateColumns(t.columns, MAX_COLS_REDUNDANCY);
@@ -233,7 +231,7 @@ export async function runIntelligenceLayer(
     passResults["pii"] = "failed";
   }
 
-  // Pass 3: Auto-Generated Descriptions
+  // Pass 3: Enhanced Descriptions (via Comment Engine table pass)
   try {
     progress("descriptions", 0);
     // Detect generic/shared comments: if multiple tables share the exact same
@@ -250,7 +248,13 @@ export async function runIntelligenceLayer(
       return (commentCounts.get(t.comment) ?? 0) > 1;
     });
     if (descTables.length > 0) {
-      result.generatedDescriptions = await passAutoDescriptions(descTables, lineageGraph, options);
+      result.generatedDescriptions = await passEnhancedDescriptions(
+        descTables,
+        tables,
+        lineageGraph,
+        result.domains,
+        options,
+      );
       passResults["descriptions"] = "success";
     } else {
       passResults["descriptions"] = "skipped";
@@ -485,38 +489,102 @@ async function passPIIDetection(
 // Pass 3: Auto-Generated Descriptions
 // ---------------------------------------------------------------------------
 
-async function passAutoDescriptions(
-  tables: TableInput[],
+/**
+ * Enhanced descriptions pass -- delegates to the Comment Engine's table pass
+ * for richer context (schema intelligence, industry, data assets, lineage).
+ *
+ * Falls back to the basic prompt if the Comment Engine call fails.
+ */
+async function passEnhancedDescriptions(
+  descTables: TableInput[],
+  allTables: TableInput[],
   lineageGraph: LineageGraph,
+  domains: DataDomain[],
   options: IntelligenceOptions,
 ): Promise<Map<string, string>> {
-  const descriptions = new Map<string, string>();
-  const lineageSummary = buildLineageSummary(lineageGraph, 15);
+  // Build SchemaContext from already-fetched data (no UC re-fetch)
+  const schemaCtx = buildSchemaContextFromIntelligence(
+    allTables,
+    lineageGraph,
+    domains,
+    options.foreignKeys ?? [],
+  );
 
-  const base = basePromptTokens("ENV_AUTO_DESCRIPTIONS_PROMPT", {
-    lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
-  });
-  const batches = buildTokenAwareBatches(tables, renderDescriptionTable, base);
-
-  for (const batch of batches) {
-    const tableList = batch.map(renderDescriptionTable).join("\n");
-
-    const prompt = formatPrompt("ENV_AUTO_DESCRIPTIONS_PROMPT", {
-      table_list: tableList,
-      lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
-    });
-
-    const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<{ table_fqn: string; description: string }>(
-      content,
-      "env-intelligence:descriptions",
-    );
-    for (const p of parsed) {
-      descriptions.set(p.table_fqn, p.description);
+  // Build industry context blocks if industry is set
+  let industryContext = "";
+  let dataAssetContext = "";
+  let useCaseLinkage = "";
+  if (options.industryId) {
+    try {
+      const {
+        buildIndustryContextPrompt,
+        buildDataAssetContext,
+        buildUseCaseLinkageContext,
+      } = await import("@/lib/domain/industry-outcomes-server");
+      industryContext = await buildIndustryContextPrompt(options.industryId);
+      const assetResult = await buildDataAssetContext(options.industryId);
+      dataAssetContext = assetResult.text;
+      const matchedAssetIds = assetResult.assets.map((a) => a.id);
+      useCaseLinkage = await buildUseCaseLinkageContext(options.industryId, matchedAssetIds);
+    } catch (err) {
+      logger.warn("[intelligence] Failed to load industry context for Pass 3", {
+        industryId: options.industryId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  return descriptions;
+  // Convert descTables to TableCommentInput[]
+  const enrichedLookup = new Map(schemaCtx.tables.map((t) => [t.fqn.toLowerCase(), t]));
+  const commentInputs: TableCommentInput[] = descTables.map((t) => {
+    const enriched = enrichedLookup.get(t.fqn.toLowerCase());
+    return {
+      fqn: t.fqn,
+      columns: t.columns.map((c) => ({ name: c.name, dataType: c.type })),
+      existingComment: t.comment,
+      domain: enriched?.domain ?? null,
+      role: enriched?.role ?? null,
+      tier: enriched?.tier ?? null,
+      dataAssetId: enriched?.dataAssetId ?? null,
+      dataAssetName: enriched?.dataAssetName ?? null,
+      writeFrequency: enriched?.writeFrequency ?? null,
+      owner: enriched?.owner ?? null,
+      tags: t.tags,
+      relatedTableFqns: enriched?.relatedTableFqns ?? [],
+    };
+  });
+
+  // Build lineage context block
+  const targetFqns = new Set(descTables.map((t) => t.fqn.toLowerCase()));
+  const lineageContext = buildLineageContextBlock(schemaCtx.lineageEdges, targetFqns);
+
+  const descriptions = await runTableCommentPass(
+    commentInputs,
+    {
+      industryContext,
+      businessContext: options.businessName ?? "",
+      dataAssetContext,
+      useCaseLinkage,
+      schemaSummary: schemaCtx.schemaSummary,
+      lineageContext,
+    },
+    { signal: undefined, onProgress: undefined },
+  );
+
+  // The Comment Engine stores keys lowercased; remap to original FQNs
+  const result = new Map<string, string>();
+  for (const t of descTables) {
+    const desc = descriptions.get(t.fqn.toLowerCase());
+    if (desc) result.set(t.fqn, desc);
+  }
+
+  logger.info("[intelligence] Pass 3 (enhanced descriptions) completed", {
+    requested: descTables.length,
+    generated: result.size,
+    withIndustry: !!options.industryId,
+  });
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

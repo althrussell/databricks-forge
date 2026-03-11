@@ -766,6 +766,7 @@ export function buildSchemaMarkdown(
   tables: TableInfo[],
   columns: ColumnInfo[],
   maxCommentLength: number = 80,
+  descriptionOverrides?: Map<string, string>,
 ): string {
   const columnsByTable: Record<string, ColumnInfo[]> = {};
   for (const col of columns) {
@@ -786,7 +787,8 @@ export function buildSchemaMarkdown(
       })
       .join("\n");
 
-    const tableComment = table.comment ? ` -- ${table.comment}` : "";
+    const desc = descriptionOverrides?.get(table.fqn) ?? table.comment;
+    const tableComment = desc ? ` -- ${desc}` : "";
     return `### ${table.fqn}${tableComment}\n${colLines || "  (no columns)"}`;
   });
 

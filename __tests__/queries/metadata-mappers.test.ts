@@ -113,6 +113,64 @@ describe("buildSchemaMarkdown", () => {
     expect(md).toContain("### cat.s.t1");
     expect(md).toContain("### cat.s.t2");
   });
+
+  it("uses descriptionOverrides in preference to table comment", () => {
+    const tables = [
+      makeTable("cat.s.orders", { comment: "Old comment from UC" }),
+      makeTable("cat.s.customers", { comment: "Customer records" }),
+    ];
+    const columns = [
+      makeColumn("cat.s.orders", "id", "int"),
+      makeColumn("cat.s.customers", "id", "int"),
+    ];
+
+    const overrides = new Map([
+      ["cat.s.orders", "Enriched: tracks all sales orders with status lifecycle"],
+    ]);
+
+    const md = buildSchemaMarkdown(tables, columns, 80, overrides);
+
+    expect(md).toContain("### cat.s.orders -- Enriched: tracks all sales orders with status lifecycle");
+    expect(md).not.toContain("Old comment from UC");
+    expect(md).toContain("### cat.s.customers -- Customer records");
+  });
+
+  it("falls back to table.comment when no override exists", () => {
+    const tables = [makeTable("cat.s.orders", { comment: "Original comment" })];
+    const columns = [makeColumn("cat.s.orders", "id", "int")];
+
+    const overrides = new Map<string, string>();
+
+    const md = buildSchemaMarkdown(tables, columns, 80, overrides);
+    expect(md).toContain("-- Original comment");
+  });
+
+  it("works with empty overrides map", () => {
+    const tables = [makeTable("cat.s.orders", { comment: "Orders" })];
+    const columns = [makeColumn("cat.s.orders", "id", "int")];
+
+    const md = buildSchemaMarkdown(tables, columns, 80, new Map());
+    expect(md).toContain("-- Orders");
+  });
+
+  it("works without overrides parameter (backward compat)", () => {
+    const tables = [makeTable("cat.s.orders", { comment: "Orders" })];
+    const columns = [makeColumn("cat.s.orders", "id", "int")];
+
+    const md = buildSchemaMarkdown(tables, columns);
+    expect(md).toContain("-- Orders");
+  });
+
+  it("overrides show no comment when table has none and override is absent", () => {
+    const tables = [makeTable("cat.s.raw_data")];
+    const columns = [makeColumn("cat.s.raw_data", "id", "int")];
+
+    const overrides = new Map<string, string>();
+
+    const md = buildSchemaMarkdown(tables, columns, 80, overrides);
+    expect(md).toContain("### cat.s.raw_data\n");
+    expect(md).not.toContain("--");
+  });
 });
 
 describe("buildForeignKeyMarkdown", () => {

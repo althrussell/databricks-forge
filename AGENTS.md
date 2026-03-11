@@ -46,6 +46,8 @@ This app runs as a **Databricks App**. Authentication is automatic:
   /queries    SQL text + row-to-type mappers
   /domain     TypeScript types + scoring logic
   /ai         Prompt template building + Model Serving execution
+    /comment-engine  Multi-pass Comment Engine (table + column + consistency)
+  /metadata   Shared schema context layer (reusable across features)
   /pipeline   Pipeline engine + step modules
   /lakebase   Lakebase table schema + CRUD operations
   /embeddings Embedding client, pgvector store, text composition, RAG retriever
@@ -79,6 +81,11 @@ These are the core TypeScript types used throughout the app:
 | `ExecutiveSynthesis` | Board-ready findings, recommendations, risks   |
 | `BusinessValuePortfolio` | Cross-run portfolio aggregation             |
 | `StrategyDocument` | Uploaded strategy with parsed initiatives         |
+| `SchemaContext`    | Enriched schema view: tables, columns, domains, roles, tiers, relationships, lineage, naming profile (`lib/metadata/types.ts`) |
+| `EnrichedTable`    | Table with deterministic + LLM classifications (domain, role, tier, data asset mapping, write frequency) |
+| `EnrichedColumn`   | Column with inferred role (pk, fk, timestamp, flag, measure, code) and FK target |
+| `InferredRelationship` | Cross-table relationship from naming patterns, FK constraints, or LLM inference |
+| `CommentEngineResult` | Output of the Comment Engine: table + column comments, schema context, consistency fixes, stats |
 
 ## Pipeline Steps (Discover Usecases)
 
@@ -186,17 +193,54 @@ Key modules:
 Data model: `ForgeEnvironmentScan`, `ForgeTableDetail`, `ForgeTableHistorySummary`,
 `ForgeTableLineage`, `ForgeTableInsight` (see Prisma schema).
 
-## AI Comments (Industry-Aware Catalog Documentation)
+## Shared Metadata Context Layer
 
-The AI Comments engine generates industry-aware table and column descriptions
-using LLM, then applies them directly to Unity Catalog via DDL.
+The `lib/metadata/` module provides a reusable, extractable schema understanding
+layer. Any feature that needs to understand a Unity Catalog schema holistically
+can call `buildSchemaContext()` to get a fully classified, relationship-aware,
+lineage-enriched view. Zero Forge-specific dependencies -- could be extracted
+as a standalone package.
 
 Key modules:
-- `lib/ai/templates-comments.ts` -- prompt templates for table + column comments
-- `lib/ai/comment-generator.ts` -- LLM generation engine (batched, concurrent)
+- `lib/metadata/types.ts` -- `SchemaContext`, `EnrichedTable`, `EnrichedColumn`, `NamingSignals`, `InferredRelationship` (zero internal imports)
+- `lib/metadata/deterministic.ts` -- pure functions: tier/role detection from naming prefixes, column role inference (`_id`→FK, `_at`→timestamp, `is_`→flag, `_amount`→measure), FK target inference, write frequency analysis, schema naming profile
+- `lib/metadata/fetcher.ts` -- orchestrates `lib/queries/` modules to fetch tables, columns, FKs, comments, types, tags, lineage (`walkLineage`), and history (`enrichTablesInBatches`); all enrichments gracefully optional
+- `lib/metadata/classifier.ts` -- LLM-based schema intelligence: domain, role, tier, and industry data asset mapping per table; token-aware batching for large schemas; deterministic fallback on LLM failure
+- `lib/metadata/context-builder.ts` -- `buildSchemaContext(scope, options)` top-level orchestrator producing `SchemaContext`
+
+Current consumer: Comment Engine. Future consumers: Genie Engine, Ask Forge,
+data quality rules, documentation generation.
+
+## AI Comments (Industry-Aware Catalog Documentation)
+
+The Comment Engine (`lib/ai/comment-engine/engine.ts`) generates the highest-quality
+table and column descriptions by building holistic schema understanding before
+describing any individual table. Optimised for Genie Space discoverability.
+
+Architecture (4 phases):
+1. **Phase 0+1: Schema Context** -- `buildSchemaContext()` fetches all metadata, runs deterministic analysis (naming patterns, FK inference), then LLM classification (domain, role, tier, data asset mapping)
+2. **Phase 2: Table Comments** -- batched table descriptions with full schema summary, industry Reference Data Assets, use case linkages, lineage, and write-frequency signals
+3. **Phase 3: Column Comments** -- parallel per-table column descriptions with domain context, related tables, data asset descriptions, and deterministic role hints
+4. **Phase 4: Consistency Review** -- terminology consistency, cross-table reference accuracy, and Genie-readiness audit (optional, on by default)
+
+Comment Engine modules:
+- `lib/ai/comment-engine/engine.ts` -- main orchestrator (wires schema context + industry knowledge through all passes)
+- `lib/ai/comment-engine/prompts.ts` -- prompt templates for table, column, and consistency review passes (Genie-optimised)
+- `lib/ai/comment-engine/table-pass.ts` -- Phase 2 implementation
+- `lib/ai/comment-engine/column-pass.ts` -- Phase 3 implementation
+- `lib/ai/comment-engine/consistency-pass.ts` -- Phase 4 implementation
+- `lib/ai/comment-engine/types.ts` -- `CommentEngineConfig`, `CommentEngineResult`, `ConsistencyFix`
+
+Industry knowledge (enriches all prompts):
+- `lib/domain/industry-outcomes-server.ts` -- `buildDataAssetContext()` renders Reference Data Assets; `buildUseCaseLinkageContext()` maps assets to use cases with criticality and benchmark impacts
+
+DDL + persistence layer:
+- `lib/ai/comment-generator.ts` -- facade: delegates to Comment Engine, persists proposals to Lakebase
 - `lib/ai/comment-applier.ts` -- DDL execution, permission checking, undo
 - `lib/lakebase/comment-jobs.ts` -- CRUD for `ForgeCommentJob`
 - `lib/lakebase/comment-proposals.ts` -- CRUD for `ForgeCommentProposal`
+
+UI modules:
 - `app/environment/comments/page.tsx` -- main AI Comments page (setup, review, apply)
 - `components/environment/comment-table-nav.tsx` -- table navigator panel
 - `components/environment/comment-review-panel.tsx` -- old-vs-new review with inline editing

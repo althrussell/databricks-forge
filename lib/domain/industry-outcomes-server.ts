@@ -436,3 +436,130 @@ export async function buildIndustryKPIsPrompt(industryId: string): Promise<strin
 
   return lines.join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Reference Data Asset Context (for Comment Engine + future consumers)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a prompt block listing all Reference Data Assets for an industry.
+ * Each asset includes its name, family, description, and system location.
+ *
+ * This gives an LLM the industry's standard data vocabulary so it can
+ * understand what tables represent and use industry-appropriate terminology.
+ */
+export async function buildDataAssetContext(
+  industryId: string,
+): Promise<{ text: string; assets: Array<{ id: string; name: string; description: string; assetFamily: string }> }> {
+  const enrichment = getMasterRepoEnrichment(industryId);
+  const industry = await getIndustryOutcomeAsync(industryId);
+
+  if (!enrichment || enrichment.dataAssets.length === 0) {
+    return { text: "", assets: [] };
+  }
+
+  const industryName = industry?.name ?? industryId;
+
+  const lines: string[] = [
+    `### INDUSTRY DATA ASSETS (${industryName})`,
+    "",
+    "These are the standard data assets in this industry. Use them to understand",
+    "what tables represent and to use industry-appropriate terminology:",
+    "",
+  ];
+
+  const assets: Array<{ id: string; name: string; description: string; assetFamily: string }> = [];
+
+  for (const asset of enrichment.dataAssets) {
+    lines.push(
+      `- **${asset.id}: ${asset.name}** [${asset.assetFamily}] -- ${asset.description}` +
+        (asset.systemLocation ? ` (typical system: ${asset.systemLocation})` : ""),
+    );
+    assets.push({
+      id: asset.id,
+      name: asset.name,
+      description: asset.description,
+      assetFamily: asset.assetFamily,
+    });
+  }
+
+  return { text: lines.join("\n"), assets };
+}
+
+/**
+ * Build a prompt block showing which use cases each data asset powers,
+ * including criticality levels and benchmark impacts.
+ *
+ * Given a set of matched data asset IDs (from schema classification),
+ * this tells the LLM WHY each asset matters -- not just what it stores
+ * but what business outcomes it enables.
+ */
+export async function buildUseCaseLinkageContext(
+  industryId: string,
+  matchedAssetIds: string[],
+): Promise<string> {
+  if (matchedAssetIds.length === 0) return "";
+
+  const enrichment = getMasterRepoEnrichment(industryId);
+  if (!enrichment) return "";
+
+  const matchedSet = new Set(matchedAssetIds);
+
+  const lines: string[] = [
+    "### DATA ASSET BUSINESS CONTEXT",
+    "",
+    "Tables matching these data assets power the following business use cases:",
+    "",
+  ];
+
+  const useCasesByAsset = new Map<string, Array<{ name: string; criticality: string; impact: string }>>();
+
+  for (const uc of enrichment.useCases) {
+    for (const assetId of uc.dataAssetIds ?? []) {
+      if (!matchedSet.has(assetId)) continue;
+
+      if (!useCasesByAsset.has(assetId)) useCasesByAsset.set(assetId, []);
+
+      const criticality = uc.dataAssetCriticality?.[assetId] ?? "VA";
+      const critLabel = criticality === "MC" ? "Mission-Critical" : "Value-Add";
+      const impact = uc.benchmarkImpact && uc.kpiTarget
+        ? `${uc.kpiTarget} ${uc.benchmarkImpact}`
+        : "";
+
+      useCasesByAsset.get(assetId)!.push({
+        name: uc.name,
+        criticality: critLabel,
+        impact,
+      });
+    }
+  }
+
+  const assetNames = new Map(enrichment.dataAssets.map((a) => [a.id, a.name]));
+
+  for (const [assetId, useCases] of useCasesByAsset) {
+    const assetName = assetNames.get(assetId) ?? assetId;
+    const mcUseCases = useCases.filter((uc) => uc.criticality === "Mission-Critical");
+    const vaUseCases = useCases.filter((uc) => uc.criticality === "Value-Add");
+
+    const parts = [`- **${assetId} (${assetName})**:`];
+
+    if (mcUseCases.length > 0) {
+      const mcNames = mcUseCases
+        .slice(0, 5)
+        .map((uc) => uc.name + (uc.impact ? ` (${uc.impact})` : ""))
+        .join("; ");
+      parts.push(`  Mission-Critical for: ${mcNames}`);
+    }
+    if (vaUseCases.length > 0) {
+      const vaNames = vaUseCases
+        .slice(0, 3)
+        .map((uc) => uc.name)
+        .join("; ");
+      parts.push(`  Value-Add for: ${vaNames}`);
+    }
+
+    lines.push(parts.join("\n"));
+  }
+
+  return lines.join("\n");
+}
