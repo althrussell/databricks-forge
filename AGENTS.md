@@ -186,6 +186,34 @@ Key modules:
 Data model: `ForgeEnvironmentScan`, `ForgeTableDetail`, `ForgeTableHistorySummary`,
 `ForgeTableLineage`, `ForgeTableInsight` (see Prisma schema).
 
+## AI Comments (Industry-Aware Catalog Documentation)
+
+The AI Comments engine generates industry-aware table and column descriptions
+using LLM, then applies them directly to Unity Catalog via DDL.
+
+Key modules:
+- `lib/ai/templates-comments.ts` -- prompt templates for table + column comments
+- `lib/ai/comment-generator.ts` -- LLM generation engine (batched, concurrent)
+- `lib/ai/comment-applier.ts` -- DDL execution, permission checking, undo
+- `lib/lakebase/comment-jobs.ts` -- CRUD for `ForgeCommentJob`
+- `lib/lakebase/comment-proposals.ts` -- CRUD for `ForgeCommentProposal`
+- `app/environment/comments/page.tsx` -- main AI Comments page (setup, review, apply)
+- `components/environment/comment-table-nav.tsx` -- table navigator panel
+- `components/environment/comment-review-panel.tsx` -- old-vs-new review with inline editing
+- `components/environment/comment-action-bar.tsx` -- bulk apply/undo sticky bar
+
+Data model: `ForgeCommentJob`, `ForgeCommentProposal` (see Prisma schema).
+
+API routes:
+- `POST /api/environment/comments` -- create job
+- `GET /api/environment/comments` -- list jobs
+- `POST /api/environment/comments/generate` -- SSE generation stream
+- `GET /api/environment/comments/[jobId]` -- job detail + proposals
+- `PATCH /api/environment/comments/[jobId]/proposals` -- accept/reject/edit
+- `POST /api/environment/comments/[jobId]/apply` -- apply DDL to UC
+- `POST /api/environment/comments/[jobId]/undo` -- restore original comments
+- `POST /api/environment/comments/check-permissions` -- SHOW GRANTS pre-check
+
 ## Ask Forge (Conversational Assistant)
 
 Ask Forge is a RAG-powered conversational AI assistant. See `ASK_FORGE.md`
