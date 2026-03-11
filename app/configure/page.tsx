@@ -14,7 +14,7 @@ export default function ConfigurePage() {
     <div className="mx-auto max-w-[1400px] space-y-8">
       <PageHeader
         title="New Discovery Run"
-        subtitle="Configure your business context and Unity Catalog scope, then let Forge AI discover use cases."
+        subtitle="Configure your business context and Unity Catalog scope, then let Forge discover use cases."
       />
 
       <Card className="border-chart-2/20 bg-chart-2/[0.03] dark:border-chart-2/15 dark:bg-chart-2/[0.04]">

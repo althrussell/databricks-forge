@@ -1,13 +1,13 @@
 # SQL Engine -- Grounded SQL Generation & Validation
 
-> How Databricks Forge AI generates, validates, and repairs LLM-produced SQL
+> How Databricks Forge generates, validates, and repairs LLM-produced SQL
 > across every surface in the application.
 
 ---
 
 ## 1. Overview and Design Principles
 
-Databricks Forge AI generates SQL via LLM calls in **10 different surfaces**
+Databricks Forge generates SQL via LLM calls in **10 different surfaces**
 (pipeline use case SQL, dashboards, Genie spaces, the Ask Forge assistant,
 etc.). Every surface follows the same grounded generation philosophy:
 

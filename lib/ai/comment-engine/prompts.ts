@@ -30,8 +30,8 @@ export const TABLE_COMMENT_PROMPT = `You are a senior data catalog expert. Gener
 
 ### DESCRIPTION QUALITY GUIDELINES
 1. Write 1-3 sentences per table. Target 100-200 characters.
-2. Start with the table's PRIMARY PURPOSE (e.g., "Golden customer dimension linking demographics, lifecycle status, and segment codes").
-3. Mention the table's ROLE in the data pipeline when known (e.g., "Curated from raw transaction feeds" or "Aggregated daily from silver order events").
+2. Start with the table's PRIMARY PURPOSE (e.g., "Customer dimension linking demographics, lifecycle status, and segment codes").
+3. Mention the table's ROLE in the data pipeline when known (e.g., "Curated from raw transaction feeds" or "Aggregated daily from order events").
 4. Include BUSINESS TERMS that users would search for in a Genie Space (e.g., "revenue", "churn", "onboarding", "campaign performance").
 5. Include COMMON SYNONYMS or alternative names (e.g., "Also known as: client master, customer profile").
 6. Reference the table's RELATIONSHIPS to other tables when relevant (e.g., "Joins to dim_products via product_id for sales analysis").
@@ -40,6 +40,7 @@ export const TABLE_COMMENT_PROMPT = `You are a senior data catalog expert. Gener
 9. Use present tense ("Stores", "Contains", "Tracks", "Aggregates").
 10. Do NOT repeat the table name verbatim in the description.
 11. For write-frequency context: hourly/streaming tables are operational; daily/weekly are analytical; stale tables may be archived.
+12. Do NOT reference medallion architecture tiers (Bronze, Silver, Gold) in descriptions. Focus on business purpose, not architectural classification.
 
 Return a JSON array:
 [{"table_fqn": "catalog.schema.table", "description": "..."}]`;

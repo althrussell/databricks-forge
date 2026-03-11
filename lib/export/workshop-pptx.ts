@@ -40,7 +40,7 @@ export async function generateWorkshopPptx(
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
-  pptx.author = "Databricks Forge AI";
+  pptx.author = "Databricks Forge";
   pptx.title = "D4B Workshop Pack";
 
   const syn = portfolio.latestSynthesis;
@@ -154,7 +154,7 @@ export async function generateWorkshopPptx(
     }
 
     stats.push({
-      text: `Forge AI discovered ${portfolio.totalUseCases} use cases worth ${formatCompactCurrency(portfolio.totalEstimatedValue.mid)} in estimated value`,
+      text: `Forge discovered ${portfolio.totalUseCases} use cases worth ${formatCompactCurrency(portfolio.totalEstimatedValue.mid)} in estimated value`,
       options: {
         fontSize: 16,
         bold: true,
@@ -505,7 +505,7 @@ export async function generateWorkshopPptx(
         },
       },
       {
-        text: "• Hands-on Genie Space build (guided by Forge AI recommendations)",
+        text: "• Hands-on Genie Space build (guided by Forge recommendations)",
         options: { fontSize: 14, color: PPTX.TEXT_COLOR, breakLine: true, paraSpaceAfter: 4 },
       },
       {
@@ -557,7 +557,7 @@ export async function generateWorkshopPptx(
       align: "center",
     });
 
-    slide.addText("Powered by Databricks Forge AI", {
+    slide.addText("Powered by Databricks Forge", {
       x: 1.5,
       y: 4.5,
       w: 10,

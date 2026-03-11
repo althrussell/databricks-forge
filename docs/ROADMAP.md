@@ -1,4 +1,4 @@
-# Databricks Forge AI -- Feature Roadmap
+# Databricks Forge -- Feature Roadmap
 
 > Created: 2026-02-24 | Baseline: v0.4.0
 

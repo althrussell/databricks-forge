@@ -30,7 +30,7 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Forge AI",
+  title: "Forge",
   description: "Discover AI-powered use cases from your Unity Catalog metadata",
   icons: {
     icon: "/databricks-icon.svg",
@@ -58,7 +58,7 @@ export default function RootLayout({
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-4 shadow-[0_1px_2px_0_rgb(0_0_0/0.03)] backdrop-blur-sm dark:shadow-[0_1px_2px_0_rgb(0_0_0/0.15)] md:px-6">
                   <MobileNav />
-                  <span className="text-sm font-bold tracking-tight md:hidden">Forge AI</span>
+                  <span className="text-sm font-bold tracking-tight md:hidden">Forge</span>
                   <div className="hidden flex-1 md:block">
                     <HeaderPageTitle />
                   </div>

@@ -50,7 +50,6 @@ function renderTableInput(t: TableCommentInput): string {
   const attrs: string[] = [];
   if (t.domain) attrs.push(`domain:${t.domain}`);
   if (t.role && t.role !== "unknown") attrs.push(`role:${t.role}`);
-  if (t.tier && t.tier !== "unknown") attrs.push(`tier:${t.tier}`);
   if (t.dataAssetId) attrs.push(`asset:${t.dataAssetId}(${t.dataAssetName ?? ""})`);
   if (t.writeFrequency && t.writeFrequency !== "unknown") attrs.push(`writes:${t.writeFrequency}`);
   if (t.owner) attrs.push(`owner:${t.owner}`);

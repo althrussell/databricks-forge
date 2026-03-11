@@ -86,5 +86,5 @@ export const logger = {
 const _g = globalThis as unknown as { __forgeStartupLogged?: boolean };
 if (IS_PRODUCTION && !_g.__forgeStartupLogged) {
   _g.__forgeStartupLogged = true;
-  emit("info", `Databricks Forge AI v${APP_VERSION} starting`);
+  emit("info", `Databricks Forge v${APP_VERSION} starting`);
 }

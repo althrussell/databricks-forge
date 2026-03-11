@@ -45,7 +45,7 @@ See [QUICKSTART.md](../QUICKSTART.md) for the full three-step setup.
 
 ## How It Works
 
-Databricks Forge AI is deployed as a **Databricks App** -- a containerised web
+Databricks Forge is deployed as a **Databricks App** -- a containerised web
 application that runs inside a Databricks workspace with automatic
 authentication.
 

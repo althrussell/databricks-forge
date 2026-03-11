@@ -1,4 +1,4 @@
-// Databricks Forge AI — Prisma Schema
+// Databricks Forge — Prisma Schema
 //
 // Connects to Lakebase Autoscaling (Postgres-compatible).
 // Tables store pipeline run state, discovered use cases, and export history.

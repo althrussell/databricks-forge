@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-10
 
-**Databricks Forge AI v0.22.0**
+**Databricks Forge v0.22.0**
 
 ---
 

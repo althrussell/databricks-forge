@@ -1,6 +1,6 @@
 # Connecting to Power BI / Microsoft Fabric via OAuth
 
-**Databricks Forge AI -- Setup Guide**
+**Databricks Forge -- Setup Guide**
 
 ---
 

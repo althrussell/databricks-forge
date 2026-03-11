@@ -402,7 +402,7 @@ function EmptyDashboard() {
               <BrainCircuit className="h-8 w-8 text-primary" />
             </div>
             <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              Welcome to Forge AI
+              Welcome to Forge
             </h2>
             <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
               Discover high-value data use cases from your Unity Catalog metadata. Configure your

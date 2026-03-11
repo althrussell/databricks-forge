@@ -63,7 +63,17 @@ export interface AppSettings {
   catalogResourcePrefix: string;
 }
 
-const STORAGE_KEY = "forge-ai-settings";
+const STORAGE_KEY = "forge-settings";
+const LEGACY_STORAGE_KEY = "forge-ai-settings";
+
+function migrateStorageKey(): void {
+  if (typeof window === "undefined") return;
+  const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (legacy && !localStorage.getItem(STORAGE_KEY)) {
+    localStorage.setItem(STORAGE_KEY, legacy);
+  }
+  if (legacy) localStorage.removeItem(LEGACY_STORAGE_KEY);
+}
 
 const DEFAULT_GENIE_ENGINE: GenieEngineDefaults = {
   engineEnabled: true,
@@ -104,6 +114,7 @@ const DEFAULTS: AppSettings = {
 
 export function loadSettings(): AppSettings {
   if (typeof window === "undefined") return { ...DEFAULTS };
+  migrateStorageKey();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULTS };

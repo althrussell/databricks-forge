@@ -8,7 +8,7 @@ responsibly. **Do not open a public GitHub issue.**
 ### How to Report
 
 Email your report to the maintainers with the subject line
-**"[SECURITY] Databricks Forge AI"**. Include:
+**"[SECURITY] Databricks Forge"**. Include:
 
 - A description of the vulnerability
 - Steps to reproduce or a proof of concept

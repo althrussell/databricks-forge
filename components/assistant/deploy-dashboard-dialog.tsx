@@ -52,7 +52,7 @@ export function DeployDashboardDialog({ open, payload, onOpenChange }: DeployDas
   }, [open]);
 
   const proposal = payload?.proposal;
-  const title = proposal?.title ?? "Forge AI Dashboard";
+  const title = proposal?.title ?? "Forge Dashboard";
   const tables = proposal?.tables ?? [];
   const widgets = proposal?.widgetDescriptions ?? [];
   const sqlBlocks = payload?.sqlBlocks ?? [];

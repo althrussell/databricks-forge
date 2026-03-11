@@ -983,7 +983,7 @@ export default function IngestOutcomeMapPage() {
               <p className="text-xl font-bold">Outcome Map Ingested!</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 <strong>{parsedOutcome.name}</strong> with {stats?.useCases ?? 0} use cases is now
-                part of the Forge AI engine.
+                part of the Forge engine.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 It will appear in the industry dropdown when configuring new pipeline runs.

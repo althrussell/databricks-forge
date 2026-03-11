@@ -2,7 +2,7 @@
 
 ## Overview
 
-Databricks Forge AI follows a **ports-and-adapters** architecture. The web app
+Databricks Forge follows a **ports-and-adapters** architecture. The web app
 is a Next.js 16 App Router application deployed as a Databricks App. All
 Databricks interactions go through a thin adapter layer (`lib/dbx/`), keeping
 business logic independent of transport details.

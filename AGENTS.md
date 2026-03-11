@@ -1,10 +1,10 @@
-# AGENTS.md -- Databricks Forge AI
+# AGENTS.md -- Databricks Forge
 
 > Single source of truth for any AI agent working on this codebase.
 
 ## Project Purpose
 
-Databricks Forge AI is a web application that discovers data-driven use cases
+Databricks Forge is a web application that discovers data-driven use cases
 from Unity Catalog metadata using LLM-powered analysis. Customers configure a
 business context, point at their UC catalogs/schemas, and the app generates
 scored, categorised use cases with optional SQL code, exported as Excel, PDF,

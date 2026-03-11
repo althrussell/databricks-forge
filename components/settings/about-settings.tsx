@@ -30,7 +30,7 @@ export function AboutSettings({ profile }: AboutSettingsProps) {
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Application</Label>
-            <p className="mt-0.5 text-sm font-medium">Databricks Forge AI</p>
+            <p className="mt-0.5 text-sm font-medium">Databricks Forge</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Runtime</Label>

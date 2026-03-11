@@ -1,4 +1,4 @@
-# Release Notes -- Databricks Forge AI v0.5.0
+# Release Notes -- Databricks Forge v0.5.0
 
 **Date:** 25 February 2026
 
@@ -313,7 +313,7 @@ Genie Spaces, and estate scans.
 ### Header & Navigation Polish
 
 - Desktop header now displays the current page title for wayfinding.
-- Mobile header shows "Forge AI" branding between the hamburger and theme
+- Mobile header shows "Forge" branding between the hamburger and theme
   toggle.
 - Global error page (`app/global-error.tsx`) respects `prefers-color-scheme`
   for dark mode and includes a "Go to Dashboard" link alongside "Try Again".

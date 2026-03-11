@@ -1,18 +1,18 @@
-# Why Forge AI?
+# Why Forge?
 
 ## Turn Databricks metadata into business value in days, not quarters
 
-You already invested in Databricks. Forge AI helps you get more value from that investment faster by turning your Unity Catalog metadata into a prioritized, execution-ready roadmap of analytics and AI opportunities.
+You already invested in Databricks. Forge helps you get more value from that investment faster by turning your Unity Catalog metadata into a prioritized, execution-ready roadmap of analytics and AI opportunities.
 
 In one flow, your team can discover high-impact use cases, align them to business outcomes, and deploy what matters first, without weeks of workshops or manual discovery.
 
 <p align="center">
-  <img src="docs/images/guide-01-dashboard.png" alt="Forge AI Dashboard with KPIs, score distribution, domain breakdown, and recent activity" width="100%" />
+  <img src="docs/images/guide-01-dashboard.png" alt="Forge Dashboard with KPIs, score distribution, domain breakdown, and recent activity" width="100%" />
 </p>
 
 ---
 
-## Why Customers Use Forge AI
+## Why Customers Use Forge
 
 - **Speed to value:** Move from "what should we build?" to a ranked backlog in minutes.
 - **Better prioritization:** Score opportunities by business impact, feasibility, and strategic fit.
@@ -26,7 +26,7 @@ In one flow, your team can discover high-impact use cases, align them to busines
 
 ### 1) Find the best opportunities faster
 
-Forge AI scans your Unity Catalog metadata and generates a curated set of AI and analytics use cases, already grouped by business domain and ranked by value.
+Forge scans your Unity Catalog metadata and generates a curated set of AI and analytics use cases, already grouped by business domain and ranked by value.
 
 <p align="center">
   <img src="docs/images/guide-10-usecase-table.png" alt="Prioritized and filterable use case catalog" width="100%" />
@@ -42,7 +42,7 @@ Each use case is transparently scored across impact, feasibility, and priority s
 
 ### 3) Activate insights immediately
 
-Forge AI helps teams move from recommendation to execution with deployable artifacts and natural language exploration.
+Forge helps teams move from recommendation to execution with deployable artifacts and natural language exploration.
 
 - Deploy **Genie Spaces** per domain for business-friendly exploration.
 - Generate **AI/BI dashboard recommendations** to accelerate decision support.
@@ -59,7 +59,7 @@ Forge AI helps teams move from recommendation to execution with deployable artif
 
 ### Works with your platform, not around it
 
-Forge AI is designed for teams already running on Databricks:
+Forge is designed for teams already running on Databricks:
 
 - Uses your **Unity Catalog** metadata as the source of truth.
 - Runs SQL on your **SQL Warehouse**.
@@ -145,8 +145,8 @@ Share results quickly in the format each stakeholder group expects.
 
 ## Start Unlocking More Value from Databricks
 
-If your organization wants faster time to value from data and AI investments, Forge AI gives you a practical way to turn metadata into momentum and momentum into measurable outcomes.
+If your organization wants faster time to value from data and AI investments, Forge gives you a practical way to turn metadata into momentum and momentum into measurable outcomes.
 
 ---
 
-**Disclaimer** -- Databricks Forge AI is provided subject to the [Databricks License](LICENSE). It is NOT an official Databricks product, feature, or service. It is provided "as-is" without warranty of any kind. Databricks and its contributors accept no liability for damages arising from the use of this software. Use of the Licensed Materials requires an active Databricks Services agreement. See [NOTICE](NOTICE) for support policy and [SECURITY](SECURITY.md) for vulnerability reporting.
+**Disclaimer** -- Databricks Forge is provided subject to the [Databricks License](LICENSE). It is NOT an official Databricks product, feature, or service. It is provided "as-is" without warranty of any kind. Databricks and its contributors accept no liability for damages arising from the use of this software. Use of the Licensed Materials requires an active Databricks Services agreement. See [NOTICE](NOTICE) for support policy and [SECURITY](SECURITY.md) for vulnerability reporting.

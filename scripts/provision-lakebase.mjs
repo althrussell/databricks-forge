@@ -20,7 +20,7 @@ const BRANCH_ID = "production";
 const DATABASE_NAME = "databricks_postgres";
 const PG_VERSION = "17";
 const DISPLAY_NAME =
-  PROJECT_ID_BASE === "databricks-forge" ? "Databricks Forge AI" : `Forge AI (${PROJECT_ID_BASE})`;
+  PROJECT_ID_BASE === "databricks-forge" ? "Databricks Forge" : `Forge (${PROJECT_ID_BASE})`;
 const API_TIMEOUT = 30_000;
 const LRO_TIMEOUT = 120_000;
 const LRO_POLL = 5_000;

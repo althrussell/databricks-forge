@@ -1,5 +1,5 @@
 #!/bin/sh
-# Databricks Forge AI — Production startup script for Databricks Apps
+# Databricks Forge — Production startup script for Databricks Apps
 #
 # The platform runs `npm install` + `npm run build` before this script.
 # After build, .next/standalone/ contains the self-contained server.
