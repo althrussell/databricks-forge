@@ -107,6 +107,41 @@ function getRetryAfterMs(error: unknown): number {
 }
 
 // ---------------------------------------------------------------------------
+// Model Pool (Gap 16)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an ordered list of fallback endpoints to try when the primary is
+ * exhausted. Filters out the current endpoint and deduplicates.
+ */
+function buildEndpointPool(currentEndpoint: string): string[] {
+  const pool: string[] = [];
+  const seen = new Set<string>([currentEndpoint]);
+
+  const addIfDistinct = (ep: string | null | undefined) => {
+    if (ep && !seen.has(ep)) {
+      seen.add(ep);
+      pool.push(ep);
+    }
+  };
+
+  addIfDistinct(getFallbackEndpoint(currentEndpoint));
+
+  // Additional endpoints from environment (comma-separated)
+  const extra = process.env.DATABRICKS_FALLBACK_ENDPOINTS;
+  if (extra) {
+    for (const ep of extra
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      addIfDistinct(ep);
+    }
+  }
+
+  return pool;
+}
+
+// ---------------------------------------------------------------------------
 // Retry wrapper
 // ---------------------------------------------------------------------------
 
@@ -172,13 +207,14 @@ async function chatCompletionWithRetry(
   }
 
   if (exhausted429) {
-    const fallback = getFallbackEndpoint(options.endpoint);
-    if (fallback) {
-      logger.warn("LLM falling back to alternate endpoint", {
+    // Model pool rotation: try all available fallback endpoints
+    const pool = buildEndpointPool(options.endpoint);
+    for (const alt of pool) {
+      logger.warn("LLM rotating to alternate endpoint", {
         from: options.endpoint,
-        to: fallback,
+        to: alt,
       });
-      const fallbackOptions = { ...options, endpoint: fallback };
+      const fallbackOptions = { ...options, endpoint: alt };
       for (let fa = 0; fa < FALLBACK_MAX_ATTEMPTS; fa++) {
         try {
           if (fa > 0) {
@@ -187,9 +223,16 @@ async function chatCompletionWithRetry(
           return await chatCompletion(fallbackOptions);
         } catch (fbError) {
           lastError = fbError instanceof Error ? fbError : new Error(String(fbError));
+          if (isRateLimitError(fbError)) {
+            logger.warn("LLM fallback also rate-limited, trying next", {
+              endpoint: alt,
+              error: lastError.message,
+            });
+            break;
+          }
           logger.warn("LLM fallback attempt failed", {
             attempt: fa + 1,
-            endpoint: fallback,
+            endpoint: alt,
             error: lastError.message,
           });
         }

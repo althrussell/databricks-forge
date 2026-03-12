@@ -142,7 +142,7 @@ describe("Skill Content Snapshots", () => {
   it("genie-design has expected chunks", () => {
     const skills = getAllSkills().find((s) => s.id === "genie-design");
     expect(skills).toBeDefined();
-    expect(skills!.chunks.length).toBe(8);
+    expect(skills!.chunks.length).toBe(9);
     expect(skills!.chunks.map((c) => c.id)).toMatchInlineSnapshot(`
       [
         "genie-table-selection",
@@ -153,6 +153,7 @@ describe("Skill Content Snapshots", () => {
         "genie-question-style",
         "genie-sample-questions",
         "genie-instruction-anti-patterns",
+        "genie-best-practices",
       ]
     `);
   });

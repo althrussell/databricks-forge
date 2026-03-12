@@ -7,6 +7,7 @@
  */
 
 import type { MetadataSnapshot, ColumnInfo } from "@/lib/domain/types";
+import { parseStructFields } from "@/lib/metadata/deterministic";
 import {
   extractColumnReferences,
   extractSqlAliases,
@@ -491,11 +492,31 @@ export function buildCompactColumnsBlock(metadata: MetadataSnapshot, tableFqns?:
 }
 
 /**
+ * Compute a dynamic character budget for schema context based on table count.
+ * Larger schemas get proportionally less detail per table to stay within
+ * the model's effective context window.
+ */
+export function computeSchemaContextBudget(tableCount: number): number {
+  if (tableCount <= 10) return 80_000;
+  if (tableCount <= 25) return 60_000;
+  if (tableCount <= 50) return 40_000;
+  if (tableCount <= 100) return 30_000;
+  return 20_000;
+}
+
+/**
  * Build a markdown schema context block for LLM prompts.
  * Lists every table with its columns and types.
+ * Includes nested struct fields when present (up to 2 levels deep).
  */
-export function buildSchemaContextBlock(metadata: MetadataSnapshot, tableFqns?: string[]): string {
+export function buildSchemaContextBlock(
+  metadata: MetadataSnapshot,
+  tableFqns?: string[],
+  maxChars?: number,
+): string {
   const targetTables = tableFqns ? new Set(tableFqns.map((f) => f.toLowerCase())) : null;
+  const effectiveTableCount = targetTables ? targetTables.size : metadata.tables.length;
+  const budget = maxChars ?? computeSchemaContextBudget(effectiveTableCount);
 
   const columnsByTable = new Map<string, ColumnInfo[]>();
   for (const c of metadata.columns) {
@@ -509,18 +530,45 @@ export function buildSchemaContextBlock(metadata: MetadataSnapshot, tableFqns?: 
     "### SCHEMA CONTEXT (you MUST only reference these tables and columns)\n",
   ];
 
+  let charCount = lines[0].length;
+
   for (const t of metadata.tables) {
     const key = t.fqn.toLowerCase();
     if (targetTables && !targetTables.has(key)) continue;
     const cols = columnsByTable.get(key) ?? [];
     cols.sort((a, b) => a.ordinalPosition - b.ordinalPosition);
 
-    lines.push(`**${t.fqn}**${t.comment ? ` — ${t.comment}` : ""}`);
+    const tableLine = `**${t.fqn}**${t.comment ? ` — ${t.comment}` : ""}`;
+    lines.push(tableLine);
+    charCount += tableLine.length;
+
     for (const c of cols) {
+      if (charCount > budget) break;
       const desc = c.comment ? ` — ${c.comment}` : "";
-      lines.push(`  - ${quoteIdent(c.columnName)} (${c.dataType})${desc}`);
+      const colLine = `  - ${quoteIdent(c.columnName)} (${c.dataType})${desc}`;
+      lines.push(colLine);
+      charCount += colLine.length;
+
+      // Expand struct fields for richer context
+      if (/^STRUCT\s*</i.test(c.dataType) && charCount < budget) {
+        const structFields = parseStructFields(c.dataType, 2);
+        for (const sf of structFields.slice(0, 10)) {
+          if (charCount > budget) break;
+          const sfLine = `    - .${sf.path} (${sf.dataType})`;
+          lines.push(sfLine);
+          charCount += sfLine.length;
+        }
+      }
     }
     lines.push("");
+    charCount += 1;
+
+    if (charCount > budget) {
+      lines.push(
+        `... (${metadata.tables.length - lines.filter((l) => l.startsWith("**")).length} more tables truncated)`,
+      );
+      break;
+    }
   }
 
   return lines.join("\n");

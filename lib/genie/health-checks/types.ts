@@ -28,7 +28,12 @@ export type FixStrategy =
   | "instruction_generation"
   | "benchmark_generation"
   | "entity_matching"
-  | "sample_questions";
+  | "sample_questions"
+  | "delete_bad_synonyms"
+  | "delete_bad_measures"
+  | "delete_bad_joins"
+  | "delete_bad_examples"
+  | "replace_instructions";
 
 export interface CategoryDefinition {
   label: string;

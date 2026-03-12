@@ -101,6 +101,28 @@ export async function scanSchema(
     });
   }
 
+  // Phantom table filtering: cross-check information_schema with SHOW TABLES
+  try {
+    const showResult = await executeSQL(`SHOW TABLES IN ${catalog}.${schema}`);
+    const liveNames = new Set(showResult.rows.map((r) => String(r[1] ?? r[0] ?? "").toLowerCase()));
+    if (liveNames.size > 0) {
+      const before = tables.length;
+      tables = tables.filter((t) => liveNames.has(t.tableName.toLowerCase()));
+      const removed = before - tables.length;
+      if (removed > 0) {
+        logger.info("Phantom table filtering removed stale entries", {
+          removed,
+          catalog,
+          schema,
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn("Phantom table filtering skipped (SHOW TABLES failed)", {
+      error: String(err),
+    });
+  }
+
   if (tables.length === 0) {
     return {
       catalog,
@@ -201,7 +223,7 @@ export async function profileKeyColumns(
       return `
         STRUCT(
           '${c.columnName}' AS column_name,
-          CAST(COUNT(DISTINCT ${col}) AS STRING) AS distinct_count,
+          CAST(APPROX_COUNT_DISTINCT(${col}) AS STRING) AS distinct_count,
           CAST(ROUND(SUM(CASE WHEN ${col} IS NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS STRING) AS null_pct,
           CAST(MIN(${col}) AS STRING) AS min_val,
           CAST(MAX(${col}) AS STRING) AS max_val
@@ -366,4 +388,79 @@ Select the most valuable tables for analytics.`,
       businessContext: "",
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Sample Row Extraction (Gap 9)
+// ---------------------------------------------------------------------------
+
+export interface SampleRowResult {
+  tableFqn: string;
+  columns: string[];
+  rows: string[][];
+}
+
+/**
+ * Fetch sample rows from tables for LLM context enrichment.
+ * This function respects the caller's decision to sample -- it should only
+ * be called when `sampleRowsPerTable > 0` has been checked upstream.
+ */
+export async function sampleTableRows(
+  tableFqns: string[],
+  limit = 20,
+  maxTables = 15,
+): Promise<SampleRowResult[]> {
+  const results: SampleRowResult[] = [];
+  const toSample = tableFqns.slice(0, maxTables);
+
+  for (const fqn of toSample) {
+    try {
+      const sql = `SELECT * FROM ${fqn} LIMIT ${limit}`;
+      const result = await executeSQL(sql, undefined, undefined, {
+        waitTimeout: "10s",
+        submitTimeoutMs: 15_000,
+      });
+      if (result.rows.length > 0) {
+        results.push({
+          tableFqn: fqn,
+          columns: result.columns.map((c) => c.name),
+          rows: result.rows.slice(0, limit),
+        });
+      }
+    } catch (err) {
+      logger.warn("Sample row fetch failed (non-fatal)", {
+        table: fqn,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Build a compact markdown block of sample data for LLM prompt inclusion.
+ * Truncates per-table to keep total within budget.
+ */
+export function buildSampleDataBlock(samples: SampleRowResult[], maxChars = 4000): string {
+  if (samples.length === 0) return "";
+  const perTable = Math.floor(maxChars / samples.length);
+  const lines: string[] = ["### SAMPLE DATA VALUES\n"];
+
+  for (const s of samples) {
+    const tableLines: string[] = [`**${s.tableFqn}** (${s.rows.length} rows):`];
+    tableLines.push(`| ${s.columns.join(" | ")} |`);
+    tableLines.push(`| ${s.columns.map(() => "---").join(" | ")} |`);
+    for (const row of s.rows.slice(0, 5)) {
+      tableLines.push(`| ${row.join(" | ")} |`);
+    }
+    const tableBlock = tableLines.join("\n");
+    if (tableBlock.length > perTable) {
+      lines.push(tableBlock.slice(0, perTable) + "...\n");
+    } else {
+      lines.push(tableBlock + "\n");
+    }
+  }
+
+  return lines.join("\n").slice(0, maxChars);
 }

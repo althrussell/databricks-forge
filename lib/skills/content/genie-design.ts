@@ -85,6 +85,18 @@ const INSTRUCTION_ANTI_PATTERNS = `Genie Instruction Anti-Patterns (BANNED conte
 - Generic instructions that don't reference specific tables, columns, or business rules
 - Instructions that contradict the knowledge store expressions`;
 
+const BEST_PRACTICES = `Genie Space Best Practices (Priority Order):
+1. SQL over Text: Prioritize SQL-based teaching (measures, filters, example queries, benchmarks) over text instructions. Genie learns patterns from SQL far more effectively than prose.
+2. Entity Matching: Enable entity matching on bounded-cardinality string columns (status, category, region) so Genie can match user terms to stored values. Key for columns where users say "active" but data stores "ACTIVE".
+3. Benchmark-Driven Quality: Always include 5-20 benchmark questions with expected SQL. These are the ground truth for measuring and improving space quality.
+4. Join Coverage: Every table in the space must participate in at least one join (except single-table spaces). Unjoined tables cause cross-table queries to fail silently.
+5. Synonym Precision: Column synonyms must be unambiguous. A synonym should map to exactly one column. Remove synonyms that match other column names.
+6. Instruction Economy: Text instructions should be concise (under 3000 chars), specific (reference actual columns/tables), and operational (disambiguation rules, time conventions, business rules). Not marketing copy.
+7. Measure Quality: Measures should use proper types (DECIMAL for money, not DOUBLE), explicit aggregation (SUM, COUNT, AVG), and FILTER clauses for conditional metrics. No window functions in measures.
+8. Time Awareness: Include at least one time-based filter and one time dimension for every date column. Users expect "last month", "this quarter", "year over year".
+9. Schema Grounding: All generated SQL must reference only columns that exist in the space. Hallucinated identifiers cause silent failures.
+10. Iterative Improvement: Use benchmark scoring → failure analysis → targeted fixes → re-score loop. Single-pass generation is never sufficient for production quality.`;
+
 const SAMPLE_QUESTION_PATTERNS = `Genie Sample Question Best Practices:
 - Reference actual column names from the schema (helps Genie learn the data vocabulary)
 - Cover the most common analytical use cases the space supports
@@ -160,6 +172,12 @@ const skill: SkillDefinition = {
       title: "Instruction Anti-Patterns",
       content: INSTRUCTION_ANTI_PATTERNS,
       category: "anti-patterns",
+    },
+    {
+      id: "genie-best-practices",
+      title: "Genie Space Best Practices",
+      content: BEST_PRACTICES,
+      category: "rules",
     },
   ],
 };

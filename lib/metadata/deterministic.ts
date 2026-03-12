@@ -372,3 +372,75 @@ export function buildSchemaNamingProfile(
 
   return { dominantConvention, commonPrefixes, commonSuffixes, hasMedallionPattern };
 }
+
+// ---------------------------------------------------------------------------
+// Struct / Map field extraction (Gap 8)
+// ---------------------------------------------------------------------------
+
+export interface StructField {
+  path: string;
+  dataType: string;
+}
+
+/**
+ * Parse a STRUCT or MAP type string to extract nested field paths up to
+ * `maxDepth` levels. Returns an array of {path, dataType} pairs.
+ *
+ * Examples:
+ *   "STRUCT<city:STRING, zip:INT>" → [{path:"city", dataType:"STRING"}, {path:"zip", dataType:"INT"}]
+ *   "STRUCT<address:STRUCT<line1:STRING, line2:STRING>>" with maxDepth=2 →
+ *     [{path:"address", dataType:"STRUCT<line1:STRING, line2:STRING>"},
+ *      {path:"address.line1", dataType:"STRING"},
+ *      {path:"address.line2", dataType:"STRING"}]
+ */
+export function parseStructFields(fullDataType: string, maxDepth = 2): StructField[] {
+  const results: StructField[] = [];
+  if (maxDepth <= 0) return results;
+
+  const trimmed = fullDataType.trim();
+  const structMatch = trimmed.match(/^STRUCT\s*<(.+)>$/i);
+  if (!structMatch) return results;
+
+  const inner = structMatch[1];
+  const fields = splitStructFields(inner);
+
+  for (const field of fields) {
+    const colonIdx = field.indexOf(":");
+    if (colonIdx < 0) continue;
+    const name = field.slice(0, colonIdx).trim();
+    const type = field.slice(colonIdx + 1).trim();
+    if (!name) continue;
+
+    results.push({ path: name, dataType: type });
+
+    if (maxDepth > 1 && /^STRUCT\s*</i.test(type)) {
+      const nested = parseStructFields(type, maxDepth - 1);
+      for (const n of nested) {
+        results.push({ path: `${name}.${n.path}`, dataType: n.dataType });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Split top-level struct fields, respecting nested angle brackets.
+ */
+function splitStructFields(inner: string): string[] {
+  const fields: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === "<") depth++;
+    else if (ch === ">") depth--;
+    else if (ch === "," && depth === 0) {
+      fields.push(inner.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  const last = inner.slice(start).trim();
+  if (last) fields.push(last);
+  return fields;
+}

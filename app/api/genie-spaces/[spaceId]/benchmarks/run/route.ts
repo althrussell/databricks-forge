@@ -190,12 +190,16 @@ export async function POST(
                 passed = true;
                 comparisonMethod = "sql_similarity";
               } else if (
-                actualSqlResult && expectedSqlResult &&
-                !actualSqlResult.error && !expectedSqlResult.error &&
-                actualSqlResult.rowCount > 0 && expectedSqlResult.rowCount > 0
+                actualSqlResult &&
+                expectedSqlResult &&
+                !actualSqlResult.error &&
+                !expectedSqlResult.error &&
+                actualSqlResult.rowCount > 0 &&
+                expectedSqlResult.rowCount > 0
               ) {
                 comparisonMethod = "result";
-                const colsMatch = actualSqlResult.columns.length === expectedSqlResult.columns.length;
+                const colsMatch =
+                  actualSqlResult.columns.length === expectedSqlResult.columns.length;
                 const rowMatch = actualSqlResult.rowCount === expectedSqlResult.rowCount;
                 if (colsMatch && rowMatch) {
                   passed = true;
