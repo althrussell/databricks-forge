@@ -97,11 +97,9 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         const errStr = String(err);
         const denied = errStr.includes("(403)") || errStr.includes("PERMISSION_DENIED");
-        logger.warn("Discover failed for space", {
-          spaceId,
-          error: errStr,
-          permissionDenied: denied,
-        });
+        if (!denied) {
+          logger.warn("Discover failed for space", { spaceId, error: errStr });
+        }
         return [
           spaceId,
           { metadata: null, healthReport: null, permissionDenied: denied || undefined },

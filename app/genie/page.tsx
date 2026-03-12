@@ -41,14 +41,27 @@ import {
   ChevronRight,
   ShieldAlert,
 } from "lucide-react";
-import type { GenieSpaceResponse, TrackedGenieSpace } from "@/lib/genie/types";
+import type { TrackedGenieSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
-import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import { PageHeader } from "@/components/page-header";
 import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
 import { ImportSpaceDialog } from "@/components/genie/import-space-dialog";
 import { HealthCheckSettingsDialog } from "@/components/genie/health-check-settings";
 import { parseErrorResponse } from "@/lib/error-utils";
+
+interface CachedSpaceData {
+  spaceId: string;
+  title: string;
+  description?: string | null;
+  tableCount?: number | null;
+  measureCount?: number | null;
+  sampleQuestionCount?: number | null;
+  filterCount?: number | null;
+  healthScore?: number | null;
+  healthReportJson?: string | null;
+  permissionDenied?: boolean;
+  lastDiscoveredAt?: string | null;
+}
 
 interface SpaceCardData {
   spaceId: string;
@@ -63,17 +76,41 @@ interface SpaceCardData {
   sampleQuestionCount?: number;
   filterCount?: number;
   updatedAt?: string;
+  permissionDenied?: boolean;
 }
 
-function mergeSpaces(
-  workspaceSpaces: GenieSpaceResponse[],
+function mergeSpacesFromCache(
+  cached: CachedSpaceData[],
   tracked: TrackedGenieSpace[],
 ): SpaceCardData[] {
-  const seen = new Set<string>();
+  const trackedMap = new Map<string, TrackedGenieSpace>();
+  for (const t of tracked) trackedMap.set(t.spaceId, t);
+
   const result: SpaceCardData[] = [];
+  const seen = new Set<string>();
+
+  for (const c of cached) {
+    seen.add(c.spaceId);
+    const t = trackedMap.get(c.spaceId);
+    result.push({
+      spaceId: c.spaceId,
+      title: t?.title ?? c.title,
+      description: c.description,
+      source: t ? "pipeline" : "workspace",
+      status: t?.status ?? "active",
+      domain: t?.domain,
+      runId: t?.runId,
+      updatedAt: t?.updatedAt,
+      tableCount: c.tableCount ?? undefined,
+      measureCount: c.measureCount ?? undefined,
+      sampleQuestionCount: c.sampleQuestionCount ?? undefined,
+      filterCount: c.filterCount ?? undefined,
+      permissionDenied: c.permissionDenied,
+    });
+  }
 
   for (const t of tracked) {
-    seen.add(t.spaceId);
+    if (seen.has(t.spaceId)) continue;
     result.push({
       spaceId: t.spaceId,
       title: t.title,
@@ -85,17 +122,6 @@ function mergeSpaces(
     });
   }
 
-  for (const ws of workspaceSpaces) {
-    if (seen.has(ws.space_id)) continue;
-    result.push({
-      spaceId: ws.space_id,
-      title: ws.title ?? "Untitled",
-      description: ws.description,
-      source: "workspace",
-      status: "active",
-    });
-  }
-
   return result.sort((a, b) => {
     if (a.status === "trashed" && b.status !== "trashed") return 1;
     if (a.status !== "trashed" && b.status === "trashed") return -1;
@@ -103,11 +129,26 @@ function mergeSpaces(
   });
 }
 
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function GenieSpacesPage() {
   const router = useRouter();
   const [spaces, setSpaces] = useState<SpaceCardData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [discovering, setDiscovering] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ percent: number; message: string } | null>(
+    null,
+  );
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [trashTarget, setTrashTarget] = useState<SpaceCardData | null>(null);
   const [trashing, setTrashing] = useState(false);
   const [databricksHost, setDatabricksHost] = useState("");
@@ -120,6 +161,7 @@ export default function GenieSpacesPage() {
   >({});
   const [page, setPage] = useState(0);
   const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const spacesRef = useRef(spaces);
   spacesRef.current = spaces;
 
@@ -139,97 +181,99 @@ export default function GenieSpacesPage() {
   >([]);
   const generateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const runDiscovery = useCallback(async (spaceIds: string[]) => {
-    if (spaceIds.length === 0) return;
-    setDiscovering(true);
-    try {
-      const BATCH_SIZE = 50;
-      const chunks: string[][] = [];
-      for (let i = 0; i < spaceIds.length; i += BATCH_SIZE) {
-        chunks.push(spaceIds.slice(i, i + BATCH_SIZE));
-      }
-
-      for (const chunk of chunks) {
-        const res = await fetch("/api/genie-spaces/discover", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ spaceIds: chunk }),
-        });
-        if (!res.ok) continue;
-
-        const data: Record<
-          string,
-          {
-            metadata: SpaceMetadata | null;
-            healthReport: SpaceHealthReport | null;
-            permissionDenied?: boolean;
-          }
-        > = await res.json();
-
-        const deniedInChunk = new Set<string>();
-        for (const [id, result] of Object.entries(data)) {
-          if (result.permissionDenied) deniedInChunk.add(id);
-        }
-        if (deniedInChunk.size > 0) {
-          setInaccessibleIds((prev) => {
-            const next = new Set(prev);
-            for (const id of deniedInChunk) next.add(id);
-            return next;
-          });
-        }
-
-        setSpaces((prev) =>
-          prev.map((s) => {
-            const disc = data[s.spaceId];
-            if (!disc?.metadata) return s;
-            return {
-              ...s,
-              tableCount: disc.metadata.tableCount,
-              measureCount: disc.metadata.measureCount,
-              sampleQuestionCount: disc.metadata.sampleQuestionCount,
-              filterCount: disc.metadata.filterCount,
-            };
-          }),
-        );
-
-        const reports: Record<string, SpaceHealthReport | null> = {};
-        for (const [id, result] of Object.entries(data)) {
-          reports[id] = result.healthReport;
-        }
-        setHealthScores((prev) => ({ ...prev, ...reports }));
-      }
-    } catch {
-      // Discovery is non-critical
-    } finally {
-      setDiscovering(false);
-    }
-  }, []);
-
-  const fetchSpaces = useCallback(async () => {
+  // Load spaces from Lakebase cache (fast, no Databricks API calls)
+  const loadFromCache = useCallback(async () => {
     try {
       const res = await fetch("/api/genie-spaces");
       if (!res.ok) throw new Error("Failed to load spaces");
       const data = await res.json();
-      const merged = mergeSpaces(data.spaces ?? [], data.tracked ?? []);
+      const merged = mergeSpacesFromCache(data.spaces ?? [], data.tracked ?? []);
       setSpaces(merged);
+      setLastSyncedAt(data.lastSyncedAt ?? null);
 
-      if ((data.staleCount ?? 0) > 0) {
-        toast.info(
-          `${data.staleCount} space${data.staleCount !== 1 ? "s" : ""} no longer found in workspace`,
-        );
+      // Populate health scores + inaccessible IDs from cached data
+      const cachedHealth: Record<string, SpaceHealthReport | null> = {};
+      const denied = new Set<string>();
+      for (const s of data.spaces ?? []) {
+        if (s.healthReportJson) {
+          try {
+            cachedHealth[s.spaceId] = JSON.parse(s.healthReportJson);
+          } catch {
+            /* invalid JSON */
+          }
+        }
+        if (s.permissionDenied) denied.add(s.spaceId);
       }
-
-      const activeIds = merged.filter((s) => s.status !== "trashed").map((s) => s.spaceId);
-      runDiscovery(activeIds);
+      if (Object.keys(cachedHealth).length > 0) setHealthScores(cachedHealth);
+      if (denied.size > 0) setInaccessibleIds(denied);
     } catch {
       toast.error("Failed to load Genie Spaces");
     } finally {
       setLoading(false);
     }
-  }, [runDiscovery]);
+  }, []);
 
+  // Fire-and-forget sync: POST to start, then poll GET for progress
+  const handleRefresh = useCallback(() => {
+    setSyncing(true);
+    setSyncProgress({ percent: 0, message: "Starting sync..." });
+
+    fetch("/api/genie-spaces/sync", { method: "POST" })
+      .then((res) => res.json())
+      .then((data: { jobId: string; alreadyRunning?: boolean }) => {
+        if (data.alreadyRunning) {
+          toast.info("A sync is already in progress");
+        }
+
+        const pollSync = () => {
+          fetch(`/api/genie-spaces/sync?jobId=${data.jobId}`)
+            .then((r) => r.json())
+            .then(
+              (job: {
+                status: string;
+                message: string;
+                percent: number;
+                spacesFound: number;
+                error: string | null;
+              }) => {
+                setSyncProgress({ percent: job.percent, message: job.message });
+
+                if (job.status === "completed") {
+                  if (syncTimerRef.current) {
+                    clearInterval(syncTimerRef.current);
+                    syncTimerRef.current = null;
+                  }
+                  setSyncing(false);
+                  setSyncProgress(null);
+                  toast.success(`Synced ${job.spacesFound.toLocaleString()} spaces`);
+                  loadFromCache();
+                } else if (job.status === "failed") {
+                  if (syncTimerRef.current) {
+                    clearInterval(syncTimerRef.current);
+                    syncTimerRef.current = null;
+                  }
+                  setSyncing(false);
+                  setSyncProgress(null);
+                  toast.error(job.error ?? "Sync failed");
+                }
+              },
+            )
+            .catch(() => {});
+        };
+
+        syncTimerRef.current = setInterval(pollSync, 3000);
+        pollSync();
+      })
+      .catch(() => {
+        setSyncing(false);
+        setSyncProgress(null);
+        toast.error("Failed to start sync");
+      });
+  }, [loadFromCache]);
+
+  // Initial load from cache + health check
   useEffect(() => {
-    fetchSpaces();
+    loadFromCache();
     fetch("/api/health")
       .then((r) => r.json())
       .then((d) => {
@@ -239,7 +283,10 @@ export default function GenieSpacesPage() {
         }
       })
       .catch(() => {});
-  }, [fetchSpaces]);
+    return () => {
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+    };
+  }, [loadFromCache]);
 
   // Poll for active improvement jobs
   useEffect(() => {
@@ -325,13 +372,6 @@ export default function GenieSpacesPage() {
     }
   };
 
-  const handleRefresh = () => {
-    setLoading(true);
-    setHealthScores({});
-    setInaccessibleIds(new Set());
-    fetchSpaces();
-  };
-
   const handleTrash = async () => {
     if (!trashTarget) return;
     setTrashing(true);
@@ -344,7 +384,7 @@ export default function GenieSpacesPage() {
       }
       toast.success(`"${trashTarget.title}" trashed`);
       setTrashTarget(null);
-      fetchSpaces();
+      loadFromCache();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to trash space");
     } finally {
@@ -396,18 +436,25 @@ export default function GenieSpacesPage() {
                 setHealthScores((prev) => ({ ...prev, [importedId]: result.healthReport }));
               }}
             />
+            {lastSyncedAt && (
+              <span className="text-xs text-muted-foreground">
+                Synced {formatRelativeTime(lastSyncedAt)}
+              </span>
+            )}
             <Button
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={loading || discovering}
+              disabled={loading || syncing}
             >
-              {loading || discovering ? (
+              {syncing ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 size-4" />
               )}
-              Refresh
+              {syncing && syncProgress
+                ? `${syncProgress.percent}%`
+                : "Sync Spaces"}
             </Button>
           </div>
         }
@@ -469,10 +516,24 @@ export default function GenieSpacesPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Sparkles className="mb-4 size-12 text-muted-foreground/50" />
-            <h2 className="text-lg font-semibold">No Genie Spaces yet</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Choose an entry point above to create your first Genie Space.
+            <h2 className="text-lg font-semibold">
+              {lastSyncedAt ? "No Genie Spaces yet" : "Sync your workspace"}
+            </h2>
+            <p className="mx-auto mt-1 max-w-sm text-center text-sm text-muted-foreground">
+              {lastSyncedAt
+                ? "Choose an entry point above to create your first Genie Space."
+                : "Click Sync Spaces to pull Genie Spaces from your Databricks workspace into the local cache."}
             </p>
+            {!lastSyncedAt && (
+              <Button className="mt-4" onClick={handleRefresh} disabled={syncing}>
+                {syncing ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 size-4" />
+                )}
+                Sync Spaces
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -639,7 +700,7 @@ export default function GenieSpacesPage() {
                       onTrash={() => setTrashTarget(space)}
                       onCardClick={() => router.push(`/genie/${space.spaceId}`)}
                       healthReport={healthScores[space.spaceId] ?? undefined}
-                      healthLoading={discovering}
+                      healthLoading={syncing}
                       onHealthClick={() => {
                         setHealthSheetTarget(space);
                         setHealthSheetOpen(true);
@@ -793,7 +854,7 @@ export default function GenieSpacesPage() {
         spaceId={healthSheetTarget?.spaceId ?? ""}
         spaceTitle={healthSheetTarget?.title ?? ""}
         report={healthSheetTarget ? (healthScores[healthSheetTarget.spaceId] ?? null) : null}
-        loading={discovering}
+        loading={syncing}
         onFix={() => {
           if (healthSheetTarget) {
             setHealthSheetOpen(false);
