@@ -211,11 +211,7 @@ export async function POST(
 // Background deploy logic
 // ---------------------------------------------------------------------------
 
-async function runPipelineDeploy(
-  jobId: string,
-  runId: string,
-  body: RequestBody,
-): Promise<void> {
+async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody): Promise<void> {
   const job = deployJobs.get(jobId);
   if (!job) return;
 
@@ -321,7 +317,9 @@ async function runPipelineDeploy(
           });
           try {
             await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
-          } catch { /* exhausted retry */ }
+          } catch {
+            /* exhausted retry */
+          }
         }
         logger.info("Genie space updated", { runId, domain: domainReq.domain, spaceId });
       } else {
@@ -361,7 +359,9 @@ async function runPipelineDeploy(
               deployedAssetsPayload,
               body.authMode,
             );
-          } catch { /* exhausted retry */ }
+          } catch {
+            /* exhausted retry */
+          }
         }
       }
 

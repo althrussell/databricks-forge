@@ -210,15 +210,11 @@ export function assembleSerializedSpace(
             if (ce.synonyms.length > 0) cfg.synonyms = ce.synonyms;
 
             const ecKey = `${fqn.toLowerCase()}:${ce.columnName.toLowerCase()}`;
-            const isEntity =
-              entityCandidateKeys.has(ecKey) || ce.entityMatchingCandidate;
+            const isEntity = entityCandidateKeys.has(ecKey) || ce.entityMatchingCandidate;
             if (isEntity) {
               cfg.enable_entity_matching = true;
               cfg.enable_format_assistance = true;
-            } else if (
-              isPiiColumn(ce.columnName) ||
-              isFormatAssistanceCandidate(ce.columnName)
-            ) {
+            } else if (isPiiColumn(ce.columnName) || isFormatAssistanceCandidate(ce.columnName)) {
               cfg.enable_format_assistance = true;
             }
 

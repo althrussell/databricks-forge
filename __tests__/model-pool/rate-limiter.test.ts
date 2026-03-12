@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getPoolRateLimiter, resetPoolRateLimiter, DEFAULT_429_BACKOFF_MS } from "@/lib/dbx/rate-limiter";
+import {
+  getPoolRateLimiter,
+  resetPoolRateLimiter,
+  DEFAULT_429_BACKOFF_MS,
+} from "@/lib/dbx/rate-limiter";
 import { resetModelPool } from "@/lib/dbx/model-registry";
 
 vi.mock("@/lib/logger", () => ({

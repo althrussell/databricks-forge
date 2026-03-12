@@ -37,7 +37,13 @@ export async function runDomainClustering(
   if (runId)
     await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
-    await assignDomains(updatedCases, run.config.businessName, bc, resolveEndpoint("classification"), runId);
+    await assignDomains(
+      updatedCases,
+      run.config.businessName,
+      bc,
+      resolveEndpoint("classification"),
+      runId,
+    );
   } catch (error) {
     logger.error("Domain assignment failed", {
       error: error instanceof Error ? error.message : String(error),

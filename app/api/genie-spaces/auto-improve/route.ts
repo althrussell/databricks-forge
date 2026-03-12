@@ -21,16 +21,39 @@ const activeJobs = new Map<
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { spaceId, benchmarks, targetScore, maxIterations } = body as {
+    const body = (await request.json()) as {
       spaceId: string;
-      benchmarks: Array<{ question: string; expectedSql?: string }>;
+      benchmarks?: Array<{ question: string; expectedSql?: string }>;
       targetScore?: number;
       maxIterations?: number;
     };
+    const { spaceId, targetScore, maxIterations } = body;
+    let { benchmarks } = body;
 
-    if (!spaceId || !benchmarks || benchmarks.length === 0) {
-      return NextResponse.json({ error: "spaceId and benchmarks are required" }, { status: 400 });
+    if (!spaceId) {
+      return NextResponse.json({ error: "spaceId is required" }, { status: 400 });
+    }
+
+    if (!benchmarks || benchmarks.length === 0) {
+      const space = await getGenieSpace(spaceId);
+      if (space?.serialized_space) {
+        try {
+          const parsed = JSON.parse(space.serialized_space);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          benchmarks = (parsed.benchmarks?.questions ?? []).map((q: any) => ({
+            question: Array.isArray(q.question) ? q.question[0] : String(q.question ?? ""),
+            expectedSql: q.expectedSql ?? q.expected_sql ?? undefined,
+          }));
+        } catch {
+          // parse failure -- fall through to the guard below
+        }
+      }
+      if (!benchmarks || benchmarks.length === 0) {
+        return NextResponse.json(
+          { error: "No benchmarks found on this space. Add benchmarks before auto-improving." },
+          { status: 400 },
+        );
+      }
     }
 
     // Capture the user's OBO token while still in request context so background

@@ -370,7 +370,9 @@ export function GenieBuilderModal({
               setGenError(pollData.error || "Deployment failed");
               setPhase("error");
             }
-          } catch { /* retry on next poll */ }
+          } catch {
+            /* retry on next poll */
+          }
         }, 2000);
       } else if (data.spaceId) {
         setDeployedSpaceId(data.spaceId);
@@ -677,9 +679,7 @@ export function GenieBuilderModal({
                 </Button>
               )}
               <Button variant="outline" className="flex-1" asChild>
-                <a href={`/genie/${deployedSpaceId}`}>
-                  View in Genie Studio
-                </a>
+                <a href={`/genie/${deployedSpaceId}`}>View in Genie Studio</a>
               </Button>
             </div>
           </div>

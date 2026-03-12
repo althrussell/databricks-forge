@@ -37,6 +37,8 @@ import {
   MessageCircle,
   Wrench,
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { GenieSpaceResponse, TrackedGenieSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
@@ -114,6 +116,7 @@ export default function GenieSpacesPage() {
   const [improveStatuses, setImproveStatuses] = useState<
     Record<string, { status: string; percent: number; message: string }>
   >({});
+  const [page, setPage] = useState(0);
   const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const spacesRef = useRef(spaces);
   spacesRef.current = spaces;
@@ -273,9 +276,7 @@ export default function GenieSpacesPage() {
           const jobList = data.jobs ?? [];
           setGenerateJobs(jobList);
 
-          const hasActive = jobList.some(
-            (j: { status: string }) => j.status === "generating",
-          );
+          const hasActive = jobList.some((j: { status: string }) => j.status === "generating");
           if (!hasActive && generateTimerRef.current) {
             clearInterval(generateTimerRef.current);
             generateTimerRef.current = null;
@@ -334,6 +335,14 @@ export default function GenieSpacesPage() {
 
   const activeSpaces = spaces.filter((s) => s.status !== "trashed");
   const trashedSpaces = spaces.filter((s) => s.status === "trashed");
+
+  const PAGE_SIZE = 12;
+  const totalPages = Math.max(1, Math.ceil(activeSpaces.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const paginatedSpaces = activeSpaces.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
+  );
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-8">
@@ -533,7 +542,10 @@ export default function GenieSpacesPage() {
                                 )}
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-xs text-green-600 border-green-300 dark:text-green-400">
+                            <Badge
+                              variant="outline"
+                              className="text-xs text-green-600 border-green-300 dark:text-green-400"
+                            >
                               Ready
                             </Badge>
                           </div>
@@ -565,11 +577,16 @@ export default function GenieSpacesPage() {
                                 )}
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-xs text-destructive border-destructive/30">
+                            <Badge
+                              variant="outline"
+                              className="text-xs text-destructive border-destructive/30"
+                            >
                               Failed
                             </Badge>
                           </div>
-                          <p className="mt-2 text-xs text-destructive">{job.error || job.message}</p>
+                          <p className="mt-2 text-xs text-destructive">
+                            {job.error || job.message}
+                          </p>
                         </CardContent>
                       </Card>
                     );
@@ -585,24 +602,53 @@ export default function GenieSpacesPage() {
                 No active spaces. Choose an entry point above to get started.
               </p>
             ) : activeSpaces.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {activeSpaces.map((space) => (
-                  <SpaceCard
-                    key={space.spaceId}
-                    space={space}
-                    databricksHost={databricksHost}
-                    onTrash={() => setTrashTarget(space)}
-                    onCardClick={() => router.push(`/genie/${space.spaceId}`)}
-                    healthReport={healthScores[space.spaceId] ?? undefined}
-                    healthLoading={discovering}
-                    onHealthClick={() => {
-                      setHealthSheetTarget(space);
-                      setHealthSheetOpen(true);
-                    }}
-                    improveStatus={improveStatuses[space.spaceId]}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {paginatedSpaces.map((space) => (
+                    <SpaceCard
+                      key={space.spaceId}
+                      space={space}
+                      databricksHost={databricksHost}
+                      onTrash={() => setTrashTarget(space)}
+                      onCardClick={() => router.push(`/genie/${space.spaceId}`)}
+                      healthReport={healthScores[space.spaceId] ?? undefined}
+                      healthLoading={discovering}
+                      onHealthClick={() => {
+                        setHealthSheetTarget(space);
+                        setHealthSheetOpen(true);
+                      }}
+                      improveStatus={improveStatuses[space.spaceId]}
+                    />
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Page {currentPage + 1} of {totalPages}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 0}
+                        onClick={() => setPage(currentPage - 1)}
+                      >
+                        <ChevronLeft className="mr-1 size-4" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage >= totalPages - 1}
+                        onClick={() => setPage(currentPage + 1)}
+                      >
+                        Next
+                        <ChevronRight className="ml-1 size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : null}
           </TabsContent>
 

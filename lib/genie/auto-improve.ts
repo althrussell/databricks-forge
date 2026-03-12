@@ -212,11 +212,12 @@ export async function runAutoImproveLoop(
     benchmarks,
     targetScore,
     maxIterations,
-    benchmarkOptions,
+    benchmarkOptions: rawBenchmarkOptions,
     indexingWaitMs = DEFAULT_INDEXING_WAIT_MS,
     enableThreeSpace = true,
     oboToken,
   } = config;
+  const benchmarkOptions = { ...rawBenchmarkOptions, oboToken };
   const iterations: AutoImproveIteration[] = [];
   const startTime = Date.now();
   let previousPassRate = -1;

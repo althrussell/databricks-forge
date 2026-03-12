@@ -127,7 +127,12 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       .map((domain) => async () => {
         const domainCases = scored.filter((uc) => uc.domain === domain);
         try {
-          return await deduplicateDomain(domainCases, bcRecord, resolveEndpoint("classification"), runId);
+          return await deduplicateDomain(
+            domainCases,
+            bcRecord,
+            resolveEndpoint("classification"),
+            runId,
+          );
         } catch (error) {
           logger.warn("Dedup failed for domain", {
             domain,

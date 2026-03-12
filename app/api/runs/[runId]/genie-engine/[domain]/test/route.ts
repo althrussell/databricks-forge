@@ -49,6 +49,7 @@ export async function POST(
     }
 
     const questions = body.questions.slice(0, 10);
+    const oboToken = request.headers.get("x-forwarded-access-token") ?? undefined;
 
     logger.info("Testing Genie Space", {
       runId,
@@ -61,7 +62,7 @@ export async function POST(
 
     for (const question of questions) {
       try {
-        const msg = await startConversation(body.spaceId, question, 90_000);
+        const msg = await startConversation(body.spaceId, question, 90_000, oboToken);
         results.push({
           question,
           status: msg.status,

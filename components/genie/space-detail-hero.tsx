@@ -77,13 +77,13 @@ export function SpaceDetailHero({
           }}
         />
 
-        <div className="relative flex items-center justify-between gap-6 px-8 py-8 sm:px-10 sm:py-10">
-          <div className="flex items-center gap-5">
+        <div className="relative flex flex-col gap-4 px-8 py-8 sm:px-10 sm:py-10 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+          <div className="flex min-w-0 items-center gap-5">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 shadow-sm ring-1 ring-primary/10">
               <BrainCircuit className="size-7 text-primary" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <h1 className="truncate text-2xl font-extrabold tracking-tight sm:text-3xl">
                   {title}
                 </h1>
@@ -105,14 +105,9 @@ export function SpaceDetailHero({
             </div>
           </div>
 
-          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+          <div className="flex items-center gap-2">
             {canImprove && (
-              <Button
-                size="lg"
-                onClick={onImprove}
-                disabled={improving || fixing}
-                className="gap-2"
-              >
+              <Button onClick={onImprove} disabled={improving || fixing} className="gap-2">
                 {improving ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
@@ -122,7 +117,7 @@ export function SpaceDetailHero({
               </Button>
             )}
             {genieUrl && (
-              <Button size="lg" variant="outline" asChild>
+              <Button variant="outline" asChild>
                 <a href={genieUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="mr-1.5 size-4" />
                   Open in Databricks

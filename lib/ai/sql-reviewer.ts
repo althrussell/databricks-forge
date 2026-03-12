@@ -307,9 +307,7 @@ function parseBatchReviewResponse(
     }
 
     const fixedSql =
-      requestFix &&
-      typeof match.fixed_sql === "string" &&
-      match.fixed_sql.length > 10
+      requestFix && typeof match.fixed_sql === "string" && match.fixed_sql.length > 10
         ? match.fixed_sql
         : undefined;
 
@@ -578,8 +576,7 @@ export async function reviewBatch(
   surface?: string,
   options?: ReviewBatchOptions | string,
 ): Promise<BatchReviewResult[]> {
-  const schemaContext =
-    typeof options === "string" ? options : options?.schemaContext;
+  const schemaContext = typeof options === "string" ? options : options?.schemaContext;
   const requestFix = typeof options === "object" && options?.requestFix === true;
 
   if (!isReviewEnabled(surface) || items.length === 0) {

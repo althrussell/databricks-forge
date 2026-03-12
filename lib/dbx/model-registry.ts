@@ -85,7 +85,11 @@ function templateFor(name: string): ModelTemplate {
     if (lower === key || lower.includes(key)) return tmpl;
   }
   // Unknown model -- conservative defaults, supports all tiers at low priority
-  return { tiers: ["generation", "classification", "sql", "lightweight"], maxConcurrent: 6, priority: 10 };
+  return {
+    tiers: ["generation", "classification", "sql", "lightweight"],
+    maxConcurrent: 6,
+    priority: 10,
+  };
 }
 
 // ---------------------------------------------------------------------------

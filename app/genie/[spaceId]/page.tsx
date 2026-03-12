@@ -153,7 +153,9 @@ export default function SpaceDetailPage() {
             toast.error(data.error || "Auto-improve failed");
           }
         }
-      } catch { /* retry */ }
+      } catch {
+        /* retry */
+      }
     };
     poll();
     autoImproveTimerRef.current = setInterval(poll, 3000);
@@ -460,7 +462,7 @@ export default function SpaceDetailPage() {
 
   // ── Derived values ────────────────────────────────────────────────
 
-  const canImprove = !detail?.runId;
+  const canImprove = !detail?.runId && detail?.healthReport?.grade !== "A";
   const genieUrl = databricksHost ? `${databricksHost}/genie/rooms/${spaceId}` : "";
 
   const parsed: SerializedSpace | null = (() => {
@@ -647,17 +649,7 @@ export default function SpaceDetailPage() {
             improving={improving}
             fixing={fixing}
             cloning={cloning}
-            improveProgress={
-              improveProgress
-                ? {
-                    status: improveProgress.status,
-                    message: improveProgress.message,
-                    percent: improveProgress.percent,
-                  }
-                : null
-            }
             onImprove={handleStartImprove}
-            onCancelImprove={handleCancelImprove}
             onClone={handleClone}
           />
         </TabsContent>

@@ -191,6 +191,8 @@ export async function POST(
     );
   }
 
+  const oboToken = request.headers.get("x-forwarded-access-token") ?? undefined;
+
   const jobId = uuidv4();
   const abortController = new AbortController();
 
@@ -211,7 +213,7 @@ export async function POST(
     abortController,
   });
 
-  runBenchmark(jobId, spaceId, questions).catch((err) => {
+  runBenchmark(jobId, spaceId, questions, oboToken).catch((err) => {
     const job = benchmarkJobs.get(jobId);
     if (job && job.status === "running") {
       job.status = "failed";
@@ -267,6 +269,7 @@ async function runBenchmark(
   jobId: string,
   spaceId: string,
   questions: Array<{ question: string; expectedSql?: string }>,
+  oboToken?: string,
 ): Promise<void> {
   const job = benchmarkJobs.get(jobId);
   if (!job) return;
@@ -289,7 +292,7 @@ async function runBenchmark(
       job.currentQuestion = bench.question;
 
       try {
-        const msg = await startConversation(spaceId, bench.question, 90_000);
+        const msg = await startConversation(spaceId, bench.question, 90_000, oboToken);
         const completed = msg.status === "COMPLETED";
         let passed = completed;
 
@@ -330,8 +333,7 @@ async function runBenchmark(
             expectedSqlResult.rowCount > 0
           ) {
             comparisonMethod = "result";
-            const colsMatch =
-              actualSqlResult.columns.length === expectedSqlResult.columns.length;
+            const colsMatch = actualSqlResult.columns.length === expectedSqlResult.columns.length;
             const rowMatch = actualSqlResult.rowCount === expectedSqlResult.rowCount;
             if (colsMatch && rowMatch) {
               passed = true;
@@ -385,9 +387,10 @@ async function runBenchmark(
           actualSql: null,
           status: "FAILED",
           passed: false,
-          error: errMsg.includes("(429)") || errMsg.includes("RESOURCE_EXHAUSTED")
-            ? `Rate limited by Databricks API after retries. ${errMsg}`
-            : errMsg,
+          error:
+            errMsg.includes("(429)") || errMsg.includes("RESOURCE_EXHAUSTED")
+              ? `Rate limited by Databricks API after retries. ${errMsg}`
+              : errMsg,
         };
         job.results.push(result);
         job.completed = i + 1;

@@ -79,14 +79,25 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Default: list all spaces
+  // Default: list all spaces (iterate all Databricks API pages)
   try {
-    const [apiResult, tracked] = await Promise.all([
-      listGenieSpaces().catch(() => ({ spaces: [], next_page_token: undefined })),
+    const fetchAllSpaces = async () => {
+      const allSpaces: Awaited<ReturnType<typeof listGenieSpaces>>["spaces"] = [];
+      let pageToken: string | undefined;
+      do {
+        const page = await listGenieSpaces(100, pageToken);
+        allSpaces.push(...(page.spaces ?? []));
+        pageToken = page.next_page_token;
+      } while (pageToken);
+      return allSpaces;
+    };
+
+    const [allSpaces, tracked] = await Promise.all([
+      fetchAllSpaces().catch(() => [] as Awaited<ReturnType<typeof listGenieSpaces>>["spaces"]),
       listTrackedGenieSpaces().catch(() => []),
     ]);
 
-    const workspaceIds = new Set((apiResult.spaces ?? []).map((s) => s.space_id));
+    const workspaceIds = new Set(allSpaces.map((s) => s.space_id));
     const liveTracked = tracked.filter(
       (t) => t.status === "trashed" || workspaceIds.has(t.spaceId),
     );
@@ -103,7 +114,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        spaces: apiResult.spaces,
+        spaces: allSpaces,
         tracked: liveTracked,
         staleCount,
       },

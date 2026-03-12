@@ -16,10 +16,7 @@ import { getModelPool } from "./model-registry";
 // Configuration
 // ---------------------------------------------------------------------------
 
-const GLOBAL_MAX = Math.max(
-  0,
-  parseInt(process.env.GLOBAL_LLM_MAX_CONCURRENT ?? "0", 10) || 0,
-);
+const GLOBAL_MAX = Math.max(0, parseInt(process.env.GLOBAL_LLM_MAX_CONCURRENT ?? "0", 10) || 0);
 
 export const DEFAULT_429_BACKOFF_MS = 60_000;
 
@@ -235,11 +232,11 @@ export function resetPoolRateLimiter(): void {
  */
 export const globalRateLimiter = {
   async acquire(endpoint?: string): Promise<void> {
-    const ep = endpoint ?? (getModelPool()[0]?.name ?? "default");
+    const ep = endpoint ?? getModelPool()[0]?.name ?? "default";
     return getPoolRateLimiter().acquire(ep);
   },
   release(endpoint?: string): void {
-    const ep = endpoint ?? (getModelPool()[0]?.name ?? "default");
+    const ep = endpoint ?? getModelPool()[0]?.name ?? "default";
     getPoolRateLimiter().release(ep);
   },
   backoff(retryAfterMsOrEndpoint: number | string, retryAfterMs?: number): void {

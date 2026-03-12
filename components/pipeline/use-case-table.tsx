@@ -305,7 +305,7 @@ export function UseCaseTable({
                     <React.Fragment key={uc.id}>
                       <TableRow
                         id={`uc-${uc.id}`}
-                        className={`cursor-pointer transition-colors hover:bg-muted/50${highlightUseCaseId === uc.id ? " ring-2 ring-primary ring-offset-2" : ""}`}
+                        className={`cursor-pointer transition-colors hover:bg-muted/50${idx % 2 === 1 ? " bg-muted/25" : ""}${highlightUseCaseId === uc.id ? " ring-2 ring-primary ring-offset-2" : ""}`}
                         onClick={() => setExpandedId(isExpanded ? null : uc.id)}
                       >
                         <TableCell className="font-mono text-xs text-muted-foreground">
