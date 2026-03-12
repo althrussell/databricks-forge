@@ -89,7 +89,18 @@ export async function GET(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error("Space detail fetch failed", { error: message });
-    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
+    const isPermissionDenied = message.includes("(403)") || message.includes("PERMISSION_DENIED");
+    logger.error("Space detail fetch failed", {
+      error: message,
+      permissionDenied: isPermissionDenied,
+    });
+    return NextResponse.json(
+      {
+        error: isPermissionDenied
+          ? "Permission denied — you do not have access to this space's underlying tables."
+          : safeErrorMessage(error),
+      },
+      { status: isPermissionDenied ? 403 : 500 },
+    );
   }
 }

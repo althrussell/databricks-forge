@@ -25,6 +25,7 @@ const CONCURRENCY = 5;
 interface DiscoverResult {
   metadata: SpaceMetadata | null;
   healthReport: SpaceHealthReport | null;
+  permissionDenied?: boolean;
 }
 
 async function runBounded<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
@@ -94,11 +95,17 @@ export async function POST(request: NextRequest) {
 
         return [spaceId, { metadata, healthReport }];
       } catch (err) {
+        const errStr = String(err);
+        const denied = errStr.includes("(403)") || errStr.includes("PERMISSION_DENIED");
         logger.warn("Discover failed for space", {
           spaceId,
-          error: String(err),
+          error: errStr,
+          permissionDenied: denied,
         });
-        return [spaceId, { metadata: null, healthReport: null }];
+        return [
+          spaceId,
+          { metadata: null, healthReport: null, permissionDenied: denied || undefined },
+        ];
       }
     });
 

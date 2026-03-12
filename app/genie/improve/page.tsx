@@ -91,22 +91,34 @@ export default function ImproveExistingPage() {
       if (discRes.ok) {
         const discData: Record<
           string,
-          { metadata: SpaceMetadata | null; healthReport: SpaceHealthReport | null }
+          {
+            metadata: SpaceMetadata | null;
+            healthReport: SpaceHealthReport | null;
+            permissionDenied?: boolean;
+          }
         > = await discRes.json();
 
+        const deniedIds = new Set(
+          Object.entries(discData)
+            .filter(([, v]) => v.permissionDenied)
+            .map(([id]) => id),
+        );
+
         setSpaces((prev) =>
-          prev.map((s) => {
-            const d = discData[s.spaceId];
-            if (!d) return s;
-            return {
-              ...s,
-              tableCount: d.metadata?.tableCount,
-              benchmarkCount: d.metadata?.benchmarkCount,
-              grade: d.healthReport?.grade,
-              overallScore: d.healthReport?.overallScore,
-              fixableCount: d.healthReport?.fixableCount,
-            };
-          }),
+          prev
+            .filter((s) => !deniedIds.has(s.spaceId))
+            .map((s) => {
+              const d = discData[s.spaceId];
+              if (!d) return s;
+              return {
+                ...s,
+                tableCount: d.metadata?.tableCount,
+                benchmarkCount: d.metadata?.benchmarkCount,
+                grade: d.healthReport?.grade,
+                overallScore: d.healthReport?.overallScore,
+                fixableCount: d.healthReport?.fixableCount,
+              };
+            }),
         );
       }
     } catch {
