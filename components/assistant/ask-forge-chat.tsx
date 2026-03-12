@@ -472,8 +472,10 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         <div
           className={cn(
             "flex items-center justify-between border-b px-4 py-3",
-            persona === "genie-builder" && "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30",
-            persona === "strategic" && "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30",
+            persona === "genie-builder" &&
+              "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30",
+            persona === "strategic" &&
+              "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30",
           )}
         >
           <div className="flex items-center gap-2">
@@ -511,7 +513,12 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           </div>
           <div className="flex items-center gap-1">
             {persona === "genie-builder" && (
-              <Button variant="ghost" size="sm" asChild className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+              >
                 <Link href="/genie">
                   <ArrowLeft className="size-3.5" />
                   <span className="hidden sm:inline">Genie Studio</span>
@@ -519,7 +526,12 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
               </Button>
             )}
             {persona === "strategic" && (
-              <Button variant="ghost" size="sm" asChild className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+              >
                 <Link href="/business-value">
                   <ArrowLeft className="size-3.5" />
                   <span className="hidden sm:inline">Business Value</span>
@@ -595,32 +607,43 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                   <div>
                     {persona === "genie-builder" ? (
                       <>
-                        <h2 className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}>
+                        <h2
+                          className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}
+                        >
                           Build a Genie Space
                         </h2>
                         <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
-                          Describe what you need in plain language. I&apos;ll ask a few focused questions, then generate your space.
+                          Describe what you need in plain language. I&apos;ll ask a few focused
+                          questions, then generate your space.
                         </p>
                         <div className="mx-auto mt-4 flex max-w-sm items-center justify-center gap-6 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1.5">
-                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">1</span>
+                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
+                              1
+                            </span>
                             Describe
                           </div>
                           <div className="h-px w-4 bg-border" />
                           <div className="flex items-center gap-1.5">
-                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">2</span>
+                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
+                              2
+                            </span>
                             Review
                           </div>
                           <div className="h-px w-4 bg-border" />
                           <div className="flex items-center gap-1.5">
-                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">3</span>
+                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
+                              3
+                            </span>
                             Deploy
                           </div>
                         </div>
                       </>
                     ) : (
                       <>
-                        <h2 className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}>
+                        <h2
+                          className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}
+                        >
                           What can I help you find?
                         </h2>
                         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -654,7 +677,10 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                         <Wrench className="size-3.5" />
                         Tech
                       </ToggleGroupItem>
-                      <ToggleGroupItem value="strategic" className="gap-1.5 rounded-md px-3 text-xs">
+                      <ToggleGroupItem
+                        value="strategic"
+                        className="gap-1.5 rounded-md px-3 text-xs"
+                      >
                         <BarChart3 className="size-3.5" />
                         Strategic
                       </ToggleGroupItem>
@@ -850,7 +876,13 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={persona === "genie-builder" ? "Describe the tables, domain, and questions for your Genie Space…" : persona === "strategic" ? "Ask about business value, ROI, strategy, or board-level insights…" : "Ask about your data estate…"}
+                placeholder={
+                  persona === "genie-builder"
+                    ? "Describe the tables, domain, and questions for your Genie Space…"
+                    : persona === "strategic"
+                      ? "Ask about business value, ROI, strategy, or board-level insights…"
+                      : "Ask about your data estate…"
+                }
                 className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm placeholder:text-muted-foreground/60 focus:outline-none"
                 rows={input.includes("\n") ? Math.min(5, input.split("\n").length + 1) : 1}
                 disabled={loading}

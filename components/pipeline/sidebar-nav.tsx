@@ -20,6 +20,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   requiresEmbedding?: boolean;
   requiresBenchmarks?: boolean;
+  requiresFabric?: boolean;
 }
 
 interface NavSection {
@@ -65,12 +66,12 @@ const navSections: NavSection[] = [
   },
   {
     label: "Migrate",
-    items: [{ href: "/fabric", label: "Fabric / PBI", icon: FabricIcon }],
+    items: [{ href: "/fabric", label: "Fabric / PBI", icon: FabricIcon, requiresFabric: true }],
   },
   {
     label: "Admin",
     items: [
-      { href: "/connections", label: "Connections", icon: ConnectionsIcon },
+      { href: "/connections", label: "Connections", icon: ConnectionsIcon, requiresFabric: true },
       {
         href: "/knowledge-base",
         label: "Knowledge Base",
@@ -109,10 +110,22 @@ function useBenchmarksEnabled(): boolean {
   return enabled;
 }
 
+function useFabricEnabled(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    fetch("/api/fabric/status")
+      .then((r) => r.json())
+      .then((data) => setEnabled(data.enabled ?? false))
+      .catch(() => setEnabled(false));
+  }, []);
+  return enabled;
+}
+
 function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
   const embeddingEnabled = useEmbeddingEnabled();
   const benchmarksEnabled = useBenchmarksEnabled();
+  const fabricEnabled = useFabricEnabled();
 
   const visibleSections = useMemo(
     () =>
@@ -122,11 +135,12 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
           items: section.items.filter((item) => {
             if (item.requiresEmbedding && !embeddingEnabled) return false;
             if (item.requiresBenchmarks && !benchmarksEnabled) return false;
+            if (item.requiresFabric && !fabricEnabled) return false;
             return true;
           }),
         }))
         .filter((section) => section.items.length > 0),
-    [embeddingEnabled, benchmarksEnabled],
+    [embeddingEnabled, benchmarksEnabled, fabricEnabled],
   );
 
   return (
