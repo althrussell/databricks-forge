@@ -17,9 +17,7 @@ export function GenieBuildProgress({
   status,
   statusMessage,
 }: GenieBuildProgressProps) {
-  const currentIdx = currentStep
-    ? GENIE_BUILDER_STEPS.findIndex((s) => s.key === currentStep)
-    : -1;
+  const currentIdx = currentStep ? GENIE_BUILDER_STEPS.findIndex((s) => s.key === currentStep) : -1;
 
   return (
     <div className="space-y-3" role="list" aria-label="Build steps" aria-live="polite">
@@ -94,7 +92,17 @@ export function GenieBuildProgress({
 
 function CheckIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );
@@ -102,7 +110,17 @@ function CheckIcon() {
 
 function XIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
     </svg>
@@ -111,7 +129,14 @@ function XIcon() {
 
 function StopIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="none"
+    >
       <rect x="4" y="4" width="16" height="16" rx="2" />
     </svg>
   );

@@ -71,6 +71,8 @@ export interface BenchmarkRunOptions {
   questionDelayMs?: number;
   /** Max concurrent Genie conversations (default 1 = sequential). Set >1 for concurrent execution. */
   concurrency?: number;
+  /** OBO token for Genie Conversation API calls (user identity). */
+  oboToken?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +338,7 @@ export async function runBenchmarks(
   const maxResultRows = opts.maxResultRows ?? RESULT_PREVIEW_LIMIT;
   const questionDelayMs = opts.questionDelayMs ?? 1_000;
   const concurrency = opts.concurrency ?? 1;
+  const oboToken = opts.oboToken;
 
   /**
    * Evaluate a single benchmark question and return the result.
@@ -345,7 +348,7 @@ export async function runBenchmarks(
     expectedSql?: string;
   }): Promise<BenchmarkResult> {
     try {
-      const msg = await startConversation(spaceId, bench.question, timeoutPerQuestion);
+      const msg = await startConversation(spaceId, bench.question, timeoutPerQuestion, oboToken);
       const completed = msg.status === "COMPLETED";
 
       if (!completed) {

@@ -247,7 +247,9 @@ export default function BenchmarkPage() {
           }
 
           delay = Math.min(delay * 1.2, 5000);
-        } catch { /* retry */ }
+        } catch {
+          /* retry */
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Benchmark run failed");
@@ -271,10 +273,9 @@ export default function BenchmarkPage() {
   const cancelBenchmark = async () => {
     if (!currentBenchmarkJobId) return;
     try {
-      await fetch(
-        `/api/genie-spaces/${spaceId}/benchmarks/run?jobId=${currentBenchmarkJobId}`,
-        { method: "DELETE" },
-      );
+      await fetch(`/api/genie-spaces/${spaceId}/benchmarks/run?jobId=${currentBenchmarkJobId}`, {
+        method: "DELETE",
+      });
     } catch {
       toast.error("Failed to cancel benchmark");
     }

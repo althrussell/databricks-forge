@@ -10,17 +10,9 @@
  */
 
 import type { TaskTier } from "./model-registry";
-import {
-  getModelPool,
-  getEndpointsForTier,
-  isMultiEndpointPool,
-} from "./model-registry";
+import { getModelPool, getEndpointsForTier, isMultiEndpointPool } from "./model-registry";
 import { getPoolRateLimiter } from "./rate-limiter";
-import {
-  getServingEndpoint,
-  getFastServingEndpoint,
-  getReviewEndpoint,
-} from "./client";
+import { getServingEndpoint, getFastServingEndpoint, getReviewEndpoint } from "./client";
 
 // Re-export TaskTier so callers only need one import
 export type { TaskTier } from "./model-registry";

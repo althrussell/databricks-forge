@@ -492,9 +492,10 @@ async function pollMessageCompletion(
   conversationId: string,
   messageId: string,
   timeoutMs = 120_000,
+  oboToken?: string,
 ): Promise<GenieConversationMessage> {
   const config = getConfig();
-  const headers = await getAppHeaders();
+  const headers = await resolveHeaders(undefined, oboToken);
   const deadline = Date.now() + timeoutMs;
   const terminalStatuses = new Set(["COMPLETED", "FAILED", "CANCELLED", "CANCELLED_BY_USER"]);
 
@@ -554,10 +555,11 @@ export async function startConversation(
   spaceId: string,
   question: string,
   timeoutMs = 120_000,
+  oboToken?: string,
 ): Promise<GenieConversationMessage> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/start-conversation`;
-  const headers = await getAppHeaders();
+  const headers = await resolveHeaders(undefined, oboToken);
 
   const response = await fetchWithGenie429Retry(
     url,
@@ -589,7 +591,13 @@ export async function startConversation(
     throw new Error("Genie start-conversation response missing conversation_id or message_id");
   }
 
-  const result = await pollMessageCompletion(spaceId, conversationId, messageId, timeoutMs);
+  const result = await pollMessageCompletion(
+    spaceId,
+    conversationId,
+    messageId,
+    timeoutMs,
+    oboToken,
+  );
 
   return { ...result, question };
 }
@@ -603,10 +611,11 @@ export async function sendFollowUp(
   conversationId: string,
   question: string,
   timeoutMs = 120_000,
+  oboToken?: string,
 ): Promise<GenieConversationMessage> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}/conversations/${conversationId}/messages`;
-  const headers = await getAppHeaders();
+  const headers = await resolveHeaders(undefined, oboToken);
 
   const response = await fetchWithGenie429Retry(
     url,
@@ -634,7 +643,13 @@ export async function sendFollowUp(
     throw new Error("Genie follow-up response missing message id");
   }
 
-  const result = await pollMessageCompletion(spaceId, conversationId, messageId, timeoutMs);
+  const result = await pollMessageCompletion(
+    spaceId,
+    conversationId,
+    messageId,
+    timeoutMs,
+    oboToken,
+  );
 
   return { ...result, question };
 }

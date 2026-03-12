@@ -194,15 +194,17 @@ export function GenieDetailSheet({
           {tracking && genieSpaceUrl(tracking.spaceId) && (
             <>
               <Button asChild className="w-full bg-violet-600 hover:bg-violet-700">
-                <a href={genieSpaceUrl(tracking.spaceId)!} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={genieSpaceUrl(tracking.spaceId)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <ExternalLinkIcon className="mr-2 h-4 w-4" />
                   Open in Databricks
                 </a>
               </Button>
               <Button variant="outline" className="w-full" asChild>
-                <a href={`/genie/${tracking.spaceId}`}>
-                  View in Genie Studio
-                </a>
+                <a href={`/genie/${tracking.spaceId}`}>View in Genie Studio</a>
               </Button>
             </>
           )}

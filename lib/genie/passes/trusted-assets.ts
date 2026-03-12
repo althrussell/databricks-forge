@@ -281,12 +281,7 @@ Create parameterized queries from these examples.`;
       const review = res.result;
       if (review.fixedSql) {
         if (
-          validateSqlExpression(
-            allowlist,
-            review.fixedSql,
-            `trusted_query_fix:${q.question}`,
-            true,
-          )
+          validateSqlExpression(allowlist, review.fixedSql, `trusted_query_fix:${q.question}`, true)
         ) {
           logger.info("Trusted asset SQL fix applied", {
             question: q.question,

@@ -62,11 +62,7 @@ interface ListDiff<T> {
   unchanged: number;
 }
 
-function diffByKey<T>(
-  oldItems: T[],
-  newItems: T[],
-  keyFn: (item: T) => string,
-): ListDiff<T> {
+function diffByKey<T>(oldItems: T[], newItems: T[], keyFn: (item: T) => string): ListDiff<T> {
   const oldKeys = new Set(oldItems.map(keyFn));
   const newKeys = new Set(newItems.map(keyFn));
   return {
@@ -153,9 +149,7 @@ function ItemRow({
         {status === "removed" && <Minus className="size-3 text-red-600" />}
         <span className="font-medium">{label}</span>
       </div>
-      {detail && (
-        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{detail}</p>
-      )}
+      {detail && <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{detail}</p>}
     </div>
   );
 }
@@ -459,11 +453,7 @@ export function SpaceDiffViewer({
                     />
                   ))}
                   {filterDiff.removed.map((f, i) => (
-                    <ItemRow
-                      key={i}
-                      label={f.display_name ?? "Filter"}
-                      status="removed"
-                    />
+                    <ItemRow key={i} label={f.display_name ?? "Filter"} status="removed" />
                   ))}
                 </div>
               </DiffSection>
@@ -515,11 +505,7 @@ export function SpaceDiffViewer({
                     />
                   ))}
                   {exampleSqlDiff.removed.map((q, i) => (
-                    <ItemRow
-                      key={i}
-                      label={flattenStringArray(q.question)}
-                      status="removed"
-                    />
+                    <ItemRow key={i} label={flattenStringArray(q.question)} status="removed" />
                   ))}
                 </div>
               </DiffSection>
@@ -535,18 +521,10 @@ export function SpaceDiffViewer({
               >
                 <div className="space-y-1">
                   {benchmarkDiff.added.map((b, i) => (
-                    <ItemRow
-                      key={i}
-                      label={flattenStringArray(b.question)}
-                      status="added"
-                    />
+                    <ItemRow key={i} label={flattenStringArray(b.question)} status="added" />
                   ))}
                   {benchmarkDiff.removed.map((b, i) => (
-                    <ItemRow
-                      key={i}
-                      label={flattenStringArray(b.question)}
-                      status="removed"
-                    />
+                    <ItemRow key={i} label={flattenStringArray(b.question)} status="removed" />
                   ))}
                 </div>
               </DiffSection>

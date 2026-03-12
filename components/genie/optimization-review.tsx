@@ -212,80 +212,72 @@ export function OptimizationReview({
 
   return (
     <div className="space-y-4">
-      {/* Strategy summary */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Wrench className="size-5" />
-            Optimization Suggestions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            {changes.length} suggestion{changes.length !== 1 ? "s" : ""} generated from{" "}
-            {strategiesRun.length} strateg{strategiesRun.length !== 1 ? "ies" : "y"}:{" "}
-            {strategiesRun.map((s) => s.replace(/_/g, " ")).join(", ")}.
-          </p>
-          <div className="mt-2 flex gap-3 text-xs">
-            {highCount > 0 && (
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-red-500" />
-                {highCount} high priority
-              </span>
-            )}
-            {medCount > 0 && (
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-amber-500" />
-                {medCount} medium priority
-              </span>
-            )}
-            {lowCount > 0 && (
-              <span className="flex items-center gap-1">
-                <span className="size-2 rounded-full bg-blue-500" />
-                {lowCount} low priority
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Suggestions list */}
-      <div className="space-y-2">
-        {isSelectable && (
+        <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">
-              {selected.size} of {changes.length} selected
-            </p>
-            <Button variant="ghost" size="sm" onClick={toggleAll}>
-              {allSelected ? "Deselect All" : "Select All"}
-            </Button>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wrench className="size-5" />
+              Optimization Suggestions
+            </CardTitle>
+            {isSelectable && (
+              <Button variant="ghost" size="sm" onClick={toggleAll}>
+                {allSelected ? "Deselect All" : "Select All"}
+              </Button>
+            )}
           </div>
-        )}
-
-        {changes.map((change, idx) => {
-          const priority = priorityFromChange(change);
-          const isSelected = !isSelectable || selected.has(idx);
-          return (
-            <Card
-              key={idx}
-              className={`transition-opacity ${isSelectable ? "cursor-pointer" : ""} ${isSelected ? "" : "opacity-50"}`}
-              onClick={isSelectable ? () => toggleItem(idx) : undefined}
-            >
-              <CardContent className="flex items-start gap-3 p-4">
-                {isSelectable && (
-                  <Checkbox
-                    checked={selected.has(idx)}
-                    onCheckedChange={() => toggleItem(idx)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span>
+              {changes.length} suggestion{changes.length !== 1 ? "s" : ""} from{" "}
+              {strategiesRun.map((s) => s.replace(/_/g, " ")).join(", ")}
+            </span>
+            <span className="flex items-center gap-3">
+              {highCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="size-2 rounded-full bg-red-500" />
+                  {highCount} high
+                </span>
+              )}
+              {medCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="size-2 rounded-full bg-amber-500" />
+                  {medCount} medium
+                </span>
+              )}
+              {lowCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="size-2 rounded-full bg-blue-500" />
+                  {lowCount} low
+                </span>
+              )}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {changes.map((change, idx) => {
+              const priority = priorityFromChange(change);
+              const isSelected = !isSelectable || selected.has(idx);
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-3 px-6 py-2.5 transition-opacity ${isSelectable ? "cursor-pointer hover:bg-muted/50" : ""} ${isSelected ? "" : "opacity-50"}`}
+                  onClick={isSelectable ? () => toggleItem(idx) : undefined}
+                >
+                  {isSelectable && (
+                    <Checkbox
+                      checked={selected.has(idx)}
+                      onCheckedChange={() => toggleItem(idx)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span className="text-sm font-medium">{change.section}</span>
                     <Badge className={`text-[10px] ${priorityColor(priority)}`}>{priority}</Badge>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{change.description}</p>
-                  <div className="mt-1 flex gap-3 text-[10px] text-muted-foreground">
+                  <p className="hidden text-xs text-muted-foreground sm:block">
+                    {change.description}
+                  </p>
+                  <div className="flex shrink-0 gap-3 text-[10px] text-muted-foreground">
                     {change.added > 0 && (
                       <span className="text-green-600">+{change.added} added</span>
                     )}
@@ -294,11 +286,11 @@ export function OptimizationReview({
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">

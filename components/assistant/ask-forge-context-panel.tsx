@@ -220,12 +220,18 @@ export function AskForgeContextPanel({
                   </Badge>
                 )}
                 {lineageCount > 0 && (
-                  <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-[10px]">
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/50 text-amber-600 text-[10px]"
+                  >
                     {lineageCount} lineage
                   </Badge>
                 )}
                 {classifiedTables.length - directCount - lineageCount > 0 && (
-                  <Badge variant="outline" className="border-dashed text-muted-foreground text-[10px]">
+                  <Badge
+                    variant="outline"
+                    className="border-dashed text-muted-foreground text-[10px]"
+                  >
                     {classifiedTables.length - directCount - lineageCount} implied
                   </Badge>
                 )}
@@ -415,12 +421,18 @@ function RichTableCard({
             </Link>
             <ExternalLink className="size-3 text-muted-foreground" />
             {referenceType === "lineage" && (
-              <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-[9px] px-1 py-0">
+              <Badge
+                variant="outline"
+                className="border-amber-500/50 text-amber-600 text-[9px] px-1 py-0"
+              >
                 lineage
               </Badge>
             )}
             {referenceType === "implied" && (
-              <Badge variant="outline" className="border-dashed text-muted-foreground text-[9px] px-1 py-0">
+              <Badge
+                variant="outline"
+                className="border-dashed text-muted-foreground text-[9px] px-1 py-0"
+              >
                 implied
               </Badge>
             )}

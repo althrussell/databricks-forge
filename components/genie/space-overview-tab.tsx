@@ -5,7 +5,6 @@ import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { SummaryCard } from "@/components/pipeline/run-detail/summary-card";
 import { LabelWithTip } from "@/components/ui/info-tip";
 import { staggerContainer, staggerItem } from "@/lib/motion";
@@ -22,7 +21,6 @@ import {
   MessageSquare,
   Sparkles,
   Table2,
-  X,
 } from "lucide-react";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import type { ImproveStats } from "@/lib/genie/improve-jobs";
@@ -42,14 +40,6 @@ const TIPS = {
   benchmarks: "Test questions with expected answers used to measure and track Genie accuracy.",
 } as const;
 
-// ── Improvement Progress ────────────────────────────────────────────
-
-interface ImproveProgress {
-  status: "generating" | "completed" | "failed" | "cancelled" | "idle";
-  message: string;
-  percent: number;
-}
-
 // ── Main Component ──────────────────────────────────────────────────
 
 interface SpaceOverviewTabProps {
@@ -63,9 +53,7 @@ interface SpaceOverviewTabProps {
   improving: boolean;
   fixing: boolean;
   cloning: boolean;
-  improveProgress: ImproveProgress | null;
   onImprove: () => void;
-  onCancelImprove: () => void;
   onClone: () => void;
 }
 
@@ -80,9 +68,7 @@ export function SpaceOverviewTab({
   improving,
   fixing,
   cloning,
-  improveProgress,
   onImprove,
-  onCancelImprove,
   onClone,
 }: SpaceOverviewTabProps) {
   return (
@@ -267,42 +253,6 @@ export function SpaceOverviewTab({
           <Button size="sm" variant="ghost" asChild>
             <Link href={`/runs/${runId}?tab=genie`}>View Pipeline Run</Link>
           </Button>
-        </motion.div>
-      )}
-
-      {/* ── Improvement Progress ── */}
-      {improving && improveProgress && (
-        <motion.div variants={staggerItem}>
-          <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10">
-            <CardContent className="py-5 pb-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                  <span className="text-sm font-medium">Improving with Genie Engine...</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs tabular-nums">
-                    {improveProgress.percent}%
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={onCancelImprove}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              </div>
-              <Progress value={improveProgress.percent} className="h-2" />
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">{improveProgress.message}</p>
-                <p className="text-[11px] text-muted-foreground/70">
-                  You can navigate away — the engine will keep running.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
         </motion.div>
       )}
     </motion.div>

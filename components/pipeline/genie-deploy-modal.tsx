@@ -289,9 +289,7 @@ export function GenieDeployModal({
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((resolve) => setTimeout(resolve, delay));
       try {
-        const res = await fetch(
-          `/api/runs/${runId}/genie-deploy?jobId=${jobId}`,
-        );
+        const res = await fetch(`/api/runs/${runId}/genie-deploy?jobId=${jobId}`);
         if (!res.ok) continue;
         const data = await res.json();
         if (data.message) log(data.message);
@@ -303,7 +301,9 @@ export function GenieDeployModal({
           return null;
         }
         delay = Math.min(delay * 1.3, 8000);
-      } catch { /* retry */ }
+      } catch {
+        /* retry */
+      }
     }
     log("ERROR: Deploy timed out waiting for completion");
     return null;
