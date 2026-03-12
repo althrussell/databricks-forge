@@ -7,7 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Activity, ArrowLeft, FlaskConical, Settings, Shield } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  FlaskConical,
+  Loader2,
+  Settings,
+  Shield,
+  XCircle,
+} from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 import { SpaceDetailHero } from "@/components/genie/space-detail-hero";
 import { SpaceOverviewTab, ImprovementAdvice } from "@/components/genie/space-overview-tab";
@@ -457,7 +468,12 @@ export default function SpaceDetailPage() {
             <ArrowLeft className="mr-1 size-4" />
             Back to Space
           </Button>
-          <h1 className="text-xl font-bold tracking-tight">Genie Engine Improvement Review</h1>
+          <h1 className="text-xl font-bold tracking-tight">
+            Genie Engine Improvement Review
+            <span className="ml-2 text-base font-normal text-muted-foreground">
+              — {detail.title}
+            </span>
+          </h1>
         </div>
 
         <ImprovementAdvice
@@ -498,6 +514,15 @@ export default function SpaceDetailPage() {
         fixing={fixing}
         onImprove={handleStartImprove}
       />
+
+      {/* Engine improvement progress banner -- visible across all tabs */}
+      {improving && improveProgress && (
+        <EngineProgressBanner
+          message={improveProgress.message ?? ""}
+          percent={improveProgress.percent ?? 0}
+          onCancel={handleCancelImprove}
+        />
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -578,6 +603,44 @@ export default function SpaceDetailPage() {
           />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function EngineProgressBanner({
+  message,
+  percent,
+  onCancel,
+}: {
+  message: string;
+  percent: number;
+  onCancel: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <div className="rounded-lg border bg-card p-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 text-sm font-medium"
+        >
+          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          <Loader2 className="size-4 animate-spin text-primary" />
+          Genie Engine Improving...
+        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{Math.round(percent)}%</span>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onCancel}>
+            <XCircle className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="mt-2 space-y-1.5">
+          <Progress value={percent} className="h-1.5" />
+          <p className="text-xs text-muted-foreground">{message}</p>
+        </div>
+      )}
     </div>
   );
 }

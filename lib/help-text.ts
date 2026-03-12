@@ -12,7 +12,7 @@ export const DASHBOARD = {
   avgScore:
     "Mean composite score (0–100) across feasibility, business value, innovation, and data readiness.",
   domains: "Distinct business domains identified by the AI across all use cases.",
-  successRate: "Percentage of pipeline runs that completed all 7 steps without failure.",
+  successRate: "Percentage of pipeline runs that completed all 8 steps without failure.",
 } as const;
 
 // ── Configure (config form) ─────────────────────────────────────────
@@ -42,7 +42,7 @@ export const RUNS_LIST = {
   businessName: "The organisation name used as context for this discovery run.",
   ucMetadata: "The Unity Catalog catalogs and schemas scanned for this run.",
   status: "Pipeline status: pending, running, completed, or failed.",
-  progress: "Percentage of the 7 pipeline steps completed.",
+  progress: "Percentage of the 8 pipeline steps completed.",
   useCases: "Total use cases generated after deduplication and scoring.",
   activity: "Current pipeline step or status message.",
   created: "When the pipeline run was started.",

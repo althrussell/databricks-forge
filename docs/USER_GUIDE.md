@@ -14,7 +14,14 @@ This guide walks through every feature of Databricks Forge. It assumes the app i
   - [5.1 Overview Tab](#51-overview-tab)
   - [5.2 Use Cases Tab](#52-use-cases-tab)
   - [5.3 Exporting Results](#53-exporting-results)
-- [6. Genie Spaces](#6-genie-spaces)
+- [6. Genie Studio](#6-genie-studio)
+  - [6.1 Creating Genie Spaces](#61-creating-genie-spaces)
+  - [6.2 The Genie Spaces List](#62-the-genie-spaces-list)
+  - [6.3 Health Scoring](#63-health-scoring)
+  - [6.4 Fix All Workflow](#64-fix-all-workflow)
+  - [6.5 Improve with Genie Engine](#65-improve-with-genie-engine)
+  - [6.6 Benchmark Test Runner](#66-benchmark-test-runner)
+  - [6.7 Space Detail View](#67-space-detail-view)
 - [7. AI Observability](#7-ai-observability)
 - [8. Comparing Runs](#8-comparing-runs)
 - [9. Managing Runs](#9-managing-runs)
@@ -141,7 +148,7 @@ The pipeline has 8 steps, executed sequentially:
 | 5 | **Domain Clustering** | Groups use cases into business domains and subdomains |
 | 6 | **Scoring & Dedup** | Scores every use case on priority, feasibility, and impact; removes duplicates |
 | 7 | **SQL Generation** | Generates runnable Databricks SQL for each use case |
-| 8 | **Genie Spaces** | Builds Genie Space recommendations per domain |
+| 8 | **Business Value Analysis** | Financial quantification, roadmap phasing, executive synthesis, and stakeholder analysis |
 
 **Visual indicators:**
 
@@ -269,46 +276,109 @@ The export toolbar is available in the Overview tab.
 
 ---
 
-## 6. Genie Spaces
+## 6. Genie Studio
 
-The **Genie Spaces** tab shows AI-generated recommendations for [Databricks Genie Spaces](https://docs.databricks.com/en/genie/index.html) -- one per business domain.
+**Genie Studio** is the unified hub for creating, managing, and continuously improving [Databricks Genie Spaces](https://docs.databricks.com/en/genie/index.html). It brings together multiple creation paths, health scoring, automated fixes, benchmark testing, and AI Comments integration.
 
-<p align="center">
-  <img src="images/guide-15-genie-tab.png" alt="Genie Spaces tab" width="100%" />
-</p>
+### 6.1 Creating Genie Spaces
 
-Each recommendation includes:
+There are several ways to create a Genie Space:
 
-- The **domain** and subdomains it covers
-- **Table count** -- how many Unity Catalog tables are included
-- **Use case count** and **SQL example count**
-- **Deployment status** -- Not Deployed, Deployed, or Updated
+**From a pipeline run:** The **Genie Spaces** tab on any completed run shows AI-generated recommendations -- one per business domain. Check the boxes next to the domains you want and click **Deploy Selected**.
 
-**Deploying Genie Spaces:**
+**From Ask Forge (Quick Build):** Ask a question in Ask Forge (e.g. "Create a Genie Space for sales analytics"). The assistant proposes a space with tightly scoped tables (up to 6) relevant to your question. Click **Create Genie Space** to open the builder modal, which uses a fast generation pass. An animated progress bar shows status. The result is a functional space in seconds.
 
-1. Check the boxes next to the domains you want to deploy.
-2. Click **Deploy Selected**.
-3. The app creates the Genie Spaces in your Databricks workspace with pre-configured tables, sample questions, SQL examples, join relationships, and knowledge store entries.
+**Enhance with Full Engine:** After Quick Build, click **Enhance with Full Engine** to run all 7 LLM passes (column intelligence, semantic expressions, join inference, trusted assets, instructions, benchmarks, metric views). This takes 1--3 minutes but produces production-grade output with higher health scores. Hover over the button for a description of what the full engine adds.
 
-**Viewing details:**
+**From Genie Studio entry points:** Navigate to **Genie > Create** for additional options: scan a schema directly, upload requirements documents, import JSON, or start from a pipeline run.
 
-Click any row to open the detail sheet.
+### 6.2 The Genie Spaces List
 
-<p align="center">
-  <img src="images/guide-16-genie-detail.png" alt="Genie Space detail" width="33%" />
-</p>
+Navigate to **Genie > Improve** to see all your Genie Spaces. Each card shows:
 
-The detail sheet shows:
+- **Space name** and table count
+- **Health grade** (A--F) with colour coding
+- **Fixable issues** -- how many health check failures can be auto-fixed
+- **Deployment status** -- Deployed, Not Deployed, or Engine Running
 
-- **Stats** -- tables, metric views, use cases, SQL examples, joins, measures, filters, dimensions.
-- **Tables & Metric Views** -- the full list of Unity Catalog tables included in the space.
-- **Sample Questions** -- natural language questions derived from the top use cases.
-- **SQL Examples** -- example queries pre-loaded into the Genie Space.
-- **Knowledge Store** -- measures, filters, and dimension expressions extracted from generated SQL.
-- **Join Relationships** -- foreign key joins between tables in this domain.
-- **Instructions** -- text instructions for the Genie Space describing the business context.
+Use the **search bar** to filter by name and the **sort control** to order by health score (best or worst first), name, or table count. During initial discovery, a "Scanning..." indicator appears.
 
-Once deployed, you can **Open in Databricks** to go directly to the Genie Space, or **Delete Space** to move it to trash.
+### 6.3 Health Scoring
+
+Every Genie Space receives a health grade (A--F) computed from approximately 40 checks across 4 categories:
+
+- **Data Sources** -- column configurations, column descriptions, table count within optimal range
+- **Instructions** -- join comments, example SQL usage guidance, text instructions
+- **Semantic Richness** -- measures, filters, and expressions with display names, comments, synonyms, and instructions
+- **Quality Assurance** -- benchmark questions, SQL quality, parameterised queries
+
+The Genie Engine now populates all required fields automatically (display names, comments, instructions, column configs, join comments, usage guidance), so engine-generated spaces typically score A or B.
+
+Click any category in the health report to expand and see individual check results, including the current value versus the required threshold.
+
+**AI Comments link:** If the `tables-have-column-configs` or `columns-have-descriptions` checks fail, a direct link appears to run the AI Comment tool on the affected tables. This is the fastest way to boost data source health.
+
+### 6.4 Fix All Workflow
+
+Click **Fix All** on any space to automatically address fixable health check failures. The fix system applies targeted strategies:
+
+- **trusted_assets** -- enriches measures, filters, and expressions with display names, comments, and synonyms
+- **semantic_expressions** -- generates missing expressions and instructions
+- **join_inference** -- adds comments explaining join relationships
+- **benchmark_generation** -- creates benchmark questions for quality assurance
+
+After fixes are applied, the health score updates automatically. If no improvements can be made (e.g. the space already meets all thresholds), a message explains why.
+
+### 6.5 Improve with Genie Engine
+
+For deeper improvements, click **Improve with Engine** to run the full 7-pass Genie Engine against an existing space. A **progress banner** appears at the top of the page showing:
+
+- Current pass name and progress percentage
+- Status message describing what is happening
+- **Cancel** button to abort the engine run
+
+The banner remains visible even if you switch between tabs (Health, Benchmarks, Detail). If you navigate away and return, the banner reappears showing current progress.
+
+After the engine completes, an **Improvement Review** screen shows the proposed changes with the space name in the header, letting you accept or discard each modification.
+
+### 6.6 Benchmark Test Runner
+
+Navigate to the **Benchmarks** tab on any space to test Genie query accuracy.
+
+**Running tests:**
+
+1. Select individual questions or click **Run All** to test every benchmark.
+2. The button shows real-time progress: "Running 3/12...".
+3. Each test sends the question to the Databricks Genie Conversation API and compares the result.
+
+**Evaluation tiers:**
+
+Tests are evaluated using a 3-tier comparison:
+
+1. **High SQL similarity** (>=90%) -- the generated SQL closely matches the expected SQL
+2. **Result-set comparison** -- column count and row count match expectations
+3. **Basic SQL similarity** (>=60%) -- fallback threshold for structural similarity
+
+**Failure diagnostics:**
+
+Failed tests display rich detail including:
+
+- **Failure category** (e.g. wrong_tables, missing_join, wrong_aggregation)
+- **Comparison method** used (sql_similarity, result_set, basic_similarity)
+- **SQL similarity score** as a percentage
+- **Failure reason** explaining what went wrong
+
+Use these diagnostics to guide manual fixes or re-run the Fix All workflow.
+
+### 6.7 Space Detail View
+
+Click into any space to see the full detail view with tabs:
+
+- **Detail** -- tables, metric views, sample questions, SQL examples, measures, filters, expressions, joins, and instructions
+- **Health** -- the full health report with category breakdowns and fixable issue indicators
+- **Benchmarks** -- the test runner (see above)
+
+The detail view supports **Deploy**, **Open in Databricks**, **Clone**, and **Trash** actions.
 
 ---
 
@@ -549,6 +619,15 @@ Click **Clear local settings** to reset all preferences to defaults. This only a
 - **Edit use cases** -- refine names and statements to match your organisation's terminology before exporting.
 - **Compare runs** -- run the same scope with different depths or models, then compare to find the best configuration for your data.
 - **Deploy Genie Spaces** -- Genie Spaces give your business users a natural language interface to the data described by the use cases. Deploy them to make discoveries immediately actionable.
+
+### Genie Studio
+
+- **Run AI Comments first** -- generating column descriptions before creating Genie Spaces dramatically improves health scores and Genie query accuracy.
+- **Use Quick Build for exploration** -- Ask Forge's Quick Build creates a functional space in seconds. Enhance with the full engine when you want production quality.
+- **Sort by health score** -- on the Improve page, sort by health score (worst first) to quickly find spaces that need attention.
+- **Use Fix All before manual edits** -- the automated fix strategies handle most common issues (missing display names, comments, instructions). Apply them first, then fine-tune manually.
+- **Run benchmarks after fixes** -- after Fix All or Engine Improve, run the benchmark test suite to verify accuracy improved. Use failure categories to guide further refinements.
+- **Monitor engine progress** -- the progress banner stays visible across all tabs, so you can review health scores or benchmarks while the engine runs.
 
 ### Estate Scanning
 

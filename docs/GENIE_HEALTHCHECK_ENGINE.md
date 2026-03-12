@@ -463,6 +463,31 @@ Located in `lib/genie/space-fixer.ts`.
 | `entity_matching` | Deterministic enablement | No |
 | `sample_questions` | Generate from existing examples | No |
 
+### Fixable Health Checks
+
+The following health checks are marked as fixable and mapped to fix
+strategies. When the user clicks "Fix All", the system groups these
+checks by strategy and runs only the necessary engine passes:
+
+| Check ID | Fix Strategy | What It Fixes |
+|---|---|---|
+| `join-specs-have-comments` | `join_inference` | Adds relationship comments to join specs |
+| `example-sqls-have-usage-guidance` | `trusted_assets` | Generates usage guidance for example SQL queries |
+| `expressions-have-instructions` | `semantic_expressions` | Adds usage instructions to dimension expressions |
+| `measures-have-display-names` | `trusted_assets` | Adds human-readable display names to measures |
+| `expressions-have-display-names` | `semantic_expressions` | Adds display names to dimension expressions |
+| `filters-have-display-names` | `trusted_assets` | Adds display names to filters |
+| `measures-have-comments` | `trusted_assets` | Adds purpose comments to measures |
+| `filters-have-comments` | `trusted_assets` | Adds usage comments to filters |
+| `measure-synonyms-defined` | `trusted_assets` | Adds colloquial synonyms to measures |
+| `filter-synonyms-defined` | `trusted_assets` | Adds synonyms to filters |
+| `expression-synonyms-defined` | `semantic_expressions` | Adds synonyms to expressions |
+
+The Genie Engine assembler now populates `display_name`, `comment`, and
+`instruction` fields automatically during space generation, so
+engine-generated spaces rarely need these fixes. They are primarily
+useful for imported or manually created spaces.
+
 ---
 
 ## Metadata Building for Off-Platform Spaces
@@ -496,12 +521,39 @@ An iterative cycle for validating and improving Genie Space quality:
 
 1. **Benchmark questions** -- loaded from `serialized_space.benchmarks.questions`
 2. **Run** -- each question sent to Genie Conversation API with 2s delay
-3. **Results** -- per-question pass/fail based on Jaccard similarity
+3. **Evaluation** -- 3-tier comparison determines pass/fail (see below)
 4. **Label** -- user marks correct/incorrect with optional feedback
 5. **Improve** -- feedback analyzed for patterns, targeted fixes generated
 6. **Review** -- `OptimizationReview` displayed with selectable suggestions and diff preview
 7. **Apply** -- user chooses "Apply to Space" or "Clone and Apply" from the review step
 8. **History** -- all runs persisted in `ForgeSpaceBenchmarkRun`
+
+### 3-Tier Evaluation
+
+Each benchmark result is evaluated using three comparison tiers in order:
+
+1. **High SQL similarity** (>=90%) -- the Genie-generated SQL closely
+   matches the expected SQL. Automatically marked as pass.
+2. **Result-set comparison** -- when SQL similarity is moderate, the actual
+   query result (column count, row count) is compared against the expected
+   result. Passes if both match within tolerance.
+3. **Basic SQL similarity** (>=60%) -- fallback threshold for structural
+   similarity. Below this threshold, the test is marked as failed.
+
+### Failure Diagnostics
+
+Each failed test includes rich diagnostic information:
+
+- **`failureCategory`** -- classifies the root cause (e.g. `wrong_tables`,
+  `missing_join`, `wrong_aggregation`, `wrong_filter`, `wrong_column`,
+  `syntax_error`)
+- **`comparisonMethod`** -- which evaluation tier determined the outcome
+  (`sql_similarity`, `result_set`, `basic_similarity`)
+- **`sqlSimilarity`** -- percentage score (0-100) of SQL structural similarity
+- **`failureReason`** -- human-readable explanation of what went wrong
+
+These diagnostics are displayed in the test runner UI and inform the
+feedback-to-fix analysis.
 
 ---
 

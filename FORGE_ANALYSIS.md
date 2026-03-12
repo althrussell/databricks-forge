@@ -58,7 +58,7 @@ All LLM calls use direct REST calls to Databricks Model Serving (chat completion
 │  └──────────┘    └──────────────┘    └──────┬───────┘                  │
 │       │               │                      │                          │
 │       │          ┌────┴────┐       ┌────────┴────────┐                 │
-│       │          │Lakebase │       │  7 Pipeline Steps │                 │
+│       │          │Lakebase │       │  8 Pipeline Steps │                 │
 │       │          │ (Prisma)│       └────────┬────────┘                 │
 │       │          └────┬────┘                │                          │
 │       │               │              ┌──────┴──────┐                   │

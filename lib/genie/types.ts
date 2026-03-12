@@ -287,9 +287,18 @@ export interface SerializedDataSources {
   metric_views?: DataSourceMetricView[];
 }
 
+export interface DataSourceColumnConfig {
+  column_name: string;
+  description?: string[];
+  synonyms?: string[];
+  enable_entity_matching?: boolean;
+  enable_format_assistance?: boolean;
+}
+
 export interface DataSourceTable {
   identifier: string; // catalog.schema.table
   description?: string[];
+  column_configs?: DataSourceColumnConfig[];
 }
 
 export interface DataSourceMetricView {
@@ -328,6 +337,7 @@ export interface JoinSpec {
   left: { identifier: string; alias?: string };
   right: { identifier: string; alias?: string };
   sql: string[];
+  comment?: string[];
 }
 
 export interface SqlSnippets {
@@ -341,6 +351,8 @@ export interface SqlSnippetMeasure {
   alias: string;
   sql: string[];
   synonyms?: string[];
+  display_name?: string;
+  comment?: string[];
 }
 
 export interface SqlSnippetFilter {
@@ -348,6 +360,7 @@ export interface SqlSnippetFilter {
   sql: string[];
   display_name: string;
   synonyms?: string[];
+  comment?: string[];
 }
 
 export interface SqlSnippetExpression {
@@ -355,6 +368,8 @@ export interface SqlSnippetExpression {
   alias: string;
   sql: string[];
   synonyms?: string[];
+  display_name?: string;
+  instruction?: string[];
 }
 
 export interface SerializedBenchmarks {

@@ -406,6 +406,7 @@ export async function runAssistantEngine(
   }
 
   const sqlTables = inferTablesFromSqlBlocks(sqlBlocks);
+  const questionTables = extractTableFqnsFromText(question);
   const reconciledTables = mergeTableReferenceLists(context.tables, sqlTables);
   const dashboardProposal = extractDashboardIntent(answer);
 
@@ -419,6 +420,8 @@ export async function runAssistantEngine(
     context.tableEnrichments,
     conversationSummary,
     persona,
+    sqlTables,
+    questionTables,
   );
 
   const durationMs = Date.now() - start;
@@ -538,6 +541,60 @@ function isSubstantiveSql(sql: string): boolean {
   );
 }
 
+const GENIE_TABLE_CAP = 6;
+
+function buildGenieAction(
+  tables: string[],
+  sqlTables: string[],
+  questionTables: string[],
+  enrichmentMap: Map<string, TableEnrichment>,
+  sqlBlocks: string[],
+  conversationSummary: string,
+  intent: AssistantIntent,
+): ActionCard | null {
+  if (tables.length < 2) return null;
+
+  const seen = new Set<string>();
+  const scoped: string[] = [];
+  const add = (fqn: string) => {
+    const key = fqn.toLowerCase();
+    if (!seen.has(key) && scoped.length < GENIE_TABLE_CAP) {
+      seen.add(key);
+      scoped.push(fqn);
+    }
+  };
+  for (const t of questionTables) add(t);
+  for (const t of sqlTables) add(t);
+  for (const t of tables) add(t);
+
+  if (scoped.length < 2) return null;
+
+  const schemas = scoped.map((t) => t.split(".")[1]).filter(Boolean);
+  const schemaCounts = new Map<string, number>();
+  for (const s of schemas) schemaCounts.set(s, (schemaCounts.get(s) || 0) + 1);
+  let domainHint = "";
+  let bestCount = 0;
+  for (const [schema, count] of schemaCounts) {
+    if (count > bestCount) {
+      bestCount = count;
+      domainHint = schema;
+    }
+  }
+
+  return {
+    type: "create_genie_space",
+    label: "Create Genie Space",
+    payload: {
+      tables: scoped,
+      domainHint: domainHint || undefined,
+      tableEnrichments: scoped.map((t) => enrichmentMap.get(t)).filter(Boolean),
+      sqlBlocks: sqlBlocks.slice(0, 3),
+      conversationSummary: conversationSummary || undefined,
+      intent,
+    },
+  };
+}
+
 function buildActions(
   intent: AssistantIntent,
   sqlBlocks: string[],
@@ -547,6 +604,8 @@ function buildActions(
   tableEnrichments: TableEnrichment[] = [],
   conversationSummary: string = "",
   persona: AssistantPersona = "business",
+  sqlTables: string[] = [],
+  questionTables: string[] = [],
 ): ActionCard[] {
   const actions: ActionCard[] = [];
 
@@ -567,7 +626,17 @@ function buildActions(
 
   const enrichmentMap = new Map(tableEnrichments.map((e) => [e.tableFqn, e]));
 
-  if (dashboardProposal && dashboardProposal.tables.length > 0) {
+  const genieAction = buildGenieAction(
+    tables,
+    sqlTables,
+    questionTables,
+    enrichmentMap,
+    sqlBlocks,
+    conversationSummary,
+    intent,
+  );
+
+  if (dashboardProposal && dashboardProposal.tables.length > 0 && !genieAction) {
     const dSchemas = dashboardProposal.tables.map((t) => t.split(".")[1]).filter(Boolean);
     const dSchemaCounts = new Map<string, number>();
     for (const s of dSchemas) dSchemaCounts.set(s, (dSchemaCounts.get(s) || 0) + 1);
@@ -593,7 +662,9 @@ function buildActions(
     });
   }
 
-  if (tables.length > 0) {
+  if (genieAction) {
+    actions.push(genieAction);
+  } else if (tables.length > 0) {
     if (persona !== "business") {
       actions.push({
         type: "view_tables",
@@ -601,39 +672,11 @@ function buildActions(
         payload: { tables },
       });
     }
-
-    if (tables.length >= 2) {
-      if (persona !== "business") {
-        actions.push({
-          type: "view_erd",
-          label: "View ERD",
-          payload: { tables },
-        });
-      }
-
-      const schemas = tables.map((t) => t.split(".")[1]).filter(Boolean);
-      const schemaCounts = new Map<string, number>();
-      for (const s of schemas) schemaCounts.set(s, (schemaCounts.get(s) || 0) + 1);
-      let domainHint = "";
-      let bestCount = 0;
-      for (const [schema, count] of schemaCounts) {
-        if (count > bestCount) {
-          bestCount = count;
-          domainHint = schema;
-        }
-      }
-
+    if (tables.length >= 2 && persona !== "business") {
       actions.push({
-        type: "create_genie_space",
-        label: "Create Genie Space",
-        payload: {
-          tables,
-          domainHint: domainHint || undefined,
-          tableEnrichments: tables.map((t) => enrichmentMap.get(t)).filter(Boolean),
-          sqlBlocks: sqlBlocks.slice(0, 3),
-          conversationSummary: conversationSummary || undefined,
-          intent,
-        },
+        type: "view_erd",
+        label: "View ERD",
+        payload: { tables },
       });
     }
   }

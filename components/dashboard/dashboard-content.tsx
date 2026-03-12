@@ -427,7 +427,7 @@ function EmptyDashboard() {
         <StepTile
           step={2}
           title="Discover"
-          description="AI analyses your metadata in 7 steps: context, filtering, generation, clustering, scoring, and SQL."
+          description="AI analyses your metadata in 8 steps: context, filtering, generation, clustering, scoring, SQL, and business value analysis."
         />
         <StepTile
           step={3}

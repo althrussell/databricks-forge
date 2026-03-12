@@ -216,7 +216,8 @@ checks:
     category: instructions
     description: "Join specs have comments explaining relationships"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: join_inference
     evaluator: ratio
     path: "instructions.join_specs"
     field: "comment"
@@ -227,7 +228,8 @@ checks:
     category: instructions
     description: "Complex example SQLs have usage guidance"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: trusted_assets
     evaluator: ratio
     path: "instructions.example_question_sqls"
     field: "usage_guidance"
@@ -249,7 +251,8 @@ checks:
     category: instructions
     description: "Expressions have usage instructions"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.expressions"
     field: "instruction"
@@ -275,7 +278,8 @@ checks:
     category: semantic_richness
     description: "Measures have display names"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.measures"
     field: "display_name"
@@ -286,7 +290,8 @@ checks:
     category: semantic_richness
     description: "Filters have synonyms for user terminology"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.filters"
     field: "synonyms"
@@ -308,7 +313,8 @@ checks:
     category: semantic_richness
     description: "Expressions have synonyms for user terminology"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.expressions"
     field: "synonyms"
@@ -319,7 +325,8 @@ checks:
     category: semantic_richness
     description: "Expressions have display names"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.expressions"
     field: "display_name"
@@ -330,7 +337,8 @@ checks:
     category: semantic_richness
     description: "Measures have synonyms for user terminology"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.measures"
     field: "synonyms"
@@ -352,7 +360,8 @@ checks:
     category: semantic_richness
     description: "Filters have display names"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.filters"
     field: "display_name"
@@ -363,7 +372,8 @@ checks:
     category: semantic_richness
     description: "Measures have comments explaining their purpose"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.measures"
     field: "comment"
@@ -374,7 +384,8 @@ checks:
     category: semantic_richness
     description: "Filters have comments explaining when to use them"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: semantic_expressions
     evaluator: ratio
     path: "instructions.sql_snippets.filters"
     field: "comment"

@@ -55,7 +55,13 @@ The engine runs in ordered steps:
 7. `sql-generation`
    - Produces SQL for each surviving use case (with strict SQL rules and schema grounding).
 
-After completion, the run is persisted, quality metrics are stored, and downstream recommendation engines can continue in the background.
+8. `business-value-analysis`
+   - Financial quantification (low/mid/high value estimates per use case).
+   - Roadmap phasing with effort and dependency mapping.
+   - Executive synthesis (board-ready findings, recommendations, risks).
+   - Stakeholder analysis (role/department impact profiles).
+
+After completion, the run is persisted, quality metrics are stored, and downstream recommendation engines (Genie Engine, Dashboard Engine) can continue in the background.
 
 ## 4) How benchmarks are applied (without polluting facts)
 

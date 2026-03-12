@@ -118,6 +118,7 @@ export default function BenchmarkPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runProgress, setRunProgress] = useState(0);
+  const [runTotal, setRunTotal] = useState(0);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -191,6 +192,7 @@ export default function BenchmarkPage() {
     setRunning(true);
     setResults([]);
     setRunProgress(0);
+    setRunTotal(toRun.length);
     setCurrentRunId(null);
     setRateLimitWarning(false);
 
@@ -218,7 +220,9 @@ export default function BenchmarkPage() {
           if (!line.startsWith("data: ")) continue;
           try {
             const event = JSON.parse(line.slice(6));
-            if (event.type === "result") {
+            if (event.type === "start" && typeof event.total === "number") {
+              setRunTotal(event.total);
+            } else if (event.type === "result") {
               setResults((prev) => [...prev, event.result]);
               setRunProgress(event.index + 1);
             } else if (event.type === "rate_limited") {
@@ -493,7 +497,7 @@ export default function BenchmarkPage() {
                     <Play className="mr-2 size-4" />
                   )}
                   {running
-                    ? `Running ${runProgress}/${selectedCount}...`
+                    ? `Running ${runProgress}/${runTotal}...`
                     : selectedCount === questions.length
                       ? `Run All (${questions.length})`
                       : `Run Selected (${selectedCount}/${questions.length})`}
@@ -610,6 +614,30 @@ export default function BenchmarkPage() {
                               )}
                               {result.error && (
                                 <div className="mt-1 text-xs text-red-500">{result.error}</div>
+                              )}
+                              {!result.passed && (result.failureCategory || result.failureReason || result.sqlSimilarity != null) && (
+                                <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 dark:border-red-900/50 dark:bg-red-950/30">
+                                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    {result.failureCategory && (
+                                      <Badge variant="destructive" className="text-[10px]">
+                                        {result.failureCategory.replace(/_/g, " ")}
+                                      </Badge>
+                                    )}
+                                    {result.comparisonMethod && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {result.comparisonMethod === "result" ? "Result comparison" : result.comparisonMethod === "sql_similarity" ? "SQL similarity" : "Completion only"}
+                                      </Badge>
+                                    )}
+                                    {result.sqlSimilarity != null && (
+                                      <span className="text-muted-foreground">
+                                        Similarity: {Math.round(result.sqlSimilarity * 100)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  {result.failureReason && (
+                                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{result.failureReason}</p>
+                                  )}
+                                </div>
                               )}
                               {result.actualSqlResult && (
                                 <SqlPreviewTable

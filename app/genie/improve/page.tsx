@@ -152,9 +152,18 @@ export default function ImproveExistingPage() {
       );
     })
     .sort((a, b) => {
-      if (sortKey === "score") return (a.overallScore ?? 999) - (b.overallScore ?? 999);
-      if (sortKey === "fixable") return (b.fixableCount ?? 0) - (a.fixableCount ?? 0);
-      return a.title.localeCompare(b.title);
+      let cmp = 0;
+      if (sortKey === "score") {
+        const aHas = a.overallScore != null;
+        const bHas = b.overallScore != null;
+        if (aHas && bHas) cmp = (b.overallScore!) - (a.overallScore!);
+        else if (aHas !== bHas) cmp = aHas ? -1 : 1;
+      } else if (sortKey === "fixable") {
+        cmp = (b.fixableCount ?? 0) - (a.fixableCount ?? 0);
+      } else {
+        cmp = a.title.localeCompare(b.title);
+      }
+      return cmp !== 0 ? cmp : a.title.localeCompare(b.title);
     });
 
   const gradeColor = (grade?: string) => {
@@ -209,6 +218,12 @@ export default function ImproveExistingPage() {
               {sortKey === key && <ArrowUpDown className="ml-1 size-3" />}
             </Button>
           ))}
+          {discovering && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Scanning...
+            </span>
+          )}
         </div>
       </div>
 
