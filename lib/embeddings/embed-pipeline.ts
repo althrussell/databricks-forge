@@ -145,6 +145,180 @@ export async function embedRunResults(
 }
 
 // ---------------------------------------------------------------------------
+// Business value embedding (value estimates, roadmap, stakeholders, synthesis)
+// ---------------------------------------------------------------------------
+
+interface ValueEstimateLike {
+  id: string;
+  useCaseId: string;
+  useCaseName?: string;
+  valueLow: number;
+  valueMid: number;
+  valueHigh: number;
+  currency?: string;
+  valueType?: string;
+  confidence?: string;
+  rationale?: string | null;
+  assumptions?: string[] | null;
+  industryBenchmark?: string | null;
+}
+
+interface RoadmapPhaseLike {
+  useCaseId: string;
+  useCaseName?: string;
+  phase: string;
+  effortEstimate?: string | null;
+  dependencies?: string[];
+  enablers?: string[];
+  rationale?: string | null;
+}
+
+interface StakeholderLike {
+  id: string;
+  role: string;
+  department: string;
+  useCaseCount: number;
+  totalValue: number;
+  domains?: string[];
+  changeComplexity?: string | null;
+  isChampion: boolean;
+  isSponsor: boolean;
+}
+
+interface SynthesisLike {
+  keyFindings?: Array<{ title: string; description: string; severity?: string }>;
+  strategicRecommendations?: Array<{ title: string; description: string; priority?: string }>;
+  riskCallouts?: Array<{ title: string; description: string; impact?: string }>;
+  totalEstimatedValue?: { low: number; mid: number; high: number; currency?: string };
+  quickWinCount?: number;
+  topDomain?: string | null;
+}
+
+/**
+ * Embed business value analysis outputs for the Strategic Advisor persona.
+ * Deletes existing BV embeddings for the run first, then inserts fresh ones.
+ */
+export async function embedBusinessValueResults(
+  runId: string,
+  estimates: ValueEstimateLike[],
+  roadmapPhases: RoadmapPhaseLike[],
+  stakeholders: StakeholderLike[],
+  synthesis: SynthesisLike | null,
+): Promise<void> {
+  if (!isEmbeddingEnabled()) {
+    logger.debug("[embed-pipeline] Embedding disabled, skipping BV embedding");
+    return;
+  }
+
+  const startTime = Date.now();
+
+  try {
+    const {
+      composeValueEstimate,
+      composeRoadmapPhase,
+      composeStakeholderProfile,
+      composeExecutiveSynthesis,
+    } = await import("./compose");
+
+    await deleteEmbeddingsByKindAndRun("value_estimate", runId);
+    await deleteEmbeddingsByKindAndRun("roadmap_phase", runId);
+    await deleteEmbeddingsByKindAndRun("stakeholder_profile", runId);
+    await deleteEmbeddingsByKindAndRun("executive_synthesis", runId);
+
+    const inputs: EmbeddingInput[] = [];
+    const texts: string[] = [];
+
+    for (const est of estimates) {
+      const text = composeValueEstimate(est);
+      texts.push(text);
+      inputs.push({
+        kind: "value_estimate",
+        sourceId: est.id,
+        runId,
+        contentText: text,
+        metadataJson: {
+          useCaseId: est.useCaseId,
+          valueType: est.valueType ?? null,
+          confidence: est.confidence ?? null,
+          valueMid: est.valueMid,
+        },
+        embedding: [],
+      });
+    }
+
+    for (const rp of roadmapPhases) {
+      const text = composeRoadmapPhase(rp);
+      texts.push(text);
+      inputs.push({
+        kind: "roadmap_phase",
+        sourceId: `${runId}:${rp.useCaseId}`,
+        runId,
+        contentText: text,
+        metadataJson: {
+          useCaseId: rp.useCaseId,
+          phase: rp.phase,
+          effort: rp.effortEstimate ?? null,
+        },
+        embedding: [],
+      });
+    }
+
+    for (const sp of stakeholders) {
+      const text = composeStakeholderProfile(sp);
+      texts.push(text);
+      inputs.push({
+        kind: "stakeholder_profile",
+        sourceId: sp.id,
+        runId,
+        contentText: text,
+        metadataJson: { role: sp.role, department: sp.department, isChampion: sp.isChampion },
+        embedding: [],
+      });
+    }
+
+    if (synthesis) {
+      const text = composeExecutiveSynthesis(synthesis);
+      texts.push(text);
+      inputs.push({
+        kind: "executive_synthesis",
+        sourceId: `${runId}:synthesis`,
+        runId,
+        contentText: text,
+        metadataJson: {
+          quickWinCount: synthesis.quickWinCount ?? null,
+          topDomain: synthesis.topDomain ?? null,
+        },
+        embedding: [],
+      });
+    }
+
+    if (texts.length === 0) return;
+
+    const embeddings = await generateEmbeddings(texts);
+    for (let i = 0; i < inputs.length; i++) {
+      inputs[i].embedding = embeddings[i];
+    }
+
+    await insertEmbeddings(inputs);
+
+    logger.info("[embed-pipeline] Business value embedding complete", {
+      runId,
+      estimates: estimates.length,
+      roadmapPhases: roadmapPhases.length,
+      stakeholders: stakeholders.length,
+      hasSynthesis: !!synthesis,
+      totalRecords: inputs.length,
+      durationMs: Date.now() - startTime,
+    });
+  } catch (err) {
+    logger.warn("[embed-pipeline] Business value embedding failed (non-fatal)", {
+      runId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Genie recommendation embedding
 // ---------------------------------------------------------------------------
 

@@ -57,9 +57,9 @@ const navSections: NavSection[] = [
     items: [
       { href: "/business-value", label: "Portfolio", icon: PortfolioIcon },
       { href: "/business-value/roadmap", label: "Roadmap", icon: RoadmapIcon },
-      { href: "/business-value/strategy", label: "Strategy", icon: StrategyIcon },
       { href: "/business-value/stakeholders", label: "Stakeholders", icon: StakeholdersIcon },
       { href: "/business-value/tracking", label: "Value Tracking", icon: TrackingIcon },
+      { href: "/business-value/strategy", label: "Strategy", icon: StrategyIcon },
       { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
       { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
     ],

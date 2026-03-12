@@ -73,6 +73,7 @@ const INTENT_SCOPES: Record<
       | "benchmarks"
       | "fabric"
       | "skills"
+      | "strategy"
       | undefined;
     topK: number;
     minScore: number;
@@ -114,6 +115,7 @@ const INTENT_SCOPES: Record<
   ],
   strategic: [
     { scope: "usecases", topK: 15, minScore: 0.3, useLatestRun: true },
+    { scope: "strategy", topK: 10, minScore: 0.3, useLatestRun: true },
     { scope: "estate", topK: 10, minScore: 0.3, useLatestScan: true },
     { scope: "benchmarks", topK: 8, minScore: 0.3 },
     { scope: "documents", topK: 5, minScore: 0.3 },
@@ -139,6 +141,7 @@ interface RetrievalPlan {
     | "benchmarks"
     | "fabric"
     | "skills"
+    | "strategy"
     | undefined;
   topK: number;
   minScore: number;
@@ -178,6 +181,10 @@ function applyPersonaModulation(
     }
     if (!existingScopes.has("insights")) {
       supplemental.push({ scope: "insights", topK: 6, minScore: 0.35, useLatestScan: true });
+    }
+  } else if (persona === "strategic") {
+    if (!existingScopes.has("strategy")) {
+      supplemental.push({ scope: "strategy", topK: 10, minScore: 0.3, useLatestRun: true });
     }
   }
 

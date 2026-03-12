@@ -1,10 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { RefreshCw, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import type {
   ValueEstimate,
@@ -30,14 +44,63 @@ interface BusinessValueData {
 export function BusinessValueTab({ runId }: { runId: string }) {
   const [data, setData] = useState<BusinessValueData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(() => {
+    return fetch(`/api/runs/${runId}/business-value`)
+      .then((r) => r.json())
+      .then((d: BusinessValueData) => {
+        setData(d);
+        return d;
+      })
+      .catch(() => {
+        setData(null);
+        return null;
+      });
+  }, [runId]);
 
   useEffect(() => {
-    fetch(`/api/runs/${runId}/business-value`)
-      .then((r) => r.json())
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, [runId]);
+    fetchData().finally(() => setLoading(false));
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [fetchData]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/business-value/rerun`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Refresh failed" }));
+        throw new Error(body.error || "Refresh failed");
+      }
+      toast.success("Business value refresh started");
+
+      pollRef.current = setInterval(async () => {
+        const d = await fetchData();
+        if (d && d.estimates.length > 0) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setRefreshing(false);
+          toast.success("Business value analysis refreshed");
+        }
+      }, 3000);
+
+      // Safety timeout: stop polling after 3 minutes
+      setTimeout(() => {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setRefreshing(false);
+          fetchData();
+        }
+      }, 180_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Refresh failed");
+      setRefreshing(false);
+    }
+  }, [runId, fetchData]);
 
   if (loading) {
     return (
@@ -53,7 +116,7 @@ export function BusinessValueTab({ runId }: { runId: string }) {
     );
   }
 
-  if (!data || data.estimates.length === 0) {
+  if ((!data || data.estimates.length === 0) && !refreshing) {
     return (
       <Card>
         <CardContent className="py-12 text-center">
@@ -72,7 +135,12 @@ export function BusinessValueTab({ runId }: { runId: string }) {
     );
   }
 
-  const { valueSummary, roadmapPhases, synthesis, stakeholders } = data;
+  const { valueSummary, roadmapPhases, synthesis, stakeholders } = data ?? {
+    valueSummary: { totalLow: 0, totalMid: 0, totalHigh: 0, count: 0, byType: {} },
+    roadmapPhases: [] as RoadmapPhaseAssignment[],
+    stakeholders: [] as StakeholderProfile[],
+    synthesis: null,
+  };
   const phaseDistribution = {
     quick_wins: roadmapPhases.filter((p) => p.phase === "quick_wins").length,
     foundation: roadmapPhases.filter((p) => p.phase === "foundation").length,
@@ -81,6 +149,46 @@ export function BusinessValueTab({ runId }: { runId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Header with Refresh */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Business Value Analysis</h3>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={refreshing}>
+              {refreshing ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {refreshing ? "Refreshing..." : "Refresh Analysis"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Refresh business value analysis?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will regenerate all financial estimates, roadmap phases, executive synthesis,
+                and stakeholder profiles using the latest AI models. Value tracking and value
+                captures you have entered will be preserved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleRefresh}>Refresh</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      {refreshing && (
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">
+            Regenerating business value analysis... This typically takes 30&ndash;60 seconds.
+          </span>
+        </div>
+      )}
+
       {/* Value Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
