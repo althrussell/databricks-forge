@@ -115,7 +115,7 @@ No raw SQL appears anywhere else in the codebase.
 1. User submits configuration via `/configure` page
 2. API route creates a `PipelineRun` record in Lakebase (status=pending)
 3. Execute endpoint starts the pipeline engine asynchronously
-4. Engine runs 7 steps, each updating progress in Lakebase
+4. Engine runs 8 steps, each updating progress in Lakebase
 5. Frontend polls `/api/runs/[runId]` every 3 seconds for status
 6. On completion, use cases are persisted in `forge_use_cases`
 7. User views results and triggers exports from the run detail page

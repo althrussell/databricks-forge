@@ -8,6 +8,7 @@ import type {
   SerializedSpace,
   SampleQuestion,
   DataSourceTable,
+  DataSourceColumnConfig,
   DataSourceMetricView,
   ExampleQuestionSql,
   JoinSpec,
@@ -193,6 +194,18 @@ export function assembleSerializedSpace(
       const table: DataSourceTable = { identifier: fqn };
       if (descParts.length > 0) table.description = [descParts.join(" ")];
 
+      if (enrichments && enrichments.length > 0) {
+        const columnConfigs: DataSourceColumnConfig[] = enrichments
+          .filter((ce) => !ce.hidden)
+          .map((ce) => {
+            const cfg: DataSourceColumnConfig = { column_name: ce.columnName };
+            if (ce.description) cfg.description = [ce.description];
+            if (ce.synonyms.length > 0) cfg.synonyms = ce.synonyms;
+            return cfg;
+          });
+        if (columnConfigs.length > 0) table.column_configs = columnConfigs;
+      }
+
       return table;
     });
 
@@ -263,6 +276,8 @@ export function assembleSerializedSpace(
             `Parameter "${p.name}" (${p.type}): ${p.comment}${p.defaultValue ? ` [default: ${p.defaultValue}]` : ""}`,
         );
         entry.usage_guidance = guidance;
+      } else {
+        entry.usage_guidance = [`Use this query to answer: "${tq.question}"`];
       }
       return entry;
     });
@@ -288,11 +303,19 @@ export function assembleSerializedSpace(
         sqlEntries.push(`--rt=${rtTag}--`);
       }
 
+      const leftName = j.leftTable.split(".").pop() ?? j.leftTable;
+      const rightName = j.rightTable.split(".").pop() ?? j.rightTable;
+      const relDesc = j.relationshipType
+        ? `${j.relationshipType} relationship`
+        : "related";
+      const comment = `Joins ${leftName} to ${rightName} (${relDesc})`;
+
       return {
         id: makeId(seed, "join", i),
         left: { identifier: j.leftTable, alias: leftAlias },
         right: { identifier: j.rightTable, alias: rightAlias },
         sql: sqlEntries,
+        comment: [comment],
       };
     });
 
@@ -308,8 +331,10 @@ export function assembleSerializedSpace(
     .map((m, i) => ({
       id: makeId(seed, "measure", i),
       alias: m.instructions ? `${m.name} -- ${m.instructions}` : m.name,
+      display_name: m.name,
       sql: [m.sql],
       ...(m.synonyms.length > 0 ? { synonyms: m.synonyms } : {}),
+      ...(m.instructions ? { comment: [m.instructions] } : {}),
     }));
 
   const filters: SqlSnippetFilter[] = outputs.filters
@@ -319,8 +344,9 @@ export function assembleSerializedSpace(
     .map((f, i) => ({
       id: makeId(seed, "filter", i),
       sql: [f.sql],
-      display_name: f.instructions ? `${f.name} -- ${f.instructions}` : f.name,
+      display_name: f.name,
       ...(f.synonyms.length > 0 ? { synonyms: f.synonyms } : {}),
+      ...(f.instructions ? { comment: [f.instructions] } : {}),
     }));
 
   const expressions: SqlSnippetExpression[] = outputs.dimensions
@@ -330,8 +356,10 @@ export function assembleSerializedSpace(
     .map((d, i) => ({
       id: makeId(seed, "expr", i),
       alias: d.instructions ? `${d.name} -- ${d.instructions}` : d.name,
+      display_name: d.name,
       sql: [d.sql],
       ...(d.synonyms.length > 0 ? { synonyms: d.synonyms } : {}),
+      ...(d.instructions ? { instruction: [d.instructions] } : {}),
     }));
 
   // 7. Text instructions -- API allows at most one TextInstruction entry;

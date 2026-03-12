@@ -35,6 +35,7 @@ import { runJoinInference } from "./passes/join-inference";
 import { runTitleGeneration } from "./passes/title-generation";
 import { runExampleQueryGeneration } from "./passes/example-query-generation";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
+import { runHealthCheck } from "./space-health-check";
 import { isValidTable } from "./schema-allowlist";
 import { getFastServingEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
@@ -267,11 +268,14 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         }
         if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
 
+        const healthReport = runHealthCheck(space as unknown as Record<string, unknown>);
+        const actualScore = Math.round(healthReport.overallScore);
+
         const rec = buildRecommendation(outputs, space, run.config.businessName, {
           titleOverride: titleResult.title,
           titleSource: titleResult.source,
           degradedReasons,
-          qualityScore: qualityScore(degradedReasons),
+          qualityScore: actualScore,
           joinDiagnostics: outputs.joinDiagnostics ?? [],
           promptVersion: "genie-v2-phase2",
         });
@@ -877,6 +881,7 @@ function inferHeuristicJoins(
   return joins;
 }
 
-function qualityScore(degradedReasons: string[]): number {
+/** @deprecated Kept as fallback; prefer runHealthCheck() for accurate scoring. */
+function qualityScoreFallback(degradedReasons: string[]): number {
   return Math.max(40, 100 - degradedReasons.length * 12);
 }

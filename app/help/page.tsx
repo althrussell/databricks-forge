@@ -97,18 +97,21 @@ const FEATURES = [
     ],
   },
   {
-    title: "Meta Data Genie",
+    title: "Genie Studio",
     icon: Sparkles,
     badge: null,
     description:
-      "Generates Databricks Genie Spaces pre-configured with semantic expressions, filters, benchmark queries, and metric views — so business users can ask natural language questions about the data.",
+      "Create, manage, and continuously improve Databricks Genie Spaces. Includes Quick Build from Ask Forge, a full 7-pass engine, health scoring (A–F), benchmark testing, automated fix workflows, and AI Comments integration.",
     details: [
-      "Scans information_schema and infers industry context automatically",
-      "Generates tailored sample questions, SQL examples, joins, and measures",
-      "Review the draft before deploying — edit or discard freely",
-      "Deploy creates the Genie Space and curated metadata views in Databricks",
-      "Trash a space to remove it along with curated views",
-      "Scope generation to specific catalogs for focused spaces",
+      "Quick Build: create a Genie Space from Ask Forge in seconds — scopes tables tightly to your question",
+      "Full Engine: 7 LLM passes produce measures, filters, expressions, joins, benchmarks, and metric views (1–3 min)",
+      "Health Scoring: every space gets an A–F grade across 4 categories (Data Sources, Instructions, Semantic Richness, Quality Assurance)",
+      "Fix All: automated fix strategies enrich measures, filters, expressions, joins, and benchmarks in one click",
+      "Benchmark Test Runner: run individual or batch tests against the Genie Conversation API with failure diagnostics (category, reason, SQL similarity)",
+      "Improve with Engine: run the full engine on any existing space with live progress tracking and cancel support",
+      "AI Comments link: health warnings about missing column descriptions link directly to the AI Comment tool",
+      "Sorting and search across all your spaces by health score, fixable issues, or name",
+      "Deploy, clone, trash, and open spaces directly in Databricks",
     ],
   },
   {
@@ -197,6 +200,21 @@ const FAQ = [
       "Genie Spaces are Databricks workspaces where business users can ask natural language questions that get translated into SQL. Forge generates pre-configured Genie Spaces with semantic expressions, filters, benchmark queries, and metric views based on your metadata and use cases.",
   },
   {
+    question: "How does Genie health scoring work?",
+    answer:
+      "Every Genie Space is graded A–F based on ~40 checks across 4 categories: Data Sources (column configs, descriptions), Instructions (joins, example SQL, text instructions), Semantic Richness (measures, filters, expressions with display names, comments, and synonyms), and Quality Assurance (benchmarks, SQL quality). The engine now populates all these fields automatically, so engine-generated spaces typically score A or B.",
+  },
+  {
+    question: "What is the difference between Quick Build and Full Engine?",
+    answer:
+      "Quick Build creates a usable Genie Space in seconds using rule-based passes with fast LLM refinements — great for getting started. Full Engine runs all 7 LLM passes (column intelligence, semantic expressions, join inference, trusted assets, instructions, benchmarks, metric views) and takes 1–3 minutes but produces production-grade output with higher health scores.",
+  },
+  {
+    question: "How do I improve an existing Genie Space?",
+    answer:
+      "Open any space in Genie Studio and use 'Improve with Engine' to run the full 7-pass engine against it. You can also use 'Fix All' to target specific failing health checks, or run benchmarks and use the feedback loop to iteratively improve accuracy. Progress is tracked with a banner visible across all tabs.",
+  },
+  {
     question: "What are Industry Outcome Maps?",
     answer:
       "Outcome maps are curated reference frameworks for specific industries (e.g., Financial Services, Healthcare, Retail). They define KPIs, strategic use cases, personas, and domain priorities. When selected during configuration, they enrich the LLM prompts for more targeted, industry-aligned recommendations.",
@@ -253,6 +271,11 @@ const TIPS = [
   "Export as Executive Briefing (PPTX) for stakeholder presentations — it combines estate intelligence with use case findings.",
   "Ask Forge can propose SQL, deploy notebooks, create dashboards, and launch Genie Spaces — all from a single question.",
   "Review the context panel in Ask Forge to see which tables, sources, and enrichments informed each answer.",
+  "Run AI Comments before creating Genie Spaces — column descriptions dramatically improve health scores and Genie query accuracy.",
+  "Use the benchmark Test Runner to validate Genie Spaces — run all tests, review failure categories, and iterate with Fix All.",
+  "After Quick Build, use 'Enhance with Full Engine' to add measures, filters, expressions, joins, and benchmarks for a production-grade space.",
+  "Sort Genie Spaces by health score to quickly find which spaces need the most attention.",
+  "The Genie Engine progress banner stays visible even if you switch tabs — no need to wait on the page.",
 ];
 
 // ---------------------------------------------------------------------------
@@ -426,7 +449,7 @@ export default function HelpPage() {
             <BarChart3 className="h-5 w-5" />
             Discovery Pipeline Steps
           </CardTitle>
-          <CardDescription>The discovery pipeline runs these 7 steps sequentially.</CardDescription>
+          <CardDescription>The discovery pipeline runs these 8 steps sequentially.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -465,6 +488,11 @@ export default function HelpPage() {
                 step: 7,
                 name: "SQL Generation",
                 desc: "Generates bespoke SQL for each use case, validated against real table schemas.",
+              },
+              {
+                step: 8,
+                name: "Business Value Analysis",
+                desc: "Financial quantification, roadmap phasing, executive synthesis, and stakeholder analysis for each use case.",
               },
             ].map((s) => (
               <div key={s.step} className="flex items-start gap-3">

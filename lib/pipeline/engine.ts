@@ -1,5 +1,5 @@
 /**
- * Pipeline Engine -- orchestrates the 7 pipeline steps sequentially.
+ * Pipeline Engine -- orchestrates the 8 pipeline steps sequentially.
  *
  * Updates Lakebase progress after each step. Handles errors and allows
  * the frontend to poll for status.

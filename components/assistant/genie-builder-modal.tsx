@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import {
   Loader2,
@@ -181,11 +182,20 @@ export function GenieBuilderModal({
     [],
   );
 
+  const fastProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const runFastGeneration = useCallback(async () => {
     setPhase("generating");
-    setGenMessage("Building space from metadata...");
-    setGenPercent(50);
+    setGenMessage("Analyzing table metadata and generating space configuration...");
+    setGenPercent(10);
     setGenError(null);
+
+    let tick = 10;
+    if (fastProgressRef.current) clearInterval(fastProgressRef.current);
+    fastProgressRef.current = setInterval(() => {
+      tick = Math.min(tick + Math.random() * 8, 90);
+      setGenPercent(Math.round(tick));
+    }, 800);
 
     try {
       const res = await fetch("/api/genie-spaces/generate", {
@@ -193,6 +203,8 @@ export function GenieBuilderModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tables, config: buildConfig("fast") }),
       });
+      if (fastProgressRef.current) clearInterval(fastProgressRef.current);
+      setGenPercent(100);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to generate");
@@ -204,6 +216,7 @@ export function GenieBuilderModal({
         throw new Error(data.error || "Unexpected response");
       }
     } catch (err) {
+      if (fastProgressRef.current) clearInterval(fastProgressRef.current);
       setGenError(err instanceof Error ? err.message : "Unknown error");
       setPhase("error");
     }
@@ -263,10 +276,10 @@ export function GenieBuilderModal({
     }
   }, [open, tables, runFastGeneration]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (fastProgressRef.current) clearInterval(fastProgressRef.current);
     };
   }, []);
 
@@ -632,10 +645,18 @@ export function GenieBuilderModal({
         {phase === "ready" && recommendation && (
           <DialogFooter className="flex-col gap-2 sm:flex-row">
             {resultMode === "fast" && (
-              <Button variant="outline" size="sm" onClick={runFullGeneration} className="gap-1.5">
-                <RefreshCw className="size-3.5" />
-                Enhance with Full Engine
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={runFullGeneration} className="gap-1.5">
+                    <RefreshCw className="size-3.5" />
+                    Enhance with Full Engine
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  Run the full 7-pass Genie Engine for richer measures, filters, benchmarks,
+                  metric views, and higher quality scores. Typically takes 1-3 minutes.
+                </TooltipContent>
+              </Tooltip>
             )}
             <Button
               onClick={handleDeploy}

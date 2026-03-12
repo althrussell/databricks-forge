@@ -168,10 +168,10 @@ export async function POST(
               });
             }
 
-            if (completed && bench.expectedSql && msg.sql) {
-              const sim = sqlSimilarity(bench.expectedSql, msg.sql);
-              passed = sim >= SIMILARITY_THRESHOLD;
-            }
+            let similarity: number | undefined;
+            let comparisonMethod: BenchmarkResult["comparisonMethod"] = "completion_only";
+            let failureCategory: BenchmarkResult["failureCategory"];
+            let failureReason: string | undefined;
 
             let actualSqlResult: SqlResultPreview | undefined;
             let expectedSqlResult: SqlResultPreview | undefined;
@@ -183,6 +183,45 @@ export async function POST(
               expectedSqlResult = await executeSqlPreview(bench.expectedSql);
             }
 
+            if (completed && bench.expectedSql && msg.sql) {
+              similarity = sqlSimilarity(bench.expectedSql, msg.sql);
+
+              if (similarity >= 0.9) {
+                passed = true;
+                comparisonMethod = "sql_similarity";
+              } else if (
+                actualSqlResult && expectedSqlResult &&
+                !actualSqlResult.error && !expectedSqlResult.error &&
+                actualSqlResult.rowCount > 0 && expectedSqlResult.rowCount > 0
+              ) {
+                comparisonMethod = "result";
+                const colsMatch = actualSqlResult.columns.length === expectedSqlResult.columns.length;
+                const rowMatch = actualSqlResult.rowCount === expectedSqlResult.rowCount;
+                if (colsMatch && rowMatch) {
+                  passed = true;
+                } else {
+                  passed = false;
+                  if (!colsMatch) {
+                    failureCategory = "wrong_column";
+                    failureReason = `Column count mismatch: expected ${expectedSqlResult.columns.length}, got ${actualSqlResult.columns.length}`;
+                  } else {
+                    failureCategory = "wrong_filter";
+                    failureReason = `Row count mismatch: expected ${expectedSqlResult.rowCount}, got ${actualSqlResult.rowCount}`;
+                  }
+                }
+              } else {
+                comparisonMethod = "sql_similarity";
+                passed = similarity >= SIMILARITY_THRESHOLD;
+                if (!passed) {
+                  failureReason = `SQL similarity ${Math.round(similarity * 100)}% (threshold: ${Math.round(SIMILARITY_THRESHOLD * 100)}%)`;
+                  failureCategory = "unknown";
+                }
+              }
+            } else if (!completed) {
+              failureCategory = msg.error?.includes("timed out") ? "timeout" : "execution_error";
+              failureReason = msg.error || `Genie returned status: ${msg.status}`;
+            }
+
             const result: BenchmarkResult = {
               question: bench.question,
               expectedSql: bench.expectedSql ?? null,
@@ -192,6 +231,10 @@ export async function POST(
               error: msg.error,
               actualSqlResult,
               expectedSqlResult,
+              sqlSimilarity: similarity,
+              comparisonMethod,
+              failureCategory: passed ? undefined : failureCategory,
+              failureReason: passed ? undefined : failureReason,
             };
             results.push(result);
             send({ type: "result", index: i, result });

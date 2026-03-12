@@ -534,6 +534,33 @@ Genie API.
 - Self-joins use `_2` suffix on the right alias
 - Relationship type is encoded as a SQL comment in `join_specs.sql`
 - Benchmark questions are capped at 10 per space
+
+### Enriched Fields (populated by the assembler)
+
+The assembler populates the following fields from engine pass outputs to
+satisfy health check requirements and improve Genie query accuracy:
+
+- **`column_configs`** on each `DataSourceTable` -- built from Pass 1
+  column enrichments (description, synonyms, hidden flags). This ensures
+  the `tables-have-column-configs` health check passes.
+- **`display_name`** on measures and expressions -- set from the expression
+  name to provide a human-readable label in the Genie UI.
+- **`comment`** on measures, filters, and join specs -- measures and
+  filters use their `instructions` array; join specs get an auto-generated
+  comment describing the relationship (e.g. "Join between orders and
+  customers via many-to-one relationship").
+- **`instruction`** on expressions -- set from the expression's
+  `instructions` array to guide Genie on when to use the expression.
+- **`usage_guidance`** on all example SQLs -- generated for both
+  parameterized queries (parameter descriptions) and non-parameterized
+  queries (general usage context).
+
+### Quality Scoring
+
+The engine uses `runHealthCheck()` from `lib/genie/space-health-check.ts`
+to compute the quality score for each generated space. This replaces the
+earlier heuristic-based `qualityScore()` fallback and ensures scores are
+consistent between the engine output and the Genie Studio health tab.
 ### Payload Sanitization
 
 **Module:** `lib/dbx/genie.ts` (`sanitizeSerializedSpace()`)
@@ -902,18 +929,37 @@ Genie Conversation API. The client provides:
 - `sendFollowUp(spaceId, conversationId, question)` -- send a follow-up
   question in an existing conversation
 
-The **Test Space** button in the Genie Spaces tab runs 3-5 sample questions
-from the space against the deployed Genie space and reports results.
+### Benchmark Test Runner
 
-> **Note:** Benchmark evaluation is planned for a future release using the
-> Databricks Evaluation API (currently unreleased). The benchmarks are
-> generated and stored for future use but are not executed in-app.
+The benchmark test runner in Genie Studio executes benchmark questions
+against deployed spaces via the Conversation API and evaluates results
+using a 3-tier comparison:
+
+1. **High SQL similarity** (>=90%) -- the generated SQL closely matches
+   the expected SQL. Marked as pass.
+2. **Result-set comparison** -- column count and row count from the actual
+   query result are compared against the expected query result. Used when
+   SQL similarity is moderate.
+3. **Basic SQL similarity** (>=60%) -- fallback threshold for structural
+   similarity.
+
+Each result includes:
+
+- **Failure category** (e.g. `wrong_tables`, `missing_join`,
+  `wrong_aggregation`, `wrong_filter`) -- classifies the root cause
+- **Comparison method** (`sql_similarity`, `result_set`, `basic_similarity`)
+  -- which tier determined the outcome
+- **SQL similarity score** -- percentage match between expected and actual SQL
+- **Failure reason** -- human-readable explanation of what went wrong
+
+The test runner UI shows real-time progress ("Running 3/12...") via SSE
+and displays failure diagnostics inline on each result card.
 
 API endpoint:
 
 ```
-POST /api/runs/{runId}/genie-engine/{domain}/test
-Body: { "spaceId": "...", "questions": ["..."] }
+POST /api/genie-spaces/{spaceId}/benchmarks/run
+Body: { "questionIds": ["..."] }
 ```
 
 ---
@@ -1059,9 +1105,11 @@ periods will align with your reporting calendar.
 
 ### 10. Test After Deploying
 
-After deploying a space, use the **Test Space** button to run sample
-questions against the live space. Fix underperforming areas by editing
-instructions, measures, or adding more trusted queries.
+After deploying a space, open the **Benchmarks** tab in Genie Studio to
+run benchmark tests against the live space. Review failure categories and
+SQL similarity scores to identify which areas need improvement. Use
+**Fix All** to auto-fix common issues, or manually edit instructions,
+measures, and expressions based on the failure diagnostics.
 
 ### 11. Iterate
 

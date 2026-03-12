@@ -252,6 +252,17 @@ export function SpaceHealthTab({ report, spaceId, onFix, fixing }: SpaceHealthTa
                               {check.detail}
                             </div>
                           )}
+                          {!check.passed &&
+                            (check.id === "tables-have-column-configs" ||
+                              check.id === "columns-have-descriptions") && (
+                              <Link
+                                href="/environment/comments"
+                                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                              >
+                                <Sparkles className="size-3" />
+                                Run AI Comments to generate descriptions
+                              </Link>
+                            )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                           {!check.passed && check.fixable && (

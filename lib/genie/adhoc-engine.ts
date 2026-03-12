@@ -42,6 +42,7 @@ import { evaluateJoinCandidates } from "./join-diagnostics";
 import { extractEntityCandidatesFromSchema } from "./entity-extraction";
 import { generateTimePeriods } from "./time-periods";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
+import { runHealthCheck } from "./space-health-check";
 import {
   buildSchemaContextBlock,
   validateSqlExpression,
@@ -267,7 +268,8 @@ function inferHeuristicJoins(
   return joins;
 }
 
-function scoreQuality(degradedReasons: string[]): number {
+/** @deprecated Kept as fallback; prefer runHealthCheck() for accurate scoring. */
+function _scoreQualityFallback(degradedReasons: string[]): number {
   return Math.max(40, 100 - degradedReasons.length * 12);
 }
 
@@ -725,11 +727,14 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     metadata,
   });
 
+  const healthReport = runHealthCheck(space as unknown as Record<string, unknown>);
+  const actualScore = Math.round(healthReport.overallScore);
+
   const recommendation = buildRecommendation(passOutputs, space, titleInputBusinessName, {
     titleOverride: titleResult.title,
     titleSource: titleResult.source,
     degradedReasons,
-    qualityScore: scoreQuality(degradedReasons),
+    qualityScore: actualScore,
     joinDiagnostics,
     promptVersion: "genie-v2-phase2",
   });
@@ -1033,11 +1038,14 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     metadata,
   });
 
+  const fullHealthReport = runHealthCheck(space as unknown as Record<string, unknown>);
+  const fullScore = Math.round(fullHealthReport.overallScore);
+
   const recommendation = buildRecommendation(passOutputs, space, titleInputBusinessName, {
     titleOverride: titleResult.title,
     titleSource: titleResult.source,
     degradedReasons,
-    qualityScore: scoreQuality(degradedReasons),
+    qualityScore: fullScore,
     joinDiagnostics,
     promptVersion: "genie-v2-phase2",
   });
