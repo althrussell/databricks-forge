@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ArrowLeft, Database, Loader2, Sparkles, Check, Search, Zap, Table2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 
 interface ScannedTable {
   fqn: string;
@@ -49,6 +50,20 @@ export default function CreateFromSchemaPage() {
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
   const [generating, setGenerating] = useState(false);
+
+  const handleSchemaSelection = useCallback(
+    (sources: string[]) => {
+      if (sources.length > 0) {
+        const parts = sources[0].split(".");
+        setCatalog(parts[0] ?? "");
+        setSchema(parts[1] ?? "");
+      } else {
+        setCatalog("");
+        setSchema("");
+      }
+    },
+    [],
+  );
 
   const stepLabels = ["Select Schema", "Review Tables", "Generate"];
   const currentStepIndex = step === "input" || step === "scanning" ? 0 : step === "review" ? 1 : 2;
@@ -181,26 +196,19 @@ export default function CreateFromSchemaPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">Catalog</label>
-                <Input
-                  placeholder="e.g. main"
-                  value={catalog}
-                  onChange={(e) => setCatalog(e.target.value)}
-                  disabled={step === "scanning"}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">Schema</label>
-                <Input
-                  placeholder="e.g. sales"
-                  value={schema}
-                  onChange={(e) => setSchema(e.target.value)}
-                  disabled={step === "scanning"}
-                />
-              </div>
+            <div className={step === "scanning" ? "pointer-events-none opacity-60" : ""}>
+              <CatalogBrowser
+                selectedSources={catalog && schema ? [`${catalog}.${schema}`] : []}
+                onSelectionChange={(sources) => handleSchemaSelection(sources)}
+                selectionMode="schema"
+              />
             </div>
+            {catalog && schema && (
+              <div className="flex items-center gap-2 text-sm">
+                <Database className="size-4 text-muted-foreground" />
+                <span className="font-medium">{catalog}.{schema}</span>
+              </div>
+            )}
             <div>
               <label className="mb-1.5 block text-sm font-medium">
                 Focus hint <span className="text-muted-foreground">(optional)</span>

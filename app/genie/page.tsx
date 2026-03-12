@@ -343,7 +343,7 @@ export default function GenieSpacesPage() {
           icon={MessageCircle}
           title="Describe Your Space"
           description="Tell Ask Forge what you need in plain text. It builds the space from your conversation."
-          href="/ask-forge"
+          href="/ask-forge?persona=genie-builder"
           accent="emerald"
         />
         <StudioEntryCard
@@ -354,18 +354,12 @@ export default function GenieSpacesPage() {
               ? `Run result-based benchmarks with auto-fix loops. ${activeSpaces.length} space${activeSpaces.length !== 1 ? "s" : ""} available.`
               : "Create a Genie Space first, then use benchmarks and auto-fix to improve it."
           }
-          onClick={() => {
-            if (activeSpaces.length > 0) {
-              const bestCandidate =
-                activeSpaces.find((s) => {
-                  const report = healthScores[s.spaceId];
-                  return report && report.grade !== "A";
-                }) ?? activeSpaces[0];
-              router.push(`/genie/${bestCandidate.spaceId}?tab=benchmarks`);
-            } else {
-              toast.info("Create a Genie Space first, then come back to improve it.");
-            }
-          }}
+          href={activeSpaces.length > 0 ? "/genie/improve" : undefined}
+          onClick={
+            activeSpaces.length === 0
+              ? () => toast.info("Create a Genie Space first, then come back to improve it.")
+              : undefined
+          }
           accent="amber"
           badge="Enhanced"
           disabled={loading || activeSpaces.length === 0}
@@ -519,7 +513,7 @@ function StudioEntryCard({
 }) {
   const content = (
     <Card
-      className={`group relative border transition-all ${
+      className={`group relative flex h-full flex-col border transition-all ${
         disabled
           ? "cursor-not-allowed opacity-50"
           : "cursor-pointer hover:shadow-lg hover:-translate-y-0.5"
@@ -541,9 +535,9 @@ function StudioEntryCard({
         </div>
         <CardTitle className="mt-3 text-sm font-semibold">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="flex flex-1 flex-col pt-0">
         <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>
-        <div className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+        <div className="mt-auto flex items-center gap-1 pt-3 text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
           Get started{" "}
           <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
         </div>
@@ -619,7 +613,7 @@ function SpaceCard({
 
   return (
     <Card
-      className={`${isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"} ${isImproving ? "ring-1 ring-violet-300 dark:ring-violet-700" : ""} ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
+      className={`flex h-full flex-col ${isTrashed ? "overflow-hidden opacity-60" : "overflow-hidden"} ${isImproving ? "ring-1 ring-violet-300 dark:ring-violet-700" : ""} ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
       onClick={onCardClick}
     >
       <CardHeader className="pb-3">
@@ -661,7 +655,7 @@ function SpaceCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-1 flex-col space-y-3">
         {space.domain && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Sparkles className="size-3" />
@@ -697,9 +691,16 @@ function SpaceCard({
         </div>
 
         {healthReport && !isTrashed && healthReport.fixableCount > 0 && (
-          <div className="text-xs text-amber-600">
-            {healthReport.fixableCount} fixable issue{healthReport.fixableCount !== 1 ? "s" : ""}
-          </div>
+          <button
+            className="flex items-center gap-1 text-xs text-amber-600 transition-colors hover:text-amber-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              onHealthClick?.();
+            }}
+          >
+            <Wrench className="size-3" />
+            {healthReport.fixableCount} fixable issue{healthReport.fixableCount !== 1 ? "s" : ""} &mdash; Fix now
+          </button>
         )}
 
         {space.updatedAt && (
@@ -708,7 +709,7 @@ function SpaceCard({
           </p>
         )}
 
-        <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-auto flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
           {genieUrl && !isTrashed && (
             <Button size="sm" variant="outline" asChild className="h-7 text-xs">
               <a href={genieUrl} target="_blank" rel="noopener noreferrer">

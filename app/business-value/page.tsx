@@ -29,6 +29,7 @@ import {
   Clock,
   Layers,
   ShieldCheck,
+  BrainCircuit,
 } from "lucide-react";
 import { PortfolioDrillDown } from "@/components/business-value/portfolio-drill-down";
 import { PortfolioExportButton } from "@/components/business-value/portfolio-export-button";
@@ -510,7 +511,17 @@ export default function BusinessValuePage() {
       <PageHeader
         title="Business Value Portfolio"
         subtitle="Executive overview of data-driven value across your organization"
-        actions={<PortfolioExportButton />}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/ask-forge?persona=strategic">
+                <BrainCircuit className="mr-1.5 size-4" />
+                Strategic Advisor
+              </Link>
+            </Button>
+            <PortfolioExportButton />
+          </div>
+        }
       />
 
       <Suspense fallback={<PortfolioSkeleton />}>

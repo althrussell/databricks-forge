@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AskForgeChat,
   type AskForgeChatHandle,
@@ -25,6 +26,7 @@ import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
 import { PanelRightClose, PanelRight } from "lucide-react";
 
 export default function AskForgeContent() {
+  const searchParams = useSearchParams();
   const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(
     null,
   );
@@ -48,6 +50,9 @@ export default function AskForgeContent() {
   const [chatSessionId, setChatSessionId] = React.useState(() => crypto.randomUUID());
   const [initialMessages, setInitialMessages] = React.useState<ConversationMessage[] | undefined>();
   const [persona, setPersona] = React.useState<AssistantPersona>(() => {
+    const urlPersona = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("persona") : null;
+    if (urlPersona && VALID_PERSONAS.has(urlPersona as AssistantPersona))
+      return urlPersona as AssistantPersona;
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("askforge-persona");
       if (stored && VALID_PERSONAS.has(stored as AssistantPersona))

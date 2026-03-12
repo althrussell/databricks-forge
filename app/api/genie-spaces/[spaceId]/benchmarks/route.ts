@@ -32,7 +32,9 @@ export async function GET(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (q: any) => ({
         question: Array.isArray(q.question) ? q.question[0] : String(q.question ?? ""),
-        expectedSql: q.answer?.[0]?.content?.[0] ?? null,
+        expectedSql: Array.isArray(q.answer?.[0]?.content)
+          ? q.answer[0].content.join("\n")
+          : (q.answer?.[0]?.content ?? null),
       }),
     );
 

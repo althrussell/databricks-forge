@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,7 @@ import {
   Database,
   Lightbulb,
   ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -120,7 +122,22 @@ export interface AskForgeChatHandle {
   submitQuestion: (question: string) => void;
 }
 
+const FALLBACK_QUESTIONS_GENIE_BUILDER: string[] = [
+  "I want a Genie Space for our sales pipeline data in main.sales",
+  "Build a space for HR analytics covering headcount and attrition",
+  "Create a space for our finance schema focused on revenue reporting",
+];
+
+const FALLBACK_QUESTIONS_STRATEGIC: string[] = [
+  "What is the total estimated business value of our discovered use cases?",
+  "Which domains have the highest ROI potential and what should we prioritise?",
+  "Draft a board-level summary of our data estate readiness and recommended investments",
+  "What are the key risks to our data strategy and how should we mitigate them?",
+];
+
 function getFallbackQuestions(persona: AssistantPersona): string[] {
+  if (persona === "genie-builder") return FALLBACK_QUESTIONS_GENIE_BUILDER;
+  if (persona === "strategic") return FALLBACK_QUESTIONS_STRATEGIC;
   if (persona === "tech") return FALLBACK_QUESTIONS_TECH;
   if (persona === "analyst") return FALLBACK_QUESTIONS_ANALYST;
   return FALLBACK_QUESTIONS;
@@ -132,7 +149,8 @@ const PERSONA_META: Record<AssistantPersona, { icon: React.ReactNode; label: str
   business: { icon: <Target className="size-3.5" />, label: "Business" },
   analyst: { icon: <Briefcase className="size-3.5" />, label: "Analyst" },
   tech: { icon: <Wrench className="size-3.5" />, label: "Tech" },
-  strategic: { icon: <Target className="size-3.5" />, label: "Strategic" },
+  strategic: { icon: <BarChart3 className="size-3.5" />, label: "Strategic" },
+  "genie-builder": { icon: <Sparkles className="size-3.5" />, label: "Genie Builder" },
 };
 
 // ---------------------------------------------------------------------------
@@ -451,13 +469,39 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     return (
       <div className="flex h-full flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-4 py-3">
+        <div
+          className={cn(
+            "flex items-center justify-between border-b px-4 py-3",
+            persona === "genie-builder" && "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30",
+            persona === "strategic" && "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30",
+          )}
+        >
           <div className="flex items-center gap-2">
-            <BrainCircuit className="size-5 text-primary" />
-            <h2 className="text-base font-semibold">Ask Forge</h2>
-            <Badge variant="secondary" className="text-[10px]">
-              AI
-            </Badge>
+            {persona === "genie-builder" ? (
+              <>
+                <Sparkles className="size-5 text-amber-600 dark:text-amber-400" />
+                <h2 className="text-base font-semibold">Genie Studio Builder</h2>
+                <Badge className="border-amber-300 bg-amber-100 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
+                  AI
+                </Badge>
+              </>
+            ) : persona === "strategic" ? (
+              <>
+                <BarChart3 className="size-5 text-emerald-600 dark:text-emerald-400" />
+                <h2 className="text-base font-semibold">Strategic Advisor</h2>
+                <Badge className="border-emerald-300 bg-emerald-100 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400">
+                  AI
+                </Badge>
+              </>
+            ) : (
+              <>
+                <BrainCircuit className="size-5 text-primary" />
+                <h2 className="text-base font-semibold">Ask Forge</h2>
+                <Badge variant="secondary" className="text-[10px]">
+                  AI
+                </Badge>
+              </>
+            )}
             {messages.length > 0 && (
               <Badge variant="outline" className="gap-1 text-[10px]">
                 {PERSONA_META[persona].icon}
@@ -466,6 +510,22 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             )}
           </div>
           <div className="flex items-center gap-1">
+            {persona === "genie-builder" && (
+              <Button variant="ghost" size="sm" asChild className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
+                <Link href="/genie">
+                  <ArrowLeft className="size-3.5" />
+                  <span className="hidden sm:inline">Genie Studio</span>
+                </Link>
+              </Button>
+            )}
+            {persona === "strategic" && (
+              <Button variant="ghost" size="sm" asChild className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
+                <Link href="/business-value">
+                  <ArrowLeft className="size-3.5" />
+                  <span className="hidden sm:inline">Business Value</span>
+                </Link>
+              </Button>
+            )}
             {messages.length > 0 && (
               <Button
                 variant="ghost"
@@ -516,24 +576,62 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                   className={`flex flex-col items-center justify-center gap-6 text-center ${isCompact ? "py-12" : "py-16"}`}
                 >
                   {/* Branded icon */}
-                  <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/10">
-                    <BrainCircuit className="size-8 text-primary" />
+                  <div
+                    className={cn(
+                      "flex size-16 items-center justify-center rounded-2xl ring-1",
+                      persona === "genie-builder"
+                        ? "bg-gradient-to-br from-amber-200/40 to-amber-100/20 ring-amber-300/30 dark:from-amber-900/30 dark:to-amber-950/20 dark:ring-amber-700/30"
+                        : "bg-gradient-to-br from-primary/20 to-primary/5 ring-primary/10",
+                    )}
+                  >
+                    {persona === "genie-builder" ? (
+                      <Sparkles className="size-8 text-amber-600 dark:text-amber-400" />
+                    ) : (
+                      <BrainCircuit className="size-8 text-primary" />
+                    )}
                   </div>
 
                   {/* Headline */}
                   <div>
-                    <h2
-                      className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}
-                    >
-                      What can I help you find?
-                    </h2>
-                    <p className="mt-1.5 text-sm text-muted-foreground">
-                      Grounded in your actual metadata, tables, and lineage.
-                    </p>
+                    {persona === "genie-builder" ? (
+                      <>
+                        <h2 className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}>
+                          Build a Genie Space
+                        </h2>
+                        <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
+                          Describe what you need in plain language. I&apos;ll ask a few focused questions, then generate your space.
+                        </p>
+                        <div className="mx-auto mt-4 flex max-w-sm items-center justify-center gap-6 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">1</span>
+                            Describe
+                          </div>
+                          <div className="h-px w-4 bg-border" />
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">2</span>
+                            Review
+                          </div>
+                          <div className="h-px w-4 bg-border" />
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">3</span>
+                            Deploy
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className={`font-semibold tracking-tight ${isCompact ? "text-lg" : "text-xl"}`}>
+                          What can I help you find?
+                        </h2>
+                        <p className="mt-1.5 text-sm text-muted-foreground">
+                          Grounded in your actual metadata, tables, and lineage.
+                        </p>
+                      </>
+                    )}
                   </div>
 
-                  {/* Persona selector -- only in empty state, full mode */}
-                  {!isCompact && onPersonaChange && (
+                  {/* Persona selector -- only in empty state, full mode, NOT for genie-builder */}
+                  {!isCompact && onPersonaChange && persona !== "genie-builder" && (
                     <ToggleGroup
                       type="single"
                       size="sm"
@@ -555,6 +653,10 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                       <ToggleGroupItem value="tech" className="gap-1.5 rounded-md px-3 text-xs">
                         <Wrench className="size-3.5" />
                         Tech
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="strategic" className="gap-1.5 rounded-md px-3 text-xs">
+                        <BarChart3 className="size-3.5" />
+                        Strategic
                       </ToggleGroupItem>
                     </ToggleGroup>
                   )}
@@ -748,7 +850,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about your data estate…"
+                placeholder={persona === "genie-builder" ? "Describe the tables, domain, and questions for your Genie Space…" : persona === "strategic" ? "Ask about business value, ROI, strategy, or board-level insights…" : "Ask about your data estate…"}
                 className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm placeholder:text-muted-foreground/60 focus:outline-none"
                 rows={input.includes("\n") ? Math.min(5, input.split("\n").length + 1) : 1}
                 disabled={loading}
