@@ -91,7 +91,7 @@
     "@types/react-dom": "^19",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^5.1.4",
-    "eslint": "^9.39.2",
+    "eslint": "^9.39.4",
     "eslint-config-next": "^16.1.6",
     "prettier": "^3.8.1",
     "prisma": "^7.5.0",
