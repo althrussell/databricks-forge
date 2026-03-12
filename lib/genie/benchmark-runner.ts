@@ -10,6 +10,7 @@ import { reviewBatch, type BatchReviewItem, type BatchReviewResult } from "@/lib
 import { isReviewEnabled, getFastServingEndpoint } from "@/lib/dbx/client";
 import { executeSQL, type SqlResult } from "@/lib/dbx/sql";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { createConcurrencyLimiter } from "@/lib/toolkit/concurrency";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
 import { logger } from "@/lib/logger";
 
@@ -68,6 +69,8 @@ export interface BenchmarkRunOptions {
   executeResults?: boolean;
   maxResultRows?: number;
   questionDelayMs?: number;
+  /** Max concurrent Genie conversations (default 1 = sequential). Set >1 for concurrent execution. */
+  concurrency?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -332,22 +335,21 @@ export async function runBenchmarks(
   const executeResults = opts.executeResults ?? true;
   const maxResultRows = opts.maxResultRows ?? RESULT_PREVIEW_LIMIT;
   const questionDelayMs = opts.questionDelayMs ?? 1_000;
+  const concurrency = opts.concurrency ?? 1;
 
-  const results: BenchmarkResult[] = [];
-
-  for (let i = 0; i < benchmarks.length; i++) {
-    const bench = benchmarks[i];
-
-    if (i > 0 && questionDelayMs > 0) {
-      await new Promise((r) => setTimeout(r, questionDelayMs));
-    }
-
+  /**
+   * Evaluate a single benchmark question and return the result.
+   */
+  async function evaluateOne(bench: {
+    question: string;
+    expectedSql?: string;
+  }): Promise<BenchmarkResult> {
     try {
       const msg = await startConversation(spaceId, bench.question, timeoutPerQuestion);
       const completed = msg.status === "COMPLETED";
 
       if (!completed) {
-        results.push({
+        return {
           question: bench.question,
           expectedSql: bench.expectedSql ?? null,
           actualSql: msg.sql ?? null,
@@ -357,28 +359,24 @@ export async function runBenchmarks(
           failureCategory: msg.status === "FAILED" ? "execution_error" : "timeout",
           failureReason: msg.error ?? `Genie returned status: ${msg.status}`,
           comparisonMethod: "completion_only",
-        });
-        continue;
+        };
       }
 
-      // No expected SQL -- pass on completion alone
       if (!bench.expectedSql || !msg.sql) {
-        results.push({
+        return {
           question: bench.question,
           expectedSql: bench.expectedSql ?? null,
           actualSql: msg.sql ?? null,
           status: msg.status,
           passed: true,
           comparisonMethod: "completion_only",
-        });
-        continue;
+        };
       }
 
       const sim = sqlSimilarity(bench.expectedSql, msg.sql);
 
-      // Tier 1: High similarity means identical queries
       if (sim >= HIGH_SIMILARITY_THRESHOLD) {
-        results.push({
+        return {
           question: bench.question,
           expectedSql: bench.expectedSql,
           actualSql: msg.sql,
@@ -386,21 +384,18 @@ export async function runBenchmarks(
           passed: true,
           sqlSimilarity: sim,
           comparisonMethod: "sql_similarity",
-        });
-        continue;
+        };
       }
 
-      // Tier 2: Execute both queries and compare results
       if (executeResults) {
         const [expectedResult, actualResult] = await Promise.all([
           executeSqlForPreview(bench.expectedSql, maxResultRows),
           executeSqlForPreview(msg.sql, maxResultRows),
         ]);
 
-        // Both executed successfully -- compare result sets
         if (!expectedResult.error && !actualResult.error) {
           if (resultSetsMatch(expectedResult, actualResult)) {
-            results.push({
+            return {
               question: bench.question,
               expectedSql: bench.expectedSql,
               actualSql: msg.sql,
@@ -410,11 +405,9 @@ export async function runBenchmarks(
               expectedSqlResult: expectedResult,
               sqlSimilarity: sim,
               comparisonMethod: "result",
-            });
-            continue;
+            };
           }
 
-          // Results differ -- LLM judge for semantic equivalence
           const verdict = await llmJudgeResults(
             bench.question,
             bench.expectedSql,
@@ -423,7 +416,7 @@ export async function runBenchmarks(
             actualResult,
           );
 
-          results.push({
+          return {
             question: bench.question,
             expectedSql: bench.expectedSql,
             actualSql: msg.sql,
@@ -435,12 +428,10 @@ export async function runBenchmarks(
             failureReason: verdict.equivalent ? undefined : verdict.reason,
             sqlSimilarity: sim,
             comparisonMethod: "result",
-          });
-          continue;
+          };
         }
 
-        // One or both failed to execute -- store previews but fall through to Tier 3
-        results.push({
+        return {
           question: bench.question,
           expectedSql: bench.expectedSql,
           actualSql: msg.sql,
@@ -458,13 +449,11 @@ export async function runBenchmarks(
               : undefined,
           sqlSimilarity: sim,
           comparisonMethod: "sql_similarity",
-        });
-        continue;
+        };
       }
 
-      // Tier 3: SQL text similarity only
       const passed = sim >= 0.6;
-      results.push({
+      return {
         question: bench.question,
         expectedSql: bench.expectedSql,
         actualSql: msg.sql,
@@ -475,9 +464,9 @@ export async function runBenchmarks(
           : undefined,
         sqlSimilarity: sim,
         comparisonMethod: "sql_similarity",
-      });
+      };
     } catch (err) {
-      results.push({
+      return {
         question: bench.question,
         expectedSql: bench.expectedSql ?? null,
         actualSql: null,
@@ -486,7 +475,23 @@ export async function runBenchmarks(
         error: err instanceof Error ? err.message : String(err),
         failureCategory: "execution_error",
         comparisonMethod: "completion_only",
-      });
+      };
+    }
+  }
+
+  // Run benchmarks either sequentially (legacy) or concurrently
+  let results: BenchmarkResult[];
+
+  if (concurrency > 1) {
+    const limit = createConcurrencyLimiter(concurrency);
+    results = await Promise.all(benchmarks.map((bench) => limit(() => evaluateOne(bench))));
+  } else {
+    results = [];
+    for (let i = 0; i < benchmarks.length; i++) {
+      if (i > 0 && questionDelayMs > 0) {
+        await new Promise((r) => setTimeout(r, questionDelayMs));
+      }
+      results.push(await evaluateOne(benchmarks[i]));
     }
   }
 

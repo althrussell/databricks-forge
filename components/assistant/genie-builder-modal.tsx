@@ -647,14 +647,19 @@ export function GenieBuilderModal({
             {resultMode === "fast" && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={runFullGeneration} className="gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={runFullGeneration}
+                    className="gap-1.5"
+                  >
                     <RefreshCw className="size-3.5" />
                     Enhance with Full Engine
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs text-xs">
-                  Run the full 7-pass Genie Engine for richer measures, filters, benchmarks,
-                  metric views, and higher quality scores. Typically takes 1-3 minutes.
+                  Run the full 7-pass Genie Engine for richer measures, filters, benchmarks, metric
+                  views, and higher quality scores. Typically takes 1-3 minutes.
                 </TooltipContent>
               </Tooltip>
             )}

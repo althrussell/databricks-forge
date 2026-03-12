@@ -193,22 +193,53 @@ function synthesizeBusinessContext(ctx: SpaceContext): BusinessContext | null {
 }
 
 /**
+ * Canonical fix strategy ordering: deletes before adds, instructions first.
+ * This prevents conflicting content from poisoning new additions.
+ */
+const STRATEGY_ORDER: readonly FixStrategy[] = [
+  "replace_instructions",
+  "delete_bad_joins",
+  "join_inference",
+  "delete_bad_measures",
+  "semantic_expressions",
+  "delete_bad_synonyms",
+  "column_intelligence",
+  "delete_bad_examples",
+  "trusted_assets",
+  "benchmark_generation",
+  "entity_matching",
+  "sample_questions",
+  "instruction_generation",
+] as const;
+
+/**
  * Given a list of failed check IDs, resolve the fix strategies needed
  * and group them to minimize redundant engine pass invocations.
+ * Returns strategies in delete-before-add order.
  */
 export function resolveFixStrategies(checkIds: string[]): Map<FixStrategy, string[]> {
   const registry = resolveRegistry();
-  const strategyMap = new Map<FixStrategy, string[]>();
+  const unordered = new Map<FixStrategy, string[]>();
 
   for (const checkId of checkIds) {
     const check = registry.checks.find((c) => c.id === checkId);
     if (!check?.fix_strategy) continue;
     const strategy = check.fix_strategy;
-    if (!strategyMap.has(strategy)) strategyMap.set(strategy, []);
-    strategyMap.get(strategy)!.push(checkId);
+    if (!unordered.has(strategy)) unordered.set(strategy, []);
+    unordered.get(strategy)!.push(checkId);
   }
 
-  return strategyMap;
+  const ordered = new Map<FixStrategy, string[]>();
+  for (const strategy of STRATEGY_ORDER) {
+    if (unordered.has(strategy)) {
+      ordered.set(strategy, unordered.get(strategy)!);
+    }
+  }
+  for (const [strategy, ids] of unordered) {
+    if (!ordered.has(strategy)) ordered.set(strategy, ids);
+  }
+
+  return ordered;
 }
 
 /**
@@ -363,9 +394,216 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
     entityCandidates.map((c) => `${c.tableFqn.toLowerCase()}.${c.columnName.toLowerCase()}`),
   );
 
+  // Column names in schema (lowercase) for quick validation
+  const schemaColumnNames = new Set(metadata.columns.map((c) => c.columnName.toLowerCase()));
+
   for (const [strategy] of strategies) {
     try {
       switch (strategy) {
+        // ---------------------------------------------------------------
+        // DELETE strategies (run before corresponding ADD strategies)
+        // ---------------------------------------------------------------
+
+        case "delete_bad_synonyms": {
+          const tables = (space.data_sources?.tables ?? []) as SpaceJson[];
+          let removed = 0;
+          for (const table of tables) {
+            const colConfigs = (table.column_configs ?? []) as SpaceJson[];
+            for (const col of colConfigs) {
+              const synonyms = col.synonyms as string[] | undefined;
+              if (!synonyms || synonyms.length === 0) continue;
+              const colName = String(col.column_name ?? col.name ?? "").toLowerCase();
+              // Remove synonyms that duplicate the column name or are empty
+              const filtered = synonyms.filter((s) => {
+                const sl = s.trim().toLowerCase();
+                if (!sl || sl === colName) return false;
+                // Remove synonyms that exactly match another column name (ambiguous)
+                if (schemaColumnNames.has(sl) && sl !== colName) return false;
+                return true;
+              });
+              const delta = synonyms.length - filtered.length;
+              if (delta > 0) {
+                col.synonyms = filtered.length > 0 ? filtered : undefined;
+                removed += delta;
+              }
+            }
+          }
+          if (removed > 0) {
+            changes.push({
+              section: "data_sources.tables.column_configs.synonyms",
+              description: `Removed ${removed} ambiguous or duplicate synonym${removed !== 1 ? "s" : ""}`,
+              added: 0,
+              modified: removed,
+            });
+          }
+          strategiesRun.push(strategy);
+          break;
+        }
+
+        case "delete_bad_measures": {
+          const snippets = space.instructions?.sql_snippets;
+          if (!snippets) {
+            strategiesRun.push(strategy);
+            break;
+          }
+          const measures = (snippets.measures ?? []) as SpaceJson[];
+          const before = measures.length;
+          // Remove measures with empty SQL or duplicate names
+          const seen = new Set<string>();
+          const filtered = measures.filter((m: SpaceJson) => {
+            const sql = Array.isArray(m.sql) ? (m.sql as string[]).join("") : String(m.sql ?? "");
+            if (!sql.trim()) return false;
+            const name = String(m.display_name ?? m.alias ?? "").toLowerCase();
+            if (seen.has(name)) return false;
+            seen.add(name);
+            return true;
+          });
+          const removed = before - filtered.length;
+          if (removed > 0) {
+            snippets.measures = filtered;
+            changes.push({
+              section: "instructions.sql_snippets.measures",
+              description: `Removed ${removed} empty or duplicate measure${removed !== 1 ? "s" : ""}`,
+              added: 0,
+              modified: removed,
+            });
+          }
+          // Same for filters
+          const filters = (snippets.filters ?? []) as SpaceJson[];
+          const beforeF = filters.length;
+          const seenF = new Set<string>();
+          const filteredF = filters.filter((f: SpaceJson) => {
+            const sql = Array.isArray(f.sql) ? (f.sql as string[]).join("") : String(f.sql ?? "");
+            if (!sql.trim()) return false;
+            const name = String(f.display_name ?? "").toLowerCase();
+            if (seenF.has(name)) return false;
+            seenF.add(name);
+            return true;
+          });
+          const removedF = beforeF - filteredF.length;
+          if (removedF > 0) {
+            snippets.filters = filteredF;
+            changes.push({
+              section: "instructions.sql_snippets.filters",
+              description: `Removed ${removedF} empty or duplicate filter${removedF !== 1 ? "s" : ""}`,
+              added: 0,
+              modified: removedF,
+            });
+          }
+          strategiesRun.push(strategy);
+          break;
+        }
+
+        case "delete_bad_joins": {
+          const joinSpecs = (space.instructions?.join_specs ?? []) as SpaceJson[];
+          const before = joinSpecs.length;
+          const tableSet = new Set(tableFqns.map((f) => f.toLowerCase()));
+          // Remove joins referencing tables not in the space or self-joins
+          const filtered = joinSpecs.filter((j: SpaceJson) => {
+            const left = String(j.left?.identifier ?? "").toLowerCase();
+            const right = String(j.right?.identifier ?? "").toLowerCase();
+            if (!left || !right) return false;
+            if (left === right) return false;
+            if (!tableSet.has(left) || !tableSet.has(right)) return false;
+            return true;
+          });
+          // Deduplicate by left|right pair
+          const seen = new Set<string>();
+          const deduped = filtered.filter((j: SpaceJson) => {
+            const key = [
+              String(j.left?.identifier ?? "").toLowerCase(),
+              String(j.right?.identifier ?? "").toLowerCase(),
+            ]
+              .sort()
+              .join("|");
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          const removed = before - deduped.length;
+          if (removed > 0) {
+            space.instructions = space.instructions ?? {};
+            space.instructions.join_specs = deduped;
+            changes.push({
+              section: "instructions.join_specs",
+              description: `Removed ${removed} invalid, self-referencing, or duplicate join${removed !== 1 ? "s" : ""}`,
+              added: 0,
+              modified: removed,
+            });
+          }
+          strategiesRun.push(strategy);
+          break;
+        }
+
+        case "delete_bad_examples": {
+          const examples = (space.instructions?.example_question_sqls ?? []) as SpaceJson[];
+          const before = examples.length;
+          // Remove examples with empty SQL or empty questions
+          const seen = new Set<string>();
+          const filtered = examples.filter((e: SpaceJson) => {
+            const question = Array.isArray(e.question)
+              ? String(e.question[0] ?? "")
+              : String(e.question ?? "");
+            const sql = Array.isArray(e.sql) ? String(e.sql[0] ?? "") : String(e.sql ?? "");
+            if (!question.trim() || !sql.trim()) return false;
+            const key = question.trim().toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          const removed = before - filtered.length;
+          if (removed > 0) {
+            space.instructions = space.instructions ?? {};
+            space.instructions.example_question_sqls = filtered;
+            changes.push({
+              section: "instructions.example_question_sqls",
+              description: `Removed ${removed} empty or duplicate example SQL${removed !== 1 ? "s" : ""}`,
+              added: 0,
+              modified: removed,
+            });
+          }
+          strategiesRun.push(strategy);
+          break;
+        }
+
+        case "replace_instructions": {
+          const textInstructions = (space.instructions?.text_instructions ?? []) as SpaceJson[];
+          if (textInstructions.length <= 1) {
+            strategiesRun.push(strategy);
+            break;
+          }
+          // Consolidate multiple instruction blocks into a single block
+          const allContent: string[] = [];
+          for (const inst of textInstructions) {
+            const content = Array.isArray(inst.content)
+              ? (inst.content as string[]).filter(Boolean).join("\n")
+              : String(inst.content ?? "");
+            if (content.trim()) allContent.push(content.trim());
+          }
+          if (allContent.length > 1) {
+            const consolidated = allContent.join("\n\n");
+            space.instructions = space.instructions ?? {};
+            space.instructions.text_instructions = [
+              {
+                id: crypto.randomUUID().replace(/-/g, ""),
+                content: [consolidated],
+              },
+            ];
+            changes.push({
+              section: "instructions.text_instructions",
+              description: `Consolidated ${textInstructions.length} instruction blocks into 1`,
+              added: 0,
+              modified: textInstructions.length,
+            });
+          }
+          strategiesRun.push(strategy);
+          break;
+        }
+
+        // ---------------------------------------------------------------
+        // ADD strategies (existing)
+        // ---------------------------------------------------------------
+
         case "column_intelligence": {
           const { runColumnIntelligence } = await import("@/lib/genie/passes/column-intelligence");
           const output = await runColumnIntelligence({

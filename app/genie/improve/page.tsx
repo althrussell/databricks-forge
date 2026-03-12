@@ -156,7 +156,7 @@ export default function ImproveExistingPage() {
       if (sortKey === "score") {
         const aHas = a.overallScore != null;
         const bHas = b.overallScore != null;
-        if (aHas && bHas) cmp = (b.overallScore!) - (a.overallScore!);
+        if (aHas && bHas) cmp = b.overallScore! - a.overallScore!;
         else if (aHas !== bHas) cmp = aHas ? -1 : 1;
       } else if (sortKey === "fixable") {
         cmp = (b.fixableCount ?? 0) - (a.fixableCount ?? 0);

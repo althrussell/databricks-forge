@@ -615,30 +615,39 @@ export default function BenchmarkPage() {
                               {result.error && (
                                 <div className="mt-1 text-xs text-red-500">{result.error}</div>
                               )}
-                              {!result.passed && (result.failureCategory || result.failureReason || result.sqlSimilarity != null) && (
-                                <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 dark:border-red-900/50 dark:bg-red-950/30">
-                                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                                    {result.failureCategory && (
-                                      <Badge variant="destructive" className="text-[10px]">
-                                        {result.failureCategory.replace(/_/g, " ")}
-                                      </Badge>
-                                    )}
-                                    {result.comparisonMethod && (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {result.comparisonMethod === "result" ? "Result comparison" : result.comparisonMethod === "sql_similarity" ? "SQL similarity" : "Completion only"}
-                                      </Badge>
-                                    )}
-                                    {result.sqlSimilarity != null && (
-                                      <span className="text-muted-foreground">
-                                        Similarity: {Math.round(result.sqlSimilarity * 100)}%
-                                      </span>
+                              {!result.passed &&
+                                (result.failureCategory ||
+                                  result.failureReason ||
+                                  result.sqlSimilarity != null) && (
+                                  <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 dark:border-red-900/50 dark:bg-red-950/30">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                      {result.failureCategory && (
+                                        <Badge variant="destructive" className="text-[10px]">
+                                          {result.failureCategory.replace(/_/g, " ")}
+                                        </Badge>
+                                      )}
+                                      {result.comparisonMethod && (
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {result.comparisonMethod === "result"
+                                            ? "Result comparison"
+                                            : result.comparisonMethod === "sql_similarity"
+                                              ? "SQL similarity"
+                                              : "Completion only"}
+                                        </Badge>
+                                      )}
+                                      {result.sqlSimilarity != null && (
+                                        <span className="text-muted-foreground">
+                                          Similarity: {Math.round(result.sqlSimilarity * 100)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                    {result.failureReason && (
+                                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                                        {result.failureReason}
+                                      </p>
                                     )}
                                   </div>
-                                  {result.failureReason && (
-                                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{result.failureReason}</p>
-                                  )}
-                                </div>
-                              )}
+                                )}
                               {result.actualSqlResult && (
                                 <SqlPreviewTable
                                   preview={result.actualSqlResult}

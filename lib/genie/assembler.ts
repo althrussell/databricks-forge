@@ -305,9 +305,7 @@ export function assembleSerializedSpace(
 
       const leftName = j.leftTable.split(".").pop() ?? j.leftTable;
       const rightName = j.rightTable.split(".").pop() ?? j.rightTable;
-      const relDesc = j.relationshipType
-        ? `${j.relationshipType} relationship`
-        : "related";
+      const relDesc = j.relationshipType ? `${j.relationshipType} relationship` : "related";
       const comment = `Joins ${leftName} to ${rightName} (${relDesc})`;
 
       return {
