@@ -7,7 +7,7 @@
  */
 
 import { chatCompletion, type ChatMessage } from "@/lib/dbx/model-serving";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
 export type AssistantIntent =
@@ -51,7 +51,7 @@ export async function classifyIntent(question: string): Promise<IntentClassifica
     ];
 
     const resp = await chatCompletion({
-      endpoint: getFastServingEndpoint(),
+      endpoint: resolveEndpoint("classification"),
       messages,
       temperature: 0.0,
       maxTokens: 1024,

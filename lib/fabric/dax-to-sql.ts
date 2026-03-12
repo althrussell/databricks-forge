@@ -15,7 +15,7 @@
  */
 
 import { chatCompletion } from "@/lib/dbx/model-serving";
-import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import "@/lib/skills/content";
@@ -256,7 +256,7 @@ Return ONLY valid JSON.`;
 
   try {
     const response = await chatCompletion({
-      endpoint: getServingEndpoint(),
+      endpoint: resolveEndpoint("sql"),
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
       maxTokens: 8192,

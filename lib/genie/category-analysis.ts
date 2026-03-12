@@ -9,7 +9,7 @@
 
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { logger } from "@/lib/logger";
 import type { BenchmarkResult, FailureCategory } from "./benchmark-runner";
@@ -170,7 +170,7 @@ async function analyzeCategory(
   benchmarkContext: string,
   failingCategories: FailureCategory[],
 ): Promise<CategoryAnalysis> {
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
   const categoryPrompt = CATEGORY_PROMPTS[category];
 
   const messages = [

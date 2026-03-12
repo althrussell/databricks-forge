@@ -42,3 +42,9 @@ env:
     valueFrom: serving-endpoint-embedding
   - name: DATABRICKS_REVIEW_ENDPOINT
     valueFrom: serving-endpoint-review
+  - name: DATABRICKS_SERVING_ENDPOINT_REASONING_2
+    valueFrom: serving-endpoint-reasoning-2
+  - name: DATABRICKS_SERVING_ENDPOINT_GENERATION
+    valueFrom: serving-endpoint-generation
+  - name: DATABRICKS_SERVING_ENDPOINT_SQL
+    valueFrom: serving-endpoint-sql

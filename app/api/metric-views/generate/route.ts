@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { listTables, listColumns, listForeignKeys } from "@/lib/queries/metadata";
 import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
 import { runMetricViewProposals } from "@/lib/genie/passes/metric-view-proposals";
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const [catalogName, schemaName] = schemaScope.split(".");
-    const endpoint = getServingEndpoint();
+    const endpoint = resolveEndpoint("generation");
 
     // Build metadata snapshot from UC information_schema
     const tableInfos = await listTables(catalogName, schemaName);

@@ -6,7 +6,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { logger } from "@/lib/logger";
 import type { PipelineRun, UseCase } from "@/lib/domain/types";
@@ -45,7 +45,7 @@ export async function generateExportSummaries(
         domain_list: domainList,
         output_language: outputLanguage,
       },
-      modelEndpoint: getFastServingEndpoint(),
+      modelEndpoint: resolveEndpoint("lightweight"),
       temperature: 0.4,
       maxTokens: 8192,
     });

@@ -12,7 +12,7 @@
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { DataTier, TableRole, NamingSignals } from "./types";
@@ -116,7 +116,7 @@ export async function classifySchema(
 
   if (tables.length === 0) return [];
 
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
 
   // Build data asset context block
   let dataAssetContext = "";

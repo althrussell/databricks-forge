@@ -22,7 +22,7 @@ import { walkLineage } from "@/lib/queries/lineage";
 import { runIntelligenceLayer, buildTableInputs } from "@/lib/ai/environment-intelligence";
 import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { initScanProgress, updateScanProgress } from "@/lib/pipeline/scan-progress";
 import { discoverExistingAssets } from "@/lib/discovery/asset-scanner";
 import { computeCoverage } from "@/lib/discovery/coverage";
@@ -381,7 +381,7 @@ export async function runStandaloneEnrichment(
     });
     let intelligenceResult;
     try {
-      const endpoint = getFastServingEndpoint();
+      const endpoint = resolveEndpoint("classification");
       const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
       intelligenceResult = await runIntelligenceLayer(tableInputs, lineageGraph, {
         endpoint,

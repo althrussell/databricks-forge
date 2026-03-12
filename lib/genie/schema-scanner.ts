@@ -8,7 +8,8 @@
 import { executeSQL, type SqlResult } from "@/lib/dbx/sql";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -192,35 +193,35 @@ export async function profileKeyColumns(
   scan: SchemaScanResult,
   maxTablesForProfiling = 15,
 ): Promise<DataProfile[]> {
-  const profiles: DataProfile[] = [];
   const tablesToProfile = scan.tables.slice(0, maxTablesForProfiling);
 
-  for (const table of tablesToProfile) {
-    const keyCols = scan.columns
-      .filter((c) => c.tableFqn === table.fqn)
-      .filter((c) => {
-        const lower = c.columnName.toLowerCase();
-        const type = c.dataType.toLowerCase();
-        return (
-          lower.endsWith("_status") ||
-          lower.endsWith("_type") ||
-          lower.endsWith("_code") ||
-          lower.endsWith("_category") ||
-          lower.endsWith("_name") ||
-          lower === "status" ||
-          lower === "type" ||
-          lower === "category" ||
-          type.includes("date") ||
-          type.includes("timestamp")
-        );
-      })
-      .slice(0, 5);
+  const tableProfiles = await mapWithConcurrency(
+    tablesToProfile.map((table) => async (): Promise<DataProfile[]> => {
+      const keyCols = scan.columns
+        .filter((c) => c.tableFqn === table.fqn)
+        .filter((c) => {
+          const lower = c.columnName.toLowerCase();
+          const type = c.dataType.toLowerCase();
+          return (
+            lower.endsWith("_status") ||
+            lower.endsWith("_type") ||
+            lower.endsWith("_code") ||
+            lower.endsWith("_category") ||
+            lower.endsWith("_name") ||
+            lower === "status" ||
+            lower === "type" ||
+            lower === "category" ||
+            type.includes("date") ||
+            type.includes("timestamp")
+          );
+        })
+        .slice(0, 5);
 
-    if (keyCols.length === 0) continue;
+      if (keyCols.length === 0) return [];
 
-    const profileClauses = keyCols.map((c) => {
-      const col = `\`${c.columnName}\``;
-      return `
+      const profileClauses = keyCols.map((c) => {
+        const col = `\`${c.columnName}\``;
+        return `
         STRUCT(
           '${c.columnName}' AS column_name,
           CAST(APPROX_COUNT_DISTINCT(${col}) AS STRING) AS distinct_count,
@@ -228,50 +229,55 @@ export async function profileKeyColumns(
           CAST(MIN(${col}) AS STRING) AS min_val,
           CAST(MAX(${col}) AS STRING) AS max_val
         )`;
-    });
+      });
 
-    try {
-      const sql = `
+      try {
+        const sql = `
         SELECT ${profileClauses.join(",\n       ")}
         FROM ${table.fqn}
       `;
-      const result: SqlResult = await executeSQL(sql, undefined, undefined, {
-        waitTimeout: "15s",
-        submitTimeoutMs: 20_000,
-      });
+        const result: SqlResult = await executeSQL(sql, undefined, undefined, {
+          waitTimeout: "15s",
+          submitTimeoutMs: 20_000,
+        });
 
-      if (result.rows.length > 0) {
-        for (let ci = 0; ci < keyCols.length; ci++) {
-          const raw = result.rows[0][ci];
-          if (!raw) continue;
+        const out: DataProfile[] = [];
+        if (result.rows.length > 0) {
+          for (let ci = 0; ci < keyCols.length; ci++) {
+            const raw = result.rows[0][ci];
+            if (!raw) continue;
 
-          let parsed: Record<string, string>;
-          try {
-            parsed = typeof raw === "string" ? JSON.parse(raw.replace(/'/g, '"')) : raw;
-          } catch {
-            continue;
+            let parsed: Record<string, string>;
+            try {
+              parsed = typeof raw === "string" ? JSON.parse(raw.replace(/'/g, '"')) : raw;
+            } catch {
+              continue;
+            }
+
+            out.push({
+              tableFqn: table.fqn,
+              columnName: keyCols[ci].columnName,
+              distinctCount: parseInt(parsed.distinct_count) || null,
+              nullRate: parseFloat(parsed.null_pct) || null,
+              minValue: parsed.min_val || null,
+              maxValue: parsed.max_val || null,
+              sampleValues: [],
+            });
           }
-
-          profiles.push({
-            tableFqn: table.fqn,
-            columnName: keyCols[ci].columnName,
-            distinctCount: parseInt(parsed.distinct_count) || null,
-            nullRate: parseFloat(parsed.null_pct) || null,
-            minValue: parsed.min_val || null,
-            maxValue: parsed.max_val || null,
-            sampleValues: [],
-          });
         }
+        return out;
+      } catch (err) {
+        logger.warn("Profiling failed for table (non-fatal)", {
+          table: table.fqn,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return [];
       }
-    } catch (err) {
-      logger.warn("Profiling failed for table (non-fatal)", {
-        table: table.fqn,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+    }),
+    5,
+  );
 
-  return profiles;
+  return tableProfiles.flat();
 }
 
 // ---------------------------------------------------------------------------
@@ -344,7 +350,7 @@ Select the most valuable tables for analytics.`,
 
   try {
     const result = await cachedChatCompletion({
-      endpoint: getFastServingEndpoint(),
+      endpoint: resolveEndpoint("classification"),
       messages,
       temperature: 0.1,
       maxTokens: 4096,
@@ -410,32 +416,35 @@ export async function sampleTableRows(
   limit = 20,
   maxTables = 15,
 ): Promise<SampleRowResult[]> {
-  const results: SampleRowResult[] = [];
   const toSample = tableFqns.slice(0, maxTables);
 
-  for (const fqn of toSample) {
-    try {
-      const sql = `SELECT * FROM ${fqn} LIMIT ${limit}`;
-      const result = await executeSQL(sql, undefined, undefined, {
-        waitTimeout: "10s",
-        submitTimeoutMs: 15_000,
-      });
-      if (result.rows.length > 0) {
-        results.push({
-          tableFqn: fqn,
-          columns: result.columns.map((c) => c.name),
-          rows: result.rows.slice(0, limit),
+  const results = await mapWithConcurrency(
+    toSample.map((fqn) => async (): Promise<SampleRowResult | null> => {
+      try {
+        const sql = `SELECT * FROM ${fqn} LIMIT ${limit}`;
+        const result = await executeSQL(sql, undefined, undefined, {
+          waitTimeout: "10s",
+          submitTimeoutMs: 15_000,
+        });
+        if (result.rows.length > 0) {
+          return {
+            tableFqn: fqn,
+            columns: result.columns.map((c) => c.name),
+            rows: result.rows.slice(0, limit),
+          };
+        }
+      } catch (err) {
+        logger.warn("Sample row fetch failed (non-fatal)", {
+          table: fqn,
+          error: err instanceof Error ? err.message : String(err),
         });
       }
-    } catch (err) {
-      logger.warn("Sample row fetch failed (non-fatal)", {
-        table: fqn,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+      return null;
+    }),
+    5,
+  );
 
-  return results;
+  return results.filter((r): r is SampleRowResult => r !== null);
 }
 
 /**

@@ -32,7 +32,7 @@ import {
   type StreamCallback,
   type TokenUsage,
 } from "@/lib/dbx/model-serving";
-import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
 import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
@@ -209,7 +209,7 @@ export async function runAssistantEngine(
 
   const llmResponse = await chatCompletionStream(
     {
-      endpoint: getServingEndpoint(),
+      endpoint: resolveEndpoint("reasoning"),
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -265,7 +265,7 @@ export async function runAssistantEngine(
 
             const fixPrompt = buildSqlFixPrompt(sql, errorToFix, knownCols);
             const fixResponse = await chatCompletion({
-              endpoint: getServingEndpoint(),
+              endpoint: resolveEndpoint("reasoning"),
               messages: [
                 {
                   role: "system",

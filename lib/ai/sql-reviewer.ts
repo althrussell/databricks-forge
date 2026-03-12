@@ -11,9 +11,8 @@
  *   - reviewBatch()      -- batch review for short expressions
  */
 
-import { getReviewEndpoint, getFastServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import {
-  chatCompletion,
   ModelServingError,
   type ChatCompletionOptions,
   type ChatCompletionResponse,
@@ -134,7 +133,11 @@ Output ONLY valid JSON with this structure (no markdown fences, no explanation):
 }`;
 }
 
-function buildBatchReviewPrompt(items: BatchReviewItem[], schemaContext?: string): string {
+function buildBatchReviewPrompt(
+  items: BatchReviewItem[],
+  schemaContext?: string,
+  requestFix?: boolean,
+): string {
   const sqlBlocks = items
     .map(
       (item, i) =>
@@ -150,6 +153,14 @@ function buildBatchReviewPrompt(items: BatchReviewItem[], schemaContext?: string
   const skillBlock = formatContextSections(skillContext.contextSections);
   const batchSkillSection = skillBlock ? `\n## SQL Craft Reference\n${skillBlock}\n` : "";
 
+  const fixInstruction = requestFix
+    ? schemaContext
+      ? ` If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. CRITICAL: The fix must ONLY use columns that appear in the "Available Schema" section above. Do NOT invent, guess, or rename any column.`
+      : ` If the verdict is "warn" or "fail", include a "fixed_sql" field with the corrected SQL. Preserve the original table/column references since no schema is available.`
+    : "";
+
+  const fixedSqlField = requestFix ? ', "fixed_sql": "<corrected SQL or null if pass>"' : "";
+
   return `You are a senior Databricks SQL reviewer. Evaluate each SQL expression below against the quality rules and checklist.
 
 ${sqlBlocks}
@@ -160,7 +171,7 @@ ${DATABRICKS_SQL_RULES}
 ${DATABRICKS_SQL_REVIEW_CHECKLIST}
 
 ## Instructions
-Review each item independently. For short expressions, focus on correctness, Databricks idiom adherence, and potential runtime errors.${schemaContext ? " Verify all table/column references exist in the provided schema." : ""}
+Review each item independently. For short expressions, focus on correctness, Databricks idiom adherence, and potential runtime errors.${schemaContext ? " Verify all table/column references exist in the provided schema." : ""}${fixInstruction}
 
 Output ONLY valid JSON with this structure (no markdown fences):
 {
@@ -176,7 +187,7 @@ Output ONLY valid JSON with this structure (no markdown fences):
           "message": "<description>"
         }
       ],
-      "suggestions": ["<improvement suggestion>"]
+      "suggestions": ["<improvement suggestion>"]${fixedSqlField}
     }
   ]
 }`;
@@ -246,7 +257,11 @@ function parseReviewResponse(raw: string, requestedFix: boolean): ReviewResult {
   return { verdict, qualityScore, issues, fixedSql, suggestions };
 }
 
-function parseBatchReviewResponse(raw: string, items: BatchReviewItem[]): BatchReviewResult[] {
+function parseBatchReviewResponse(
+  raw: string,
+  items: BatchReviewItem[],
+  requestFix?: boolean,
+): BatchReviewResult[] {
   const cleaned = raw
     .replace(/^```(?:json)?\s*/m, "")
     .replace(/\s*```\s*$/m, "")
@@ -291,6 +306,13 @@ function parseBatchReviewResponse(raw: string, items: BatchReviewItem[]): BatchR
       };
     }
 
+    const fixedSql =
+      requestFix &&
+      typeof match.fixed_sql === "string" &&
+      match.fixed_sql.length > 10
+        ? match.fixed_sql
+        : undefined;
+
     return {
       id: item.id,
       result: {
@@ -315,6 +337,7 @@ function parseBatchReviewResponse(raw: string, items: BatchReviewItem[]): BatchR
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (s: any) => typeof s === "string",
         ),
+        fixedSql,
       },
     };
   });
@@ -339,18 +362,11 @@ function getRateLimitRetryMs(err: unknown): number | undefined {
   return err instanceof ModelServingError ? err.retryAfterMs : undefined;
 }
 
-/**
- * Route through the Genie LLM cache for genie-* surfaces to avoid
- * redundant LLM calls when the same SQL is reviewed multiple times.
- */
 function reviewChatCompletion(
   opts: ChatCompletionOptions,
-  surface?: string,
+  _surface?: string,
 ): Promise<ChatCompletionResponse> {
-  if (surface && surface.startsWith("genie-")) {
-    return cachedChatCompletion(opts);
-  }
-  return chatCompletion(opts);
+  return cachedChatCompletion(opts);
 }
 
 function summariseIssues(issues: ReviewIssue[]): Record<string, number> {
@@ -378,7 +394,7 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
   if (!isReviewEnabled(opts.surface)) return PASS_THROUGH_RESULT;
   if (!sql || sql.trim().length < 10) return PASS_THROUGH_RESULT;
 
-  const endpoint = getReviewEndpoint();
+  const endpoint = resolveEndpoint("sql");
   const prompt = buildReviewPrompt(sql, { ...opts, requestFix: false });
 
   const callReview = async (ep: string): Promise<ReviewResult> => {
@@ -414,7 +430,7 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
     return result;
   } catch (err) {
     if (isRateLimitError(err)) {
-      const fallback = getFastServingEndpoint();
+      const fallback = resolveEndpoint("sql");
       if (fallback !== endpoint) {
         logger.warn("SQL review hit 429, retrying with fast model", {
           surface: opts.surface,
@@ -465,7 +481,7 @@ export async function reviewAndFixSql(
   if (!isReviewEnabled(opts.surface)) return PASS_THROUGH_RESULT;
   if (!sql || sql.trim().length < 10) return PASS_THROUGH_RESULT;
 
-  const endpoint = getReviewEndpoint();
+  const endpoint = resolveEndpoint("sql");
   const prompt = buildReviewPrompt(sql, { ...opts, requestFix: true });
 
   const callReviewFix = async (ep: string): Promise<ReviewResult> => {
@@ -503,7 +519,7 @@ export async function reviewAndFixSql(
     return result;
   } catch (err) {
     if (isRateLimitError(err)) {
-      const fallback = getFastServingEndpoint();
+      const fallback = resolveEndpoint("sql");
       if (fallback !== endpoint) {
         logger.warn("SQL review+fix hit 429, retrying with fast model", {
           surface: opts.surface,
@@ -545,6 +561,13 @@ export async function reviewAndFixSql(
   }
 }
 
+export interface ReviewBatchOptions {
+  /** Schema context injected into the prompt. */
+  schemaContext?: string;
+  /** Whether to request fixed SQL on warn/fail verdicts. */
+  requestFix?: boolean;
+}
+
 /**
  * Batch-review multiple short SQL expressions in a single LLM call.
  * Best for semantic expressions, filters, measures, and join conditions.
@@ -553,8 +576,12 @@ export async function reviewAndFixSql(
 export async function reviewBatch(
   items: BatchReviewItem[],
   surface?: string,
-  schemaContext?: string,
+  options?: ReviewBatchOptions | string,
 ): Promise<BatchReviewResult[]> {
+  const schemaContext =
+    typeof options === "string" ? options : options?.schemaContext;
+  const requestFix = typeof options === "object" && options?.requestFix === true;
+
   if (!isReviewEnabled(surface) || items.length === 0) {
     return items.map((item) => ({
       id: item.id,
@@ -562,8 +589,8 @@ export async function reviewBatch(
     }));
   }
 
-  const endpoint = getReviewEndpoint();
-  const prompt = buildBatchReviewPrompt(items, schemaContext);
+  const endpoint = resolveEndpoint("sql");
+  const prompt = buildBatchReviewPrompt(items, schemaContext, requestFix);
 
   const callBatchReview = async (ep: string): Promise<BatchReviewResult[]> => {
     const response = await reviewChatCompletion(
@@ -576,7 +603,7 @@ export async function reviewBatch(
       },
       surface,
     );
-    return parseBatchReviewResponse(response.content, items);
+    return parseBatchReviewResponse(response.content, items, requestFix);
   };
 
   const logBatchResults = (results: BatchReviewResult[], ep: string, label = ""): void => {
@@ -601,7 +628,7 @@ export async function reviewBatch(
     return results;
   } catch (err) {
     if (isRateLimitError(err)) {
-      const fallback = getFastServingEndpoint();
+      const fallback = resolveEndpoint("sql");
       if (fallback !== endpoint) {
         logger.warn("SQL batch review hit 429, retrying with fast model", {
           surface,

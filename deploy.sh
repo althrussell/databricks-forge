@@ -13,6 +13,8 @@
 #
 # Override model endpoints (advanced):
 #   ./deploy.sh --endpoint "model" --fast-endpoint "fast-model" --review-endpoint "review-model"
+#   ./deploy.sh --reasoning-endpoint-2 "model" --generation-endpoint "model" --sql-endpoint "model"
+#   ./deploy.sh --allowed-models "model1,model2"
 # Optional Lakebase bootstrap grants:
 #   ./deploy.sh --lakebase-bootstrap-user "user@company.com"
 # Optional Lakebase runtime auth mode:
@@ -48,6 +50,9 @@ DEFAULT_ENDPOINT="databricks-claude-opus-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_EMBEDDING_ENDPOINT="databricks-qwen3-embedding-0-6b"
 DEFAULT_REVIEW_ENDPOINT="databricks-gpt-5-4"
+DEFAULT_REASONING_ENDPOINT_2=""
+DEFAULT_GENERATION_ENDPOINT=""
+DEFAULT_SQL_ENDPOINT=""
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
@@ -68,6 +73,10 @@ ARG_ENDPOINT=""
 ARG_FAST_ENDPOINT=""
 ARG_EMBEDDING_ENDPOINT=""
 ARG_REVIEW_ENDPOINT=""
+ARG_REASONING_ENDPOINT_2=""
+ARG_GENERATION_ENDPOINT=""
+ARG_SQL_ENDPOINT=""
+ARG_ALLOWED_MODELS=""
 ARG_LAKEBASE_BOOTSTRAP_USER=""
 ARG_LAKEBASE_AUTH_MODE=""
 ARG_LAKEBASE_NATIVE_USER=""
@@ -108,6 +117,10 @@ Options:
   --fast-endpoint NAME        Fast model endpoint       (default: databricks-claude-sonnet-4-6)
   --embedding-endpoint NAME   Embedding model endpoint  (default: databricks-qwen3-embedding-0-6b)
   --review-endpoint NAME      Review model endpoint     (default: databricks-gpt-5-4)
+  --reasoning-endpoint-2 NAME Optional second reasoning model for parallel routing
+  --generation-endpoint NAME  Optional generation model endpoint
+  --sql-endpoint NAME         Optional SQL/codex model endpoint
+  --allowed-models CSV        Comma-separated list of models the app may use
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
                              Lakebase OAuth role/grants during startup
@@ -165,6 +178,10 @@ while [[ $# -gt 0 ]]; do
     --fast-endpoint)       ARG_FAST_ENDPOINT="$2"; shift 2 ;;
     --embedding-endpoint)  ARG_EMBEDDING_ENDPOINT="$2"; shift 2 ;;
     --review-endpoint)     ARG_REVIEW_ENDPOINT="$2"; shift 2 ;;
+    --reasoning-endpoint-2) ARG_REASONING_ENDPOINT_2="$2"; shift 2 ;;
+    --generation-endpoint) ARG_GENERATION_ENDPOINT="$2"; shift 2 ;;
+    --sql-endpoint)        ARG_SQL_ENDPOINT="$2"; shift 2 ;;
+    --allowed-models)      ARG_ALLOWED_MODELS="$2"; shift 2 ;;
     --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
     --lakebase-auth-mode) ARG_LAKEBASE_AUTH_MODE="$2"; shift 2 ;;
     --lakebase-native-user) ARG_LAKEBASE_NATIVE_USER="$2"; shift 2 ;;
@@ -201,6 +218,10 @@ ENDPOINT="${ARG_ENDPOINT:-$DEFAULT_ENDPOINT}"
 FAST_ENDPOINT="${ARG_FAST_ENDPOINT:-$DEFAULT_FAST_ENDPOINT}"
 EMBEDDING_ENDPOINT="${ARG_EMBEDDING_ENDPOINT:-$DEFAULT_EMBEDDING_ENDPOINT}"
 REVIEW_ENDPOINT="${ARG_REVIEW_ENDPOINT:-$DEFAULT_REVIEW_ENDPOINT}"
+REASONING_ENDPOINT_2="${ARG_REASONING_ENDPOINT_2:-$DEFAULT_REASONING_ENDPOINT_2}"
+GENERATION_ENDPOINT="${ARG_GENERATION_ENDPOINT:-$DEFAULT_GENERATION_ENDPOINT}"
+SQL_ENDPOINT="${ARG_SQL_ENDPOINT:-$DEFAULT_SQL_ENDPOINT}"
+ALLOWED_MODELS="${ARG_ALLOWED_MODELS:-}"
 LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
 LAKEBASE_AUTH_MODE="${ARG_LAKEBASE_AUTH_MODE:-}"
 LAKEBASE_NATIVE_USER="${ARG_LAKEBASE_NATIVE_USER:-}"
@@ -334,6 +355,10 @@ prepare_app_yaml() {
   export BENCHMARK_ADMINS
   export ENABLE_METRIC_VIEWS
   export ENABLE_FABRIC
+  export REASONING_ENDPOINT_2
+  export GENERATION_ENDPOINT
+  export SQL_ENDPOINT
+  export ALLOWED_MODELS
   python3 - <<'PY'
 import os
 from pathlib import Path
@@ -353,6 +378,10 @@ seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").stri
 benchmark_admins = os.environ.get("BENCHMARK_ADMINS", "").strip()
 enable_metric_views = os.environ.get("ENABLE_METRIC_VIEWS", "").strip().lower() == "true"
 enable_fabric = os.environ.get("ENABLE_FABRIC", "").strip().lower() == "true"
+reasoning_endpoint_2 = os.environ.get("REASONING_ENDPOINT_2", "").strip()
+generation_endpoint = os.environ.get("GENERATION_ENDPOINT", "").strip()
+sql_endpoint = os.environ.get("SQL_ENDPOINT", "").strip()
+allowed_models = os.environ.get("ALLOWED_MODELS", "").strip()
 
 path = Path("app.yaml")
 lines = path.read_text().splitlines()
@@ -378,6 +407,10 @@ def is_managed_name_line(s: str) -> bool:
         or "FORGE_BENCHMARK_ADMINS" in t
         or "FORGE_METRIC_VIEWS_ENABLED" in t
         or "FORGE_FABRIC_ENABLED" in t
+        or "DATABRICKS_SERVING_ENDPOINT_REASONING_2" in t
+        or "DATABRICKS_SERVING_ENDPOINT_GENERATION" in t
+        or "DATABRICKS_SERVING_ENDPOINT_SQL" in t
+        or "DATABRICKS_ALLOWED_MODELS" in t
     )
 
 while i < len(lines):
@@ -435,6 +468,18 @@ if enable_metric_views:
 if enable_fabric:
     out.append("  - name: FORGE_FABRIC_ENABLED")
     out.append('    value: "true"')
+if reasoning_endpoint_2:
+    out.append("  - name: DATABRICKS_SERVING_ENDPOINT_REASONING_2")
+    out.append("    valueFrom: serving-endpoint-reasoning-2")
+if generation_endpoint:
+    out.append("  - name: DATABRICKS_SERVING_ENDPOINT_GENERATION")
+    out.append("    valueFrom: serving-endpoint-generation")
+if sql_endpoint:
+    out.append("  - name: DATABRICKS_SERVING_ENDPOINT_SQL")
+    out.append("    valueFrom: serving-endpoint-sql")
+if allowed_models:
+    out.append("  - name: DATABRICKS_ALLOWED_MODELS")
+    out.append(f'    value: "{allowed_models}"')
 path.write_text("\n".join(out) + "\n")
 PY
 }
@@ -773,46 +818,20 @@ configure_app() {
   local update_json
   update_json=$(python3 -c "
 import json
-print(json.dumps({
-    'resources': [
-        {
-            'name': 'sql-warehouse',
-            'sql_warehouse': {
-                'id': '$WAREHOUSE_ID',
-                'permission': 'CAN_USE'
-            }
-        },
-        {
-            'name': 'serving-endpoint',
-            'serving_endpoint': {
-                'name': '$ENDPOINT',
-                'permission': 'CAN_QUERY'
-            }
-        },
-        {
-            'name': 'serving-endpoint-fast',
-            'serving_endpoint': {
-                'name': '$FAST_ENDPOINT',
-                'permission': 'CAN_QUERY'
-            }
-        },
-        {
-            'name': 'serving-endpoint-embedding',
-            'serving_endpoint': {
-                'name': '$EMBEDDING_ENDPOINT',
-                'permission': 'CAN_QUERY'
-            }
-        },
-        {
-            'name': 'serving-endpoint-review',
-            'serving_endpoint': {
-                'name': '$REVIEW_ENDPOINT',
-                'permission': 'CAN_QUERY'
-            }
-        }
-    ],
-    'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']
-}))
+resources = [
+    {'name': 'sql-warehouse', 'sql_warehouse': {'id': '$WAREHOUSE_ID', 'permission': 'CAN_USE'}},
+    {'name': 'serving-endpoint', 'serving_endpoint': {'name': '$ENDPOINT', 'permission': 'CAN_QUERY'}},
+    {'name': 'serving-endpoint-fast', 'serving_endpoint': {'name': '$FAST_ENDPOINT', 'permission': 'CAN_QUERY'}},
+    {'name': 'serving-endpoint-embedding', 'serving_endpoint': {'name': '$EMBEDDING_ENDPOINT', 'permission': 'CAN_QUERY'}},
+    {'name': 'serving-endpoint-review', 'serving_endpoint': {'name': '$REVIEW_ENDPOINT', 'permission': 'CAN_QUERY'}},
+]
+if '$REASONING_ENDPOINT_2':
+    resources.append({'name': 'serving-endpoint-reasoning-2', 'serving_endpoint': {'name': '$REASONING_ENDPOINT_2', 'permission': 'CAN_QUERY'}})
+if '$GENERATION_ENDPOINT':
+    resources.append({'name': 'serving-endpoint-generation', 'serving_endpoint': {'name': '$GENERATION_ENDPOINT', 'permission': 'CAN_QUERY'}})
+if '$SQL_ENDPOINT':
+    resources.append({'name': 'serving-endpoint-sql', 'serving_endpoint': {'name': '$SQL_ENDPOINT', 'permission': 'CAN_QUERY'}})
+print(json.dumps({'resources': resources, 'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']}))
 ")
 
   local update_err
@@ -948,6 +967,18 @@ print_success() {
   printf "      Fast model:       %s\n" "$FAST_ENDPOINT"
   printf "      Embedding model:  %s\n" "$EMBEDDING_ENDPOINT"
   printf "      Review model:     %s\n" "$REVIEW_ENDPOINT"
+  if [ -n "$REASONING_ENDPOINT_2" ]; then
+    printf "      Reasoning 2:      %s\n" "$REASONING_ENDPOINT_2"
+  fi
+  if [ -n "$GENERATION_ENDPOINT" ]; then
+    printf "      Generation:       %s\n" "$GENERATION_ENDPOINT"
+  fi
+  if [ -n "$SQL_ENDPOINT" ]; then
+    printf "      SQL/Codex:        %s\n" "$SQL_ENDPOINT"
+  fi
+  if [ -n "$ALLOWED_MODELS" ]; then
+    printf "      Allowed models:   %s\n" "$ALLOWED_MODELS"
+  fi
   if [ -n "$LAKEBASE_BOOTSTRAP_USER" ]; then
     printf "      Bootstrap user:   %s\n" "$LAKEBASE_BOOTSTRAP_USER"
   fi

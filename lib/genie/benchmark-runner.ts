@@ -7,7 +7,7 @@
 
 import { startConversation, type GenieConversationMessage } from "@/lib/dbx/genie";
 import { reviewBatch, type BatchReviewItem, type BatchReviewResult } from "@/lib/ai/sql-reviewer";
-import { isReviewEnabled, getFastServingEndpoint } from "@/lib/dbx/client";
+import { isReviewEnabled, resolveEndpoint } from "@/lib/dbx/client";
 import { executeSQL, type SqlResult } from "@/lib/dbx/sql";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { createConcurrencyLimiter } from "@/lib/toolkit/concurrency";
@@ -258,7 +258,7 @@ Are these results semantically equivalent?`,
 
   try {
     const result = await cachedChatCompletion({
-      endpoint: getFastServingEndpoint(),
+      endpoint: resolveEndpoint("lightweight"),
       messages,
       temperature: 0,
       maxTokens: 512,

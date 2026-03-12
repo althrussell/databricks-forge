@@ -34,7 +34,7 @@ import { runIntelligenceLayer, buildTableInputs } from "@/lib/ai/environment-int
 import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { parseExcludedString, parsePatternsString, globMatch } from "@/lib/domain/scope-selection";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
@@ -479,7 +479,7 @@ async function runEnrichmentPass(
   // Step 5: LLM intelligence layer
   let intelligenceResult;
   try {
-    const endpoint = getServingEndpoint();
+    const endpoint = resolveEndpoint("classification");
     if (runId) await updateRunMessage(runId, "Running LLM intelligence analysis...");
     const tableInputs = buildTableInputs(enrichmentResults, allColumns, allTableTags);
 

@@ -37,7 +37,7 @@ import { runExampleQueryGeneration } from "./passes/example-query-generation";
 import { assembleSerializedSpace, buildRecommendation } from "./assembler";
 import { runHealthCheck } from "./space-health-check";
 import { isValidTable } from "./schema-allowlist";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { Logger } from "@/lib/ports/logger";
@@ -125,8 +125,6 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
   } = input;
 
   const log: Logger = deps?.logger ?? defaultLogger;
-  const premiumEndpoint = run.config.aiModel;
-  const fastEndpoint = getFastServingEndpoint();
   const allowlist = buildSchemaAllowlist(metadata);
 
   log.info("Genie Engine starting", {
@@ -135,8 +133,6 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     tableCount: metadata.tableCount,
     llmRefinement: config.llmRefinement,
     sampleDataAvailable: sampleData ? sampleData.size : 0,
-    premiumEndpoint,
-    fastEndpoint,
   });
 
   // Pass 0: Table Selection + Grouping
@@ -227,8 +223,6 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
           config,
           sampleData,
           piiClassifications,
-          premiumEndpoint,
-          fastEndpoint,
           signal,
           (msg) =>
             onProgress?.(
@@ -253,8 +247,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
           subdomains: outputs.subdomains,
           tableFqns: outputs.tables,
           conversationSummary: run.businessContext?.strategicGoals || "",
-          endpoint: fastEndpoint,
-          fallbackEndpoint: premiumEndpoint,
+          endpoint: resolveEndpoint("lightweight"),
+          fallbackEndpoint: resolveEndpoint("generation"),
           signal,
         });
         const degradedReasons: string[] = [];
@@ -364,8 +358,6 @@ async function processDomain(
   config: GenieEngineConfig,
   sampleData: SampleDataCache | null,
   piiClassifications: SensitivityClassification[] | undefined,
-  premiumEndpoint: string,
-  fastEndpoint: string,
   signal: AbortSignal | undefined,
   onProgress: (msg: string) => void,
   log: Logger,
@@ -393,7 +385,7 @@ async function processDomain(
       sampleData,
       piiClassifications,
       industryId: run.config.industry || undefined,
-      endpoint: fastEndpoint,
+      endpoint: resolveEndpoint("classification"),
       signal,
     }),
     runSemanticExpressions({
@@ -404,7 +396,7 @@ async function processDomain(
       businessContext: run.businessContext,
       config,
       industryId: run.config.industry || undefined,
-      endpoint: premiumEndpoint,
+      endpoint: resolveEndpoint("generation"),
       signal,
     }),
   ]);
@@ -483,7 +475,7 @@ async function processDomain(
         metadata,
         allowlist,
         existingJoinKeys: allExistingKeys,
-        endpoint: fastEndpoint,
+        endpoint: resolveEndpoint("classification"),
         signal,
       });
       llmInferredJoins = llmResult.joins.map((j) => ({
@@ -554,7 +546,7 @@ async function processDomain(
       joinSpecs: allJoins,
       columnEnrichments: columnResult.enrichments,
       businessContext: run.businessContext?.strategicGoals,
-      endpoint: premiumEndpoint,
+      endpoint: resolveEndpoint("generation"),
       signal,
     });
 
@@ -581,7 +573,7 @@ async function processDomain(
           useCases,
           entityCandidates: columnResult.entityCandidates,
           joinSpecs: allJoins,
-          endpoint: premiumEndpoint,
+          endpoint: resolveEndpoint("generation"),
           questionComplexity: config.questionComplexity,
           signal,
         })
@@ -596,8 +588,8 @@ async function processDomain(
       config,
       entityCandidates: columnResult.entityCandidates,
       joinSpecs: allJoins,
-      endpoint: fastEndpoint,
-      fallbackEndpoint: premiumEndpoint,
+      endpoint: resolveEndpoint("classification"),
+      fallbackEndpoint: resolveEndpoint("generation"),
       metadata,
       tableFqns: tables,
       conversationSummary: run.businessContext?.strategicGoals || "",
@@ -616,7 +608,7 @@ async function processDomain(
           entityCandidates: columnResult.entityCandidates,
           customerBenchmarks: config.benchmarkQuestions,
           joinSpecs: allJoins,
-          endpoint: premiumEndpoint,
+          endpoint: resolveEndpoint("generation"),
           industryId: run.config.industry || undefined,
           signal,
         })
@@ -634,8 +626,8 @@ async function processDomain(
       metadata,
       allowlist,
       joinSpecs: allJoins,
-      endpoint: fastEndpoint,
-      fallbackEndpoint: premiumEndpoint,
+      endpoint: resolveEndpoint("lightweight"),
+      fallbackEndpoint: resolveEndpoint("generation"),
       sensitiveColumns,
       questionComplexity: config.questionComplexity,
       signal,

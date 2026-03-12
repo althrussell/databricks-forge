@@ -33,6 +33,8 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - SQL Warehouse is bound as an app resource (no hardcoded warehouse IDs).
 - Embedding endpoint (`serving-endpoint-embedding`) defaults to `databricks-qwen3-embedding-0-6b`.
 - Review endpoint (`serving-endpoint-review`) defaults to `databricks-gpt-5-4` for LLM-as-reviewer SQL quality checks.
+- Extended model pool endpoints (`serving-endpoint-reasoning-2`, `serving-endpoint-generation`, `serving-endpoint-sql`) are optional; when configured via deploy.sh, they enable multi-model parallel routing.
+- `DATABRICKS_ALLOWED_MODELS` restricts the pool to customer-approved models only.
 - Lakebase scale-to-zero is enforced at every startup (default: 300s timeout). Override with `LAKEBASE_SCALE_TO_ZERO_TIMEOUT` or `--lakebase-no-scale-to-zero`.
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
 
@@ -329,11 +331,13 @@ API routes:
 | Health check       | `GET /api/health` -- DB + warehouse connectivity            |
 | Security headers   | Via `next.config.ts` `headers()` function                   |
 | Versioning         | `package.json` version in `/api/health`, sidebar, run metadata |
-| Model routing      | `getFastServingEndpoint()` routes classification/enrichment to fast model across all pipelines; falls back to premium if `serving-endpoint-fast` is not configured |
+| Model routing      | `resolveEndpoint(tier)` routes all LLM calls via `lib/dbx/task-router.ts`; 5 tiers (reasoning, generation, classification, sql, lightweight); queue-depth-aware routing across model pool |
+| Model pool         | `lib/dbx/model-registry.ts` -- declares endpoints, capabilities, concurrency caps; auto-discovers from env vars; `DATABRICKS_ALLOWED_MODELS` restricts pool |
 | SQL review         | `getReviewEndpoint()` routes SQL quality review to dedicated review model (`databricks-gpt-5-4` via `serving-endpoint-review`); `lib/ai/sql-reviewer.ts` provides `reviewSql()`, `reviewAndFixSql()`, `reviewBatch()`; opt-in per surface via `isReviewEnabled()` |
 | Embeddings         | `lib/embeddings/client.ts` -- `databricks-qwen3-embedding-0-6b` (1024-dim) via `getEmbeddingEndpoint()`; batched (16/req) with 429/5xx retry |
 | Vector search      | `lib/embeddings/store.ts` -- pgvector in Lakebase; `forge_embeddings` table with HNSW index; 12 entity kinds covering all estate + pipeline data |
 | LLM cache + retry  | `lib/toolkit/llm-cache.ts` -- in-memory SHA-256-keyed cache (10min TTL) with 429/5xx retry |
+| Rate limiting      | `lib/dbx/rate-limiter.ts` -- per-endpoint semaphores + independent 429 circuit breakers; optional global ceiling via `GLOBAL_LLM_MAX_CONCURRENT` |
 | Concurrency        | `lib/toolkit/concurrency.ts` -- bounded-concurrency utility for parallel domains and batches |
 | Toolkit            | `lib/toolkit/` -- shared utilities relocated from engine-specific paths for cross-engine reuse |
 | Port interfaces    | `lib/ports/` -- abstract DI interfaces (LLMClient, SqlExecutor, SkillResolver, Logger, EngineProgress) |
@@ -364,6 +368,7 @@ original paths for backward compatibility.
 - **Prompt templates** must include business context, metadata scope, and output format spec
 - **SQL quality rules** -- all SQL-generating prompts must import rules from `lib/ai/sql-rules.ts` (never inline ad-hoc rules)
 - **Privacy** -- only metadata (schemas, table/column names) is read; no row-level data access
+- **Model pool backward compat** -- if only legacy env vars are set (`DATABRICKS_SERVING_ENDPOINT`, `_FAST`, `_REVIEW`), the app runs with a single-to-three endpoint pool identical to pre-pool behavior
 
 ## New Feature Integration Checklist
 

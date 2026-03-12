@@ -7,7 +7,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "./industry-outcomes";
@@ -35,7 +35,7 @@ export async function parseOutcomeMapWithAI(
   markdown: string,
   aiModel?: string,
 ): Promise<ParseResult> {
-  const endpoint = aiModel || getFastServingEndpoint();
+  const endpoint = aiModel || resolveEndpoint("classification");
   // Truncate very large documents to avoid exceeding context windows
   const MAX_CHARS = 80_000;
   const truncated =

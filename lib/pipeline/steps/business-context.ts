@@ -6,7 +6,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
@@ -143,7 +143,7 @@ export async function runBusinessContext(
         benchmark_context: benchmarkResult.text,
         document_context: documentContext,
       },
-      modelEndpoint: getFastServingEndpoint(),
+      modelEndpoint: resolveEndpoint("classification"),
       responseFormat: "json_object",
       runId,
       step: "business-context",

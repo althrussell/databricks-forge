@@ -7,7 +7,7 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/toolkit/token-budget";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
@@ -84,7 +84,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         await scoreDomain(
           domainCases,
           bcRecord,
-          run.config.aiModel,
+          resolveEndpoint("reasoning"),
           industryKpis,
           runId,
           assetContext,
@@ -127,7 +127,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       .map((domain) => async () => {
         const domainCases = scored.filter((uc) => uc.domain === domain);
         try {
-          return await deduplicateDomain(domainCases, bcRecord, getFastServingEndpoint(), runId);
+          return await deduplicateDomain(domainCases, bcRecord, resolveEndpoint("classification"), runId);
         } catch (error) {
           logger.warn("Dedup failed for domain", {
             domain,
@@ -155,7 +155,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       const crossDomainRemoved = await deduplicateCrossDomain(
         scored,
         bcRecord,
-        getFastServingEndpoint(),
+        resolveEndpoint("classification"),
         runId,
       );
       if (crossDomainRemoved.size > 0) {
@@ -185,7 +185,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       await calibrateScoresChunked(
         scored,
         bc as unknown as Record<string, string>,
-        run.config.aiModel,
+        resolveEndpoint("reasoning"),
         runId,
       );
     } catch (error) {

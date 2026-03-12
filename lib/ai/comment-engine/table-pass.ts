@@ -10,7 +10,7 @@
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { TableCommentInput, CommentProgressCallback, MetadataCounters } from "./types";
@@ -115,7 +115,7 @@ export async function runTableCommentPass(
 
   if (tables.length === 0) return descriptions;
 
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
 
   const basePrompt = TABLE_COMMENT_PROMPT.replace("{industry_context}", context.industryContext)
     .replace(

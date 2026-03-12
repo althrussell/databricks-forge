@@ -8,7 +8,7 @@ import {
 } from "../schema-allowlist";
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import type { TrustedAssetQuery, QuestionComplexity, JoinSpecInput } from "../types";
-import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { reviewBatch } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { sanitizeUserContext } from "./title-generation";
@@ -245,39 +245,40 @@ async function generateWithEndpoint(
 
   if (isReviewEnabled("genie-example-queries") && queries.length > 0) {
     const schemaBlock = buildSchemaContextBlock(input.metadata, input.tableFqns);
-    const reviewed = await Promise.all(
-      queries.map(async (q) => {
-        const review = await reviewAndFixSql(q.sql, {
-          schemaContext: schemaBlock,
-          surface: "genie-example-queries",
-        });
-        if (review.fixedSql) {
-          if (
-            validateSqlExpression(
-              input.allowlist,
-              review.fixedSql,
-              `example_query_fix:${q.question}`,
-              true,
-            )
-          ) {
-            logger.info("Example query SQL fix applied", {
-              question: q.question,
-              verdict: review.verdict,
-              qualityScore: review.qualityScore,
-            });
-            return { ...q, sql: review.fixedSql };
-          }
-        }
-        if (review.verdict === "fail") {
-          logger.warn("Example query SQL dropped (fail verdict, no usable fix)", {
+    const items = queries.map((q, i) => ({ id: `eq${i}:${q.question}`, sql: q.sql }));
+    const results = await reviewBatch(items, "genie-example-queries", {
+      schemaContext: schemaBlock,
+      requestFix: true,
+    });
+    const reviewed = queries.map((q, i) => {
+      const res = results.find((r) => r.id === items[i].id) ?? results[i];
+      const review = res.result;
+      if (review.fixedSql) {
+        if (
+          validateSqlExpression(
+            input.allowlist,
+            review.fixedSql,
+            `example_query_fix:${q.question}`,
+            true,
+          )
+        ) {
+          logger.info("Example query SQL fix applied", {
             question: q.question,
+            verdict: review.verdict,
             qualityScore: review.qualityScore,
           });
-          return null;
+          return { ...q, sql: review.fixedSql };
         }
-        return q;
-      }),
-    );
+      }
+      if (review.verdict === "fail") {
+        logger.warn("Example query SQL dropped (fail verdict, no usable fix)", {
+          question: q.question,
+          qualityScore: review.qualityScore,
+        });
+        return null;
+      }
+      return q;
+    });
     queries = reviewed.filter((q): q is NonNullable<typeof q> => q !== null);
   }
 

@@ -30,7 +30,7 @@ import {
   hasColumnErrors,
   dryRunMetricViewDdl,
 } from "@/lib/genie/passes/metric-view-proposals";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
 const PERMISSION_PATTERNS = [
@@ -104,7 +104,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         issues: validation.issues,
       });
 
-      const endpoint = getServingEndpoint();
+      const endpoint = resolveEndpoint("sql");
       const repaired = await repairProposal(
         {
           name: proposal.name,
