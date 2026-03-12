@@ -29,10 +29,10 @@ export async function getAllIndustryOutcomes(): Promise<IndustryOutcome[]> {
     const customIds = new Set(customOutcomes.map((c) => c.id));
     const builtIn = INDUSTRY_OUTCOMES.filter((i) => !customIds.has(i.id));
 
-    return [...builtIn, ...customOutcomes];
+    return [...builtIn, ...customOutcomes].sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     // Fallback to built-in if DB is unavailable
-    return INDUSTRY_OUTCOMES;
+    return [...INDUSTRY_OUTCOMES].sort((a, b) => a.name.localeCompare(b.name));
   }
 }
 

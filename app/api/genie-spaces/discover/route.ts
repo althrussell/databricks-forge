@@ -13,6 +13,7 @@ import { isReviewEnabled } from "@/lib/dbx/client";
 import { getHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { extractSpaceMetadata } from "@/lib/genie/space-metadata";
+import { updateCachedSpaceDiscovery } from "@/lib/lakebase/genie-space-cache";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
@@ -93,12 +94,25 @@ export async function POST(request: NextRequest) {
           healthReport = await enrichReportWithSqlQuality(space, healthReport);
         }
 
+        updateCachedSpaceDiscovery(spaceId, {
+          tableCount: metadata?.tableCount ?? null,
+          measureCount: metadata?.measureCount ?? null,
+          sampleQuestionCount: metadata?.sampleQuestionCount ?? null,
+          filterCount: metadata?.filterCount ?? null,
+          healthScore: healthReport?.overallScore ?? null,
+          healthReportJson: healthReport ? JSON.stringify(healthReport) : null,
+          permissionDenied: false,
+        }).catch(() => {});
+
         return [spaceId, { metadata, healthReport }];
       } catch (err) {
         const errStr = String(err);
         const denied = errStr.includes("(403)") || errStr.includes("PERMISSION_DENIED");
         if (!denied) {
           logger.warn("Discover failed for space", { spaceId, error: errStr });
+        }
+        if (denied) {
+          updateCachedSpaceDiscovery(spaceId, { permissionDenied: true }).catch(() => {});
         }
         return [
           spaceId,

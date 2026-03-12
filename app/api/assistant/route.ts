@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
             sources: result.sources,
             actions: result.actions,
             tables: result.tables,
+            chatMentionedTables: result.chatMentionedTables,
             tableEnrichments: result.tableEnrichments,
             sqlBlocks: result.sqlBlocks,
             dashboardProposal: result.dashboardProposal,

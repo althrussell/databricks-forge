@@ -37,6 +37,7 @@ export default function AskForgeContent() {
   const [tableEnrichments, setTableEnrichments] = React.useState<TableEnrichmentData[]>([]);
   const [tableDetails, setTableDetails] = React.useState<Map<string, TableDetailData>>(new Map());
   const [referencedTables, setReferencedTables] = React.useState<string[]>([]);
+  const [chatMentionedTables, setChatMentionedTables] = React.useState<string[]>([]);
   const [sources, setSources] = React.useState<SourceData[]>([]);
   const [loadingTables, setLoadingTables] = React.useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = React.useState<string[] | undefined>();
@@ -287,6 +288,7 @@ export default function AskForgeContent() {
             }}
             onTableEnrichments={setTableEnrichments}
             onReferencedTables={handleReferencedTables}
+            onChatMentionedTables={setChatMentionedTables}
             onSources={setSources}
             onConversationCreated={handleConversationCreated}
             onClear={handleClearOrDelete}
@@ -316,6 +318,7 @@ export default function AskForgeContent() {
                 enrichments={tableEnrichments}
                 tableDetails={tableDetails}
                 referencedTables={referencedTables}
+                chatMentionedTables={chatMentionedTables}
                 sources={sources}
                 loadingTables={loadingTables}
                 onAskAboutTable={handleAskAboutTable}
