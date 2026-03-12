@@ -1,27 +1,61 @@
 # Release Notes -- 2026-03-12
 
-**Databricks Forge v0.24.1**
+**Databricks Forge v0.25.0**
+
+---
+
+## New Features
+
+### Genie Studio
+Genie Spaces page transformed into a unified **Genie Studio** hub with 4 entry point cards for creating, managing, and improving Genie Spaces. Promoted to its own top-level sidebar navigation section.
+
+### Scan Schema -- Create from Schema
+New wizard (`/genie/create/schema`) scans a Unity Catalog schema, profiles key columns (cardinality, date ranges), uses AI to select the most analytically valuable tables, and generates a Genie Space via the ad-hoc engine. Includes step indicator, select-all/clear controls, and AI-detected business context display.
+
+### Upload Requirements -- Create from Requirements
+New wizard (`/genie/create/requirements`) parses uploaded PDF, Markdown, or plain text documents. LLM extracts tables, business questions, SQL examples, instructions, join hints, glossary terms, and domain context. Supports drag-and-drop with visual feedback, text paste, and confidence scoring.
+
+### Result-Based Benchmark Scoring
+Benchmark runner upgraded from Jaccard SQL text similarity to a 3-tier comparison:
+1. SQL similarity fast-pass (>95% = pass immediately)
+2. Execute both expected and actual SQL, compare result sets
+3. LLM judge for semantic equivalence when results differ
+
+Each failure is categorized: `wrong_join`, `wrong_filter`, `wrong_aggregation`, `wrong_column`, `missing_data`, `wrong_sort`, `extra_data`, `timeout`, `execution_error`.
+
+### Auto-Improve Loop
+New iterative engine (`lib/genie/auto-improve.ts`) runs benchmarks, maps failure categories to targeted fix strategies, applies fixes via the space fixer, and re-benchmarks -- repeating until a target score is reached, max iterations are exhausted, or improvement stagnates. Progress callback for real-time UI updates.
 
 ---
 
 ## Improvements
 
-### Comprehensive Documentation Cleanup
-All major documentation files updated to reflect the current 10-step pipeline scope. Key corrections:
+### Parallel Semantic Expression Generation
+Single LLM call split into 3 parallel workers:
+- **Worker A**: Foundation aggregate measures (SUM, COUNT, AVG per column)
+- **Worker B**: Ratio and derived KPI measures (revenue per customer, conversion rates)
+- **Worker C**: Filters and dimensions (WHERE conditions, GROUP BY expressions)
 
-- **QUICKSTART.md** -- corrected `--endpoint` default from `databricks-claude-sonnet-4-6` to `databricks-claude-opus-4-6`; added 5 missing flags (`--full`, `--review-endpoint`, `--enable-metric-views`, `--lakebase-scale-to-zero-timeout`, `--lakebase-no-scale-to-zero`); fixed intro text to distinguish premium vs fast endpoints.
-- **WHY_FORGE.md** -- major rewrite adding Business Value Intelligence, Genie Space management (health checks, benchmarks, fix workflow), AI/BI Dashboard Recommendations, AI Catalog Comments, Value Tracking, Knowledge Base, Fabric/Power BI Migration, Industry Benchmarks, and portfolio exports. Added screenshot placeholders for 6 new features.
-- **README.md** -- pipeline updated from 7 to 10 steps (added Asset Discovery, Business Value Analysis, renumbered Genie to Step 10); expanded "What It Does" to 5-phase lifecycle; added 12 key features (Business Value, Genie health, Dashboards, AI Comments, Ask Forge, Estate Intelligence, Benchmarks, Knowledge Base, Fabric migration); fixed model defaults; added portfolio export table; expanded Further Documentation to 22 entries.
-- **docs/GENIE_ENGINE.md** -- Step 8 to Step 10; fixed join inference threshold (2 to 3); fixed domain concurrency (3 to 10); updated toolkit paths (`lib/toolkit/` not `lib/genie/`); added 12 new file references; added health check cross-references; expanded UI components table.
-- **docs/BUSINESS_VALUE.md** -- Step 8 to Step 9 throughout (prose, diagram, file map).
-- **docs/PIPELINE.md** -- updated from 7+1 optional steps to 10 steps; added Asset Discovery (Step 3) and Business Value Analysis (Step 9); renumbered Genie to Step 10 (background); added Dashboard Engine as parallel background step; fixed progress percentages; updated Model Routing table.
+Results are merged and deduplicated, producing richer and more diverse measures.
 
-### New Engine Documentation
-Three new comprehensive documentation files:
+### Instruction Quality Evaluator
+New `instruction_quality` evaluator added to the health check system. Scores instructions on three axes: specificity (40 pts -- table/column references, SQL keywords), structure (30 pts -- headers, lists, formatting), and clarity (30 pts -- absence of vague terms, action verbs). Includes actionable improvement suggestions.
 
-- **docs/COMMENT_ENGINE.md** -- documents the 4-phase AI Comment Engine (schema context, table comments, column comments, consistency review), configuration, DI, progress tracking, DDL execution, API routes, and UI.
-- **docs/DASHBOARD_ENGINE.md** -- documents the Dashboard Engine in both pipeline and ad-hoc modes, SQL validation (3-stage), Lakeview assembler, deployment, API routes, and UI.
-- **docs/SKILLS_KNOWLEDGE_BASE.md** -- documents the Skills system (9 static modules, registry, resolver, relevance targeting), Knowledge Base (upload flow, categories, embedding), and RAG integration (scopes, retrieval, provenance reranking).
+### Failure-Category-Aware Fix Routing
+Benchmark feedback analysis upgraded with a two-tier strategy: failure categories from result-based scoring map directly to fix strategies (precise), with fallback to text-pattern heuristics. New `summarizeFailureCategories()` utility for human-readable failure summaries.
+
+### Smart Improve Existing Card
+The "Improve Existing" entry card in Genie Studio now shows dynamic descriptions based on available space count, disables gracefully when no spaces exist, and navigates to the space with the lowest health grade for maximum impact.
+
+---
+
+## Other Changes
+
+- Added `validateIdentifier()` SQL injection protection to scan-schema API route
+- Added activity logging (`logActivity()`) to all 3 new API routes with 4 new `ActivityAction` types: `scanned_schema`, `parsed_requirements`, `started_auto_improve`, `completed_auto_improve`
+- Step indicator component on both wizard pages for guided UX
+- Drag-over visual highlight on requirements file upload drop zone
+- 22 new unit tests (805 total): failure category mapping, instruction quality scoring, summarization
 
 ---
 
@@ -29,7 +63,7 @@ Three new comprehensive documentation files:
 
 | Hash | Summary |
 |---|---|
-| `4233215` | Comprehensive documentation cleanup to match current 10-step pipeline scope |
-| `(pending)` | Bump version to 0.24.1, update release notes |
+| `132d494` | feat: Genie Studio -- unified hub for creating, managing, and improving Genie Spaces |
+| `43aa0ef` | Merge pull request #123 from althrussell/feat/genie-studio |
 
-**Uncommitted changes:** package.json version bump, RELEASE_NOTES_2026_03_12.md update.
+**Uncommitted changes:** package.json version bump to 0.25.0, RELEASE_NOTES_2026_03_12.md update.
