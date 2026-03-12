@@ -561,6 +561,41 @@ export async function startPipeline(runId: string): Promise<void> {
         });
       }
 
+      // Embed business value outputs for Strategic Advisor RAG (best-effort)
+      try {
+        const { embedBusinessValueResults } = await import("@/lib/embeddings/embed-pipeline");
+        const { getValueEstimatesForRun } = await import("@/lib/lakebase/value-estimates");
+        const { getRoadmapPhasesForRun } = await import("@/lib/lakebase/roadmap-phases");
+        const { getStakeholderProfilesForRun } =
+          await import("@/lib/lakebase/stakeholder-profiles");
+        const [bvEstimates, bvPhases, bvStakeholders] = await Promise.all([
+          getValueEstimatesForRun(runId),
+          getRoadmapPhasesForRun(runId),
+          getStakeholderProfilesForRun(runId),
+        ]);
+        const bvSynthesisRow = await withPrisma(async (prisma) => {
+          const row = await prisma.forgeRun.findUnique({
+            where: { runId },
+            select: { synthesisJson: true },
+          });
+          return row?.synthesisJson ?? null;
+        });
+        let bvSynthesis: import("@/lib/domain/types").ExecutiveSynthesis | null = null;
+        if (bvSynthesisRow) {
+          try {
+            bvSynthesis = JSON.parse(bvSynthesisRow);
+          } catch {
+            /* ignore */
+          }
+        }
+        await embedBusinessValueResults(runId, bvEstimates, bvPhases, bvStakeholders, bvSynthesis);
+      } catch (embedErr) {
+        logger.warn("Business value embedding failed (non-fatal)", {
+          runId,
+          error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+        });
+      }
+
       // Mark as completed -- Genie Engine runs in the background
       const finalDomains = new Set(ctx.useCases.map((uc) => uc.domain)).size;
       await updateRunStatus(
@@ -1084,6 +1119,42 @@ export async function resumePipeline(runId: string): Promise<void> {
         await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
       } catch (embedErr) {
         logger.warn("Use case embedding failed (non-fatal)", {
+          runId,
+          error: embedErr instanceof Error ? embedErr.message : String(embedErr),
+        });
+      }
+
+      // Embed business value outputs for Strategic Advisor RAG (best-effort)
+      try {
+        const { embedBusinessValueResults } = await import("@/lib/embeddings/embed-pipeline");
+        const { getValueEstimatesForRun } = await import("@/lib/lakebase/value-estimates");
+        const { getRoadmapPhasesForRun } = await import("@/lib/lakebase/roadmap-phases");
+        const { getStakeholderProfilesForRun } =
+          await import("@/lib/lakebase/stakeholder-profiles");
+        const { withPrisma: wp } = await import("@/lib/prisma");
+        const [bvEstimates, bvPhases, bvStakeholders] = await Promise.all([
+          getValueEstimatesForRun(runId),
+          getRoadmapPhasesForRun(runId),
+          getStakeholderProfilesForRun(runId),
+        ]);
+        const bvSynthesisRow = await wp(async (prisma) => {
+          const row = await prisma.forgeRun.findUnique({
+            where: { runId },
+            select: { synthesisJson: true },
+          });
+          return row?.synthesisJson ?? null;
+        });
+        let bvSynthesis: import("@/lib/domain/types").ExecutiveSynthesis | null = null;
+        if (bvSynthesisRow) {
+          try {
+            bvSynthesis = JSON.parse(bvSynthesisRow);
+          } catch {
+            /* ignore */
+          }
+        }
+        await embedBusinessValueResults(runId, bvEstimates, bvPhases, bvStakeholders, bvSynthesis);
+      } catch (embedErr) {
+        logger.warn("Business value embedding failed (non-fatal)", {
           runId,
           error: embedErr instanceof Error ? embedErr.message : String(embedErr),
         });

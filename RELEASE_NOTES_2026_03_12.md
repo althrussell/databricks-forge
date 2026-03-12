@@ -1,13 +1,34 @@
 # Release Notes -- 2026-03-12
 
-**Databricks Forge v0.27.1**
+**Databricks Forge v0.28.0**
+
+---
+
+## New Features
+
+### Business Value Rerun
+Added the ability to refresh business value analysis on a completed pipeline run without re-executing the entire pipeline. A new "Refresh Analysis" button on the Business Value tab clears existing estimates, roadmap phases, stakeholder profiles, and executive synthesis, then reruns the 4 LLM passes. Value tracking and value captures entered by users are preserved. Includes concurrency guards to prevent conflicts with running pipelines.
+
+### Business Value Embeddings for Strategic Advisor
+Business value outputs (value estimates, roadmap phases, stakeholder profiles, executive synthesis) are now embedded as 4 new entity kinds in the vector store. A new `strategy` search scope groups these kinds and is wired into the Strategic Advisor persona's RAG context, enabling it to answer financial, roadmap, and stakeholder questions grounded in actual pipeline data.
 
 ---
 
 ## Improvements
 
-### Inaccessible Genie Spaces Separated Into "No Access" Tab
-Genie Spaces that return 403 PERMISSION_DENIED (e.g. user lacks access to underlying tables) are no longer shown in the Active tab with missing metadata. They now appear in a dedicated "No Access" tab with an amber warning banner and guidance to request permissions from a workspace admin. The Improve Existing page also filters out inaccessible spaces so they cannot be selected for auto-improvement. The space detail API now returns HTTP 403 (instead of 500) for permission errors, providing clearer error semantics.
+### Strategic Advisor Persona Modulation
+The Strategic Advisor persona now supplements its base retrieval plans with the `strategy` scope when not already present, ensuring business value data is always retrieved for strategic queries regardless of detected intent.
+
+### Business Value Nav Reorder
+The sidebar navigation for Business Value has been reordered: Strategy now appears directly above Outcome Maps (previously between Roadmap and Stakeholders).
+
+---
+
+## Other Changes
+
+- Added `rerun_business_value` activity action to the audit log and activity feed
+- Business value embedding runs automatically at the end of both `startPipeline` and `resumePipeline`
+- Added 4 text compose functions for embedding business value entities
 
 ---
 
@@ -15,6 +36,6 @@ Genie Spaces that return 403 PERMISSION_DENIED (e.g. user lacks access to underl
 
 | Hash | Summary |
 |---|---|
-| `9541bb1` | feat: filter inaccessible Genie spaces into separate "No Access" tab |
+| `f5b8be4` | feat: add BV rerun endpoint, embed business value data for Strategic Advisor |
 
-**Uncommitted changes:** Version bump to 0.27.1, release notes update.
+**Uncommitted changes:** Version bump to 0.28.0, updated release notes.

@@ -14,6 +14,7 @@ import {
   Download,
   Activity,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 
 interface ActivityEntry {
@@ -55,6 +56,11 @@ const ACTION_CONFIG: Record<string, { icon: React.ReactNode; label: string; colo
     icon: <Download className="h-3.5 w-3.5" />,
     label: "Exported",
     color: "text-teal-500",
+  },
+  rerun_business_value: {
+    icon: <RefreshCw className="h-3.5 w-3.5" />,
+    label: "Refreshed business value",
+    color: "text-indigo-500",
   },
 };
 

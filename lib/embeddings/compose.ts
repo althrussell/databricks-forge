@@ -592,6 +592,149 @@ export function composeFabricArtifact(a: FabricArtifactInput): string {
 }
 
 // ---------------------------------------------------------------------------
+// 18. value_estimate
+// ---------------------------------------------------------------------------
+
+interface ValueEstimateInput {
+  useCaseId: string;
+  useCaseName?: string;
+  valueLow: number;
+  valueMid: number;
+  valueHigh: number;
+  currency?: string;
+  valueType?: string;
+  confidence?: string;
+  rationale?: string | null;
+  assumptions?: string[] | null;
+  industryBenchmark?: string | null;
+}
+
+export function composeValueEstimate(est: ValueEstimateInput): string {
+  const currency = est.currency || "USD";
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency, maximumFractionDigits: 0 });
+
+  return lines([
+    `Value Estimate: ${est.useCaseName || est.useCaseId}`,
+    est.valueType ? `Type: ${est.valueType}` : null,
+    `Estimate: ${fmt(est.valueLow)} – ${fmt(est.valueMid)} – ${fmt(est.valueHigh)}`,
+    est.confidence ? `Confidence: ${est.confidence}` : null,
+    est.rationale ? `Rationale: ${est.rationale}` : null,
+    est.assumptions && est.assumptions.length > 0
+      ? `Assumptions: ${est.assumptions.join("; ")}`
+      : null,
+    est.industryBenchmark ? `Industry Benchmark: ${est.industryBenchmark}` : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// 19. roadmap_phase
+// ---------------------------------------------------------------------------
+
+interface RoadmapPhaseInput {
+  useCaseId: string;
+  useCaseName?: string;
+  phase: string;
+  effortEstimate?: string | null;
+  dependencies?: string[];
+  enablers?: string[];
+  rationale?: string | null;
+}
+
+export function composeRoadmapPhase(rp: RoadmapPhaseInput): string {
+  return lines([
+    `Roadmap Phase: ${rp.useCaseName || rp.useCaseId}`,
+    `Phase: ${rp.phase}`,
+    rp.effortEstimate ? `Effort: ${rp.effortEstimate}` : null,
+    rp.dependencies && rp.dependencies.length > 0
+      ? `Dependencies: ${rp.dependencies.join(", ")}`
+      : null,
+    rp.enablers && rp.enablers.length > 0 ? `Enablers: ${rp.enablers.join(", ")}` : null,
+    rp.rationale ? `Rationale: ${rp.rationale}` : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// 20. stakeholder_profile
+// ---------------------------------------------------------------------------
+
+interface StakeholderProfileInput {
+  role: string;
+  department: string;
+  useCaseCount: number;
+  totalValue: number;
+  domains?: string[];
+  changeComplexity?: string | null;
+  isChampion: boolean;
+  isSponsor: boolean;
+}
+
+export function composeStakeholderProfile(sp: StakeholderProfileInput): string {
+  const roles: string[] = [];
+  if (sp.isChampion) roles.push("Champion");
+  if (sp.isSponsor) roles.push("Sponsor");
+
+  return lines([
+    `Stakeholder: ${sp.role} (${sp.department})`,
+    `Impact: ${sp.useCaseCount} use cases, $${sp.totalValue.toLocaleString()} estimated value`,
+    sp.domains && sp.domains.length > 0 ? `Domains: ${sp.domains.join(", ")}` : null,
+    sp.changeComplexity ? `Change Complexity: ${sp.changeComplexity}` : null,
+    roles.length > 0 ? `Roles: ${roles.join(", ")}` : null,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// 21. executive_synthesis
+// ---------------------------------------------------------------------------
+
+interface ExecutiveSynthesisInput {
+  keyFindings?: Array<{ title: string; description: string; severity?: string }>;
+  strategicRecommendations?: Array<{ title: string; description: string; priority?: string }>;
+  riskCallouts?: Array<{ title: string; description: string; impact?: string }>;
+  totalEstimatedValue?: { low: number; mid: number; high: number; currency?: string };
+  quickWinCount?: number;
+  topDomain?: string | null;
+}
+
+export function composeExecutiveSynthesis(syn: ExecutiveSynthesisInput): string {
+  const parts: string[] = ["Executive Synthesis"];
+
+  if (syn.totalEstimatedValue) {
+    const v = syn.totalEstimatedValue;
+    const c = v.currency || "USD";
+    const fmt = (n: number) =>
+      n.toLocaleString("en-US", { style: "currency", currency: c, maximumFractionDigits: 0 });
+    parts.push(`Total Estimated Value: ${fmt(v.low)} – ${fmt(v.mid)} – ${fmt(v.high)}`);
+  }
+
+  if (syn.quickWinCount != null) parts.push(`Quick Wins: ${syn.quickWinCount}`);
+  if (syn.topDomain) parts.push(`Top Domain: ${syn.topDomain}`);
+
+  if (syn.keyFindings?.length) {
+    parts.push("Key Findings:");
+    for (const f of syn.keyFindings) {
+      parts.push(`  • ${f.title}: ${f.description}${f.severity ? ` [${f.severity}]` : ""}`);
+    }
+  }
+
+  if (syn.strategicRecommendations?.length) {
+    parts.push("Strategic Recommendations:");
+    for (const r of syn.strategicRecommendations) {
+      parts.push(`  • ${r.title}: ${r.description}${r.priority ? ` [${r.priority}]` : ""}`);
+    }
+  }
+
+  if (syn.riskCallouts?.length) {
+    parts.push("Risk Callouts:");
+    for (const r of syn.riskCallouts) {
+      parts.push(`  • ${r.title}: ${r.description}${r.impact ? ` [${r.impact}]` : ""}`);
+    }
+  }
+
+  return parts.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

@@ -29,7 +29,8 @@ export type ActivityAction =
   | "parsed_requirements"
   | "started_auto_improve"
   | "completed_auto_improve"
-  | "synced_genie_spaces";
+  | "synced_genie_spaces"
+  | "rerun_business_value";
 
 export interface ActivityLogEntry {
   activityId: string;
