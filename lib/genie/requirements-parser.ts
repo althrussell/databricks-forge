@@ -62,12 +62,9 @@ export async function parsePdf(buffer: Buffer, filename: string): Promise<Parsed
 // LLM extraction
 // ---------------------------------------------------------------------------
 
-export async function extractRequirements(
-  doc: ParsedDocument,
-): Promise<ExtractedRequirements> {
-  const truncatedText = doc.text.length > 15_000
-    ? doc.text.slice(0, 15_000) + "\n...[truncated]"
-    : doc.text;
+export async function extractRequirements(doc: ParsedDocument): Promise<ExtractedRequirements> {
+  const truncatedText =
+    doc.text.length > 15_000 ? doc.text.slice(0, 15_000) + "\n...[truncated]" : doc.text;
 
   const messages = [
     {
@@ -111,7 +108,10 @@ Extract all requirements for building a Genie Space.`,
       responseFormat: "json_object",
     });
 
-    const parsed = parseLLMJson(result.content ?? "", "requirements-extraction") as Record<string, unknown>;
+    const parsed = parseLLMJson(result.content ?? "", "requirements-extraction") as Record<
+      string,
+      unknown
+    >;
 
     const toStringArray = (v: unknown): string[] =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
@@ -124,7 +124,9 @@ Extract all requirements for building a Genie Space.`,
             .filter((x) => x.question && x.sql)
         : [];
 
-    const toJoinHints = (v: unknown): Array<{ leftTable: string; rightTable: string; hint: string }> =>
+    const toJoinHints = (
+      v: unknown,
+    ): Array<{ leftTable: string; rightTable: string; hint: string }> =>
       Array.isArray(v)
         ? v
             .filter((x): x is Record<string, unknown> => typeof x === "object" && x !== null)

@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  parseMarkdown,
-  parsePdf,
-  extractRequirements,
-} from "@/lib/genie/requirements-parser";
+import { parseMarkdown, parsePdf, extractRequirements } from "@/lib/genie/requirements-parser";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import { logger } from "@/lib/logger";
 

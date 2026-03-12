@@ -528,7 +528,9 @@ function StudioEntryCard({
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
-          <div className={`rounded-lg border bg-background p-2 shadow-sm ${ICON_ACCENT_CLASSES[accent]}`}>
+          <div
+            className={`rounded-lg border bg-background p-2 shadow-sm ${ICON_ACCENT_CLASSES[accent]}`}
+          >
             <Icon className="size-5" />
           </div>
           {badge && (
@@ -542,14 +544,19 @@ function StudioEntryCard({
       <CardContent className="pt-0">
         <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>
         <div className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
-          Get started <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+          Get started{" "}
+          <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
         </div>
       </CardContent>
     </Card>
   );
 
   if (href && !disabled) {
-    return <Link href={href} className="no-underline">{content}</Link>;
+    return (
+      <Link href={href} className="no-underline">
+        {content}
+      </Link>
+    );
   }
   return content;
 }

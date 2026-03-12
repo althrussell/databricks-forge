@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  scanSchema,
-  profileKeyColumns,
-  selectTablesWithLLM,
-} from "@/lib/genie/schema-scanner";
+import { scanSchema, profileKeyColumns, selectTablesWithLLM } from "@/lib/genie/schema-scanner";
 import { validateIdentifier, IdentifierValidationError } from "@/lib/validation";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import { logger } from "@/lib/logger";

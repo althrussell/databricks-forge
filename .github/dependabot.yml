@@ -10,6 +10,19 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore(deps):"
+    groups:
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+      types:
+        patterns:
+          - "@types/*"
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "recharts"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -22,3 +35,7 @@ updates:
       - "ci"
     commit-message:
       prefix: "chore(ci):"
+    groups:
+      actions:
+        patterns:
+          - "actions/*"

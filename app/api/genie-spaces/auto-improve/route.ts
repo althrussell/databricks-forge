@@ -30,10 +30,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (!spaceId || !benchmarks || benchmarks.length === 0) {
-      return NextResponse.json(
-        { error: "spaceId and benchmarks are required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "spaceId and benchmarks are required" }, { status: 400 });
     }
 
     const jobId = `auto-${spaceId}-${Date.now()}`;

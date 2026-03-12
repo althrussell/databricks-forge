@@ -141,10 +141,7 @@ const LOW_SIMILARITY_THRESHOLD = 0.3;
 
 const RESULT_PREVIEW_LIMIT = 50;
 
-async function executeSqlForPreview(
-  sql: string,
-  maxRows: number,
-): Promise<SqlResultPreview> {
+async function executeSqlForPreview(sql: string, maxRows: number): Promise<SqlResultPreview> {
   try {
     const wrappedSql = `SELECT * FROM (${sql.replace(/;\s*$/, "")}) __bench LIMIT ${maxRows + 1}`;
     const result: SqlResult = await executeSQL(wrappedSql, undefined, undefined, {
@@ -295,9 +292,15 @@ function inferFailureCategory(
     .toLowerCase();
 
   if (/join|relationship|foreign\s*key|cross/.test(context)) return "wrong_join";
-  if (/where|filter|condition|between|like|in\s*\(/.test(context) && /wrong|missing|incorrect/.test(context))
+  if (
+    /where|filter|condition|between|like|in\s*\(/.test(context) &&
+    /wrong|missing|incorrect/.test(context)
+  )
     return "wrong_filter";
-  if (/sum|count|avg|average|aggregate|group\s*by|total/.test(context) && /wrong|incorrect/.test(context))
+  if (
+    /sum|count|avg|average|aggregate|group\s*by|total/.test(context) &&
+    /wrong|incorrect/.test(context)
+  )
     return "wrong_aggregation";
   if (/column|field|select/.test(context) && /wrong|missing|incorrect/.test(context))
     return "wrong_column";
@@ -445,7 +448,10 @@ export async function runBenchmarks(
           passed: sim >= 0.6,
           actualSqlResult: actualResult,
           expectedSqlResult: expectedResult,
-          failureCategory: sim < 0.6 ? inferFailureCategory(bench.question, bench.expectedSql, msg.sql) : undefined,
+          failureCategory:
+            sim < 0.6
+              ? inferFailureCategory(bench.question, bench.expectedSql, msg.sql)
+              : undefined,
           failureReason:
             sim < 0.6
               ? `Result execution failed; SQL similarity ${Math.round(sim * 100)}%`
@@ -464,7 +470,9 @@ export async function runBenchmarks(
         actualSql: msg.sql,
         status: msg.status,
         passed,
-        failureCategory: !passed ? inferFailureCategory(bench.question, bench.expectedSql, msg.sql) : undefined,
+        failureCategory: !passed
+          ? inferFailureCategory(bench.question, bench.expectedSql, msg.sql)
+          : undefined,
         sqlSimilarity: sim,
         comparisonMethod: "sql_similarity",
       });
@@ -488,7 +496,8 @@ export async function runBenchmarks(
   const failureCategoryCounts = {} as Record<FailureCategory, number>;
   for (const r of results) {
     if (r.failureCategory) {
-      failureCategoryCounts[r.failureCategory] = (failureCategoryCounts[r.failureCategory] ?? 0) + 1;
+      failureCategoryCounts[r.failureCategory] =
+        (failureCategoryCounts[r.failureCategory] ?? 0) + 1;
     }
   }
 

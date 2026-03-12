@@ -285,7 +285,10 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "measures": [...] }`,
       },
-      { role: "user", content: `${contextBlock}\n\nGenerate ratio, percentage, and derived KPI measures.` },
+      {
+        role: "user",
+        content: `${contextBlock}\n\nGenerate ratio, percentage, and derived KPI measures.`,
+      },
     ],
     temperature: TEMPERATURE,
     maxTokens: 8192,
@@ -309,7 +312,10 @@ ${DATABRICKS_SQL_RULES_COMPACT}
 
 Return JSON: { "filters": [...], "dimensions": [...] }`,
       },
-      { role: "user", content: `${contextBlock}\n\nGenerate filters and dimensions for common business analysis.` },
+      {
+        role: "user",
+        content: `${contextBlock}\n\nGenerate filters and dimensions for common business analysis.`,
+      },
     ],
     temperature: TEMPERATURE,
     maxTokens: 8192,

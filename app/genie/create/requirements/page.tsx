@@ -227,7 +227,9 @@ export default function CreateFromRequirementsPage() {
                 {step === "parsing" ? (
                   <>
                     <Loader2 className="mb-3 size-8 animate-spin text-primary" />
-                    <p className="text-sm font-medium">Parsing document and extracting requirements...</p>
+                    <p className="text-sm font-medium">
+                      Parsing document and extracting requirements...
+                    </p>
                   </>
                 ) : (
                   <>
@@ -264,10 +266,7 @@ export default function CreateFromRequirementsPage() {
                 rows={8}
                 disabled={step === "parsing"}
               />
-              <Button
-                onClick={handleTextSubmit}
-                disabled={step === "parsing" || !textInput.trim()}
-              >
+              <Button onClick={handleTextSubmit} disabled={step === "parsing" || !textInput.trim()}>
                 {step === "parsing" ? (
                   <Loader2 className="mr-2 size-4 animate-spin" />
                 ) : (
@@ -289,7 +288,8 @@ export default function CreateFromRequirementsPage() {
                 <div>
                   <CardTitle className="text-base">Extracted Requirements</CardTitle>
                   <CardDescription>
-                    From &quot;{parseResult.document.title}&quot; ({parseResult.document.wordCount} words, {parseResult.document.format})
+                    From &quot;{parseResult.document.title}&quot; ({parseResult.document.wordCount}{" "}
+                    words, {parseResult.document.format})
                   </CardDescription>
                 </div>
                 <Badge
@@ -392,7 +392,8 @@ export default function CreateFromRequirementsPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
-                  Additional Tables <span className="text-muted-foreground">(optional, comma-separated FQNs)</span>
+                  Additional Tables{" "}
+                  <span className="text-muted-foreground">(optional, comma-separated FQNs)</span>
                 </label>
                 <Input
                   value={additionalTables}

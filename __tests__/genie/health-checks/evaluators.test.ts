@@ -358,13 +358,15 @@ describe("scoreInstructionQuality", () => {
   });
 
   it("scores lower for vague instructions", () => {
-    const vagueInstruction = "Use appropriate queries for relevant data as needed. Various things should be handled correctly when applicable.";
+    const vagueInstruction =
+      "Use appropriate queries for relevant data as needed. Various things should be handled correctly when applicable.";
     const score = scoreInstructionQuality(vagueInstruction);
     expect(score.total).toBeLessThan(30);
   });
 
   it("rewards SQL keywords in instructions", () => {
-    const sqlRich = "Always use SELECT with WHERE clause and JOIN for cross-table queries. Use GROUP BY for aggregations.";
+    const sqlRich =
+      "Always use SELECT with WHERE clause and JOIN for cross-table queries. Use GROUP BY for aggregations.";
     const noSql = "The data is about orders and customers in the retail business.";
     const sqlScore = scoreInstructionQuality(sqlRich);
     const noSqlScore = scoreInstructionQuality(noSql);
