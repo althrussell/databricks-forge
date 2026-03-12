@@ -44,6 +44,8 @@ export function RunCompletedTabs({
   onRerun,
   isRerunning,
   onUseCaseUpdate,
+  highlightUseCaseId,
+  initialDomain,
 }: {
   run: PipelineRun;
   useCases: UseCase[];
@@ -67,6 +69,8 @@ export function RunCompletedTabs({
   onRerun: () => void;
   isRerunning: boolean;
   onUseCaseUpdate: (updated: UseCase) => Promise<{ ok: boolean; error?: string }>;
+  highlightUseCaseId?: string;
+  initialDomain?: string;
 }) {
   return (
     <Tabs value={activeTab} onValueChange={onTabChange}>
@@ -153,6 +157,7 @@ export function RunCompletedTabs({
           lineageDiscoveredFqns={lineageDiscoveredFqns}
           runId={runId}
           onUpdate={onUseCaseUpdate}
+          highlightUseCaseId={highlightUseCaseId}
         />
       </TabsContent>
 
@@ -168,7 +173,7 @@ export function RunCompletedTabs({
 
       {useCases.length > 0 && (
         <TabsContent value="genie" className="pt-4">
-          <GenieWorkbench runId={run.runId} />
+          <GenieWorkbench runId={run.runId} initialDomain={initialDomain} />
         </TabsContent>
       )}
 

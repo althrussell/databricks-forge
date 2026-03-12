@@ -155,8 +155,17 @@ export default function CreateFromRequirementsPage() {
         throw new Error(await parseErrorResponse(res, "Generation failed"));
       }
 
-      toast.success("Genie Space generation started!");
-      router.push("/genie");
+      const data = await res.json();
+      if (data.jobId) {
+        toast.success("Genie Space generation started");
+        router.push(`/genie/build/${data.jobId}`);
+      } else if (data.recommendation) {
+        toast.success("Genie Space generated!");
+        router.push("/genie");
+      } else {
+        toast.success("Genie Space generation started!");
+        router.push("/genie");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Generation failed");
       setStep("review");

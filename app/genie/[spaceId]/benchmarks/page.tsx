@@ -18,6 +18,7 @@ import {
   Loader2,
   Play,
   RotateCcw,
+  Square,
   ThumbsDown,
   ThumbsUp,
   Sparkles,
@@ -120,6 +121,7 @@ export default function BenchmarkPage() {
   const [runProgress, setRunProgress] = useState(0);
   const [runTotal, setRunTotal] = useState(0);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const [currentBenchmarkJobId, setCurrentBenchmarkJobId] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [improving, setImproving] = useState(false);
@@ -194,6 +196,7 @@ export default function BenchmarkPage() {
     setRunProgress(0);
     setRunTotal(toRun.length);
     setCurrentRunId(null);
+    setCurrentBenchmarkJobId(null);
     setRateLimitWarning(false);
 
     try {
@@ -203,43 +206,54 @@ export default function BenchmarkPage() {
         body: JSON.stringify({ questions: toRun }),
       });
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-      const decoder = new TextDecoder();
-      let buffer = "";
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error ?? "Benchmark run failed");
+      }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const data = await res.json();
+      if (!data.jobId) throw new Error("No jobId returned");
+      setCurrentBenchmarkJobId(data.jobId);
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+      let delay = 2000;
+      const maxAttempts = 300;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        try {
+          const pollRes = await fetch(
+            `/api/genie-spaces/${spaceId}/benchmarks/run?jobId=${data.jobId}`,
+          );
+          if (!pollRes.ok) continue;
+          const pollData = await pollRes.json();
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            if (event.type === "start" && typeof event.total === "number") {
-              setRunTotal(event.total);
-            } else if (event.type === "result") {
-              setResults((prev) => [...prev, event.result]);
-              setRunProgress(event.index + 1);
-            } else if (event.type === "rate_limited") {
-              setRateLimitWarning(true);
-            } else if (event.type === "complete") {
-              setCurrentRunId(event.runId ?? null);
-              fetchHistory();
-            }
-          } catch {
-            // Ignore parse errors in SSE
+          if (pollData.results) {
+            setResults(pollData.results);
+            setRunProgress(pollData.completed ?? 0);
+            setRunTotal(pollData.total ?? toRun.length);
           }
-        }
+
+          if (pollData.status === "completed") {
+            setCurrentRunId(pollData.runId ?? null);
+            fetchHistory();
+            break;
+          }
+          if (pollData.status === "failed") {
+            toast.error(pollData.error ?? "Benchmark run failed");
+            break;
+          }
+          if (pollData.status === "cancelled") {
+            toast.info("Benchmark run cancelled");
+            break;
+          }
+
+          delay = Math.min(delay * 1.2, 5000);
+        } catch { /* retry */ }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Benchmark run failed");
     } finally {
       setRunning(false);
+      setCurrentBenchmarkJobId(null);
     }
   };
 
@@ -252,6 +266,18 @@ export default function BenchmarkPage() {
       }));
     if (failedQuestions.length === 0) return;
     runBenchmarks(failedQuestions);
+  };
+
+  const cancelBenchmark = async () => {
+    if (!currentBenchmarkJobId) return;
+    try {
+      await fetch(
+        `/api/genie-spaces/${spaceId}/benchmarks/run?jobId=${currentBenchmarkJobId}`,
+        { method: "DELETE" },
+      );
+    } catch {
+      toast.error("Failed to cancel benchmark");
+    }
   };
 
   const setLabel = (index: number, isCorrect: boolean) => {
@@ -502,6 +528,16 @@ export default function BenchmarkPage() {
                       ? `Run All (${questions.length})`
                       : `Run Selected (${selectedCount}/${questions.length})`}
                 </Button>
+                {running && currentBenchmarkJobId && (
+                  <Button
+                    variant="outline"
+                    className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    onClick={cancelBenchmark}
+                  >
+                    <Square className="mr-2 h-3.5 w-3.5" />
+                    Stop
+                  </Button>
+                )}
                 {results.length > 0 && !running && failedCount > 0 && (
                   <Button variant="outline" onClick={rerunFailed} disabled={running}>
                     <RotateCcw className="mr-2 size-4" />

@@ -5,7 +5,7 @@
  *           mode=fast (default): synchronous, returns result immediately.
  *           mode=full: async, returns jobId; the client polls GET for progress.
  * GET    -- Poll full-mode generation status by jobId.
- *           Without jobId: returns all active generate jobs (for dashboard tiles).
+ *           Without jobId: returns all non-evicted generate jobs (for dashboard tiles).
  * DELETE -- Cancel a running generate job by jobId.
  */
 
@@ -16,12 +16,14 @@ import {
   runFastGenieEngine,
   type AdHocGenieConfig,
 } from "@/lib/genie/adhoc-engine";
+import type { GenieBuilderStep } from "@/lib/genie/builder-steps";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 
 interface AdHocJobStatus {
   jobId: string;
   status: "generating" | "completed" | "failed" | "cancelled";
+  currentStep: GenieBuilderStep | null;
   message: string;
   percent: number;
   startedAt: number;
@@ -64,6 +66,7 @@ function jobToResponse(job: AdHocJobStatus) {
   return {
     jobId: job.jobId,
     status: job.status,
+    currentStep: job.currentStep,
     message: job.message,
     percent: job.percent,
     error: job.error,
@@ -123,6 +126,7 @@ export async function POST(request: NextRequest) {
     jobs.set(jobId, {
       jobId,
       status: "generating",
+      currentStep: null,
       message: "Starting full Genie Engine...",
       percent: 0,
       startedAt: now,
@@ -138,11 +142,12 @@ export async function POST(request: NextRequest) {
     runAdHocGenieEngine({
       tables,
       config,
-      onProgress: (message, percent) => {
+      onProgress: (message, percent, step) => {
         const job = jobs.get(jobId);
         if (job && job.status === "generating") {
           job.message = message;
           job.percent = Math.min(99, percent);
+          if (step) job.currentStep = step;
         }
       },
       signal: abortController.signal,
@@ -160,6 +165,7 @@ export async function POST(request: NextRequest) {
                 ? `Generation complete with ${qualityWarnings} warning${qualityWarnings === 1 ? "" : "s"}`
                 : "Generation complete";
           job.percent = 100;
+          job.currentStep = null;
           job.completedAt = Date.now();
           job.result = { recommendation: result.recommendation, mode: "full" };
         }
@@ -192,21 +198,11 @@ export async function GET(request: NextRequest) {
 
   const jobId = request.nextUrl.searchParams.get("jobId");
 
-  // If no jobId, return all active jobs (for dashboard polling)
+  // If no jobId, return all non-evicted jobs so the dashboard can render
+  // in-progress, completed, failed, and cancelled states.
   if (!jobId) {
-    const activeJobs = [...jobs.values()]
-      .filter((j) => j.status === "generating" || (j.status === "completed" && !j.result))
-      .map(jobToResponse);
-    // Also include recently completed jobs (within 60s) so the dashboard can transition
-    const recentlyCompleted = [...jobs.values()]
-      .filter(
-        (j) =>
-          (j.status === "completed" || j.status === "failed" || j.status === "cancelled") &&
-          j.completedAt &&
-          Date.now() - j.completedAt < 60_000,
-      )
-      .map(jobToResponse);
-    return NextResponse.json({ jobs: [...activeJobs, ...recentlyCompleted] });
+    const allJobs = [...jobs.values()].map(jobToResponse);
+    return NextResponse.json({ jobs: allJobs });
   }
 
   const job = jobs.get(jobId);

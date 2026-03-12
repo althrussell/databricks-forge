@@ -298,6 +298,14 @@ export function GenieBuilderModal({
     [],
   );
 
+  const deployPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (deployPollRef.current) clearInterval(deployPollRef.current);
+    };
+  }, []);
+
   const handleDeploy = async () => {
     if (!recommendation) return;
     if (
@@ -339,16 +347,40 @@ export function GenieBuilderModal({
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result: any = await safeJsonParse(res);
-      if (!result) throw new Error("Invalid response from server");
-      setDeployedSpaceId(result.spaceId);
-      setPhase("deployed");
+      const data: any = await safeJsonParse(res);
+      if (!data) throw new Error("Invalid response from server");
 
-      fetch("/api/embeddings/backfill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: "genie" }),
-      }).catch(() => {});
+      if (data.jobId) {
+        deployPollRef.current = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`/api/genie-spaces?deployJobId=${data.jobId}`);
+            if (!pollRes.ok) return;
+            const pollData = await pollRes.json();
+            if (pollData.status === "completed" && pollData.result) {
+              if (deployPollRef.current) clearInterval(deployPollRef.current);
+              setDeployedSpaceId(pollData.result.spaceId);
+              setPhase("deployed");
+              fetch("/api/embeddings/backfill", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ scope: "genie" }),
+              }).catch(() => {});
+            } else if (pollData.status === "failed") {
+              if (deployPollRef.current) clearInterval(deployPollRef.current);
+              setGenError(pollData.error || "Deployment failed");
+              setPhase("error");
+            }
+          } catch { /* retry on next poll */ }
+        }, 2000);
+      } else if (data.spaceId) {
+        setDeployedSpaceId(data.spaceId);
+        setPhase("deployed");
+        fetch("/api/embeddings/backfill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: "genie" }),
+        }).catch(() => {});
+      }
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Deployment failed");
       setPhase("error");
@@ -631,18 +663,25 @@ export function GenieBuilderModal({
                 <p className="text-xs text-muted-foreground">Ready for natural language queries.</p>
               </div>
             </div>
-            {databricksHost && (
-              <Button asChild className="w-full">
-                <a
-                  href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="mr-2 size-4" />
-                  Open in Databricks
+            <div className="flex gap-2">
+              {databricksHost && (
+                <Button asChild className="flex-1">
+                  <a
+                    href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="mr-2 size-4" />
+                    Open in Databricks
+                  </a>
+                </Button>
+              )}
+              <Button variant="outline" className="flex-1" asChild>
+                <a href={`/genie/${deployedSpaceId}`}>
+                  View in Genie Studio
                 </a>
               </Button>
-            )}
+            </div>
           </div>
         )}
 

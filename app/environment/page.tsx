@@ -76,6 +76,7 @@ export default function EstatePage() {
   const searchParams = useSearchParams();
   const highlightFqn = useMemo(() => searchParams.get("highlight") ?? "", [searchParams]);
   const tabParam = useMemo(() => searchParams.get("tab") ?? "", [searchParams]);
+  const scanParam = useMemo(() => searchParams.get("scan") ?? "", [searchParams]);
 
   const [viewMode, setViewMode] = useState<ViewMode>("aggregate");
   const [aggregate, setAggregate] = useState<AggregateData | null>(null);
@@ -177,6 +178,10 @@ export default function EstatePage() {
       toast.error("Failed to load scan details");
     }
   }, []);
+
+  useEffect(() => {
+    if (scanParam) loadSingleScan(scanParam);
+  }, [scanParam, loadSingleScan]);
 
   // Back to aggregate
   const backToAggregate = useCallback(() => {

@@ -264,12 +264,49 @@ export function GenieDeployModal({
         return null;
       }
 
-      const data = (await res.json()) as { results: DomainResult[] };
-      return data.results;
+      const data = await res.json();
+
+      // Fire-and-forget: poll for completion
+      if (data.jobId) {
+        log("Deploy started in background, polling for progress...");
+        return await pollPipelineDeploy(data.jobId, log);
+      }
+
+      // Backward compat: synchronous response
+      return (data as { results: DomainResult[] }).results;
     } catch (err) {
       log(`ERROR: ${err instanceof Error ? err.message : "Unknown error"}`);
       return null;
     }
+  }
+
+  async function pollPipelineDeploy(
+    jobId: string,
+    log: (msg: string) => void,
+  ): Promise<DomainResult[] | null> {
+    const maxAttempts = 120;
+    let delay = 2000;
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      try {
+        const res = await fetch(
+          `/api/runs/${runId}/genie-deploy?jobId=${jobId}`,
+        );
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.message) log(data.message);
+        if (data.status === "completed") {
+          return data.results;
+        }
+        if (data.status === "failed") {
+          log(`ERROR: ${data.error ?? "Deployment failed"}`);
+          return null;
+        }
+        delay = Math.min(delay * 1.3, 8000);
+      } catch { /* retry */ }
+    }
+    log("ERROR: Deploy timed out waiting for completion");
+    return null;
   }
 
   function logResults(domainResults: DomainResult[], log: (msg: string) => void) {

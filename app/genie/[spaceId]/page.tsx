@@ -98,6 +98,18 @@ export default function SpaceDetailPage() {
   const [improveResult, setImproveResult] = useState<ImproveResult | null>(null);
   const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Auto-improve polling state (when redirected from the improve page)
+  const autoImproveJobId = searchParams.get("autoImprove") ?? "";
+  const autoImproveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [autoImproveStatus, setAutoImproveStatus] = useState<{
+    status: string;
+    iteration?: number;
+    maxIterations?: number;
+    currentScore?: number;
+    targetScore?: number;
+    message?: string;
+  } | null>(null);
+
   // ── Data fetching ─────────────────────────────────────────────────
 
   const fetchDetail = useCallback(async () => {
@@ -122,6 +134,33 @@ export default function SpaceDetailPage() {
       })
       .catch(() => {});
   }, [fetchDetail]);
+
+  // Auto-improve polling effect
+  useEffect(() => {
+    if (!autoImproveJobId) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/genie-spaces/auto-improve?jobId=${autoImproveJobId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setAutoImproveStatus(data);
+        if (data.status === "completed" || data.status === "failed") {
+          if (autoImproveTimerRef.current) clearInterval(autoImproveTimerRef.current);
+          if (data.status === "completed") {
+            toast.success("Auto-improve complete! Refreshing...");
+            fetchDetail();
+          } else {
+            toast.error(data.error || "Auto-improve failed");
+          }
+        }
+      } catch { /* retry */ }
+    };
+    poll();
+    autoImproveTimerRef.current = setInterval(poll, 3000);
+    return () => {
+      if (autoImproveTimerRef.current) clearInterval(autoImproveTimerRef.current);
+    };
+  }, [autoImproveJobId, fetchDetail]);
 
   // ── Fix handlers ──────────────────────────────────────────────────
 
@@ -189,6 +228,22 @@ export default function SpaceDetailPage() {
     }
   };
 
+  const pollDeployJob = async (jobId: string): Promise<string> => {
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const pollRes = await fetch(`/api/genie-spaces?deployJobId=${jobId}`);
+      if (!pollRes.ok) continue;
+      const pollData = await pollRes.json();
+      if (pollData.status === "completed" && pollData.result?.spaceId) {
+        return pollData.result.spaceId;
+      }
+      if (pollData.status === "failed") {
+        throw new Error(pollData.error || "Deployment failed");
+      }
+    }
+    throw new Error("Deploy timed out");
+  };
+
   const handleCreateNewSpace = async (serializedSpace: string) => {
     setCreating(true);
     try {
@@ -208,7 +263,15 @@ export default function SpaceDetailPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const createResult: any = await safeJsonParse(res);
       if (!createResult) throw new Error("Invalid response from server");
-      const { spaceId: newSpaceId } = createResult;
+
+      let newSpaceId: string;
+      if (createResult.jobId) {
+        toast.info("Deploying new space...");
+        newSpaceId = await pollDeployJob(createResult.jobId);
+      } else {
+        newSpaceId = createResult.spaceId;
+      }
+
       toast.success("New space created from optimized config");
       setFixResult(null);
       router.push(`/genie/${newSpaceId}`);
@@ -376,7 +439,15 @@ export default function SpaceDetailPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const improvedResult: any = await safeJsonParse(res);
       if (!improvedResult) throw new Error("Invalid response from server");
-      const { spaceId: newSpaceId } = improvedResult;
+
+      let newSpaceId: string;
+      if (improvedResult.jobId) {
+        toast.info("Deploying improved space...");
+        newSpaceId = await pollDeployJob(improvedResult.jobId);
+      } else {
+        newSpaceId = improvedResult.spaceId;
+      }
+
       toast.success("New improved space created");
       dismissImproveResult();
       router.push(`/genie/${newSpaceId}`);
@@ -529,6 +600,21 @@ export default function SpaceDetailPage() {
         />
       )}
 
+      {/* Auto-improve progress banner */}
+      {autoImproveStatus && autoImproveStatus.status === "running" && (
+        <EngineProgressBanner
+          message={
+            autoImproveStatus.message ??
+            `Auto-improve iteration ${autoImproveStatus.iteration ?? "?"}/${autoImproveStatus.maxIterations ?? "?"} — score ${autoImproveStatus.currentScore ?? "?"}/${autoImproveStatus.targetScore ?? 80}`
+          }
+          percent={
+            autoImproveStatus.iteration && autoImproveStatus.maxIterations
+              ? Math.round((autoImproveStatus.iteration / autoImproveStatus.maxIterations) * 100)
+              : 50
+          }
+        />
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">
@@ -619,7 +705,7 @@ function EngineProgressBanner({
 }: {
   message: string;
   percent: number;
-  onCancel: () => void;
+  onCancel?: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   return (
@@ -635,9 +721,11 @@ function EngineProgressBanner({
         </button>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{Math.round(percent)}%</span>
-          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onCancel}>
-            <XCircle className="size-3.5" />
-          </Button>
+          {onCancel && (
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onCancel}>
+              <XCircle className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
       {expanded && (

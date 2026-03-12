@@ -9,6 +9,7 @@
  */
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { loadSettings } from "@/lib/settings";
 import { FileText, Upload, Trash2, CheckCircle2, Clock, AlertCircle, FileUp } from "lucide-react";
@@ -64,6 +65,8 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; colo
 // ---------------------------------------------------------------------------
 
 export default function KnowledgeBasePage() {
+  const searchParams = useSearchParams();
+  const highlightDocId = searchParams.get("doc") ?? "";
   const [documents, setDocuments] = React.useState<DocumentRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [uploading, setUploading] = React.useState(false);
@@ -72,6 +75,13 @@ export default function KnowledgeBasePage() {
   const [enabled, setEnabled] = React.useState<boolean | null>(null);
   const [disabledReason, setDisabledReason] = React.useState<"infra" | "setting" | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (highlightDocId) {
+      const el = document.getElementById(`doc-${highlightDocId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightDocId, documents]);
 
   const fetchDocuments = React.useCallback(async () => {
     try {
@@ -289,7 +299,8 @@ export default function KnowledgeBasePage() {
                 return (
                   <div
                     key={doc.id}
-                    className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                    id={`doc-${doc.id}`}
+                    className={`flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors ${highlightDocId === doc.id ? "ring-2 ring-primary" : ""}`}
                   >
                     <FileText className="size-5 shrink-0 text-muted-foreground" />
                     <div className="flex-1 min-w-0">

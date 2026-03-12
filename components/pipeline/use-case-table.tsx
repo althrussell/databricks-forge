@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,19 +68,30 @@ interface UseCaseTableProps {
   useCases: UseCase[];
   onUpdate?: (updated: UseCase) => Promise<UpdateResult> | void;
   lineageDiscoveredFqns?: string[];
+  highlightUseCaseId?: string;
 }
 
 export function UseCaseTable({
   useCases,
   onUpdate,
   lineageDiscoveredFqns = [],
+  highlightUseCaseId,
 }: UseCaseTableProps) {
   const [search, setSearch] = useState("");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"score" | "name" | "domain">("score");
   const [selectedUseCase, setSelectedUseCase] = useState<UseCase | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(highlightUseCaseId ?? null);
+
+  useEffect(() => {
+    if (highlightUseCaseId) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`uc-${highlightUseCaseId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+  }, [highlightUseCaseId]);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editStatement, setEditStatement] = useState("");
@@ -293,7 +304,8 @@ export function UseCaseTable({
                   return (
                     <React.Fragment key={uc.id}>
                       <TableRow
-                        className="cursor-pointer transition-colors hover:bg-muted/50"
+                        id={`uc-${uc.id}`}
+                        className={`cursor-pointer transition-colors hover:bg-muted/50${highlightUseCaseId === uc.id ? " ring-2 ring-primary ring-offset-2" : ""}`}
                         onClick={() => setExpandedId(isExpanded ? null : uc.id)}
                       >
                         <TableCell className="font-mono text-xs text-muted-foreground">

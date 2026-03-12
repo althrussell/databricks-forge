@@ -411,7 +411,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         window.open(action.payload.url as string, "_blank");
         clearPending();
       } else if (action.type === "export_report") {
-        router.push("/environment?tab=overview");
+        router.push("/environment?tab=summary");
       } else if (action.type === "view_portfolio") {
         router.push("/business-value");
       } else if (action.type === "view_stakeholders") {
