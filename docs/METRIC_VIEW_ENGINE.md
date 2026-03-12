@@ -10,8 +10,8 @@ The Metric View Engine generates Databricks Unity Catalog
 classifies them as reuse/improve/new, generates proposals with multi-table joins,
 validates against the schema allowlist, and deploys via DDL execution.
 
-The engine is **feature-gated** behind `FORGE_METRIC_VIEWS_ENABLED=true`
-(set via `./deploy.sh --enable-metric-views`).
+The engine is **enabled by default**.  Set `FORGE_METRIC_VIEWS_ENABLED=false`
+to explicitly disable it.
 
 ---
 
@@ -163,7 +163,7 @@ fallback when LLM generation is not available:
 
 | Setting | Source | Default |
 |---------|--------|---------|
-| `FORGE_METRIC_VIEWS_ENABLED` | `deploy.sh --enable-metric-views` | `false` |
+| `FORGE_METRIC_VIEWS_ENABLED` | `deploy.sh --enable-metric-views` | `true` |
 | `GenieEngineConfig.generateMetricViews` | Per-run Genie config | `true` (when feature enabled) |
 | `/api/health` | Health endpoint | Reports `metricViewsEnabled` |
 
