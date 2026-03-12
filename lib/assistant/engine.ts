@@ -32,9 +32,10 @@ import {
   type StreamCallback,
   type TokenUsage,
 } from "@/lib/dbx/model-serving";
-import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, isReviewEnabled, getConfig } from "@/lib/dbx/client";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { createAssistantLog } from "@/lib/lakebase/assistant-log";
+import { listTrackedGenieSpaces } from "@/lib/lakebase/genie-spaces";
 import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { scoreAssistantResponse } from "@/lib/assistant/evaluation";
 import { logger } from "@/lib/logger";
@@ -93,6 +94,7 @@ export interface AssistantResponse {
   tables: string[];
   tableEnrichments: TableEnrichment[];
   sqlBlocks: string[];
+  chatMentionedTables: string[];
   dashboardProposal: DashboardProposal | null;
   existingDashboards: ExistingDashboard[];
   tokenUsage: TokenUsage | null;
@@ -181,6 +183,7 @@ export async function runAssistantEngine(
       tables: [],
       tableEnrichments: [],
       sqlBlocks: [],
+      chatMentionedTables: [],
       dashboardProposal: null,
       existingDashboards: [],
       tokenUsage: null,
@@ -343,11 +346,28 @@ export async function runAssistantEngine(
       });
       if (genieChunks.length > 0) {
         const m = genieChunks[0].metadata ?? {};
-        return {
-          spaceTitle: (m.spaceTitle as string) ?? (m.title as string) ?? "Genie Space",
-          spaceId: (m.spaceId as string) ?? genieChunks[0].sourceId,
-          score: genieChunks[0].score,
-        };
+        let spaceId = m.spaceId as string | undefined;
+        const spaceTitle = (m.spaceTitle as string) ?? (m.title as string) ?? "Genie Space";
+        const domain = m.domain as string | undefined;
+
+        // RAG embeddings may not store the deployed spaceId -- resolve via tracked spaces
+        if (!spaceId && domain) {
+          try {
+            const tracked = await listTrackedGenieSpaces();
+            const match = tracked.find(
+              (t) => t.domain === domain && t.status !== "trashed",
+            );
+            spaceId = match?.spaceId;
+          } catch {
+            // best-effort lookup
+          }
+        }
+
+        // Validate spaceId looks like a real Databricks ID (UUID or hex)
+        const isValidId = spaceId && /^[0-9a-f-]{32,36}$/i.test(spaceId);
+        if (!isValidId) return null;
+
+        return { spaceTitle, spaceId: spaceId!, score: genieChunks[0].score };
       }
     } catch {
       // best-effort Genie routing
@@ -499,6 +519,8 @@ export async function runAssistantEngine(
       logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) }),
     );
 
+  const chatMentionedTables = [...new Set([...sqlTables, ...questionTables])];
+
   return {
     answer,
     intent: intentResult,
@@ -507,6 +529,7 @@ export async function runAssistantEngine(
     tables: reconciledTables,
     tableEnrichments: context.tableEnrichments,
     sqlBlocks,
+    chatMentionedTables,
     dashboardProposal,
     existingDashboards,
     tokenUsage: llmResponse.usage,
@@ -682,14 +705,14 @@ function buildActions(
   }
 
   if (genieMatch) {
-    const host = process.env.DATABRICKS_HOST?.replace(/\/+$/, "") ?? "";
+    const host = getConfig().host;
     actions.unshift({
       type: "ask_genie",
       label: `Ask Genie: ${genieMatch.spaceTitle}`,
       payload: {
         genieSpaceId: genieMatch.spaceId,
         genieSpaceTitle: genieMatch.spaceTitle,
-        url: host ? `${host}/ml/genie/rooms/${genieMatch.spaceId}` : "",
+        url: host ? `${host}/genie/rooms/${genieMatch.spaceId}` : "",
       },
     });
   }

@@ -108,6 +108,8 @@ export interface AskForgeChatProps {
   onTableEnrichments?: (enrichments: TableEnrichmentData[]) => void;
   /** Called when referenced table FQNs are available from the response */
   onReferencedTables?: (tables: string[]) => void;
+  /** Called when chat-mentioned table FQNs (from question + SQL blocks) are available */
+  onChatMentionedTables?: (tables: string[]) => void;
   /** Called when source references are available from the response */
   onSources?: (sources: SourceData[]) => void;
   /** Called when the backend creates a conversation for this session */
@@ -170,6 +172,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       onDeployDashboard,
       onTableEnrichments,
       onReferencedTables,
+      onChatMentionedTables,
       onSources,
       onConversationCreated,
       onClear,
@@ -193,10 +196,13 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
     } | null>(null);
     const [erdModalTables, setErdModalTables] = React.useState<string[] | null>(null);
     const [pendingAction, setPendingAction] = React.useState<string | null>(null);
+    const [preparingMessageId, setPreparingMessageId] = React.useState<string | null>(null);
     const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
     const sessionId = externalSessionId ?? fallbackSessionId;
     const inputRef = React.useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
+    const lastChunkTimeRef = React.useRef<number>(0);
+    const streamingMsgIdRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
       setMessages(initialMessages ?? []);
@@ -207,6 +213,25 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       }, 50);
     }, []);
+
+    // Detect when LLM streaming has stopped but done event hasn't arrived yet
+    React.useEffect(() => {
+      if (!loading) {
+        setPreparingMessageId(null);
+        return;
+      }
+      const timer = setInterval(() => {
+        const msgId = streamingMsgIdRef.current;
+        if (
+          msgId &&
+          lastChunkTimeRef.current > 0 &&
+          Date.now() - lastChunkTimeRef.current > 800
+        ) {
+          setPreparingMessageId(msgId);
+        }
+      }, 500);
+      return () => clearInterval(timer);
+    }, [loading]);
 
     const handleSubmit = async (externalQuestion?: string) => {
       const question = (externalQuestion ?? input).trim();
@@ -229,6 +254,9 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       setInput("");
       setLoading(true);
       setActiveSql(null);
+      lastChunkTimeRef.current = 0;
+      streamingMsgIdRef.current = assistantMsg.id;
+      setPreparingMessageId(null);
       scrollToBottom();
 
       try {
@@ -270,6 +298,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
               const parsed = JSON.parse(data);
 
               if (parsed.type === "chunk") {
+                lastChunkTimeRef.current = Date.now();
                 streamedContent += parsed.content;
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -278,6 +307,8 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                 );
                 scrollToBottom();
               } else if (parsed.type === "done") {
+                streamingMsgIdRef.current = null;
+                setPreparingMessageId(null);
                 const enrichments = parsed.tableEnrichments ?? [];
                 const tables: string[] = parsed.tables ?? [];
                 const sources: SourceData[] = parsed.sources ?? [];
@@ -301,6 +332,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                 );
                 onTableEnrichments?.(enrichments);
                 onReferencedTables?.(tables);
+                onChatMentionedTables?.(parsed.chatMentionedTables ?? []);
                 onSources?.(sources);
                 if (parsed.conversationId) {
                   onConversationCreated?.(parsed.conversationId);
@@ -453,6 +485,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       setDeploySql(null);
       onTableEnrichments?.([]);
       onReferencedTables?.([]);
+      onChatMentionedTables?.([]);
       onSources?.([]);
       onClear?.();
     };
@@ -772,6 +805,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                         <AnswerStream
                           content={msg.content}
                           isStreaming={msg.isStreaming ?? false}
+                          isPreparing={preparingMessageId === msg.id}
                           onRunSql={
                             onOpenSql
                               ? (sql) => {

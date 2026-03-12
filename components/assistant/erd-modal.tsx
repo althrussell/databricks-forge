@@ -13,7 +13,14 @@ interface ErdModalProps {
 }
 
 function filterGraphByHops(fullGraph: ERDGraph, seedFqns: string[], hops: number): ERDGraph {
-  const relevant = new Set(seedFqns);
+  const nodeLookup = new Map<string, string>();
+  for (const n of fullGraph.nodes) nodeLookup.set(n.tableFqn.toLowerCase(), n.tableFqn);
+
+  const relevant = new Set<string>();
+  for (const fqn of seedFqns) {
+    const canonical = nodeLookup.get(fqn.toLowerCase());
+    if (canonical) relevant.add(canonical);
+  }
 
   for (let hop = 0; hop < hops; hop++) {
     const frontier = new Set<string>();
@@ -54,7 +61,7 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
   const [graph, setGraph] = React.useState<ERDGraph | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [hopDepth, setHopDepth] = React.useState(1);
+  const [hopDepth, setHopDepth] = React.useState(0);
   const [ERDViewer, setERDViewer] = React.useState<React.ComponentType<{ graph: ERDGraph }> | null>(
     null,
   );
@@ -73,7 +80,7 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
         const data: ERDGraph = await resp.json();
         if (!cancelled) {
           setFullGraph(data);
-          setGraph(filterGraphByHops(data, tableFqns, 1));
+          setGraph(filterGraphByHops(data, tableFqns, 0));
           setLoading(false);
         }
       } catch (err) {
@@ -192,8 +199,32 @@ export function ErdModal({ tableFqns, onClose }: ErdModalProps) {
           )}
 
           {!loading && !error && graph && graph.nodes.length === 0 && (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              No relationship data available for the referenced tables.
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              <Network className="size-8 text-muted-foreground/30" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {fullGraph && fullGraph.nodes.length === 0
+                    ? "No estate scan data available"
+                    : "Referenced tables not found in estate scan data"}
+                </p>
+                <p className="max-w-sm text-xs text-muted-foreground/70">
+                  {fullGraph && fullGraph.nodes.length === 0
+                    ? "Run an estate scan from the Environment page to generate ERD data for your schemas."
+                    : "The referenced tables were not included in any estate scan. Run a scan covering these schemas, or increase the lineage depth above."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-1 gap-1.5 text-xs"
+                onClick={() => {
+                  router.push("/environment?tab=erd");
+                  onClose();
+                }}
+              >
+                <Maximize2 className="size-3" />
+                Go to Environment
+              </Button>
             </div>
           )}
 

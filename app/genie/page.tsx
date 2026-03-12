@@ -145,6 +145,7 @@ export default function GenieSpacesPage() {
   const [spaces, setSpaces] = useState<SpaceCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ percent: number; message: string } | null>(
     null,
   );
@@ -210,6 +211,63 @@ export default function GenieSpacesPage() {
       toast.error("Failed to load Genie Spaces");
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const runDiscovery = useCallback(async (spaceIds: string[]) => {
+    if (spaceIds.length === 0) return;
+    setDiscovering(true);
+    try {
+      const res = await fetch("/api/genie-spaces/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spaceIds }),
+      });
+      if (!res.ok) return;
+
+      const data: Record<
+        string,
+        {
+          metadata: { tableCount?: number; measureCount?: number; sampleQuestionCount?: number; filterCount?: number } | null;
+          healthReport: SpaceHealthReport | null;
+          permissionDenied?: boolean;
+        }
+      > = await res.json();
+
+      const deniedIds = new Set<string>();
+      const reports: Record<string, SpaceHealthReport | null> = {};
+      for (const [id, result] of Object.entries(data)) {
+        if (result.permissionDenied) deniedIds.add(id);
+        reports[id] = result.healthReport;
+      }
+
+      if (deniedIds.size > 0) {
+        setInaccessibleIds((prev) => {
+          const next = new Set(prev);
+          for (const id of deniedIds) next.add(id);
+          return next;
+        });
+      }
+
+      setSpaces((prev) =>
+        prev.map((s) => {
+          const disc = data[s.spaceId];
+          if (!disc?.metadata) return s;
+          return {
+            ...s,
+            tableCount: disc.metadata.tableCount,
+            measureCount: disc.metadata.measureCount,
+            sampleQuestionCount: disc.metadata.sampleQuestionCount,
+            filterCount: disc.metadata.filterCount,
+          };
+        }),
+      );
+
+      setHealthScores((prev) => ({ ...prev, ...reports }));
+    } catch {
+      // Discovery is non-critical
+    } finally {
+      setDiscovering(false);
     }
   }, []);
 
@@ -287,6 +345,21 @@ export default function GenieSpacesPage() {
       if (syncTimerRef.current) clearInterval(syncTimerRef.current);
     };
   }, [loadFromCache]);
+
+  // Discover health for visible spaces that are missing scores
+  const discoveredRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (loading || syncing || discovering) return;
+    const visible = spaces
+      .filter((s) => s.status !== "trashed" && !inaccessibleIds.has(s.spaceId))
+      .slice(page * 12, (page + 1) * 12);
+    const missing = visible
+      .filter((s) => !healthScores[s.spaceId] && !discoveredRef.current.has(s.spaceId))
+      .map((s) => s.spaceId);
+    if (missing.length === 0) return;
+    for (const id of missing) discoveredRef.current.add(id);
+    runDiscovery(missing);
+  }, [loading, syncing, discovering, spaces, page, healthScores, inaccessibleIds, runDiscovery]);
 
   // Poll for active improvement jobs
   useEffect(() => {
@@ -700,7 +773,7 @@ export default function GenieSpacesPage() {
                       onTrash={() => setTrashTarget(space)}
                       onCardClick={() => router.push(`/genie/${space.spaceId}`)}
                       healthReport={healthScores[space.spaceId] ?? undefined}
-                      healthLoading={syncing}
+                      healthLoading={syncing || (discovering && !healthScores[space.spaceId])}
                       onHealthClick={() => {
                         setHealthSheetTarget(space);
                         setHealthSheetOpen(true);

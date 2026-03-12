@@ -9,6 +9,7 @@ import { Copy, Check, Play } from "lucide-react";
 interface AnswerStreamProps {
   content: string;
   isStreaming: boolean;
+  isPreparing?: boolean;
   onRunSql?: (sql: string) => void;
 }
 
@@ -101,7 +102,7 @@ function CodeBlock({
 
 const REMARK_PLUGINS = [remarkGfm];
 
-export function AnswerStream({ content, isStreaming, onRunSql }: AnswerStreamProps) {
+export function AnswerStream({ content, isStreaming, isPreparing, onRunSql }: AnswerStreamProps) {
   const endRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -148,8 +149,18 @@ export function AnswerStream({ content, isStreaming, onRunSql }: AnswerStreamPro
           {content}
         </ReactMarkdown>
       </div>
-      {isStreaming && (
+      {isStreaming && !isPreparing && (
         <span className="ml-0.5 inline-block h-4 w-1 animate-pulse rounded-sm bg-primary" />
+      )}
+      {isPreparing && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex gap-0.5">
+            <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:0ms]" />
+            <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:150ms]" />
+            <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:300ms]" />
+          </span>
+          Preparing actions&hellip;
+        </div>
       )}
       <div ref={endRef} />
     </div>

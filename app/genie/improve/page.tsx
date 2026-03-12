@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,8 @@ export default function ImproveExistingPage() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [autoImproving, setAutoImproving] = useState<string | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const discoveredRef = useRef(new Set<string>());
 
   const loadSpaces = useCallback(async () => {
     try {
@@ -118,6 +120,54 @@ export default function ImproveExistingPage() {
   useEffect(() => {
     loadSpaces();
   }, [loadSpaces]);
+
+  // Discover health for spaces missing scores
+  useEffect(() => {
+    if (loading || discovering) return;
+    const missing = spaces
+      .filter((s) => s.overallScore === undefined && !discoveredRef.current.has(s.spaceId))
+      .map((s) => s.spaceId);
+    if (missing.length === 0) return;
+    for (const id of missing) discoveredRef.current.add(id);
+    setDiscovering(true);
+
+    const BATCH = 50;
+    (async () => {
+      try {
+        for (let i = 0; i < missing.length; i += BATCH) {
+          const chunk = missing.slice(i, i + BATCH);
+          const res = await fetch("/api/genie-spaces/discover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ spaceIds: chunk }),
+          });
+          if (!res.ok) continue;
+          const data: Record<
+            string,
+            { metadata: { tableCount?: number } | null; healthReport: { grade?: string; overallScore?: number; fixableCount?: number } | null; permissionDenied?: boolean }
+          > = await res.json();
+
+          setSpaces((prev) =>
+            prev.map((s) => {
+              const d = data[s.spaceId];
+              if (!d) return s;
+              return {
+                ...s,
+                tableCount: d.metadata?.tableCount ?? s.tableCount,
+                grade: d.healthReport?.grade ?? s.grade,
+                overallScore: d.healthReport?.overallScore ?? s.overallScore,
+                fixableCount: d.healthReport?.fixableCount ?? s.fixableCount,
+              };
+            }),
+          );
+        }
+      } catch {
+        // Discovery is non-critical
+      } finally {
+        setDiscovering(false);
+      }
+    })();
+  }, [loading, discovering, spaces]);
 
   const handleAutoImprove = async (spaceId: string) => {
     setAutoImproving(spaceId);
