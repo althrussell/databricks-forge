@@ -23,6 +23,7 @@ import {
   Code,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
 
 interface ExtractedRequirements {
   tables: string[];
@@ -69,11 +70,11 @@ export default function CreateFromRequirementsPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Parsing failed");
+        throw new Error(await parseErrorResponse(res, "Parsing failed"));
       }
 
-      const result: ParseResult = await res.json();
+      const result = (await safeJsonParse<ParseResult>(res))!;
+      if (!result) throw new Error("Invalid response from server");
       setParseResult(result);
       setTitle(result.requirements.suggestedTitle);
       setStep("review");
@@ -101,11 +102,11 @@ export default function CreateFromRequirementsPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Parsing failed");
+        throw new Error(await parseErrorResponse(res, "Parsing failed"));
       }
 
-      const result: ParseResult = await res.json();
+      const result = (await safeJsonParse<ParseResult>(res))!;
+      if (!result) throw new Error("Invalid response from server");
       setParseResult(result);
       setTitle(result.requirements.suggestedTitle);
       setStep("review");
@@ -151,8 +152,7 @@ export default function CreateFromRequirementsPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Generation failed");
+        throw new Error(await parseErrorResponse(res, "Generation failed"));
       }
 
       toast.success("Genie Space generation started!");

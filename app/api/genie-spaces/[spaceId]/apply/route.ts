@@ -33,7 +33,7 @@ export async function POST(
       return NextResponse.json({ error: "serializedSpace is required" }, { status: 400 });
     }
 
-    const authMode = await getSpaceAuthMode(spaceId).catch(() => undefined);
+    const authMode = await getSpaceAuthMode(spaceId);
     await updateGenieSpace(spaceId, { serializedSpace, authMode });
 
     invalidateSpaceCache(spaceId);

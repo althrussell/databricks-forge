@@ -33,6 +33,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "spaceId and benchmarks are required" }, { status: 400 });
     }
 
+    // Capture the user's OBO token while still in request context so background
+    // tasks can operate on behalf of the user (avoiding 403 with SP tokens).
+    const oboToken = request.headers.get("x-forwarded-access-token") ?? undefined;
+
     const jobId = `auto-${spaceId}-${Date.now()}`;
 
     activeJobs.set(jobId, { status: "running" });
@@ -46,6 +50,7 @@ export async function POST(request: NextRequest) {
         executeResults: true,
         questionDelayMs: 2_000,
       },
+      oboToken,
     };
 
     logActivity("started_auto_improve", {
@@ -71,6 +76,7 @@ export async function POST(request: NextRequest) {
             if (fixResult.changes.length > 0) {
               await updateGenieSpace(spaceId, {
                 serializedSpace: JSON.stringify(fixResult.updatedSpace),
+                oboToken,
               });
             }
             return fixResult.strategiesRun;

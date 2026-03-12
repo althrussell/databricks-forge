@@ -35,11 +35,13 @@ export async function POST(
     const config = getConfig();
     const cloneTitle = `${originalTitle} (Forge Copy)`;
 
+    const oboToken = _request.headers.get("x-forwarded-access-token") ?? undefined;
     const result = await createGenieSpace({
       title: cloneTitle,
       description: `Cloned from space ${spaceId} for health check improvement.`,
       serializedSpace,
       warehouseId: config.warehouseId,
+      oboToken,
     });
 
     logger.info("Space cloned for fix workflow", {

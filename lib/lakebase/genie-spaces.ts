@@ -197,14 +197,14 @@ export async function trackGenieSpaceTrashed(spaceId: string): Promise<void> {
   });
 }
 
-/** Get the auth mode used to create a space (falls back to "sp" for legacy rows). */
+/** Get the auth mode used to create a space (falls back to OBO for safety). */
 export async function getSpaceAuthMode(spaceId: string): Promise<GenieAuthMode> {
   return withPrisma(async (prisma) => {
     const row = await prisma.forgeGenieSpace.findUnique({
       where: { spaceId },
       select: { authMode: true },
     });
-    return (row?.authMode as GenieAuthMode) ?? "sp";
+    return (row?.authMode as GenieAuthMode) ?? "obo";
   });
 }
 

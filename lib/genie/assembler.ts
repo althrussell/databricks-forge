@@ -24,6 +24,7 @@ import type {
 import type { MetadataSnapshot } from "@/lib/domain/types";
 import { isValidTable, validateSqlExpression, type SchemaAllowlist } from "./schema-allowlist";
 import { logger } from "@/lib/logger";
+import { isPiiColumn, isFormatAssistanceCandidate } from "@/lib/toolkit/pii-patterns";
 
 function makeId(seed: string, category: string, index: number): string {
   const hash = createHash("md5").update(`${seed}:${category}:${index}`).digest("hex");
@@ -133,6 +134,12 @@ export function assembleSerializedSpace(
     columnsByTable.set(ce.tableFqn, list);
   }
 
+  // Entity matching candidates lookup: "tableFqn:columnName" (lowercase)
+  const entityCandidateKeys = new Set<string>();
+  for (const ec of outputs.entityMatchingCandidates) {
+    entityCandidateKeys.add(`${ec.tableFqn.toLowerCase()}:${ec.columnName.toLowerCase()}`);
+  }
+
   // Join relationship lookup: tableFqn -> descriptions of related tables
   const joinRelationships = new Map<string, string[]>();
   for (const j of outputs.joinSpecs) {
@@ -201,6 +208,20 @@ export function assembleSerializedSpace(
             const cfg: DataSourceColumnConfig = { column_name: ce.columnName };
             if (ce.description) cfg.description = [ce.description];
             if (ce.synonyms.length > 0) cfg.synonyms = ce.synonyms;
+
+            const ecKey = `${fqn.toLowerCase()}:${ce.columnName.toLowerCase()}`;
+            const isEntity =
+              entityCandidateKeys.has(ecKey) || ce.entityMatchingCandidate;
+            if (isEntity) {
+              cfg.enable_entity_matching = true;
+              cfg.enable_format_assistance = true;
+            } else if (
+              isPiiColumn(ce.columnName) ||
+              isFormatAssistanceCandidate(ce.columnName)
+            ) {
+              cfg.enable_format_assistance = true;
+            }
+
             return cfg;
           });
         if (columnConfigs.length > 0) table.column_configs = columnConfigs;

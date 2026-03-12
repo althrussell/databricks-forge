@@ -41,6 +41,8 @@ export interface AutoImproveConfig {
   indexingWaitMs?: number;
   /** Enable three-space architecture for safe rollback (default true). */
   enableThreeSpace?: boolean;
+  /** OBO token captured at request time for background Genie API calls. */
+  oboToken?: string;
 }
 
 export interface AutoImproveIteration {
@@ -85,7 +87,10 @@ export interface ThreeSpaceIds {
  * Create dev-best and dev-working clones from the production space.
  * Returns the IDs for all three spaces.
  */
-export async function createDevSpaces(productionSpaceId: string): Promise<ThreeSpaceIds> {
+export async function createDevSpaces(
+  productionSpaceId: string,
+  oboToken?: string,
+): Promise<ThreeSpaceIds> {
   const prod = await getGenieSpace(productionSpaceId);
   const title = prod.title ?? "Untitled";
   const serializedSpace = prod.serialized_space ?? "{}";
@@ -96,6 +101,7 @@ export async function createDevSpaces(productionSpaceId: string): Promise<ThreeS
     description: `Auto-improve dev-best clone of ${productionSpaceId}`,
     serializedSpace,
     warehouseId,
+    oboToken,
   });
 
   const devWorking = await createGenieSpace({
@@ -103,6 +109,7 @@ export async function createDevSpaces(productionSpaceId: string): Promise<ThreeS
     description: `Auto-improve dev-working clone of ${productionSpaceId}`,
     serializedSpace,
     warehouseId,
+    oboToken,
   });
 
   logger.info("Three-space architecture initialized", {
@@ -208,6 +215,7 @@ export async function runAutoImproveLoop(
     benchmarkOptions,
     indexingWaitMs = DEFAULT_INDEXING_WAIT_MS,
     enableThreeSpace = true,
+    oboToken,
   } = config;
   const iterations: AutoImproveIteration[] = [];
   const startTime = Date.now();
@@ -230,7 +238,7 @@ export async function runAutoImproveLoop(
     });
 
     try {
-      devSpaces = await createDevSpaces(spaceId);
+      devSpaces = await createDevSpaces(spaceId, oboToken);
       benchmarkSpaceId = devSpaces.devWorking;
     } catch (err) {
       logger.warn("Three-space setup failed, falling back to in-place improvement", {

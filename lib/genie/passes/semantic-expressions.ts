@@ -8,7 +8,6 @@
  * grounded to the physical schema allowlist.
  */
 
-import { type ChatMessage } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { logger } from "@/lib/logger";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";

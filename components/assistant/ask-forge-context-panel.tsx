@@ -131,11 +131,49 @@ export function AskForgeContextPanel({
   const [showErdModal, setShowErdModal] = React.useState(false);
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({
     tables: true,
-    lineage: true,
-    sources: true,
+    lineage: false,
+    sources: false,
   });
 
   const hasContent = referencedTables.length > 0 || sources.length > 0 || enrichments.length > 0;
+
+  const toggleTable = (fqn: string) => {
+    setExpandedTables((prev) => {
+      const next = new Set(prev);
+      if (next.has(fqn)) next.delete(fqn);
+      else next.add(fqn);
+      return next;
+    });
+  };
+
+  const tableFqns =
+    referencedTables.length > 0 ? referencedTables : enrichments.map((e) => e.tableFqn);
+
+  const classifiedTables = React.useMemo(() => {
+    const enrichedFqns = new Set(enrichments.map((e) => e.tableFqn.toLowerCase()));
+    const lineageFqns = new Set<string>();
+    for (const fqn of tableFqns) {
+      const d = tableDetails.get(fqn);
+      if (d) {
+        for (const e of d.lineage.upstream) lineageFqns.add(e.sourceTableFqn.toLowerCase());
+        for (const e of d.lineage.downstream) lineageFqns.add(e.targetTableFqn.toLowerCase());
+      }
+    }
+
+    type RefType = "direct" | "lineage" | "implied";
+    const classified: Array<{ fqn: string; type: RefType }> = tableFqns.map((fqn) => {
+      const lower = fqn.toLowerCase();
+      if (enrichedFqns.has(lower)) return { fqn, type: "direct" };
+      if (lineageFqns.has(lower)) return { fqn, type: "lineage" };
+      return { fqn, type: "implied" };
+    });
+
+    const order: Record<RefType, number> = { direct: 0, lineage: 1, implied: 2 };
+    return classified.sort((a, b) => order[a.type] - order[b.type]);
+  }, [tableFqns, enrichments, tableDetails]);
+
+  const directCount = classifiedTables.filter((t) => t.type === "direct").length;
+  const lineageCount = classifiedTables.filter((t) => t.type === "lineage").length;
 
   if (!hasContent && !loadingTables) {
     return (
@@ -161,18 +199,6 @@ export function AskForgeContextPanel({
     );
   }
 
-  const toggleTable = (fqn: string) => {
-    setExpandedTables((prev) => {
-      const next = new Set(prev);
-      if (next.has(fqn)) next.delete(fqn);
-      else next.add(fqn);
-      return next;
-    });
-  };
-
-  const tableFqns =
-    referencedTables.length > 0 ? referencedTables : enrichments.map((e) => e.tableFqn);
-
   return (
     <div className="h-full w-full overflow-y-auto overflow-x-hidden">
       <div className="min-w-0 space-y-5 p-4">
@@ -186,6 +212,25 @@ export function AskForgeContextPanel({
             onToggle={() => setOpenSections((s) => ({ ...s, tables: !s.tables }))}
             loading={loadingTables}
           >
+            {(directCount > 0 || lineageCount > 0) && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+                {directCount > 0 && (
+                  <Badge variant="default" className="bg-primary/90 text-[10px]">
+                    {directCount} direct
+                  </Badge>
+                )}
+                {lineageCount > 0 && (
+                  <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-[10px]">
+                    {lineageCount} lineage
+                  </Badge>
+                )}
+                {classifiedTables.length - directCount - lineageCount > 0 && (
+                  <Badge variant="outline" className="border-dashed text-muted-foreground text-[10px]">
+                    {classifiedTables.length - directCount - lineageCount} implied
+                  </Badge>
+                )}
+              </div>
+            )}
             <div className="mt-2 space-y-3">
               {loadingTables && tableFqns.length === 0 && (
                 <>
@@ -194,7 +239,7 @@ export function AskForgeContextPanel({
                 </>
               )}
 
-              {tableFqns.map((fqn) => {
+              {classifiedTables.map(({ fqn, type: refType }) => {
                 const detail = tableDetails.get(fqn);
                 const enrichment = enrichments.find((e) => e.tableFqn === fqn);
                 const isExpanded = expandedTables.has(fqn);
@@ -208,6 +253,7 @@ export function AskForgeContextPanel({
                     isExpanded={isExpanded}
                     onToggle={() => toggleTable(fqn)}
                     onAskAbout={() => onAskAboutTable?.(fqn)}
+                    referenceType={refType}
                   />
                 );
               })}
@@ -314,6 +360,7 @@ function RichTableCard({
   isExpanded,
   onToggle,
   onAskAbout,
+  referenceType,
 }: {
   fqn: string;
   detail?: TableDetailData;
@@ -321,6 +368,7 @@ function RichTableCard({
   isExpanded: boolean;
   onToggle: () => void;
   onAskAbout: () => void;
+  referenceType?: "direct" | "lineage" | "implied";
 }) {
   const parts = fqn.split(".");
   const shortName = parts.length >= 3 ? parts[2] : fqn;
@@ -366,6 +414,16 @@ function RichTableCard({
               {shortName}
             </Link>
             <ExternalLink className="size-3 text-muted-foreground" />
+            {referenceType === "lineage" && (
+              <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-[9px] px-1 py-0">
+                lineage
+              </Badge>
+            )}
+            {referenceType === "implied" && (
+              <Badge variant="outline" className="border-dashed text-muted-foreground text-[9px] px-1 py-0">
+                implied
+              </Badge>
+            )}
           </div>
           {schemaPath && <p className="truncate text-muted-foreground">{schemaPath}</p>}
           {!isExpanded && description && (

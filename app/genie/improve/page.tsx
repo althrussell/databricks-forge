@@ -23,6 +23,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
+import { parseErrorResponse } from "@/lib/error-utils";
 
 interface SpaceRow {
   spaceId: string;
@@ -129,8 +130,7 @@ export default function ImproveExistingPage() {
         body: JSON.stringify({ spaceId, targetScore: 80, maxIterations: 5 }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Auto-improve failed");
+        throw new Error(await parseErrorResponse(res, "Auto-improve failed"));
       }
       toast.success("Auto-improve started. Check back in a few minutes.");
       router.push(`/genie/${spaceId}?tab=benchmarks`);

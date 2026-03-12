@@ -21,6 +21,8 @@ import {
 
 const TEMPERATURE = 0.2;
 const MAX_QUERIES = 6;
+
+/** @deprecated Use shared `isPiiColumn` from `lib/toolkit/pii-patterns.ts`. */
 const PII_COLUMN_PATTERN = /(email|phone|ssn|social_security|tax_id|dob|birth|address)/i;
 const NUMERIC_TYPE_PATTERN = /^(int|bigint|smallint|tinyint|float|double|decimal|numeric|real)/i;
 const DATE_TYPE_PATTERN = /(date|timestamp|time)/i;

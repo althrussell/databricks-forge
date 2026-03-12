@@ -1,10 +1,12 @@
 /**
  * API: /api/genie-spaces/generate
  *
- * POST -- Start Genie Space generation from a table list.
- *         mode=fast (default): synchronous, returns result immediately.
- *         mode=full: async, returns jobId; the client polls GET for progress.
- * GET  -- Poll full-mode generation status by jobId.
+ * POST   -- Start Genie Space generation from a table list.
+ *           mode=fast (default): synchronous, returns result immediately.
+ *           mode=full: async, returns jobId; the client polls GET for progress.
+ * GET    -- Poll full-mode generation status by jobId.
+ *           Without jobId: returns all active generate jobs (for dashboard tiles).
+ * DELETE -- Cancel a running generate job by jobId.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,7 +21,7 @@ import { safeErrorMessage } from "@/lib/error-utils";
 
 interface AdHocJobStatus {
   jobId: string;
-  status: "generating" | "completed" | "failed";
+  status: "generating" | "completed" | "failed" | "cancelled";
   message: string;
   percent: number;
   startedAt: number;
@@ -29,6 +31,10 @@ interface AdHocJobStatus {
     recommendation: import("@/lib/genie/types").GenieSpaceRecommendation;
     mode: "fast" | "full";
   } | null;
+  title?: string;
+  domain?: string;
+  tableCount?: number;
+  abortController?: AbortController;
 }
 
 const jobs = new Map<string, AdHocJobStatus>();
@@ -52,6 +58,20 @@ function validateTables(tables: unknown): string[] | null {
   );
   if (invalid.length > 0) return null;
   return tables as string[];
+}
+
+function jobToResponse(job: AdHocJobStatus) {
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    message: job.message,
+    percent: job.percent,
+    error: job.error,
+    result: job.result,
+    title: job.title,
+    domain: job.domain,
+    tableCount: job.tableCount,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -98,6 +118,8 @@ export async function POST(request: NextRequest) {
     // -----------------------------------------------------------------------
     const jobId = uuidv4();
     const now = Date.now();
+    const abortController = new AbortController();
+
     jobs.set(jobId, {
       jobId,
       status: "generating",
@@ -107,6 +129,10 @@ export async function POST(request: NextRequest) {
       completedAt: null,
       error: null,
       result: null,
+      title: config?.title ?? undefined,
+      domain: config?.domain ?? undefined,
+      tableCount: tables.length,
+      abortController,
     });
 
     runAdHocGenieEngine({
@@ -119,10 +145,11 @@ export async function POST(request: NextRequest) {
           job.percent = Math.min(99, percent);
         }
       },
+      signal: abortController.signal,
     })
       .then((result) => {
         const job = jobs.get(jobId);
-        if (job) {
+        if (job && job.status === "generating") {
           job.status = "completed";
           const gateDecision = result.recommendation.quality?.gateDecision ?? "allow";
           const qualityWarnings = result.recommendation.quality?.degradedReasons.length ?? 0;
@@ -138,14 +165,19 @@ export async function POST(request: NextRequest) {
         }
       })
       .catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error("Full Genie generation failed", { jobId, error: msg });
         const job = jobs.get(jobId);
-        if (job) {
-          job.status = "failed";
-          job.message = "Generation failed";
+        if (job && job.status === "generating") {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (abortController.signal.aborted) {
+            job.status = "cancelled";
+            job.message = "Generation cancelled";
+          } else {
+            logger.error("Full Genie generation failed", { jobId, error: msg });
+            job.status = "failed";
+            job.message = "Generation failed";
+            job.error = msg;
+          }
           job.completedAt = Date.now();
-          job.error = msg;
         }
       });
 
@@ -159,6 +191,34 @@ export async function GET(request: NextRequest) {
   evictStale();
 
   const jobId = request.nextUrl.searchParams.get("jobId");
+
+  // If no jobId, return all active jobs (for dashboard polling)
+  if (!jobId) {
+    const activeJobs = [...jobs.values()]
+      .filter((j) => j.status === "generating" || (j.status === "completed" && !j.result))
+      .map(jobToResponse);
+    // Also include recently completed jobs (within 60s) so the dashboard can transition
+    const recentlyCompleted = [...jobs.values()]
+      .filter(
+        (j) =>
+          (j.status === "completed" || j.status === "failed" || j.status === "cancelled") &&
+          j.completedAt &&
+          Date.now() - j.completedAt < 60_000,
+      )
+      .map(jobToResponse);
+    return NextResponse.json({ jobs: [...activeJobs, ...recentlyCompleted] });
+  }
+
+  const job = jobs.get(jobId);
+  if (!job) {
+    return NextResponse.json({ error: "Job not found or expired" }, { status: 404 });
+  }
+
+  return NextResponse.json(jobToResponse(job));
+}
+
+export async function DELETE(request: NextRequest) {
+  const jobId = request.nextUrl.searchParams.get("jobId");
   if (!jobId) {
     return NextResponse.json({ error: "jobId query parameter required" }, { status: 400 });
   }
@@ -168,12 +228,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Job not found or expired" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    jobId: job.jobId,
-    status: job.status,
-    message: job.message,
-    percent: job.percent,
-    error: job.error,
-    result: job.result,
-  });
+  if (job.status !== "generating") {
+    return NextResponse.json({ error: "Job is not running" }, { status: 409 });
+  }
+
+  job.abortController?.abort();
+  job.status = "cancelled";
+  job.message = "Generation cancelled";
+  job.completedAt = Date.now();
+
+  logger.info("Generate job cancelled", { jobId });
+  return NextResponse.json({ success: true });
 }

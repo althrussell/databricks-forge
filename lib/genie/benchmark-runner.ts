@@ -136,7 +136,7 @@ function sqlSimilarity(a: string, b: string): number {
 }
 
 const HIGH_SIMILARITY_THRESHOLD = 0.95;
-const LOW_SIMILARITY_THRESHOLD = 0.3;
+const _LOW_SIMILARITY_THRESHOLD = 0.3;
 
 // ---------------------------------------------------------------------------
 // SQL execution for result comparison

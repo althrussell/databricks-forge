@@ -26,7 +26,7 @@ import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
 import { PanelRightClose, PanelRight } from "lucide-react";
 
 export default function AskForgeContent() {
-  const searchParams = useSearchParams();
+  const _searchParams = useSearchParams();
   const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(
     null,
   );
