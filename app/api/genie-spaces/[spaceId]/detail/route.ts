@@ -13,6 +13,7 @@ import { isReviewEnabled } from "@/lib/dbx/client";
 import { getHealthCheckConfig } from "@/lib/lakebase/space-health";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { getTrackedBySpaceId } from "@/lib/lakebase/genie-spaces";
+import { updateCachedSpaceDiscovery } from "@/lib/lakebase/genie-space-cache";
 import { extractSpaceMetadata, parseSerializedSpace } from "@/lib/genie/space-metadata";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
@@ -75,6 +76,17 @@ export async function GET(
       }
     }
 
+    // Write back to Lakebase cache so listing page stays fresh
+    updateCachedSpaceDiscovery(spaceId, {
+      tableCount: metadata?.tableCount ?? null,
+      measureCount: metadata?.measureCount ?? null,
+      sampleQuestionCount: metadata?.sampleQuestionCount ?? null,
+      filterCount: metadata?.filterCount ?? null,
+      healthScore: healthReport?.overallScore ?? null,
+      healthReportJson: healthReport ? JSON.stringify(healthReport) : null,
+      permissionDenied: false,
+    }).catch(() => {});
+
     return NextResponse.json({
       spaceId,
       title: tracked?.title ?? title,
@@ -88,12 +100,18 @@ export async function GET(
       healthReport,
     });
   } catch (error) {
+    const { spaceId: sid } = await params;
     const message = error instanceof Error ? error.message : "Unknown error";
     const isPermissionDenied = message.includes("(403)") || message.includes("PERMISSION_DENIED");
     logger.error("Space detail fetch failed", {
       error: message,
       permissionDenied: isPermissionDenied,
     });
+
+    if (isPermissionDenied && isSafeId(sid)) {
+      updateCachedSpaceDiscovery(sid, { permissionDenied: true }).catch(() => {});
+    }
+
     return NextResponse.json(
       {
         error: isPermissionDenied

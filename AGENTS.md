@@ -128,6 +128,20 @@ Key modules:
 - `lib/genie/auto-improve.ts` -- iterative benchmark -> fix -> re-benchmark loop until target score
 - `lib/genie/benchmark-runner.ts` -- 3-tier benchmark scoring: SQL similarity, result-set comparison, LLM judge
 - `lib/genie/benchmark-feedback.ts` -- failure category mapping to fix strategies (result-based + heuristic)
+- `lib/genie/sync-jobs.ts` -- in-memory job store for workspace sync (fire-and-forget pattern)
+- `lib/lakebase/genie-space-cache.ts` -- CRUD for `ForgeGenieSpaceCache` (workspace listing cache)
+
+Workspace space cache:
+- On page load, the listing reads from `ForgeGenieSpaceCache` in Lakebase (fast, no Databricks API calls).
+- User-triggered "Sync Spaces" fires a background job (`POST /api/genie-spaces/sync`) that paginates the Databricks `listGenieSpaces` API and upserts results into the cache. Client polls for progress.
+- Individual space detail pages write metadata + health back to the cache on visit.
+
+Data model: `ForgeGenieSpaceCache` (see Prisma schema).
+
+API routes:
+- `GET /api/genie-spaces` -- list from Lakebase cache + tracking data (fast)
+- `POST /api/genie-spaces/sync` -- start background sync job (fire-and-forget)
+- `GET /api/genie-spaces/sync?jobId=X` -- poll sync job status
 
 ## Genie Engine (Post-Pipeline)
 
