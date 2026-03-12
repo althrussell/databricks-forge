@@ -349,8 +349,12 @@ export function ConversationHistory({
                         : "text-muted-foreground",
                   )}
                 >
-                  {(group as GroupedConversationsEx).accent === "amber" && <Sparkles className="size-3" />}
-                  {(group as GroupedConversationsEx).accent === "emerald" && <BarChart3 className="size-3" />}
+                  {(group as GroupedConversationsEx).accent === "amber" && (
+                    <Sparkles className="size-3" />
+                  )}
+                  {(group as GroupedConversationsEx).accent === "emerald" && (
+                    <BarChart3 className="size-3" />
+                  )}
                   {group.label}
                 </p>
                 {group.conversations.map((conv) => (

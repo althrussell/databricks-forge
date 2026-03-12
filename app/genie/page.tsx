@@ -699,7 +699,8 @@ function SpaceCard({
             }}
           >
             <Wrench className="size-3" />
-            {healthReport.fixableCount} fixable issue{healthReport.fixableCount !== 1 ? "s" : ""} &mdash; Fix now
+            {healthReport.fixableCount} fixable issue{healthReport.fixableCount !== 1 ? "s" : ""}{" "}
+            &mdash; Fix now
           </button>
         )}
 

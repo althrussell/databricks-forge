@@ -68,7 +68,11 @@ export default function ImproveExistingPage() {
       }
       for (const ws of wsSpaces) {
         if (seen.has(ws.space_id)) continue;
-        rows.push({ spaceId: ws.space_id, title: ws.title ?? "Untitled", description: ws.description });
+        rows.push({
+          spaceId: ws.space_id,
+          title: ws.title ?? "Untitled",
+          description: ws.description,
+        });
       }
 
       setSpaces(rows);
@@ -238,11 +242,7 @@ export default function ImproveExistingPage() {
                 <div
                   className={`flex size-10 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${gradeColor(space.grade)}`}
                 >
-                  {discovering ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    space.grade ?? "–"
-                  )}
+                  {discovering ? <Loader2 className="size-4 animate-spin" /> : (space.grade ?? "–")}
                 </div>
 
                 {/* Info */}
@@ -282,7 +282,10 @@ export default function ImproveExistingPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="flex shrink-0 items-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Button
                     size="sm"
                     variant="outline"

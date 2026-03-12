@@ -51,19 +51,16 @@ export default function CreateFromSchemaPage() {
   const [title, setTitle] = useState("");
   const [generating, setGenerating] = useState(false);
 
-  const handleSchemaSelection = useCallback(
-    (sources: string[]) => {
-      if (sources.length > 0) {
-        const parts = sources[0].split(".");
-        setCatalog(parts[0] ?? "");
-        setSchema(parts[1] ?? "");
-      } else {
-        setCatalog("");
-        setSchema("");
-      }
-    },
-    [],
-  );
+  const handleSchemaSelection = useCallback((sources: string[]) => {
+    if (sources.length > 0) {
+      const parts = sources[0].split(".");
+      setCatalog(parts[0] ?? "");
+      setSchema(parts[1] ?? "");
+    } else {
+      setCatalog("");
+      setSchema("");
+    }
+  }, []);
 
   const stepLabels = ["Select Schema", "Review Tables", "Generate"];
   const currentStepIndex = step === "input" || step === "scanning" ? 0 : step === "review" ? 1 : 2;
@@ -206,7 +203,9 @@ export default function CreateFromSchemaPage() {
             {catalog && schema && (
               <div className="flex items-center gap-2 text-sm">
                 <Database className="size-4 text-muted-foreground" />
-                <span className="font-medium">{catalog}.{schema}</span>
+                <span className="font-medium">
+                  {catalog}.{schema}
+                </span>
               </div>
             )}
             <div>
