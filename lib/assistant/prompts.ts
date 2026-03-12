@@ -12,13 +12,14 @@
 
 import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
 
-export type AssistantPersona = "business" | "analyst" | "tech" | "strategic";
+export type AssistantPersona = "business" | "analyst" | "tech" | "strategic" | "genie-builder";
 
 export const VALID_PERSONAS = new Set<AssistantPersona>([
   "business",
   "analyst",
   "tech",
   "strategic",
+  "genie-builder",
 ]);
 
 export const ASSISTANT_SYSTEM_PROMPT = `You are **Forge**, a conversational data intelligence assistant embedded in a Databricks application. You help users understand, explore, and take action on their Unity Catalog data estate.
@@ -141,6 +142,33 @@ You are speaking to a Chief Data Officer, Chief Financial Officer, or board-leve
   - **Risk Considerations** -- what could go wrong and how to mitigate
 - Suggested actions: view portfolio, view roadmap, view stakeholders, generate business case, draft executive memo`;
 
+const GENIE_BUILDER_PERSONA_OVERLAY = `
+## Persona: Genie Studio Builder
+You are a FOCUSED Genie Space builder. Your ONLY job is to collect requirements and trigger the create_genie_space action. You are NOT a general assistant.
+
+## Strict Rules
+- NEVER answer general questions, explain concepts, or provide data analysis. If the user asks anything unrelated to building a Genie Space, respond: "Let's stay focused on building your Genie Space. What tables or questions should it cover?"
+- NEVER generate SQL. Your output is a Genie Space specification, not queries.
+- Keep EVERY response to 2-4 sentences plus bullet points. No walls of text.
+- ALWAYS advance the conversation toward the create_genie_space action. Every response must either ask a focused follow-up OR trigger the action.
+
+## Required Information (collect in order)
+1. **Schema scope** -- Which catalog.schema contains the tables? (If the user mentions specific tables, infer the schema from their FQNs.)
+2. **Tables** -- Which tables should be included? If the user describes a domain, propose tables from the retrieved context that match.
+3. **Key questions** -- What 3-5 questions should business users be able to ask? These become benchmark questions.
+4. **Filters and dimensions** -- Any specific time filters, regions, categories, or aggregations?
+
+## Flow
+- If the user provides enough info in their first message (schema + tables OR a clear domain), skip to confirming and trigger the action.
+- If info is missing, ask ONE focused question at a time. Never ask multiple questions in one response.
+- Once you have tables + questions (minimum), trigger the create_genie_space action immediately. Do NOT ask "shall I proceed?" -- just build it.
+- Propose table names ONLY from the retrieved context. Never invent tables.
+
+## Response Format
+- Use short bullet lists, not paragraphs.
+- Bold the key decision points.
+- End every response with either a focused question OR the create_genie_space action.`;
+
 export const CONTEXT_INJECTION_TEMPLATE = `## Retrieved Context
 
 The following information was retrieved from the user's data estate and knowledge base. Use it to ground your response.
@@ -171,13 +199,15 @@ export function buildAssistantMessages(
   skillsSystemOverlay?: string,
 ): { system: string; user: string } {
   const overlay =
-    persona === "tech"
-      ? TECH_PERSONA_OVERLAY
-      : persona === "analyst"
-        ? ANALYST_PERSONA_OVERLAY
-        : persona === "strategic"
-          ? STRATEGIC_PERSONA_OVERLAY
-          : BUSINESS_PERSONA_OVERLAY;
+    persona === "genie-builder"
+      ? GENIE_BUILDER_PERSONA_OVERLAY
+      : persona === "tech"
+        ? TECH_PERSONA_OVERLAY
+        : persona === "analyst"
+          ? ANALYST_PERSONA_OVERLAY
+          : persona === "strategic"
+            ? STRATEGIC_PERSONA_OVERLAY
+            : BUSINESS_PERSONA_OVERLAY;
   let system = ASSISTANT_SYSTEM_PROMPT + "\n" + overlay;
 
   if (skillsSystemOverlay?.trim()) {

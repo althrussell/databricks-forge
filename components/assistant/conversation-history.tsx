@@ -31,6 +31,8 @@ import {
   PanelLeft,
   Check,
   X,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +44,7 @@ export interface ConversationSummary {
   id: string;
   title: string;
   sessionId: string;
+  persona?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,35 +68,67 @@ interface GroupedConversations {
   conversations: ConversationSummary[];
 }
 
-function groupByDate(conversations: ConversationSummary[]): GroupedConversations[] {
+interface GroupedConversationsEx extends GroupedConversations {
+  accent?: "amber" | "emerald";
+}
+
+function groupConversations(conversations: ConversationSummary[]): GroupedConversationsEx[] {
+  const genieBuilder: ConversationSummary[] = [];
+  const strategic: ConversationSummary[] = [];
+  const regular: ConversationSummary[] = [];
+
+  for (const conv of conversations) {
+    if (conv.persona === "genie-builder") {
+      genieBuilder.push(conv);
+    } else if (conv.persona === "strategic") {
+      strategic.push(conv);
+    } else {
+      regular.push(conv);
+    }
+  }
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
   const weekStart = new Date(todayStart.getTime() - 7 * 86_400_000);
 
-  const groups: Record<string, ConversationSummary[]> = {
+  const dateGroups: Record<string, ConversationSummary[]> = {
     Today: [],
     Yesterday: [],
     "Previous 7 days": [],
     Older: [],
   };
 
-  for (const conv of conversations) {
+  for (const conv of regular) {
     const date = new Date(conv.updatedAt);
     if (date >= todayStart) {
-      groups.Today.push(conv);
+      dateGroups.Today.push(conv);
     } else if (date >= yesterdayStart) {
-      groups.Yesterday.push(conv);
+      dateGroups.Yesterday.push(conv);
     } else if (date >= weekStart) {
-      groups["Previous 7 days"].push(conv);
+      dateGroups["Previous 7 days"].push(conv);
     } else {
-      groups.Older.push(conv);
+      dateGroups.Older.push(conv);
     }
   }
 
-  return Object.entries(groups)
-    .filter(([, items]) => items.length > 0)
-    .map(([label, conversations]) => ({ label, conversations }));
+  const result: GroupedConversationsEx[] = [];
+
+  if (genieBuilder.length > 0) {
+    result.push({ label: "Genie Builder", conversations: genieBuilder, accent: "amber" });
+  }
+
+  if (strategic.length > 0) {
+    result.push({ label: "Strategic Advisor", conversations: strategic, accent: "emerald" });
+  }
+
+  for (const [label, items] of Object.entries(dateGroups)) {
+    if (items.length > 0) {
+      result.push({ label, conversations: items });
+    }
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +221,7 @@ export function ConversationHistory({
     setEditTitle(conv.title);
   };
 
-  const groups = groupByDate(conversations);
+  const groups = groupConversations(conversations);
 
   if (collapsed) {
     return (
@@ -304,7 +339,18 @@ export function ConversationHistory({
           {!loading &&
             groups.map((group) => (
               <div key={group.label} className="mb-3">
-                <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p
+                  className={cn(
+                    "mb-1.5 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider",
+                    (group as GroupedConversationsEx).accent === "amber"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : (group as GroupedConversationsEx).accent === "emerald"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {(group as GroupedConversationsEx).accent === "amber" && <Sparkles className="size-3" />}
+                  {(group as GroupedConversationsEx).accent === "emerald" && <BarChart3 className="size-3" />}
                   {group.label}
                 </p>
                 {group.conversations.map((conv) => (
@@ -318,7 +364,16 @@ export function ConversationHistory({
                     )}
                   >
                     {activeConversationId === conv.id && (
-                      <span className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary" />
+                      <span
+                        className={cn(
+                          "absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full",
+                          conv.persona === "genie-builder"
+                            ? "bg-amber-500"
+                            : conv.persona === "strategic"
+                              ? "bg-emerald-500"
+                              : "bg-primary",
+                        )}
+                      />
                     )}
                     {editingId === conv.id ? (
                       <div className="flex min-w-0 flex-1 items-center gap-1">

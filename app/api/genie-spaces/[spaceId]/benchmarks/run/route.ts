@@ -76,6 +76,10 @@ async function executeSqlPreview(sql: string): Promise<SqlResultPreview> {
       truncated: totalRows > MAX_PREVIEW_ROWS,
     };
   } catch (err) {
+    logger.warn("SQL preview execution failed", {
+      sql: sql.slice(0, 300),
+      error: err instanceof Error ? err.message : String(err),
+    });
     return {
       columns: [],
       rows: [],
@@ -150,6 +154,19 @@ export async function POST(
             const msg = await startConversation(spaceId, bench.question, 90_000);
             const completed = msg.status === "COMPLETED";
             let passed = completed;
+
+            if (completed && !msg.sql) {
+              logger.warn("Genie returned COMPLETED but no SQL", {
+                spaceId,
+                question: bench.question.slice(0, 200),
+              });
+            } else if (msg.sql) {
+              logger.info("Genie SQL received", {
+                spaceId,
+                question: bench.question.slice(0, 100),
+                sqlPreview: msg.sql.slice(0, 200),
+              });
+            }
 
             if (completed && bench.expectedSql && msg.sql) {
               const sim = sqlSimilarity(bench.expectedSql, msg.sql);
