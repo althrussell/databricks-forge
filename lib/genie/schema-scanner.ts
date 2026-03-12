@@ -271,13 +271,17 @@ export async function selectTablesWithLLM(
     })
     .join("\n");
 
-  const profileSummary = scan.profiles.length > 0
-    ? `\n\nData Profile Highlights:\n${scan.profiles
-        .filter((p) => p.distinctCount !== null && p.distinctCount <= 50)
-        .slice(0, 20)
-        .map((p) => `- ${p.tableFqn}.${p.columnName}: ${p.distinctCount} distinct values, range: ${p.minValue ?? "?"} to ${p.maxValue ?? "?"}`)
-        .join("\n")}`
-    : "";
+  const profileSummary =
+    scan.profiles.length > 0
+      ? `\n\nData Profile Highlights:\n${scan.profiles
+          .filter((p) => p.distinctCount !== null && p.distinctCount <= 50)
+          .slice(0, 20)
+          .map(
+            (p) =>
+              `- ${p.tableFqn}.${p.columnName}: ${p.distinctCount} distinct values, range: ${p.minValue ?? "?"} to ${p.maxValue ?? "?"}`,
+          )
+          .join("\n")}`
+      : "";
 
   const messages = [
     {
@@ -325,7 +329,10 @@ Select the most valuable tables for analytics.`,
       responseFormat: "json_object",
     });
 
-    const parsed = parseLLMJson(result.content ?? "", "schema-table-selection") as Record<string, unknown>;
+    const parsed = parseLLMJson(result.content ?? "", "schema-table-selection") as Record<
+      string,
+      unknown
+    >;
 
     const selectedTables = Array.isArray(parsed.selectedTables)
       ? (parsed.selectedTables as string[]).filter((t) =>

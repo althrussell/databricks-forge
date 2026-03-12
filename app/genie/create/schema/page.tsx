@@ -9,16 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import {
-  ArrowLeft,
-  Database,
-  Loader2,
-  Sparkles,
-  Check,
-  Search,
-  Zap,
-  Table2,
-} from "lucide-react";
+import { ArrowLeft, Database, Loader2, Sparkles, Check, Search, Zap, Table2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 
 interface ScannedTable {
@@ -185,7 +176,8 @@ export default function CreateFromSchemaPage() {
               Select Schema
             </CardTitle>
             <CardDescription>
-              Enter the catalog and schema to scan. Optionally describe what you want the space to focus on.
+              Enter the catalog and schema to scan. Optionally describe what you want the space to
+              focus on.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -245,11 +237,10 @@ export default function CreateFromSchemaPage() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-base">
-                    AI Table Selection
-                  </CardTitle>
+                  <CardTitle className="text-base">AI Table Selection</CardTitle>
                   <CardDescription className="mt-1">
-                    {scanResult.scan.totalTableCount} tables scanned, {selectedTables.size} selected.
+                    {scanResult.scan.totalTableCount} tables scanned, {selectedTables.size}{" "}
+                    selected.
                     {scanResult.selection.reasoning && (
                       <span className="block mt-1 italic">{scanResult.selection.reasoning}</span>
                     )}

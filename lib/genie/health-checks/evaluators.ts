@@ -467,9 +467,21 @@ interface InstructionQualityScore {
 }
 
 const VAGUE_TERMS = [
-  "appropriate", "relevant", "proper", "suitable", "correctly",
-  "as needed", "if necessary", "when applicable", "etc", "and so on",
-  "various", "certain", "some", "things", "stuff",
+  "appropriate",
+  "relevant",
+  "proper",
+  "suitable",
+  "correctly",
+  "as needed",
+  "if necessary",
+  "when applicable",
+  "etc",
+  "and so on",
+  "various",
+  "certain",
+  "some",
+  "things",
+  "stuff",
 ];
 
 function scoreInstructionQuality(instructionText: string): InstructionQualityScore {
@@ -487,11 +499,22 @@ function scoreInstructionQuality(instructionText: string): InstructionQualitySco
   const fqnMatches = text.match(fqnPattern)?.length ?? 0;
   specificity += Math.min(15, fqnMatches * 3);
 
-  const sqlKeywords = ["select", "where", "join", "group by", "order by", "sum(", "count(", "avg(", "date_trunc", "case when"];
+  const sqlKeywords = [
+    "select",
+    "where",
+    "join",
+    "group by",
+    "order by",
+    "sum(",
+    "count(",
+    "avg(",
+    "date_trunc",
+    "case when",
+  ];
   const sqlHits = sqlKeywords.filter((kw) => text.includes(kw)).length;
   specificity += Math.min(15, sqlHits * 3);
 
-  const backtickRefs = (text.match(/`[^`]+`/g)?.length ?? 0);
+  const backtickRefs = text.match(/`[^`]+`/g)?.length ?? 0;
   specificity += Math.min(10, backtickRefs * 2);
 
   specificity = Math.min(40, specificity);
@@ -512,7 +535,17 @@ function scoreInstructionQuality(instructionText: string): InstructionQualitySco
   const vagueCount = VAGUE_TERMS.filter((t) => text.includes(t)).length;
   clarity -= Math.min(15, vagueCount * 3);
 
-  const actionVerbs = ["use", "always", "never", "ensure", "include", "exclude", "prefer", "avoid", "apply"];
+  const actionVerbs = [
+    "use",
+    "always",
+    "never",
+    "ensure",
+    "include",
+    "exclude",
+    "prefer",
+    "avoid",
+    "apply",
+  ];
   const actionHits = actionVerbs.filter((v) => text.includes(v)).length;
   clarity += Math.min(5, actionHits);
 
@@ -549,7 +582,15 @@ function evaluateInstructionQuality(space: SpaceJson, check: CheckDefinition): C
   const passed = score.total >= minScore;
 
   const grade =
-    score.total >= 80 ? "A" : score.total >= 60 ? "B" : score.total >= 40 ? "C" : score.total >= 20 ? "D" : "F";
+    score.total >= 80
+      ? "A"
+      : score.total >= 60
+        ? "B"
+        : score.total >= 40
+          ? "C"
+          : score.total >= 20
+            ? "D"
+            : "F";
 
   const suggestions: string[] = [];
   if (score.specificity < 20) suggestions.push("Add table/column references and SQL examples");
