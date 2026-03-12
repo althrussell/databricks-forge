@@ -355,6 +355,7 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 | [ESTATE_ANALYSIS.md](ESTATE_ANALYSIS.md) | **Estate scan guide** -- environment intelligence pipeline, health scoring, lineage |
 | [ASK_FORGE.md](ASK_FORGE.md) | **Ask Forge** -- conversational assistant architecture, intent classification, RAG, actions |
 | [docs/BUSINESS_VALUE.md](docs/BUSINESS_VALUE.md) | **Business Value Engine** -- financial quantification, roadmap, stakeholders, exports |
+| [docs/ENGINES.md](docs/ENGINES.md) | **Engines overview** -- architecture, catalog, shared patterns, and how engines connect |
 | [docs/GENIE_ENGINE.md](docs/GENIE_ENGINE.md) | **Genie Engine** -- multi-pass Genie Space generator architecture and best practices |
 | [docs/GENIE_HEALTHCHECK_ENGINE.md](docs/GENIE_HEALTHCHECK_ENGINE.md) | **Genie Health Check Engine** -- deterministic scoring, fix workflow, benchmark feedback |
 | [docs/DASHBOARD_ENGINE.md](docs/DASHBOARD_ENGINE.md) | **Dashboard Engine** -- AI/BI dashboard recommendation generator |
