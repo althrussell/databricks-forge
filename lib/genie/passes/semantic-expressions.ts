@@ -176,6 +176,38 @@ export async function runSemanticExpressions(
   };
 }
 
+/**
+ * Parallel measure generation strategy:
+ * - Worker A: Foundation metrics (standard aggregates per column)
+ * - Worker B: Ratio metrics (cross-column ratios, percentages, rates)
+ * - Worker C: Filters and dimensions (WHERE conditions + GROUP BY expressions)
+ *
+ * All three run in parallel and results are merged and deduplicated.
+ */
+
+const SHARED_RULES = `IMPORTANT — Genie SQL snippets must be SHORT, reusable expressions (single aggregates or simple CASE WHEN). They are building blocks Genie composes into queries.
+
+GOOD snippet examples:
+- Measure: SUM(CAST(amount AS DECIMAL(18,2)))
+- Measure: COUNT(DISTINCT customer_id)
+- Filter: status = 'active'
+- Dimension: DATE_TRUNC('month', order_date)
+
+BAD snippets (DO NOT generate):
+- Window functions (OVER(...))
+- Statistical functions (REGR_SLOPE, CORR, STDDEV, SKEWNESS)
+- Nested subqueries
+- Multiple chained function calls
+
+Each SQL expression should be a SINGLE expression, ideally under 200 characters.
+You MUST only use table and column identifiers from the SCHEMA CONTEXT. Do NOT invent identifiers.
+
+For each expression provide:
+- name: Business-friendly display name
+- sql: Valid Databricks SQL expression
+- synonyms: Array of alternative terms users might say
+- instructions: When and how to use this expression`;
+
 async function generateLLMExpressions(
   tableFqns: string[],
   metadata: MetadataSnapshot,
@@ -207,70 +239,108 @@ async function generateLLMExpressions(
     ? `Industry: ${businessContext.industries}\nPriorities: ${businessContext.businessPriorities}\nGoals: ${businessContext.strategicGoals}`
     : "";
 
-  const systemMessage = `You are a SQL analytics expert building knowledge store expressions for a Databricks Genie space.
+  const contextBlock = `${schemaBlock}\n\n${bizContext ? `### BUSINESS CONTEXT\n${bizContext}\n` : ""}${glossaryBlock}\n\n### USE CASE SQL EXAMPLES\n${sqlExamples || "(no SQL examples available)"}\n\n${buildSemanticSkillBlock(industryId)}`;
 
-You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
+  // Worker A: Foundation metrics (standard aggregates)
+  const workerA = cachedChatCompletion({
+    endpoint,
+    messages: [
+      {
+        role: "system",
+        content: `You are a SQL analytics expert. Generate foundation aggregate measures for a Databricks Genie space.
 
-Generate SQL expressions in three categories:
-1. **Measures**: Simple aggregate KPIs (SUM, COUNT, AVG, MIN, MAX) with business-friendly names
-2. **Filters**: Common WHERE conditions with business-friendly names
-3. **Dimensions**: Simple GROUP BY expressions with business-friendly names
+Focus on standard aggregate KPIs: SUM, COUNT, COUNT DISTINCT, AVG, MIN, MAX for the most business-relevant numeric and key columns. Generate 8-15 measures.
 
-IMPORTANT — Genie SQL snippets must be SHORT, reusable expressions (single aggregates or simple CASE WHEN). They are building blocks Genie composes into queries. Complex multi-step analytics belong in SQL examples, NOT in snippets.
-
-GOOD snippet examples:
-- Measure: SUM(CAST(amount AS DECIMAL(18,2)))
-- Measure: COUNT(DISTINCT customer_id)
-- Filter: status = 'active'
-- Dimension: DATE_TRUNC('month', order_date)
-- Dimension: CASE WHEN amount > 1000 THEN 'High' WHEN amount > 100 THEN 'Medium' ELSE 'Low' END
-
-BAD snippet examples (too complex for Genie snippets):
-- Anything with window functions (OVER(...))
-- Statistical functions (REGR_SLOPE, CORR, STDDEV, SKEWNESS)
-- PERCENTILE_APPROX in a measure
-- Nested subqueries
-- Multiple function calls chained together
-
-Each expression's SQL should be a SINGLE expression, ideally under 200 characters.
-
-For each expression provide:
-- name: Business-friendly display name
-- sql: Valid Databricks SQL expression using ONLY identifiers from the schema
-- synonyms: Array of alternative terms users might say
-- instructions: When and how to use this expression
-
+${SHARED_RULES}
 ${DATABRICKS_SQL_RULES_COMPACT}
 
-Return JSON: { "measures": [...], "filters": [...], "dimensions": [...] }`;
-
-  const userMessage = `${schemaBlock}
-
-${bizContext ? `### BUSINESS CONTEXT\n${bizContext}\n` : ""}
-${glossaryBlock}
-
-### USE CASE SQL EXAMPLES
-${sqlExamples || "(no SQL examples available)"}
-
-${buildSemanticSkillBlock(industryId)}
-Generate measures, filters, and dimensions for a Genie space serving this domain.`;
-
-  const messages: ChatMessage[] = [
-    { role: "system", content: systemMessage },
-    { role: "user", content: userMessage },
-  ];
-
-  const result = await cachedChatCompletion({
-    endpoint,
-    messages,
+Return JSON: { "measures": [...] }`,
+      },
+      { role: "user", content: `${contextBlock}\n\nGenerate foundation aggregate measures.` },
+    ],
     temperature: TEMPERATURE,
-    maxTokens: 16384,
+    maxTokens: 8192,
     responseFormat: "json_object",
     signal,
   });
 
-  const content = result.content ?? "";
-  return parseLLMExpressions(content);
+  // Worker B: Ratio and derived metrics
+  const workerB = cachedChatCompletion({
+    endpoint,
+    messages: [
+      {
+        role: "system",
+        content: `You are a SQL analytics expert. Generate ratio and derived business KPI measures for a Databricks Genie space.
+
+Focus on:
+- Cross-column ratios (e.g., revenue per customer, cost per unit)
+- Percentage calculations (e.g., conversion rate, margin percentage)
+- Business-specific derived KPIs (e.g., customer lifetime value, basket size)
+- Rate calculations using try_divide() to avoid division by zero
+
+Generate 5-10 measures. These should be MORE insightful than simple aggregates.
+
+${SHARED_RULES}
+${DATABRICKS_SQL_RULES_COMPACT}
+
+Return JSON: { "measures": [...] }`,
+      },
+      { role: "user", content: `${contextBlock}\n\nGenerate ratio, percentage, and derived KPI measures.` },
+    ],
+    temperature: TEMPERATURE,
+    maxTokens: 8192,
+    responseFormat: "json_object",
+    signal,
+  });
+
+  // Worker C: Filters and dimensions
+  const workerC = cachedChatCompletion({
+    endpoint,
+    messages: [
+      {
+        role: "system",
+        content: `You are a SQL analytics expert. Generate filters (WHERE conditions) and dimensions (GROUP BY expressions) for a Databricks Genie space.
+
+**Filters** (8-12): Common business conditions users ask about (status values, date ranges, categorical splits, active/inactive flags).
+**Dimensions** (8-12): Useful analytical breakdowns (categorical groupings, date parts, bucketed ranges).
+
+${SHARED_RULES}
+${DATABRICKS_SQL_RULES_COMPACT}
+
+Return JSON: { "filters": [...], "dimensions": [...] }`,
+      },
+      { role: "user", content: `${contextBlock}\n\nGenerate filters and dimensions for common business analysis.` },
+    ],
+    temperature: TEMPERATURE,
+    maxTokens: 8192,
+    responseFormat: "json_object",
+    signal,
+  });
+
+  const [resultA, resultB, resultC] = await Promise.all([workerA, workerB, workerC]);
+
+  const parsedA = parseLLMExpressions(resultA.content ?? "");
+  const parsedB = parseLLMExpressions(resultB.content ?? "");
+  const parsedC = parseLLMExpressions(resultC.content ?? "");
+
+  const allMeasures = [...parsedA.measures, ...parsedB.measures, ...parsedC.measures];
+  const allFilters = [...parsedA.filters, ...parsedB.filters, ...parsedC.filters];
+  const allDimensions = [...parsedA.dimensions, ...parsedB.dimensions, ...parsedC.dimensions];
+
+  logger.info("Parallel semantic expression generation complete", {
+    workerA: parsedA.measures.length,
+    workerB: parsedB.measures.length,
+    workerC: { filters: parsedC.filters.length, dimensions: parsedC.dimensions.length },
+    totalMeasures: allMeasures.length,
+    totalFilters: allFilters.length,
+    totalDimensions: allDimensions.length,
+  });
+
+  return {
+    measures: dedup(allMeasures, (m) => m.name),
+    filters: dedup(allFilters, (f) => f.name),
+    dimensions: dedup(allDimensions, (d) => d.name),
+  };
 }
 
 function parseLLMExpressions(content: string): {

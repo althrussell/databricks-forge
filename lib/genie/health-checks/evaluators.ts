@@ -456,6 +456,117 @@ function evaluateSqlQuality(space: SpaceJson, check: CheckDefinition): CheckResu
 }
 
 // ---------------------------------------------------------------------------
+// Instruction quality evaluator
+// ---------------------------------------------------------------------------
+
+interface InstructionQualityScore {
+  specificity: number;
+  structure: number;
+  clarity: number;
+  total: number;
+}
+
+const VAGUE_TERMS = [
+  "appropriate", "relevant", "proper", "suitable", "correctly",
+  "as needed", "if necessary", "when applicable", "etc", "and so on",
+  "various", "certain", "some", "things", "stuff",
+];
+
+function scoreInstructionQuality(instructionText: string): InstructionQualityScore {
+  if (!instructionText || instructionText.trim().length === 0) {
+    return { specificity: 0, structure: 0, clarity: 0, total: 0 };
+  }
+
+  const text = instructionText.toLowerCase();
+  const words = text.split(/\s+/);
+  const wordCount = words.length;
+
+  // Specificity (40 points): table/column references, SQL keywords, concrete examples
+  let specificity = 0;
+  const fqnPattern = /\w+\.\w+\.\w+/g;
+  const fqnMatches = text.match(fqnPattern)?.length ?? 0;
+  specificity += Math.min(15, fqnMatches * 3);
+
+  const sqlKeywords = ["select", "where", "join", "group by", "order by", "sum(", "count(", "avg(", "date_trunc", "case when"];
+  const sqlHits = sqlKeywords.filter((kw) => text.includes(kw)).length;
+  specificity += Math.min(15, sqlHits * 3);
+
+  const backtickRefs = (text.match(/`[^`]+`/g)?.length ?? 0);
+  specificity += Math.min(10, backtickRefs * 2);
+
+  specificity = Math.min(40, specificity);
+
+  // Structure (30 points): headers, lists, bold, code blocks, line breaks
+  let structure = 0;
+  if (/^#+\s/m.test(instructionText)) structure += 8;
+  if (/^[-*]\s/m.test(instructionText) || /^\d+\.\s/m.test(instructionText)) structure += 8;
+  if (/\*\*[^*]+\*\*/.test(instructionText)) structure += 5;
+  if (/`[^`]+`/.test(instructionText)) structure += 5;
+  const lineCount = instructionText.split("\n").filter((l) => l.trim()).length;
+  if (lineCount >= 5) structure += 4;
+
+  structure = Math.min(30, structure);
+
+  // Clarity (30 points): absence of vague terms, action verbs, length
+  let clarity = 20;
+  const vagueCount = VAGUE_TERMS.filter((t) => text.includes(t)).length;
+  clarity -= Math.min(15, vagueCount * 3);
+
+  const actionVerbs = ["use", "always", "never", "ensure", "include", "exclude", "prefer", "avoid", "apply"];
+  const actionHits = actionVerbs.filter((v) => text.includes(v)).length;
+  clarity += Math.min(5, actionHits);
+
+  if (wordCount >= 50) clarity += 3;
+  if (wordCount >= 200) clarity += 2;
+
+  clarity = Math.max(0, Math.min(30, clarity));
+
+  const total = specificity + structure + clarity;
+  return { specificity, structure, clarity, total };
+}
+
+function evaluateInstructionQuality(space: SpaceJson, check: CheckDefinition): CheckResult {
+  const textInstructions = resolveArray(space, "instructions.text_instructions");
+  if (textInstructions.length === 0) {
+    return buildResult(check, false, "No instructions found");
+  }
+
+  const allContent: string[] = [];
+  for (const instr of textInstructions) {
+    if (instr && typeof instr === "object" && "content" in (instr as Record<string, unknown>)) {
+      const content = (instr as Record<string, unknown>).content;
+      if (Array.isArray(content)) {
+        allContent.push((content as string[]).join(" "));
+      } else if (typeof content === "string") {
+        allContent.push(content);
+      }
+    }
+  }
+
+  const fullText = allContent.join("\n");
+  const score = scoreInstructionQuality(fullText);
+  const minScore = (check.params.min_score as number) ?? 40;
+  const passed = score.total >= minScore;
+
+  const grade =
+    score.total >= 80 ? "A" : score.total >= 60 ? "B" : score.total >= 40 ? "C" : score.total >= 20 ? "D" : "F";
+
+  const suggestions: string[] = [];
+  if (score.specificity < 20) suggestions.push("Add table/column references and SQL examples");
+  if (score.structure < 15) suggestions.push("Use headers, bullet lists, and formatting");
+  if (score.clarity < 15) suggestions.push("Replace vague terms with specific guidance");
+
+  return buildResult(
+    check,
+    passed,
+    `Quality: ${grade} (${score.total}/100) — Specificity: ${score.specificity}/40, Structure: ${score.structure}/30, Clarity: ${score.clarity}/30${suggestions.length > 0 ? `. Improve: ${suggestions.join("; ")}` : ""}`,
+  );
+}
+
+/** Exposed for testing. */
+export { scoreInstructionQuality, type InstructionQualityScore };
+
+// ---------------------------------------------------------------------------
 // Evaluator registry
 // ---------------------------------------------------------------------------
 
@@ -473,6 +584,7 @@ const EVALUATORS: Record<string, (space: SpaceJson, check: CheckDefinition) => C
   jsonpath: evaluateJsonpath,
   llm_qualitative: evaluateLlmQualitative,
   sql_quality: evaluateSqlQuality,
+  instruction_quality: evaluateInstructionQuality,
 };
 
 /**

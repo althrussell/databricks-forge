@@ -24,7 +24,11 @@ export type ActivityAction =
   | "created_comment_job"
   | "applied_comments"
   | "undone_comments"
-  | "deleted_comment_job";
+  | "deleted_comment_job"
+  | "scanned_schema"
+  | "parsed_requirements"
+  | "started_auto_improve"
+  | "completed_auto_improve";
 
 export interface ActivityLogEntry {
   activityId: string;

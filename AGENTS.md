@@ -106,6 +106,27 @@ The core pipeline runs these steps sequentially:
 
 Each step updates progress in Lakebase. The frontend polls for status.
 
+## Genie Studio
+
+Genie Studio (`/genie`) is the unified hub for creating, managing, and improving
+Databricks Genie Spaces. It provides multiple entry points for space creation
+and an auto-improvement loop for existing spaces.
+
+Entry points:
+1. **Scan Schema** (`/genie/create/schema`) -- point at catalog.schema, auto-scan + AI table selection + data profiling, then generate via ad-hoc engine
+2. **Upload Requirements** (`/genie/create/requirements`) -- upload PDF/MD/text, LLM extracts tables/questions/instructions, then generate
+3. **Describe Your Space** (via Ask Forge) -- conversational ad-hoc Genie builder
+4. **Improve Existing** -- result-based benchmarks with auto-fix loops until target score
+5. **Import JSON** -- paste and analyze serialized space JSON
+6. **Pipeline Run** -- full discovery pipeline with domain-based recommendations
+
+Key modules:
+- `lib/genie/schema-scanner.ts` -- schema scan, data profiling, LLM table selection for "Scan Schema" flow
+- `lib/genie/requirements-parser.ts` -- PDF/MD/text parsing, LLM requirements extraction for "Upload Requirements" flow
+- `lib/genie/auto-improve.ts` -- iterative benchmark -> fix -> re-benchmark loop until target score
+- `lib/genie/benchmark-runner.ts` -- 3-tier benchmark scoring: SQL similarity, result-set comparison, LLM judge
+- `lib/genie/benchmark-feedback.ts` -- failure category mapping to fix strategies (result-based + heuristic)
+
 ## Genie Engine (Post-Pipeline)
 
 The Genie Engine (`lib/genie/engine.ts`) generates Databricks Genie Space
@@ -119,6 +140,7 @@ Key modules:
 - `lib/genie/entity-extraction.ts` -- sample-data-driven entity matching
 - `lib/genie/schema-allowlist.ts` -- grounded generation (only scraped columns/tables, CREATE DDL exclusion)
 - `lib/genie/passes/` -- individual LLM pass modules (column intelligence, semantic expressions, trusted assets, benchmarks, metric views)
+- `lib/genie/passes/semantic-expressions.ts` -- 3-worker parallel measure generation (foundation, ratio, filter/dimension)
 - `lib/genie/passes/parse-llm-json.ts` -- robust LLM JSON parsing utility
 - `lib/genie/recommend.ts` -- legacy (non-engine) Genie recommendation fallback
 - `lib/genie/engine-status.ts` -- in-memory progress tracker
@@ -163,14 +185,15 @@ scoring system for any Genie Space, an automated Fix Workflow, and an iterative
 Benchmark Feedback Loop. See `docs/GENIE_HEALTHCHECK_ENGINE.md` for full documentation.
 
 Key modules:
-- `lib/genie/health-checks/default-checks.yaml` -- 20 built-in check definitions (YAML DSL)
-- `lib/genie/health-checks/evaluators.ts` -- 11 deterministic evaluator functions
+- `lib/genie/health-checks/default-checks.yaml` -- built-in check definitions (YAML DSL, includes `instruction_quality` evaluator)
+- `lib/genie/health-checks/evaluators.ts` -- deterministic evaluator functions (count, ratio, pattern, sql_quality, instruction_quality, etc.)
 - `lib/genie/health-checks/registry.ts` -- YAML parser, merge defaults + user overrides
 - `lib/genie/health-checks/types.ts` -- TypeScript types for the health check system
 - `lib/genie/space-health-check.ts` -- scorer (pure function, no LLM calls)
 - `lib/genie/space-fixer.ts` -- fix strategy router, metadata builder for off-platform spaces
 - `lib/genie/space-cache.ts` -- in-memory serialized_space cache (5min TTL)
-- `lib/genie/benchmark-feedback.ts` -- feedback-to-fix analysis
+- `lib/genie/benchmark-feedback.ts` -- failure category mapping to fix strategies (result-based + heuristic)
+- `lib/genie/auto-improve.ts` -- iterative benchmark -> analyze -> fix -> re-benchmark loop
 - `lib/lakebase/space-health.ts` -- CRUD for health scores, benchmark runs, config
 - `components/genie/health-detail-sheet.tsx` -- health report slide-out panel
 
