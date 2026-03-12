@@ -20,7 +20,7 @@
 
 import { getConfig, getAppHeaders } from "./client";
 import { fetchWithTimeout } from "./fetch-with-timeout";
-import { globalRateLimiter, DEFAULT_429_BACKOFF_MS } from "./rate-limiter";
+import { getPoolRateLimiter, DEFAULT_429_BACKOFF_MS } from "./rate-limiter";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,8 @@ export async function chatCompletion(
     body.response_format = { type: "json_object" };
   }
 
-  await globalRateLimiter.acquire();
+  const limiter = getPoolRateLimiter();
+  await limiter.acquire(options.endpoint);
   try {
     const resp = await fetchWithTimeout(
       url,
@@ -174,7 +175,7 @@ export async function chatCompletion(
       const text = await resp.text();
       const retryAfterMs = resp.status === 429 ? parseRetryAfterHeader(resp) : undefined;
       if (retryAfterMs) {
-        globalRateLimiter.backoff(retryAfterMs);
+        limiter.backoff(options.endpoint, retryAfterMs);
       }
       throw new ModelServingError(
         `Model Serving request failed (${resp.status}): ${text}`,
@@ -186,7 +187,7 @@ export async function chatCompletion(
     const data = await resp.json();
     return parseCompletionResponse(data);
   } finally {
-    globalRateLimiter.release();
+    limiter.release(options.endpoint);
   }
 }
 
@@ -225,7 +226,8 @@ export async function chatCompletionStream(
     body.response_format = { type: "json_object" };
   }
 
-  await globalRateLimiter.acquire();
+  const limiter = getPoolRateLimiter();
+  await limiter.acquire(options.endpoint);
   try {
     const resp = await fetchWithTimeout(
       url,
@@ -242,7 +244,7 @@ export async function chatCompletionStream(
       const text = await resp.text();
       const retryAfterMs = resp.status === 429 ? parseRetryAfterHeader(resp) : undefined;
       if (retryAfterMs) {
-        globalRateLimiter.backoff(retryAfterMs);
+        limiter.backoff(options.endpoint, retryAfterMs);
       }
       throw new ModelServingError(
         `Model Serving streaming request failed (${resp.status}): ${text}`,
@@ -257,7 +259,7 @@ export async function chatCompletionStream(
 
     return parseSSEStream(resp.body, onChunk);
   } finally {
-    globalRateLimiter.release();
+    limiter.release(options.endpoint);
   }
 }
 

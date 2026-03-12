@@ -7,7 +7,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
@@ -101,7 +101,7 @@ export async function runTableFiltering(ctx: PipelineContext, runId?: string): P
         columnIndex,
         run.config.businessName,
         run.businessContext,
-        getFastServingEndpoint(),
+        resolveEndpoint("classification"),
         runId,
       );
       businessTables.push(...filteredFqns);

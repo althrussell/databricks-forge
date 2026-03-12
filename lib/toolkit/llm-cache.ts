@@ -10,10 +10,10 @@
  * exponential backoff (1s, 2s, 4s), and up to 4 retries for 429 rate-limit
  * errors with a jittered backoff (Retry-After from response, else 60s).
  *
- * Concurrency: delegated to the global rate limiter in model-serving.ts.
- * No local semaphore -- the global limiter caps all surfaces.
+ * Pool-aware fallback: on 429 exhaustion, rotates through same-tier endpoints
+ * from the model registry rather than the old static fallback list.
  *
- * TTL: 10 minutes (covers a single iteration session).
+ * TTL: 15 minutes. Max entries: 500.
  */
 
 import { createHash } from "crypto";
@@ -25,10 +25,11 @@ import {
 } from "@/lib/dbx/model-serving";
 import { addJitter, DEFAULT_429_BACKOFF_MS } from "@/lib/dbx/rate-limiter";
 import { getFallbackEndpoint } from "@/lib/dbx/client";
+import { getModelPool } from "@/lib/dbx/model-registry";
 import { logger } from "@/lib/logger";
 
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const MAX_CACHE_ENTRIES = 200;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_CACHE_ENTRIES = 500;
 const MAX_RETRIES = 3;
 const MAX_429_RETRIES = 4;
 const INITIAL_BACKOFF_MS = 1_000;
@@ -61,6 +62,7 @@ function evictExpired(): void {
   for (const [key, entry] of cache) {
     if (now >= entry.expiresAt) {
       cache.delete(key);
+      _stats.evictions++;
     }
   }
 }
@@ -75,7 +77,27 @@ function evictLru(): void {
       oldestKey = key;
     }
   }
-  if (oldestKey) cache.delete(oldestKey);
+  if (oldestKey) {
+    cache.delete(oldestKey);
+    _stats.evictions++;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cache statistics
+// ---------------------------------------------------------------------------
+
+interface CacheStats {
+  hits: number;
+  misses: number;
+  evictions: number;
+}
+
+const _stats: CacheStats = { hits: 0, misses: 0, evictions: 0 };
+
+/** Returns a snapshot of cache hit/miss/eviction counters. */
+export function llmCacheStats(): CacheStats & { size: number } {
+  return { ..._stats, size: cache.size };
 }
 
 // ---------------------------------------------------------------------------
@@ -107,12 +129,13 @@ function getRetryAfterMs(error: unknown): number {
 }
 
 // ---------------------------------------------------------------------------
-// Model Pool (Gap 16)
+// Model Pool (pool-aware fallback)
 // ---------------------------------------------------------------------------
 
 /**
  * Build an ordered list of fallback endpoints to try when the primary is
- * exhausted. Filters out the current endpoint and deduplicates.
+ * exhausted. Uses the model pool registry first, then falls back to the
+ * legacy getFallbackEndpoint + DATABRICKS_FALLBACK_ENDPOINTS.
  */
 function buildEndpointPool(currentEndpoint: string): string[] {
   const pool: string[] = [];
@@ -125,9 +148,14 @@ function buildEndpointPool(currentEndpoint: string): string[] {
     }
   };
 
+  // Pool-aware: add all endpoints from the model registry
+  for (const ep of getModelPool()) {
+    addIfDistinct(ep.name);
+  }
+
+  // Legacy fallback chain
   addIfDistinct(getFallbackEndpoint(currentEndpoint));
 
-  // Additional endpoints from environment (comma-separated)
   const extra = process.env.DATABRICKS_FALLBACK_ENDPOINTS;
   if (extra) {
     for (const ep of extra
@@ -207,7 +235,6 @@ async function chatCompletionWithRetry(
   }
 
   if (exhausted429) {
-    // Model pool rotation: try all available fallback endpoints
     const pool = buildEndpointPool(options.endpoint);
     for (const alt of pool) {
       logger.warn("LLM rotating to alternate endpoint", {
@@ -257,10 +284,12 @@ export async function cachedChatCompletion(
   const cached = cache.get(key);
 
   if (cached && Date.now() < cached.expiresAt) {
+    _stats.hits++;
     logger.debug("LLM cache hit", { endpoint: options.endpoint });
     return cached.response;
   }
 
+  _stats.misses++;
   const response = await chatCompletionWithRetry(options);
 
   cache.set(key, {
@@ -275,6 +304,9 @@ export async function cachedChatCompletion(
 /** Clear all cached entries (useful for testing). */
 export function clearLLMCache(): void {
   cache.clear();
+  _stats.hits = 0;
+  _stats.misses = 0;
+  _stats.evictions = 0;
 }
 
 /** Number of entries currently in the cache. */

@@ -7,7 +7,7 @@
 
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/genie/passes/parse-llm-json";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ Extract all requirements for building a Genie Space.`,
 
   try {
     const result = await cachedChatCompletion({
-      endpoint: getFastServingEndpoint(),
+      endpoint: resolveEndpoint("classification"),
       messages,
       temperature: 0.1,
       maxTokens: 8192,

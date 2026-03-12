@@ -20,7 +20,7 @@ import type {
   ExecutiveSynthesis,
 } from "@/lib/domain/types";
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import { upsertValueEstimates, getValueEstimatesForRun } from "@/lib/lakebase/value-estimates";
 import { upsertRoadmapPhases } from "@/lib/lakebase/roadmap-phases";
@@ -111,7 +111,7 @@ async function runFinancialQuantification(
         runId: run.runId,
         promptKey: "FINANCIAL_QUANTIFICATION_PROMPT",
         variables,
-        modelEndpoint: getFastServingEndpoint(),
+        modelEndpoint: resolveEndpoint("classification"),
         responseFormat: "json_object",
       });
 
@@ -173,7 +173,7 @@ async function runRoadmapPhasing(ctx: PipelineContext, useCases: UseCase[]): Pro
       runId: run.runId,
       promptKey: "ROADMAP_PHASING_PROMPT",
       variables,
-      modelEndpoint: getFastServingEndpoint(),
+      modelEndpoint: resolveEndpoint("classification"),
       responseFormat: "json_object",
     });
 
@@ -250,7 +250,7 @@ async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]):
       runId: run.runId,
       promptKey: "EXECUTIVE_SYNTHESIS_PROMPT",
       variables,
-      modelEndpoint: getFastServingEndpoint(),
+      modelEndpoint: resolveEndpoint("classification"),
       responseFormat: "json_object",
     });
 
@@ -340,7 +340,7 @@ async function runStakeholderAnalysis(ctx: PipelineContext, useCases: UseCase[])
       runId: run.runId,
       promptKey: "STAKEHOLDER_ANALYSIS_PROMPT",
       variables,
-      modelEndpoint: getFastServingEndpoint(),
+      modelEndpoint: resolveEndpoint("classification"),
       responseFormat: "json_object",
     });
 

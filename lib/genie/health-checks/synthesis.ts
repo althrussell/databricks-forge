@@ -5,7 +5,7 @@
  * - runSynthesis(): generates cross-sectional synthesis after all checks complete
  */
 
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { logger } from "@/lib/logger";
 import type {
@@ -59,7 +59,7 @@ export async function runLlmQualitativeChecks(
 
   const allResults: CheckResult[] = [];
   const allFindings: Finding[] = [];
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
 
   for (const [section, sectionChecks] of sectionGroups) {
     try {
@@ -179,7 +179,7 @@ Only include findings for FAILED criteria. Match severity to importance:
  * Uses LLM to identify compensating strengths, celebration points, and quick wins.
  */
 export async function runSynthesis(report: SpaceHealthReport): Promise<SynthesisResult> {
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
 
   const categorySummaries = Object.entries(report.categories)
     .map(([_id, cat]) => `- ${cat.label}: ${cat.passed}/${cat.total} passed (${cat.score}%)`)

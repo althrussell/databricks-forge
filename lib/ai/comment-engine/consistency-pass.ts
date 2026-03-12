@@ -13,7 +13,7 @@
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { ConsistencyFix, CommentProgressCallback } from "./types";
@@ -70,7 +70,7 @@ export async function runConsistencyReview(
 
   onProgress?.("consistency", 0, `Reviewing ${entries.length} descriptions...`);
 
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
 
   const basePrompt = CONSISTENCY_REVIEW_PROMPT.replace("{schema_summary}", schemaSummary).replace(
     "{descriptions_list}",

@@ -14,7 +14,7 @@ import {
   updateStrategyDocument,
 } from "@/lib/lakebase/strategy-documents";
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import type { StrategyInitiative } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   ]
 }`,
         },
-        modelEndpoint: getServingEndpoint(),
+        modelEndpoint: resolveEndpoint("classification"),
         responseFormat: "json_object",
       });
 

@@ -8,7 +8,7 @@
  */
 
 import { executeSQL } from "@/lib/dbx/sql";
-import { getServingEndpoint, getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { buildSchemaAllowlist } from "@/lib/genie/schema-allowlist";
 import { extractEntityCandidatesFromSchema } from "@/lib/genie/entity-extraction";
 import {
@@ -342,8 +342,8 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
   const metadata = await buildMetadataForSpace(tableFqns);
   const allowlist = buildSchemaAllowlist(metadata);
   const config = defaultGenieEngineConfig();
-  const endpoint = getServingEndpoint();
-  const fastEndpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("generation");
+  const fastEndpoint = resolveEndpoint("classification");
   const spaceCtx = extractSpaceContext(space);
   const businessContext = synthesizeBusinessContext(spaceCtx);
   const spaceSql = extractSpaceSqlExamples(space);

@@ -63,7 +63,7 @@ import {
   fetchColumnsBatch,
   fetchForeignKeysBatch,
 } from "@/lib/queries/metadata";
-import { getServingEndpoint, getFastServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
 import { logger } from "@/lib/logger";
 
@@ -546,8 +546,8 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   const domain = normalizeDomainLabel(adhocConfig?.domain || inferDomain(tables));
   const fiscalYearStartMonth = adhocConfig?.fiscalYearStartMonth ?? 1;
 
-  const fastEndpoint = getFastServingEndpoint();
-  const premiumEndpoint = getServingEndpoint();
+  const fastEndpoint = resolveEndpoint("classification");
+  const premiumEndpoint = resolveEndpoint("generation");
   logger.info("Fast Genie Engine starting", { tableCount: tables.length, domain });
 
   // Step 1: Scrape metadata (SQL queries only, no LLM)
@@ -779,8 +779,8 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   }
 
   const engineConfig = buildEngineConfig(adhocConfig);
-  const premiumEndpoint = getServingEndpoint();
-  const fastEndpoint = getFastServingEndpoint();
+  const premiumEndpoint = resolveEndpoint("generation");
+  const fastEndpoint = resolveEndpoint("classification");
   const domain = normalizeDomainLabel(adhocConfig?.domain || inferDomain(tables));
   const businessContext = resolveBusinessContext(adhocConfig);
 

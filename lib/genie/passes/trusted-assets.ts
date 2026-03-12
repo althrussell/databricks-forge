@@ -23,7 +23,7 @@ import {
   type SchemaAllowlist,
 } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
-import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { reviewBatch } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
@@ -269,45 +269,46 @@ Create parameterized queries from these examples.`;
     }))
     .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_query:${q.question}`, true));
 
-  // LLM review gate: review + fix each trusted asset SQL
+  // LLM review gate: batch review + fix trusted asset SQL
   if (isReviewEnabled("genie-trusted-assets") && queries.length > 0) {
-    const reviewed = await Promise.all(
-      queries.map(async (q) => {
-        const review = await reviewAndFixSql(q.sql, {
-          schemaContext: schemaBlock,
-          surface: "genie-trusted-assets",
-        });
-        if (review.fixedSql) {
-          if (
-            validateSqlExpression(
-              allowlist,
-              review.fixedSql,
-              `trusted_query_fix:${q.question}`,
-              true,
-            )
-          ) {
-            logger.info("Trusted asset SQL fix applied", {
-              question: q.question,
-              verdict: review.verdict,
-              qualityScore: review.qualityScore,
-            });
-            return { ...q, sql: review.fixedSql };
-          }
-          logger.warn("Trusted asset review fix failed schema validation, keeping original", {
+    const items = queries.map((q, i) => ({ id: `q${i}:${q.question}`, sql: q.sql }));
+    const results = await reviewBatch(items, "genie-trusted-assets", {
+      schemaContext: schemaBlock,
+      requestFix: true,
+    });
+    const reviewed = queries.map((q, i) => {
+      const res = results.find((r) => r.id === items[i].id) ?? results[i];
+      const review = res.result;
+      if (review.fixedSql) {
+        if (
+          validateSqlExpression(
+            allowlist,
+            review.fixedSql,
+            `trusted_query_fix:${q.question}`,
+            true,
+          )
+        ) {
+          logger.info("Trusted asset SQL fix applied", {
             question: q.question,
-          });
-          return q;
-        }
-        if (review.verdict === "fail") {
-          logger.warn("Trusted asset SQL dropped (fail verdict, no usable fix)", {
-            question: q.question,
+            verdict: review.verdict,
             qualityScore: review.qualityScore,
           });
-          return null;
+          return { ...q, sql: review.fixedSql };
         }
+        logger.warn("Trusted asset review fix failed schema validation, keeping original", {
+          question: q.question,
+        });
         return q;
-      }),
-    );
+      }
+      if (review.verdict === "fail") {
+        logger.warn("Trusted asset SQL dropped (fail verdict, no usable fix)", {
+          question: q.question,
+          qualityScore: review.qualityScore,
+        });
+        return null;
+      }
+      return q;
+    });
     queries = reviewed.filter((q): q is NonNullable<typeof q> => q !== null);
   }
 
@@ -406,38 +407,39 @@ Create new parameterized queries based on these reference patterns.`;
     .filter((q) => validateSqlExpression(allowlist, q.sql, `trusted_ref:${q.question}`, true));
 
   if (isReviewEnabled("genie-trusted-assets") && queries.length > 0) {
-    const reviewed = await Promise.all(
-      queries.map(async (q) => {
-        const review = await reviewAndFixSql(q.sql, {
-          schemaContext: schemaBlock,
-          surface: "genie-trusted-assets",
-        });
-        if (review.fixedSql) {
-          if (
-            validateSqlExpression(allowlist, review.fixedSql, `trusted_ref_fix:${q.question}`, true)
-          ) {
-            logger.info("Trusted asset SQL fix applied", {
-              question: q.question,
-              verdict: review.verdict,
-              qualityScore: review.qualityScore,
-            });
-            return { ...q, sql: review.fixedSql };
-          }
-          logger.warn("Trusted asset review fix failed schema validation, keeping original", {
+    const items = queries.map((q, i) => ({ id: `ref${i}:${q.question}`, sql: q.sql }));
+    const results = await reviewBatch(items, "genie-trusted-assets", {
+      schemaContext: schemaBlock,
+      requestFix: true,
+    });
+    const reviewed = queries.map((q, i) => {
+      const res = results.find((r) => r.id === items[i].id) ?? results[i];
+      const review = res.result;
+      if (review.fixedSql) {
+        if (
+          validateSqlExpression(allowlist, review.fixedSql, `trusted_ref_fix:${q.question}`, true)
+        ) {
+          logger.info("Trusted asset SQL fix applied", {
             question: q.question,
-          });
-          return q;
-        }
-        if (review.verdict === "fail") {
-          logger.warn("Trusted asset SQL dropped (fail verdict, no usable fix)", {
-            question: q.question,
+            verdict: review.verdict,
             qualityScore: review.qualityScore,
           });
-          return null;
+          return { ...q, sql: review.fixedSql };
         }
+        logger.warn("Trusted asset review fix failed schema validation, keeping original", {
+          question: q.question,
+        });
         return q;
-      }),
-    );
+      }
+      if (review.verdict === "fail") {
+        logger.warn("Trusted asset SQL dropped (fail verdict, no usable fix)", {
+          question: q.question,
+          qualityScore: review.qualityScore,
+        });
+        return null;
+      }
+      return q;
+    });
     queries = reviewed.filter((q): q is NonNullable<typeof q> => q !== null);
   }
 

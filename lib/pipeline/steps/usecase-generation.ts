@@ -6,6 +6,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import {
   generateAIFunctionsSummary,
@@ -289,7 +290,7 @@ export async function runUsecaseGeneration(
           },
           "AI",
           run.runId,
-          run.config.aiModel,
+          resolveEndpoint("reasoning"),
           runId,
           enrichmentTags,
         ),
@@ -302,7 +303,7 @@ export async function runUsecaseGeneration(
           },
           "Statistical",
           run.runId,
-          run.config.aiModel,
+          resolveEndpoint("reasoning"),
           runId,
           enrichmentTags,
         ),

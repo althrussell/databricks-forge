@@ -11,7 +11,7 @@
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { ColumnCommentInput, CommentProgressCallback, MetadataCounters } from "./types";
@@ -67,7 +67,7 @@ export async function runColumnCommentPass(
 
   if (inputs.length === 0) return results;
 
-  const endpoint = getFastServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
   let completed = 0;
   let totalColumnsGenerated = 0;
 

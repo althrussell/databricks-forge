@@ -26,7 +26,7 @@ import { buildDashboardDesignPrompt, DASHBOARD_SYSTEM_MESSAGE } from "./prompts"
 import { assembleLakeviewDashboard, buildDashboardRecommendation } from "./assembler";
 import { buildSchemaAllowlist, validateSqlExpression } from "@/lib/genie/schema-allowlist";
 import { reviewAndFixSql as defaultReviewAndFixSql } from "@/lib/ai/sql-reviewer";
-import { isReviewEnabled as defaultIsReviewEnabled } from "@/lib/dbx/client";
+import { isReviewEnabled as defaultIsReviewEnabled, resolveEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { validateDatasetSql } from "./validation";
 import { logger as defaultLogger } from "@/lib/logger";
@@ -360,7 +360,7 @@ export async function runDashboardEngine(
   const isReviewEnabledFn = inputDeps?.isReviewEnabled ?? defaultIsReviewEnabled;
   const wireDeps = { llm, log, reviewFn, isReviewEnabledFn };
 
-  const endpoint = run.config.aiModel;
+  const endpoint = resolveEndpoint("generation");
   const businessName = run.config.businessName;
   const businessContext = run.businessContext;
 
@@ -415,44 +415,47 @@ export async function runDashboardEngine(
   });
 
   const recommendations: DashboardRecommendation[] = [];
-
-  for (let i = 0; i < domainGroups.length; i++) {
-    const group = domainGroups[i];
-    const pct = Math.round(10 + (i / domainGroups.length) * 85);
-    onProgress?.(`Designing dashboard for ${group.domain}...`, pct);
-
-    try {
-      const rec = await processDomain(
-        group,
-        metadata,
-        endpoint,
-        businessName,
-        businessContext,
-        genieRecommendations,
-        run.runId,
-        wireDeps,
-      );
-
-      if (rec) {
-        const existingDash = existingDashboardByDomain.get(group.domain);
-        if (existingDash) {
-          rec.recommendationType = "enhancement";
-          rec.existingAssetId = existingDash.dashboardId;
-          rec.changeSummary = `Enhancement of "${existingDash.displayName}": ${rec.datasetCount} datasets, ${rec.widgetCount} widgets (existing has ${existingDash.datasetCount} datasets, ${existingDash.widgetCount} widgets)`;
+  const domainResults = await mapWithConcurrency(
+    domainGroups.map((group, i) => async () => {
+      const pct = Math.round(10 + (i / domainGroups.length) * 85);
+      onProgress?.(`Designing dashboard for ${group.domain}...`, pct);
+      try {
+        const rec = await processDomain(
+          group,
+          metadata,
+          endpoint,
+          businessName,
+          businessContext,
+          genieRecommendations,
+          run.runId,
+          wireDeps,
+        );
+        if (rec) {
+          const existingDash = existingDashboardByDomain.get(group.domain);
+          if (existingDash) {
+            rec.recommendationType = "enhancement";
+            rec.existingAssetId = existingDash.dashboardId;
+            rec.changeSummary = `Enhancement of "${existingDash.displayName}": ${rec.datasetCount} datasets, ${rec.widgetCount} widgets (existing has ${existingDash.datasetCount} datasets, ${existingDash.widgetCount} widgets)`;
+          }
+          log.info("Dashboard Engine: domain complete", {
+            domain: group.domain,
+            datasets: rec.datasetCount,
+            widgets: rec.widgetCount,
+          });
+          return rec;
         }
-        recommendations.push(rec);
-        log.info("Dashboard Engine: domain complete", {
+      } catch (err) {
+        log.error("Dashboard Engine: domain failed", {
           domain: group.domain,
-          datasets: rec.datasetCount,
-          widgets: rec.widgetCount,
+          error: err instanceof Error ? err.message : String(err),
         });
       }
-    } catch (err) {
-      log.error("Dashboard Engine: domain failed", {
-        domain: group.domain,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+      return null;
+    }),
+    3,
+  );
+  for (const rec of domainResults) {
+    if (rec) recommendations.push(rec);
   }
 
   onProgress?.("Dashboard generation complete", 100);

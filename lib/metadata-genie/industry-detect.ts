@@ -7,7 +7,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import {
   detectIndustryFromContext,
@@ -38,7 +38,7 @@ export async function detectIndustry(tableNames: string[]): Promise<IndustryDete
     const result = await executeAIQuery({
       promptKey: "METADATA_GENIE_INDUSTRY_DETECT_PROMPT",
       variables: { table_names: summary },
-      modelEndpoint: getFastServingEndpoint(),
+      modelEndpoint: resolveEndpoint("classification"),
       responseFormat: "json_object",
     });
 

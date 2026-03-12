@@ -5,7 +5,7 @@
  * - mergeOptimizations(): deterministic config merge by field path
  */
 
-import { getServingEndpoint, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { chatCompletion } from "@/lib/dbx/model-serving";
 import { reviewSql } from "@/lib/ai/sql-reviewer";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
@@ -112,7 +112,7 @@ export async function generateOptimizations(
   space: SpaceJson,
   feedback: FeedbackEntry[],
 ): Promise<OptimizationResult> {
-  const endpoint = getServingEndpoint();
+  const endpoint = resolveEndpoint("classification");
 
   const incorrect = feedback.filter((f) => !f.isCorrect);
   const correct = feedback.filter((f) => f.isCorrect);

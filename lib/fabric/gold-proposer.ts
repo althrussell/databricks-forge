@@ -10,7 +10,7 @@
  */
 
 import { chatCompletion } from "@/lib/dbx/model-serving";
-import { getServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { DATABRICKS_SQL_RULES } from "@/lib/toolkit/sql-rules";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
@@ -282,7 +282,7 @@ ${tableDescriptions}
 Return a JSON object where keys are UC table names and values are complete CREATE TABLE DDL strings. Return ONLY valid JSON.`;
 
   const response = await chatCompletion({
-    endpoint: getServingEndpoint(),
+    endpoint: resolveEndpoint("generation"),
     messages: [{ role: "user", content: prompt }],
     temperature: 0.1,
     maxTokens: 16384,

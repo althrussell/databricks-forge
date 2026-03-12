@@ -152,10 +152,10 @@ async function tryRagDistill(
 
     try {
       const { chatCompletion } = await import("@/lib/dbx/model-serving");
-      const { getFastServingEndpoint } = await import("@/lib/dbx/client");
+      const { resolveEndpoint } = await import("@/lib/dbx/client");
 
       const response = await chatCompletion({
-        endpoint: getFastServingEndpoint(),
+        endpoint: resolveEndpoint("classification"),
         messages: [
           { role: "system", content: DISTILL_SYSTEM_PROMPT },
           { role: "user", content: contextText },

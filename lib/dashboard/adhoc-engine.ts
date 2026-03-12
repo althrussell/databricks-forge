@@ -26,7 +26,7 @@ import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { validateDatasetSql } from "./validation";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
-import { getServingEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
+import { resolveEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
 import { logger } from "@/lib/logger";
 
 const TEMPERATURE = 0.3;
@@ -262,7 +262,7 @@ export async function runAdHocDashboardEngine(
   });
 
   const result = await chatCompletion({
-    endpoint: getServingEndpoint(),
+    endpoint: resolveEndpoint("generation"),
     messages,
     temperature: TEMPERATURE,
     responseFormat: "json_object",

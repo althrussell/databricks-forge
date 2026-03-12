@@ -10,7 +10,7 @@
  */
 
 import { executeAIQuery } from "@/lib/ai/agent";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { executeSQLMapped } from "@/lib/dbx/sql";
 import { logger } from "@/lib/logger";
@@ -110,7 +110,7 @@ export async function generateTableDescriptions(
       const result = await executeAIQuery({
         promptKey: "METADATA_GENIE_DESCRIBE_TABLES_PROMPT",
         variables: { table_list: tableList },
-        modelEndpoint: getFastServingEndpoint(),
+        modelEndpoint: resolveEndpoint("classification"),
         responseFormat: "json_object",
         temperature: 0.2,
         retries: 1,

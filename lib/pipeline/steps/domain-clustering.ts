@@ -7,7 +7,7 @@
 
 import { executeAIQuery } from "@/lib/ai/agent";
 import { buildTokenAwareBatches } from "@/lib/toolkit/token-budget";
-import { getFastServingEndpoint } from "@/lib/dbx/client";
+import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { logger } from "@/lib/logger";
@@ -37,7 +37,7 @@ export async function runDomainClustering(
   if (runId)
     await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
-    await assignDomains(updatedCases, run.config.businessName, bc, getFastServingEndpoint(), runId);
+    await assignDomains(updatedCases, run.config.businessName, bc, resolveEndpoint("classification"), runId);
   } catch (error) {
     logger.error("Domain assignment failed", {
       error: error instanceof Error ? error.message : String(error),
@@ -60,7 +60,7 @@ export async function runDomainClustering(
           domain,
           run.config.businessName,
           bc,
-          getFastServingEndpoint(),
+          resolveEndpoint("classification"),
           runId,
         );
       } catch (error) {
@@ -92,7 +92,7 @@ export async function runDomainClustering(
     await updateRunMessage(runId, `Merging ${smallDomainCount} small domains...`);
   }
   try {
-    await mergeSmallDomains(updatedCases, getFastServingEndpoint(), runId);
+    await mergeSmallDomains(updatedCases, resolveEndpoint("classification"), runId);
   } catch (error) {
     logger.warn("Domain merge failed", {
       error: error instanceof Error ? error.message : String(error),

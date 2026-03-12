@@ -31,7 +31,7 @@ import type {
 } from "@/lib/domain/types";
 import { validateColumnReferences } from "@/lib/validation/sql-columns";
 import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
-import { isReviewEnabled } from "@/lib/dbx/client";
+import { isReviewEnabled, resolveEndpoint } from "@/lib/dbx/client";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
 
@@ -44,7 +44,7 @@ const MAX_CONCURRENT_SQL = Math.max(
   parseInt(process.env.SQL_GEN_MAX_CONCURRENT ?? "3", 10) || 3,
 );
 
-const WAVE_DELAY_MS = Math.max(0, parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "500", 10) || 0);
+const WAVE_DELAY_MS = Math.max(0, parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? "0", 10) || 0);
 
 // ---------------------------------------------------------------------------
 // Main entry point
@@ -107,7 +107,7 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
     strategic_initiative: bc.strategicInitiative,
     value_chain: bc.valueChain,
     revenue_model: bc.revenueModel,
-    sql_model_serving: run.config.aiModel,
+    sql_model_serving: resolveEndpoint("sql"),
   };
 
   // Function reference docs (computed once)
@@ -169,7 +169,7 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
             columnsByTable,
             tableByFqn,
             metadata.foreignKeys,
-            run.config.aiModel,
+            resolveEndpoint("sql"),
             sampleRows,
             sampleDataCache,
             runId,

@@ -109,6 +109,7 @@ export interface PipelineRunConfig {
   generationPath: string;
   languages: string[];
   aiModel: string;
+  modelPool?: string[]; // optional list of endpoint names in the pool (for UI display)
   sampleRowsPerTable: number; // 0 = disabled, 5-50 = rows to sample per table for discovery & SQL gen
   industry: string; // industry outcome map id, empty = not selected
   discoveryDepth: DiscoveryDepth; // controls generation volume, quality floor, and adaptive cap

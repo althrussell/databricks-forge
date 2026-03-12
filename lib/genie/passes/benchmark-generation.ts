@@ -23,7 +23,7 @@ import {
   type SchemaAllowlist,
 } from "../schema-allowlist";
 import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
-import { reviewAndFixSql } from "@/lib/ai/sql-reviewer";
+import { reviewBatch } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import {
@@ -332,40 +332,41 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
 
   let benchmarks = valid;
 
-  // LLM review gate: review + fix each benchmark's expected SQL
+  // LLM review gate: batch review + fix benchmark expected SQL
   if (isReviewEnabled("genie-benchmarks") && benchmarks.length > 0) {
-    const reviewed = await Promise.all(
-      benchmarks.map(async (b) => {
-        const review = await reviewAndFixSql(b.expectedSql, {
-          schemaContext: schemaBlock,
-          surface: "genie-benchmarks",
-        });
-        if (review.fixedSql) {
-          if (
-            validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)
-          ) {
-            logger.info("Benchmark SQL fix applied", {
-              question: b.question,
-              verdict: review.verdict,
-              qualityScore: review.qualityScore,
-            });
-            return { ...b, expectedSql: review.fixedSql };
-          }
-          logger.warn("Benchmark review fix failed schema validation, keeping original", {
+    const items = benchmarks.map((b, i) => ({ id: `b${i}:${b.question}`, sql: b.expectedSql }));
+    const results = await reviewBatch(items, "genie-benchmarks", {
+      schemaContext: schemaBlock,
+      requestFix: true,
+    });
+    const reviewed = benchmarks.map((b, i) => {
+      const res = results.find((r) => r.id === items[i].id) ?? results[i];
+      const review = res.result;
+      if (review.fixedSql) {
+        if (
+          validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)
+        ) {
+          logger.info("Benchmark SQL fix applied", {
             question: b.question,
-          });
-          return b;
-        }
-        if (review.verdict === "fail") {
-          logger.warn("Benchmark SQL dropped (fail verdict, no usable fix)", {
-            question: b.question,
+            verdict: review.verdict,
             qualityScore: review.qualityScore,
           });
-          return null;
+          return { ...b, expectedSql: review.fixedSql };
         }
+        logger.warn("Benchmark review fix failed schema validation, keeping original", {
+          question: b.question,
+        });
         return b;
-      }),
-    );
+      }
+      if (review.verdict === "fail") {
+        logger.warn("Benchmark SQL dropped (fail verdict, no usable fix)", {
+          question: b.question,
+          qualityScore: review.qualityScore,
+        });
+        return null;
+      }
+      return b;
+    });
     benchmarks = reviewed.filter((b): b is NonNullable<typeof b> => b !== null);
   }
 
