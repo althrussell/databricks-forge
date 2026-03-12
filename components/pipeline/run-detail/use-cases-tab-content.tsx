@@ -8,11 +8,13 @@ export function UseCasesTabContent({
   useCases,
   lineageDiscoveredFqns,
   onUpdate,
+  highlightUseCaseId,
 }: {
   useCases: UseCase[];
   lineageDiscoveredFqns: string[];
   runId?: string;
   onUpdate: (updated: UseCase) => Promise<{ ok: boolean; error?: string }>;
+  highlightUseCaseId?: string;
 }) {
   if (useCases.length === 0) {
     return (
@@ -29,6 +31,7 @@ export function UseCasesTabContent({
       useCases={useCases}
       lineageDiscoveredFqns={lineageDiscoveredFqns}
       onUpdate={onUpdate}
+      highlightUseCaseId={highlightUseCaseId}
     />
   );
 }

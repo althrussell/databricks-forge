@@ -133,10 +133,10 @@ export default function CreateFromSchemaPage() {
       if (!data) throw new Error("Invalid response from server");
 
       if (data.jobId) {
-        toast.success("Genie Space generation started. Redirecting...");
-        router.push(`/genie?generating=${data.jobId}`);
+        toast.success("Genie Space generation started");
+        router.push(`/genie/build/${data.jobId}`);
       } else if (data.recommendation) {
-        toast.success("Genie Space generated! Redirecting to deploy...");
+        toast.success("Genie Space generated!");
         router.push("/genie");
       }
     } catch (err) {

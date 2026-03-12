@@ -1,7 +1,10 @@
 /**
  * API: /api/runs/[runId]/genie-deploy
  *
- * POST -- Orchestrates the full Genie deployment flow:
+ * POST -- Start pipeline Genie deployment (fire-and-forget, returns jobId).
+ * GET  -- Poll deployment progress by jobId.
+ *
+ * Orchestrates the full Genie deployment flow:
  *   1. Validate pre-existing metric views from metadata
  *   2. Rewrite metric view / function DDLs to the chosen target schema
  *   3. Execute each DDL (with auto-fix for common errors)
@@ -39,6 +42,7 @@ import {
 } from "@/lib/lakebase/metric-view-proposals";
 import { rewriteDashboardMetricViewFqns } from "@/lib/genie/metric-view-dependencies";
 import { isMetricViewsEnabled } from "@/lib/genie/metric-views-config";
+
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------
@@ -54,11 +58,9 @@ interface DomainDeployRequest {
 
 interface RequestBody {
   domains: DomainDeployRequest[];
-  targetSchema: string; // "catalog.schema"
+  targetSchema: string;
   authMode?: GenieAuthMode;
-  /** Optional metric view FQN rewrites (old ref → deployed FQN). */
   fqnRewrites?: Record<string, string>;
-  /** Prefix prepended to UC resource names (e.g. "forge_"). */
   resourcePrefix?: string;
 }
 
@@ -73,7 +75,70 @@ interface DomainResult {
 }
 
 // ---------------------------------------------------------------------------
-// Handler
+// Job tracker
+// ---------------------------------------------------------------------------
+
+interface PipelineDeployJob {
+  jobId: string;
+  runId: string;
+  status: "deploying" | "completed" | "failed";
+  message: string;
+  completedDomains: number;
+  totalDomains: number;
+  startedAt: number;
+  completedAt: number | null;
+  results: DomainResult[];
+  error: string | null;
+}
+
+const deployJobs = new Map<string, PipelineDeployJob>();
+const JOB_TTL_MS = 30 * 60 * 1000;
+
+function evictStale(): void {
+  const now = Date.now();
+  for (const [id, job] of deployJobs) {
+    if (job.completedAt && now - job.completedAt > JOB_TTL_MS) {
+      deployJobs.delete(id);
+    } else if (!job.completedAt && now - job.startedAt > JOB_TTL_MS * 2) {
+      deployJobs.delete(id);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET handler (poll)
+// ---------------------------------------------------------------------------
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ runId: string }> },
+) {
+  await params;
+  evictStale();
+
+  const jobId = request.nextUrl.searchParams.get("jobId");
+  if (!jobId) {
+    return NextResponse.json({ error: "jobId query parameter required" }, { status: 400 });
+  }
+
+  const job = deployJobs.get(jobId);
+  if (!job) {
+    return NextResponse.json({ error: "Job not found or expired" }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    jobId: job.jobId,
+    status: job.status,
+    message: job.message,
+    completedDomains: job.completedDomains,
+    totalDomains: job.totalDomains,
+    results: job.results,
+    error: job.error,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// POST handler (fire-and-forget)
 // ---------------------------------------------------------------------------
 
 export async function POST(
@@ -109,140 +174,183 @@ export async function POST(
       );
     }
 
-    const config = getConfig();
-    const results: DomainResult[] = [];
+    const jobId = uuidv4();
 
-    const fqnRewrites = body.fqnRewrites ?? {};
+    deployJobs.set(jobId, {
+      jobId,
+      runId,
+      status: "deploying",
+      message: `Deploying ${body.domains.length} domain${body.domains.length !== 1 ? "s" : ""}...`,
+      completedDomains: 0,
+      totalDomains: body.domains.length,
+      startedAt: Date.now(),
+      completedAt: null,
+      results: [],
+      error: null,
+    });
 
-    for (const domainReq of body.domains) {
-      // Apply metric view FQN rewrites to the serialized space if provided
-      if (Object.keys(fqnRewrites).length > 0) {
-        domainReq.serializedSpace = rewriteDashboardMetricViewFqns(
-          domainReq.serializedSpace,
-          fqnRewrites,
-        );
+    runPipelineDeploy(jobId, runId, body).catch((err) => {
+      const job = deployJobs.get(jobId);
+      if (job && job.status === "deploying") {
+        job.status = "failed";
+        job.message = "Deployment failed";
+        job.error = safeErrorMessage(err);
+        job.completedAt = Date.now();
       }
+    });
 
-      const assets: AssetResult[] = [];
-      const deployedMvs: { fqn: string; description?: string }[] = [];
+    return NextResponse.json({ jobId, status: "deploying" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.error("Genie deploy failed", { error: message });
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
+  }
+}
 
-      // 1. Deploy metric views (with auto-fix) -- skipped when the global kill switch is off
-      if (isMetricViewsEnabled()) {
-        let mvProposals: Awaited<ReturnType<typeof getMetricViewProposalsByRunDomain>> = [];
-        try {
-          mvProposals = await getMetricViewProposalsByRunDomain(runId, domainReq.domain);
-        } catch {
-          // Non-fatal: standalone table may not exist yet for old runs
-        }
+// ---------------------------------------------------------------------------
+// Background deploy logic
+// ---------------------------------------------------------------------------
 
-        for (const mv of domainReq.metricViews) {
-          const result = await deployAsset(mv, body.targetSchema, body.resourcePrefix);
-          assets.push(result);
-          if (result.deployed) {
-            deployedMvs.push({ fqn: result.fqn, description: mv.description });
-            logger.info("Metric view deployed", {
-              runId,
-              domain: domainReq.domain,
-              fqn: result.fqn,
-            });
+async function runPipelineDeploy(
+  jobId: string,
+  runId: string,
+  body: RequestBody,
+): Promise<void> {
+  const job = deployJobs.get(jobId);
+  if (!job) return;
 
-            const matchingProposal = mvProposals.find(
-              (p) => p.name.toLowerCase() === mv.name.toLowerCase(),
-            );
-            if (matchingProposal) {
-              try {
-                await updateDeploymentStatus(matchingProposal.id, "deployed", result.fqn);
-              } catch (err) {
-                logger.warn("Failed to update MV proposal deployment status", {
-                  proposalId: matchingProposal.id,
-                  error: err instanceof Error ? err.message : String(err),
-                });
-              }
-            }
-          }
-        }
-      }
+  const config = getConfig();
+  const fqnRewrites = body.fqnRewrites ?? {};
 
-      // 2. Validate pre-existing metric views from the serialized space.
-      //    Only validate identifiers that are already FQNs (3-part names). Bare names
-      //    come from the assembler (first deploy) and haven't been created yet —
-      //    validating them produces spurious failures.
-      const isFqn = (id: string) => id.replace(/`/g, "").split(".").length >= 3;
-
-      const preExistingMvFqns = extractPreExistingMvFqns(domainReq.serializedSpace).filter(isFqn);
-
-      const { valid: validPreExistingMvs, stripped: mvValidationStripped } =
-        await validatePreExistingMetricViews(preExistingMvFqns);
-
-      // 3. Prepare a clean serialized space (strip undeployed, add deployed FQNs)
-      const { json: preparedSpace, strippedRefs } = prepareSerializedSpace(
+  for (const domainReq of body.domains) {
+    if (Object.keys(fqnRewrites).length > 0) {
+      domainReq.serializedSpace = rewriteDashboardMetricViewFqns(
         domainReq.serializedSpace,
-        deployedMvs,
-        validPreExistingMvs,
+        fqnRewrites,
       );
+    }
 
-      // 4. Final existence check — verify every reference in the space is real
-      const { json: validatedSpace, stripped: finalStripped } =
-        await validateFinalSpace(preparedSpace);
+    const currentJob = deployJobs.get(jobId);
+    if (!currentJob || currentJob.status !== "deploying") return;
+    currentJob.message = `Deploying "${domainReq.domain}"...`;
 
-      // 4b. Normalize all identifiers to 3-part FQNs — Genie API requires
-      // fully-qualified catalog.schema.object names for functions and metric views.
-      const finalSpace = normalizeIdentifiersToFqn(validatedSpace, body.targetSchema);
+    const assets: AssetResult[] = [];
+    const deployedMvs: { fqn: string; description?: string }[] = [];
 
-      const allStripped = [...mvValidationStripped, ...strippedRefs, ...finalStripped];
-
-      if (allStripped.length > 0) {
-        logger.info("Stripped references from serialized space", {
-          domain: domainReq.domain,
-          stripped: allStripped.map((s) => `${s.type}:${s.identifier}`),
-        });
+    if (isMetricViewsEnabled()) {
+      let mvProposals: Awaited<ReturnType<typeof getMetricViewProposalsByRunDomain>> = [];
+      try {
+        mvProposals = await getMetricViewProposalsByRunDomain(runId, domainReq.domain);
+      } catch {
+        // Non-fatal
       }
 
-      // 5. Create or update Genie space
-      const deployedAssetsPayload = {
-        functions: [] as string[],
-        metricViews: deployedMvs.map((m) => m.fqn),
-      };
-
-      try {
-        let spaceId: string;
-
-        if (domainReq.existingSpaceId) {
-          const result = await updateGenieSpace(domainReq.existingSpaceId, {
-            serializedSpace: finalSpace,
-            authMode: body.authMode,
-          });
-          spaceId = result.space_id;
-          try {
-            await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
-          } catch (trackErr) {
-            logger.error("Lakebase tracking failed after space update (space exists in Genie)", {
-              spaceId,
-              domain: domainReq.domain,
-              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
-            });
-            try {
-              await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
-            } catch {
-              /* exhausted retry */
-            }
-          }
-          logger.info("Genie space updated", {
+      for (const mv of domainReq.metricViews) {
+        const result = await deployAsset(mv, body.targetSchema, body.resourcePrefix);
+        assets.push(result);
+        if (result.deployed) {
+          deployedMvs.push({ fqn: result.fqn, description: mv.description });
+          logger.info("Metric view deployed", {
             runId,
             domain: domainReq.domain,
-            spaceId,
+            fqn: result.fqn,
           });
-        } else {
-          const result = await createGenieSpace({
-            title: domainReq.title,
-            description: domainReq.description || "",
-            serializedSpace: finalSpace,
-            warehouseId: config.warehouseId,
-            authMode: body.authMode,
-          });
-          spaceId = result.space_id;
 
-          const trackingId = uuidv4();
+          const matchingProposal = mvProposals.find(
+            (p) => p.name.toLowerCase() === mv.name.toLowerCase(),
+          );
+          if (matchingProposal) {
+            try {
+              await updateDeploymentStatus(matchingProposal.id, "deployed", result.fqn);
+            } catch (err) {
+              logger.warn("Failed to update MV proposal deployment status", {
+                proposalId: matchingProposal.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const isFqn = (id: string) => id.replace(/`/g, "").split(".").length >= 3;
+    const preExistingMvFqns = extractPreExistingMvFqns(domainReq.serializedSpace).filter(isFqn);
+    const { valid: validPreExistingMvs, stripped: mvValidationStripped } =
+      await validatePreExistingMetricViews(preExistingMvFqns);
+
+    const { json: preparedSpace, strippedRefs } = prepareSerializedSpace(
+      domainReq.serializedSpace,
+      deployedMvs,
+      validPreExistingMvs,
+    );
+
+    const { json: validatedSpace, stripped: finalStripped } =
+      await validateFinalSpace(preparedSpace);
+
+    const finalSpace = normalizeIdentifiersToFqn(validatedSpace, body.targetSchema);
+    const allStripped = [...mvValidationStripped, ...strippedRefs, ...finalStripped];
+
+    if (allStripped.length > 0) {
+      logger.info("Stripped references from serialized space", {
+        domain: domainReq.domain,
+        stripped: allStripped.map((s) => `${s.type}:${s.identifier}`),
+      });
+    }
+
+    const deployedAssetsPayload = {
+      functions: [] as string[],
+      metricViews: deployedMvs.map((m) => m.fqn),
+    };
+
+    try {
+      let spaceId: string;
+
+      if (domainReq.existingSpaceId) {
+        const result = await updateGenieSpace(domainReq.existingSpaceId, {
+          serializedSpace: finalSpace,
+          authMode: body.authMode,
+        });
+        spaceId = result.space_id;
+        try {
+          await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
+        } catch (trackErr) {
+          logger.error("Lakebase tracking failed after space update", {
+            spaceId,
+            domain: domainReq.domain,
+            error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+          });
+          try {
+            await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
+          } catch { /* exhausted retry */ }
+        }
+        logger.info("Genie space updated", { runId, domain: domainReq.domain, spaceId });
+      } else {
+        const result = await createGenieSpace({
+          title: domainReq.title,
+          description: domainReq.description || "",
+          serializedSpace: finalSpace,
+          warehouseId: config.warehouseId,
+          authMode: body.authMode,
+        });
+        spaceId = result.space_id;
+
+        const trackingId = uuidv4();
+        try {
+          await trackGenieSpaceCreated(
+            trackingId,
+            spaceId,
+            runId,
+            domainReq.domain,
+            domainReq.title,
+            deployedAssetsPayload,
+            body.authMode,
+          );
+        } catch (trackErr) {
+          logger.error("Lakebase tracking failed after space creation", {
+            spaceId,
+            domain: domainReq.domain,
+            error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+          });
           try {
             await trackGenieSpaceCreated(
               trackingId,
@@ -253,76 +361,57 @@ export async function POST(
               deployedAssetsPayload,
               body.authMode,
             );
-          } catch (trackErr) {
-            logger.error("Lakebase tracking failed after space creation (space exists in Genie)", {
-              spaceId,
-              domain: domainReq.domain,
-              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
-            });
-            try {
-              await trackGenieSpaceCreated(
-                trackingId,
-                spaceId,
-                runId,
-                domainReq.domain,
-                domainReq.title,
-                deployedAssetsPayload,
-                body.authMode,
-              );
-            } catch {
-              /* exhausted retry */
-            }
-          }
+          } catch { /* exhausted retry */ }
         }
-
-        results.push({
-          domain: domainReq.domain,
-          assets,
-          spaceId,
-          patchedSpace: finalSpace,
-          strippedRefs: allStripped.length > 0 ? allStripped : undefined,
-        });
-
-        logger.info("Genie space deployed", {
-          runId,
-          domain: domainReq.domain,
-          spaceId,
-          metricViews: deployedMvs.length,
-          strippedRefs: allStripped.length,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const orphanedAssets = {
-          metricViews: deployedMvs.map((m) => m.fqn),
-        };
-        if (orphanedAssets.metricViews.length > 0) {
-          logger.warn(
-            "Genie space creation failed -- UC assets deployed but not attached to any space",
-            {
-              domain: domainReq.domain,
-              orphanedAssets,
-            },
-          );
-        }
-        results.push({
-          domain: domainReq.domain,
-          assets,
-          spaceError: msg,
-          orphanedAssets: orphanedAssets.metricViews.length > 0 ? orphanedAssets : undefined,
-          patchedSpace: finalSpace,
-          strippedRefs: allStripped.length > 0 ? allStripped : undefined,
-        });
-        logger.error("Genie space creation failed during deploy", {
-          domain: domainReq.domain,
-          error: msg,
-        });
       }
+
+      currentJob.results.push({
+        domain: domainReq.domain,
+        assets,
+        spaceId,
+        patchedSpace: finalSpace,
+        strippedRefs: allStripped.length > 0 ? allStripped : undefined,
+      });
+
+      logger.info("Genie space deployed", {
+        runId,
+        domain: domainReq.domain,
+        spaceId,
+        metricViews: deployedMvs.length,
+        strippedRefs: allStripped.length,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const orphanedAssets = {
+        metricViews: deployedMvs.map((m) => m.fqn),
+      };
+      if (orphanedAssets.metricViews.length > 0) {
+        logger.warn(
+          "Genie space creation failed -- UC assets deployed but not attached to any space",
+          { domain: domainReq.domain, orphanedAssets },
+        );
+      }
+      currentJob.results.push({
+        domain: domainReq.domain,
+        assets,
+        spaceError: msg,
+        orphanedAssets: orphanedAssets.metricViews.length > 0 ? orphanedAssets : undefined,
+        patchedSpace: finalSpace,
+        strippedRefs: allStripped.length > 0 ? allStripped : undefined,
+      });
+      logger.error("Genie space creation failed during deploy", {
+        domain: domainReq.domain,
+        error: msg,
+      });
     }
 
-    return NextResponse.json({ results });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error("Genie deploy failed", { error: message });
-    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
+    currentJob.completedDomains += 1;
+  }
+
+  const finalJob = deployJobs.get(jobId);
+  if (finalJob) {
+    finalJob.status = "completed";
+    finalJob.message = "Deployment complete";
+    finalJob.completedAt = Date.now();
   }
 }

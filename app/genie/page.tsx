@@ -263,7 +263,7 @@ export default function GenieSpacesPage() {
     };
   }, [router]);
 
-  // Poll for active generate jobs (Scan Schema builds)
+  // Poll for generate jobs (Scan Schema builds) -- includes all non-evicted jobs
   useEffect(() => {
     const pollGenerateJobs = async () => {
       try {
@@ -280,14 +280,6 @@ export default function GenieSpacesPage() {
             clearInterval(generateTimerRef.current);
             generateTimerRef.current = null;
           }
-
-          // Refresh space list if any job just completed
-          const completed = jobList.filter(
-            (j: { status: string }) => j.status === "completed",
-          );
-          if (completed.length > 0) {
-            fetchSpaces();
-          }
         }
       } catch {
         // Non-critical
@@ -299,7 +291,7 @@ export default function GenieSpacesPage() {
     return () => {
       if (generateTimerRef.current) clearInterval(generateTimerRef.current);
     };
-  }, [fetchSpaces]);
+  }, []);
 
   const handleCancelGenerate = async (jobId: string) => {
     try {
@@ -460,56 +452,130 @@ export default function GenieSpacesPage() {
           </TabsList>
 
           <TabsContent value="active" className="mt-4">
-            {/* In-progress generate jobs as "Building" tiles */}
-            {generateJobs.filter((j) => j.status === "generating").length > 0 && (
+            {/* Generate job tiles -- building, completed (ready to deploy), and failed */}
+            {generateJobs.length > 0 && (
               <div className="mb-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {generateJobs
-                  .filter((j) => j.status === "generating")
-                  .map((job) => (
-                    <Card key={job.jobId} className="relative overflow-hidden border-violet-500/30">
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <BrainCircuit className="size-5 animate-pulse text-violet-500" />
-                            <div>
-                              <h3 className="text-sm font-semibold">
-                                {job.title || "Building Genie Space..."}
-                              </h3>
-                              {job.domain && (
-                                <p className="text-xs text-muted-foreground">{job.domain}</p>
-                              )}
+                {generateJobs.map((job) => {
+                  if (job.status === "generating") {
+                    return (
+                      <Card
+                        key={job.jobId}
+                        className="relative cursor-pointer overflow-hidden border-violet-500/30 transition-shadow hover:shadow-md"
+                        onClick={() => router.push(`/genie/build/${job.jobId}`)}
+                      >
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <BrainCircuit className="size-5 animate-pulse text-violet-500" />
+                              <div>
+                                <h3 className="text-sm font-semibold">
+                                  {job.title || "Building Genie Space..."}
+                                </h3>
+                                {job.domain && (
+                                  <p className="text-xs text-muted-foreground">{job.domain}</p>
+                                )}
+                              </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCancelGenerate(job.jobId);
+                              }}
+                            >
+                              Cancel
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                            onClick={() => handleCancelGenerate(job.jobId)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                        <div className="mt-3 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{job.message}</span>
-                            <span>{job.percent}%</span>
-                          </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full bg-violet-500 transition-all duration-500"
-                              style={{ width: `${job.percent}%` }}
-                            />
-                          </div>
-                          {job.tableCount && (
-                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                              <Table2 className="size-3" />
-                              {job.tableCount} table{job.tableCount !== 1 ? "s" : ""}
+                          <div className="mt-3 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>{job.message}</span>
+                              <span>{job.percent}%</span>
                             </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                                style={{ width: `${job.percent}%` }}
+                              />
+                            </div>
+                            {job.tableCount && (
+                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Table2 className="size-3" />
+                                {job.tableCount} table{job.tableCount !== 1 ? "s" : ""}
+                              </div>
+                            )}
+                          </div>
+                          <p className="mt-2 text-[10px] text-muted-foreground/70">
+                            Click for details <ArrowRight className="ml-0.5 inline size-2.5" />
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  if (job.status === "completed") {
+                    return (
+                      <Card
+                        key={job.jobId}
+                        className="relative cursor-pointer overflow-hidden border-green-500/30 transition-shadow hover:shadow-md"
+                        onClick={() => router.push(`/genie/build/${job.jobId}`)}
+                      >
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="size-5 text-green-500" />
+                              <div>
+                                <h3 className="text-sm font-semibold">
+                                  {job.title || "Genie Space Ready"}
+                                </h3>
+                                {job.domain && (
+                                  <p className="text-xs text-muted-foreground">{job.domain}</p>
+                                )}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-xs text-green-600 border-green-300 dark:text-green-400">
+                              Ready
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">{job.message}</p>
+                          <p className="mt-2 text-xs font-medium text-primary">
+                            Review & Deploy <ArrowRight className="ml-0.5 inline size-3" />
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  if (job.status === "failed") {
+                    return (
+                      <Card
+                        key={job.jobId}
+                        className="relative cursor-pointer overflow-hidden border-destructive/30 transition-shadow hover:shadow-md"
+                        onClick={() => router.push(`/genie/build/${job.jobId}`)}
+                      >
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <BrainCircuit className="size-5 text-destructive" />
+                              <div>
+                                <h3 className="text-sm font-semibold">
+                                  {job.title || "Build Failed"}
+                                </h3>
+                                {job.domain && (
+                                  <p className="text-xs text-muted-foreground">{job.domain}</p>
+                                )}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-xs text-destructive border-destructive/30">
+                              Failed
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-xs text-destructive">{job.error || job.message}</p>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  return null;
+                })}
               </div>
             )}
 

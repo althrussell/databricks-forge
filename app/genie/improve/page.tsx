@@ -132,8 +132,10 @@ export default function ImproveExistingPage() {
       if (!res.ok) {
         throw new Error(await parseErrorResponse(res, "Auto-improve failed"));
       }
-      toast.success("Auto-improve started. Check back in a few minutes.");
-      router.push(`/genie/${spaceId}?tab=benchmarks`);
+      const data = await res.json();
+      const autoJobId = data.jobId ?? "";
+      toast.success("Auto-improve started");
+      router.push(`/genie/${spaceId}?tab=benchmarks&autoImprove=${autoJobId}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Auto-improve failed");
     } finally {

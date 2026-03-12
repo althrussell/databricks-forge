@@ -19,6 +19,7 @@ import { loadSettings } from "@/lib/settings";
 
 interface GenieWorkbenchProps {
   runId: string;
+  initialDomain?: string;
 }
 
 function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
@@ -38,7 +39,7 @@ function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
   return cfg;
 }
 
-export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
+export function GenieWorkbench({ runId, initialDomain }: GenieWorkbenchProps) {
   const [engineEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
     return loadSettings().genieEngineDefaults.engineEnabled;
@@ -81,6 +82,12 @@ export function GenieWorkbench({ runId }: GenieWorkbenchProps) {
       /* ignore */
     }
   }, [runId]);
+
+  useEffect(() => {
+    if (initialDomain && domains.includes(initialDomain)) {
+      setSelectedDomains(new Set([initialDomain]));
+    }
+  }, [initialDomain, domains]);
 
   const startPolling = useCallback(() => {
     stopPolling();

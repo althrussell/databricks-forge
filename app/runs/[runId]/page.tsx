@@ -2,7 +2,7 @@
 
 import { useState, useCallback, use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +27,7 @@ import { useUseCaseUpdate } from "@/lib/hooks/use-usecase-update";
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     getOutcome,
     getOptions: getIndustryOptions,
@@ -66,7 +67,11 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     enrichWithPbi,
   } = useRunDetail(runId);
 
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") || "overview",
+  );
+  const highlightUseCaseId = searchParams.get("uc") || undefined;
+  const initialDomain = searchParams.get("domain") || undefined;
   const [insightsOpen, setInsightsOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -202,6 +207,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
             onRerun={handleRerun}
             isRerunning={isRerunning}
             onUseCaseUpdate={onUseCaseUpdate}
+            highlightUseCaseId={highlightUseCaseId}
+            initialDomain={initialDomain}
           />
         </>
       )}

@@ -1,8 +1,10 @@
 /**
  * API: /api/genie-spaces
  *
- * GET  -- List Genie spaces from the workspace + local tracking data
- * POST -- Create a new Genie space via Databricks API and track it
+ * GET  -- List Genie spaces from the workspace + local tracking data.
+ *         With ?deployJobId=... : poll deploy job status.
+ * POST -- Create a new Genie space (fire-and-forget with polling).
+ *         Returns { jobId } immediately; client polls GET ?deployJobId=...
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,15 +23,69 @@ import {
   type MetricViewDeployResult,
 } from "@/lib/genie/deploy";
 
-export async function GET() {
+// ---------------------------------------------------------------------------
+// Deploy job tracker (in-memory, same pattern as generate route)
+// ---------------------------------------------------------------------------
+
+interface DeployJobStatus {
+  jobId: string;
+  status: "deploying" | "completed" | "failed";
+  message: string;
+  startedAt: number;
+  completedAt: number | null;
+  result: {
+    spaceId: string;
+    title: string;
+    trackingId: string;
+    metricViewResults?: MetricViewDeployResult[];
+  } | null;
+  error: string | null;
+}
+
+const deployJobs = new Map<string, DeployJobStatus>();
+const DEPLOY_JOB_TTL_MS = 30 * 60 * 1000;
+
+function evictStaleDeployJobs(): void {
+  const now = Date.now();
+  for (const [id, job] of deployJobs) {
+    if (job.completedAt && now - job.completedAt > DEPLOY_JOB_TTL_MS) {
+      deployJobs.delete(id);
+    } else if (!job.completedAt && now - job.startedAt > DEPLOY_JOB_TTL_MS * 2) {
+      deployJobs.delete(id);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET handler
+// ---------------------------------------------------------------------------
+
+export async function GET(request: NextRequest) {
+  const deployJobId = request.nextUrl.searchParams.get("deployJobId");
+
+  // Poll deploy job status
+  if (deployJobId) {
+    evictStaleDeployJobs();
+    const job = deployJobs.get(deployJobId);
+    if (!job) {
+      return NextResponse.json({ error: "Deploy job not found or expired" }, { status: 404 });
+    }
+    return NextResponse.json({
+      jobId: job.jobId,
+      status: job.status,
+      message: job.message,
+      result: job.result,
+      error: job.error,
+    });
+  }
+
+  // Default: list all spaces
   try {
     const [apiResult, tracked] = await Promise.all([
       listGenieSpaces().catch(() => ({ spaces: [], next_page_token: undefined })),
       listTrackedGenieSpaces().catch(() => []),
     ]);
 
-    // Filter out tracked spaces that no longer exist in the workspace.
-    // Lakebase rows are left intact so the runs page can still offer redeployment.
     const workspaceIds = new Set((apiResult.spaces ?? []).map((s) => s.space_id));
     const liveTracked = tracked.filter(
       (t) => t.status === "trashed" || workspaceIds.has(t.spaceId),
@@ -62,7 +118,7 @@ export async function GET() {
 }
 
 // ---------------------------------------------------------------------------
-// POST handler
+// POST handler (fire-and-forget)
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -104,23 +160,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validation = await revalidateSerializedSpace(serializedSpace);
-    if (!validation.ok) {
-      return NextResponse.json(
-        {
-          error: validation.error,
-          code: validation.code,
-          diagnostics: validation.diagnostics ?? null,
-        },
-        { status: 409 },
-      );
-    }
-    // Deploy metric views if provided
-    let finalSerializedSpace = serializedSpace;
-    const deployedMvFqns: string[] = [];
-    let mvResults: MetricViewDeployResult[] = [];
-
-    if (metricViews && metricViews.length > 0 && targetSchema) {
+    // Validate targetSchema format synchronously if provided
+    if (targetSchema) {
       if (targetSchema.split(".").length !== 2) {
         return NextResponse.json(
           { error: "targetSchema must be in catalog.schema format" },
@@ -135,62 +176,148 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-
-      const mvDeploy = await deployMetricViews(metricViews, targetSchema, resourcePrefix);
-      mvResults = mvDeploy.results;
-      deployedMvFqns.push(...mvDeploy.deployedFqns);
-      finalSerializedSpace = patchSpaceWithMetricViews(serializedSpace, deployedMvFqns);
     }
 
-    const config = getConfig();
+    // Fire-and-forget: return jobId immediately, run deploy in background
+    const jobId = uuidv4();
 
-    const result = await createGenieSpace({
-      title,
-      description: description || "",
-      serializedSpace: finalSerializedSpace,
-      warehouseId: config.warehouseId,
-      parentPath,
-      authMode,
+    deployJobs.set(jobId, {
+      jobId,
+      status: "deploying",
+      message: "Starting deployment...",
+      startedAt: Date.now(),
+      completedAt: null,
+      result: null,
+      error: null,
     });
 
-    const trackingId = uuidv4();
-    await trackGenieSpaceCreated(
-      trackingId,
-      result.space_id,
-      runId ?? null,
-      domain,
+    runDeploy(jobId, {
       title,
-      {
-        functions: [],
-        metricViews: deployedMvFqns,
-        metadata: {
-          promptVersion: quality?.promptVersion ?? "genie-v2",
-          gateDecision: quality?.gateDecision ?? "allow",
-        },
-      },
-      authMode,
-    );
-
-    logger.info("Genie space created successfully", {
-      spaceId: result.space_id,
+      description,
+      serializedSpace,
       runId,
       domain,
-      title,
-      metricViewsDeployed: deployedMvFqns.length,
+      parentPath,
+      authMode,
+      quality,
+      targetSchema,
+      metricViews,
+      resourcePrefix,
+    }).catch((err) => {
+      const job = deployJobs.get(jobId);
+      if (job && job.status === "deploying") {
+        job.status = "failed";
+        job.message = "Deployment failed";
+        job.error = safeErrorMessage(err);
+        job.completedAt = Date.now();
+      }
     });
 
-    return NextResponse.json({
-      spaceId: result.space_id,
-      title: result.title,
-      trackingId,
-      metricViewResults: mvResults.length > 0 ? mvResults : undefined,
-    });
+    return NextResponse.json({ jobId, status: "deploying" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error("Genie space creation failed", {
-      error: message,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Background deploy logic
+// ---------------------------------------------------------------------------
+
+async function runDeploy(
+  jobId: string,
+  params: {
+    title: string;
+    description: string;
+    serializedSpace: string;
+    runId?: string;
+    domain: string;
+    parentPath?: string;
+    authMode?: GenieAuthMode;
+    quality?: { gateDecision?: "allow" | "warn" | "block"; promptVersion?: string };
+    targetSchema?: string;
+    metricViews?: Array<{ name: string; ddl: string; description?: string }>;
+    resourcePrefix?: string;
+  },
+): Promise<void> {
+  const job = deployJobs.get(jobId);
+  if (!job) return;
+
+  // Step 1: Validate serialized space
+  job.message = "Validating space configuration...";
+  const validation = await revalidateSerializedSpace(params.serializedSpace);
+  if (!validation.ok) {
+    job.status = "failed";
+    job.message = "Validation failed";
+    job.error = validation.error;
+    job.completedAt = Date.now();
+    return;
+  }
+
+  // Step 2: Deploy metric views if provided
+  let finalSerializedSpace = params.serializedSpace;
+  const deployedMvFqns: string[] = [];
+  let mvResults: MetricViewDeployResult[] = [];
+
+  if (params.metricViews && params.metricViews.length > 0 && params.targetSchema) {
+    job.message = `Deploying ${params.metricViews.length} metric view${params.metricViews.length !== 1 ? "s" : ""}...`;
+    const mvDeploy = await deployMetricViews(
+      params.metricViews,
+      params.targetSchema,
+      params.resourcePrefix,
+    );
+    mvResults = mvDeploy.results;
+    deployedMvFqns.push(...mvDeploy.deployedFqns);
+    finalSerializedSpace = patchSpaceWithMetricViews(params.serializedSpace, deployedMvFqns);
+  }
+
+  // Step 3: Create the Genie Space
+  job.message = "Creating Genie Space in Databricks...";
+  const config = getConfig();
+  const result = await createGenieSpace({
+    title: params.title,
+    description: params.description || "",
+    serializedSpace: finalSerializedSpace,
+    warehouseId: config.warehouseId,
+    parentPath: params.parentPath,
+    authMode: params.authMode,
+  });
+
+  // Step 4: Track in Lakebase
+  job.message = "Tracking space...";
+  const trackingId = uuidv4();
+  await trackGenieSpaceCreated(
+    trackingId,
+    result.space_id,
+    params.runId ?? null,
+    params.domain,
+    params.title,
+    {
+      functions: [],
+      metricViews: deployedMvFqns,
+      metadata: {
+        promptVersion: params.quality?.promptVersion ?? "genie-v2",
+        gateDecision: params.quality?.gateDecision ?? "allow",
+      },
+    },
+    params.authMode,
+  );
+
+  logger.info("Genie space created successfully", {
+    spaceId: result.space_id,
+    runId: params.runId,
+    domain: params.domain,
+    title: params.title,
+    metricViewsDeployed: deployedMvFqns.length,
+  });
+
+  // Mark complete
+  job.status = "completed";
+  job.message = "Deployment complete";
+  job.completedAt = Date.now();
+  job.result = {
+    spaceId: result.space_id,
+    title: result.title,
+    trackingId,
+    metricViewResults: mvResults.length > 0 ? mvResults : undefined,
+  };
 }

@@ -85,11 +85,15 @@ export interface AdHocGenieConfig {
   mode?: "fast" | "full";
 }
 
+export type { GenieBuilderStep } from "./builder-steps";
+export { GENIE_BUILDER_STEPS } from "./builder-steps";
+import type { GenieBuilderStep } from "./builder-steps";
+
 export interface AdHocEngineInput {
   tables: string[];
   config?: AdHocGenieConfig;
   signal?: AbortSignal;
-  onProgress?: (message: string, percent: number) => void;
+  onProgress?: (message: string, percent: number, step?: GenieBuilderStep) => void;
 }
 
 export interface AdHocEngineResult {
@@ -794,13 +798,13 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     hasBusinessContext: !!businessContext,
   });
 
-  onProgress?.("Fetching table metadata...", 5);
+  onProgress?.("Fetching table metadata...", 5, "metadata-scrape");
   const metadata = await scrapeMetadata(tables);
   const validTableFqns = metadata.tables.map((t) => t.fqn);
   const allowlist = buildSchemaAllowlist(metadata);
 
   // Pass 1 (fast) + Pass 2 (premium) in parallel
-  onProgress?.("Analyzing columns & generating SQL expressions...", 10);
+  onProgress?.("Analyzing columns & generating SQL expressions...", 10, "column-intelligence");
   const [columnResult, exprResult] = await Promise.all([
     runColumnIntelligence({
       tableFqns: validTableFqns,
@@ -824,7 +828,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   ]);
 
   // Build join specs from foreign keys + LLM inference
-  onProgress?.("Inferring table relationships...", 35);
+  onProgress?.("Inferring table relationships...", 35, "join-inference");
   const tableSet = new Set(validTableFqns.map((t) => t.toLowerCase()));
   const fkJoins = buildFkJoins(metadata.foreignKeys, tableSet);
 
@@ -884,7 +888,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   });
 
   // Phase A: Metric views first
-  onProgress?.("Generating metric views...", 50);
+  onProgress?.("Generating metric views...", 50, "metric-views");
   const metricViewResult =
     isMetricViewsEnabled() && engineConfig.generateMetricViews
       ? await runMetricViewProposals({
@@ -914,7 +918,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   }
 
   // Phase B: Passes 3-5 in parallel
-  onProgress?.("Creating trusted assets, instructions & benchmarks...", 60);
+  onProgress?.("Creating trusted assets, instructions & benchmarks...", 60, "trusted-assets");
   const [trustedResult, instructionResult, benchmarkResult] = await Promise.all([
     engineConfig.generateTrustedAssets
       ? runTrustedAssetAuthoring({
@@ -961,7 +965,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
       : Promise.resolve({ benchmarks: [...engineConfig.benchmarkQuestions] }),
   ]);
 
-  onProgress?.("Assembling Genie Space...", 90);
+  onProgress?.("Assembling Genie Space...", 90, "assembly");
 
   let trustedQueries = trustedResult.queries;
   if (trustedQueries.length === 0) {
