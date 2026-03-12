@@ -17,7 +17,8 @@ export type EvaluatorType =
   | "conditional_count"
   | "jsonpath"
   | "llm_qualitative"
-  | "sql_quality";
+  | "sql_quality"
+  | "instruction_quality";
 
 export type FixStrategy =
   | "column_intelligence"

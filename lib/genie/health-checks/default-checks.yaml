@@ -152,6 +152,18 @@ checks:
       min: 1
       max: 1
 
+  - id: instruction-quality
+    category: instructions
+    description: "Instructions meet quality standards (specificity, structure, clarity)"
+    severity: warning
+    fixable: true
+    fix_strategy: instruction_generation
+    evaluator: instruction_quality
+    path: "instructions.text_instructions"
+    params:
+      min_score: 40
+    quick_win: "Improve instructions with table/column references, SQL examples, headers, and bullet lists. Replace vague terms with specific guidance."
+
   - id: example-sqls-minimum
     category: instructions
     description: "At least 5 example question-SQL pairs exist"

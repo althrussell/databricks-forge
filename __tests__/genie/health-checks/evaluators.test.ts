@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { runEvaluator, resolvePath } from "@/lib/genie/health-checks/evaluators";
+import {
+  runEvaluator,
+  resolvePath,
+  scoreInstructionQuality,
+} from "@/lib/genie/health-checks/evaluators";
 import type { CheckDefinition } from "@/lib/genie/health-checks/types";
 import { perfectSpace, emptySpace, duplicateIdSpace, emptySqlSpace } from "./fixtures/spaces";
 
@@ -322,5 +326,94 @@ describe("unregistered evaluator", () => {
     const check = makeCheck({ evaluator: "unknown_type" as never });
     const result = runEvaluator(perfectSpace, check);
     expect(result).toBeNull();
+  });
+});
+
+describe("scoreInstructionQuality", () => {
+  it("returns zero for empty input", () => {
+    const score = scoreInstructionQuality("");
+    expect(score.total).toBe(0);
+    expect(score.specificity).toBe(0);
+    expect(score.structure).toBe(0);
+    expect(score.clarity).toBe(0);
+  });
+
+  it("scores higher for structured instructions with references", () => {
+    const richInstruction = `## Revenue Calculations
+- **Total Revenue**: Always use \`SUM(CAST(o.total AS DECIMAL(18,2)))\` from \`catalog.schema.orders\`
+- **Average Order Value**: Use \`catalog.schema.orders.total / catalog.schema.orders.quantity\`
+
+### Filters
+- Use \`status = 'active'\` to exclude cancelled orders
+- Always filter by \`order_date\` for time-based queries
+
+### Important Rules
+- Never include refunded orders in revenue calculations
+- Ensure all monetary values use DECIMAL(18,2)`;
+
+    const score = scoreInstructionQuality(richInstruction);
+    expect(score.total).toBeGreaterThan(60);
+    expect(score.specificity).toBeGreaterThan(15);
+    expect(score.structure).toBeGreaterThan(15);
+  });
+
+  it("scores lower for vague instructions", () => {
+    const vagueInstruction = "Use appropriate queries for relevant data as needed. Various things should be handled correctly when applicable.";
+    const score = scoreInstructionQuality(vagueInstruction);
+    expect(score.total).toBeLessThan(30);
+  });
+
+  it("rewards SQL keywords in instructions", () => {
+    const sqlRich = "Always use SELECT with WHERE clause and JOIN for cross-table queries. Use GROUP BY for aggregations.";
+    const noSql = "The data is about orders and customers in the retail business.";
+    const sqlScore = scoreInstructionQuality(sqlRich);
+    const noSqlScore = scoreInstructionQuality(noSql);
+    expect(sqlScore.specificity).toBeGreaterThan(noSqlScore.specificity);
+  });
+
+  it("rewards structured formatting", () => {
+    const structured = `## Section
+- Point 1
+- Point 2
+
+**Important**: Use this format.`;
+    const flat = "Point 1 Point 2 Important Use this format.";
+    const structScore = scoreInstructionQuality(structured);
+    const flatScore = scoreInstructionQuality(flat);
+    expect(structScore.structure).toBeGreaterThan(flatScore.structure);
+  });
+});
+
+describe("instruction_quality evaluator", () => {
+  it("fails when no instructions exist", () => {
+    const check = makeCheck({
+      evaluator: "instruction_quality",
+      path: "instructions.text_instructions",
+      params: { min_score: 40 },
+    });
+    const result = runEvaluator(emptySpace, check)!;
+    expect(result.passed).toBe(false);
+    expect(result.detail).toContain("No instructions");
+  });
+
+  it("evaluates instruction quality for perfectSpace", () => {
+    const check = makeCheck({
+      evaluator: "instruction_quality",
+      path: "instructions.text_instructions",
+      params: { min_score: 10 },
+    });
+    const result = runEvaluator(perfectSpace, check)!;
+    expect(result).not.toBeNull();
+    expect(result.detail).toContain("Quality:");
+  });
+
+  it("respects min_score threshold", () => {
+    const check = makeCheck({
+      evaluator: "instruction_quality",
+      path: "instructions.text_instructions",
+      params: { min_score: 99 },
+    });
+    const result = runEvaluator(perfectSpace, check)!;
+    expect(result.passed).toBe(false);
   });
 });

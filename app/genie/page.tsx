@@ -25,7 +25,6 @@ import {
   ExternalLink,
   Sparkles,
   Trash2,
-  Database,
   Loader2,
   Table2,
   BarChart3,
@@ -33,6 +32,11 @@ import {
   Link2,
   FlaskConical,
   RefreshCw,
+  Search,
+  FileText,
+  MessageCircle,
+  Wrench,
+  ArrowRight,
 } from "lucide-react";
 import type { GenieSpaceResponse, TrackedGenieSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
@@ -275,8 +279,8 @@ export default function GenieSpacesPage() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-8">
       <PageHeader
-        title="Genie Spaces"
-        subtitle="Manage and deploy Databricks Genie Spaces for natural language SQL exploration."
+        title="Genie Studio"
+        subtitle="Create, manage, and improve Databricks Genie Spaces for natural language SQL exploration."
         actions={
           <div className="flex items-center gap-2">
             <HealthCheckSettingsDialog />
@@ -317,6 +321,58 @@ export default function GenieSpacesPage() {
         }
       />
 
+      {/* Genie Studio Entry Points */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StudioEntryCard
+          icon={Search}
+          title="Scan Schema"
+          description="Point at a catalog.schema and auto-generate a Genie Space with AI table selection and data profiling."
+          href="/genie/create/schema"
+          accent="blue"
+          badge="New"
+        />
+        <StudioEntryCard
+          icon={FileText}
+          title="Upload Requirements"
+          description="Upload a PDF, Markdown, or text document. Forge extracts tables, questions, and instructions."
+          href="/genie/create/requirements"
+          accent="violet"
+          badge="New"
+        />
+        <StudioEntryCard
+          icon={MessageCircle}
+          title="Describe Your Space"
+          description="Tell Ask Forge what you need in plain text. It builds the space from your conversation."
+          href="/ask-forge"
+          accent="emerald"
+        />
+        <StudioEntryCard
+          icon={Wrench}
+          title="Improve Existing"
+          description={
+            activeSpaces.length > 0
+              ? `Run result-based benchmarks with auto-fix loops. ${activeSpaces.length} space${activeSpaces.length !== 1 ? "s" : ""} available.`
+              : "Create a Genie Space first, then use benchmarks and auto-fix to improve it."
+          }
+          onClick={() => {
+            if (activeSpaces.length > 0) {
+              const bestCandidate =
+                activeSpaces.find((s) => {
+                  const report = healthScores[s.spaceId];
+                  return report && report.grade !== "A";
+                }) ?? activeSpaces[0];
+              router.push(`/genie/${bestCandidate.spaceId}?tab=benchmarks`);
+            } else {
+              toast.info("Create a Genie Space first, then come back to improve it.");
+            }
+          }}
+          accent="amber"
+          badge="Enhanced"
+          disabled={loading || activeSpaces.length === 0}
+        />
+      </div>
+
+      {/* Spaces List */}
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -329,16 +385,8 @@ export default function GenieSpacesPage() {
             <Sparkles className="mb-4 size-12 text-muted-foreground/50" />
             <h2 className="text-lg font-semibold">No Genie Spaces yet</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ask Forge about your data tables to create a Genie Space, or run a discovery pipeline.
+              Choose an entry point above to create your first Genie Space.
             </p>
-            <div className="mt-6 flex gap-3">
-              <Button variant="outline" asChild>
-                <Link href="/metadata-genie">
-                  <Database className="mr-2 size-4" />
-                  Metadata Genie
-                </Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
       ) : (
@@ -353,7 +401,7 @@ export default function GenieSpacesPage() {
           <TabsContent value="active" className="mt-4">
             {activeSpaces.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No active spaces. Create one to get started.
+                No active spaces. Choose an entry point above to get started.
               </p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -388,22 +436,6 @@ export default function GenieSpacesPage() {
           )}
         </Tabs>
       )}
-
-      {/* Quick links to related pages */}
-      <div className="flex gap-3 pt-2">
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/metadata-genie">
-            <Database className="mr-2 size-3.5" />
-            Metadata Genie
-          </Link>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/runs">
-            <BarChart3 className="mr-2 size-3.5" />
-            Pipeline Runs
-          </Link>
-        </Button>
-      </div>
 
       {/* Trash confirmation dialog */}
       <AlertDialog open={!!trashTarget} onOpenChange={(open) => !open && setTrashTarget(null)}>
@@ -450,6 +482,76 @@ export default function GenieSpacesPage() {
       />
     </div>
   );
+}
+
+const ACCENT_CLASSES = {
+  blue: "border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30",
+  violet: "border-violet-200 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/30",
+  emerald: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30",
+  amber: "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30",
+} as const;
+
+const ICON_ACCENT_CLASSES = {
+  blue: "text-blue-600 dark:text-blue-400",
+  violet: "text-violet-600 dark:text-violet-400",
+  emerald: "text-emerald-600 dark:text-emerald-400",
+  amber: "text-amber-600 dark:text-amber-400",
+} as const;
+
+function StudioEntryCard({
+  icon: Icon,
+  title,
+  description,
+  href,
+  onClick,
+  accent,
+  badge,
+  disabled,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  href?: string;
+  onClick?: () => void;
+  accent: keyof typeof ACCENT_CLASSES;
+  badge?: string;
+  disabled?: boolean;
+}) {
+  const content = (
+    <Card
+      className={`group relative border transition-all ${
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer hover:shadow-lg hover:-translate-y-0.5"
+      } ${ACCENT_CLASSES[accent]}`}
+      onClick={disabled ? undefined : onClick}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between">
+          <div className={`rounded-lg border bg-background p-2 shadow-sm ${ICON_ACCENT_CLASSES[accent]}`}>
+            <Icon className="size-5" />
+          </div>
+          {badge && (
+            <Badge variant="secondary" className="text-[10px] font-medium">
+              {badge}
+            </Badge>
+          )}
+        </div>
+        <CardTitle className="mt-3 text-sm font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>
+        <div className="mt-3 flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+          Get started <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (href && !disabled) {
+    return <Link href={href} className="no-underline">{content}</Link>;
+  }
+  return content;
 }
 
 function HealthGradeBadge({

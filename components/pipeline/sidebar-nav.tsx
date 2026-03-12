@@ -38,12 +38,17 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    label: "Genie Studio",
+    items: [
+      { href: "/genie", label: "Genie Studio", icon: GenieSpacesIcon },
+      { href: "/metadata-genie", label: "Metadata Genie", icon: MetadataGenieIcon },
+    ],
+  },
+  {
     label: "Estate",
     items: [
       { href: "/environment", label: "Overview", icon: EnvironmentIcon },
       { href: "/environment/comments", label: "AI Comments", icon: AICommentsIcon },
-      { href: "/genie", label: "Genie Spaces", icon: GenieSpacesIcon },
-      { href: "/metadata-genie", label: "Metadata Genie", icon: MetadataGenieIcon },
     ],
   },
   {
