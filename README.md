@@ -360,6 +360,7 @@ When **Data Sampling** is enabled in Settings, the app reads a configurable numb
 | [docs/DASHBOARD_ENGINE.md](docs/DASHBOARD_ENGINE.md) | **Dashboard Engine** -- AI/BI dashboard recommendation generator |
 | [docs/COMMENT_ENGINE.md](docs/COMMENT_ENGINE.md) | **Comment Engine** -- AI catalog comment generation |
 | [docs/SQL_ENGINE.md](docs/SQL_ENGINE.md) | **SQL Engine** -- grounded SQL generation and validation across all surfaces |
+| [docs/METRIC_VIEW_ENGINE.md](docs/METRIC_VIEW_ENGINE.md) | **Metric View Engine** -- metric view generation, validation, and deployment |
 | [docs/SKILLS_KNOWLEDGE_BASE.md](docs/SKILLS_KNOWLEDGE_BASE.md) | **Skills and Knowledge Base** -- composable domain knowledge and document RAG |
 | [docs/PIPELINE.md](docs/PIPELINE.md) | Pipeline step reference |
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | Industry benchmarks catalog |
