@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { CheckCircle2, Loader2, Rocket, ExternalLink } from "lucide-react";
 import { loadSettings } from "@/lib/settings";
+import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
 
 type Step = "schema" | "deploying" | "done";
 
@@ -83,11 +84,12 @@ export function MetadataGenieDeployModal({
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Deployment failed");
+        throw new Error(await parseErrorResponse(res, "Deployment failed"));
       }
 
-      const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any = await safeJsonParse(res);
+      if (!data) throw new Error("Invalid response from server");
       const result = {
         spaceId: data.spaceId,
         spaceUrl: data.spaceUrl,

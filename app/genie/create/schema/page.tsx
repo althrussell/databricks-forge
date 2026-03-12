@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Database, Loader2, Sparkles, Check, Search, Zap, Table2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
+import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
 
 interface ScannedTable {
   fqn: string;
@@ -49,7 +50,7 @@ export default function CreateFromSchemaPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const [_generating, setGenerating] = useState(false);
 
   const handleSchemaSelection = useCallback((sources: string[]) => {
     if (sources.length > 0) {
@@ -85,11 +86,11 @@ export default function CreateFromSchemaPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Scan failed");
+        throw new Error(await parseErrorResponse(res, "Scan failed"));
       }
 
-      const result: ScanResult = await res.json();
+      const result = (await safeJsonParse<ScanResult>(res))!;
+      if (!result) throw new Error("Invalid response from server");
       setScanResult(result);
       setSelectedTables(new Set(result.selection.selectedTables));
       setTitle(result.selection.suggestedTitle);
@@ -124,11 +125,12 @@ export default function CreateFromSchemaPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Generation failed");
+        throw new Error(await parseErrorResponse(res, "Generation failed"));
       }
 
-      const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any = await safeJsonParse(res);
+      if (!data) throw new Error("Invalid response from server");
 
       if (data.jobId) {
         toast.success("Genie Space generation started. Redirecting...");

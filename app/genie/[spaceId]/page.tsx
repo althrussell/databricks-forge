@@ -31,6 +31,7 @@ import type { SerializedSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
 import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import type { ImproveStats, ImproveChange } from "@/lib/genie/improve-jobs";
+import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -202,10 +203,12 @@ export default function SpaceDetailPage() {
         }),
       });
       if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error ?? "Create failed");
+        throw new Error(await parseErrorResponse(res, "Create failed"));
       }
-      const { spaceId: newSpaceId } = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const createResult: any = await safeJsonParse(res);
+      if (!createResult) throw new Error("Invalid response from server");
+      const { spaceId: newSpaceId } = createResult;
       toast.success("New space created from optimized config");
       setFixResult(null);
       router.push(`/genie/${newSpaceId}`);
@@ -368,10 +371,12 @@ export default function SpaceDetailPage() {
         }),
       });
       if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error ?? "Create failed");
+        throw new Error(await parseErrorResponse(res, "Create failed"));
       }
-      const { spaceId: newSpaceId } = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const improvedResult: any = await safeJsonParse(res);
+      if (!improvedResult) throw new Error("Invalid response from server");
+      const { spaceId: newSpaceId } = improvedResult;
       toast.success("New improved space created");
       dismissImproveResult();
       router.push(`/genie/${newSpaceId}`);

@@ -14,9 +14,22 @@ import { logger } from "@/lib/logger";
 import type { GenieSpaceResponse, GenieListResponse } from "@/lib/genie/types";
 import type { GenieAuthMode } from "@/lib/settings";
 
-/** Resolve auth headers based on the deploy auth mode (defaults to OBO). */
-async function resolveHeaders(authMode?: GenieAuthMode): Promise<Record<string, string>> {
-  return authMode === "sp" ? getAppHeaders() : getHeaders();
+/**
+ * Resolve auth headers based on the deploy auth mode (defaults to OBO).
+ *
+ * When an explicit `oboToken` is provided (e.g. captured at job creation for
+ * background tasks that run outside a request context), it is used directly
+ * instead of relying on the request-scoped `getHeaders()`.
+ */
+async function resolveHeaders(
+  authMode?: GenieAuthMode,
+  oboToken?: string,
+): Promise<Record<string, string>> {
+  if (authMode === "sp") return getAppHeaders();
+  if (oboToken) {
+    return { Authorization: `Bearer ${oboToken}`, "Content-Type": "application/json" };
+  }
+  return getHeaders();
 }
 
 export const DEFAULT_GENIE_PARENT_PATH = "/Shared/Forge Genie Spaces/";
@@ -300,10 +313,11 @@ export async function createGenieSpace(opts: {
   warehouseId: string;
   parentPath?: string;
   authMode?: GenieAuthMode;
+  oboToken?: string;
 }): Promise<GenieSpaceResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces`;
-  const headers = await resolveHeaders(opts.authMode);
+  const headers = await resolveHeaders(opts.authMode, opts.oboToken);
   const sanitized = sanitizeSerializedSpace(opts.serializedSpace);
 
   let parentPath = opts.parentPath ?? DEFAULT_GENIE_PARENT_PATH;
@@ -383,11 +397,12 @@ export async function updateGenieSpace(
     serializedSpace?: string;
     warehouseId?: string;
     authMode?: GenieAuthMode;
+    oboToken?: string;
   },
 ): Promise<GenieSpaceResponse> {
   const config = getConfig();
   const url = `${config.host}/api/2.0/genie/spaces/${spaceId}`;
-  const headers = await resolveHeaders(opts.authMode);
+  const headers = await resolveHeaders(opts.authMode, opts.oboToken);
 
   const body: Record<string, string> = {};
   if (opts.title !== undefined) body.title = opts.title;

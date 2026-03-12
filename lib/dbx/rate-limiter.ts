@@ -10,7 +10,7 @@
  */
 
 import { logger } from "@/lib/logger";
-import { getModelPool, type ModelEndpoint } from "./model-registry";
+import { getModelPool } from "./model-registry";
 
 // ---------------------------------------------------------------------------
 // Configuration

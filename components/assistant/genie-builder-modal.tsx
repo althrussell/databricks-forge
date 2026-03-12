@@ -38,6 +38,7 @@ import type {
   MetricViewProposal,
 } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
+import { parseErrorResponse, safeJsonParse } from "@/lib/error-utils";
 import type { TableEnrichmentData } from "./ask-forge-chat";
 
 // ---------------------------------------------------------------------------
@@ -206,10 +207,11 @@ export function GenieBuilderModal({
       if (fastProgressRef.current) clearInterval(fastProgressRef.current);
       setGenPercent(100);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to generate");
+        throw new Error(await parseErrorResponse(res, "Failed to generate"));
       }
-      const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any = await safeJsonParse(res);
+      if (!data) throw new Error("Invalid response from server");
       if (data.status === "completed" && data.result) {
         handleGenerationResult(data.result.recommendation, "fast");
       } else {
@@ -235,10 +237,12 @@ export function GenieBuilderModal({
         body: JSON.stringify({ tables, config: buildConfig("full") }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to start generation");
+        throw new Error(await parseErrorResponse(res, "Failed to start generation"));
       }
-      const { jobId } = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const startData: any = await safeJsonParse(res);
+      if (!startData) throw new Error("Invalid response from server");
+      const { jobId } = startData;
 
       pollRef.current = setInterval(async () => {
         try {
@@ -331,11 +335,12 @@ export function GenieBuilderModal({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Deployment failed");
+        throw new Error(await parseErrorResponse(res, "Deployment failed"));
       }
 
-      const result = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await safeJsonParse(res);
+      if (!result) throw new Error("Invalid response from server");
       setDeployedSpaceId(result.spaceId);
       setPhase("deployed");
 

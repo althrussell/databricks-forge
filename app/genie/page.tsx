@@ -45,6 +45,7 @@ import { PageHeader } from "@/components/page-header";
 import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
 import { ImportSpaceDialog } from "@/components/genie/import-space-dialog";
 import { HealthCheckSettingsDialog } from "@/components/genie/health-check-settings";
+import { parseErrorResponse } from "@/lib/error-utils";
 
 interface SpaceCardData {
   spaceId: string;
@@ -116,6 +117,22 @@ export default function GenieSpacesPage() {
   const improveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const spacesRef = useRef(spaces);
   spacesRef.current = spaces;
+
+  // Active generate jobs (Scan Schema / Requirements / Ask Forge full-mode builds)
+  const [generateJobs, setGenerateJobs] = useState<
+    Array<{
+      jobId: string;
+      status: string;
+      message: string;
+      percent: number;
+      title?: string;
+      domain?: string;
+      tableCount?: number;
+      error?: string | null;
+      result?: unknown;
+    }>
+  >([]);
+  const generateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const runDiscovery = useCallback(async (spaceIds: string[]) => {
     if (spaceIds.length === 0) return;
@@ -246,6 +263,57 @@ export default function GenieSpacesPage() {
     };
   }, [router]);
 
+  // Poll for active generate jobs (Scan Schema builds)
+  useEffect(() => {
+    const pollGenerateJobs = async () => {
+      try {
+        const res = await fetch("/api/genie-spaces/generate");
+        if (res.ok) {
+          const data = await res.json();
+          const jobList = data.jobs ?? [];
+          setGenerateJobs(jobList);
+
+          const hasActive = jobList.some(
+            (j: { status: string }) => j.status === "generating",
+          );
+          if (!hasActive && generateTimerRef.current) {
+            clearInterval(generateTimerRef.current);
+            generateTimerRef.current = null;
+          }
+
+          // Refresh space list if any job just completed
+          const completed = jobList.filter(
+            (j: { status: string }) => j.status === "completed",
+          );
+          if (completed.length > 0) {
+            fetchSpaces();
+          }
+        }
+      } catch {
+        // Non-critical
+      }
+    };
+
+    pollGenerateJobs();
+    generateTimerRef.current = setInterval(pollGenerateJobs, 3000);
+    return () => {
+      if (generateTimerRef.current) clearInterval(generateTimerRef.current);
+    };
+  }, [fetchSpaces]);
+
+  const handleCancelGenerate = async (jobId: string) => {
+    try {
+      await fetch(`/api/genie-spaces/generate?jobId=${jobId}`, { method: "DELETE" });
+      setGenerateJobs((prev) =>
+        prev.map((j) =>
+          j.jobId === jobId ? { ...j, status: "cancelled", message: "Cancelled" } : j,
+        ),
+      );
+    } catch {
+      toast.error("Failed to cancel generation");
+    }
+  };
+
   const handleRefresh = () => {
     setLoading(true);
     setHealthScores({});
@@ -260,8 +328,7 @@ export default function GenieSpacesPage() {
         method: "DELETE",
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to trash space");
+        throw new Error(await parseErrorResponse(res, "Failed to trash space"));
       }
       toast.success(`"${trashTarget.title}" trashed`);
       setTrashTarget(null);
@@ -393,11 +460,65 @@ export default function GenieSpacesPage() {
           </TabsList>
 
           <TabsContent value="active" className="mt-4">
-            {activeSpaces.length === 0 ? (
+            {/* In-progress generate jobs as "Building" tiles */}
+            {generateJobs.filter((j) => j.status === "generating").length > 0 && (
+              <div className="mb-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {generateJobs
+                  .filter((j) => j.status === "generating")
+                  .map((job) => (
+                    <Card key={job.jobId} className="relative overflow-hidden border-violet-500/30">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <BrainCircuit className="size-5 animate-pulse text-violet-500" />
+                            <div>
+                              <h3 className="text-sm font-semibold">
+                                {job.title || "Building Genie Space..."}
+                              </h3>
+                              {job.domain && (
+                                <p className="text-xs text-muted-foreground">{job.domain}</p>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                            onClick={() => handleCancelGenerate(job.jobId)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{job.message}</span>
+                            <span>{job.percent}%</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                              style={{ width: `${job.percent}%` }}
+                            />
+                          </div>
+                          {job.tableCount && (
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Table2 className="size-3" />
+                              {job.tableCount} table{job.tableCount !== 1 ? "s" : ""}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
+            )}
+
+            {activeSpaces.length === 0 &&
+            generateJobs.filter((j) => j.status === "generating").length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No active spaces. Choose an entry point above to get started.
               </p>
-            ) : (
+            ) : activeSpaces.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {activeSpaces.map((space) => (
                   <SpaceCard
@@ -416,7 +537,7 @@ export default function GenieSpacesPage() {
                   />
                 ))}
               </div>
-            )}
+            ) : null}
           </TabsContent>
 
           {trashedSpaces.length > 0 && (

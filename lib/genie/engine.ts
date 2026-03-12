@@ -874,6 +874,6 @@ function inferHeuristicJoins(
 }
 
 /** @deprecated Kept as fallback; prefer runHealthCheck() for accurate scoring. */
-function qualityScoreFallback(degradedReasons: string[]): number {
+function _qualityScoreFallback(degradedReasons: string[]): number {
   return Math.max(40, 100 - degradedReasons.length * 12);
 }

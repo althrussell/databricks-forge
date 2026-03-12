@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-12
 
-**Databricks Forge v0.26.0**
+**Databricks Forge v0.27.0**
 
 ---
 
@@ -20,6 +20,31 @@ New two-step LLM analysis (`category-analysis.ts`) reviews all benchmark results
 
 ### Model Pool Rotation
 Enhanced LLM retry logic in `llm-cache.ts` now rotates through all available fallback endpoints (including `DATABRICKS_FALLBACK_ENDPOINTS` env var) on 429 rate-limit exhaustion, instead of trying only one fallback.
+
+### Scan Schema Build Progress Dashboard
+After starting a Genie Space build from Scan Schema (or Upload Requirements), the Genie Studio dashboard now shows a live "Building" tile with a pulsing AI icon, progress percentage, table count, and a cancel button. Previously the toast disappeared and there was no visibility into running builds.
+
+### Generate Job Cancellation
+Full-mode Genie Space generation can now be cancelled via a dashboard button or `DELETE /api/genie-spaces/generate?jobId=X`. Uses `AbortController` signal propagation through the ad-hoc engine.
+
+### Structured Configuration Preview
+The Configuration Preview (used by Fix and Improve flows) now shows a human-readable section-by-section comparison instead of raw JSON. Sections include Tables, Sample Questions, Joins, Measures, Filters, Expressions, Example SQL Queries, and Benchmarks -- each with added/removed item counts. Raw JSON is available via a collapsible "Advanced" toggle for power users.
+
+### Table Reference Classification in Ask Forge
+The Referenced Tables panel in Ask Forge now classifies tables as **direct** (mentioned in enrichment data), **lineage** (upstream/downstream of a direct table), or **implied** (found via regex scan). Tables are sorted by type with colour-coded badges, and summary counts appear at the top.
+
+### Format Assistance and Entity Matching for Genie Columns
+The Genie assembler now automatically enables `enable_format_assistance` and `enable_entity_matching` on columns that are entity matching candidates (bounded-cardinality string columns). PII/sensitive columns and format-candidate columns (day_of_week, month_name, quarter, status, category, severity, etc.) also get `enable_format_assistance` turned on. This improves Genie's ability to understand user queries that reference display values.
+
+---
+
+## Bug Fixes
+
+- **JSON Parse Error on Space Creation** -- Fixed "Unexpected token 'u', 'upstream r'..." crash caused by calling `res.json()` on proxy error responses (plain-text bodies like "upstream request timeout"). Added `parseErrorResponse()` and `safeJsonParse()` helpers to `lib/error-utils.ts` and replaced all unsafe patterns across 8 client-side files.
+
+- **OBO Token Authentication for Genie API** -- Fixed 403 PERMISSION_DENIED errors when applying fixes or cloning Genie Spaces. Changed `getSpaceAuthMode()` default from `"sp"` (Service Principal) to `"obo"` (On Behalf Of user). Extended `createGenieSpace()`/`updateGenieSpace()` with optional `oboToken` parameter for background tasks. Auto-improve and clone routes now capture the user's OBO token at request time and forward it through background operations.
+
+- **Collapsed Context Panel Regression** -- Fixed the Ask Forge context panel defaulting all sections (tables, lineage, sources) to expanded. Lineage and Sources sections now start collapsed; only Referenced Tables is open by default.
 
 ---
 
@@ -52,6 +77,9 @@ Auto-improve loop now waits a configurable duration (`indexingWaitMs`, default 3
 ### Genie Best Practices Reference
 New "Genie Space Best Practices" chunk added to the `genie-design` skill covering the priority-ordered rules for building production-quality spaces.
 
+### Shared PII Pattern Utilities
+New `lib/toolkit/pii-patterns.ts` module extracts PII column detection and format-assistance candidacy patterns for reuse across the assembler and example query generation.
+
 ---
 
 ## Other Changes
@@ -60,13 +88,16 @@ New "Genie Space Best Practices" chunk added to the `genie-design` skill coverin
 - Schema context block includes truncation indicator for large schemas
 - Category analysis runs with bounded concurrency (3 parallel categories)
 - Endpoint pool builder de-duplicates fallback targets
+- `example-query-generation.ts` PII pattern deprecated in favour of shared `lib/toolkit/pii-patterns.ts`
+- Generate status API returns all active jobs when called without `jobId` parameter
 
 ---
 
-## Commits (1)
+## Commits (2)
 
 | Hash | Summary |
 |---|---|
 | `dcd3ebf` | feat: Genie Studio enhancement loop -- 16 competitive gaps bridged |
+| (pending) | feat: Genie Studio Builder enhancements -- 7 fixes and features |
 
-**Uncommitted changes:** Version bump to 0.26.0, updated release notes.
+**Uncommitted changes:** Version bump to 0.27.0, 20 files modified covering JSON parse safety, OBO token auth, entity matching, table reference classification, collapsed panels, build progress tiles, and structured config preview.
