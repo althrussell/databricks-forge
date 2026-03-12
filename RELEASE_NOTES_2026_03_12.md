@@ -1,69 +1,72 @@
 # Release Notes -- 2026-03-12
 
-**Databricks Forge v0.25.0**
+**Databricks Forge v0.26.0**
 
 ---
 
 ## New Features
 
-### Genie Studio
-Genie Spaces page transformed into a unified **Genie Studio** hub with 4 entry point cards for creating, managing, and improving Genie Spaces. Promoted to its own top-level sidebar navigation section.
+### Three-Space Architecture for Auto-Improve
+The auto-improve loop now creates production/dev-best/dev-working space clones for safe iteration. Improvements are promoted, regressions are automatically rolled back. The original production space is never modified during the improvement cycle.
 
-### Scan Schema -- Create from Schema
-New wizard (`/genie/create/schema`) scans a Unity Catalog schema, profiles key columns (cardinality, date ranges), uses AI to select the most analytically valuable tables, and generates a Genie Space via the ad-hoc engine. Includes step indicator, select-all/clear controls, and AI-detected business context display.
+### Sequential Fix Evaluation
+New `applyFixesSequentially()` mode applies fixes one at a time with re-scoring after each. Improvements are kept, regressions are rolled back to the dev-best baseline, enabling granular control over which changes actually help.
 
-### Upload Requirements -- Create from Requirements
-New wizard (`/genie/create/requirements`) parses uploaded PDF, Markdown, or plain text documents. LLM extracts tables, business questions, SQL examples, instructions, join hints, glossary terms, and domain context. Supports drag-and-drop with visual feedback, text paste, and confidence scoring.
+### Category-Based Enhancement Analysis
+New two-step LLM analysis (`category-analysis.ts`) reviews all benchmark results holistically before diagnosing failures per-category (instructions, measures, joins, examples, synonyms, benchmarks). Produces targeted fix recommendations with token-aware config slicing.
 
-### Result-Based Benchmark Scoring
-Benchmark runner upgraded from Jaccard SQL text similarity to a 3-tier comparison:
-1. SQL similarity fast-pass (>95% = pass immediately)
-2. Execute both expected and actual SQL, compare result sets
-3. LLM judge for semantic equivalence when results differ
+### Pre-Deploy Config Review Agent
+`runPreDeployReview()` in `deploy-validation.ts` performs comprehensive quality analysis before space deployment: instruction quality, join completeness, example coverage, semantic richness, column descriptions, and benchmark presence. Returns severity-graded findings with deploy recommendations.
 
-Each failure is categorized: `wrong_join`, `wrong_filter`, `wrong_aggregation`, `wrong_column`, `missing_data`, `wrong_sort`, `extra_data`, `timeout`, `execution_error`.
-
-### Auto-Improve Loop
-New iterative engine (`lib/genie/auto-improve.ts`) runs benchmarks, maps failure categories to targeted fix strategies, applies fixes via the space fixer, and re-benchmarks -- repeating until a target score is reached, max iterations are exhausted, or improvement stagnates. Progress callback for real-time UI updates.
+### Model Pool Rotation
+Enhanced LLM retry logic in `llm-cache.ts` now rotates through all available fallback endpoints (including `DATABRICKS_FALLBACK_ENDPOINTS` env var) on 429 rate-limit exhaustion, instead of trying only one fallback.
 
 ---
 
 ## Improvements
 
-### Parallel Semantic Expression Generation
-Single LLM call split into 3 parallel workers:
-- **Worker A**: Foundation aggregate measures (SUM, COUNT, AVG per column)
-- **Worker B**: Ratio and derived KPI measures (revenue per customer, conversion rates)
-- **Worker C**: Filters and dimensions (WHERE conditions, GROUP BY expressions)
+### Delete-Before-Add Fix Ordering
+Space fixer now applies delete strategies (remove bad synonyms, measures, joins, examples) before add strategies, preventing conflicting content from poisoning new additions. Five new delete strategies: `delete_bad_synonyms`, `delete_bad_measures`, `delete_bad_joins`, `delete_bad_examples`, `replace_instructions`.
 
-Results are merged and deduplicated, producing richer and more diverse measures.
+### Concurrent Benchmark Execution
+Benchmark runner now supports bounded-concurrency execution via `concurrency` option. Set >1 to run multiple Genie conversations in parallel for faster scoring cycles.
 
-### Instruction Quality Evaluator
-New `instruction_quality` evaluator added to the health check system. Scores instructions on three axes: specificity (40 pts -- table/column references, SQL keywords), structure (30 pts -- headers, lists, formatting), and clarity (30 pts -- absence of vague terms, action verbs). Includes actionable improvement suggestions.
+### Struct Field Awareness
+Schema context blocks now expand STRUCT and MAP column types to show nested field paths (up to 2 levels deep), giving LLMs richer understanding of complex data structures.
 
-### Failure-Category-Aware Fix Routing
-Benchmark feedback analysis upgraded with a two-tier strategy: failure categories from result-based scoring map directly to fix strategies (precise), with fallback to text-pattern heuristics. New `summarizeFailureCategories()` utility for human-readable failure summaries.
+### APPROX_COUNT_DISTINCT in Data Profiling
+Schema scanner now uses `APPROX_COUNT_DISTINCT` instead of `COUNT(DISTINCT)` for data profiling, significantly faster on large tables with minimal accuracy impact.
 
-### Smart Improve Existing Card
-The "Improve Existing" entry card in Genie Studio now shows dynamic descriptions based on available space count, disables gracefully when no spaces exist, and navigates to the space with the lowest health grade for maximum impact.
+### Dynamic Token Budget
+`buildSchemaContextBlock()` now auto-scales the character budget based on schema size: small schemas (<=10 tables) get 80K chars, large schemas (100+ tables) get 20K chars, preventing context overflow.
+
+### Phantom Table Filtering
+Schema scanner cross-checks `information_schema` results against `SHOW TABLES` to filter out stale/phantom table entries that no longer exist.
+
+### Sample Row Extraction
+New `sampleTableRows()` and `buildSampleDataBlock()` utilities in schema scanner for fetching and formatting sample data, gated by the `sampleRowsPerTable` setting.
+
+### Configurable Indexing Wait
+Auto-improve loop now waits a configurable duration (`indexingWaitMs`, default 30s) after applying fixes before re-scoring, allowing Genie's internal indexes to update.
+
+### Genie Best Practices Reference
+New "Genie Space Best Practices" chunk added to the `genie-design` skill covering the priority-ordered rules for building production-quality spaces.
 
 ---
 
 ## Other Changes
-
-- Added `validateIdentifier()` SQL injection protection to scan-schema API route
-- Added activity logging (`logActivity()`) to all 3 new API routes with 4 new `ActivityAction` types: `scanned_schema`, `parsed_requirements`, `started_auto_improve`, `completed_auto_improve`
-- Step indicator component on both wizard pages for guided UX
-- Drag-over visual highlight on requirements file upload drop zone
-- 22 new unit tests (805 total): failure category mapping, instruction quality scoring, summarization
+- Instruction consolidation strategy merges multiple fragmented instruction blocks into one
+- Fix strategy ordering follows canonical delete-before-add sequence
+- Schema context block includes truncation indicator for large schemas
+- Category analysis runs with bounded concurrency (3 parallel categories)
+- Endpoint pool builder de-duplicates fallback targets
 
 ---
 
-## Commits (2)
+## Commits (1)
 
 | Hash | Summary |
 |---|---|
-| `132d494` | feat: Genie Studio -- unified hub for creating, managing, and improving Genie Spaces |
-| `43aa0ef` | Merge pull request #123 from althrussell/feat/genie-studio |
+| `dcd3ebf` | feat: Genie Studio enhancement loop -- 16 competitive gaps bridged |
 
-**Uncommitted changes:** package.json version bump to 0.25.0, RELEASE_NOTES_2026_03_12.md update.
+**Uncommitted changes:** Version bump to 0.26.0, updated release notes.
