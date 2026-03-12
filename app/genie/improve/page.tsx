@@ -21,8 +21,6 @@ import {
   Zap,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
-import type { SpaceMetadata } from "@/lib/genie/space-metadata";
 import { parseErrorResponse } from "@/lib/error-utils";
 
 interface SpaceRow {
@@ -43,95 +41,83 @@ export default function ImproveExistingPage() {
   const router = useRouter();
   const [spaces, setSpaces] = useState<SpaceRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [discovering, setDiscovering] = useState(false);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [autoImproving, setAutoImproving] = useState<string | null>(null);
 
-  const fetchAndDiscover = useCallback(async () => {
+  const loadSpaces = useCallback(async () => {
     try {
       const res = await fetch("/api/genie-spaces");
       if (!res.ok) throw new Error("Failed to load spaces");
       const data = await res.json();
 
-      const wsSpaces: Array<{ space_id: string; title?: string; description?: string }> =
-        data.spaces ?? [];
+      const cachedSpaces: Array<{
+        spaceId: string;
+        title: string;
+        description?: string;
+        tableCount?: number;
+        healthScore?: number;
+        healthReportJson?: string;
+        permissionDenied?: boolean;
+      }> = data.spaces ?? [];
       const tracked: Array<{ spaceId: string; title: string; domain?: string; status: string }> =
         data.tracked ?? [];
 
-      const seen = new Set<string>();
+      const trackedMap = new Map(tracked.map((t) => [t.spaceId, t]));
       const rows: SpaceRow[] = [];
 
-      for (const t of tracked) {
-        if (t.status === "trashed") continue;
-        seen.add(t.spaceId);
-        rows.push({ spaceId: t.spaceId, title: t.title, domain: t.domain });
-      }
-      for (const ws of wsSpaces) {
-        if (seen.has(ws.space_id)) continue;
+      for (const c of cachedSpaces) {
+        if (c.permissionDenied) continue;
+        const t = trackedMap.get(c.spaceId);
+        if (t?.status === "trashed") continue;
+
+        let grade: string | undefined;
+        let overallScore: number | undefined;
+        let fixableCount: number | undefined;
+        let benchmarkCount: number | undefined;
+
+        if (c.healthReportJson) {
+          try {
+            const report = JSON.parse(c.healthReportJson);
+            grade = report.grade;
+            overallScore = report.overallScore;
+            fixableCount = report.fixableCount;
+          } catch {
+            /* invalid JSON */
+          }
+        }
+
         rows.push({
-          spaceId: ws.space_id,
-          title: ws.title ?? "Untitled",
-          description: ws.description,
+          spaceId: c.spaceId,
+          title: t?.title ?? c.title,
+          description: c.description,
+          domain: t?.domain,
+          tableCount: c.tableCount,
+          grade,
+          overallScore,
+          fixableCount,
+          benchmarkCount,
         });
       }
 
-      setSpaces(rows);
-      setLoading(false);
-
-      if (rows.length === 0) return;
-      setDiscovering(true);
-
-      const discRes = await fetch("/api/genie-spaces/discover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spaceIds: rows.map((r) => r.spaceId) }),
-      });
-
-      if (discRes.ok) {
-        const discData: Record<
-          string,
-          {
-            metadata: SpaceMetadata | null;
-            healthReport: SpaceHealthReport | null;
-            permissionDenied?: boolean;
-          }
-        > = await discRes.json();
-
-        const deniedIds = new Set(
-          Object.entries(discData)
-            .filter(([, v]) => v.permissionDenied)
-            .map(([id]) => id),
-        );
-
-        setSpaces((prev) =>
-          prev
-            .filter((s) => !deniedIds.has(s.spaceId))
-            .map((s) => {
-              const d = discData[s.spaceId];
-              if (!d) return s;
-              return {
-                ...s,
-                tableCount: d.metadata?.tableCount,
-                benchmarkCount: d.metadata?.benchmarkCount,
-                grade: d.healthReport?.grade,
-                overallScore: d.healthReport?.overallScore,
-                fixableCount: d.healthReport?.fixableCount,
-              };
-            }),
-        );
+      // Include tracked spaces not yet in cache
+      for (const t of tracked) {
+        if (t.status === "trashed") continue;
+        if (cachedSpaces.some((c) => c.spaceId === t.spaceId)) continue;
+        rows.push({ spaceId: t.spaceId, title: t.title, domain: t.domain });
       }
+
+      setSpaces(rows);
     } catch {
       toast.error("Failed to load spaces");
     } finally {
       setLoading(false);
-      setDiscovering(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAndDiscover();
-  }, [fetchAndDiscover]);
+    loadSpaces();
+  }, [loadSpaces]);
 
   const handleAutoImprove = async (spaceId: string) => {
     setAutoImproving(spaceId);
@@ -232,10 +218,10 @@ export default function ImproveExistingPage() {
               {sortKey === key && <ArrowUpDown className="ml-1 size-3" />}
             </Button>
           ))}
-          {discovering && (
+          {loading && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
-              Scanning...
+              Loading...
             </span>
           )}
         </div>
@@ -271,7 +257,7 @@ export default function ImproveExistingPage() {
                 <div
                   className={`flex size-10 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${gradeColor(space.grade)}`}
                 >
-                  {discovering ? <Loader2 className="size-4 animate-spin" /> : (space.grade ?? "–")}
+                  {space.grade ?? "–"}
                 </div>
 
                 {/* Info */}

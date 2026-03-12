@@ -512,8 +512,8 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
         }
       }
 
-      // 5. Deployed assets (dashboards + Genie spaces)
-      const [deployedDashboards, deployedSpaces] = await Promise.all([
+      // 5. Deployed assets (dashboards + Genie spaces from tracking + full workspace cache)
+      const [deployedDashboards, deployedSpaces, cachedWorkspaceSpaces] = await Promise.all([
         prisma.forgeDashboard.findMany({
           where: { status: { not: "trashed" } },
           select: { title: true, domain: true, dashboardId: true },
@@ -524,9 +524,17 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
           select: { title: true, domain: true, spaceId: true },
           take: 20,
         }),
+        prisma.forgeGenieSpaceCache
+          .findMany({
+            where: { permissionDenied: false },
+            select: { spaceId: true, title: true },
+            orderBy: { title: "asc" },
+            take: 100,
+          })
+          .catch(() => [] as { spaceId: string; title: string }[]),
       ]);
 
-      if (deployedDashboards.length > 0 || deployedSpaces.length > 0) {
+      if (deployedDashboards.length > 0 || deployedSpaces.length > 0 || cachedWorkspaceSpaces.length > 0) {
         const parts = ["## Already Deployed Assets"];
         if (deployedDashboards.length > 0) {
           parts.push(`Dashboards (${deployedDashboards.length}):`);
@@ -534,9 +542,18 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
             parts.push(`- ${d.title}${d.domain ? ` [${d.domain}]` : ""}`);
           }
         }
-        if (deployedSpaces.length > 0) {
-          parts.push(`Genie Spaces (${deployedSpaces.length}):`);
-          for (const s of deployedSpaces) {
+
+        const trackedIds = new Set(deployedSpaces.map((s) => s.spaceId));
+        const allSpaces = [
+          ...deployedSpaces.map((s) => ({ title: s.title, domain: s.domain })),
+          ...cachedWorkspaceSpaces
+            .filter((c) => !trackedIds.has(c.spaceId))
+            .map((c) => ({ title: c.title, domain: undefined as string | undefined })),
+        ];
+
+        if (allSpaces.length > 0) {
+          parts.push(`Genie Spaces (${allSpaces.length}):`);
+          for (const s of allSpaces) {
             parts.push(`- ${s.title}${s.domain ? ` [${s.domain}]` : ""}`);
           }
         }

@@ -1,7 +1,7 @@
 /**
  * API: /api/genie-spaces
  *
- * GET  -- List Genie spaces from the workspace + local tracking data.
+ * GET  -- List Genie spaces from Lakebase cache + tracking data (fast).
  *         With ?deployJobId=... : poll deploy job status.
  * POST -- Create a new Genie space (fire-and-forget with polling).
  *         Returns { jobId } immediately; client polls GET ?deployJobId=...
@@ -10,8 +10,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getConfig } from "@/lib/dbx/client";
-import { listGenieSpaces, createGenieSpace } from "@/lib/dbx/genie";
+import { createGenieSpace } from "@/lib/dbx/genie";
 import { listTrackedGenieSpaces, trackGenieSpaceCreated } from "@/lib/lakebase/genie-spaces";
+import { listCachedSpaces, getCacheSyncTimestamp } from "@/lib/lakebase/genie-space-cache";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import type { GenieAuthMode } from "@/lib/settings";
@@ -79,49 +80,40 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Default: list all spaces (iterate all Databricks API pages)
+  // Default: list from Lakebase cache (fast, no Databricks API calls).
+  // Sync from Databricks is handled by POST /api/genie-spaces/sync.
   try {
-    const fetchAllSpaces = async () => {
-      const allSpaces: Awaited<ReturnType<typeof listGenieSpaces>>["spaces"] = [];
-      let pageToken: string | undefined;
-      do {
-        const page = await listGenieSpaces(100, pageToken);
-        allSpaces.push(...(page.spaces ?? []));
-        pageToken = page.next_page_token;
-      } while (pageToken);
-      return allSpaces;
-    };
-
-    const [allSpaces, tracked] = await Promise.all([
-      fetchAllSpaces().catch(() => [] as Awaited<ReturnType<typeof listGenieSpaces>>["spaces"]),
+    const [cached, tracked, lastSyncedAt] = await Promise.all([
+      listCachedSpaces().catch(() => []),
       listTrackedGenieSpaces().catch(() => []),
+      getCacheSyncTimestamp().catch(() => null),
     ]);
 
-    const workspaceIds = new Set(allSpaces.map((s) => s.space_id));
+    const cachedIds = new Set(cached.map((c) => c.spaceId));
+
+    const mergedSpaces = cached.map((c) => ({
+      spaceId: c.spaceId,
+      title: c.title,
+      description: c.description,
+      tableCount: c.tableCount,
+      measureCount: c.measureCount,
+      sampleQuestionCount: c.sampleQuestionCount,
+      filterCount: c.filterCount,
+      healthScore: c.healthScore,
+      healthReportJson: c.healthReportJson,
+      permissionDenied: c.permissionDenied,
+      lastDiscoveredAt: c.lastDiscoveredAt,
+    }));
+
     const liveTracked = tracked.filter(
-      (t) => t.status === "trashed" || workspaceIds.has(t.spaceId),
+      (t) => t.status === "trashed" || cachedIds.has(t.spaceId),
     );
-    const staleCount = tracked.length - liveTracked.length;
 
-    if (staleCount > 0) {
-      logger.info("[genie-spaces] Filtered stale tracked spaces", {
-        staleCount,
-        staleIds: tracked
-          .filter((t) => t.status !== "trashed" && !workspaceIds.has(t.spaceId))
-          .map((t) => t.spaceId),
-      });
-    }
-
-    return NextResponse.json(
-      {
-        spaces: allSpaces,
-        tracked: liveTracked,
-        staleCount,
-      },
-      {
-        headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" },
-      },
-    );
+    return NextResponse.json({
+      spaces: mergedSpaces,
+      tracked: liveTracked,
+      lastSyncedAt,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
