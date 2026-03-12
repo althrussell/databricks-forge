@@ -39,6 +39,7 @@ import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
+  ShieldAlert,
 } from "lucide-react";
 import type { GenieSpaceResponse, TrackedGenieSpace } from "@/lib/genie/types";
 import type { SpaceHealthReport } from "@/lib/genie/health-checks/types";
@@ -111,6 +112,7 @@ export default function GenieSpacesPage() {
   const [trashing, setTrashing] = useState(false);
   const [databricksHost, setDatabricksHost] = useState("");
   const [healthScores, setHealthScores] = useState<Record<string, SpaceHealthReport | null>>({});
+  const [inaccessibleIds, setInaccessibleIds] = useState<Set<string>>(new Set());
   const [healthSheetOpen, setHealthSheetOpen] = useState(false);
   const [healthSheetTarget, setHealthSheetTarget] = useState<SpaceCardData | null>(null);
   const [improveStatuses, setImproveStatuses] = useState<
@@ -157,8 +159,24 @@ export default function GenieSpacesPage() {
 
         const data: Record<
           string,
-          { metadata: SpaceMetadata | null; healthReport: SpaceHealthReport | null }
+          {
+            metadata: SpaceMetadata | null;
+            healthReport: SpaceHealthReport | null;
+            permissionDenied?: boolean;
+          }
         > = await res.json();
+
+        const deniedInChunk = new Set<string>();
+        for (const [id, result] of Object.entries(data)) {
+          if (result.permissionDenied) deniedInChunk.add(id);
+        }
+        if (deniedInChunk.size > 0) {
+          setInaccessibleIds((prev) => {
+            const next = new Set(prev);
+            for (const id of deniedInChunk) next.add(id);
+            return next;
+          });
+        }
 
         setSpaces((prev) =>
           prev.map((s) => {
@@ -310,6 +328,7 @@ export default function GenieSpacesPage() {
   const handleRefresh = () => {
     setLoading(true);
     setHealthScores({});
+    setInaccessibleIds(new Set());
     fetchSpaces();
   };
 
@@ -333,7 +352,12 @@ export default function GenieSpacesPage() {
     }
   };
 
-  const activeSpaces = spaces.filter((s) => s.status !== "trashed");
+  const activeSpaces = spaces.filter(
+    (s) => s.status !== "trashed" && !inaccessibleIds.has(s.spaceId),
+  );
+  const inaccessibleSpaces = spaces.filter(
+    (s) => s.status !== "trashed" && inaccessibleIds.has(s.spaceId),
+  );
   const trashedSpaces = spaces.filter((s) => s.status === "trashed");
 
   const PAGE_SIZE = 12;
@@ -455,6 +479,9 @@ export default function GenieSpacesPage() {
         <Tabs defaultValue="active">
           <TabsList>
             <TabsTrigger value="active">Active ({activeSpaces.length})</TabsTrigger>
+            {inaccessibleSpaces.length > 0 && (
+              <TabsTrigger value="no-access">No Access ({inaccessibleSpaces.length})</TabsTrigger>
+            )}
             {trashedSpaces.length > 0 && (
               <TabsTrigger value="trashed">Trashed ({trashedSpaces.length})</TabsTrigger>
             )}
@@ -651,6 +678,73 @@ export default function GenieSpacesPage() {
               </>
             ) : null}
           </TabsContent>
+
+          {inaccessibleSpaces.length > 0 && (
+            <TabsContent value="no-access" className="mt-4 space-y-4">
+              <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+                <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800 dark:text-amber-300">
+                    These spaces reference tables you don&apos;t have permission to access.
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    Contact your workspace admin to request access to the underlying tables, or ask
+                    the space owner to grant you permissions.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {inaccessibleSpaces.map((space) => (
+                  <Card
+                    key={space.spaceId}
+                    className="flex h-full flex-col overflow-hidden opacity-75"
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <CardTitle className="line-clamp-2 text-base">{space.title}</CardTitle>
+                          {space.description && (
+                            <CardDescription className="mt-1 line-clamp-2 text-xs">
+                              {space.description}
+                            </CardDescription>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <ShieldAlert className="size-4 text-amber-500" />
+                          <SourceBadge source={space.source} />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex flex-1 flex-col">
+                      {space.domain && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Sparkles className="size-3" />
+                          <span>{space.domain}</span>
+                        </div>
+                      )}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Permission denied to underlying tables.
+                      </p>
+                      <div className="mt-auto flex items-center gap-2 pt-3">
+                        {databricksHost && (
+                          <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+                            <a
+                              href={`${databricksHost}/genie/rooms/${space.spaceId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="mr-1.5 size-3" />
+                              Open in Databricks
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </TabsContent>
+          )}
 
           {trashedSpaces.length > 0 && (
             <TabsContent value="trashed" className="mt-4">
