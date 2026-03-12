@@ -13,6 +13,7 @@ import {
   trackGenieSpaceTrashed,
   getSpaceAuthMode,
 } from "@/lib/lakebase/genie-spaces";
+import { deleteCachedSpace } from "@/lib/lakebase/genie-space-cache";
 import { logger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { isSafeId, validateFqn } from "@/lib/validation";
@@ -98,7 +99,10 @@ export async function DELETE(
 
     const authMode = await getSpaceAuthMode(spaceId);
     await trashGenieSpace(spaceId, authMode);
-    await trackGenieSpaceTrashed(spaceId);
+    await Promise.all([
+      trackGenieSpaceTrashed(spaceId),
+      deleteCachedSpace(spaceId),
+    ]);
 
     return NextResponse.json({
       success: true,

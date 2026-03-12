@@ -326,6 +326,27 @@ model ForgeGenieSpace {
 }
 
 // ---------------------------------------------------------------------------
+// Genie Space Cache (workspace listing cache for lazy loading)
+// ---------------------------------------------------------------------------
+
+model ForgeGenieSpaceCache {
+  spaceId             String    @id @map("space_id")
+  title               String
+  description         String?
+  tableCount          Int?      @map("table_count")
+  measureCount        Int?      @map("measure_count")
+  sampleQuestionCount Int?      @map("sample_question_count")
+  filterCount         Int?      @map("filter_count")
+  healthScore         Float?    @map("health_score")
+  healthReportJson    String?   @map("health_report_json")
+  permissionDenied    Boolean   @default(false) @map("permission_denied")
+  lastDiscoveredAt    DateTime? @map("last_discovered_at")
+  syncedAt            DateTime  @default(now()) @map("synced_at")
+
+  @@map("forge_genie_space_cache")
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Recommendations (generated in pipeline)
 // ---------------------------------------------------------------------------
 

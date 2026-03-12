@@ -28,7 +28,8 @@ export type ActivityAction =
   | "scanned_schema"
   | "parsed_requirements"
   | "started_auto_improve"
-  | "completed_auto_improve";
+  | "completed_auto_improve"
+  | "synced_genie_spaces";
 
 export interface ActivityLogEntry {
   activityId: string;
