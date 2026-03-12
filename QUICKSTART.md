@@ -35,23 +35,6 @@ No manual configuration steps. Zero UI clicks.
 
 Run `./deploy.sh` again. It detects the existing app and updates it.
 
-## Fast deploy (pre-built)
-
-Build locally and upload the compiled bundle instead of having the platform
-build from source. Eliminates remote `npm install` + `npm run build`, cutting
-deploy time from ~3-5 minutes to under a minute.
-
-```bash
-./deploy.sh --prebuilt
-```
-
-This builds locally, assembles a self-contained deploy package (~72MB), and
-uploads only what the server needs at runtime. The platform runs a lightweight
-`npm install` (~5 seconds for two dependencies) and starts the app immediately.
-
-Use `--prebuilt` for iterative deploys during development. The standard source
-deploy (`./deploy.sh` without the flag) remains available as a fallback.
-
 ## Remove
 
 ```bash
@@ -69,7 +52,6 @@ All flags are optional. Combine as needed.
 | `--app-name "name"` | Custom app name for multi-instance deployments. Isolates the Databricks App and Lakebase database. Default: `databricks-forge` |
 | `--warehouse "Name"` | Skip the interactive warehouse prompt |
 | `--profile "name"` | Use a specific Databricks CLI profile |
-| `--prebuilt` | Build locally and deploy pre-compiled bundle (fastest, no remote build) |
 | `--full` | Full sync: upload all files. Default is diff sync (only changed files since last deploy) |
 | `--destroy` | Remove the app and clean up workspace files |
 
@@ -101,7 +83,7 @@ All flags are optional. Combine as needed.
 
 | Flag | Description |
 |------|-------------|
-| `--enable-metric-views` | Enable metric view generation (off by default) |
+| `--enable-metric-views` | Enable metric view generation (on by default) |
 
 ### Benchmark catalog
 
@@ -117,9 +99,6 @@ All flags are optional. Combine as needed.
 ```bash
 # Non-interactive deploy with a specific warehouse
 ./deploy.sh --warehouse "My SQL Warehouse"
-
-# Fast pre-built deploy (build locally, skip remote build)
-./deploy.sh --prebuilt --warehouse "My SQL Warehouse"
 
 # Custom model endpoints
 ./deploy.sh --endpoint "my-custom-model" --fast-endpoint "my-fast-model" --review-endpoint "my-review-model"
