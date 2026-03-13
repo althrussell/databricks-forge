@@ -1460,6 +1460,71 @@ export function autoFixMaterializationRefs(
 }
 
 // ---------------------------------------------------------------------------
+// YAML sanitizer: strip constructs that fail Databricks dry-run validation
+// ---------------------------------------------------------------------------
+
+const VALID_MEASURE_FIELDS = new Set([
+  "name", "expr", "display_name", "comment", "synonyms", "format", "window",
+]);
+
+/**
+ * Post-process LLM-generated YAML to fix common structural issues before
+ * dry-run validation.  Returns the cleaned YAML (or the original if no
+ * changes were needed).
+ *
+ * 1. Strip `materialization:` blocks that lack required `materialized_views`
+ *    list or have entries missing the `type` field.
+ * 2. Remove backtick characters from the entire YAML (YAML rejects them).
+ * 3. Remove unrecognized fields from `measures:` entries (e.g. `filter:`
+ *    is not in the Databricks v1.1 spec).
+ */
+export function sanitizeMetricViewYaml(yaml: string): string {
+  let out = yaml;
+
+  // 1. Strip backticks -- YAML parser rejects them entirely
+  out = out.replace(/`/g, "");
+
+  // 2. Strip invalid materialization blocks
+  const matIdx = out.indexOf("materialization:");
+  if (matIdx !== -1) {
+    const matBlock = out.slice(matIdx);
+    const hasViews = /materialized_views\s*:/.test(matBlock);
+    const allHaveType =
+      hasViews && !/- name:\s*\w+\s*\n(?!\s*type:)/.test(
+        matBlock.slice(matBlock.indexOf("materialized_views")),
+      );
+    if (!hasViews || !allHaveType) {
+      const nextTopLevel = matBlock.slice(1).search(/^\S/m);
+      if (nextTopLevel !== -1) {
+        out = out.slice(0, matIdx) + matBlock.slice(nextTopLevel + 1);
+      } else {
+        out = out.slice(0, matIdx).trimEnd() + "\n";
+      }
+    }
+  }
+
+  // 3. Strip unrecognized fields from measures entries
+  const measIdx = out.indexOf("measures:");
+  if (measIdx !== -1) {
+    const afterMeas = out.slice(measIdx);
+    const nextSection = afterMeas.slice(1).search(/^[a-z]/m);
+    const measBlock = nextSection !== -1 ? afterMeas.slice(0, nextSection + 1) : afterMeas;
+    const cleaned = measBlock.replace(
+      /^(\s+)(\w+):/gm,
+      (line: string, indent: string, field: string) => {
+        if (field === "measures") return line;
+        if (VALID_MEASURE_FIELDS.has(field) || field === "-") return line;
+        if (indent.length >= 4 && !VALID_MEASURE_FIELDS.has(field)) return "";
+        return line;
+      },
+    ).replace(/\n{3,}/g, "\n\n");
+    out = out.slice(0, measIdx) + cleaned + (nextSection !== -1 ? afterMeas.slice(nextSection + 1) : "");
+  }
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // LLM repair: re-prompt once with validation errors + correct schema
 // ---------------------------------------------------------------------------
 
@@ -1811,8 +1876,12 @@ Create metric view proposals for this domain.`;
           });
         }
 
+        // Sanitize YAML: strip backticks, invalid materialization, bad measure fields
+        const sanitizedYaml = sanitizeMetricViewYaml(fixedYaml);
+        const sanitizedDdl = sanitizeMetricViewYaml(fixedDdl);
+
         // Fix materialization refs that use join aliases instead of dim/measure names
-        const matFix = autoFixMaterializationRefs(fixedYaml, fixedDdl);
+        const matFix = autoFixMaterializationRefs(sanitizedYaml, sanitizedDdl);
         const finalYaml = matFix.yaml;
         const finalDdl = matFix.ddl;
         if (matFix.fixed > 0) {

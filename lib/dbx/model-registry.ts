@@ -106,7 +106,7 @@ const KNOWN_MODELS: Record<string, ModelTemplate> = {
   },
   "databricks-gemini-3-1-flash-lite": {
     tiers: ["generation", "classification", "lightweight"],
-    maxConcurrent: 12,
+    maxConcurrent: 8,
     priority: 0,
     supportsJsonMode: false,
     maxOutputTokens: 8_192,

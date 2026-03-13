@@ -96,7 +96,7 @@ ${synonymHints}`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 8192,
+    maxTokens: 6144,
     responseFormat: "json_object",
     signal,
   });

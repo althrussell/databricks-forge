@@ -227,7 +227,7 @@ async function processBenchmarkBatch(
   industryId?: string,
   signal?: AbortSignal,
   benchmarksPerBatch: number = BENCHMARKS_PER_BATCH,
-  maxTokensLimit: number = 8192,
+  maxTokensLimit: number = 6144,
 ): Promise<BatchResult> {
   const MAX_SQL_CHARS = 3000;
   const useCaseContext = batch
@@ -364,6 +364,13 @@ Generate ${benchmarksPerBatch} benchmark questions with expected SQL and alterna
         if (
           validateSqlExpression(allowlist, review.fixedSql, `benchmark_fix:${b.question}`, true)
         ) {
+          if (review.verdict === "fail" && (review.qualityScore ?? 0) < 60) {
+            logger.warn("Benchmark SQL dropped (fix applied but quality too low)", {
+              question: b.question,
+              qualityScore: review.qualityScore,
+            });
+            return null;
+          }
           logger.info("Benchmark SQL fix applied", {
             question: b.question,
             verdict: review.verdict,

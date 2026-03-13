@@ -282,6 +282,13 @@ Create parameterized queries from these examples.`;
         if (
           validateSqlExpression(allowlist, review.fixedSql, `trusted_query_fix:${q.question}`, true)
         ) {
+          if (review.verdict === "fail" && (review.qualityScore ?? 0) < 60) {
+            logger.warn("Trusted asset SQL dropped (fix applied but quality too low)", {
+              question: q.question,
+              qualityScore: review.qualityScore,
+            });
+            return null;
+          }
           logger.info("Trusted asset SQL fix applied", {
             question: q.question,
             verdict: review.verdict,
@@ -414,6 +421,13 @@ Create new parameterized queries based on these reference patterns.`;
         if (
           validateSqlExpression(allowlist, review.fixedSql, `trusted_ref_fix:${q.question}`, true)
         ) {
+          if (review.verdict === "fail" && (review.qualityScore ?? 0) < 60) {
+            logger.warn("Trusted asset SQL dropped (fix applied but quality too low)", {
+              question: q.question,
+              qualityScore: review.qualityScore,
+            });
+            return null;
+          }
           logger.info("Trusted asset SQL fix applied", {
             question: q.question,
             verdict: review.verdict,
