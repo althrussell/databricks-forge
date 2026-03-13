@@ -27,7 +27,7 @@ import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { validateDatasetSql } from "./validation";
 import { createDashboard, publishDashboard } from "@/lib/dbx/dashboards";
 import { resolveEndpoint, getConfig, isReviewEnabled } from "@/lib/dbx/client";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 
 const TEMPERATURE = 0.3;
 
@@ -205,6 +205,10 @@ function buildBusinessContext(conversationSummary?: string): BusinessContext | n
 export async function runAdHocDashboardEngine(
   input: AdHocDashboardInput,
 ): Promise<AdHocDashboardResult> {
+  const log = createScopedLogger({
+    origin: "DashboardEngine",
+    module: "dashboard/adhoc-engine",
+  });
   const {
     tables,
     sqlBlocks = [],
@@ -216,7 +220,7 @@ export async function runAdHocDashboardEngine(
     publish = false,
   } = input;
 
-  logger.info("Ad-hoc Dashboard Engine starting", {
+  log.info("Ad-hoc Dashboard Engine starting", {
     tableCount: tables.length,
     sqlBlockCount: sqlBlocks.length,
     widgetCount: widgetDescriptions.length,
@@ -256,7 +260,7 @@ export async function runAdHocDashboardEngine(
     { role: "user", content: prompt },
   ];
 
-  logger.info("Ad-hoc Dashboard Engine: calling LLM", {
+  log.info("Ad-hoc Dashboard Engine: calling LLM", {
     useCaseCount: useCases.length,
     columnSchemaCount: columnSchemas.length,
   });
@@ -287,7 +291,9 @@ export async function runAdHocDashboardEngine(
   });
 
   if (validDatasets.length < design.datasets.length) {
-    logger.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
+    log.warn("Dashboard Engine: dropped datasets with invalid SQL references", {
+      fn: "runAdHocDashboardEngine",
+      errorCategory: "invalid_sql_references",
       domain: domainHint || "General",
       dropped: design.datasets.length - validDatasets.length,
       remaining: validDatasets.length,
@@ -319,19 +325,23 @@ export async function runAdHocDashboardEngine(
               true,
             )
           ) {
-            logger.info("Ad-hoc Dashboard: review applied fix", {
+            log.info("Ad-hoc Dashboard: review applied fix", {
               dataset: ds.name,
               qualityScore: review.qualityScore,
             });
             return { ...ds, sql: review.fixedSql };
           }
-          logger.warn("Ad-hoc Dashboard: review fix failed schema validation, keeping original", {
+          log.warn("Ad-hoc Dashboard: review fix failed schema validation, keeping original", {
+            fn: "runAdHocDashboardEngine",
+            errorCategory: "review_fix_validation_failed",
             dataset: ds.name,
           });
           return ds;
         }
         if (review.verdict === "fail") {
-          logger.warn("Ad-hoc Dashboard: review rejected dataset", {
+          log.warn("Ad-hoc Dashboard: review rejected dataset", {
+            fn: "runAdHocDashboardEngine",
+            errorCategory: "review_rejected",
             dataset: ds.name,
             issues: review.issues.map((i) => i.message),
           });
@@ -376,7 +386,7 @@ export async function runAdHocDashboardEngine(
     useCaseIds,
   );
 
-  logger.info("Ad-hoc Dashboard Engine: design complete", {
+  log.info("Ad-hoc Dashboard Engine: design complete", {
     datasets: recommendation.datasetCount,
     widgets: recommendation.widgetCount,
   });
@@ -398,16 +408,18 @@ export async function runAdHocDashboardEngine(
   if (publish) {
     try {
       await publishDashboard(dashboardId, config.warehouseId);
-      logger.info("Ad-hoc dashboard published", { dashboardId });
+      log.info("Ad-hoc dashboard published", { dashboardId });
     } catch (err) {
-      logger.warn("Ad-hoc dashboard publish failed (dashboard was still created)", {
+      log.warn("Ad-hoc dashboard publish failed (dashboard was still created)", {
+        fn: "runAdHocDashboardEngine",
+        errorCategory: "publish_failed",
         dashboardId,
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  logger.info("Ad-hoc Dashboard Engine: deployed", { dashboardId, dashboardUrl });
+  log.info("Ad-hoc Dashboard Engine: deployed", { dashboardId, dashboardUrl });
 
   return { recommendation, dashboardId, dashboardUrl };
 }

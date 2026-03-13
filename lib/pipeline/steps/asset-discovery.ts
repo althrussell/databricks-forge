@@ -16,19 +16,20 @@ import { discoverExistingAssets } from "@/lib/discovery/asset-scanner";
 import { computeCoverage } from "@/lib/discovery/coverage";
 import { saveDiscoveryResults } from "@/lib/lakebase/discovered-assets";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 
 export async function runAssetDiscovery(
   ctx: PipelineContext,
   runId?: string,
 ): Promise<DiscoveryResult | null> {
+  const log = ctx.logger ?? fallbackLogger;
   if (!ctx.run.config.assetDiscoveryEnabled) {
-    logger.info("[asset-discovery] Disabled -- skipping");
+    log.info("Disabled -- skipping");
     return null;
   }
 
   if (!ctx.metadata) {
-    logger.warn("[asset-discovery] No metadata snapshot available -- skipping");
+    log.warn("No metadata snapshot available -- skipping", { fn: "runAssetDiscovery" });
     return null;
   }
 
@@ -65,7 +66,7 @@ export async function runAssetDiscovery(
     await updateRunMessage(runId, `Asset discovery complete: ${summary}`);
   }
 
-  logger.info("[asset-discovery] Complete", {
+  log.info("Complete", {
     genieSpaces: discoveryResult.genieSpaces.length,
     dashboards: discoveryResult.dashboards.length,
     metricViews: discoveryResult.metricViews.length,

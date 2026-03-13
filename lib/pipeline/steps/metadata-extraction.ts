@@ -35,7 +35,7 @@ import { computeAllTableHealth } from "@/lib/domain/health-score";
 import { saveEnvironmentScan, type InsightRecord } from "@/lib/lakebase/environment-scans";
 import { updateRunMessage } from "@/lib/lakebase/runs";
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import { parseExcludedString, parsePatternsString, globMatch } from "@/lib/domain/scope-selection";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import type {
@@ -83,6 +83,7 @@ export async function runMetadataExtraction(
   ctx: PipelineContext,
   runId?: string,
 ): Promise<MetadataExtractionResult> {
+  const log = ctx.logger ?? fallbackLogger;
   const { config } = ctx.run;
   const scopes = parseUCMetadata(config.ucMetadata);
   const enrichmentStart = Date.now();
@@ -99,7 +100,7 @@ export async function runMetadataExtraction(
   const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
 
   if (skipped.length > 0) {
-    logger.info("[metadata-extraction] Filtered inaccessible scopes", {
+    log.info("Filtered inaccessible scopes", {
       skipped: skipped.map((s) => s.label),
     });
     if (runId) {
@@ -143,7 +144,9 @@ export async function runMetadataExtraction(
       allFKs.push(...result.value.fks);
       allMetricViews.push(...result.value.mvs);
     } else {
-      logger.warn("[metadata-extraction] Failed to extract metadata for scope", {
+      log.warn("Failed to extract metadata for scope", {
+        fn: "runMetadataExtraction",
+        errorCategory: "data",
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       });
     }
@@ -208,7 +211,7 @@ export async function runMetadataExtraction(
     }
 
     if (allTables.length < beforeCount) {
-      logger.info("[metadata-extraction] Applied exclusions", {
+      log.info("Applied exclusions", {
         excludedPaths,
         patterns: exPatterns,
         removedCount: beforeCount - allTables.length,
@@ -239,8 +242,8 @@ export async function runMetadataExtraction(
     lineageDiscoveredFqns: [],
   };
 
-  logger.info(
-    `[metadata-extraction] Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns, ${allMetricViews.length} metric views`,
+  log.info(
+    `Extracted ${snapshot.tableCount} tables, ${snapshot.columnCount} columns, ${allMetricViews.length} metric views`,
   );
 
   // --- Phase 2: Enrichment pass (estate scan) ---
@@ -257,19 +260,22 @@ export async function runMetadataExtraction(
         allFKs,
         accessibleScopes,
         dc,
+        log,
         runId,
         config.industry || undefined,
       );
     } catch (error) {
-      logger.error("[metadata-extraction] Enrichment pass failed (non-fatal)", {
+      log.error("Enrichment pass failed (non-fatal)", {
+        fn: "runMetadataExtraction",
+        errorCategory: "data",
         error: error instanceof Error ? error.message : String(error),
       });
     }
 
     const enrichmentMs = Date.now() - enrichmentStart;
-    logger.info("[metadata-extraction] Enrichment pass duration", { durationMs: enrichmentMs });
+    log.info("Enrichment pass duration", { durationMs: enrichmentMs });
   } else {
-    logger.info("[metadata-extraction] Estate scan disabled -- skipping enrichment pass");
+    log.info("Estate scan disabled -- skipping enrichment pass");
   }
 
   // --- Persist schema snapshot on the run for Ask Forge column grounding ---
@@ -277,12 +283,14 @@ export async function runMetadataExtraction(
     try {
       const schemaSnap = buildRunSchemaSnapshot(snapshot.tables, snapshot.columns);
       await updateSchemaSnapshot(runId, schemaSnap);
-      logger.info("[metadata-extraction] Schema snapshot persisted", {
+      log.info("Schema snapshot persisted", {
         runId,
         tableCount: Object.keys(schemaSnap).length,
       });
     } catch (err) {
-      logger.warn("[metadata-extraction] Failed to persist schema snapshot (non-fatal)", {
+      log.warn("Failed to persist schema snapshot (non-fatal)", {
+        fn: "runMetadataExtraction",
+        errorCategory: "db",
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -322,6 +330,7 @@ async function runEnrichmentPass(
   allFKs: ForeignKey[],
   scopes: Array<{ catalog: string; schema?: string }>,
   depthConfig: DiscoveryDepthConfig,
+  log: typeof fallbackLogger,
   runId?: string,
   industryId?: string,
 ): Promise<LineageGraph> {
@@ -367,7 +376,7 @@ async function runEnrichmentPass(
     })),
   ];
 
-  logger.info("[metadata-extraction] Lineage expanded scope", {
+  log.info("Lineage expanded scope", {
     seed: seedFqns.length,
     discovered: discoveredFqns.length,
     total: expandedTables.length,
@@ -408,13 +417,15 @@ async function runEnrichmentPass(
         }
       }
 
-      logger.info("[metadata-extraction] Merged lineage-discovered tables into snapshot", {
+      log.info("Merged lineage-discovered tables into snapshot", {
         newTables: newTableInfos.length,
         newColumns: newColumns.length,
         newFKs: newFKs.length,
       });
     } catch (error) {
-      logger.warn("[metadata-extraction] Failed to fetch lineage table metadata (non-fatal)", {
+      log.warn("Failed to fetch lineage table metadata (non-fatal)", {
+        fn: "runMetadataExtraction",
+        errorCategory: "data",
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -436,7 +447,11 @@ async function runEnrichmentPass(
   const enrichmentResults = await enrichTablesInBatches(expandedTables, 5, (completed, total) => {
     if (runId && completed % 10 === 0) {
       updateRunMessage(runId, `Enrichment: ${completed}/${total} tables...`).catch((e) =>
-        logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }),
+        log.debug("Progress update failed", {
+          fn: "runMetadataExtraction",
+          errorCategory: "db",
+          error: String(e),
+        }),
       );
     }
   });
@@ -491,7 +506,11 @@ async function runEnrichmentPass(
       onProgress: (pass, pct) => {
         if (runId && pct === 0) {
           updateRunMessage(runId, `Intelligence: ${pass}...`).catch((e) =>
-            logger.debug("[metadata-extraction] Progress update failed", { error: String(e) }),
+            log.debug("Progress update failed", {
+              fn: "runMetadataExtraction",
+              errorCategory: "db",
+              error: String(e),
+            }),
           );
         }
       },
@@ -551,7 +570,9 @@ async function runEnrichmentPass(
       }
     }
   } catch (error) {
-    logger.warn("[metadata-extraction] LLM intelligence layer failed (non-fatal)", {
+    log.warn("LLM intelligence layer failed (non-fatal)", {
+      fn: "runMetadataExtraction",
+      errorCategory: "llm_error",
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -668,7 +689,7 @@ async function runEnrichmentPass(
     allColumnTags,
   );
 
-  logger.info("[metadata-extraction] Environment scan saved", {
+  log.info("Environment scan saved", {
     scanId,
     tables: details.length,
     lineageEdges: lineageGraph.edges.length,
@@ -687,7 +708,9 @@ async function runEnrichmentPass(
       allColumns,
     );
   } catch (embedErr) {
-    logger.warn("[metadata-extraction] Estate embedding failed (non-fatal)", {
+    log.warn("Estate embedding failed (non-fatal)", {
+      fn: "runMetadataExtraction",
+      errorCategory: "data",
       scanId,
       error: embedErr instanceof Error ? embedErr.message : String(embedErr),
     });

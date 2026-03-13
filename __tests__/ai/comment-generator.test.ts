@@ -17,8 +17,19 @@ vi.mock("@/lib/ai/comment-engine/progress", () => ({
   updateCommentProgress: vi.fn(),
 }));
 
+const _mockGeneratorLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+  timed: vi.fn(),
+  context: {},
+};
 vi.mock("@/lib/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  createScopedLogger: () => _mockGeneratorLog,
+  apiLogger: () => _mockGeneratorLog,
 }));
 
 import { runCommentEngine } from "@/lib/ai/comment-engine/engine";

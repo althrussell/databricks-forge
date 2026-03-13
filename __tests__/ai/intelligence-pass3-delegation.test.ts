@@ -93,13 +93,19 @@ vi.mock("@/lib/domain/pii-rules", () => ({
   detectPIIDeterministic: vi.fn(() => []),
 }));
 
+const _mockIntelligenceLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+  timed: vi.fn(),
+  context: {},
+};
 vi.mock("@/lib/logger", () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  createScopedLogger: () => _mockIntelligenceLog,
+  apiLogger: () => _mockIntelligenceLog,
 }));
 
 vi.mock("@/lib/embeddings/retriever", () => ({

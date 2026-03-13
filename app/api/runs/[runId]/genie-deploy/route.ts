@@ -22,7 +22,7 @@ import {
   trackGenieSpaceCreated,
   trackGenieSpaceUpdated as trackSpaceUpdated,
 } from "@/lib/lakebase/genie-spaces";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 import { isSafeId, validateFqn } from "@/lib/validation";
 import type { GenieAuthMode } from "@/lib/settings";
 import {
@@ -146,6 +146,7 @@ export async function POST(
   { params }: { params: Promise<{ runId: string }> },
 ) {
   const { runId } = await params;
+  const log = apiLogger("/api/runs/[runId]/genie-deploy", "POST", { runId });
 
   if (!isSafeId(runId)) {
     return NextResponse.json({ error: "Invalid runId" }, { status: 400 });
@@ -189,7 +190,7 @@ export async function POST(
       error: null,
     });
 
-    runPipelineDeploy(jobId, runId, body).catch((err) => {
+    runPipelineDeploy(jobId, runId, body, log).catch((err) => {
       const job = deployJobs.get(jobId);
       if (job && job.status === "deploying") {
         job.status = "failed";
@@ -202,7 +203,7 @@ export async function POST(
     return NextResponse.json({ jobId, status: "deploying" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error("Genie deploy failed", { error: message });
+    log.error("Genie deploy failed", { error: message, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
@@ -211,7 +212,12 @@ export async function POST(
 // Background deploy logic
 // ---------------------------------------------------------------------------
 
-async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody): Promise<void> {
+async function runPipelineDeploy(
+  jobId: string,
+  runId: string,
+  body: RequestBody,
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const job = deployJobs.get(jobId);
   if (!job) return;
 
@@ -246,7 +252,7 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
         assets.push(result);
         if (result.deployed) {
           deployedMvs.push({ fqn: result.fqn, description: mv.description });
-          logger.info("Metric view deployed", {
+          log.info("Metric view deployed", {
             runId,
             domain: domainReq.domain,
             fqn: result.fqn,
@@ -259,9 +265,10 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
             try {
               await updateDeploymentStatus(matchingProposal.id, "deployed", result.fqn);
             } catch (err) {
-              logger.warn("Failed to update MV proposal deployment status", {
+              log.warn("Failed to update MV proposal deployment status", {
                 proposalId: matchingProposal.id,
                 error: err instanceof Error ? err.message : String(err),
+                errorCategory: "db",
               });
             }
           }
@@ -287,7 +294,7 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
     const allStripped = [...mvValidationStripped, ...strippedRefs, ...finalStripped];
 
     if (allStripped.length > 0) {
-      logger.info("Stripped references from serialized space", {
+      log.info("Stripped references from serialized space", {
         domain: domainReq.domain,
         stripped: allStripped.map((s) => `${s.type}:${s.identifier}`),
       });
@@ -310,10 +317,11 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
         try {
           await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
         } catch (trackErr) {
-          logger.error("Lakebase tracking failed after space update", {
+          log.error("Lakebase tracking failed after space update", {
             spaceId,
             domain: domainReq.domain,
             error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            errorCategory: "db",
           });
           try {
             await trackSpaceUpdated(spaceId, undefined, deployedAssetsPayload);
@@ -321,7 +329,7 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
             /* exhausted retry */
           }
         }
-        logger.info("Genie space updated", { runId, domain: domainReq.domain, spaceId });
+        log.info("Genie space updated", { domain: domainReq.domain, spaceId });
       } else {
         const result = await createGenieSpace({
           title: domainReq.title,
@@ -344,10 +352,11 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
             body.authMode,
           );
         } catch (trackErr) {
-          logger.error("Lakebase tracking failed after space creation", {
+          log.error("Lakebase tracking failed after space creation", {
             spaceId,
             domain: domainReq.domain,
             error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            errorCategory: "db",
           });
           try {
             await trackGenieSpaceCreated(
@@ -373,7 +382,7 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
         strippedRefs: allStripped.length > 0 ? allStripped : undefined,
       });
 
-      logger.info("Genie space deployed", {
+      log.info("Genie space deployed", {
         runId,
         domain: domainReq.domain,
         spaceId,
@@ -386,9 +395,9 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
         metricViews: deployedMvs.map((m) => m.fqn),
       };
       if (orphanedAssets.metricViews.length > 0) {
-        logger.warn(
+        log.warn(
           "Genie space creation failed -- UC assets deployed but not attached to any space",
-          { domain: domainReq.domain, orphanedAssets },
+          { domain: domainReq.domain, orphanedAssets, errorCategory: "deploy_orphaned" },
         );
       }
       currentJob.results.push({
@@ -399,9 +408,10 @@ async function runPipelineDeploy(jobId: string, runId: string, body: RequestBody
         patchedSpace: finalSpace,
         strippedRefs: allStripped.length > 0 ? allStripped : undefined,
       });
-      logger.error("Genie space creation failed during deploy", {
+      log.error("Genie space creation failed during deploy", {
         domain: domainReq.domain,
         error: msg,
+        errorCategory: "deploy_failed",
       });
     }
 

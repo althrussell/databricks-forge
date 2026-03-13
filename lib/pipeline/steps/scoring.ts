@@ -13,7 +13,7 @@ import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryKPIsPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
 import { persistManifest } from "@/lib/pipeline/context-manifest";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import {
   ScoreItemSchema,
   DedupItemSchema,
@@ -29,6 +29,7 @@ import { scoreUseCaseConsultingQuality } from "@/lib/pipeline/usecase-scorecard"
 const DOMAIN_CONCURRENCY = 5;
 
 export async function runScoring(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run, useCases } = ctx;
   if (!run.businessContext) throw new Error("Business context not available");
   if (useCases.length === 0) return [];
@@ -56,7 +57,11 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         steps: ["scoring"],
       });
     } catch (e) {
-      logger.warn("[scoring] persistManifest failed (non-fatal)", { error: e });
+      log.warn("persistManifest failed (non-fatal)", {
+        error: e,
+        fn: "runScoring",
+        errorCategory: "db",
+      });
     }
   }
 
@@ -82,6 +87,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       const domainCases = scored.filter((uc) => uc.domain === domain);
       try {
         await scoreDomain(
+          log,
           domainCases,
           bcRecord,
           resolveEndpoint("reasoning"),
@@ -93,9 +99,11 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         );
         return { domain, failed: false };
       } catch (error) {
-        logger.warn("Scoring failed for domain", {
+        log.warn("Scoring failed for domain", {
           domain,
           error: error instanceof Error ? error.message : String(error),
+          fn: "runScoring",
+          errorCategory: "llm_error",
         });
         domainCases.forEach((uc) => {
           uc.priorityScore = 0.5;
@@ -128,15 +136,18 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
         const domainCases = scored.filter((uc) => uc.domain === domain);
         try {
           return await deduplicateDomain(
+            log,
             domainCases,
             bcRecord,
             resolveEndpoint("classification"),
             runId,
           );
         } catch (error) {
-          logger.warn("Dedup failed for domain", {
+          log.warn("Dedup failed for domain", {
             domain,
             error: error instanceof Error ? error.message : String(error),
+            fn: "runScoring",
+            errorCategory: "llm_error",
           });
           return new Set<number>();
         }
@@ -158,6 +169,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       await updateRunMessage(runId, `Cross-domain dedup: reviewing ${scored.length} use cases...`);
     try {
       const crossDomainRemoved = await deduplicateCrossDomain(
+        log,
         scored,
         bcRecord,
         resolveEndpoint("classification"),
@@ -171,13 +183,15 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
             `Cross-domain dedup: removed ${crossDomainRemoved.size} duplicates`,
           );
         }
-        logger.info("Cross-domain dedup removed use cases", {
+        log.info("Cross-domain dedup removed use cases", {
           removedCount: crossDomainRemoved.size,
         });
       }
     } catch (error) {
-      logger.warn("Cross-domain dedup failed", {
+      log.warn("Cross-domain dedup failed", {
         error: error instanceof Error ? error.message : String(error),
+        fn: "runScoring",
+        errorCategory: "llm_error",
       });
     }
   }
@@ -188,14 +202,17 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       await updateRunMessage(runId, `Calibrating scores across ${domains.length} domains...`);
     try {
       await calibrateScoresChunked(
+        log,
         scored,
         bc as unknown as Record<string, string>,
         resolveEndpoint("reasoning"),
         runId,
       );
     } catch (error) {
-      logger.warn("Global calibration failed", {
+      log.warn("Global calibration failed", {
         error: error instanceof Error ? error.message : String(error),
+        fn: "runScoring",
+        errorCategory: "llm_error",
       });
     }
   }
@@ -227,7 +244,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
   scored = scored.filter((uc) => uc.overallScore >= floor);
   if (scored.length < beforeFloor) {
     const removed = beforeFloor - scored.length;
-    logger.info("Quality floor applied", { floor, removed, remaining: scored.length });
+    log.info("Quality floor applied", { floor, removed, remaining: scored.length });
     if (runId)
       await updateRunMessage(
         runId,
@@ -249,7 +266,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
       `Final: ${scored.length} use cases across ${finalDomains} domains`,
     );
 
-  logger.info("Scoring complete", {
+  log.info("Scoring complete", {
     useCaseCount: scored.length,
     domainCount: finalDomains,
     depth,
@@ -259,6 +276,7 @@ export async function runScoring(ctx: PipelineContext, runId?: string): Promise<
 }
 
 async function scoreDomain(
+  log: typeof fallbackLogger,
   domainCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
@@ -314,8 +332,10 @@ async function scoreDomain(
       try {
         rawItems = parseLLMJson(result.rawResponse, "scoring:score") as unknown[];
       } catch (parseErr) {
-        logger.warn("Failed to parse scoring response JSON", {
+        log.warn("Failed to parse scoring response JSON", {
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          fn: "runScoring",
+          errorCategory: "llm_parse",
         });
         return [];
       }
@@ -399,6 +419,7 @@ async function scoreDomain(
 }
 
 async function deduplicateDomain(
+  log: typeof fallbackLogger,
   domainCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
@@ -433,8 +454,10 @@ async function deduplicateDomain(
       try {
         rawItems = parseLLMJson(result.rawResponse, "scoring:dedup") as unknown[];
       } catch (parseErr) {
-        logger.warn("Failed to parse dedup response JSON", {
+        log.warn("Failed to parse dedup response JSON", {
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          fn: "runScoring",
+          errorCategory: "llm_parse",
         });
         return [];
       }
@@ -472,6 +495,7 @@ function clampScore(value: number): number {
  * chunks of 50 with 5-item overlap anchors for scale consistency.
  */
 async function calibrateScoresChunked(
+  log: typeof fallbackLogger,
   useCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
@@ -523,9 +547,11 @@ async function calibrateScoresChunked(
       try {
         rawItems = parseLLMJson(result.rawResponse, "scoring:calibrate") as unknown[];
       } catch (parseErr) {
-        logger.warn("Failed to parse calibration chunk JSON", {
+        log.warn("Failed to parse calibration chunk JSON", {
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
           chunkOffset: offset,
+          fn: "runScoring",
+          errorCategory: "llm_parse",
         });
         continue;
       }
@@ -537,10 +563,12 @@ async function calibrateScoresChunked(
         }
       }
     } catch (error) {
-      logger.warn("Calibration chunk failed", {
+      log.warn("Calibration chunk failed", {
         chunkOffset: offset,
         chunkSize: chunk.length,
         error: error instanceof Error ? error.message : String(error),
+        fn: "runScoring",
+        errorCategory: "llm_error",
       });
     }
   }
@@ -552,7 +580,7 @@ async function calibrateScoresChunked(
     }
   }
 
-  logger.info("Chunked calibration complete", {
+  log.info("Chunked calibration complete", {
     candidatesConsidered: sorted.length,
     adjustedCount: calibrationMap.size,
     chunks: Math.ceil(sorted.length / (CHUNK_SIZE - ANCHOR_SIZE)),
@@ -564,6 +592,7 @@ async function calibrateScoresChunked(
 // ---------------------------------------------------------------------------
 
 async function deduplicateCrossDomain(
+  log: typeof fallbackLogger,
   useCases: UseCase[],
   businessContext: Record<string, string>,
   aiModel: string,
@@ -604,8 +633,10 @@ async function deduplicateCrossDomain(
     try {
       rawItems = parseLLMJson(result.rawResponse, "scoring:cross-domain-dedup") as unknown[];
     } catch (parseErr) {
-      logger.warn("Failed to parse cross-domain dedup response JSON", {
+      log.warn("Failed to parse cross-domain dedup response JSON", {
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        fn: "runScoring",
+        errorCategory: "llm_parse",
       });
       continue;
     }
@@ -616,9 +647,11 @@ async function deduplicateCrossDomain(
       if (isNaN(item.no) || isNaN(item.duplicate_of)) continue;
 
       if (toRemove.has(item.duplicate_of)) {
-        logger.warn("Cross-domain dedup: skipping removal — kept item already marked for removal", {
+        log.warn("skipping removal — kept item already marked for removal", {
           wouldRemove: item.no,
           duplicateOf: item.duplicate_of,
+          fn: "runScoring",
+          errorCategory: "llm_error",
         });
         continue;
       }
@@ -626,11 +659,13 @@ async function deduplicateCrossDomain(
       const removeScore = scoreMap.get(item.no) ?? 0;
       const keepScore = scoreMap.get(item.duplicate_of) ?? 0;
       if (removeScore > keepScore) {
-        logger.warn("Cross-domain dedup: LLM suggested removing higher-scored item — swapping", {
+        log.warn("LLM suggested removing higher-scored item — swapping", {
           suggested: item.no,
           suggestedScore: removeScore,
           duplicateOf: item.duplicate_of,
           duplicateOfScore: keepScore,
+          fn: "runScoring",
+          errorCategory: "llm_error",
         });
         if (!toRemove.has(item.no)) {
           toRemove.add(item.duplicate_of);

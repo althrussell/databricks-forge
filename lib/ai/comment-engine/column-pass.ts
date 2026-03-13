@@ -12,7 +12,8 @@ import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
+import type { Logger } from "@/lib/ports/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { ColumnCommentInput, CommentProgressCallback, MetadataCounters } from "./types";
 import { COLUMN_COMMENT_PROMPT } from "./prompts";
@@ -60,9 +61,10 @@ export async function runColumnCommentPass(
     signal?: AbortSignal;
     onProgress?: CommentProgressCallback;
     onCounters?: (counters: Partial<MetadataCounters>) => void;
+    logger?: Logger;
   } = {},
 ): Promise<Map<string, Map<string, string>>> {
-  const { signal, onProgress, onCounters } = options;
+  const { signal, onProgress, onCounters, logger: log = fallbackLogger } = options;
   const results = new Map<string, Map<string, string>>();
 
   if (inputs.length === 0) return results;
@@ -126,7 +128,9 @@ export async function runColumnCommentPass(
         totalColumnsGenerated += tableResults.size;
       }
     } catch (err) {
-      logger.warn("[comment-engine:column-pass] Table failed", {
+      log.warn("Table failed", {
+        fn: "runColumnCommentPass",
+        errorCategory: "llm_table",
         table: input.tableFqn,
         error: err instanceof Error ? err.message : String(err),
       });

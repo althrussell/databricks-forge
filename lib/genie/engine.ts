@@ -39,7 +39,7 @@ import { runHealthCheck } from "./space-health-check";
 import { isValidTable } from "./schema-allowlist";
 import { resolveEndpoint } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
-import { logger as defaultLogger } from "@/lib/logger";
+import { createScopedLogger, logger as defaultLogger } from "@/lib/logger";
 import type { Logger } from "@/lib/ports/logger";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { DiscoveredGenieSpace } from "@/lib/discovery/types";
@@ -124,7 +124,9 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     deps,
   } = input;
 
-  const log: Logger = deps?.logger ?? defaultLogger;
+  const log: Logger =
+    deps?.logger ??
+    createScopedLogger({ origin: "GenieEngine", module: "genie/engine", runId: run.runId });
   const allowlist = buildSchemaAllowlist(metadata);
 
   log.info("Genie Engine starting", {
@@ -149,7 +151,12 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     config.maxAutoSpaces > 0 ? filteredGroups.slice(0, config.maxAutoSpaces) : filteredGroups;
 
   if (domainGroups.length === 0) {
-    log.warn("No domain groups produced", { runId: run.runId, domainFilter });
+    log.warn("No domain groups produced", {
+      fn: "runGenieEngine",
+      errorCategory: "data",
+      runId: run.runId,
+      domainFilter,
+    });
     return { recommendations: [], passOutputs: [], failedDomains: [] };
   }
 
@@ -308,6 +315,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
         completedDomainCount++;
         const errorMsg = err instanceof Error ? err.message : String(err);
         log.error("Failed to process domain", {
+          fn: "runGenieEngine",
+          errorCategory: "domain_processing",
           domain: group.domain,
           error: errorMsg,
         });
@@ -336,6 +345,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
 
   if (failedDomains.length > 0) {
     log.warn("Some domains failed during Genie Engine run", {
+      fn: "runGenieEngine",
+      errorCategory: "domain_processing",
       runId: run.runId,
       failedDomains,
     });
@@ -485,6 +496,8 @@ async function processDomain(
       }));
     } catch (err) {
       log.warn("LLM join inference failed, continuing with FK + SQL-inferred joins", {
+        fn: "processDomain",
+        errorCategory: "llm_error",
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -529,6 +542,8 @@ async function processDomain(
     // Deep discovery: fetch existing UC metric views with full YAML definitions
     const existingViews = await discoverExistingMetricViews([metadata.ucPath]).catch((err) => {
       log.warn("Metric view discovery failed, continuing without existing views", {
+        fn: "processDomain",
+        errorCategory: "data",
         error: err instanceof Error ? err.message : String(err),
       });
       return [];
@@ -556,6 +571,8 @@ async function processDomain(
       await saveMetricViewProposals(run.runId, schemaScope, normalizedDomain, result.proposals);
     } catch (err) {
       log.warn("Failed to persist metric view proposals (non-fatal)", {
+        fn: "processDomain",
+        errorCategory: "db",
         domain: normalizedDomain,
         error: err instanceof Error ? err.message : String(err),
       });

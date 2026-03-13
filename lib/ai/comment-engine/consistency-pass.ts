@@ -14,7 +14,8 @@ import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
+import type { Logger } from "@/lib/ports/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { ConsistencyFix, CommentProgressCallback } from "./types";
 import { CONSISTENCY_REVIEW_PROMPT } from "./prompts";
@@ -48,9 +49,9 @@ export async function runConsistencyReview(
   tableComments: Map<string, string>,
   columnComments: Map<string, Map<string, string>>,
   schemaSummary: string,
-  options: { signal?: AbortSignal; onProgress?: CommentProgressCallback } = {},
+  options: { signal?: AbortSignal; onProgress?: CommentProgressCallback; logger?: Logger } = {},
 ): Promise<ConsistencyFix[]> {
-  const { signal, onProgress } = options;
+  const { signal, onProgress, logger: log = fallbackLogger } = options;
   const allFixes: ConsistencyFix[] = [];
 
   // Flatten all descriptions into entries
@@ -123,7 +124,9 @@ export async function runConsistencyReview(
         }
       }
     } catch (err) {
-      logger.warn("[comment-engine:consistency] Review batch failed", {
+      log.warn("Review batch failed", {
+        fn: "runConsistencyReview",
+        errorCategory: "llm_batch",
         batchSize: batch.length,
         error: err instanceof Error ? err.message : String(err),
       });

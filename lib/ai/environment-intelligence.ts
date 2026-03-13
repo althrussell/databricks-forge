@@ -24,7 +24,7 @@ import {
   truncateColumns,
 } from "@/lib/toolkit/token-budget";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
-import { logger } from "@/lib/logger";
+import { createScopedLogger, type ScopedLogger } from "@/lib/logger";
 import { detectPIIDeterministic } from "@/lib/domain/pii-rules";
 import { buildSchemaContextFromIntelligence } from "@/lib/metadata/context-builder";
 import { runTableCommentPass, buildLineageContextBlock } from "@/lib/ai/comment-engine/table-pass";
@@ -63,6 +63,8 @@ export interface IntelligenceOptions {
   industryId?: string;
   /** Foreign key constraints from information_schema (enables richer schema context for Pass 3). */
   foreignKeys?: import("@/lib/domain/types").ForeignKey[];
+  /** Scoped logger (set internally by runIntelligenceLayer). */
+  log?: ScopedLogger;
 }
 
 /** Input table info for the intelligence layer. */
@@ -189,6 +191,11 @@ export async function runIntelligenceLayer(
   lineageGraph: LineageGraph,
   options: IntelligenceOptions,
 ): Promise<IntelligenceResult> {
+  const log = createScopedLogger({
+    origin: "EstateScan",
+    module: "ai/environment-intelligence",
+  });
+  const opts = { ...options, log };
   const passResults: Record<string, "success" | "failed" | "skipped"> = {};
   const result: IntelligenceResult = {
     domains: [],
@@ -204,7 +211,7 @@ export async function runIntelligenceLayer(
   };
 
   if (tables.length === 0) {
-    logger.info("[intelligence] No tables to analyse");
+    log.info("No tables to analyse");
     return result;
   }
 
@@ -215,22 +222,30 @@ export async function runIntelligenceLayer(
   // Pass 1: Domain Categorisation
   try {
     progress("domains", 0);
-    result.domains = await passDomainCategorisation(tables, lineageGraph, options);
+    result.domains = await passDomainCategorisation(tables, lineageGraph, opts);
     passResults["domains"] = "success";
     progress("domains", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 1 (domains) failed", { error: String(error) });
+    log.error("Pass 1 (domains) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_domains_failed",
+      error: String(error),
+    });
     passResults["domains"] = "failed";
   }
 
   // Pass 2: PII / Sensitivity Detection
   try {
     progress("pii", 0);
-    result.sensitivities = await passPIIDetection(tables, options);
+    result.sensitivities = await passPIIDetection(tables, opts);
     passResults["pii"] = "success";
     progress("pii", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 2 (PII) failed", { error: String(error) });
+    log.error("Pass 2 (PII) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_pii_failed",
+      error: String(error),
+    });
     passResults["pii"] = "failed";
   }
 
@@ -256,7 +271,7 @@ export async function runIntelligenceLayer(
         tables,
         lineageGraph,
         result.domains,
-        options,
+        opts,
       );
       passResults["descriptions"] = "success";
     } else {
@@ -264,7 +279,11 @@ export async function runIntelligenceLayer(
     }
     progress("descriptions", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 3 (descriptions) failed", { error: String(error) });
+    log.error("Pass 3 (descriptions) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_descriptions_failed",
+      error: String(error),
+    });
     passResults["descriptions"] = "failed";
   }
 
@@ -272,14 +291,18 @@ export async function runIntelligenceLayer(
   try {
     progress("redundancy", 0);
     if (tables.length >= 2) {
-      result.redundancies = await passRedundancyDetection(tables, options);
+      result.redundancies = await passRedundancyDetection(tables, opts);
       passResults["redundancy"] = "success";
     } else {
       passResults["redundancy"] = "skipped";
     }
     progress("redundancy", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 4 (redundancy) failed", { error: String(error) });
+    log.error("Pass 4 (redundancy) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_redundancy_failed",
+      error: String(error),
+    });
     passResults["redundancy"] = "failed";
   }
 
@@ -287,25 +310,33 @@ export async function runIntelligenceLayer(
   try {
     progress("relationships", 0);
     if (tables.length >= 2) {
-      result.implicitRelationships = await passImplicitRelationships(tables, options);
+      result.implicitRelationships = await passImplicitRelationships(tables, opts);
       passResults["relationships"] = "success";
     } else {
       passResults["relationships"] = "skipped";
     }
     progress("relationships", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 5 (relationships) failed", { error: String(error) });
+    log.error("Pass 5 (relationships) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_relationships_failed",
+      error: String(error),
+    });
     passResults["relationships"] = "failed";
   }
 
   // Pass 6: Medallion Tier Classification
   try {
     progress("tiers", 0);
-    result.tierAssignments = await passMedallionTier(tables, lineageGraph, options);
+    result.tierAssignments = await passMedallionTier(tables, lineageGraph, opts);
     passResults["tiers"] = "success";
     progress("tiers", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 6 (tiers) failed", { error: String(error) });
+    log.error("Pass 6 (tiers) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_tiers_failed",
+      error: String(error),
+    });
     passResults["tiers"] = "failed";
   }
 
@@ -313,14 +344,18 @@ export async function runIntelligenceLayer(
   try {
     progress("products", 0);
     if (tables.length >= 3) {
-      result.dataProducts = await passDataProducts(tables, lineageGraph, result.domains, options);
+      result.dataProducts = await passDataProducts(tables, lineageGraph, result.domains, opts);
       passResults["products"] = "success";
     } else {
       passResults["products"] = "skipped";
     }
     progress("products", 100);
   } catch (error) {
-    logger.error("[intelligence] Pass 7 (products) failed", { error: String(error) });
+    log.error("Pass 7 (products) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_products_failed",
+      error: String(error),
+    });
     passResults["products"] = "failed";
   }
 
@@ -332,12 +367,16 @@ export async function runIntelligenceLayer(
       lineageGraph,
       result.sensitivities,
       result.domains,
-      options,
+      opts,
     );
     passResults["governance"] = "success";
     progress("governance", 100);
   } catch (error) {
-    logger.error("[intelligence] Post-pass (governance) failed", { error: String(error) });
+    log.error("Post-pass (governance) failed", {
+      fn: "runIntelligenceLayer",
+      errorCategory: "pass_governance_failed",
+      error: String(error),
+    });
     passResults["governance"] = "failed";
   }
 
@@ -350,12 +389,16 @@ export async function runIntelligenceLayer(
         result.domains,
         result.tierAssignments,
         options.discoveryResult,
-        options,
+        opts,
       );
       passResults["analytics-maturity"] = "success";
       progress("analytics-maturity", 100);
     } catch (error) {
-      logger.error("[intelligence] Pass 9 (analytics maturity) failed", { error: String(error) });
+      log.error("Pass 9 (analytics maturity) failed", {
+        fn: "runIntelligenceLayer",
+        errorCategory: "pass_analytics_maturity_failed",
+        error: String(error),
+      });
       passResults["analytics-maturity"] = "failed";
     }
   } else {
@@ -365,7 +408,7 @@ export async function runIntelligenceLayer(
   result.passResults = passResults;
 
   const successCount = Object.values(passResults).filter((v) => v === "success").length;
-  logger.info("[intelligence] All passes complete", {
+  log.info("All passes complete", {
     successCount,
     failedCount: Object.values(passResults).filter((v) => v === "failed").length,
     skippedCount: Object.values(passResults).filter((v) => v === "skipped").length,
@@ -418,10 +461,11 @@ async function passDomainCategorisation(
       document_context: documentContext ? `\n${documentContext}` : "",
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
     const parsed = safeParseArray<{ table_fqn: string; domain: string; subdomain: string }>(
       content,
       "env-intelligence:domains",
+      options.log!,
     );
     allAssignments.push(...parsed);
   }
@@ -457,7 +501,7 @@ async function passPIIDetection(
   // Phase 1: Deterministic rules (fast, reliable for obvious patterns)
   const ruleResults = detectPIIDeterministic(tables);
   const ruleKeys = new Set(ruleResults.map((r) => `${r.tableFqn}::${r.columnName}`));
-  logger.info("[intelligence] Deterministic PII rules found matches", {
+  options.log?.info("Deterministic PII rules found matches", {
     count: ruleResults.length,
   });
 
@@ -474,8 +518,12 @@ async function passPIIDetection(
       table_list: tableList,
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<SensitivityClassification>(content, "env-intelligence:pii");
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
+    const parsed = safeParseArray<SensitivityClassification>(
+      content,
+      "env-intelligence:pii",
+      options.log!,
+    );
     for (const p of parsed) {
       const key = `${p.tableFqn}::${p.columnName}`;
       if (!ruleKeys.has(key)) {
@@ -527,7 +575,9 @@ async function passEnhancedDescriptions(
       const matchedAssetIds = assetResult.assets.map((a) => a.id);
       useCaseLinkage = await buildUseCaseLinkageContext(options.industryId, matchedAssetIds);
     } catch (err) {
-      logger.warn("[intelligence] Failed to load industry context for Pass 3", {
+      options.log?.warn("Failed to load industry context for Pass 3", {
+        fn: "passEnhancedDescriptions",
+        errorCategory: "industry_context_load_failed",
         industryId: options.industryId,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -578,7 +628,7 @@ async function passEnhancedDescriptions(
     if (desc) result.set(t.fqn, desc);
   }
 
-  logger.info("[intelligence] Pass 3 (enhanced descriptions) completed", {
+  options.log?.info("Pass 3 (enhanced descriptions) completed", {
     requested: descTables.length,
     generated: result.size,
     withIndustry: !!options.industryId,
@@ -607,8 +657,12 @@ async function passRedundancyDetection(
       table_list: tableList,
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<RedundancyPair>(content, "env-intelligence:redundancy");
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
+    const parsed = safeParseArray<RedundancyPair>(
+      content,
+      "env-intelligence:redundancy",
+      options.log!,
+    );
     allPairs.push(...parsed);
   }
 
@@ -635,8 +689,12 @@ async function passImplicitRelationships(
       table_list: tableList,
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<ImplicitRelationship>(content, "env-intelligence:relationships");
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
+    const parsed = safeParseArray<ImplicitRelationship>(
+      content,
+      "env-intelligence:relationships",
+      options.log!,
+    );
     allRels.push(...parsed);
   }
 
@@ -668,10 +726,11 @@ async function passMedallionTier(
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
     const parsed = safeParseArray<{ table_fqn: string; tier: DataTier; reasoning: string }>(
       content,
       "env-intelligence:tiers",
+      options.log!,
     );
     for (const p of parsed) {
       if (["bronze", "silver", "gold", "system"].includes(p.tier)) {
@@ -717,8 +776,10 @@ async function passDataProducts(
       lineage_summary: lineageSummary ? `Lineage context:\n${lineageSummary}` : "",
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
-    allProducts.push(...safeParseArray<DataProduct>(content, "env-intelligence:data-products"));
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
+    allProducts.push(
+      ...safeParseArray<DataProduct>(content, "env-intelligence:data-products", options.log!),
+    );
   }
 
   return allProducts;
@@ -754,8 +815,12 @@ async function passGovernanceGaps(
       table_list: tableList,
     });
 
-    const { content } = await callLLM(prompt, options.endpoint);
-    const parsed = safeParseArray<GovernanceGap>(content, "env-intelligence:governance");
+    const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
+    const parsed = safeParseArray<GovernanceGap>(
+      content,
+      "env-intelligence:governance",
+      options.log!,
+    );
     allGaps.push(...parsed);
   }
 
@@ -771,7 +836,12 @@ interface LLMResult {
   finishReason: string | null;
 }
 
-async function callLLM(prompt: string, endpoint: string, maxTokens = 65536): Promise<LLMResult> {
+async function callLLM(
+  prompt: string,
+  endpoint: string,
+  maxTokens: number,
+  log: ScopedLogger,
+): Promise<LLMResult> {
   const messages: ChatMessage[] = [{ role: "user", content: prompt }];
 
   const response = await chatCompletion({
@@ -782,7 +852,9 @@ async function callLLM(prompt: string, endpoint: string, maxTokens = 65536): Pro
   });
 
   if (response.finishReason === "length") {
-    logger.warn("[intelligence] LLM response truncated (finish_reason=length)", {
+    log.warn("LLM response truncated (finish_reason=length)", {
+      fn: "callLLM",
+      errorCategory: "llm_truncation",
       endpoint,
       contentLength: response.content.length,
     });
@@ -795,7 +867,7 @@ async function callLLM(prompt: string, endpoint: string, maxTokens = 65536): Pro
 // Parsing helpers
 // ---------------------------------------------------------------------------
 
-function safeParseArray<T>(raw: string, caller: string): T[] {
+function safeParseArray<T>(raw: string, caller: string, log: ScopedLogger): T[] {
   try {
     const parsed = parseLLMJson(raw, caller);
     if (Array.isArray(parsed)) return parsed as T[];
@@ -807,7 +879,9 @@ function safeParseArray<T>(raw: string, caller: string): T[] {
     }
     return [];
   } catch (error) {
-    logger.warn("[intelligence] Failed to parse LLM JSON response", {
+    log.warn("Failed to parse LLM JSON response", {
+      fn: "safeParseArray",
+      errorCategory: "llm_json_parse_failed",
       caller,
       error: String(error),
       responseSnippet: raw.slice(0, 200),
@@ -883,7 +957,7 @@ async function passAnalyticsMaturity(
   };
 
   const prompt = formatPrompt("ENV_ANALYTICS_MATURITY_PROMPT" as never, vars);
-  const { content } = await callLLM(prompt, options.endpoint);
+  const { content } = await callLLM(prompt, options.endpoint, 65536, options.log!);
 
   type MaturityLevel = "nascent" | "developing" | "established" | "advanced";
   const VALID_LEVELS = new Set<MaturityLevel>(["nascent", "developing", "established", "advanced"]);

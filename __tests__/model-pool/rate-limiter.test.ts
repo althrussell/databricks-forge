@@ -1,14 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+const { mockLog } = vi.hoisted(() => {
+  const log = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn().mockReturnThis(),
+    timed: vi.fn(),
+    context: {},
+  };
+  return { mockLog: log };
+});
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+  createScopedLogger: () => mockLog,
+  apiLogger: () => mockLog,
+}));
+
 import {
   getPoolRateLimiter,
   resetPoolRateLimiter,
   DEFAULT_429_BACKOFF_MS,
 } from "@/lib/dbx/rate-limiter";
 import { resetModelPool } from "@/lib/dbx/model-registry";
-
-vi.mock("@/lib/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
 
 const ENV_KEYS = [
   "DATABRICKS_SERVING_ENDPOINT",

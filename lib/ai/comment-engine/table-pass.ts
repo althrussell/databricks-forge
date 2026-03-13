@@ -11,7 +11,8 @@ import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
+import type { Logger } from "@/lib/ports/logger";
 import type { ChatMessage } from "@/lib/dbx/model-serving";
 import type { TableCommentInput, CommentProgressCallback, MetadataCounters } from "./types";
 import { TABLE_COMMENT_PROMPT } from "./prompts";
@@ -108,9 +109,10 @@ export async function runTableCommentPass(
     signal?: AbortSignal;
     onProgress?: CommentProgressCallback;
     onCounters?: (counters: Partial<MetadataCounters>) => void;
+    logger?: Logger;
   } = {},
 ): Promise<Map<string, string>> {
-  const { signal, onProgress, onCounters } = options;
+  const { signal, onProgress, onCounters, logger: log = fallbackLogger } = options;
   const descriptions = new Map<string, string>();
 
   if (tables.length === 0) return descriptions;
@@ -173,7 +175,9 @@ export async function runTableCommentPass(
         }
       }
     } catch (err) {
-      logger.warn("[comment-engine:table-pass] Batch failed", {
+      log.warn("Batch failed", {
+        fn: "runTableCommentPass",
+        errorCategory: "llm_batch",
         batchSize: batch.length,
         error: err instanceof Error ? err.message : String(err),
       });

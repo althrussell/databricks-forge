@@ -14,8 +14,19 @@ vi.mock("@/lib/lakebase/comment-jobs", () => ({
   updateCommentJobStatus: vi.fn(),
 }));
 
+const _mockApplierLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+  timed: vi.fn(),
+  context: {},
+};
 vi.mock("@/lib/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  createScopedLogger: () => _mockApplierLog,
+  apiLogger: () => _mockApplierLog,
 }));
 
 import { executeSQL } from "@/lib/dbx/sql";

@@ -24,7 +24,7 @@ import {
 import { runTableCommentPass, buildLineageContextBlock } from "./table-pass";
 import { runColumnCommentPass } from "./column-pass";
 import { runConsistencyReview, applyConsistencyFixes } from "./consistency-pass";
-import { logger as defaultLogger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 import type { SchemaContext, MetadataScope } from "@/lib/metadata/types";
 import type { Logger } from "@/lib/ports/logger";
 import type {
@@ -56,10 +56,12 @@ export async function runCommentEngine(
     deps,
   } = config;
 
-  const log: Logger = deps?.logger ?? defaultLogger;
+  const log: Logger =
+    deps?.logger ??
+    createScopedLogger({ origin: "CommentEngine", module: "ai/comment-engine/engine" });
   const counters: MetadataCounters = {};
 
-  log.info("[comment-engine] Starting", {
+  log.info("Starting", {
     catalogs: scope.catalogs,
     schemas: scope.schemas?.length,
     tables: scope.tables?.length,
@@ -81,7 +83,7 @@ export async function runCommentEngine(
 
   if (deps?.schemaContext) {
     schemaContext = deps.schemaContext;
-    log.info("[comment-engine] Using pre-built schema context", {
+    log.info("Using pre-built schema context", {
       tables: schemaContext.tables.length,
     });
   } else {
@@ -114,7 +116,10 @@ export async function runCommentEngine(
   }
 
   if (schemaContext.tables.length === 0) {
-    log.warn("[comment-engine] No tables found in schema context");
+    log.warn("No tables found in schema context", {
+      fn: "runCommentEngine",
+      errorCategory: "empty_scope",
+    });
     return emptyResult(schemaContext, Date.now() - startTime);
   }
 
@@ -178,6 +183,7 @@ export async function runCommentEngine(
         Object.assign(counters, c);
         onMetadataProgress?.(counters);
       },
+      logger: log,
     },
   );
 
@@ -249,6 +255,7 @@ export async function runCommentEngine(
       Object.assign(counters, c);
       onMetadataProgress?.(counters);
     },
+    logger: log,
   });
 
   if (signal?.aborted) throw new Error("Cancelled");
@@ -273,18 +280,20 @@ export async function runCommentEngine(
         tableComments,
         columnComments,
         schemaContext.schemaSummary,
-        { signal, onProgress },
+        { signal, onProgress, logger: log },
       );
 
       if (consistencyFixes.length > 0) {
         fixesApplied = applyConsistencyFixes(tableComments, columnComments, consistencyFixes);
-        log.info("[comment-engine] Consistency fixes applied", {
+        log.info("Consistency fixes applied", {
           found: consistencyFixes.length,
           applied: fixesApplied,
         });
       }
     } catch (err) {
-      log.warn("[comment-engine] Consistency review failed, skipping", {
+      log.warn("Consistency review failed, skipping", {
+        fn: "runCommentEngine",
+        errorCategory: "consistency_review",
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -296,7 +305,7 @@ export async function runCommentEngine(
   const totalColumns = Array.from(columnComments.values()).reduce((sum, m) => sum + m.size, 0);
   const durationMs = Date.now() - startTime;
 
-  log.info("[comment-engine] Complete", {
+  log.info("Complete", {
     tables: tableComments.size,
     columns: totalColumns,
     consistencyFixes: consistencyFixes.length,

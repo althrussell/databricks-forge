@@ -351,6 +351,8 @@ export interface PipelineContext {
   discoveryResult: import("@/lib/discovery/types").DiscoveryResult | null;
   /** Abort signal for pipeline cancellation. Checked between steps and before LLM calls. */
   signal?: AbortSignal;
+  /** Scoped logger carrying origin/task/runId context. Injected by the pipeline engine. */
+  logger?: import("@/lib/logger").ScopedLogger;
 }
 
 // ---------------------------------------------------------------------------

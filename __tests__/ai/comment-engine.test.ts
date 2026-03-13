@@ -25,8 +25,19 @@ vi.mock("@/lib/ai/comment-engine/consistency-pass", () => ({
   applyConsistencyFixes: vi.fn().mockReturnValue(0),
 }));
 
+const _mockEngineLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+  timed: vi.fn(),
+  context: {},
+};
 vi.mock("@/lib/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  createScopedLogger: () => _mockEngineLog,
+  apiLogger: () => _mockEngineLog,
 }));
 
 import { runCommentEngine } from "@/lib/ai/comment-engine/engine";

@@ -5,13 +5,19 @@ vi.mock("@/lib/dbx/sql", () => ({
   executeSQL: vi.fn(),
 }));
 
+const _mockLineageLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+  timed: vi.fn(),
+  context: {},
+};
 vi.mock("@/lib/logger", () => ({
-  logger: {
-    warn: vi.fn(),
-    info: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  createScopedLogger: () => _mockLineageLog,
+  apiLogger: () => _mockLineageLog,
 }));
 
 import { executeSQL } from "@/lib/dbx/sql";

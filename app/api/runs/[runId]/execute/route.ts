@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { failOrphanedRunningRun, getRunById } from "@/lib/lakebase/runs";
 import { startPipeline, resumePipeline, getActivePipelineRunIds } from "@/lib/pipeline/engine";
@@ -16,12 +16,13 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
+  const { runId } = await params;
+  const log = apiLogger("/api/runs/[runId]/execute", "POST", { runId });
   try {
     await ensureMigrated();
-    const { runId } = await params;
 
     if (!isValidUUID(runId)) {
-      logger.warn("[execute] Invalid run ID format", { runId });
+      log.warn("Invalid run ID format", { errorCategory: "validation_failed" });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
@@ -30,12 +31,12 @@ export async function POST(
     const run = await getRunById(runId);
 
     if (!run) {
-      logger.warn("[execute] Run not found", { runId });
+      log.warn("Run not found", { errorCategory: "not_found" });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
     if (run.status === "running") {
-      logger.warn("[execute] Pipeline is already running", { runId });
+      log.warn("Pipeline is already running", { errorCategory: "conflict" });
       return NextResponse.json({ error: "Pipeline is already running" }, { status: 409 });
     }
 
@@ -45,7 +46,7 @@ export async function POST(
     if (isResume && run.status === "failed") {
       resumePipeline(runId).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error("[execute] Resume pipeline crashed", { runId, error: msg });
+        log.error("Resume pipeline crashed", { error: msg, errorCategory: "pipeline_crashed" });
       });
       return NextResponse.json({ status: "running", runId, resumed: true });
     }
@@ -53,13 +54,13 @@ export async function POST(
     // Start pipeline asynchronously -- do not await
     startPipeline(runId).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error("[execute] Pipeline crashed", { runId, error: msg });
+      log.error("Pipeline crashed", { error: msg, errorCategory: "pipeline_crashed" });
     });
 
     return NextResponse.json({ status: "running", runId });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error("[execute] Failed to start pipeline", { error: msg });
+    log.error("Failed to start pipeline", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

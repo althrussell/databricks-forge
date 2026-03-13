@@ -18,7 +18,9 @@ import {
   type ChatCompletionResponse,
 } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
+
+const log = createScopedLogger({ origin: "Infra", module: "ai/sql-reviewer" });
 import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "@/lib/toolkit/sql-rules";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
@@ -208,8 +210,9 @@ function parseReviewResponse(raw: string, requestedFix: boolean): ReviewResult {
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    logger.warn("Failed to parse review response as JSON, treating as warn", {
+    log.warn("Failed to parse review response as JSON, treating as warn", {
       rawLength: raw.length,
+      errorCategory: "parse_error",
     });
     return {
       verdict: "warn",
@@ -272,7 +275,9 @@ function parseBatchReviewResponse(
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    logger.warn("Failed to parse batch review response, treating all as warn");
+    log.warn("Failed to parse batch review response, treating all as warn", {
+      errorCategory: "parse_error",
+    });
     return items.map((item) => ({
       id: item.id,
       result: {
@@ -412,14 +417,14 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
   try {
     const result = await callReview(endpoint);
 
-    logger.info("SQL review complete", {
+    log.info("SQL review complete", {
       surface: opts.surface,
       verdict: result.verdict,
       qualityScore: result.qualityScore,
       issueCount: result.issues.length,
       endpoint,
     });
-    logger.debug("SQL review detail", {
+    log.debug("SQL review detail", {
       surface: opts.surface,
       issueCategories: summariseIssues(result.issues),
       topIssues: topIssueMessages(result.issues),
@@ -430,39 +435,42 @@ export async function reviewSql(sql: string, opts: ReviewOptions = {}): Promise<
     if (isRateLimitError(err)) {
       const fallback = resolveEndpoint("sql");
       if (fallback !== endpoint) {
-        logger.warn("SQL review hit 429, retrying with fast model", {
+        log.warn("SQL review hit 429, retrying with fast model", {
           surface: opts.surface,
           originalEndpoint: endpoint,
           fallbackEndpoint: fallback,
           retryAfterMs: getRateLimitRetryMs(err),
+          errorCategory: "rate_limit",
         });
         try {
           const result = await callReview(fallback);
-          logger.info("SQL review complete (fallback)", {
+          log.info("SQL review complete (fallback)", {
             surface: opts.surface,
             verdict: result.verdict,
             qualityScore: result.qualityScore,
             issueCount: result.issues.length,
             endpoint: fallback,
           });
-          logger.debug("SQL review detail (fallback)", {
+          log.debug("SQL review detail (fallback)", {
             surface: opts.surface,
             issueCategories: summariseIssues(result.issues),
             topIssues: topIssueMessages(result.issues),
           });
           return result;
         } catch (fallbackErr) {
-          logger.warn("SQL review fallback also failed, passing through", {
+          log.warn("SQL review fallback also failed, passing through", {
             surface: opts.surface,
             error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+            errorCategory: "fallback_failed",
           });
           return PASS_THROUGH_RESULT;
         }
       }
     }
-    logger.warn("SQL review failed, passing through", {
+    log.warn("SQL review failed, passing through", {
       surface: opts.surface,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
     return PASS_THROUGH_RESULT;
   }
@@ -499,7 +507,7 @@ export async function reviewAndFixSql(
   try {
     const result = await callReviewFix(endpoint);
 
-    logger.info("SQL review+fix complete", {
+    log.info("SQL review+fix complete", {
       surface: opts.surface,
       verdict: result.verdict,
       qualityScore: result.qualityScore,
@@ -507,7 +515,7 @@ export async function reviewAndFixSql(
       hasFix: !!result.fixedSql,
       endpoint,
     });
-    logger.debug("SQL review+fix detail", {
+    log.debug("SQL review+fix detail", {
       surface: opts.surface,
       issueCategories: summariseIssues(result.issues),
       topIssues: topIssueMessages(result.issues),
@@ -519,15 +527,16 @@ export async function reviewAndFixSql(
     if (isRateLimitError(err)) {
       const fallback = resolveEndpoint("sql");
       if (fallback !== endpoint) {
-        logger.warn("SQL review+fix hit 429, retrying with fast model", {
+        log.warn("SQL review+fix hit 429, retrying with fast model", {
           surface: opts.surface,
           originalEndpoint: endpoint,
           fallbackEndpoint: fallback,
           retryAfterMs: getRateLimitRetryMs(err),
+          errorCategory: "rate_limit",
         });
         try {
           const result = await callReviewFix(fallback);
-          logger.info("SQL review+fix complete (fallback)", {
+          log.info("SQL review+fix complete (fallback)", {
             surface: opts.surface,
             verdict: result.verdict,
             qualityScore: result.qualityScore,
@@ -535,7 +544,7 @@ export async function reviewAndFixSql(
             hasFix: !!result.fixedSql,
             endpoint: fallback,
           });
-          logger.debug("SQL review+fix detail (fallback)", {
+          log.debug("SQL review+fix detail (fallback)", {
             surface: opts.surface,
             issueCategories: summariseIssues(result.issues),
             topIssues: topIssueMessages(result.issues),
@@ -543,17 +552,19 @@ export async function reviewAndFixSql(
           });
           return result;
         } catch (fallbackErr) {
-          logger.warn("SQL review+fix fallback also failed, passing through", {
+          log.warn("SQL review+fix fallback also failed, passing through", {
             surface: opts.surface,
             error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+            errorCategory: "fallback_failed",
           });
           return PASS_THROUGH_RESULT;
         }
       }
     }
-    logger.warn("SQL review+fix failed, passing through", {
+    log.warn("SQL review+fix failed, passing through", {
       surface: opts.surface,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
     return PASS_THROUGH_RESULT;
   }
@@ -609,7 +620,7 @@ export async function reviewBatch(
     const scores = results.map((r) => r.result.qualityScore);
     const avgScore =
       scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-    logger.info(`SQL batch review complete${label}`, {
+    log.info(`SQL batch review complete${label}`, {
       surface,
       totalItems: items.length,
       failCount,
@@ -627,21 +638,23 @@ export async function reviewBatch(
     if (isRateLimitError(err)) {
       const fallback = resolveEndpoint("sql");
       if (fallback !== endpoint) {
-        logger.warn("SQL batch review hit 429, retrying with fast model", {
+        log.warn("SQL batch review hit 429, retrying with fast model", {
           surface,
           originalEndpoint: endpoint,
           fallbackEndpoint: fallback,
           itemCount: items.length,
           retryAfterMs: getRateLimitRetryMs(err),
+          errorCategory: "rate_limit",
         });
         try {
           const results = await callBatchReview(fallback);
           logBatchResults(results, fallback, " (fallback)");
           return results;
         } catch (fallbackErr) {
-          logger.warn("SQL batch review fallback also failed, passing through", {
+          log.warn("SQL batch review fallback also failed, passing through", {
             surface,
             error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+            errorCategory: "fallback_failed",
           });
           return items.map((item) => ({
             id: item.id,
@@ -650,9 +663,10 @@ export async function reviewBatch(
         }
       }
     }
-    logger.warn("SQL batch review failed, passing through", {
+    log.warn("SQL batch review failed, passing through", {
       surface,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
     return items.map((item) => ({
       id: item.id,
