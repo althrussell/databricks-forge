@@ -7,8 +7,20 @@ import {
   type TaskTier,
 } from "@/lib/dbx/model-registry";
 
+const mockLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn(),
+  timed: vi.fn(),
+  context: {},
+};
+mockLog.child.mockReturnValue(mockLog);
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+  createScopedLogger: () => mockLog,
+  apiLogger: () => mockLog,
 }));
 
 const ENV_KEYS = [

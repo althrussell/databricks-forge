@@ -27,7 +27,7 @@ import { initScanProgress, updateScanProgress } from "@/lib/pipeline/scan-progre
 import { discoverExistingAssets } from "@/lib/discovery/asset-scanner";
 import { computeCoverage } from "@/lib/discovery/coverage";
 import { saveDiscoveryResults } from "@/lib/lakebase/discovered-assets";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 import { parseExcludedString, parsePatternsString, globMatch } from "@/lib/domain/scope-selection";
 import type {
   EnvironmentScan,
@@ -65,9 +65,14 @@ export async function runStandaloneEnrichment(
 ): Promise<void> {
   const startTime = Date.now();
   const scopes = parseUCMetadata(ucMetadata);
+  const log = createScopedLogger({
+    origin: "EstateScan",
+    module: "pipeline/standalone-scan",
+    scanId,
+  });
 
   initScanProgress(scanId);
-  logger.info("[standalone-scan] Starting", { scanId, ucMetadata, scopes: scopes.length });
+  log.info("Starting", { scanId, ucMetadata, scopes: scopes.length });
 
   try {
     // Phase 0: Permission pre-check -- filter out inaccessible scopes in parallel
@@ -79,7 +84,7 @@ export async function runStandaloneEnrichment(
     const { accessible: accessibleScopes, skipped } = await filterAccessibleScopes(scopes);
 
     if (skipped.length > 0) {
-      logger.info("[standalone-scan] Filtered inaccessible scopes", {
+      log.info("Filtered inaccessible scopes", {
         skipped: skipped.map((s) => s.label),
       });
       updateScanProgress(scanId, {
@@ -88,7 +93,12 @@ export async function runStandaloneEnrichment(
     }
 
     if (accessibleScopes.length === 0) {
-      logger.error("[standalone-scan] No accessible scopes", { scanId, ucMetadata });
+      log.error("No accessible scopes", {
+        fn: "runStandaloneEnrichment",
+        errorCategory: "permission_denied",
+        scanId,
+        ucMetadata,
+      });
       updateScanProgress(scanId, {
         phase: "failed",
         message:
@@ -128,7 +138,9 @@ export async function runStandaloneEnrichment(
         const fks = await listForeignKeys(scope.catalog, scope.schema);
         allFKs.push(...fks);
       } catch (error) {
-        logger.warn("[standalone-scan] Scope failed", {
+        log.warn("Scope failed", {
+          fn: "runStandaloneEnrichment",
+          errorCategory: "scope_listing_failed",
           scope,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -136,7 +148,12 @@ export async function runStandaloneEnrichment(
     }
 
     if (allTables.length === 0) {
-      logger.error("[standalone-scan] No tables found", { scanId, ucMetadata });
+      log.error("No tables found", {
+        fn: "runStandaloneEnrichment",
+        errorCategory: "no_tables",
+        scanId,
+        ucMetadata,
+      });
       updateScanProgress(scanId, {
         phase: "failed",
         message: "No tables found. Check scope and permissions.",
@@ -189,7 +206,7 @@ export async function runStandaloneEnrichment(
       }
 
       if (allTables.length < beforeCount) {
-        logger.info("[standalone-scan] Applied exclusions", {
+        log.info("Applied exclusions", {
           excludedPaths,
           patterns: exPatterns,
           removedCount: beforeCount - allTables.length,
@@ -263,7 +280,9 @@ export async function runStandaloneEnrichment(
           }
         }
       } catch (error) {
-        logger.warn("[standalone-scan] Failed to fetch lineage-discovered metadata (non-fatal)", {
+        log.warn("Failed to fetch lineage-discovered metadata (non-fatal)", {
+          fn: "runStandaloneEnrichment",
+          errorCategory: "lineage_metadata_fetch_failed",
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -368,7 +387,9 @@ export async function runStandaloneEnrichment(
           message: `Asset discovery: ${genieSpaceCount} Genie spaces, ${dashboardCount} dashboards, ${metricViewCount} metric views (${assetCoveragePercent}% coverage)`,
         });
       } catch (error) {
-        logger.warn("[standalone-scan] Asset discovery failed (non-fatal)", {
+        log.warn("Asset discovery failed (non-fatal)", {
+          fn: "runStandaloneEnrichment",
+          errorCategory: "asset_discovery_failed",
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -433,7 +454,9 @@ export async function runStandaloneEnrichment(
         message: `LLM analysis complete: ${intelligenceResult.domains.length} domains, ${new Set(intelligenceResult.sensitivities.map((s) => s.tableFqn)).size} PII tables detected.`,
       });
     } catch (error) {
-      logger.warn("[standalone-scan] LLM intelligence failed (non-fatal)", {
+      log.warn("LLM intelligence failed (non-fatal)", {
+        fn: "runStandaloneEnrichment",
+        errorCategory: "llm_intelligence_failed",
         error: error instanceof Error ? error.message : String(error),
       });
       updateScanProgress(scanId, {
@@ -588,7 +611,9 @@ export async function runStandaloneEnrichment(
         allColumns,
       );
     } catch (embedErr) {
-      logger.warn("[standalone-scan] Embedding generation failed (non-fatal)", {
+      log.warn("Embedding generation failed (non-fatal)", {
+        fn: "runStandaloneEnrichment",
+        errorCategory: "embedding_generation_failed",
         scanId,
         error: embedErr instanceof Error ? embedErr.message : String(embedErr),
       });
@@ -598,7 +623,7 @@ export async function runStandaloneEnrichment(
       phase: "complete",
       message: `Scan complete — ${details.length} tables, ${lineageGraph.edges.length} lineage edges, ${intelligenceResult?.domains.length ?? 0} domains.`,
     });
-    logger.info("[standalone-scan] Complete", {
+    log.info("Complete", {
       scanId,
       tables: details.length,
       durationMs: Date.now() - startTime,

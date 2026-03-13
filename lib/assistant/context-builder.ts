@@ -21,13 +21,15 @@ import type { ConversationTurn } from "./engine";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
 import { isBenchmarksEnabled } from "@/lib/benchmarks/config";
 import { withPrisma } from "@/lib/prisma";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 import {
   resolveForIntent,
   formatContextSections,
   buildIndustrySkillSections,
   type AskForgeIntent,
 } from "@/lib/skills";
+
+const log = createScopedLogger({ origin: "AskForge", module: "assistant/context-builder" });
 
 export interface TableEnrichment {
   tableFqn: string;
@@ -232,7 +234,7 @@ export async function buildAssistantContext(
 
     ragContext = formatRetrievedContext(chunks, 12000);
 
-    logger.debug("[assistant/context] Built RAG context", {
+    log.debug("Built RAG context", {
       chunkCount: chunks.length,
       contextLength: ragContext.length,
       topScore: chunks[0]?.score,
@@ -266,8 +268,9 @@ export async function buildAssistantContext(
       }
     }
   } catch (err) {
-    logger.warn("[assistant/context] Skill resolution failed (non-fatal)", {
+    log.warn("Skill resolution failed (non-fatal)", {
       error: String(err),
+      errorCategory: "non_fatal",
     });
   }
 
@@ -277,8 +280,9 @@ export async function buildAssistantContext(
     extractTableFqnsFromText(question),
   );
   if (chunks.length > 0 && tables.length === 0) {
-    logger.warn("[assistant/context] Retrieved chunks but inferred zero table references", {
+    log.warn("Retrieved chunks but inferred zero table references", {
       chunkCount: chunks.length,
+      errorCategory: "context_gap",
     });
   }
   const tableEnrichments = await fetchTableEnrichments(tables);
@@ -448,9 +452,10 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
           if (industryContext) sections.push(industryContext);
           if (industryKpis) sections.push(industryKpis);
         } catch (err) {
-          logger.warn("[assistant/context] Failed to load industry context", {
+          log.warn("Failed to load industry context", {
             industryId,
             error: String(err),
+            errorCategory: "non_fatal",
           });
         }
       }
@@ -506,8 +511,9 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
             sections.push(domParts.join("\n"));
           }
         } catch (err) {
-          logger.warn("[assistant/context] Failed to fetch domain distribution", {
+          log.warn("Failed to fetch domain distribution", {
             error: String(err),
+            errorCategory: "non_fatal",
           });
         }
       }
@@ -588,8 +594,9 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
       };
     });
   } catch (err) {
-    logger.warn("[assistant/context] Failed to fetch direct Lakebase context", {
+    log.warn("Failed to fetch direct Lakebase context", {
       error: String(err),
+      errorCategory: "non_fatal",
     });
     return {
       text: null,
@@ -706,7 +713,7 @@ async function retrieveWithFallback(
     return strict;
   }
 
-  logger.info("[assistant/context] Strict retrieval returned no chunks, retrying relaxed filters");
+  log.info("Strict retrieval returned no chunks, retrying relaxed filters");
   return retrieveForPlans(question, plans, latestRunId, latestScanId, latestFabricScanId, true);
 }
 
@@ -743,7 +750,7 @@ async function retrieveForPlans(
   for (let i = 0; i < retrievals.length; i++) {
     const plan = plans[i];
     const list = retrievals[i];
-    logger.debug("[assistant/context] Retrieval scope result", {
+    log.debug("Retrieval scope result", {
       scope: plan.scope ?? "all",
       relaxed,
       resultCount: list.length,
@@ -852,7 +859,10 @@ async function fetchTableEnrichments(fqns: string[]): Promise<TableEnrichment[]>
       });
     });
   } catch (err) {
-    logger.warn("[assistant/context] Failed to fetch table enrichments", { error: String(err) });
+    log.warn("Failed to fetch table enrichments", {
+      error: String(err),
+      errorCategory: "non_fatal",
+    });
     return [];
   }
 }
@@ -888,7 +898,10 @@ async function loadSchemaSnapshotColumns(
       return result;
     });
   } catch (err) {
-    logger.warn("[assistant/context] Failed to load schema snapshot", { error: String(err) });
+    log.warn("Failed to load schema snapshot", {
+      error: String(err),
+      errorCategory: "non_fatal",
+    });
     return new Map();
   }
 }

@@ -10,7 +10,7 @@ import { buildTokenAwareBatches } from "@/lib/toolkit/token-budget";
 import { resolveEndpoint } from "@/lib/dbx/client";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import {
   DomainAssignmentSchema,
   SubdomainAssignmentSchema,
@@ -26,6 +26,7 @@ export async function runDomainClustering(
   ctx: PipelineContext,
   runId?: string,
 ): Promise<UseCase[]> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run, useCases } = ctx;
   if (!run.businessContext) throw new Error("Business context not available");
   if (useCases.length === 0) return [];
@@ -38,6 +39,7 @@ export async function runDomainClustering(
     await updateRunMessage(runId, `Assigning domains to ${updatedCases.length} use cases...`);
   try {
     await assignDomains(
+      log,
       updatedCases,
       run.config.businessName,
       bc,
@@ -45,7 +47,9 @@ export async function runDomainClustering(
       runId,
     );
   } catch (error) {
-    logger.error("Domain assignment failed", {
+    log.error("Domain assignment failed", {
+      fn: "runDomainClustering",
+      errorCategory: "llm_error",
       error: error instanceof Error ? error.message : String(error),
     });
     // Fallback: assign all to "General"
@@ -62,6 +66,7 @@ export async function runDomainClustering(
       const domainCases = updatedCases.filter((uc) => uc.domain === domain);
       try {
         await assignSubdomains(
+          log,
           domainCases,
           domain,
           run.config.businessName,
@@ -70,7 +75,9 @@ export async function runDomainClustering(
           runId,
         );
       } catch (error) {
-        logger.warn("Subdomain assignment failed", {
+        log.warn("Subdomain assignment failed", {
+          fn: "runDomainClustering",
+          errorCategory: "llm_error",
           domain,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -98,9 +105,11 @@ export async function runDomainClustering(
     await updateRunMessage(runId, `Merging ${smallDomainCount} small domains...`);
   }
   try {
-    await mergeSmallDomains(updatedCases, resolveEndpoint("classification"), runId);
+    await mergeSmallDomains(log, updatedCases, resolveEndpoint("classification"), runId);
   } catch (error) {
-    logger.warn("Domain merge failed", {
+    log.warn("Domain merge failed", {
+      fn: "runDomainClustering",
+      errorCategory: "llm_error",
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -108,12 +117,13 @@ export async function runDomainClustering(
   const finalDomainCount = [...new Set(updatedCases.map((uc) => uc.domain))].length;
   if (runId) await updateRunMessage(runId, `Organised into ${finalDomainCount} domains`);
 
-  logger.info("Domain clustering complete", { domainCount: finalDomainCount });
+  log.info("Domain clustering complete", { domainCount: finalDomainCount });
 
   return updatedCases;
 }
 
 async function assignDomains(
+  log: typeof fallbackLogger,
   useCases: UseCase[],
   businessName: string,
   businessContext: { industries: string },
@@ -157,7 +167,9 @@ async function assignDomains(
       try {
         rawItems = parseLLMJson(result.rawResponse, "domain-clustering") as unknown[];
       } catch (parseErr) {
-        logger.warn("Failed to parse domain assignment JSON", {
+        log.warn("Failed to parse domain assignment JSON", {
+          fn: "runDomainClustering",
+          errorCategory: "llm_parse",
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
         });
         batch.forEach((uc) => {
@@ -184,6 +196,7 @@ async function assignDomains(
 }
 
 async function assignSubdomains(
+  log: typeof fallbackLogger,
   domainCases: UseCase[],
   domainName: string,
   businessName: string,
@@ -225,7 +238,9 @@ async function assignSubdomains(
       try {
         rawItems = parseLLMJson(result.rawResponse, "domain-clustering:subdomain") as unknown[];
       } catch (parseErr) {
-        logger.warn("Failed to parse subdomain assignment JSON", {
+        log.warn("Failed to parse subdomain assignment JSON", {
+          fn: "runDomainClustering",
+          errorCategory: "llm_parse",
           domain: domainName,
           error: parseErr instanceof Error ? parseErr.message : String(parseErr),
         });
@@ -276,6 +291,7 @@ async function assignSubdomains(
 }
 
 async function mergeSmallDomains(
+  log: typeof fallbackLogger,
   useCases: UseCase[],
   aiModel: string,
   runId?: string,
@@ -316,7 +332,9 @@ async function mergeSmallDomains(
         string
       >;
     } catch (parseErr) {
-      logger.warn("Failed to parse domain merge JSON", {
+      log.warn("Failed to parse domain merge JSON", {
+        fn: "runDomainClustering",
+        errorCategory: "llm_parse",
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
       });
       return;
@@ -328,7 +346,9 @@ async function mergeSmallDomains(
       }
     }
   } catch (error) {
-    logger.warn("Domain merge failed", {
+    log.warn("Domain merge failed", {
+      fn: "runDomainClustering",
+      errorCategory: "llm_error",
       error: error instanceof Error ? error.message : String(error),
     });
   }

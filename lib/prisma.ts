@@ -36,7 +36,9 @@ import {
   isCredentialPropagationError,
   isRateLimitError,
 } from "@/lib/lakebase/auth-errors";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
+
+const log = createScopedLogger({ origin: "Lakebase", module: "prisma" });
 
 // ---------------------------------------------------------------------------
 // Connection string logging helper
@@ -44,7 +46,7 @@ import { logger } from "@/lib/logger";
 
 function logConnectionInfo(connectionString: string): void {
   const parsed = new URL(connectionString);
-  logger.info("[prisma] Connecting", {
+  log.info("Connecting", {
     host: parsed.hostname,
     database: parsed.pathname.slice(1),
     user: decodeURIComponent(parsed.username),
@@ -160,13 +162,14 @@ async function createAndWarmPool(
   const pool = new pg.Pool({ connectionString, ...POOL_OPTIONS });
 
   pool.on("error", (err) => {
-    logger.warn("[prisma] Idle pool connection error", {
+    log.warn("Idle pool connection error", {
       error: err.message,
+      errorCategory: "pool_error",
     });
   });
 
   if (initialDelayMs > 0) {
-    logger.info("[prisma] Waiting before first pool verification", {
+    log.info("Waiting before first pool verification", {
       initialDelayMs,
     });
     await new Promise((r) => setTimeout(r, initialDelayMs));
@@ -176,11 +179,12 @@ async function createAndWarmPool(
   let lastError: unknown;
   for (let i = 0; i <= verifyRetries; i++) {
     if (i > 0) {
-      logger.warn("[prisma] Pool connection not ready, retrying", {
+      log.warn("Pool connection not ready, retrying", {
         attempt: i,
         maxAttempts: verifyRetries + 1,
         nextDelayMs: retryDelayMs,
         error: lastError instanceof Error ? lastError.message : String(lastError),
+        errorCategory: "connection_retry",
       });
       await new Promise((r) => setTimeout(r, retryDelayMs));
     }
@@ -221,15 +225,16 @@ async function createAndWarmPool(
             ? firstReason.reason.message
             : String(firstReason.reason)
           : "";
-      logger.warn("[prisma] Pool warm-up partially failed", {
+      log.warn("Pool warm-up partially failed", {
         warmed,
         target: POOL_WARM_TARGET,
         rejected: rejected.length,
         rateLimited: isRateLimitError(message),
         error: message,
+        errorCategory: "pool_warmup",
       });
     }
-    logger.info("[prisma] Pool connections warmed", {
+    log.info("Pool connections warmed", {
       warmed,
       target: POOL_WARM_TARGET,
     });
@@ -350,8 +355,9 @@ async function buildAutoProvisionedClient(
     try {
       await globalForPrisma.__prisma.$disconnect();
     } catch (err) {
-      logger.warn("[prisma] Failed to disconnect old client during rotation", {
+      log.warn("Failed to disconnect old client during rotation", {
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "rotation_error",
       });
     }
   }
@@ -361,7 +367,7 @@ async function buildAutoProvisionedClient(
   }
 
   const endpointInfo = await getRuntimeEndpointInfo();
-  logger.info("[prisma] Runtime endpoint candidates resolved", {
+  log.info("Runtime endpoint candidates resolved", {
     endpointName: endpointInfo.endpointName,
     poolerHost: endpointInfo.poolerHost,
     directHost: endpointInfo.directHost,
@@ -405,7 +411,7 @@ async function buildAutoProvisionedClient(
         await probePool.query("SELECT 1");
         probeResults[endpointKind] = "ok";
       } catch (err) {
-        logger.warn("[prisma] Endpoint auth probe failed", {
+        log.warn("Endpoint auth probe failed", {
           endpointKind,
           host,
           tokenGeneration,
@@ -414,6 +420,7 @@ async function buildAutoProvisionedClient(
             : null,
           errorClass: classifyDbError(err),
           error: err instanceof Error ? err.message : String(err),
+          errorCategory: "auth_probe_failed",
         });
       } finally {
         await probePool.end().catch(() => {});
@@ -430,7 +437,7 @@ async function buildAutoProvisionedClient(
     if (fastFailoverTriggered) {
       poolerFailureObserved = true;
     }
-    logger.info("[prisma] Endpoint auth probes complete", {
+    log.info("Endpoint auth probes complete", {
       tokenGeneration,
       probeResultPooler: probeResults.pooler,
       probeResultDirect: probeResults.direct,
@@ -466,14 +473,15 @@ async function buildAutoProvisionedClient(
           : endpointCandidates;
 
     if (fastFailoverTriggered) {
-      logger.warn("[prisma] Fast failover activated after probe results", {
+      log.warn("Fast failover activated after probe results", {
         tokenGeneration,
         endpointKindAttempted: "pooler",
         endpointKindSelected: "direct",
+        errorCategory: "failover",
       });
     }
     if (!poolerAttemptEnabled) {
-      logger.info("[prisma] Pooler attempts disabled by runtime flags", {
+      log.info("Pooler attempts disabled by runtime flags", {
         runtimeMode: RUNTIME_MODE,
         enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
         endpointKindSelected: "direct",
@@ -499,7 +507,7 @@ async function buildAutoProvisionedClient(
         }
         lastError = err;
         const msg = err instanceof Error ? err.message : String(err);
-        logger.warn("[prisma] Auto-provision pool bootstrap failed", {
+        log.warn("Auto-provision pool bootstrap failed", {
           attempt,
           maxAttempts: MAX_CREDENTIAL_GENERATIONS,
           endpointKind: candidate.endpointKind,
@@ -513,6 +521,7 @@ async function buildAutoProvisionedClient(
           rateLimited: isRateLimitError(err),
           propagationLikely: isCredentialPropagationError(err),
           error: msg,
+          errorCategory: "bootstrap_failed",
         });
       }
     }
@@ -537,12 +546,13 @@ async function buildAutoProvisionedClient(
     globalForPrisma.__poolerConsecutiveSuccesses = 0;
     globalForPrisma.__lastSelectedEndpointKind = "direct";
     if (fallbackTriggered) {
-      logger.warn("[prisma] Pooler bootstrap failed; using direct endpoint fallback for runtime", {
+      log.warn("Pooler bootstrap failed; using direct endpoint fallback for runtime", {
         fallbackTriggered: true,
         poolerFailoverCount: globalForPrisma.__poolerFailoverCount,
+        errorCategory: "failover",
       });
     } else {
-      logger.info("[prisma] Direct endpoint selected by runtime policy", {
+      log.info("Direct endpoint selected by runtime policy", {
         runtimeMode: RUNTIME_MODE,
         enablePoolerExperiment: ENABLE_POOLER_EXPERIMENT,
         requirePooler: REQUIRE_POOLER,
@@ -555,14 +565,14 @@ async function buildAutoProvisionedClient(
   }
 
   const runtimeState = getDatabaseAuthRuntimeState();
-  logger.info("[prisma] Runtime endpoint selected", {
+  log.info("Runtime endpoint selected", {
     endpointName: endpointInfo.endpointName,
     endpointKind: selectedEndpointKind,
     host: selectedHost,
     fallbackTriggered,
     poolerFailoverCount: runtimeState.poolerFailoverCount,
   });
-  logger.info("[prisma] Pooler readiness gate status", {
+  log.info("Pooler readiness gate status", {
     poolerConsecutiveSuccesses: runtimeState.poolerConsecutiveSuccesses,
     poolerFailoverCount: runtimeState.poolerFailoverCount,
     poolerReadinessSuccessTarget: runtimeState.poolerReadinessSuccessTarget,
@@ -578,7 +588,7 @@ async function buildAutoProvisionedClient(
   globalForPrisma.__prismaTokenId = tokenId;
   globalForPrisma.__dbReady = true;
 
-  logger.info("[prisma] Client created (auto-provision mode)", {
+  log.info("Client created (auto-provision mode)", {
     generation,
     tokenId,
   });
@@ -608,25 +618,26 @@ function scheduleProactiveRefresh(): void {
     globalForPrisma.__refreshTimer = undefined;
 
     if (globalForPrisma.__rotationInFlight) {
-      logger.info("[prisma] Proactive refresh skipped — rotation already in flight");
+      log.info("Proactive refresh skipped — rotation already in flight");
       return;
     }
 
     try {
-      logger.info("[prisma] Proactive credential rotation starting", {
+      log.info("Proactive credential rotation starting", {
         msBeforeExpiry: expiresAt - Date.now(),
       });
       await invalidatePrismaClient();
       await getPrisma();
-      logger.info("[prisma] Proactive credential rotation complete");
+      log.info("Proactive credential rotation complete");
     } catch (err) {
-      logger.warn("[prisma] Proactive credential rotation failed — will retry on next request", {
+      log.warn("Proactive credential rotation failed — will retry on next request", {
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "rotation_error",
       });
     }
   }, delay);
 
-  logger.info("[prisma] Proactive refresh scheduled", {
+  log.info("Proactive refresh scheduled", {
     delaySec: Math.round(delay / 1_000),
     expiresAt: new Date(expiresAt).toISOString(),
   });
@@ -673,7 +684,7 @@ async function getStaticPrisma(): Promise<PrismaClient> {
     globalForPrisma.__prismaTokenId = "__static__";
     globalForPrisma.__dbReady = true;
 
-    logger.info("[prisma] Client created (static mode)");
+    log.info("Client created (static mode)");
 
     return prisma;
   })().finally(() => {
@@ -714,7 +725,7 @@ async function getNativePasswordPrisma(): Promise<PrismaClient> {
     globalForPrisma.__prismaTokenId = "__native_password__";
     globalForPrisma.__dbReady = true;
 
-    logger.info("[prisma] Client created (native password mode)", {
+    log.info("Client created (native password mode)", {
       authMode: LAKEBASE_AUTH_MODE,
       endpointKind: "pooler",
     });
@@ -764,12 +775,13 @@ export async function withPrisma<T>(fn: (prisma: PrismaClient) => Promise<T>): P
       lastErr = err;
       if (isRateLimitError(err) && attempt < MAX_AUTH_RETRIES) {
         const backoffMs = RETRY_DELAY_MS * (attempt + 1);
-        logger.warn("[prisma] Connection rate-limited, retrying", {
+        log.warn("Connection rate-limited, retrying", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
           backoffMs,
           errorClass: classifyDbError(err),
           error: err instanceof Error ? err.message : String(err),
+          errorCategory: "rate_limit",
         });
         await new Promise((r) => setTimeout(r, backoffMs));
         continue;
@@ -777,11 +789,12 @@ export async function withPrisma<T>(fn: (prisma: PrismaClient) => Promise<T>): P
 
       if (!isAuthError(err)) throw err;
       if (LAKEBASE_AUTH_MODE === "native_password") {
-        logger.warn("[prisma] Native password auth error (no rotation path)", {
+        log.warn("Native password auth error (no rotation path)", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
           errorClass: classifyDbError(err),
           error: err instanceof Error ? err.message : String(err),
+          errorCategory: "auth_error",
         });
         if (attempt < MAX_AUTH_RETRIES) {
           await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
@@ -794,13 +807,14 @@ export async function withPrisma<T>(fn: (prisma: PrismaClient) => Promise<T>): P
       if (attempt < MAX_AUTH_RETRIES) {
         const propagationLikely = isCredentialPropagationError(err);
         const strategy = propagationLikely && attempt === 0 ? "delay" : "rotate";
-        logger.warn("[prisma] Auth error, retrying", {
+        log.warn("Auth error, retrying", {
           attempt: attempt + 1,
           maxRetries: MAX_AUTH_RETRIES,
           strategy,
           propagationLikely,
           errorClass: classifyDbError(err),
           error: err instanceof Error ? err.message : String(err),
+          errorCategory: "auth_error",
         });
 
         if (strategy === "delay") {
@@ -831,8 +845,9 @@ async function rotatePrismaClient(reason: string): Promise<PrismaClient> {
   }
   if (now - (globalForPrisma.__lastRotationAttemptAt ?? 0) < ROTATION_COOLDOWN_MS) {
     if (globalForPrisma.__prisma) return globalForPrisma.__prisma;
-    logger.warn("[prisma] Rotation skipped — cooldown active after recent failed attempt", {
+    log.warn("Rotation skipped — cooldown active after recent failed attempt", {
       msSinceLastAttempt: now - (globalForPrisma.__lastRotationAttemptAt ?? 0),
+      errorCategory: "cooldown",
     });
     throw new Error("Credential rotation on cooldown after recent failure");
   }
@@ -844,7 +859,7 @@ async function rotatePrismaClient(reason: string): Promise<PrismaClient> {
 
     try {
       await invalidatePrismaClient();
-      logger.info("[prisma] Credential rotation starting", { reason });
+      log.info("Credential rotation starting", { reason });
 
       // getPrisma → buildAutoProvisionedClient → createAndWarmPool
       // handles credential propagation retries and pool pre-warming.
@@ -854,7 +869,7 @@ async function rotatePrismaClient(reason: string): Promise<PrismaClient> {
       await client.forgeRun.count();
 
       globalForPrisma.__rotationResolvedAt = Date.now();
-      logger.info("[prisma] Credential rotation complete — connection verified");
+      log.info("Credential rotation complete — connection verified");
       return client;
     } catch (err) {
       globalForPrisma.__prisma = undefined;

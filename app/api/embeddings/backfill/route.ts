@@ -14,9 +14,11 @@
 import { NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { isEmbeddingEnabled } from "@/lib/embeddings/config";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 
 export async function POST() {
+  const log = apiLogger("/api/embeddings/backfill", "POST");
+
   if (!isEmbeddingEnabled()) {
     return NextResponse.json(
       {
@@ -41,32 +43,33 @@ export async function POST() {
     await ensurePgvectorSchema();
 
     // 1. Embed all environment scans
-    await backfillScans(results);
+    await backfillScans(results, log);
 
     // 2. Embed all pipeline runs (use cases + business context)
-    await backfillRuns(results);
+    await backfillRuns(results, log);
 
     // 3. Embed all Genie recommendations
-    await backfillGenieRecs(results);
+    await backfillGenieRecs(results, log);
 
     // 4. Embed all outcome maps
-    await backfillOutcomeMaps(results);
+    await backfillOutcomeMaps(results, log);
 
     // 5. Re-embed all uploaded documents
-    await backfillDocuments(results);
+    await backfillDocuments(results, log);
 
     // 6. Embed benchmark context records
-    await backfillBenchmarks(results);
+    await backfillBenchmarks(results, log);
 
     // 7. Embed Fabric/Power BI scans
-    await backfillFabricScans(results);
+    await backfillFabricScans(results, log);
 
-    logger.info("[backfill] Embedding backfill complete", results);
+    log.info("Embedding backfill complete", results);
     return NextResponse.json({ success: true, results });
   } catch (error) {
-    logger.error("[backfill] Backfill failed", {
+    log.error("Backfill failed", {
       error: error instanceof Error ? error.message : String(error),
       results,
+      errorCategory: "internal_error",
     });
     return NextResponse.json(
       { error: safeErrorMessage(error), partialResults: results },
@@ -88,9 +91,10 @@ async function ensurePgvectorSchema(): Promise<void> {
 // Backfill: Environment Scans
 // ---------------------------------------------------------------------------
 
-async function backfillScans(results: {
-  scans: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillScans(
+  results: { scans: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const { listEnvironmentScans, getEnvironmentScan } =
     await import("@/lib/lakebase/environment-scans");
   const { embedScanResults } = await import("@/lib/embeddings/embed-estate");
@@ -114,12 +118,13 @@ async function backfillScans(results: {
         columns,
       );
       results.scans.embedded++;
-      logger.debug("[backfill] Scan embedded", { scanId: scan.scanId });
+      log.debug("Scan embedded", { scanId: scan.scanId });
     } catch (err) {
       results.scans.failed++;
-      logger.warn("[backfill] Scan embedding failed", {
+      log.warn("Scan embedding failed", {
         scanId: scan.scanId,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "embedding_failed",
       });
     }
   }
@@ -175,9 +180,10 @@ function extractColumnsFromDetails(
 // Backfill: Pipeline Runs
 // ---------------------------------------------------------------------------
 
-async function backfillRuns(results: {
-  runs: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillRuns(
+  results: { runs: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const { listRuns, getRunById } = await import("@/lib/lakebase/runs");
   const { getUseCasesByRunId } = await import("@/lib/lakebase/usecases");
   const { embedRunResults } = await import("@/lib/embeddings/embed-pipeline");
@@ -196,12 +202,13 @@ async function backfillRuns(results: {
 
       await embedRunResults(run.runId, useCases, bcJson, full.config.businessName);
       results.runs.embedded++;
-      logger.debug("[backfill] Run embedded", { runId: run.runId });
+      log.debug("Run embedded", { runId: run.runId });
     } catch (err) {
       results.runs.failed++;
-      logger.warn("[backfill] Run embedding failed", {
+      log.warn("Run embedding failed", {
         runId: run.runId,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "embedding_failed",
       });
     }
   }
@@ -211,9 +218,10 @@ async function backfillRuns(results: {
 // Backfill: Genie Recommendations
 // ---------------------------------------------------------------------------
 
-async function backfillGenieRecs(results: {
-  genieRecs: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillGenieRecs(
+  results: { genieRecs: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const { listRuns } = await import("@/lib/lakebase/runs");
   const { getGenieRecommendationsByRunId } = await import("@/lib/lakebase/genie-recommendations");
   const { embedGenieRecommendations } = await import("@/lib/embeddings/embed-pipeline");
@@ -230,12 +238,13 @@ async function backfillGenieRecs(results: {
 
       await embedGenieRecommendations(run.runId, recs);
       results.genieRecs.embedded += recs.length;
-      logger.debug("[backfill] Genie recs embedded", { runId: run.runId, count: recs.length });
+      log.debug("Genie recs embedded", { runId: run.runId, count: recs.length });
     } catch (err) {
       results.genieRecs.failed++;
-      logger.warn("[backfill] Genie recs embedding failed", {
+      log.warn("Genie recs embedding failed", {
         runId: run.runId,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "embedding_failed",
       });
     }
   }
@@ -245,9 +254,10 @@ async function backfillGenieRecs(results: {
 // Backfill: Outcome Maps
 // ---------------------------------------------------------------------------
 
-async function backfillOutcomeMaps(results: {
-  outcomeMaps: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillOutcomeMaps(
+  results: { outcomeMaps: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const { listOutcomeMaps, getOutcomeMap } = await import("@/lib/lakebase/outcome-maps");
   const { embedOutcomeMap } = await import("@/lib/embeddings/embed-pipeline");
 
@@ -263,9 +273,10 @@ async function backfillOutcomeMaps(results: {
       results.outcomeMaps.embedded++;
     } catch (err) {
       results.outcomeMaps.failed++;
-      logger.warn("[backfill] Outcome map embedding failed", {
+      log.warn("Outcome map embedding failed", {
         id: summary.id,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "embedding_failed",
       });
     }
   }
@@ -275,9 +286,10 @@ async function backfillOutcomeMaps(results: {
 // Backfill: Documents
 // ---------------------------------------------------------------------------
 
-async function backfillDocuments(results: {
-  documents: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillDocuments(
+  results: { documents: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const { listDocuments } = await import("@/lib/lakebase/documents");
   const { countEmbeddings } = await import("@/lib/embeddings/store");
 
@@ -297,15 +309,16 @@ async function backfillDocuments(results: {
       // Document text is not stored in the DB, only metadata.
       // We can't re-embed without the original file, so we skip
       // documents that don't already have embeddings.
-      logger.debug("[backfill] Skipping document (no stored text, needs re-upload)", {
+      log.debug("Skipping document (no stored text, needs re-upload)", {
         id: doc.id,
         filename: doc.filename,
       });
     } catch (err) {
       results.documents.failed++;
-      logger.warn("[backfill] Document check failed", {
+      log.warn("Document check failed", {
         id: doc.id,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "embedding_failed",
       });
     }
   }
@@ -315,9 +328,10 @@ async function backfillDocuments(results: {
 // Backfill: Benchmark records
 // ---------------------------------------------------------------------------
 
-async function backfillBenchmarks(results: {
-  benchmarks: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillBenchmarks(
+  results: { benchmarks: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   const { isBenchmarksEnabled } = await import("@/lib/benchmarks/config");
   if (!isBenchmarksEnabled()) return;
 
@@ -349,8 +363,9 @@ async function backfillBenchmarks(results: {
     results.benchmarks.embedded = rows.length;
   } catch (err) {
     results.benchmarks.failed = rows.length;
-    logger.warn("[backfill] Benchmark embedding failed", {
+    log.warn("Benchmark embedding failed", {
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "embedding_failed",
     });
   }
 }
@@ -359,9 +374,10 @@ async function backfillBenchmarks(results: {
 // Backfill: Fabric/Power BI Scans
 // ---------------------------------------------------------------------------
 
-async function backfillFabricScans(results: {
-  fabricScans: { total: number; embedded: number; failed: number };
-}): Promise<void> {
+async function backfillFabricScans(
+  results: { fabricScans: { total: number; embedded: number; failed: number } },
+  log: ReturnType<typeof apiLogger>,
+): Promise<void> {
   let scans: Array<{ id: string; status: string }>;
   try {
     const { listFabricScans } = await import("@/lib/lakebase/fabric-scans");
@@ -427,12 +443,13 @@ async function backfillFabricScans(results: {
       });
 
       results.fabricScans.embedded++;
-      logger.debug("[backfill] Fabric scan embedded", { scanId: scan.id });
+      log.debug("Fabric scan embedded", { scanId: scan.id });
     } catch (err) {
       results.fabricScans.failed++;
-      logger.warn("[backfill] Fabric scan embedding failed", {
+      log.warn("Fabric scan embedding failed", {
         scanId: scan.id,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "embedding_failed",
       });
     }
   }

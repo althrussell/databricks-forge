@@ -21,7 +21,7 @@ import { isValidUUID } from "@/lib/validation";
 import { getCurrentUserEmail } from "@/lib/dbx/client";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { getActivePipelineRunIds } from "@/lib/pipeline/engine";
 
@@ -29,13 +29,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
+  const { runId } = await params;
+  const log = apiLogger("/api/runs/[runId]", "GET", { runId });
   try {
     await ensureMigrated();
-    const { runId } = await params;
     const summary = new URL(request.url).searchParams.get("fields") === "summary";
 
     if (!isValidUUID(runId)) {
-      logger.warn("[api/runs] GET invalid run ID", { runId });
+      log.warn("Invalid run ID", { errorCategory: "validation_failed" });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
@@ -44,7 +45,7 @@ export async function GET(
     const run = await getRunById(runId);
 
     if (!run) {
-      logger.warn("[api/runs] GET run not found", { runId });
+      log.warn("Run not found", { errorCategory: "not_found" });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
@@ -78,7 +79,7 @@ export async function GET(
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error("[api/runs] GET failed", { runId: "unknown", error: msg });
+    log.error("GET failed", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
@@ -87,9 +88,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
+  const { runId } = await params;
+  const log = apiLogger("/api/runs/[runId]", "PATCH", { runId });
   try {
     await ensureMigrated();
-    const { runId } = await params;
 
     if (!isValidUUID(runId)) {
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
@@ -124,13 +126,10 @@ export async function PATCH(
         );
       }
       await updateRunIndustry(runId, industry, false);
-      logger.info("[api/runs] PATCH industry assigned retrospectively", {
-        runId,
-        industry,
-      });
+      log.info("Industry assigned retrospectively", { industry });
     } else {
       await updateRunIndustry(runId, "", false);
-      logger.info("[api/runs] PATCH industry cleared", { runId });
+      log.info("Industry cleared");
     }
 
     const userEmail = await getCurrentUserEmail();
@@ -144,7 +143,7 @@ export async function PATCH(
     return NextResponse.json({ run: updated });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error("[api/runs] PATCH failed", { error: msg });
+    log.error("PATCH failed", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
@@ -153,24 +152,25 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
+  const { runId } = await params;
+  const log = apiLogger("/api/runs/[runId]", "DELETE", { runId });
   try {
     await ensureMigrated();
-    const { runId } = await params;
 
     if (!isValidUUID(runId)) {
-      logger.warn("[api/runs] DELETE invalid run ID", { runId });
+      log.warn("Invalid run ID", { errorCategory: "validation_failed" });
       return NextResponse.json({ error: "Invalid run ID format" }, { status: 400 });
     }
 
     const run = await getRunById(runId);
 
     if (!run) {
-      logger.warn("[api/runs] DELETE run not found", { runId });
+      log.warn("Run not found", { errorCategory: "not_found" });
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
     if (run.status === "running") {
-      logger.warn("[api/runs] DELETE blocked -- run still in progress", { runId });
+      log.warn("Delete blocked -- run still in progress", { errorCategory: "conflict" });
       return NextResponse.json(
         { error: "Cannot delete a running pipeline. Wait for it to complete or fail." },
         { status: 409 },
@@ -186,11 +186,11 @@ export async function DELETE(
       metadata: { businessName: run.config.businessName },
     });
 
-    logger.info("[api/runs] Run deleted", { runId });
+    log.info("Run deleted");
     return NextResponse.json({ deleted: true, runId });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error("[api/runs] DELETE failed", { error: msg });
+    log.error("DELETE failed", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

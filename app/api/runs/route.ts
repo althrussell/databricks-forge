@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { createRun, listRuns } from "@/lib/lakebase/runs";
 import { ensureMigrated } from "@/lib/lakebase/schema";
@@ -24,12 +24,13 @@ import type {
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 
 export async function POST(request: NextRequest) {
+  const log = apiLogger("/api/runs", "POST");
   try {
     await ensureMigrated();
 
     const parsed = await safeParseBody(request, CreateRunSchema);
     if (!parsed.success) {
-      logger.warn("[api/runs] POST validation failed", { error: parsed.error });
+      log.warn("Validation failed", { error: parsed.error, errorCategory: "validation_failed" });
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
@@ -76,12 +77,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ runId }, { status: 201 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error("[api/runs] POST failed", { error: msg });
+    log.error("POST failed", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const log = apiLogger("/api/runs", "GET");
   try {
     const { searchParams } = new URL(request.url);
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") ?? "50", 10) || 50, 1), 200);
@@ -101,7 +103,7 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error("[api/runs] GET failed", { error: msg });
+    log.error("GET failed", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

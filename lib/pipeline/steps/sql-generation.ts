@@ -20,7 +20,8 @@ import {
 } from "@/lib/ai/functions";
 import { buildSchemaMarkdown, buildForeignKeyMarkdown } from "@/lib/queries/metadata";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
+import type { Logger } from "@/lib/ports/logger";
 import { groupByDomain } from "@/lib/domain/scoring";
 import type {
   PipelineContext,
@@ -51,6 +52,7 @@ const WAVE_DELAY_MS = Math.max(0, parseInt(process.env.SQL_GEN_WAVE_DELAY_MS ?? 
 // ---------------------------------------------------------------------------
 
 export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Promise<UseCase[]> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run, metadata } = ctx;
   if (!metadata) throw new Error("Metadata not available");
   if (!run.businessContext) throw new Error("Business context not available");
@@ -137,7 +139,8 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
     return Math.round(PROGRESS_START + completed * progressPerUseCase);
   }
 
-  logger.info("SQL generation starting", {
+  log.info("SQL generation starting", {
+    fn: "runSqlGeneration",
     useCaseCount: totalUseCases,
     domainCount: sortedDomains.length,
     sampleRows,
@@ -159,6 +162,7 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
       const results = await Promise.allSettled(
         wave.map((uc) =>
           generateSqlForUseCase(
+            log,
             uc,
             businessVars,
             aiFunctionsSummary,
@@ -219,7 +223,9 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
             if (diag.wasTruncated) truncatedCount++;
           }
 
-          logger.warn("SQL generation failed for use case", {
+          log.warn("SQL generation failed for use case", {
+            fn: "runSqlGeneration",
+            errorCategory: "llm_error",
             useCaseId: uc.id,
             name: uc.name,
             reason,
@@ -252,7 +258,8 @@ export async function runSqlGeneration(ctx: PipelineContext, runId?: string): Pr
     }
   }
 
-  logger.info("SQL generation complete", {
+  log.info("SQL generation complete", {
+    fn: "runSqlGeneration",
     generated: completed - failed,
     failed,
     hallucinationAttempts,
@@ -301,6 +308,7 @@ function emptyDiag(): SqlGenDiagnostics {
 }
 
 async function generateSqlForUseCase(
+  log: Logger,
   uc: UseCase,
   businessVars: Record<string, string>,
   aiFunctionsSummary: string,
@@ -342,7 +350,9 @@ async function generateSqlForUseCase(
   }
 
   if (unresolvedFqns.length > 0) {
-    logger.warn("Some tables in use case have no column metadata", {
+    log.warn("Some tables in use case have no column metadata", {
+      fn: "generateSqlForUseCase",
+      errorCategory: "data",
       useCaseId: uc.id,
       unresolvedTables: unresolvedFqns,
       resolvedTables: resolvedFqns,
@@ -350,7 +360,12 @@ async function generateSqlForUseCase(
   }
 
   if (involvedColumns.length === 0) {
-    logger.warn("No column metadata for use case", { useCaseId: uc.id, tables: uc.tablesInvolved });
+    log.warn("No column metadata for use case", {
+      fn: "generateSqlForUseCase",
+      errorCategory: "data",
+      useCaseId: uc.id,
+      tables: uc.tablesInvolved,
+    });
   }
 
   // Build schema markdown scoped to this use case's tables
@@ -446,7 +461,9 @@ async function generateSqlForUseCase(
   const finishReasonTruncated = result.finishReason === "length";
   if (finishReasonTruncated || isTruncatedSql(sql)) {
     diag.wasTruncated = true;
-    logger.warn("SQL appears truncated, attempting fix", {
+    log.warn("SQL appears truncated, attempting fix", {
+      fn: "generateSqlForUseCase",
+      errorCategory: "sql_truncated",
       useCaseId: uc.id,
       detectedBy: finishReasonTruncated ? "finish_reason=length" : "heuristic",
       finishReason: result.finishReason,
@@ -454,6 +471,7 @@ async function generateSqlForUseCase(
       sqlPreview: sql.substring(Math.max(0, sql.length - 120)),
     });
     const fixedSql = await attemptSqlFix(
+      log,
       uc,
       sql,
       "SQL query is truncated / incomplete — syntax error at end of input. The original query was too long. Simplify the query: reduce to 3-5 CTEs, remove redundant calculations, keep under 120 lines total.",
@@ -470,7 +488,9 @@ async function generateSqlForUseCase(
   let currentSql = sql;
   const validation = validateSqlOutput(currentSql, uc.tablesInvolved, involvedColumns);
   if (!validation.valid) {
-    logger.warn("SQL validation failed", {
+    log.warn("SQL validation failed", {
+      fn: "generateSqlForUseCase",
+      errorCategory: "sql_syntax",
       useCaseId: uc.id,
       warnings: validation.warnings,
       sqlPreview: currentSql.substring(0, 200),
@@ -479,7 +499,8 @@ async function generateSqlForUseCase(
 
   if (validation.unknownColumns.length > 0) {
     diag.hadHallucination = true;
-    logger.info("Hallucinated columns detected, attempting fix", {
+    log.info("Hallucinated columns detected, attempting fix", {
+      fn: "generateSqlForUseCase",
       useCaseId: uc.id,
       unknownColumns: validation.unknownColumns,
       knownColumnCount: involvedColumns.length,
@@ -495,6 +516,7 @@ async function generateSqlForUseCase(
     );
 
     const fixedSql = await attemptSqlFix(
+      log,
       uc,
       currentSql,
       columnErrorMsg,
@@ -506,13 +528,19 @@ async function generateSqlForUseCase(
     );
 
     if (!fixedSql) {
-      logger.warn("Column fix failed, rejecting SQL", { useCaseId: uc.id });
+      log.warn("Column fix failed, rejecting SQL", {
+        fn: "generateSqlForUseCase",
+        errorCategory: "sql_hallucination",
+        useCaseId: uc.id,
+      });
       return { sql: null, diag };
     }
 
     const revalidation = validateSqlOutput(fixedSql, uc.tablesInvolved, involvedColumns);
     if (revalidation.unknownColumns.length > 0) {
-      logger.warn("Fixed SQL still contains hallucinated columns, rejecting", {
+      log.warn("Fixed SQL still contains hallucinated columns, rejecting", {
+        fn: "generateSqlForUseCase",
+        errorCategory: "sql_hallucination",
         useCaseId: uc.id,
         unknownColumns: revalidation.unknownColumns,
         knownColumnCount: involvedColumns.length,
@@ -527,15 +555,17 @@ async function generateSqlForUseCase(
   }
 
   // Attempt to execute the SQL to catch runtime errors; if it fails, try fix prompt
-  const executionError = await trySqlExecution(currentSql);
+  const executionError = await trySqlExecution(log, currentSql);
   if (executionError) {
     diag.hadExecutionError = true;
-    logger.info("SQL execution failed, attempting fix", {
+    log.info("SQL execution failed, attempting fix", {
+      fn: "generateSqlForUseCase",
       useCaseId: uc.id,
       error: executionError,
       sqlPreview: currentSql.substring(0, 200),
     });
     const fixedSql = await attemptSqlFix(
+      log,
       uc,
       currentSql,
       executionError,
@@ -549,7 +579,11 @@ async function generateSqlForUseCase(
       diag.executionFixed = true;
       currentSql = fixedSql;
     } else {
-      logger.warn("SQL fix failed, returning original SQL", { useCaseId: uc.id });
+      log.warn("SQL fix failed, returning original SQL", {
+        fn: "generateSqlForUseCase",
+        errorCategory: "llm_error",
+        useCaseId: uc.id,
+      });
     }
   }
 
@@ -563,7 +597,7 @@ async function generateSqlForUseCase(
     });
     diag.qualityScore = review.qualityScore;
     if (review.fixedSql) {
-      const fixError = await trySqlExecution(review.fixedSql);
+      const fixError = await trySqlExecution(log, review.fixedSql);
       if (!fixError) {
         const reviewColCheck = validateSqlOutput(
           review.fixedSql,
@@ -572,26 +606,33 @@ async function generateSqlForUseCase(
         );
         if (reviewColCheck.unknownColumns.length > 0) {
           diag.reviewRejected = true;
-          logger.warn("Review fix introduced hallucinated columns, keeping original", {
+          log.warn("Review fix introduced hallucinated columns, keeping original", {
+            fn: "generateSqlForUseCase",
+            errorCategory: "sql_hallucination",
             useCaseId: uc.id,
             unknownColumns: reviewColCheck.unknownColumns,
           });
         } else {
           diag.reviewApplied = true;
-          logger.info("SQL review fix applied", {
+          log.info("SQL review fix applied", {
+            fn: "generateSqlForUseCase",
             useCaseId: uc.id,
           });
           currentSql = review.fixedSql;
         }
       } else {
         diag.reviewRejected = true;
-        logger.warn("Review fix failed EXPLAIN, keeping original", {
+        log.warn("Review fix failed EXPLAIN, keeping original", {
+          fn: "generateSqlForUseCase",
+          errorCategory: "sql_syntax",
           useCaseId: uc.id,
           explainError: fixError.substring(0, 200),
         });
       }
     } else if (review.verdict === "fail") {
-      logger.warn("SQL review verdict: fail (no fix available)", {
+      log.warn("SQL review verdict: fail (no fix available)", {
+        fn: "generateSqlForUseCase",
+        errorCategory: "sql_syntax",
         useCaseId: uc.id,
         qualityScore: review.qualityScore,
         issues: review.issues.map((i) => `[${i.category}] ${i.message}`),
@@ -607,10 +648,10 @@ async function generateSqlForUseCase(
  * errors without actually running the full query.
  * Returns the error message on failure, or null on success.
  */
-async function trySqlExecution(sql: string): Promise<string | null> {
+async function trySqlExecution(log: Logger, sql: string): Promise<string | null> {
   // Pipe syntax (|>) is valid Databricks SQL but not supported by EXPLAIN
   if (/\|>/.test(sql)) {
-    logger.debug("Skipping EXPLAIN validation for pipe-syntax query");
+    log.debug("Skipping EXPLAIN validation for pipe-syntax query", { fn: "trySqlExecution" });
     return null;
   }
   try {
@@ -625,6 +666,7 @@ async function trySqlExecution(sql: string): Promise<string | null> {
  * Send the failing SQL through the USE_CASE_SQL_FIX_PROMPT to attempt a fix.
  */
 async function attemptSqlFix(
+  log: Logger,
   uc: UseCase,
   originalSql: string,
   errorMessage: string,
@@ -660,16 +702,23 @@ async function attemptSqlFix(
     }
 
     // Verify the fix actually works
-    const fixError = await trySqlExecution(fixedSql);
+    const fixError = await trySqlExecution(log, fixedSql);
     if (fixError) {
-      logger.warn("Fixed SQL still fails EXPLAIN", { useCaseId: uc.id, error: fixError });
+      log.warn("Fixed SQL still fails EXPLAIN", {
+        fn: "attemptSqlFix",
+        errorCategory: "sql_syntax",
+        useCaseId: uc.id,
+        error: fixError,
+      });
       return null;
     }
 
-    logger.info("SQL fix successful", { useCaseId: uc.id });
+    log.info("SQL fix successful", { fn: "attemptSqlFix", useCaseId: uc.id });
     return fixedSql;
   } catch (error) {
-    logger.warn("SQL fix prompt failed", {
+    log.warn("SQL fix prompt failed", {
+      fn: "attemptSqlFix",
+      errorCategory: "llm_error",
       useCaseId: uc.id,
       error: error instanceof Error ? error.message : String(error),
     });

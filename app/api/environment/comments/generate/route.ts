@@ -12,9 +12,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeErrorMessage } from "@/lib/error-utils";
 import { getCommentJob, createCommentJob } from "@/lib/lakebase/comment-jobs";
 import { generateComments } from "@/lib/ai/comment-generator";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
+  const log = apiLogger("/api/environment/comments/generate", "POST");
   try {
     const body = await request.json();
     const {
@@ -84,15 +85,19 @@ export async function POST(request: NextRequest) {
       industryId: job.industryId ?? undefined,
       businessContext: businessContext ?? undefined,
     }).catch((err) => {
-      logger.error("[comment-generate] Generation failed", {
+      log.error("Generation failed", {
         jobId: effectiveJobId,
         error: err instanceof Error ? err.message : String(err),
+        errorCategory: "generation_failed",
       });
     });
 
     return NextResponse.json({ jobId: effectiveJobId, status: "generating" });
   } catch (error) {
-    logger.error("[comment-generate] Request failed", { error: safeErrorMessage(error) });
+    log.error("Request failed", {
+      error: safeErrorMessage(error),
+      errorCategory: "internal_error",
+    });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

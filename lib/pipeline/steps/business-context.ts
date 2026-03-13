@@ -12,7 +12,7 @@ import { updateRunMessage } from "@/lib/lakebase/runs";
 import { buildIndustryContextPrompt } from "@/lib/domain/industry-outcomes-server";
 import { buildBenchmarkContextPrompt } from "@/lib/domain/benchmark-context";
 import { persistManifest } from "@/lib/pipeline/context-manifest";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import type { BusinessContext, PipelineContext } from "@/lib/domain/types";
 
 const DEFAULT_CONTEXT: BusinessContext = {
@@ -75,6 +75,7 @@ export async function runBusinessContext(
   ctx: PipelineContext,
   runId?: string,
 ): Promise<BusinessContext> {
+  const log = ctx.logger ?? fallbackLogger;
   const { config } = ctx.run;
 
   try {
@@ -106,7 +107,7 @@ export async function runBusinessContext(
         docSourceIds = [...new Set(chunks.map((c) => c.sourceId))];
         docKinds = [...new Set(chunks.map((c) => c.kind))];
         docChunkCount = chunks.length;
-        logger.debug("[business-context] RAG context retrieved", { chunks: chunks.length });
+        log.debug("RAG context retrieved", { chunks: chunks.length });
       }
     } catch {
       // RAG is best-effort; proceed without it
@@ -127,7 +128,11 @@ export async function runBusinessContext(
           steps: ["business-context"],
         });
       } catch (e) {
-        logger.warn("[business-context] persistManifest failed (non-fatal)", { error: e });
+        log.warn("persistManifest failed (non-fatal)", {
+          fn: "runBusinessContext",
+          errorCategory: "db",
+          error: e,
+        });
       }
     }
 
@@ -153,7 +158,9 @@ export async function runBusinessContext(
     try {
       parsed = parseLLMJson(result.rawResponse, "business-context") as Record<string, unknown>;
     } catch (parseErr) {
-      logger.warn("Failed to parse business context JSON, using defaults", {
+      log.warn("Failed to parse business context JSON, using defaults", {
+        fn: "runBusinessContext",
+        errorCategory: "llm_parse",
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
       });
       return {
@@ -191,7 +198,9 @@ export async function runBusinessContext(
 
     return context;
   } catch (error) {
-    logger.error("Business context LLM call failed, using defaults", {
+    log.error("Business context LLM call failed, using defaults", {
+      fn: "runBusinessContext",
+      errorCategory: "llm_error",
       error: error instanceof Error ? error.message : String(error),
     });
     return {

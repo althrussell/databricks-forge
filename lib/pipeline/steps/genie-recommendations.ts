@@ -12,7 +12,7 @@ import { generateGenieRecommendations } from "@/lib/genie/recommend";
 import { saveGenieRecommendations } from "@/lib/lakebase/genie-recommendations";
 import { getGenieEngineConfig } from "@/lib/lakebase/genie-engine-config";
 import { loadMetadataForRun } from "@/lib/lakebase/metadata-cache";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 
 export async function runGenieRecommendations(
   ctx: PipelineContext,
@@ -24,14 +24,23 @@ export async function runGenieRecommendations(
     totalDomains: number,
   ) => void,
 ): Promise<number> {
+  const log = ctx.logger ?? fallbackLogger;
   const metadata = ctx.metadata ?? (await loadMetadataForRun(runId));
   if (!metadata) {
-    logger.warn("Skipping Genie recommendations: no metadata snapshot available", { runId });
+    log.warn("Skipping Genie recommendations: no metadata snapshot available", {
+      fn: "runGenieRecommendations",
+      errorCategory: "data",
+      runId,
+    });
     return 0;
   }
 
   if (ctx.useCases.length === 0) {
-    logger.warn("Skipping Genie recommendations: no use cases available", { runId });
+    log.warn("Skipping Genie recommendations: no use cases available", {
+      fn: "runGenieRecommendations",
+      errorCategory: "data",
+      runId,
+    });
     return 0;
   }
 
@@ -51,7 +60,7 @@ export async function runGenieRecommendations(
 
     await saveGenieRecommendations(runId, result.recommendations, result.passOutputs, version);
 
-    logger.info("Genie Engine recommendations generated and persisted", {
+    log.info("Genie Engine recommendations generated and persisted", {
       runId,
       recommendationCount: result.recommendations.length,
       domains: result.recommendations.map((r) => r.domain),
@@ -61,7 +70,9 @@ export async function runGenieRecommendations(
     return result.recommendations.length;
   } catch (err) {
     // Fallback to legacy generator
-    logger.warn("Genie Engine failed, falling back to legacy generator", {
+    log.warn("Genie Engine failed, falling back to legacy generator", {
+      fn: "runGenieRecommendations",
+      errorCategory: "llm_error",
       runId,
       error: err instanceof Error ? err.message : String(err),
     });
@@ -76,8 +87,8 @@ export async function runGenieRecommendations(
 
     await saveGenieRecommendations(runId, recommendations);
 
-    logger.info("Legacy Genie recommendations generated (fallback)", {
-      runId,
+    log.info("Legacy Genie recommendations generated (fallback)", {
+      fn: "runGenieRecommendations",
       recommendationCount: recommendations.length,
     });
 

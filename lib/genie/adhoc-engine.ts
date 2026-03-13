@@ -65,7 +65,7 @@ import {
 } from "@/lib/queries/metadata";
 import { resolveEndpoint, isReviewEnabled } from "@/lib/dbx/client";
 import { reviewBatch, type BatchReviewItem } from "@/lib/ai/sql-reviewer";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 
 export interface AdHocGenieConfig {
   title?: string;
@@ -549,12 +549,19 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     throw new Error("At least one table is required");
   }
 
+  const jobId = `fast-${Date.now()}`;
+  const log = createScopedLogger({
+    origin: "GenieAdhoc",
+    module: "genie/adhoc-engine",
+    jobId,
+  });
+
   const domain = normalizeDomainLabel(adhocConfig?.domain || inferDomain(tables));
   const fiscalYearStartMonth = adhocConfig?.fiscalYearStartMonth ?? 1;
 
   const fastEndpoint = resolveEndpoint("classification");
   const premiumEndpoint = resolveEndpoint("generation");
-  logger.info("Fast Genie Engine starting", { tableCount: tables.length, domain });
+  log.info("Fast Genie Engine starting", { tableCount: tables.length, domain });
 
   const checkAborted = () => {
     if (signal?.aborted) throw new Error("Cancelled");
@@ -623,13 +630,15 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     llmMeasures = llmResult.measures;
     llmFilters = llmResult.filters;
     llmDimensions = llmResult.dimensions;
-    logger.info("Fast LLM expressions generated", {
+    log.info("Fast LLM expressions generated", {
       measures: llmMeasures.length,
       filters: llmFilters.length,
       dimensions: llmDimensions.length,
     });
   } catch (err) {
-    logger.warn("Fast LLM expressions failed, falling back to rule-based", {
+    log.warn("Fast LLM expressions failed, falling back to rule-based", {
+      fn: "runFastGenieEngine",
+      errorCategory: "llm_error",
       error: err instanceof Error ? err.message : String(err),
     });
     llmMeasures = generateNumericMeasures(metadata.columns, validTableFqns);
@@ -722,7 +731,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   // Step 9: Assemble via same pipeline as full engine
   checkAborted();
   onProgress?.("Assembling space configuration...", 80);
-  const seedId = `fast-${Date.now()}`;
+  const seedId = jobId;
   const titleInputBusinessName = adhocConfig?.title || domain;
   const titleResult = adhocConfig?.title
     ? { title: adhocConfig.title, source: "fallback" as const }
@@ -766,7 +775,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   if (adhocConfig?.title) recommendation.title = adhocConfig.title;
   if (adhocConfig?.description) recommendation.description = adhocConfig.description;
 
-  logger.info("Fast Genie Engine complete", {
+  log.info("Fast Genie Engine complete", {
     domain,
     tables: validTableFqns.length,
     llmMeasures: llmMeasures.length,
@@ -803,13 +812,20 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     throw new Error("At least one table is required");
   }
 
+  const jobId = `adhoc-${Date.now()}`;
+  const log = createScopedLogger({
+    origin: "GenieAdhoc",
+    module: "genie/adhoc-engine",
+    jobId,
+  });
+
   const engineConfig = buildEngineConfig(adhocConfig);
   const premiumEndpoint = resolveEndpoint("generation");
   const fastEndpoint = resolveEndpoint("classification");
   const domain = normalizeDomainLabel(adhocConfig?.domain || inferDomain(tables));
   const businessContext = resolveBusinessContext(adhocConfig);
 
-  logger.info("Full ad-hoc Genie Engine starting", {
+  log.info("Full ad-hoc Genie Engine starting", {
     tableCount: tables.length,
     domain,
     llmRefinement: engineConfig.llmRefinement,
@@ -870,7 +886,9 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
       });
       llmJoins = llmResult.joins;
     } catch (err) {
-      logger.warn("Ad-hoc LLM join inference failed", {
+      log.warn("Ad-hoc LLM join inference failed", {
+        fn: "runAdHocGenieEngine",
+        errorCategory: "llm_error",
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -901,7 +919,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
   );
   const allJoins = acceptedJoinCandidates;
 
-  logger.info("Ad-hoc join specs assembled", {
+  log.info("Ad-hoc join specs assembled", {
     domain,
     fkJoins: fkJoins.length,
     llmInferred: llmJoins.length,
@@ -932,7 +950,9 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
     const schemaScope = metadata.ucPath;
     await saveMetricViewProposals(null, schemaScope, domain, metricViewResult.proposals);
   } catch (err) {
-    logger.warn("Failed to persist ad-hoc metric view proposals (non-fatal)", {
+    log.warn("Failed to persist ad-hoc metric view proposals (non-fatal)", {
+      fn: "runAdHocGenieEngine",
+      errorCategory: "db",
       domain,
       error: err instanceof Error ? err.message : String(err),
     });
@@ -1079,7 +1099,7 @@ export async function runAdHocGenieEngine(input: AdHocEngineInput): Promise<AdHo
 
   onProgress?.("Complete", 100);
 
-  logger.info("Full ad-hoc Genie Engine complete", {
+  log.info("Full ad-hoc Genie Engine complete", {
     domain,
     tables: validTableFqns.length,
     measures: exprResult.measures.length,

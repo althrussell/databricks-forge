@@ -26,7 +26,9 @@ import {
 import { addJitter, DEFAULT_429_BACKOFF_MS } from "@/lib/dbx/rate-limiter";
 import { getFallbackEndpoint } from "@/lib/dbx/client";
 import { getModelPool } from "@/lib/dbx/model-registry";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
+
+const log = createScopedLogger({ origin: "Infra", module: "toolkit/llm-cache" });
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_CACHE_ENTRIES = 500;
@@ -187,7 +189,7 @@ async function chatCompletionWithRetry(
       if (attempt > 0) {
         if (isRateLimitError(lastError)) {
           const retryAfterMs = addJitter(getRetryAfterMs(lastError));
-          logger.warn("LLM rate-limited (429), backing off with jitter", {
+          log.warn("LLM rate-limited (429), backing off with jitter", {
             attempt,
             retryAfterMs: Math.round(retryAfterMs),
             endpoint: options.endpoint,
@@ -195,7 +197,7 @@ async function chatCompletionWithRetry(
           await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
         } else {
           const backoffMs = addJitter(INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1));
-          logger.info("LLM retry", {
+          log.info("LLM retry", {
             attempt,
             backoffMs: Math.round(backoffMs),
             endpoint: options.endpoint,
@@ -214,10 +216,11 @@ async function chatCompletionWithRetry(
           exhausted429 = true;
           break;
         }
-        logger.warn("LLM call failed (will retry)", {
+        log.warn("LLM call failed (will retry)", {
           attempt: attempt + 1,
           endpoint: options.endpoint,
           error: lastError.message,
+          errorCategory: "rate_limit",
         });
         continue;
       }
@@ -226,10 +229,11 @@ async function chatCompletionWithRetry(
         throw lastError;
       }
 
-      logger.warn("LLM call failed (will retry)", {
+      log.warn("LLM call failed (will retry)", {
         attempt: attempt + 1,
         endpoint: options.endpoint,
         error: lastError.message,
+        errorCategory: "transient",
       });
     }
   }
@@ -237,9 +241,10 @@ async function chatCompletionWithRetry(
   if (exhausted429) {
     const pool = buildEndpointPool(options.endpoint);
     for (const alt of pool) {
-      logger.warn("LLM rotating to alternate endpoint", {
+      log.warn("LLM rotating to alternate endpoint", {
         from: options.endpoint,
         to: alt,
+        errorCategory: "rate_limit",
       });
       const fallbackOptions = { ...options, endpoint: alt };
       for (let fa = 0; fa < FALLBACK_MAX_ATTEMPTS; fa++) {
@@ -251,16 +256,18 @@ async function chatCompletionWithRetry(
         } catch (fbError) {
           lastError = fbError instanceof Error ? fbError : new Error(String(fbError));
           if (isRateLimitError(fbError)) {
-            logger.warn("LLM fallback also rate-limited, trying next", {
+            log.warn("LLM fallback also rate-limited, trying next", {
               endpoint: alt,
               error: lastError.message,
+              errorCategory: "rate_limit",
             });
             break;
           }
-          logger.warn("LLM fallback attempt failed", {
+          log.warn("LLM fallback attempt failed", {
             attempt: fa + 1,
             endpoint: alt,
             error: lastError.message,
+            errorCategory: "fallback_failed",
           });
         }
       }
@@ -285,7 +292,7 @@ export async function cachedChatCompletion(
 
   if (cached && Date.now() < cached.expiresAt) {
     _stats.hits++;
-    logger.debug("LLM cache hit", { endpoint: options.endpoint });
+    log.debug("LLM cache hit", { endpoint: options.endpoint });
     return cached.response;
   }
 

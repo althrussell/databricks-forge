@@ -13,8 +13,10 @@
  *      to the caller (lib/prisma.ts) to use the URL directly.
  */
 
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 import { fetchWithTimeout, TIMEOUTS } from "@/lib/dbx/fetch-with-timeout";
+
+const log = createScopedLogger({ origin: "Lakebase", module: "lakebase/provision" });
 
 // ---------------------------------------------------------------------------
 // Shared mutable state on globalThis
@@ -87,9 +89,10 @@ export function getLakebaseAuthMode(): LakebaseAuthMode {
   if (raw === "oauth" || raw === "native_password") {
     return raw;
   }
-  logger.warn("[provision] Invalid LAKEBASE_AUTH_MODE, defaulting to oauth", {
+  log.warn("Invalid LAKEBASE_AUTH_MODE, defaulting to oauth", {
     value: raw,
     allowed: LAKEBASE_AUTH_MODES,
+    errorCategory: "config_invalid",
   });
   return "oauth";
 }
@@ -172,7 +175,7 @@ async function getWorkspaceToken(): Promise<string> {
       expiresAt: Date.now() + data.expires_in * 1_000,
     };
 
-    logger.info("[provision] Workspace token acquired", {
+    log.info("Workspace token acquired", {
       expiresInSec: data.expires_in,
     });
 
@@ -216,7 +219,7 @@ async function projectExists(): Promise<boolean> {
 
 async function createProject(): Promise<void> {
   const projectId = getProjectId();
-  logger.info("[provision] Creating Lakebase Autoscale project...", { projectId });
+  log.info("Creating Lakebase Autoscale project...", { projectId });
 
   const resp = await lakebaseApi("POST", `projects?project_id=${encodeURIComponent(projectId)}`, {
     spec: {
@@ -226,7 +229,7 @@ async function createProject(): Promise<void> {
   });
 
   if (resp.status === 409) {
-    logger.info("[provision] Lakebase project already exists (409)");
+    log.info("Lakebase project already exists (409)");
     return;
   }
   if (!resp.ok) {
@@ -240,7 +243,7 @@ async function createProject(): Promise<void> {
     await pollOperation(operation.name);
   }
 
-  logger.info("[provision] Lakebase Autoscale project created", { projectId });
+  log.info("Lakebase Autoscale project created", { projectId });
 }
 
 async function pollOperation(operationName: string): Promise<void> {
@@ -263,7 +266,7 @@ async function pollOperation(operationName: string): Promise<void> {
       return;
     }
 
-    logger.info("[provision] Waiting for Lakebase project creation...", {
+    log.info("Waiting for Lakebase project creation...", {
       elapsedSec: Math.round((Date.now() - start) / 1_000),
     });
   }
@@ -315,7 +318,7 @@ async function resolveEndpoint(): Promise<{
       globalForProvision.__endpointPoolerHost = envPoolerHost;
       globalForProvision.__endpointName = envEndpointName;
 
-      logger.info("[provision] Endpoint resolved from startup contract", {
+      log.info("Endpoint resolved from startup contract", {
         endpoint: envEndpointName,
         directHost,
         poolerHost: envPoolerHost,
@@ -365,7 +368,7 @@ async function resolveEndpoint(): Promise<{
     globalForProvision.__endpointPoolerHost = poolerHost;
     globalForProvision.__endpointName = epName;
 
-    logger.info("[provision] Endpoint resolved", {
+    log.info("Endpoint resolved", {
       endpoint: epName,
       directHost,
       poolerHost,
@@ -387,7 +390,7 @@ async function resolveUsername(): Promise<string> {
   const envUsername = process.env.LAKEBASE_USERNAME;
   if (envUsername) {
     globalForProvision.__username = envUsername;
-    logger.info("[provision] Username resolved from LAKEBASE_USERNAME env", {
+    log.info("Username resolved from LAKEBASE_USERNAME env", {
       identity: envUsername,
     });
     return envUsername;
@@ -419,7 +422,7 @@ async function resolveUsername(): Promise<string> {
         }
         globalForProvision.__username = identity;
 
-        logger.info("[provision] Username resolved via SCIM /Me", { identity });
+        log.info("Username resolved via SCIM /Me", { identity });
 
         return globalForProvision.__username;
       }
@@ -428,9 +431,10 @@ async function resolveUsername(): Promise<string> {
 
       if (resp.status === 429 && attempt < maxRetries - 1) {
         const delaySec = Math.pow(2, attempt + 1);
-        logger.warn(`[provision] SCIM /Me rate-limited (429), retrying in ${delaySec}s`, {
+        log.warn(`SCIM /Me rate-limited (429), retrying in ${delaySec}s`, {
           attempt: attempt + 1,
           maxRetries,
+          errorCategory: "rate_limit",
         });
         await new Promise((r) => setTimeout(r, delaySec * 1000));
         continue;
@@ -488,7 +492,7 @@ async function generateDbCredential(): Promise<string> {
     globalForProvision.__credentialGeneration =
       (globalForProvision.__credentialGeneration ?? 0) + 1;
 
-    logger.info("[provision] DB credential generated", {
+    log.info("DB credential generated", {
       generation: globalForProvision.__credentialGeneration,
       hasToken: true,
       tokenLength: data.token.length,
@@ -522,8 +526,9 @@ async function ensureScaleToZero(): Promise<void> {
 
   const detResp = await lakebaseApi("GET", epName);
   if (!detResp.ok) {
-    logger.warn("[provision] Could not read endpoint for scale-to-zero check, skipping", {
+    log.warn("Could not read endpoint for scale-to-zero check, skipping", {
       status: detResp.status,
+      errorCategory: "config_read_failed",
     });
     return;
   }
@@ -538,35 +543,36 @@ async function ensureScaleToZero(): Promise<void> {
 
   if (desiredTimeout === null) {
     if (currentNoSuspension) {
-      logger.info("[provision] Scale-to-zero already disabled (as requested)");
+      log.info("Scale-to-zero already disabled (as requested)");
       return;
     }
-    logger.info("[provision] Disabling scale-to-zero (explicitly requested)...");
+    log.info("Disabling scale-to-zero (explicitly requested)...");
     const patchResp = await lakebaseApi("PATCH", `${epName}?update_mask=spec.no_suspension`, {
       name: epName,
       spec: { no_suspension: true },
     });
     if (!patchResp.ok) {
       const text = await patchResp.text();
-      logger.warn("[provision] Failed to disable scale-to-zero", {
+      log.warn("Failed to disable scale-to-zero", {
         status: patchResp.status,
         text,
+        errorCategory: "api_fail",
       });
       return;
     }
     const op = await patchResp.json();
     if (op.name && !op.done) await pollOperation(op.name);
-    logger.info("[provision] Scale-to-zero disabled");
+    log.info("Scale-to-zero disabled");
     return;
   }
 
   const desiredDuration = `${desiredTimeout}s`;
   if (!currentNoSuspension && currentDuration === desiredDuration) {
-    logger.info("[provision] Scale-to-zero already enabled", { timeout: desiredDuration });
+    log.info("Scale-to-zero already enabled", { timeout: desiredDuration });
     return;
   }
 
-  logger.info("[provision] Enabling scale-to-zero...", { timeout: desiredDuration });
+  log.info("Enabling scale-to-zero...", { timeout: desiredDuration });
   const patchResp = await lakebaseApi(
     "PATCH",
     `${epName}?update_mask=spec.suspend_timeout_duration,spec.no_suspension`,
@@ -574,12 +580,16 @@ async function ensureScaleToZero(): Promise<void> {
   );
   if (!patchResp.ok) {
     const text = await patchResp.text();
-    logger.warn("[provision] Failed to enable scale-to-zero", { status: patchResp.status, text });
+    log.warn("Failed to enable scale-to-zero", {
+      status: patchResp.status,
+      text,
+      errorCategory: "api_fail",
+    });
     return;
   }
   const op = await patchResp.json();
   if (op.name && !op.done) await pollOperation(op.name);
-  logger.info("[provision] Scale-to-zero enabled", { timeout: desiredDuration });
+  log.info("Scale-to-zero enabled", { timeout: desiredDuration });
 }
 
 // ---------------------------------------------------------------------------
@@ -622,7 +632,7 @@ export function canAutoProvision(): boolean {
  */
 export async function ensureLakebaseProject(): Promise<void> {
   if (await projectExists()) {
-    logger.info("[provision] Lakebase project exists", { projectId: getProjectId() });
+    log.info("Lakebase project exists", { projectId: getProjectId() });
   } else {
     await createProject();
   }
@@ -630,8 +640,9 @@ export async function ensureLakebaseProject(): Promise<void> {
   try {
     await ensureScaleToZero();
   } catch (err) {
-    logger.warn("[provision] Scale-to-zero enforcement failed (non-fatal)", {
+    log.warn("Scale-to-zero enforcement failed (non-fatal)", {
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 }
@@ -648,7 +659,7 @@ export async function getLakebaseConnectionUrl(): Promise<string> {
     generateDbCredential(),
   ]);
 
-  logger.info("[provision] Building runtime connection URL", {
+  log.info("Building runtime connection URL", {
     endpointKind: "pooler",
     host: poolerHost,
   });

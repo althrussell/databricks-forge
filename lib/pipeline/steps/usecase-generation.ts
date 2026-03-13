@@ -20,7 +20,7 @@ import { persistManifest, deriveTags, type EnrichmentTag } from "@/lib/pipeline/
 import { buildTokenAwareBatches, estimateTokens } from "@/lib/toolkit/token-budget";
 import { fetchSampleData } from "@/lib/pipeline/sample-data";
 import { updateRunMessage } from "@/lib/lakebase/runs";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import type { PipelineContext, UseCase, UseCaseType, LineageGraph } from "@/lib/domain/types";
 import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { v4 as uuidv4 } from "uuid";
@@ -47,6 +47,7 @@ export async function runUsecaseGeneration(
   ctx: PipelineContext,
   runId?: string,
 ): Promise<UseCase[]> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run, metadata, filteredTables } = ctx;
   if (!metadata) throw new Error("Metadata not available");
   if (!run.businessContext) throw new Error("Business context not available");
@@ -163,7 +164,11 @@ export async function runUsecaseGeneration(
     try {
       await persistManifest(runId, stepManifest);
     } catch (e) {
-      logger.warn("[usecase-generation] persistManifest failed (non-fatal)", { error: e });
+      log.warn("persistManifest failed (non-fatal)", {
+        fn: "runUsecaseGeneration",
+        errorCategory: "db",
+        error: e,
+      });
     }
   }
 
@@ -194,7 +199,7 @@ export async function runUsecaseGeneration(
     baseTokens,
   );
 
-  logger.info("Use case generation starting", {
+  log.info("Use case generation starting", {
     tableCount: tables.length,
     batchCount: batches.length,
     sampleRowsPerTable: sampleRows,
@@ -239,7 +244,7 @@ export async function runUsecaseGeneration(
         }
       }
       if (sampleResult.tablesSampled > 0) {
-        logger.info("Sample data fetched for use case generation batch", {
+        log.info("Sample data fetched for use case generation batch", {
           batchGroup: batchGroupIdx,
           tablesSampled: sampleResult.tablesSampled,
           tablesSkipped: sampleResult.tablesSkipped,
@@ -281,6 +286,7 @@ export async function runUsecaseGeneration(
       // Generate both AI and Stats use cases per batch
       return [
         generateBatch(
+          log,
           "AI_USE_CASE_GEN_PROMPT",
           {
             ...baseVars,
@@ -295,6 +301,7 @@ export async function runUsecaseGeneration(
           enrichmentTags,
         ),
         generateBatch(
+          log,
           "STATS_USE_CASE_GEN_PROMPT",
           {
             ...baseVars,
@@ -321,7 +328,9 @@ export async function runUsecaseGeneration(
         }
       } else {
         failedBatchCalls++;
-        logger.warn("Use case generation batch failed", {
+        log.warn("Use case generation batch failed", {
+          fn: "runUsecaseGeneration",
+          errorCategory: "llm_error",
           error: result.reason instanceof Error ? result.reason.message : String(result.reason),
         });
       }
@@ -344,7 +353,9 @@ export async function runUsecaseGeneration(
     const message = allRequestsFailed
       ? "Use case generation failed for all model requests. Please retry this run."
       : "No use cases were generated from model responses. Please retry this run.";
-    logger.error("Use case generation produced no output", {
+    log.error("Use case generation produced no output", {
+      fn: "runUsecaseGeneration",
+      errorCategory: "llm_empty",
       tableCount: tables.length,
       attemptedBatchCalls,
       failedBatchCalls,
@@ -353,7 +364,7 @@ export async function runUsecaseGeneration(
     throw new Error(message);
   }
 
-  logger.info("Use case generation complete", { useCaseCount: allUseCases.length });
+  log.info("Use case generation complete", { useCaseCount: allUseCases.length });
 
   return allUseCases;
 }
@@ -376,6 +387,7 @@ function buildPreviousUseCasesFeedback(existing: UseCase[]): string {
 }
 
 async function generateBatch(
+  log: typeof fallbackLogger,
   promptKey: "AI_USE_CASE_GEN_PROMPT" | "STATS_USE_CASE_GEN_PROMPT",
   variables: Record<string, string>,
   type: UseCaseType,
@@ -396,7 +408,9 @@ async function generateBatch(
   });
 
   if (result.finishReason === "length") {
-    logger.warn("Use case generation response truncated, attempting recovery", {
+    log.warn("Use case generation response truncated, attempting recovery", {
+      fn: "runUsecaseGeneration",
+      errorCategory: "llm_empty",
       promptKey,
       completionTokens: result.tokenUsage?.completionTokens,
     });
@@ -409,7 +423,9 @@ async function generateBatch(
       | { use_cases: UseCaseItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.use_cases ?? []);
   } catch (parseErr) {
-    logger.warn("Failed to parse use case generation JSON", {
+    log.warn("Failed to parse use case generation JSON", {
+      fn: "runUsecaseGeneration",
+      errorCategory: "llm_parse",
       promptKey,
       error: parseErr instanceof Error ? parseErr.message : String(parseErr),
     });

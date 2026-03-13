@@ -8,7 +8,7 @@
 import { PipelineStep } from "@/lib/domain/types";
 import type { PipelineContext } from "@/lib/domain/types";
 import { PipelineCancelledError, markRunCancelled, clearRunCancelled } from "@/lib/ai/agent";
-import { logger } from "@/lib/logger";
+import { createScopedLogger, type ScopedLogger } from "@/lib/logger";
 import {
   updateRunStatus,
   updateRunBusinessContext,
@@ -99,6 +99,7 @@ const STEPS: StepDef[] = [
 export async function startPipeline(runId: string): Promise<void> {
   const controller = new AbortController();
   activePipelineRuns.set(runId, controller);
+  const log = createScopedLogger({ origin: "DiscoveryRun", module: "pipeline/engine", runId });
   try {
     const run = await getRunById(runId);
     if (!run) throw new Error(`Run ${runId} not found`);
@@ -112,20 +113,28 @@ export async function startPipeline(runId: string): Promise<void> {
       sampleData: null,
       discoveryResult: null,
       signal: controller.signal,
+      logger: log,
     };
 
     /** Helper: record step start/end timing in the run's stepLog. */
-    async function logStep(step: PipelineStep, fn: () => Promise<void>): Promise<void> {
+    async function logStep(
+      step: PipelineStep,
+      stepLog: ScopedLogger,
+      fn: () => Promise<void>,
+    ): Promise<void> {
       const startedAt = new Date().toISOString();
+      stepLog.info("Step starting", { phase: "start" });
       try {
         await fn();
         const completedAt = new Date().toISOString();
         const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+        stepLog.info("Step completed", { phase: "end", durationMs });
         await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
       } catch (err) {
         const completedAt = new Date().toISOString();
         const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
         const errorMsg = err instanceof Error ? err.message : String(err);
+        stepLog.error("Step failed", { phase: "error", durationMs, error: errorMsg });
         await updateRunStepLog(runId, {
           step,
           startedAt,
@@ -148,31 +157,38 @@ export async function startPipeline(runId: string): Promise<void> {
         "Initialising pipeline...",
       );
       ctx.run = { ...ctx.run, status: "running" };
+      log.info("Pipeline started", { phase: "start", businessName: ctx.run.config.businessName });
 
       // Step 1: Business Context
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.BusinessContext, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.BusinessContext,
-          5,
-          undefined,
-          `Generating business context for ${ctx.run.config.businessName}...`,
-        );
-        logger.info(`Step 1: ${STEPS[0].label}`, { runId, step: "business-context" });
-        const businessContext = await runBusinessContext(ctx, runId);
-        ctx.run = { ...ctx.run, businessContext };
-        await updateRunBusinessContext(runId, businessContext);
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.BusinessContext,
-          10,
-          undefined,
-          "Business context generated",
-        );
-      });
+      {
+        const stepLog = log.child({
+          task: "BusinessContext",
+          module: "pipeline/steps/business-context",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.BusinessContext, stepLog, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessContext,
+            5,
+            undefined,
+            `Generating business context for ${ctx.run.config.businessName}...`,
+          );
+          const businessContext = await runBusinessContext(ctx, runId);
+          ctx.run = { ...ctx.run, businessContext };
+          await updateRunBusinessContext(runId, businessContext);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessContext,
+            10,
+            undefined,
+            "Business context generated",
+          );
+        });
+      }
 
       // Auto-detect industry outcome map if not manually selected
       const detectedIndustries = ctx.run.businessContext?.industries;
@@ -184,8 +200,7 @@ export async function startPipeline(runId: string): Promise<void> {
             config: { ...ctx.run.config, industry: detected },
           };
           await updateRunIndustry(runId, detected, true);
-          logger.info("Auto-detected industry outcome map", {
-            runId,
+          log.info("Auto-detected industry outcome map", {
             detected,
             from: detectedIndustries,
           });
@@ -195,38 +210,49 @@ export async function startPipeline(runId: string): Promise<void> {
 
       // Step 2: Metadata Extraction
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.MetadataExtraction, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.MetadataExtraction,
-          12,
-          undefined,
-          `Extracting metadata from ${ctx.run.config.ucMetadata}...`,
-        );
-        logger.info(`Step 2: ${STEPS[1].label}`, { runId, step: "metadata-extraction" });
-        const extractionResult = await runMetadataExtraction(ctx, runId);
-        ctx.metadata = extractionResult.snapshot;
-        ctx.lineageGraph = extractionResult.lineageGraph;
-        if (ctx.metadata.cacheKey) {
-          await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
-          const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
-          await saveMetadataSnapshot(ctx.metadata);
-        }
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.MetadataExtraction,
-          18,
-          undefined,
-          `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`,
-        );
-      });
+      {
+        const stepLog = log.child({
+          task: "MetadataExtraction",
+          module: "pipeline/steps/metadata-extraction",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.MetadataExtraction, stepLog, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.MetadataExtraction,
+            12,
+            undefined,
+            `Extracting metadata from ${ctx.run.config.ucMetadata}...`,
+          );
+          const extractionResult = await runMetadataExtraction(ctx, runId);
+          ctx.metadata = extractionResult.snapshot;
+          ctx.lineageGraph = extractionResult.lineageGraph;
+          if (ctx.metadata.cacheKey) {
+            await updateRunMetadataCacheKey(runId, ctx.metadata.cacheKey);
+            const { saveMetadataSnapshot } = await import("@/lib/lakebase/metadata-cache");
+            await saveMetadataSnapshot(ctx.metadata);
+          }
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.MetadataExtraction,
+            18,
+            undefined,
+            `Found ${ctx.metadata.tableCount} tables, ${ctx.metadata.columnCount} columns`,
+          );
+        });
+      }
 
       // Step 2b: Asset Discovery (conditional -- skipped when assetDiscoveryEnabled is false)
       checkCancelled(ctx.signal);
       if (ctx.run.config.assetDiscoveryEnabled) {
-        await logStep(PipelineStep.AssetDiscovery, async () => {
+        const stepLog = log.child({
+          task: "AssetDiscovery",
+          module: "pipeline/steps/asset-discovery",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.AssetDiscovery, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -235,7 +261,6 @@ export async function startPipeline(runId: string): Promise<void> {
             undefined,
             "Discovering existing Genie spaces, dashboards, and metric views...",
           );
-          logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
           ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
           const summary = ctx.discoveryResult
             ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
@@ -254,6 +279,10 @@ export async function startPipeline(runId: string): Promise<void> {
       // Step 2c: Comment Enrichment (runs Comment Engine as a prerequisite)
       checkCancelled(ctx.signal);
       {
+        const enrichLog = log.child({
+          task: "CommentEnrichment",
+          module: "pipeline/comment-prerequisite",
+        });
         await updateRunMessage(runId, "Enriching metadata with AI-generated comments...");
         const commentResult = await ensureCommentEnrichment(
           ctx.metadata!,
@@ -267,230 +296,254 @@ export async function startPipeline(runId: string): Promise<void> {
             ? `Reused AI comments: ${commentResult.tablesEnriched} tables, ${commentResult.columnsEnriched} columns enriched`
             : `AI Comment Engine: ${commentResult.tablesEnriched} tables, ${commentResult.columnsEnriched} columns enriched`;
           await updateRunMessage(runId, msg);
-          logger.info("Comment enrichment complete", {
-            runId,
-            ...commentResult,
-          });
+          enrichLog.info("Comment enrichment complete", { ...commentResult });
         } else {
-          logger.info("Comment enrichment skipped or failed, continuing with UC comments", {
-            runId,
-          });
+          enrichLog.info("Comment enrichment skipped or failed, continuing with UC comments");
         }
       }
 
       // Step 3: Table Filtering
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.TableFiltering, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.TableFiltering,
-          24,
-          undefined,
-          `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`,
-        );
-        logger.info(`Step 3: Table Filtering`, { runId, step: "table-filtering" });
-        ctx.filteredTables = await runTableFiltering(ctx, runId);
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.TableFiltering,
-          30,
-          undefined,
-          `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`,
-        );
-      });
+      {
+        const stepLog = log.child({
+          task: "TableFiltering",
+          module: "pipeline/steps/table-filtering",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.TableFiltering, stepLog, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.TableFiltering,
+            24,
+            undefined,
+            `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`,
+          );
+          ctx.filteredTables = await runTableFiltering(ctx, runId);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.TableFiltering,
+            30,
+            undefined,
+            `Identified ${ctx.filteredTables.length} business-relevant tables out of ${ctx.metadata!.tableCount}`,
+          );
+        });
+      }
 
       // Step 4: Use Case Generation
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.UsecaseGeneration, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.UsecaseGeneration,
-          32,
-          undefined,
-          `Generating AI use cases from ${ctx.filteredTables.length} tables...`,
-        );
-        logger.info(`Step 4: ${STEPS[3].label}`, { runId, step: "usecase-generation" });
-        ctx.useCases = await runUsecaseGeneration(ctx, runId);
-
-        // Post-generation validation: strip hallucinated table references
-        const validFqns = new Set([
-          ...ctx.filteredTables,
-          ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
-        ]);
-        let hallucinated = 0;
-        ctx.useCases = ctx.useCases.filter((uc) => {
-          uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
-            const clean = t.replace(/`/g, "");
-            return validFqns.has(t) || validFqns.has(clean);
-          });
-          if (uc.tablesInvolved.length === 0) {
-            hallucinated++;
-            return false;
-          }
-          return true;
+      {
+        const stepLog = log.child({
+          task: "UsecaseGeneration",
+          module: "pipeline/steps/usecase-generation",
         });
-        if (hallucinated > 0) {
-          logger.warn("Removed use cases with hallucinated table references", {
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.UsecaseGeneration, stepLog, async () => {
+          await updateRunStatus(
             runId,
-            removedCount: hallucinated,
-            remainingCount: ctx.useCases.length,
-          });
-        }
-
-        // Deterministic anti-slop quality gate (pre-scoring).
-        const qualityFilter = applyDeterministicQualityFilter(ctx.useCases, ctx.filteredTables);
-        if (qualityFilter.rejected.length > 0) {
-          logger.warn("Rejected low-quality use cases by deterministic gate", {
-            runId,
-            rejected: qualityFilter.rejected.length,
-            sampleReasons: qualityFilter.rejected.slice(0, 5).map((r) => r.reasons.join("; ")),
-          });
-        }
-        ctx.useCases = qualityFilter.accepted;
-
-        if (ctx.useCases.length === 0) {
-          throw new Error(
-            "Use case generation returned only invalid results after table validation. Please retry this run.",
+            "running",
+            PipelineStep.UsecaseGeneration,
+            32,
+            undefined,
+            `Generating AI use cases from ${ctx.filteredTables.length} tables...`,
           );
-        }
+          ctx.useCases = await runUsecaseGeneration(ctx, runId);
 
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.UsecaseGeneration,
-          45,
-          undefined,
-          `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed — invalid table refs)` : ""}`,
-        );
-      });
+          // Post-generation validation: strip hallucinated table references
+          const validFqns = new Set([
+            ...ctx.filteredTables,
+            ...ctx.filteredTables.map((fqn) => fqn.replace(/`/g, "")),
+          ]);
+          let hallucinated = 0;
+          ctx.useCases = ctx.useCases.filter((uc) => {
+            uc.tablesInvolved = uc.tablesInvolved.filter((t) => {
+              const clean = t.replace(/`/g, "");
+              return validFqns.has(t) || validFqns.has(clean);
+            });
+            if (uc.tablesInvolved.length === 0) {
+              hallucinated++;
+              return false;
+            }
+            return true;
+          });
+          if (hallucinated > 0) {
+            stepLog.warn("Removed use cases with hallucinated table references", {
+              fn: "startPipeline",
+              errorCategory: "sql_hallucination",
+              removedCount: hallucinated,
+              remainingCount: ctx.useCases.length,
+            });
+          }
+
+          // Deterministic anti-slop quality gate (pre-scoring).
+          const qualityFilter = applyDeterministicQualityFilter(ctx.useCases, ctx.filteredTables);
+          if (qualityFilter.rejected.length > 0) {
+            stepLog.warn("Rejected low-quality use cases by deterministic gate", {
+              fn: "startPipeline",
+              errorCategory: "schema_validation",
+              rejected: qualityFilter.rejected.length,
+              sampleReasons: qualityFilter.rejected.slice(0, 5).map((r) => r.reasons.join("; ")),
+            });
+          }
+          ctx.useCases = qualityFilter.accepted;
+
+          if (ctx.useCases.length === 0) {
+            throw new Error(
+              "Use case generation returned only invalid results after table validation. Please retry this run.",
+            );
+          }
+
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.UsecaseGeneration,
+            45,
+            undefined,
+            `Generated ${ctx.useCases.length} validated use cases${hallucinated > 0 ? ` (${hallucinated} removed — invalid table refs)` : ""}`,
+          );
+        });
+      }
 
       // Step 5: Domain Clustering
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.DomainClustering, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.DomainClustering,
-          47,
-          undefined,
-          `Assigning domains to ${ctx.useCases.length} use cases...`,
-        );
-        logger.info(`Step 5: ${STEPS[4].label}`, { runId, step: "domain-clustering" });
-        ctx.useCases = await runDomainClustering(ctx, runId);
-        const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.DomainClustering,
-          55,
-          undefined,
-          `Organised use cases into ${domainCount} domains`,
-        );
-      });
+      {
+        const stepLog = log.child({
+          task: "DomainClustering",
+          module: "pipeline/steps/domain-clustering",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.DomainClustering, stepLog, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.DomainClustering,
+            47,
+            undefined,
+            `Assigning domains to ${ctx.useCases.length} use cases...`,
+          );
+          ctx.useCases = await runDomainClustering(ctx, runId);
+          const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.DomainClustering,
+            55,
+            undefined,
+            `Organised use cases into ${domainCount} domains`,
+          );
+        });
+      }
 
       // Step 6: Scoring & Deduplication
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.Scoring, async () => {
-        const preScoringCount = ctx.useCases.length;
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.Scoring,
-          57,
-          undefined,
-          `Scoring and deduplicating ${preScoringCount} use cases...`,
-        );
-        logger.info(`Step 6: ${STEPS[5].label}`, { runId, step: "scoring" });
-        ctx.useCases = await runScoring(ctx, runId);
-        const baseline = computeRunQualityBaseline(ctx.useCases, ctx.filteredTables);
-        const minReadiness = Number(process.env.FORGE_MIN_CONSULTANT_READINESS ?? "0.55");
-        await insertQualityMetrics([
-          {
-            metricType: "run",
-            metricName: "consultant_readiness",
-            metricValue: baseline.consultantReadinessScore,
-            floorValue: minReadiness,
-            passed: baseline.consultantReadinessScore >= minReadiness,
+      {
+        const stepLog = log.child({ task: "Scoring", module: "pipeline/steps/scoring" });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.Scoring, stepLog, async () => {
+          const preScoringCount = ctx.useCases.length;
+          await updateRunStatus(
             runId,
-            metadata: { findings: baseline.findings },
-          },
-          {
-            metricType: "run",
-            metricName: "low_specificity_rate",
-            metricValue: baseline.lowSpecificityRate,
-            floorValue: 0.25,
-            passed: baseline.lowSpecificityRate <= 0.25,
-            runId,
-          },
-          {
-            metricType: "run",
-            metricName: "schema_coverage_pct",
-            metricValue: baseline.schemaCoveragePct,
-            floorValue: 0.3,
-            passed: baseline.schemaCoveragePct >= 0.3,
-            runId,
-          },
-          {
-            metricType: "run",
-            metricName: "sql_generated_rate",
-            metricValue: baseline.sqlGeneratedRate,
-            floorValue: 0.7,
-            passed: baseline.sqlGeneratedRate >= 0.7,
-            runId,
-          },
-        ]);
-        logger.info("Run quality baseline computed", {
-          runId,
-          consultantReadiness: baseline.consultantReadinessScore,
-          lowSpecificityRate: baseline.lowSpecificityRate,
-          schemaCoveragePct: baseline.schemaCoveragePct,
-          sqlGeneratedRate: baseline.sqlGeneratedRate,
-        });
-        if (baseline.consultantReadinessScore < minReadiness) {
-          throw new Error(
-            `Run quality gate failed (consultantReadiness=${baseline.consultantReadinessScore.toFixed(2)} < ${minReadiness.toFixed(2)}). ${baseline.findings.join(" | ") || "Insufficient quality for customer-facing output."}`,
+            "running",
+            PipelineStep.Scoring,
+            57,
+            undefined,
+            `Scoring and deduplicating ${preScoringCount} use cases...`,
           );
-        }
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.Scoring,
-          65,
-          undefined,
-          `Scored ${ctx.useCases.length} use cases`,
-        );
-      });
+          ctx.useCases = await runScoring(ctx, runId);
+          const baseline = computeRunQualityBaseline(ctx.useCases, ctx.filteredTables);
+          const minReadiness = Number(process.env.FORGE_MIN_CONSULTANT_READINESS ?? "0.55");
+          await insertQualityMetrics([
+            {
+              metricType: "run",
+              metricName: "consultant_readiness",
+              metricValue: baseline.consultantReadinessScore,
+              floorValue: minReadiness,
+              passed: baseline.consultantReadinessScore >= minReadiness,
+              runId,
+              metadata: { findings: baseline.findings },
+            },
+            {
+              metricType: "run",
+              metricName: "low_specificity_rate",
+              metricValue: baseline.lowSpecificityRate,
+              floorValue: 0.25,
+              passed: baseline.lowSpecificityRate <= 0.25,
+              runId,
+            },
+            {
+              metricType: "run",
+              metricName: "schema_coverage_pct",
+              metricValue: baseline.schemaCoveragePct,
+              floorValue: 0.3,
+              passed: baseline.schemaCoveragePct >= 0.3,
+              runId,
+            },
+            {
+              metricType: "run",
+              metricName: "sql_generated_rate",
+              metricValue: baseline.sqlGeneratedRate,
+              floorValue: 0.7,
+              passed: baseline.sqlGeneratedRate >= 0.7,
+              runId,
+            },
+          ]);
+          stepLog.info("Run quality baseline computed", {
+            fn: "startPipeline",
+            consultantReadiness: baseline.consultantReadinessScore,
+            lowSpecificityRate: baseline.lowSpecificityRate,
+            schemaCoveragePct: baseline.schemaCoveragePct,
+            sqlGeneratedRate: baseline.sqlGeneratedRate,
+          });
+          if (baseline.consultantReadinessScore < minReadiness) {
+            throw new Error(
+              `Run quality gate failed (consultantReadiness=${baseline.consultantReadinessScore.toFixed(2)} < ${minReadiness.toFixed(2)}). ${baseline.findings.join(" | ") || "Insufficient quality for customer-facing output."}`,
+            );
+          }
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.Scoring,
+            65,
+            undefined,
+            `Scored ${ctx.useCases.length} use cases`,
+          );
+        });
+      }
 
       // Step 7: SQL Generation
       checkCancelled(ctx.signal);
       let sqlOk = 0;
-      await logStep(PipelineStep.SqlGeneration, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.SqlGeneration,
-          67,
-          undefined,
-          `Generating SQL for ${ctx.useCases.length} use cases...`,
-        );
-        logger.info(`Step 7: ${STEPS[6].label}`, { runId, step: "sql-generation" });
-        ctx.useCases = await runSqlGeneration(ctx, runId);
-        sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.SqlGeneration,
-          85,
-          undefined,
-          `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`,
-        );
-      });
+      {
+        const stepLog = log.child({
+          task: "SqlGeneration",
+          module: "pipeline/steps/sql-generation",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.SqlGeneration, stepLog, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.SqlGeneration,
+            67,
+            undefined,
+            `Generating SQL for ${ctx.useCases.length} use cases...`,
+          );
+          ctx.useCases = await runSqlGeneration(ctx, runId);
+          sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.SqlGeneration,
+            85,
+            undefined,
+            `Generated SQL for ${sqlOk}/${ctx.useCases.length} use cases`,
+          );
+        });
+      }
 
       // Persist use cases atomically (delete old + insert new in a transaction)
-      logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
+      log.info(`Persisting ${ctx.useCases.length} use cases`, { fn: "startPipeline" });
       const { withPrisma } = await import("@/lib/prisma");
       await withPrisma(async (prisma) => {
         await prisma.$transaction(
@@ -528,26 +581,32 @@ export async function startPipeline(runId: string): Promise<void> {
 
       // Step 8: Business Value Analysis (financial quantification, roadmap, synthesis, stakeholders)
       checkCancelled(ctx.signal);
-      await logStep(PipelineStep.BusinessValueAnalysis, async () => {
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.BusinessValueAnalysis,
-          86,
-          undefined,
-          "Analyzing business value and building executive synthesis...",
-        );
-        logger.info("Step 8: Analyzing business value", { runId, step: "business-value-analysis" });
-        await runBusinessValueAnalysis(ctx);
-        await updateRunStatus(
-          runId,
-          "running",
-          PipelineStep.BusinessValueAnalysis,
-          90,
-          undefined,
-          "Business value analysis complete",
-        );
-      });
+      {
+        const stepLog = log.child({
+          task: "BusinessValueAnalysis",
+          module: "pipeline/steps/business-value-analysis",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.BusinessValueAnalysis, stepLog, async () => {
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessValueAnalysis,
+            86,
+            undefined,
+            "Analyzing business value and building executive synthesis...",
+          );
+          await runBusinessValueAnalysis(ctx);
+          await updateRunStatus(
+            runId,
+            "running",
+            PipelineStep.BusinessValueAnalysis,
+            90,
+            undefined,
+            "Business value analysis complete",
+          );
+        });
+      }
 
       // Generate vector embeddings for use cases + business context (best-effort)
       try {
@@ -555,8 +614,9 @@ export async function startPipeline(runId: string): Promise<void> {
         const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
         await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
       } catch (embedErr) {
-        logger.warn("Use case embedding failed (non-fatal)", {
-          runId,
+        log.warn("Use case embedding failed (non-fatal)", {
+          fn: "startPipeline",
+          errorCategory: "data",
           error: embedErr instanceof Error ? embedErr.message : String(embedErr),
         });
       }
@@ -590,8 +650,9 @@ export async function startPipeline(runId: string): Promise<void> {
         }
         await embedBusinessValueResults(runId, bvEstimates, bvPhases, bvStakeholders, bvSynthesis);
       } catch (embedErr) {
-        logger.warn("Business value embedding failed (non-fatal)", {
-          runId,
+        log.warn("Business value embedding failed (non-fatal)", {
+          fn: "startPipeline",
+          errorCategory: "data",
           error: embedErr instanceof Error ? embedErr.message : String(embedErr),
         });
       }
@@ -606,17 +667,17 @@ export async function startPipeline(runId: string): Promise<void> {
         undefined,
         `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`,
       );
-      logger.info("Pipeline completed, starting Genie Engine in background", {
-        runId,
+      log.info("Pipeline completed, starting background engines", {
+        phase: "end",
         useCaseCount: ctx.useCases.length,
         sqlOk,
       });
 
       // Fire Genie Engine and Dashboard Engine concurrently in the background.
-      startBackgroundEngines(ctx, runId);
+      startBackgroundEngines(ctx, runId, log);
     } catch (error) {
       if (error instanceof PipelineCancelledError) {
-        logger.info("Pipeline cancelled by user", { runId });
+        log.info("Pipeline cancelled by user", { phase: "end" });
         try {
           await updateRunStatus(
             runId,
@@ -627,14 +688,14 @@ export async function startPipeline(runId: string): Promise<void> {
             "Pipeline cancelled",
           );
         } catch (statusError) {
-          logger.error("Failed to update run status after cancellation", {
-            runId,
+          log.error("Failed to update run status after cancellation", {
+            errorCategory: "db",
             statusError: statusError instanceof Error ? statusError.message : String(statusError),
           });
         }
       } else {
         const message = error instanceof Error ? error.message : "Unknown pipeline error";
-        logger.error(`Pipeline failed`, { runId, error: message });
+        log.error("Pipeline failed", { phase: "error", error: message });
         try {
           await updateRunStatus(
             runId,
@@ -645,8 +706,8 @@ export async function startPipeline(runId: string): Promise<void> {
             `Pipeline failed: ${message}`,
           );
         } catch (statusError) {
-          logger.error("Failed to update run status after pipeline failure", {
-            runId,
+          log.error("Failed to update run status after pipeline failure", {
+            errorCategory: "db",
             originalError: message,
             statusError: statusError instanceof Error ? statusError.message : String(statusError),
           });
@@ -672,6 +733,12 @@ export async function startPipeline(runId: string): Promise<void> {
 export async function resumePipeline(runId: string): Promise<void> {
   const controller = new AbortController();
   activePipelineRuns.set(runId, controller);
+  const log = createScopedLogger({
+    origin: "DiscoveryRun",
+    module: "pipeline/engine",
+    runId,
+    fn: "resumePipeline",
+  });
   try {
     const run = await getRunById(runId);
     if (!run) throw new Error(`Run ${runId} not found`);
@@ -697,6 +764,7 @@ export async function resumePipeline(runId: string): Promise<void> {
       sampleData: null,
       discoveryResult: null,
       signal: controller.signal,
+      logger: log,
     };
 
     // Restore business context (persisted after step 1)
@@ -746,24 +814,31 @@ export async function resumePipeline(runId: string): Promise<void> {
       ctx.useCases = await getUseCasesByRunId(runId);
     }
 
-    logger.info("Resuming pipeline", {
-      runId,
+    log.info("Resuming pipeline", {
+      phase: "start",
       resumeFromStep: STEPS[resumeIndex].step,
       completedSteps: [...completedSteps],
     });
 
     /** Helper: record step start/end timing in the run's stepLog. */
-    async function logStep(step: PipelineStep, fn: () => Promise<void>): Promise<void> {
+    async function logStep(
+      step: PipelineStep,
+      stepLog: ScopedLogger,
+      fn: () => Promise<void>,
+    ): Promise<void> {
       const startedAt = new Date().toISOString();
+      stepLog.info("Step starting", { phase: "start" });
       try {
         await fn();
         const completedAt = new Date().toISOString();
         const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+        stepLog.info("Step completed", { phase: "end", durationMs });
         await updateRunStepLog(runId, { step, startedAt, completedAt, durationMs });
       } catch (err) {
         const completedAt = new Date().toISOString();
         const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
         const errorMsg = err instanceof Error ? err.message : String(err);
+        stepLog.error("Step failed", { phase: "error", durationMs, error: errorMsg });
         await updateRunStepLog(runId, {
           step,
           startedAt,
@@ -789,7 +864,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 1: Business Context
       if (resumeIndex <= 0) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.BusinessContext, async () => {
+        const stepLog = log.child({
+          task: "BusinessContext",
+          module: "pipeline/steps/business-context",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.BusinessContext, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -798,7 +878,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Generating business context for ${ctx.run.config.businessName}...`,
           );
-          logger.info("Step 1: Generating business context", { runId, step: "business-context" });
           const businessContext = await runBusinessContext(ctx, runId);
           ctx.run = { ...ctx.run, businessContext };
           await updateRunBusinessContext(runId, businessContext);
@@ -826,7 +905,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 2: Metadata Extraction
       if (resumeIndex <= 1) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.MetadataExtraction, async () => {
+        const stepLog = log.child({
+          task: "MetadataExtraction",
+          module: "pipeline/steps/metadata-extraction",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.MetadataExtraction, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -835,7 +919,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Extracting metadata from ${ctx.run.config.ucMetadata}...`,
           );
-          logger.info("Step 2: Extracting metadata", { runId, step: "metadata-extraction" });
           const extractionResult = await runMetadataExtraction(ctx, runId);
           ctx.metadata = extractionResult.snapshot;
           ctx.lineageGraph = extractionResult.lineageGraph;
@@ -858,7 +941,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 2b: Asset Discovery (conditional)
       checkCancelled(ctx.signal);
       if (resumeIndex <= 2 && ctx.run.config.assetDiscoveryEnabled) {
-        await logStep(PipelineStep.AssetDiscovery, async () => {
+        const stepLog = log.child({
+          task: "AssetDiscovery",
+          module: "pipeline/steps/asset-discovery",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.AssetDiscovery, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -867,7 +955,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             "Discovering existing Genie spaces, dashboards, and metric views...",
           );
-          logger.info("Step 2b: Asset Discovery", { runId, step: "asset-discovery" });
           ctx.discoveryResult = await runAssetDiscovery(ctx, runId);
           const summary = ctx.discoveryResult
             ? `Found ${ctx.discoveryResult.genieSpaces.length} Genie spaces, ${ctx.discoveryResult.dashboards.length} dashboards, ${ctx.discoveryResult.metricViews.length} metric views`
@@ -886,7 +973,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 3: Table Filtering
       if (resumeIndex <= 3) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.TableFiltering, async () => {
+        const stepLog = log.child({
+          task: "TableFiltering",
+          module: "pipeline/steps/table-filtering",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.TableFiltering, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -895,7 +987,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Filtering ${ctx.metadata!.tableCount} tables for business relevance...`,
           );
-          logger.info("Step 3: Filtering tables", { runId, step: "table-filtering" });
           ctx.filteredTables = await runTableFiltering(ctx, runId);
           await updateRunStatus(
             runId,
@@ -911,7 +1002,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 4: Use Case Generation
       if (resumeIndex <= 4) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.UsecaseGeneration, async () => {
+        const stepLog = log.child({
+          task: "UsecaseGeneration",
+          module: "pipeline/steps/usecase-generation",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.UsecaseGeneration, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -920,7 +1016,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Generating AI use cases from ${ctx.filteredTables.length} tables...`,
           );
-          logger.info("Step 4: Generating use cases", { runId, step: "usecase-generation" });
           ctx.useCases = await runUsecaseGeneration(ctx, runId);
 
           const validFqns = new Set([
@@ -940,8 +1035,8 @@ export async function resumePipeline(runId: string): Promise<void> {
             return true;
           });
           if (hallucinated > 0) {
-            logger.warn("Removed use cases with hallucinated table references", {
-              runId,
+            stepLog.warn("Removed use cases with hallucinated table references", {
+              errorCategory: "sql_hallucination",
               removedCount: hallucinated,
               remainingCount: ctx.useCases.length,
             });
@@ -965,7 +1060,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 5: Domain Clustering
       if (resumeIndex <= 5) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.DomainClustering, async () => {
+        const stepLog = log.child({
+          task: "DomainClustering",
+          module: "pipeline/steps/domain-clustering",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.DomainClustering, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -974,7 +1074,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Assigning domains to ${ctx.useCases.length} use cases...`,
           );
-          logger.info("Step 5: Clustering domains", { runId, step: "domain-clustering" });
           ctx.useCases = await runDomainClustering(ctx, runId);
           const domainCount = new Set(ctx.useCases.map((uc) => uc.domain)).size;
           await updateRunStatus(
@@ -991,7 +1090,9 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 6: Scoring
       if (resumeIndex <= 6) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.Scoring, async () => {
+        const stepLog = log.child({ task: "Scoring", module: "pipeline/steps/scoring" });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.Scoring, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -1000,7 +1101,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Scoring and deduplicating ${ctx.useCases.length} use cases...`,
           );
-          logger.info("Step 6: Scoring", { runId, step: "scoring" });
           ctx.useCases = await runScoring(ctx, runId);
           await updateRunStatus(
             runId,
@@ -1017,7 +1117,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       let sqlOk = 0;
       if (resumeIndex <= 7) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.SqlGeneration, async () => {
+        const stepLog = log.child({
+          task: "SqlGeneration",
+          module: "pipeline/steps/sql-generation",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.SqlGeneration, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -1026,7 +1131,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             `Generating SQL for ${ctx.useCases.length} use cases...`,
           );
-          logger.info("Step 7: Generating SQL", { runId, step: "sql-generation" });
           ctx.useCases = await runSqlGeneration(ctx, runId);
           sqlOk = ctx.useCases.filter((uc) => uc.sqlStatus === "generated").length;
           await updateRunStatus(
@@ -1042,7 +1146,7 @@ export async function resumePipeline(runId: string): Promise<void> {
 
       // Persist use cases only if we re-ran generation/scoring/SQL steps
       if (resumeIndex <= 7) {
-        logger.info(`Persisting ${ctx.useCases.length} use cases`, { runId });
+        log.info(`Persisting ${ctx.useCases.length} use cases`);
         const { withPrisma } = await import("@/lib/prisma");
         await withPrisma(async (prisma) => {
           await prisma.$transaction(
@@ -1082,7 +1186,12 @@ export async function resumePipeline(runId: string): Promise<void> {
       // Step 8: Business Value Analysis
       if (resumeIndex <= 8) {
         checkCancelled(ctx.signal);
-        await logStep(PipelineStep.BusinessValueAnalysis, async () => {
+        const stepLog = log.child({
+          task: "BusinessValueAnalysis",
+          module: "pipeline/steps/business-value-analysis",
+        });
+        ctx.logger = stepLog;
+        await logStep(PipelineStep.BusinessValueAnalysis, stepLog, async () => {
           await updateRunStatus(
             runId,
             "running",
@@ -1091,10 +1200,6 @@ export async function resumePipeline(runId: string): Promise<void> {
             undefined,
             "Analyzing business value and building executive synthesis...",
           );
-          logger.info("Step 8: Analyzing business value", {
-            runId,
-            step: "business-value-analysis",
-          });
           await runBusinessValueAnalysis(ctx);
           await updateRunStatus(
             runId,
@@ -1118,8 +1223,8 @@ export async function resumePipeline(runId: string): Promise<void> {
         const bcJson = ctx.run.businessContext ? JSON.stringify(ctx.run.businessContext) : null;
         await embedRunResults(runId, ctx.useCases, bcJson, ctx.run.config.businessName);
       } catch (embedErr) {
-        logger.warn("Use case embedding failed (non-fatal)", {
-          runId,
+        log.warn("Use case embedding failed (non-fatal)", {
+          errorCategory: "data",
           error: embedErr instanceof Error ? embedErr.message : String(embedErr),
         });
       }
@@ -1154,8 +1259,8 @@ export async function resumePipeline(runId: string): Promise<void> {
         }
         await embedBusinessValueResults(runId, bvEstimates, bvPhases, bvStakeholders, bvSynthesis);
       } catch (embedErr) {
-        logger.warn("Business value embedding failed (non-fatal)", {
-          runId,
+        log.warn("Business value embedding failed (non-fatal)", {
+          errorCategory: "data",
           error: embedErr instanceof Error ? embedErr.message : String(embedErr),
         });
       }
@@ -1169,16 +1274,16 @@ export async function resumePipeline(runId: string): Promise<void> {
         undefined,
         `Pipeline complete: ${ctx.useCases.length} use cases across ${finalDomains} domains (${sqlOk} with SQL)`,
       );
-      logger.info("Resumed pipeline completed", {
-        runId,
+      log.info("Resumed pipeline completed", {
+        phase: "end",
         useCaseCount: ctx.useCases.length,
         sqlOk,
       });
 
-      startBackgroundEngines(ctx, runId);
+      startBackgroundEngines(ctx, runId, log);
     } catch (error) {
       if (error instanceof PipelineCancelledError) {
-        logger.info("Resumed pipeline cancelled by user", { runId });
+        log.info("Pipeline cancelled by user", { phase: "end" });
         try {
           await updateRunStatus(
             runId,
@@ -1189,14 +1294,14 @@ export async function resumePipeline(runId: string): Promise<void> {
             "Pipeline cancelled",
           );
         } catch (statusError) {
-          logger.error("Failed to update run status after cancellation", {
-            runId,
+          log.error("Failed to update run status after cancellation", {
+            errorCategory: "db",
             statusError: statusError instanceof Error ? statusError.message : String(statusError),
           });
         }
       } else {
         const message = error instanceof Error ? error.message : "Unknown pipeline error";
-        logger.error("Resumed pipeline failed", { runId, error: message });
+        log.error("Resumed pipeline failed", { phase: "error", error: message });
         try {
           await updateRunStatus(
             runId,
@@ -1207,8 +1312,8 @@ export async function resumePipeline(runId: string): Promise<void> {
             `Pipeline failed: ${message}`,
           );
         } catch (statusError) {
-          logger.error("Failed to update run status after resume failure", {
-            runId,
+          log.error("Failed to update run status after resume failure", {
+            errorCategory: "db",
             originalError: message,
             statusError: statusError instanceof Error ? statusError.message : String(statusError),
           });
@@ -1232,10 +1337,19 @@ export async function resumePipeline(runId: string): Promise<void> {
  * fetches whatever recommendations exist in Lakebase at the time it runs).
  * Each engine's progress is tracked independently via its own status module.
  */
-function startBackgroundEngines(ctx: PipelineContext, runId: string): void {
+function startBackgroundEngines(
+  ctx: PipelineContext,
+  runId: string,
+  parentLog: ScopedLogger,
+): void {
+  const genieLog = parentLog.child({
+    task: "GenieRecommendations",
+    module: "pipeline/steps/genie-recommendations",
+  });
   const genieTask = async () => {
     await startJob(runId);
     try {
+      ctx.logger = genieLog;
       const genieCount = await runGenieRecommendations(
         ctx,
         runId,
@@ -1245,14 +1359,18 @@ function startBackgroundEngines(ctx: PipelineContext, runId: string): void {
         },
       );
       await completeJob(runId, genieCount);
-      logger.info("Background Genie Engine completed", { runId, genieCount });
+      genieLog.info("Background Genie Engine completed", { phase: "end", genieCount });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await failJob(runId, msg);
-      logger.error("Background Genie Engine failed", { runId, error: msg });
+      genieLog.error("Background Genie Engine failed", { phase: "error", error: msg });
     }
   };
 
+  const dashLog = parentLog.child({
+    task: "DashboardRecommendations",
+    module: "pipeline/steps/dashboard-recommendations",
+  });
   const dashboardTask = async () => {
     await startDashboardJob(runId);
     try {
@@ -1260,11 +1378,14 @@ function startBackgroundEngines(ctx: PipelineContext, runId: string): void {
         updateDashboardJob(runId, message, percent),
       );
       await completeDashboardJob(runId, dashCount);
-      logger.info("Background Dashboard Engine completed", { runId, dashboardCount: dashCount });
+      dashLog.info("Background Dashboard Engine completed", {
+        phase: "end",
+        dashboardCount: dashCount,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await failDashboardJob(runId, msg);
-      logger.error("Background Dashboard Engine failed", { runId, error: msg });
+      dashLog.error("Background Dashboard Engine failed", { phase: "error", error: msg });
     }
   };
 
@@ -1296,7 +1417,9 @@ export async function cancelPipeline(runId: string): Promise<boolean> {
   if (!controller) return false;
   markRunCancelled(runId);
   controller.abort();
-  logger.info("Pipeline cancellation requested", { runId });
+  createScopedLogger({ origin: "DiscoveryRun", module: "pipeline/engine", runId }).info(
+    "Pipeline cancellation requested",
+  );
   return true;
 }
 
@@ -1310,7 +1433,10 @@ export async function cancelAllPipelines(): Promise<number> {
     await cancelPipeline(runId);
   }
   if (runIds.length > 0) {
-    logger.info("Cancelled all active pipelines", { count: runIds.length, runIds });
+    createScopedLogger({ origin: "DiscoveryRun", module: "pipeline/engine" }).info(
+      "Cancelled all active pipelines",
+      { count: runIds.length, runIds },
+    );
   }
   return runIds.length;
 }

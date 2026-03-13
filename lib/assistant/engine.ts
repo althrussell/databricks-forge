@@ -38,7 +38,9 @@ import { createAssistantLog } from "@/lib/lakebase/assistant-log";
 import { listTrackedGenieSpaces } from "@/lib/lakebase/genie-spaces";
 import { insertQualityMetrics } from "@/lib/lakebase/quality-metrics";
 import { scoreAssistantResponse } from "@/lib/assistant/evaluation";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
+
+const log = createScopedLogger({ origin: "AskForge", module: "assistant/engine" });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,7 +141,7 @@ export async function runAssistantEngine(
   const start = Date.now();
 
   const intentResult = await classifyIntent(question);
-  logger.info("[assistant/engine] Intent classified", {
+  log.info("Intent classified", {
     intent: intentResult.intent,
     confidence: intentResult.confidence,
   });
@@ -260,7 +262,7 @@ export async function runAssistantEngine(
             errorToFix &&
             (staticResult.unknownColumns.length > 0 || isColumnResolutionError(errorToFix))
           ) {
-            logger.info("[assistant/engine] SQL column error, attempting fix", {
+            log.info("SQL column error, attempting fix", {
               blockIndex: i,
               staticHallucinations: staticResult.unknownColumns.length,
               error: errorToFix.slice(0, 200),
@@ -284,20 +286,22 @@ export async function runAssistantEngine(
             if (fixedBlocks.length > 0) {
               const recheck = await validateSql(fixedBlocks[0]);
               if (!recheck) {
-                logger.info("[assistant/engine] SQL fix successful", { blockIndex: i });
+                log.info("SQL fix successful", { blockIndex: i });
                 return { index: i, original: sql, fixed: fixedBlocks[0] };
               }
-              logger.warn("[assistant/engine] SQL fix still fails EXPLAIN", {
+              log.warn("SQL fix still fails EXPLAIN", {
                 blockIndex: i,
                 error: recheck.slice(0, 200),
+                errorCategory: "sql_validation",
               });
             }
           }
           return null;
         } catch (err) {
-          logger.warn("[assistant/engine] SQL validation/fix failed (non-fatal)", {
+          log.warn("SQL validation/fix failed (non-fatal)", {
             blockIndex: i,
             error: err instanceof Error ? err.message : String(err),
+            errorCategory: "non_fatal",
           });
           return null;
         }
@@ -404,7 +408,7 @@ export async function runAssistantEngine(
         const oldSql = sqlBlocks[i];
         sqlBlocks[i] = review.fixedSql;
         answer = answer.replace(oldSql, review.fixedSql);
-        logger.info("Assistant: review applied SQL fix", {
+        log.info("Review applied SQL fix", {
           blockIndex: i,
           qualityScore: review.qualityScore,
         });
@@ -444,7 +448,7 @@ export async function runAssistantEngine(
 
   const durationMs = Date.now() - start;
 
-  logger.info("[assistant/engine] Response complete", {
+  log.info("Response complete", {
     intent: intentResult.intent,
     sourceCount: sources.length,
     tableCount: reconciledTables.length,
@@ -453,9 +457,10 @@ export async function runAssistantEngine(
     durationMs,
   });
   if (sources.length > 0 && reconciledTables.length === 0) {
-    logger.warn("[assistant/engine] Sources present but no referenced tables inferred", {
+    log.warn("Sources present but no referenced tables inferred", {
       sourceCount: sources.length,
       sqlBlockCount: sqlBlocks.length,
+      errorCategory: "context_gap",
     });
   }
 
@@ -514,7 +519,7 @@ export async function runAssistantEngine(
       ]);
     })
     .catch((err) =>
-      logger.warn("[assistant/engine] Failed to log interaction", { error: String(err) }),
+      log.warn("Failed to log interaction", { error: String(err), errorCategory: "non_fatal" }),
     );
 
   const chatMentionedTables = [...new Set([...sqlTables, ...questionTables])];

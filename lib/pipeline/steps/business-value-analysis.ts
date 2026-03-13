@@ -21,7 +21,7 @@ import type {
 } from "@/lib/domain/types";
 import { executeAIQuery } from "@/lib/ai/agent";
 import { resolveEndpoint } from "@/lib/dbx/client";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import { upsertValueEstimates, getValueEstimatesForRun } from "@/lib/lakebase/value-estimates";
 import { upsertRoadmapPhases } from "@/lib/lakebase/roadmap-phases";
 import { replaceStakeholderProfiles } from "@/lib/lakebase/stakeholder-profiles";
@@ -78,6 +78,7 @@ async function runFinancialQuantification(
   ctx: PipelineContext,
   useCases: UseCase[],
 ): Promise<void> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run } = ctx;
   const bc = run.businessContext;
   if (!bc || useCases.length === 0) return;
@@ -145,7 +146,9 @@ async function runFinancialQuantification(
         );
       }
     } catch (err) {
-      logger.warn("[business-value] Financial quantification batch failed", {
+      log.warn("Financial quantification batch failed", {
+        fn: "runBusinessValueAnalysis",
+        errorCategory: "llm_error",
         error: String(err),
       });
     }
@@ -157,6 +160,7 @@ async function runFinancialQuantification(
 // ---------------------------------------------------------------------------
 
 async function runRoadmapPhasing(ctx: PipelineContext, useCases: UseCase[]): Promise<void> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run } = ctx;
   const bc = run.businessContext;
   if (!bc || useCases.length === 0) return;
@@ -203,7 +207,11 @@ async function runRoadmapPhasing(ctx: PipelineContext, useCases: UseCase[]): Pro
       );
     }
   } catch (err) {
-    logger.warn("[business-value] Roadmap phasing failed", { error: String(err) });
+    log.warn("Roadmap phasing failed", {
+      fn: "runRoadmapPhasing",
+      errorCategory: "llm_error",
+      error: String(err),
+    });
   }
 }
 
@@ -212,6 +220,7 @@ async function runRoadmapPhasing(ctx: PipelineContext, useCases: UseCase[]): Pro
 // ---------------------------------------------------------------------------
 
 async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]): Promise<void> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run } = ctx;
   const bc = run.businessContext;
   if (!bc || useCases.length === 0) return;
@@ -306,7 +315,11 @@ async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]):
       });
     }
   } catch (err) {
-    logger.warn("[business-value] Executive synthesis failed", { error: String(err) });
+    log.warn("Executive synthesis failed", {
+      fn: "runBusinessValueAnalysis",
+      errorCategory: "llm_error",
+      error: String(err),
+    });
   }
 }
 
@@ -315,6 +328,7 @@ async function runExecutiveSynthesis(ctx: PipelineContext, useCases: UseCase[]):
 // ---------------------------------------------------------------------------
 
 async function runStakeholderAnalysis(ctx: PipelineContext, useCases: UseCase[]): Promise<void> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run } = ctx;
   const bc = run.businessContext;
   if (!bc || useCases.length === 0) return;
@@ -381,7 +395,11 @@ async function runStakeholderAnalysis(ctx: PipelineContext, useCases: UseCase[])
       );
     }
   } catch (err) {
-    logger.warn("[business-value] Stakeholder analysis failed", { error: String(err) });
+    log.warn("Stakeholder analysis failed", {
+      fn: "runBusinessValueAnalysis",
+      errorCategory: "llm_error",
+      error: String(err),
+    });
   }
 }
 
@@ -390,14 +408,15 @@ async function runStakeholderAnalysis(ctx: PipelineContext, useCases: UseCase[])
 // ---------------------------------------------------------------------------
 
 export async function runBusinessValueAnalysis(ctx: PipelineContext): Promise<void> {
+  const log = ctx.logger ?? fallbackLogger;
   const useCases = ctx.useCases;
 
   if (!useCases || useCases.length === 0) {
-    logger.info("[business-value] No use cases to analyze, skipping");
+    log.info("No use cases to analyze, skipping");
     return;
   }
 
-  logger.info("[business-value] Starting business value analysis", {
+  log.info("Starting business value analysis", {
     useCaseCount: useCases.length,
   });
 
@@ -422,5 +441,5 @@ export async function runBusinessValueAnalysis(ctx: PipelineContext): Promise<vo
   await updateRunMessage(runId, "Analyzing stakeholder profiles...", 89);
   await runStakeholderAnalysis(ctx, useCases);
 
-  logger.info("[business-value] Business value analysis complete");
+  log.info("Business value analysis complete");
 }

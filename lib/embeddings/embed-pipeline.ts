@@ -28,7 +28,12 @@ import {
 } from "./compose";
 import type { EmbeddingInput } from "./types";
 import { isEmbeddingEnabled } from "./config";
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
+
+const log = createScopedLogger({
+  origin: "EmbeddingPipeline",
+  module: "embeddings/embed-pipeline",
+});
 
 function parseTables(val: string[] | string | undefined): string[] {
   if (Array.isArray(val)) return val;
@@ -71,7 +76,7 @@ export async function embedRunResults(
   businessName?: string,
 ): Promise<void> {
   if (!isEmbeddingEnabled()) {
-    logger.debug("[embed-pipeline] Embedding disabled, skipping run embedding");
+    log.debug("Embedding disabled, skipping run embedding");
     return;
   }
 
@@ -130,16 +135,17 @@ export async function embedRunResults(
 
     await insertEmbeddings(inputs);
 
-    logger.info("[embed-pipeline] Run embedding complete", {
+    log.info("Run embedding complete", {
       runId,
       useCases: useCases.length,
       totalRecords: inputs.length,
       durationMs: Date.now() - startTime,
     });
   } catch (err) {
-    logger.warn("[embed-pipeline] Embedding failed (non-fatal)", {
+    log.warn("Embedding failed (non-fatal)", {
       runId,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 }
@@ -206,7 +212,7 @@ export async function embedBusinessValueResults(
   synthesis: SynthesisLike | null,
 ): Promise<void> {
   if (!isEmbeddingEnabled()) {
-    logger.debug("[embed-pipeline] Embedding disabled, skipping BV embedding");
+    log.debug("Embedding disabled, skipping BV embedding");
     return;
   }
 
@@ -301,7 +307,7 @@ export async function embedBusinessValueResults(
 
     await insertEmbeddings(inputs);
 
-    logger.info("[embed-pipeline] Business value embedding complete", {
+    log.info("Business value embedding complete", {
       runId,
       estimates: estimates.length,
       roadmapPhases: roadmapPhases.length,
@@ -311,9 +317,10 @@ export async function embedBusinessValueResults(
       durationMs: Date.now() - startTime,
     });
   } catch (err) {
-    logger.warn("[embed-pipeline] Business value embedding failed (non-fatal)", {
+    log.warn("Business value embedding failed (non-fatal)", {
       runId,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 }
@@ -341,7 +348,7 @@ export async function embedGenieRecommendations(
   recommendations: GenieRecLike[],
 ): Promise<void> {
   if (!isEmbeddingEnabled()) {
-    logger.debug("[embed-pipeline] Embedding disabled, skipping genie embedding");
+    log.debug("Embedding disabled, skipping genie embedding");
     return;
   }
 
@@ -425,16 +432,17 @@ export async function embedGenieRecommendations(
 
     await insertEmbeddings(inputs);
 
-    logger.info("[embed-pipeline] Genie embedding complete", {
+    log.info("Genie embedding complete", {
       runId,
       recommendations: recommendations.length,
       totalRecords: inputs.length,
       durationMs: Date.now() - startTime,
     });
   } catch (err) {
-    logger.warn("[embed-pipeline] Genie embedding failed (non-fatal)", {
+    log.warn("Genie embedding failed (non-fatal)", {
       runId,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 }
@@ -480,11 +488,12 @@ export async function embedOutcomeMap(map: OutcomeMapLike): Promise<void> {
       },
     ]);
 
-    logger.debug("[embed-pipeline] Outcome map embedded", { id: map.id, name: map.name });
+    log.debug("Outcome map embedded", { id: map.id, name: map.name });
   } catch (err) {
-    logger.warn("[embed-pipeline] Outcome map embedding failed (non-fatal)", {
+    log.warn("Outcome map embedding failed (non-fatal)", {
       id: map.id,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 }
@@ -580,13 +589,14 @@ export async function embedBenchmarkRecords(records: BenchmarkLike[]): Promise<n
 
     await insertEmbeddings(allInputs);
 
-    logger.info("[embed-pipeline] Benchmark embedding complete", {
+    log.info("Benchmark embedding complete", {
       records: records.length,
       totalChunks,
     });
   } catch (err) {
-    logger.warn("[embed-pipeline] Benchmark embedding failed (non-fatal)", {
+    log.warn("Benchmark embedding failed (non-fatal)", {
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 
@@ -716,7 +726,7 @@ export async function embedFabricScan(
 
     await insertEmbeddings(allInputs);
 
-    logger.info("[embed-pipeline] Fabric scan embedding complete", {
+    log.info("Fabric scan embedding complete", {
       scanId,
       datasets: data.datasets.length,
       reports: data.reports.length,
@@ -724,9 +734,10 @@ export async function embedFabricScan(
       totalEmbeddings: allInputs.length,
     });
   } catch (err) {
-    logger.warn("[embed-pipeline] Fabric scan embedding failed (non-fatal)", {
+    log.warn("Fabric scan embedding failed (non-fatal)", {
       scanId,
       error: err instanceof Error ? err.message : String(err),
+      errorCategory: "non_fatal",
     });
   }
 }

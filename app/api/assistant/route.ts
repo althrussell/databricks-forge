@@ -19,12 +19,13 @@ import {
   findConversationBySession,
   touchConversation,
 } from "@/lib/lakebase/conversations";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
+  const log = apiLogger("/api/assistant", "POST");
   try {
     const body = await req.json();
     const question = body.question as string;
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
           conversationId = await createConversation(userEmail, title, sessionId, persona);
         }
       } catch (err) {
-        logger.warn("[api/assistant] Conversation tracking failed", { error: String(err) });
+        log.warn("Conversation tracking failed", { error: String(err), errorCategory: "db" });
       }
     }
 
@@ -99,11 +100,11 @@ export async function POST(req: NextRequest) {
           controller.close();
         } catch (err) {
           if (abortController.signal.aborted) {
-            logger.info("[api/assistant] Client disconnected, aborting engine");
+            log.info("Client disconnected, aborting engine");
             controller.close();
             return;
           }
-          logger.error("[api/assistant] Engine error", { error: String(err) });
+          log.error("Engine error", { error: String(err), errorCategory: "engine_error" });
           const errorEvent = `data: ${JSON.stringify({
             type: "error",
             error: err instanceof Error ? err.message : "An unexpected error occurred",
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    logger.error("[api/assistant] Request error", { error: String(err) });
+    log.error("Request error", { error: String(err), errorCategory: "internal_error" });
     return Response.json({ error: "Failed to process request" }, { status: 500 });
   }
 }

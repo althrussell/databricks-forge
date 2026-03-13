@@ -17,7 +17,7 @@ import {
   getSchemaSnapshot,
   updateSchemaSnapshot,
 } from "@/lib/lakebase/runs";
-import { logger } from "@/lib/logger";
+import { logger as fallbackLogger } from "@/lib/logger";
 import type { ColumnInfo, PipelineContext, TableInfo } from "@/lib/domain/types";
 
 /** Classification record for a table — stored as audit trail in Lakebase. */
@@ -68,6 +68,7 @@ function buildColumnIndex(columns: ColumnInfo[]): Map<string, string[]> {
 }
 
 export async function runTableFiltering(ctx: PipelineContext, runId?: string): Promise<string[]> {
+  const log = ctx.logger ?? fallbackLogger;
   const { run, metadata } = ctx;
   if (!metadata) throw new Error("Metadata not available for table filtering");
   if (!run.businessContext) throw new Error("Business context not available");
@@ -108,7 +109,9 @@ export async function runTableFiltering(ctx: PipelineContext, runId?: string): P
       allClassifications.push(...classifications);
     } catch (error) {
       // Deterministic fallback to avoid broad fail-open behavior.
-      logger.warn("Table filtering batch failed, using deterministic fallback", {
+      log.warn("Table filtering batch failed, using deterministic fallback", {
+        fn: "runTableFiltering",
+        errorCategory: "llm_error",
         batch: batchNum,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -123,7 +126,9 @@ export async function runTableFiltering(ctx: PipelineContext, runId?: string): P
     try {
       await updateRunFilteredTables(runId, allClassifications);
     } catch (error) {
-      logger.warn("Failed to persist table classifications", {
+      log.warn("Failed to persist table classifications", {
+        fn: "runTableFiltering",
+        errorCategory: "db",
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -139,7 +144,9 @@ export async function runTableFiltering(ctx: PipelineContext, runId?: string): P
         await updateSchemaSnapshot(runId, snapshot);
       }
     } catch (error) {
-      logger.warn("Failed to update schema snapshot with business flags", {
+      log.warn("Failed to update schema snapshot with business flags", {
+        fn: "runTableFiltering",
+        errorCategory: "db",
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -158,7 +165,7 @@ export async function runTableFiltering(ctx: PipelineContext, runId?: string): P
       `Identified ${businessTables.length} business-relevant tables out of ${tables.length}${lineageNote}`,
     );
 
-  logger.info("Table filtering complete", {
+  log.info("Table filtering complete", {
     businessTables: businessTables.length,
     totalTables: tables.length,
     fromSelection: selectedCount,
@@ -183,7 +190,9 @@ async function filterBatchWithRetry(
     } catch (err) {
       lastError = err;
       if (attempt < MAX_FILTER_RETRIES) {
-        logger.warn("Retrying table filtering batch", {
+        fallbackLogger.warn("Retrying table filtering batch", {
+          fn: "runTableFiltering",
+          errorCategory: "llm_error",
           attempt: attempt + 1,
           maxRetries: MAX_FILTER_RETRIES,
         });
@@ -270,7 +279,9 @@ async function filterBatch(
       | { classifications: TableClassificationItem[] };
     items = Array.isArray(parsed) ? parsed : (parsed.classifications ?? []);
   } catch (parseErr) {
-    logger.warn("Failed to parse table filtering JSON", {
+    fallbackLogger.warn("Failed to parse table filtering JSON", {
+      fn: "runTableFiltering",
+      errorCategory: "llm_parse",
       error: parseErr instanceof Error ? parseErr.message : String(parseErr),
     });
     throw parseErr instanceof Error ? parseErr : new Error("Parse failure in table filtering");

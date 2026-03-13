@@ -25,14 +25,15 @@ import {
   getJobStatus,
 } from "@/lib/genie/engine-status";
 import { getDiscoveryResultsByRunId } from "@/lib/lakebase/discovered-assets";
-import { logger } from "@/lib/logger";
+import { apiLogger } from "@/lib/logger";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
+  const { runId } = await params;
+  const log = apiLogger("/api/runs/[runId]/genie-engine/generate", "POST", { runId });
   try {
-    const { runId } = await params;
     if (!isValidUUID(runId)) {
       return NextResponse.json({ error: "Invalid run ID" }, { status: 400 });
     }
@@ -124,7 +125,7 @@ export async function POST(
       .then(async (result) => {
         const job = await getJobStatus(runId);
         if (job?.status === "cancelled") {
-          logger.info("Genie Engine generation cancelled, skipping save", { runId });
+          log.info("Genie Engine generation cancelled, skipping save");
           return;
         }
         await saveGenieRecommendations(
@@ -136,13 +137,12 @@ export async function POST(
         );
         await completeJob(runId, result.recommendations.length);
         if (result.failedDomains.length > 0) {
-          logger.warn("Genie Engine completed with domain failures", {
-            runId,
+          log.warn("Genie Engine completed with domain failures", {
             failedDomains: result.failedDomains,
+            errorCategory: "domain_processing",
           });
         }
-        logger.info("Genie Engine generation complete (async)", {
-          runId,
+        log.info("Genie Engine generation complete (async)", {
           recommendationCount: result.recommendations.length,
           failedDomainCount: result.failedDomains.length,
           configVersion: version,
@@ -151,14 +151,14 @@ export async function POST(
       })
       .catch(async (err) => {
         if (err instanceof EngineCancelledError) {
-          logger.info("Genie Engine generation cancelled (async)", { runId });
+          log.info("Genie Engine generation cancelled (async)");
           return;
         }
         const errMsg = err instanceof Error ? err.message : String(err);
         await failJob(runId, errMsg);
-        logger.error("Genie Engine generation failed (async)", {
-          runId,
+        log.error("Genie Engine generation failed (async)", {
           error: errMsg,
+          errorCategory: "engine_error",
         });
       });
 
@@ -172,6 +172,8 @@ export async function POST(
         : "Genie Engine generation started. Poll /generate/status for progress.",
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    log.error("POST failed", { error: msg, errorCategory: "internal_error" });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
 }

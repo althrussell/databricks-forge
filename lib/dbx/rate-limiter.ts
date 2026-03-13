@@ -9,8 +9,10 @@
  * router can pick the endpoint with the lowest queue depth.
  */
 
-import { logger } from "@/lib/logger";
+import { createScopedLogger } from "@/lib/logger";
 import { getModelPool } from "./model-registry";
+
+const log = createScopedLogger({ origin: "Infra", module: "dbx/rate-limiter" });
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -88,7 +90,7 @@ class PoolRateLimiter {
     const effectiveGlobal = GLOBAL_MAX > 0 ? GLOBAL_MAX : poolMax;
     this.globalSemaphore = effectiveGlobal < poolMax ? new Semaphore(effectiveGlobal) : null;
 
-    logger.info("Pool rate limiter initialised", {
+    log.info("Pool rate limiter initialised", {
       endpoints: pool.length,
       perEndpoint: pool.map((ep) => ({ name: ep.name, max: ep.maxConcurrent })),
       globalCeiling: effectiveGlobal,
@@ -111,7 +113,7 @@ class PoolRateLimiter {
     if (now < lim.blockedUntil) {
       const baseWait = lim.blockedUntil - now;
       const jitteredWait = addJitter(baseWait);
-      logger.debug("Pool rate limiter: waiting for 429 backoff", {
+      log.debug("Pool rate limiter: waiting for 429 backoff", {
         endpoint,
         waitMs: Math.round(jitteredWait),
       });
@@ -135,11 +137,12 @@ class PoolRateLimiter {
     const until = Date.now() + retryAfterMs;
     if (until > lim.blockedUntil) {
       lim.blockedUntil = until;
-      logger.warn("Pool rate limiter: 429 circuit breaker activated", {
+      log.warn("Pool rate limiter: 429 circuit breaker activated", {
         endpoint,
         retryAfterMs,
         inflight: lim.semaphore.inflight,
         pending: lim.semaphore.pending,
+        errorCategory: "rate_limit",
       });
     }
   }
