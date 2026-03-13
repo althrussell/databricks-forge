@@ -103,7 +103,7 @@ export function SuggestionPanel({ businessName }: SuggestionPanelProps) {
               >
                 <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate">{s.content.split("\n")[0]}</p>
+                  <p className="truncate" title={s.content.split("\n")[0]}>{s.content.split("\n")[0]}</p>
                   {s.metadata?.domain ? (
                     <p className="text-muted-foreground">{String(s.metadata.domain)}</p>
                   ) : null}

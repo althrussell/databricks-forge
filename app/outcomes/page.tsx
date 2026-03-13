@@ -311,10 +311,10 @@ function IndustryCard({
       onClick={onClick}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2.5">
-            <Building2 className={`h-5 w-5 ${iconColor}`} />
-            <CardTitle className="text-base">{industry.name}</CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Building2 className={`h-5 w-5 shrink-0 ${iconColor}`} />
+            <CardTitle className="truncate text-base" title={industry.name}>{industry.name}</CardTitle>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
@@ -327,7 +327,7 @@ function IndustryCard({
       <CardContent className="flex flex-1 flex-col justify-between space-y-3">
         <div className="flex flex-wrap gap-1">
           {industry.objectives.map((obj) => (
-            <Badge key={obj.name} variant="secondary" className="text-xs">
+            <Badge key={obj.name} variant="secondary" className="max-w-full text-xs" title={obj.name}>
               {obj.name}
             </Badge>
           ))}
@@ -442,7 +442,7 @@ function IndustryDetailView({
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {industry.suggestedDomains.map((d) => (
-                    <Badge key={d} variant="outline" className="text-xs">
+                    <Badge key={d} variant="outline" className="max-w-full text-xs" title={d}>
                       {d}
                     </Badge>
                   ))}
@@ -454,7 +454,7 @@ function IndustryDetailView({
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {industry.suggestedPriorities.map((p) => (
-                    <Badge key={p} variant="outline" className="text-xs">
+                    <Badge key={p} variant="outline" className="max-w-full text-xs" title={p}>
                       {p}
                     </Badge>
                   ))}

@@ -165,7 +165,7 @@ export function TableCoverageView() {
             {paged.map((t) => (
               <TableRow key={t.tableFqn}>
                 <TableCell className="font-mono text-xs">
-                  {t.tableFqn}
+                  <span className="block truncate max-w-[300px]" title={t.tableFqn}>{t.tableFqn}</span>
                   {t.sensitivityLevel === "confidential" || t.sensitivityLevel === "restricted" ? (
                     <Badge variant="destructive" className="ml-1 text-[10px]">
                       PII
@@ -185,7 +185,7 @@ export function TableCoverageView() {
                           <Badge variant="secondary" className="text-[10px]">
                             {uc.type}
                           </Badge>
-                          <span className="truncate text-xs">{uc.name}</span>
+                          <span className="truncate text-xs" title={uc.name}>{uc.name}</span>
                           <span className="text-[10px] text-muted-foreground">
                             {Math.round(uc.overallScore * 100)}%
                           </span>

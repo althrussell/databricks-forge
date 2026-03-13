@@ -346,7 +346,14 @@ export default function ValueTrackingPage() {
                         <TableCell className="font-mono text-xs">
                           {truncateId(entry.useCaseId)}
                         </TableCell>
-                        <TableCell>{entry.run?.businessName ?? "-"}</TableCell>
+                        <TableCell>
+                          <span
+                            className="block max-w-[200px] truncate"
+                            title={entry.run?.businessName ?? "-"}
+                          >
+                            {entry.run?.businessName ?? "-"}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className={STAGE_COLORS[stage] ?? "bg-muted"}>
                             {STAGES.find((s) => s.value === stage)?.label ?? stage}
@@ -378,13 +385,15 @@ export default function ValueTrackingPage() {
                             </div>
                           ) : (
                             <button
-                              className="group flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                              className="group flex min-w-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                               onClick={() => {
                                 setEditingOwner(key);
                                 setOwnerDraft(entry.assignedOwner ?? "");
                               }}
                             >
-                              {entry.assignedOwner || "—"}
+                              <span className="block max-w-[140px] truncate" title={entry.assignedOwner ?? undefined}>
+                                {entry.assignedOwner || "—"}
+                              </span>
                               <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
                             </button>
                           )}

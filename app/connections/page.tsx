@@ -177,13 +177,13 @@ function ConnectionCard({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+          <div className="min-w-0 flex-1 space-y-1">
+            <CardTitle className="text-base flex min-w-0 items-center gap-2 truncate" title={conn.name}>
+              <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
               {conn.name}
             </CardTitle>
             <CardDescription className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs capitalize">
+              <Badge variant="outline" className="max-w-full text-xs capitalize" title={conn.connectorType}>
                 {conn.connectorType}
               </Badge>
               <Badge

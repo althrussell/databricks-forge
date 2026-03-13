@@ -304,7 +304,7 @@ export default function KnowledgeBasePage() {
                   >
                     <FileText className="size-5 shrink-0 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.filename}</p>
+                      <p className="text-sm font-medium truncate" title={doc.filename}>{doc.filename}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-muted-foreground">
                           {formatSize(doc.sizeBytes)}

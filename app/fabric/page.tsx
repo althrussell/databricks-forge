@@ -282,7 +282,7 @@ export default function FabricHubPage() {
                         </div>
                       </div>
                       {scan.errorMessage && (
-                        <p className="text-xs text-destructive mt-2 truncate">
+                        <p className="text-xs text-destructive mt-2 truncate" title={scan.errorMessage}>
                           {scan.errorMessage}
                         </p>
                       )}

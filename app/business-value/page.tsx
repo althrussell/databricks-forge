@@ -295,12 +295,14 @@ async function PortfolioContent() {
               <Card key={i} className="group transition-colors hover:border-primary/30">
                 <CardContent className="pt-4 pb-4">
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex items-center gap-2">
                       <SeverityIcon severity={f.severity} />
-                      <span className="text-sm font-medium leading-tight">{f.title}</span>
+                      <span className="truncate text-sm font-medium leading-tight" title={f.title}>
+                        {f.title}
+                      </span>
                     </div>
                     {f.domain && (
-                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      <Badge variant="secondary" className="max-w-full shrink-0 text-[10px]" title={f.domain}>
                         {f.domain}
                       </Badge>
                     )}
@@ -405,7 +407,11 @@ async function PortfolioContent() {
                     const intensity = (d.valueMid || d.useCaseCount) / maxDomainValue;
                     return (
                       <TableRow key={d.domain}>
-                        <TableCell className="font-medium">{d.domain}</TableCell>
+                        <TableCell className="font-medium">
+                          <span className="block truncate max-w-[200px]" title={d.domain}>
+                            {d.domain}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">
                           {formatCurrency(d.valueMid)}
                         </TableCell>
@@ -451,8 +457,10 @@ async function PortfolioContent() {
                         {i + 1}
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{r.title}</span>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium" title={r.title}>
+                            {r.title}
+                          </span>
                           <PriorityBadge priority={r.priority} />
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -480,8 +488,10 @@ async function PortfolioContent() {
                         !
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{r.title}</span>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium" title={r.title}>
+                            {r.title}
+                          </span>
                           <PriorityBadge priority={r.impact} />
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
