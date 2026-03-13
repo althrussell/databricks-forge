@@ -64,11 +64,20 @@ export function resolveEndpoint(tier: TaskTier): string {
   // Try tier-matched endpoints first (priority-sorted)
   const tierNames = candidates.map((c) => c.name);
   const best = limiter.bestAvailable(tierNames);
-  if (best) return best;
 
-  // All tier endpoints saturated -- try any endpoint in the pool
+  // If the best tier-matched endpoint is not blocked, use it directly.
+  // If it IS blocked (429 backoff), overflow to any pool endpoint so
+  // other models can absorb the load instead of queuing behind the backoff.
+  if (best && !limiter.isBlocked(best)) return best;
+
+  // All tier endpoints blocked or saturated -- try any endpoint in the pool
   const allNames = getModelPool().map((ep) => ep.name);
   const fallback = limiter.bestAvailable(allNames);
+  if (fallback && !limiter.isBlocked(fallback)) return fallback;
+
+  // Everything blocked -- return the least-loaded tier endpoint (will wait
+  // for the backoff to expire inside the rate limiter acquire() call)
+  if (best) return best;
   if (fallback) return fallback;
 
   return legacyResolve(tier);

@@ -1169,6 +1169,11 @@ const VIEW_FQN_RE =
  * success. The temp view uses a `__<prefix>validate_` prefix so it is
  * distinguishable from real views and is always cleaned up in a finally block.
  */
+const DRY_RUN_TIMEOUT: { waitTimeout: string; submitTimeoutMs: number } = {
+  waitTimeout: "30s",
+  submitTimeoutMs: 35_000,
+};
+
 export async function dryRunMetricViewDdl(
   ddl: string,
   resourcePrefix?: string,
@@ -1186,13 +1191,18 @@ export async function dryRunMetricViewDdl(
   );
 
   try {
-    await executeSQL(tempDdl);
+    await executeSQL(tempDdl, undefined, undefined, DRY_RUN_TIMEOUT);
     return null;
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
   } finally {
     try {
-      await executeSQL(`DROP VIEW IF EXISTS \`${parts[0]}\`.\`${parts[1]}\`.\`${tempName}\``);
+      await executeSQL(
+        `DROP VIEW IF EXISTS \`${parts[0]}\`.\`${parts[1]}\`.\`${tempName}\``,
+        undefined,
+        undefined,
+        DRY_RUN_TIMEOUT,
+      );
     } catch {
       logger.warn("Failed to drop temp validation view", { tempFqn });
     }
@@ -1564,6 +1574,17 @@ const COLUMN_ERROR_PATTERNS = [
   "Nested aggregate",
 ];
 
+const DRY_RUN_REPAIRABLE_PATTERNS = [
+  "METRIC_VIEW_INVALID_VIEW_DEFINITION",
+  "UNRESOLVED_COLUMN",
+  "FIELD_NOT_FOUND",
+  "TABLE_OR_VIEW_NOT_FOUND",
+];
+
+function hasDryRunRepairableError(issues: string[]): boolean {
+  return issues.some((i) => DRY_RUN_REPAIRABLE_PATTERNS.some((p) => i.includes(p)));
+}
+
 export function hasColumnErrors(issues: string[]): boolean {
   return issues.some((i) => COLUMN_ERROR_PATTERNS.some((p) => i.includes(p)));
 }
@@ -1721,6 +1742,7 @@ export async function runMetricViewProposals(
 
   // Build seed YAML from existing measures/dimensions
   const primaryTable = tableFqns[0];
+  const scope = primaryTable.split(".").slice(0, 2).join(".");
   const seedYaml = buildSeedYaml(primaryTable, measures, dimensions);
 
   // Determine if materialization should be suggested
@@ -1766,12 +1788,14 @@ ${joinSpecs.length === 0 ? "- There are NO join relationships — do NOT create 
     {
       "name": "metric_view_name",
       "description": "What this metric view measures and why it is useful",
-      "yaml": "version: 1.1\\nsource: catalog.schema.table\\n...",
-      "ddl": "CREATE OR REPLACE VIEW catalog.schema.metric_view_name\\nWITH METRICS\\nLANGUAGE YAML\\nAS $$\\n...\\n$$",
-      "sourceTables": ["catalog.schema.table", "catalog.schema.dim_table"]
+      "yaml": "version: 1.1\\nsource: ${scope}.table\\n...",
+      "ddl": "CREATE OR REPLACE VIEW ${scope}.metric_view_name\\nWITH METRICS\\nLANGUAGE YAML\\nAS $$\\n...\\n$$",
+      "sourceTables": ["${scope}.table", "${scope}.dim_table"]
     }
   ]
 }
+
+IMPORTANT: Use the REAL catalog and schema from the schema context (${scope}) in all source, DDL, and sourceTables references. Do NOT use placeholder names like "catalog.schema".
 
 IMPORTANT:
 - The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.
@@ -1827,6 +1851,10 @@ Create metric view proposals for this domain.`;
       .map((p) => {
         let yamlStr = String(p.yaml ?? "");
         let ddlStr = String(p.ddl ?? "");
+
+        // Replace literal placeholder catalog.schema with real scope
+        yamlStr = yamlStr.replace(/\bcatalog\.schema\b/g, scope);
+        ddlStr = ddlStr.replace(/\bcatalog\.schema\b/g, scope);
 
         // Safety net: strip FQN column prefixes from YAML expr/on lines in the DDL.
         // Preserve CREATE VIEW and source: lines (those need FQN).
@@ -2019,6 +2047,61 @@ Create metric view proposals for this domain.`;
           });
         }
       }
+    }
+
+    // Post-dry-run repair: attempt LLM repair for proposals that failed dry-run
+    // with repairable errors (e.g. METRIC_VIEW_INVALID_VIEW_DEFINITION)
+    for (let i = 0; i < proposals.length; i++) {
+      const proposal = proposals[i];
+      if (
+        proposal.validationStatus !== "error" ||
+        !hasDryRunRepairableError(proposal.validationIssues)
+      ) {
+        continue;
+      }
+
+      logger.info("Attempting LLM repair for metric view with dry-run error", {
+        domain,
+        name: proposal.name,
+        issues: proposal.validationIssues,
+      });
+
+      const repaired = await repairProposal(proposal, schemaBlock, columnsBlock, endpoint, signal);
+      if (!repaired) continue;
+
+      repaired.yaml = nestSnowflakeJoins(repaired.yaml);
+      repaired.ddl = nestSnowflakeJoins(repaired.ddl);
+      repaired.yaml = qualifyNestedAliasRefs(repaired.yaml);
+      repaired.ddl = qualifyNestedAliasRefs(repaired.ddl);
+
+      const revalidation = validateMetricViewYaml(repaired.yaml, repaired.ddl, allowlist);
+      if (revalidation.status === "error") continue;
+
+      const reDryRunError = await dryRunMetricViewDdl(repaired.ddl);
+      if (reDryRunError) {
+        logger.warn("Post-dry-run LLM repair still fails dry-run", {
+          domain,
+          name: proposal.name,
+          error: reDryRunError,
+        });
+        continue;
+      }
+
+      const reFeatures = detectFeatures(repaired.yaml);
+      proposals[i] = {
+        ...repaired,
+        hasJoins: reFeatures.hasJoins,
+        hasFilteredMeasures: reFeatures.hasFilteredMeasures,
+        hasWindowMeasures: reFeatures.hasWindowMeasures,
+        hasMaterialization: reFeatures.hasMaterialization,
+        validationStatus: revalidation.status,
+        validationIssues: revalidation.issues,
+      };
+
+      logger.info("Post-dry-run LLM repair succeeded", {
+        domain,
+        name: proposal.name,
+      });
     }
 
     // LLM review gate: review DDL for proposals that passed validation (parallel)
