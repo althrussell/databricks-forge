@@ -361,7 +361,7 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
     endpoint,
     messages,
     temperature: 0.2,
-    maxTokens: 8192,
+    maxTokens: 6144,
     responseFormat: "json_object",
     signal,
   });

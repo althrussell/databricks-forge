@@ -1,9 +1,9 @@
 /**
  * API: /api/genie-spaces/[spaceId]/improve
  *
- * POST -- Start a full Genie Engine improvement run for an existing space.
- *         Extracts tables from the current serialized_space and runs the
- *         ad-hoc engine in full mode asynchronously.
+ * POST -- Health-check-driven targeted improvement.  Diagnoses what the space
+ *         is missing, then runs only the fix strategies needed.  Falls back
+ *         to a full ad-hoc engine rebuild when mode: "full" is requested.
  *
  * GET  -- Poll improvement status for a space.
  *
@@ -15,6 +15,8 @@ import { getGenieSpace, sanitizeSerializedSpace } from "@/lib/dbx/genie";
 import { runAdHocGenieEngine, type AdHocGenieConfig } from "@/lib/genie/adhoc-engine";
 import { getSpaceCache, setSpaceCache } from "@/lib/genie/space-cache";
 import { parseSerializedSpace } from "@/lib/genie/space-metadata";
+import { runHealthCheck } from "@/lib/genie/space-health-check";
+import { runFixes } from "@/lib/genie/space-fixer";
 import {
   startImproveJob,
   getImproveJob,
@@ -25,6 +27,7 @@ import {
   dismissImproveJob,
   computeImproveStats,
   computeImproveChanges,
+  type ImproveHealthDiagnostics,
 } from "@/lib/genie/improve-jobs";
 import { isSafeId } from "@/lib/validation";
 import { logger } from "@/lib/logger";
@@ -80,70 +83,193 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}));
     const userConfig = (body as { config?: Partial<AdHocGenieConfig> }).config;
+    const forceFullRebuild = userConfig?.mode === "full";
 
     const controller = startImproveJob(spaceId);
 
-    const config: AdHocGenieConfig = {
-      mode: "full",
-      title,
-      description,
-      generateBenchmarks: true,
-      generateTrustedAssets: true,
-      ...userConfig,
-    };
-
-    logger.info("Starting Genie Engine improvement", {
-      spaceId,
-      tableCount: tables.length,
-      title,
-    });
-
-    runAdHocGenieEngine({
-      tables,
-      config,
-      signal: controller.signal,
-      onProgress: (message, percent) => {
-        updateImproveJob(spaceId, message, percent);
-      },
-    })
-      .then((engineResult) => {
-        const newSerializedSpace = sanitizeSerializedSpace(
-          engineResult.recommendation.serializedSpace,
-        );
-
-        const statsBefore = computeImproveStats(serializedSpace!);
-        const statsAfter = computeImproveStats(newSerializedSpace);
-        const changes = computeImproveChanges(statsBefore, statsAfter);
-
-        const recommendation: GenieSpaceRecommendation = {
-          ...engineResult.recommendation,
-          serializedSpace: newSerializedSpace,
-        };
-
-        completeImproveJob(spaceId, {
-          recommendation,
-          originalSerializedSpace: serializedSpace!,
-          changes,
-          statsBefore,
-          statsAfter,
-        });
-
-        logger.info("Genie Engine improvement completed", {
-          spaceId,
-          changeCount: changes.length,
-        });
-      })
-      .catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error("Genie Engine improvement failed", { spaceId, error: msg });
-        failImproveJob(spaceId, msg);
-      });
+    if (forceFullRebuild) {
+      runFullImprove(spaceId, tables, title, description, serializedSpace!, userConfig, controller);
+    } else {
+      runTargetedImprove(spaceId, serializedSpace!, parsed, controller);
+    }
 
     return NextResponse.json({ spaceId, status: "generating" });
   } catch (error) {
     logger.error("Improve endpoint error", { error: safeErrorMessage(error) });
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
+}
+
+/**
+ * Targeted improve: run health check, identify gaps, fix only what's needed.
+ */
+function runTargetedImprove(
+  spaceId: string,
+  serializedSpace: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parsed: any,
+  controller: AbortController,
+): void {
+  (async () => {
+    try {
+      updateImproveJob(spaceId, "Diagnosing space health...", 10);
+
+      const report = runHealthCheck(parsed);
+
+      const failedFixable = report.checks
+        .filter((c) => !c.passed && c.fixable)
+        .map((c) => ({ id: c.id, detail: c.detail }));
+
+      const failedCheckIds = failedFixable.map((c) => c.id);
+
+      logger.info("Improve: health check complete", {
+        spaceId,
+        score: report.overallScore,
+        grade: report.grade,
+        totalChecks: report.checks.length,
+        failedFixable: failedCheckIds.length,
+        failedCheckIds,
+      });
+
+      if (failedCheckIds.length === 0) {
+        const stats = computeImproveStats(serializedSpace);
+        const diagnostics: ImproveHealthDiagnostics = {
+          healthScore: report.overallScore,
+          grade: report.grade,
+          failedChecks: [],
+          strategiesRun: [],
+          mode: "targeted",
+        };
+        completeImproveJob(spaceId, {
+          originalSerializedSpace: serializedSpace,
+          changes: [],
+          statsBefore: stats,
+          statsAfter: stats,
+          diagnostics,
+        });
+        logger.info("Improve: space is healthy, no fixes needed", {
+          spaceId,
+          score: report.overallScore,
+          grade: report.grade,
+        });
+        return;
+      }
+
+      updateImproveJob(
+        spaceId,
+        `Fixing ${failedCheckIds.length} issue${failedCheckIds.length !== 1 ? "s" : ""}...`,
+        30,
+      );
+
+      const fixResult = await runFixes({
+        checkIds: failedCheckIds,
+        serializedSpace,
+      });
+
+      const newSerializedSpace = JSON.stringify(fixResult.updatedSpace);
+      const statsBefore = computeImproveStats(serializedSpace);
+      const statsAfter = computeImproveStats(newSerializedSpace);
+      const changes = computeImproveChanges(statsBefore, statsAfter);
+
+      const diagnostics: ImproveHealthDiagnostics = {
+        healthScore: report.overallScore,
+        grade: report.grade,
+        failedChecks: failedFixable,
+        strategiesRun: fixResult.strategiesRun,
+        mode: "targeted",
+      };
+
+      completeImproveJob(spaceId, {
+        originalSerializedSpace: serializedSpace,
+        changes: [...fixResult.changes, ...changes.filter((c) => !fixResult.changes.some((fc) => fc.section === c.section))],
+        statsBefore,
+        statsAfter,
+        diagnostics,
+      });
+
+      logger.info("Targeted improve complete", {
+        spaceId,
+        healthScore: report.overallScore,
+        strategiesRun: fixResult.strategiesRun,
+        changeCount: fixResult.changes.length,
+      });
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Targeted improve failed", { spaceId, error: msg });
+      failImproveJob(spaceId, msg);
+    }
+  })();
+}
+
+/**
+ * Full rebuild: extract tables and run the full ad-hoc engine (legacy path).
+ */
+function runFullImprove(
+  spaceId: string,
+  tables: string[],
+  title: string,
+  description: string,
+  serializedSpace: string,
+  userConfig: Partial<AdHocGenieConfig> | undefined,
+  controller: AbortController,
+): void {
+  const config: AdHocGenieConfig = {
+    mode: "full",
+    title,
+    description,
+    generateBenchmarks: true,
+    generateTrustedAssets: true,
+    ...userConfig,
+  };
+
+  logger.info("Starting Genie Engine full improvement", {
+    spaceId,
+    tableCount: tables.length,
+    title,
+  });
+
+  runAdHocGenieEngine({
+    tables,
+    config,
+    signal: controller.signal,
+    onProgress: (message, percent) => {
+      updateImproveJob(spaceId, message, percent);
+    },
+  })
+    .then((engineResult) => {
+      const newSerializedSpace = sanitizeSerializedSpace(
+        engineResult.recommendation.serializedSpace,
+      );
+
+      const statsBefore = computeImproveStats(serializedSpace);
+      const statsAfter = computeImproveStats(newSerializedSpace);
+      const changes = computeImproveChanges(statsBefore, statsAfter);
+
+      const recommendation: GenieSpaceRecommendation = {
+        ...engineResult.recommendation,
+        serializedSpace: newSerializedSpace,
+      };
+
+      completeImproveJob(spaceId, {
+        recommendation,
+        originalSerializedSpace: serializedSpace,
+        changes,
+        statsBefore,
+        statsAfter,
+        diagnostics: { healthScore: 0, grade: "?", failedChecks: [], strategiesRun: [], mode: "full" },
+      });
+
+      logger.info("Genie Engine full improvement completed", {
+        spaceId,
+        changeCount: changes.length,
+      });
+    })
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Genie Engine full improvement failed", { spaceId, error: msg });
+      failImproveJob(spaceId, msg);
+    });
 }
 
 export async function GET(

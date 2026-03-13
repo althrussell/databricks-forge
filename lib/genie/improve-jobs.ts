@@ -7,12 +7,21 @@
 
 import type { GenieSpaceRecommendation } from "./types";
 
+export interface ImproveHealthDiagnostics {
+  healthScore: number;
+  grade: string;
+  failedChecks: { id: string; detail?: string }[];
+  strategiesRun: string[];
+  mode: "targeted" | "full";
+}
+
 export interface ImproveJobResult {
-  recommendation: GenieSpaceRecommendation;
+  recommendation?: GenieSpaceRecommendation;
   originalSerializedSpace: string;
   changes: ImproveChange[];
   statsBefore: ImproveStats;
   statsAfter: ImproveStats;
+  diagnostics?: ImproveHealthDiagnostics;
 }
 
 export interface ImproveChange {
