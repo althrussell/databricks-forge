@@ -195,7 +195,7 @@ Plan the metric views for this data estate.`;
       endpoint,
       messages,
       temperature: PLANNING_TEMPERATURE,
-      maxTokens: 8192,
+      maxTokens: 6144,
       responseFormat: "json_object",
       signal,
     });

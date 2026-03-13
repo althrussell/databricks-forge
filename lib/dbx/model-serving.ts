@@ -195,6 +195,14 @@ export async function chatCompletion(
     if (!resp.ok) {
       const text = await resp.text();
       const retryAfterMs = resp.status === 429 ? parseRetryAfterHeader(resp) : undefined;
+      if (resp.status === 429) {
+        const rawRetryAfter = resp.headers.get("Retry-After");
+        logger.warn("LLM 429 rate limit hit", {
+          endpoint: options.endpoint,
+          rawRetryAfterHeader: rawRetryAfter ?? "(none)",
+          computedBackoffMs: retryAfterMs,
+        });
+      }
       if (retryAfterMs) {
         limiter.backoff(options.endpoint, retryAfterMs);
       }
@@ -278,6 +286,14 @@ export async function chatCompletionStream(
     if (!resp.ok) {
       const text = await resp.text();
       const retryAfterMs = resp.status === 429 ? parseRetryAfterHeader(resp) : undefined;
+      if (resp.status === 429) {
+        const rawRetryAfter = resp.headers.get("Retry-After");
+        logger.warn("LLM 429 rate limit hit (stream)", {
+          endpoint: options.endpoint,
+          rawRetryAfterHeader: rawRetryAfter ?? "(none)",
+          computedBackoffMs: retryAfterMs,
+        });
+      }
       if (retryAfterMs) {
         limiter.backoff(options.endpoint, retryAfterMs);
       }

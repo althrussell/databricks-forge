@@ -91,7 +91,7 @@ export async function runBenchmarkGeneration(
   } = input;
 
   const effectiveBenchmarksPerBatch = benchmarksPerBatchOverride ?? BENCHMARKS_PER_BATCH;
-  const effectiveMaxTokens = maxTokensOverride ?? 8192;
+  const effectiveMaxTokens = maxTokensOverride ?? 6144;
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 

@@ -22,14 +22,13 @@ import {
   validateSqlExpression,
   type SchemaAllowlist,
 } from "../schema-allowlist";
-import { DATABRICKS_SQL_RULES_COMPACT } from "@/lib/toolkit/sql-rules";
 import { reviewBatch } from "@/lib/ai/sql-reviewer";
 import { isReviewEnabled } from "@/lib/dbx/client";
 import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
 
 const TEMPERATURE = 0.2;
-const BATCH_SIZE = 3;
+const BATCH_SIZE = 2;
 const BATCH_CONCURRENCY = 10;
 
 export interface TrustedAssetsInput {
@@ -204,33 +203,23 @@ async function processTrustedAssetBatch(
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
-From the provided SQL examples, create **parameterized queries**: Convert WHERE clause values into named parameters using :param_name syntax.
-   - Type each parameter (String, Date, Numeric) based on the column's data type
-   - For entity-matching columns, include sample values in the parameter comment
-   - Include DEFAULT NULL for optional parameters
-   - PRESERVE all human-readable identifying columns (e.g. email_address, customer_name, product_name) in the SELECT output -- do not strip them during parameterization
-   - For top-N queries, use ORDER BY ... LIMIT N, NOT RANK()/DENSE_RANK() (ties can return more than N rows)
-   - Parameterized queries are the RIGHT place for complex analytics: multi-CTE queries, window functions, statistical functions, correlation analysis, anomaly detection, benchmarking, etc. Genie learns from these patterns.
+From the provided SQL examples, create **parameterized queries**:
+- Convert WHERE clause values into named parameters using :param_name syntax
+- Type each parameter (String, Date, Numeric) based on the column's data type
+- For entity-matching columns, include sample values in the parameter comment
+- Include DEFAULT NULL for optional parameters
+- PRESERVE identifying columns (e.g. customer_name) in SELECT output
+- PRESERVE full CTE structure, business logic, thresholds, and column lists from source SQL
+- For top-N queries, use ORDER BY ... LIMIT N (not RANK/DENSE_RANK)
 
-SQL PRESERVATION RULES:
-- PRESERVE the full CTE structure and all business logic from the source SQL. Do NOT simplify, remove CTEs, drop analytical columns, or reduce query complexity.
-- PRESERVE all columns in the SELECT list exactly as they appear in the source SQL. Do NOT add columns not present in the source or remove columns that are present.
-- PRESERVE exact threshold values (LIMIT N, WHERE conditions, >= comparisons). Do NOT change numeric thresholds, filter conditions, or row limits.
-- PRESERVE window function ordering (ASC/DESC) exactly. NTILE, RANK, ROW_NUMBER semantics depend on sort direction -- reversing ORDER BY reverses the business meaning.
-- PRESERVE all statistical and advanced functions (CORR, REGR_SLOPE, REGR_INTERCEPT, REGR_R2, PERCENTILE_APPROX, SKEWNESS, KURTOSIS, CUME_DIST). These are analytical requirements, not optional embellishments.
+SQL RULES:
+- Format SQL across multiple lines with proper indentation
+- COLLATE UTF8_LCASE on BOTH sides for case-insensitive comparisons
+- Cast DOUBLE monetary columns to DECIMAL(18,2) BEFORE aggregation
+- ORDER BY must include LIMIT
+- Do NOT create UDFs -- only parameterized queries
 
-SQL QUALITY RULES (apply during parameterization):
-- Format SQL across multiple lines with proper indentation. NEVER output single-line SQL.
-- For case-insensitive parameter comparisons, use COLLATE UTF8_LCASE on BOTH sides: col COLLATE UTF8_LCASE = :param COLLATE UTF8_LCASE. One-sided collation produces unreliable results.
-- Cast DOUBLE monetary columns to DECIMAL(18,2) BEFORE aggregation: SUM(CAST(amt AS DECIMAL(18,2))), not CAST(SUM(amt) AS DECIMAL(18,2)).
-- SELECT DISTINCT: use only when source duplication is known. Prefer QUALIFY ROW_NUMBER() for deterministic deduplication.
-- ANY query with ORDER BY for ranking or preview purposes MUST include LIMIT.
-
-QUANTITY RULES:
-- Produce exactly 1 parameterized query per use case provided. If a use case has complex SQL with multiple analytical angles, you may produce 2 queries.
-- Do NOT create any SQL functions (UDFs). Only produce parameterized queries.
-
-${DATABRICKS_SQL_RULES_COMPACT}
+OUTPUT: Produce exactly 1 parameterized query per use case.
 ${getQuestionRules(questionComplexity ?? "simple")}
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
@@ -256,7 +245,7 @@ Create parameterized queries from these examples.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: maxTokensOverride ?? 12288,
+    maxTokens: maxTokensOverride ?? 6144,
     responseFormat: "json_object",
     signal,
   });
@@ -359,10 +348,11 @@ For each query:
 - Include DEFAULT NULL for optional parameters
 - ONLY use column names that appear in the SCHEMA CONTEXT
 
-QUANTITY RULES:
-- Produce 3-5 parameterized queries covering different analytical patterns.
-
-${DATABRICKS_SQL_RULES_COMPACT}
+SQL RULES:
+- Format SQL across multiple lines with proper indentation
+- COLLATE UTF8_LCASE on BOTH sides for case-insensitive comparisons
+- ORDER BY must include LIMIT
+- Produce 3-5 parameterized queries covering different analytical patterns
 ${getQuestionRules(questionComplexity ?? "simple")}
 Return JSON: {
   "queries": [{ "question": "...", "sql": "...", "parameters": [{ "name": "...", "type": "String|Date|Numeric", "comment": "...", "defaultValue": null }] }]
@@ -388,7 +378,7 @@ Create new parameterized queries based on these reference patterns.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 12288,
+    maxTokens: 6144,
     responseFormat: "json_object",
     signal,
   });

@@ -99,13 +99,13 @@ const KNOWN_MODELS: Record<string, ModelTemplate> = {
   },
   "databricks-gpt-5-4": {
     tiers: ["sql", "generation", "reasoning"],
-    maxConcurrent: 6,
+    maxConcurrent: 4,
     priority: 1,
     supportsJsonMode: true,
     maxOutputTokens: 128_000,
   },
   "databricks-gemini-3-1-flash-lite": {
-    tiers: ["classification", "lightweight"],
+    tiers: ["generation", "classification", "lightweight"],
     maxConcurrent: 12,
     priority: 0,
     supportsJsonMode: false,
@@ -113,14 +113,14 @@ const KNOWN_MODELS: Record<string, ModelTemplate> = {
   },
   "databricks-llama-4-maverick": {
     tiers: ["generation", "classification"],
-    maxConcurrent: 10,
-    priority: 0,
+    maxConcurrent: 6,
+    priority: 1,
     supportsJsonMode: false,
     maxOutputTokens: 8_192,
   },
   "databricks-gemini-3-flash": {
     tiers: ["generation", "classification", "lightweight"],
-    maxConcurrent: 10,
+    maxConcurrent: 8,
     priority: 1,
     supportsJsonMode: false,
     maxOutputTokens: 8_192,

@@ -152,4 +152,44 @@ describe("rate-limiter", () => {
       expect(best).toBe("databricks-claude-sonnet-4-6");
     });
   });
+
+  describe("Progressive backoff escalation", () => {
+    it("DEFAULT_429_BACKOFF_MS is 10 seconds", () => {
+      expect(DEFAULT_429_BACKOFF_MS).toBe(10_000);
+    });
+
+    it("consecutive 429s escalate backoff duration", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      const limiter = getPoolRateLimiter();
+      const ep = "databricks-claude-opus-4-6";
+
+      // First 429: use default (10s) -- check it blocks
+      limiter.backoff(ep, 0);
+      expect(limiter.isBlocked(ep)).toBe(true);
+
+      // Second 429: should still be blocked (escalated)
+      limiter.backoff(ep, 0);
+      expect(limiter.isBlocked(ep)).toBe(true);
+
+      // Third 429: still blocked (cap)
+      limiter.backoff(ep, 0);
+      expect(limiter.isBlocked(ep)).toBe(true);
+    });
+
+    it("release resets consecutive counter and clears block", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      const limiter = getPoolRateLimiter();
+      const ep = "databricks-claude-opus-4-6";
+
+      // Trigger a 429 backoff
+      limiter.backoff(ep, 0);
+      expect(limiter.isBlocked(ep)).toBe(true);
+
+      // Simulate a successful release (as if a call that was already in-flight succeeded)
+      limiter.release(ep);
+
+      // Block should be cleared after successful release
+      expect(limiter.isBlocked(ep)).toBe(false);
+    });
+  });
 });

@@ -55,8 +55,8 @@ const SPEED_BUDGET: GenerationBudget = {
   ],
   domainConcurrency: 3,
   maxTokensExpressions: 2048,
-  maxTokensTrustedAssets: 8192,
-  maxTokensBenchmarks: 4096,
+  maxTokensTrustedAssets: 4096,
+  maxTokensBenchmarks: 3072,
 };
 
 const BALANCED_BUDGET: GenerationBudget = {
@@ -71,8 +71,8 @@ const BALANCED_BUDGET: GenerationBudget = {
   disabledReviewSurfaces: ["genie-join-inference", "genie-metric-views"],
   domainConcurrency: 5,
   maxTokensExpressions: 3072,
-  maxTokensTrustedAssets: 12288,
-  maxTokensBenchmarks: 6144,
+  maxTokensTrustedAssets: 6144,
+  maxTokensBenchmarks: 4096,
 };
 
 const PREMIUM_BUDGET: GenerationBudget = {
@@ -87,8 +87,8 @@ const PREMIUM_BUDGET: GenerationBudget = {
   disabledReviewSurfaces: [],
   domainConcurrency: 10,
   maxTokensExpressions: 4096,
-  maxTokensTrustedAssets: 32768,
-  maxTokensBenchmarks: 8192,
+  maxTokensTrustedAssets: 8192,
+  maxTokensBenchmarks: 6144,
 };
 
 const PRESETS: Record<QualityPreset, GenerationBudget> = {
