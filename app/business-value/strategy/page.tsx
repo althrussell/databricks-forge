@@ -325,15 +325,23 @@ export default function StrategyAlignmentPage() {
                           {(doc.parsedInitiatives as StrategyInitiative[]).map((init) => (
                             <TableRow key={init.index}>
                               <TableCell>{init.index + 1}</TableCell>
-                              <TableCell className="font-medium">{init.name}</TableCell>
+                              <TableCell className="max-w-[200px] font-medium">
+                                <span className="block truncate" title={init.name}>
+                                  {init.name}
+                                </span>
+                              </TableCell>
                               <TableCell className="max-w-xs truncate">
                                 {init.description}
                               </TableCell>
                               <TableCell className="max-w-xs">
-                                {init.expectedOutcomes?.join(", ") || "-"}
+                                <span className="line-clamp-2 block" title={init.expectedOutcomes?.join(", ") || undefined}>
+                                  {init.expectedOutcomes?.join(", ") || "-"}
+                                </span>
                               </TableCell>
                               <TableCell className="max-w-xs">
-                                {init.dataRequirements?.join(", ") || "-"}
+                                <span className="line-clamp-2 block" title={init.dataRequirements?.join(", ") || undefined}>
+                                  {init.dataRequirements?.join(", ") || "-"}
+                                </span>
                               </TableCell>
                               <TableCell>
                                 <GapStatusBadge

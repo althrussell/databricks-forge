@@ -736,7 +736,7 @@ export default function EstatePage() {
                   {filteredTables.slice(0, 100).map((t) => (
                     <TableRow key={t.tableFqn}>
                       <TableCell className="font-mono text-xs">
-                        <div>{t.tableFqn}</div>
+                        <div className="truncate max-w-[300px]" title={t.tableFqn}>{t.tableFqn}</div>
                         {(t.comment || t.generatedDescription) && (
                           <div className="text-muted-foreground font-sans mt-0.5 truncate max-w-[300px]">
                             {t.comment || t.generatedDescription}
@@ -744,7 +744,7 @@ export default function EstatePage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {t.dataDomain ? <Badge variant="secondary">{t.dataDomain}</Badge> : "—"}
+                        {t.dataDomain ? <Badge variant="secondary" className="max-w-full" title={t.dataDomain}>{t.dataDomain}</Badge> : "—"}
                       </TableCell>
                       <TableCell>
                         {t.dataTier ? (
@@ -752,13 +752,14 @@ export default function EstatePage() {
                             variant="outline"
                             className={
                               t.dataTier === "gold"
-                                ? "border-yellow-500 text-yellow-700"
+                                ? "border-yellow-500 text-yellow-700 max-w-full"
                                 : t.dataTier === "silver"
-                                  ? "border-gray-400 text-gray-600"
+                                  ? "border-gray-400 text-gray-600 max-w-full"
                                   : t.dataTier === "bronze"
-                                    ? "border-orange-500 text-orange-700"
-                                    : "border-blue-400 text-blue-600"
+                                    ? "border-orange-500 text-orange-700 max-w-full"
+                                    : "border-blue-400 text-blue-600 max-w-full"
                             }
+                            title={t.dataTier}
                           >
                             {t.dataTier}
                           </Badge>
@@ -791,9 +792,9 @@ export default function EstatePage() {
                       <TableCell>
                         {t.sensitivityLevel === "confidential" ||
                         t.sensitivityLevel === "restricted" ? (
-                          <Badge variant="destructive">{t.sensitivityLevel}</Badge>
+                          <Badge variant="destructive" className="max-w-full" title={t.sensitivityLevel}>{t.sensitivityLevel}</Badge>
                         ) : t.sensitivityLevel ? (
-                          <Badge variant="secondary">{t.sensitivityLevel}</Badge>
+                          <Badge variant="secondary" className="max-w-full" title={t.sensitivityLevel}>{t.sensitivityLevel}</Badge>
                         ) : (
                           "—"
                         )}

@@ -218,7 +218,7 @@ export function CommentReviewPanel({
                 <div className="bg-background px-3 py-2 text-center">Actions</div>
               </div>
 
-              {columnProposals.map((p) => (
+              {columnProposals.map((p, idx) => (
                 <div
                   key={p.id}
                   className={cn(
@@ -227,6 +227,7 @@ export function CommentReviewPanel({
                     p.status === "rejected" && "bg-red-50/50 dark:bg-red-950/10",
                     p.status === "applied" && "bg-blue-50/50 dark:bg-blue-950/10",
                     p.status === "failed" && "bg-destructive/5",
+                    p.status === "pending" && idx % 2 === 1 && "bg-muted/30",
                   )}
                 >
                   <div className="px-3 py-2">

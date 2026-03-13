@@ -391,7 +391,7 @@ export function GenieBuilderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-5 text-primary" />
@@ -414,6 +414,7 @@ export function GenieBuilderModal({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Generating phase */}
         {phase === "generating" && (
           <div className="space-y-4 py-4">
@@ -684,6 +685,8 @@ export function GenieBuilderModal({
             </div>
           </div>
         )}
+
+        </div>
 
         {/* Footer actions */}
         {phase === "ready" && recommendation && (

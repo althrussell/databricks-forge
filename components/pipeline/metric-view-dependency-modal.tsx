@@ -245,8 +245,8 @@ export function MetricViewDependencyModal({
                     <div key={mv.fqn} className="flex items-center gap-2 py-1">
                       <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
                       <div className="min-w-0">
-                        <code className="text-xs font-mono truncate block">{mv.name}</code>
-                        <p className="text-[10px] text-muted-foreground truncate">
+                        <code className="text-xs font-mono truncate block" title={mv.name}>{mv.name}</code>
+                        <p className="text-[10px] text-muted-foreground truncate" title={mv.existingFqn}>
                           {mv.existingFqn}
                         </p>
                       </div>
@@ -268,7 +268,7 @@ export function MetricViewDependencyModal({
                   {noDdl.map((mv) => (
                     <div key={mv.fqn} className="flex items-center gap-2 py-1">
                       <XCircle className="h-3 w-3 text-destructive shrink-0" />
-                      <code className="text-xs font-mono truncate">{mv.name}</code>
+                      <code className="text-xs font-mono truncate" title={mv.name}>{mv.name}</code>
                     </div>
                   ))}
                 </div>
@@ -296,7 +296,7 @@ export function MetricViewDependencyModal({
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <code className="text-xs font-mono truncate">{mv.name}</code>
+                            <code className="text-xs font-mono truncate" title={mv.name}>{mv.name}</code>
                             <Badge
                               variant="outline"
                               className="text-[9px] shrink-0 border-violet-500/50 text-violet-600"
@@ -304,7 +304,7 @@ export function MetricViewDependencyModal({
                               Metric View
                             </Badge>
                           </div>
-                          <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                          <p className="text-[10px] text-muted-foreground mt-0.5 truncate" title={mv.fqn}>
                             {mv.fqn}
                           </p>
                         </div>
@@ -378,12 +378,12 @@ export function MetricViewDependencyModal({
                     <XCircle className="h-4 w-4 text-destructive shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <code className="text-xs font-mono truncate block">{o.name}</code>
+                    <code className="text-xs font-mono truncate block" title={o.name}>{o.name}</code>
                     {o.success && o.deployedFqn && (
-                      <p className="text-[10px] text-green-600 truncate">{o.deployedFqn}</p>
+                      <p className="text-[10px] text-green-600 truncate" title={o.deployedFqn}>{o.deployedFqn}</p>
                     )}
                     {!o.success && o.error && (
-                      <p className="text-[10px] text-destructive truncate">{o.error}</p>
+                      <p className="text-[10px] text-destructive truncate" title={o.error}>{o.error}</p>
                     )}
                   </div>
                 </div>

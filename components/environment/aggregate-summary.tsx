@@ -169,7 +169,9 @@ export function AggregateSummary({
                   <TableBody>
                     {stats.coverageByScope.map((c) => (
                       <TableRow key={c.scanId}>
-                        <TableCell className="font-mono text-xs">{c.ucPath}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                        <span className="block truncate max-w-[300px]" title={c.ucPath}>{c.ucPath}</span>
+                      </TableCell>
                         <TableCell>
                           <Badge variant={c.runId ? "default" : "secondary"} className="text-xs">
                             {c.runId ? `Run ${c.runId.slice(0, 8)}` : "Standalone"}
@@ -214,7 +216,7 @@ export function AggregateSummary({
             <AlertDialogTitle>Delete scan?</AlertDialogTitle>
             <AlertDialogDescription>
               Delete the scan for{" "}
-              <span className="font-mono font-medium">{deleteTarget?.ucPath}</span>? This
+              <span className="font-mono font-medium break-all">{deleteTarget?.ucPath}</span>? This
               permanently removes all table details, history, lineage, and insights for this scan.
             </AlertDialogDescription>
           </AlertDialogHeader>

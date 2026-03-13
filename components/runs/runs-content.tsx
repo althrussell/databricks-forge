@@ -272,8 +272,15 @@ export function RunsContent({
                     className="cursor-pointer transition-colors hover:bg-row-hover"
                     onClick={() => router.push(`/runs/${run.runId}`)}
                   >
-                    <TableCell className="font-medium">{run.config.businessName}</TableCell>
-                    <TableCell className="max-w-[200px] truncate font-mono text-xs">
+                    <TableCell className="font-medium">
+                      <span
+                        className="block max-w-[200px] truncate"
+                        title={run.config.businessName}
+                      >
+                        {run.config.businessName}
+                      </span>
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate font-mono text-xs" title={run.config.ucMetadata}>
                       {run.config.ucMetadata}
                     </TableCell>
                     <TableCell>
@@ -301,7 +308,7 @@ export function RunsContent({
                         <span className="text-xs text-muted-foreground">{run.progressPct}%</span>
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
+                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground" title={run.statusMessage ?? "\u2014"}>
                       {run.statusMessage ?? "\u2014"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

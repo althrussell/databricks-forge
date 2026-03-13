@@ -173,7 +173,7 @@ export function MetricViewDeployModal({
                   </p>
                   <div className="space-y-0.5 max-h-32 overflow-y-auto">
                     {proposals.map((p) => (
-                      <p key={p.id} className="text-xs font-mono truncate">
+                      <p key={p.id} className="text-xs font-mono truncate" title={p.name}>
                         {p.name}
                       </p>
                     ))}
@@ -204,12 +204,12 @@ export function MetricViewDeployModal({
                     <XCircle className="h-4 w-4 text-destructive shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <code className="text-xs font-mono truncate block">{o.name}</code>
+                    <code className="text-xs font-mono truncate block" title={o.name}>{o.name}</code>
                     {o.success && o.deployedFqn && (
-                      <p className="text-[10px] text-green-600 truncate">{o.deployedFqn}</p>
+                      <p className="text-[10px] text-green-600 truncate" title={o.deployedFqn}>{o.deployedFqn}</p>
                     )}
                     {!o.success && o.error && (
-                      <p className="text-[10px] text-destructive truncate">{o.error}</p>
+                      <p className="text-[10px] text-destructive truncate" title={o.error}>{o.error}</p>
                     )}
                   </div>
                 </div>

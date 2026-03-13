@@ -103,7 +103,7 @@ export function HealthDetailSheet({
             <Shield className="size-5" />
             Health Report
           </SheetTitle>
-          <SheetDescription className="truncate">{spaceTitle}</SheetDescription>
+          <SheetDescription className="truncate" title={spaceTitle}>{spaceTitle}</SheetDescription>
         </SheetHeader>
 
         {loading ? (

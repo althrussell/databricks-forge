@@ -116,7 +116,7 @@ export function MetadataGenieDeployModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {step === "done" ? "Deployment Complete" : `Deploy ${spaceTitle}`}
@@ -129,10 +129,11 @@ export function MetadataGenieDeployModal({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Schema selection */}
         {step === "schema" && (
           <div className="space-y-4">
-            <div className="max-h-80 overflow-y-auto rounded-md border">
+            <div className="rounded-md border">
               <CatalogBrowser
                 selectedSources={targetSchema}
                 onSelectionChange={handleSchemaChange}
@@ -175,6 +176,8 @@ export function MetadataGenieDeployModal({
             </Button>
           </div>
         )}
+
+        </div>
 
         <DialogFooter>
           {step === "schema" && (

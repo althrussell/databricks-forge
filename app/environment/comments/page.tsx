@@ -684,7 +684,7 @@ export default function AICommentsPage() {
       {/* New Job Dialog                                                    */}
       {/* ---------------------------------------------------------------- */}
       <Dialog open={newJobOpen} onOpenChange={setNewJobOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>New Comment Job</DialogTitle>
             <DialogDescription>
@@ -693,7 +693,7 @@ export default function AICommentsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 pt-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-6 pt-2">
             <div>
               <h3 className="text-sm font-medium mb-2">Select Scope</h3>
               <p className="text-xs text-muted-foreground mb-3">

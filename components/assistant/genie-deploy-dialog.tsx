@@ -153,7 +153,7 @@ export function GenieDeployDialog({ open, onOpenChange, jobId }: GenieDeployDial
   if (!recommendation || !parsedSpace) {
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Loading...</DialogTitle>
           </DialogHeader>
@@ -167,7 +167,7 @@ export function GenieDeployDialog({ open, onOpenChange, jobId }: GenieDeployDial
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-2xl flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-5 text-primary" />
@@ -186,6 +186,7 @@ export function GenieDeployDialog({ open, onOpenChange, jobId }: GenieDeployDial
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Deploying phase */}
         {phase === "deploying" && (
           <div className="flex items-center gap-3 py-8">
@@ -372,6 +373,8 @@ export function GenieDeployDialog({ open, onOpenChange, jobId }: GenieDeployDial
               )}
           </div>
         )}
+
+        </div>
 
         {/* Footer */}
         {(phase === "idle" || (phase === "error" && !deployedSpaceId)) && (

@@ -305,7 +305,7 @@ export function UseCaseTable({
                     <React.Fragment key={uc.id}>
                       <TableRow
                         id={`uc-${uc.id}`}
-                        className={`cursor-pointer transition-colors hover:bg-muted/50${idx % 2 === 1 ? " bg-muted/25" : ""}${highlightUseCaseId === uc.id ? " ring-2 ring-primary ring-offset-2" : ""}`}
+                        className={`cursor-pointer transition-colors hover:bg-muted/50${highlightUseCaseId === uc.id ? " ring-2 ring-primary ring-offset-2" : ""}`}
                         onClick={() => setExpandedId(isExpanded ? null : uc.id)}
                       >
                         <TableCell className="font-mono text-xs text-muted-foreground">
@@ -321,7 +321,7 @@ export function UseCaseTable({
                         <TableCell className="max-w-[300px]">
                           <div className="flex items-center gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium">{uc.name}</p>
+                              <p className="truncate font-medium" title={uc.name}>{uc.name}</p>
                               {!isExpanded && (
                                 <p className="line-clamp-1 text-xs text-muted-foreground">
                                   {uc.statement}
@@ -337,11 +337,11 @@ export function UseCaseTable({
                           <TypeBadge type={uc.type} />
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-sm">{uc.domain}</span>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate text-sm" title={uc.domain}>{uc.domain}</span>
                             {uc.subdomain && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="truncate text-xs text-muted-foreground" title={uc.subdomain}>
                                 / {uc.subdomain}
                               </span>
                             )}
@@ -506,12 +506,12 @@ export function UseCaseTable({
               {/* Tags row */}
               <div className="mt-3 flex flex-wrap gap-2">
                 <TypeBadge type={selectedUseCase.type} />
-                <Badge variant="secondary" className="gap-1">
+                <Badge variant="secondary" className="max-w-full gap-1" title={selectedUseCase.domain}>
                   <Layers className="h-3 w-3" />
                   {selectedUseCase.domain}
                 </Badge>
                 {selectedUseCase.subdomain && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="max-w-full gap-1" title={selectedUseCase.subdomain}>
                     <Tag className="h-3 w-3" />
                     {selectedUseCase.subdomain}
                   </Badge>
@@ -827,7 +827,8 @@ export function UseCaseTable({
                             {selectedUseCase.enrichmentTags.includes("benchmark") && (
                               <Badge
                                 variant="outline"
-                                className="gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400"
+                                className="max-w-full gap-1 border-amber-400/60 text-amber-700 dark:text-amber-400"
+                                title="Benchmark"
                               >
                                 <BarChart3 className="h-2.5 w-2.5" />
                                 Benchmark
@@ -836,7 +837,8 @@ export function UseCaseTable({
                             {selectedUseCase.enrichmentTags.includes("outcome_map") && (
                               <Badge
                                 variant="outline"
-                                className="gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400"
+                                className="max-w-full gap-1 border-blue-400/60 text-blue-700 dark:text-blue-400"
+                                title="Outcome Map"
                               >
                                 <Target className="h-2.5 w-2.5" />
                                 Outcome Map
@@ -845,7 +847,8 @@ export function UseCaseTable({
                             {selectedUseCase.enrichmentTags.includes("document") && (
                               <Badge
                                 variant="outline"
-                                className="gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400"
+                                className="max-w-full gap-1 border-purple-400/60 text-purple-700 dark:text-purple-400"
+                                title="Document"
                               >
                                 <FileText className="h-2.5 w-2.5" />
                                 Document
@@ -880,19 +883,19 @@ export function UseCaseTable({
                                 <Badge
                                   key={t}
                                   variant="outline"
-                                  className={`gap-1 font-mono text-[11px] font-normal ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
+                                  className={`max-w-full gap-1 font-mono text-[11px] font-normal ${isLineage ? "border-dashed border-blue-400/60" : ""}`}
                                   title={
                                     isLineage
                                       ? "This table was automatically discovered via data lineage — it was not in your original catalog/schema selection."
-                                      : undefined
+                                      : t
                                   }
                                 >
                                   {isLineage ? (
-                                    <Link2 className="h-2.5 w-2.5 text-blue-500" />
+                                    <Link2 className="h-2.5 w-2.5 shrink-0 text-blue-500" />
                                   ) : (
-                                    <Database className="h-2.5 w-2.5 text-muted-foreground" />
+                                    <Database className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                                   )}
-                                  {t}
+                                  <span className="truncate">{t}</span>
                                   {isLineage && (
                                     <span className="text-[9px] text-blue-500">via lineage</span>
                                   )}

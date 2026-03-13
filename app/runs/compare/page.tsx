@@ -414,7 +414,9 @@ function RunSummaryCard({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">{label}</CardTitle>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="truncate text-sm font-medium">{label}</CardTitle>
+          </div>
           <Badge variant="secondary">{run.status}</Badge>
         </div>
         <CardDescription>

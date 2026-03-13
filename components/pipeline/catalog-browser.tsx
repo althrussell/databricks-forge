@@ -755,10 +755,11 @@ export function CatalogBrowser({
                     <Badge
                       key={source}
                       variant="outline"
-                      className="gap-1 border-emerald-200 bg-emerald-50 pr-1 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400"
+                      className="max-w-[250px] gap-1 border-emerald-200 bg-emerald-50 pr-1 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400"
+                      title={source}
                     >
-                      <Icon className="h-3 w-3" />
-                      {source}
+                      <Icon className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{source}</span>
                       <button
                         type="button"
                         onClick={() => removeSource(source)}
@@ -787,10 +788,11 @@ export function CatalogBrowser({
                     <Badge
                       key={source}
                       variant="outline"
-                      className="gap-1 border-red-200 bg-red-50 pr-1 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400"
+                      className="max-w-[250px] gap-1 border-red-200 bg-red-50 pr-1 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400"
+                      title={source}
                     >
-                      <Icon className="h-3 w-3" />
-                      <span className="line-through">{source}</span>
+                      <Icon className="h-3 w-3 shrink-0" />
+                      <span className="truncate line-through">{source}</span>
                       <button
                         type="button"
                         onClick={() => restoreExcluded(source)}
@@ -905,7 +907,8 @@ function CatalogRow({
         <button
           type="button"
           onClick={onToggleCatalog}
-          className={`flex-1 text-left text-sm font-medium ${catalogExcluded ? "line-through text-muted-foreground" : ""}`}
+          className={`min-w-0 flex-1 truncate text-left text-sm font-medium ${catalogExcluded ? "line-through text-muted-foreground" : ""}`}
+          title={catalog.name}
         >
           <HighlightMatch text={catalog.name} query={searchFilter} />
         </button>
@@ -1118,13 +1121,14 @@ function SchemaRow({
         <button
           type="button"
           onClick={handleSchemaClick}
-          className={`flex-1 text-left text-sm ${
+          className={`min-w-0 flex-1 truncate text-left text-sm ${
             effectivelyExcluded
               ? "line-through text-muted-foreground"
               : schemaCovered && !schemaSelected
                 ? "text-muted-foreground"
                 : ""
           } ${isSchemaMode && schemaSelected ? "font-medium text-violet-700 dark:text-violet-400" : ""}`}
+          title={schema.name}
         >
           <HighlightMatch text={schema.name} query={searchFilter} />
           {!isSchemaMode && schema.tables.length > 0 && (

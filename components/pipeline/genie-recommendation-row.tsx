@@ -63,8 +63,8 @@ export function GenieRecommendationRow({
         />
       </td>
       <td className="px-3 py-2.5 font-medium">
-        <span className="flex items-center gap-1.5">
-          {rec.domain}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate min-w-0" title={rec.domain}>{rec.domain}</span>
           {engineGenerating && completedDomainNames.includes(rec.domain) && (
             <BrainCircuit
               className="h-3.5 w-3.5 text-violet-500"
@@ -106,7 +106,7 @@ export function GenieRecommendationRow({
       <td className="max-w-[200px] px-3 py-2.5">
         <div className="flex flex-wrap gap-1">
           {rec.subdomains.slice(0, 3).map((sd) => (
-            <Badge key={sd} variant="outline" className="text-[10px]">
+            <Badge key={sd} variant="outline" className="max-w-full text-[10px]" title={sd}>
               {sd}
             </Badge>
           ))}
