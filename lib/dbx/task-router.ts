@@ -13,6 +13,7 @@ import type { TaskTier } from "./model-registry";
 import { getModelPool, getEndpointsForTier, isMultiEndpointPool } from "./model-registry";
 import { getPoolRateLimiter } from "./rate-limiter";
 import { getServingEndpoint, getFastServingEndpoint, getReviewEndpoint } from "./client";
+import { logger } from "@/lib/logger";
 
 // Re-export TaskTier so callers only need one import
 export type { TaskTier } from "./model-registry";
@@ -50,37 +51,47 @@ function legacyResolve(tier: TaskTier): string {
  *   5. Final fallback: legacy resolution.
  */
 export function resolveEndpoint(tier: TaskTier): string {
+  let chosen: string;
+  let source: string;
+
   if (!isMultiEndpointPool()) {
-    return legacyResolve(tier);
+    chosen = legacyResolve(tier);
+    source = "legacy";
+  } else {
+    const candidates = getEndpointsForTier(tier);
+    if (candidates.length === 0) {
+      chosen = legacyResolve(tier);
+      source = "legacy-no-candidates";
+    } else {
+      const limiter = getPoolRateLimiter();
+      const tierNames = candidates.map((c) => c.name);
+      const best = limiter.bestAvailable(tierNames);
+
+      if (best && !limiter.isBlocked(best)) {
+        chosen = best;
+        source = "tier-match";
+      } else {
+        const allNames = getModelPool().map((ep) => ep.name);
+        const fallback = limiter.bestAvailable(allNames);
+        if (fallback && !limiter.isBlocked(fallback)) {
+          chosen = fallback;
+          source = "overflow";
+        } else if (best) {
+          chosen = best;
+          source = "blocked-tier";
+        } else if (fallback) {
+          chosen = fallback;
+          source = "blocked-any";
+        } else {
+          chosen = legacyResolve(tier);
+          source = "legacy-all-blocked";
+        }
+      }
+    }
   }
 
-  const candidates = getEndpointsForTier(tier);
-  if (candidates.length === 0) {
-    return legacyResolve(tier);
-  }
-
-  const limiter = getPoolRateLimiter();
-
-  // Try tier-matched endpoints first (priority-sorted)
-  const tierNames = candidates.map((c) => c.name);
-  const best = limiter.bestAvailable(tierNames);
-
-  // If the best tier-matched endpoint is not blocked, use it directly.
-  // If it IS blocked (429 backoff), overflow to any pool endpoint so
-  // other models can absorb the load instead of queuing behind the backoff.
-  if (best && !limiter.isBlocked(best)) return best;
-
-  // All tier endpoints blocked or saturated -- try any endpoint in the pool
-  const allNames = getModelPool().map((ep) => ep.name);
-  const fallback = limiter.bestAvailable(allNames);
-  if (fallback && !limiter.isBlocked(fallback)) return fallback;
-
-  // Everything blocked -- return the least-loaded tier endpoint (will wait
-  // for the backoff to expire inside the rate limiter acquire() call)
-  if (best) return best;
-  if (fallback) return fallback;
-
-  return legacyResolve(tier);
+  logger.debug("Endpoint resolved", { tier, endpoint: chosen, source });
+  return chosen;
 }
 
 /**

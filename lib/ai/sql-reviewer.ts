@@ -605,14 +605,14 @@ export async function reviewBatch(
   const endpoint = resolveEndpoint("sql");
   const prompt = buildBatchReviewPrompt(items, schemaContext, requestFix);
 
-  const perItemBudget = requestFix ? 2048 : 1024;
+  const perItemBudget = requestFix ? 4096 : 2048;
   const callBatchReview = async (ep: string): Promise<BatchReviewResult[]> => {
     const response = await reviewChatCompletion(
       {
         endpoint: ep,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
-        maxTokens: Math.min(items.length * perItemBudget, 32768),
+        maxTokens: Math.max(Math.min(items.length * perItemBudget, 32768), 16384),
         responseFormat: "json_object",
       },
       surface,

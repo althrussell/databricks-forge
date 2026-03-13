@@ -174,6 +174,7 @@ export async function runInstructionGeneration(
       );
     } catch (err) {
       logger.warn("LLM instruction generation failed", {
+        endpoint,
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -202,6 +203,7 @@ export async function runInstructionGeneration(
       }
     } catch (err) {
       logger.warn("Fallback LLM instruction generation failed", {
+        endpoint: fallbackEndpoint,
         error: err instanceof Error ? err.message : String(err),
       });
     }

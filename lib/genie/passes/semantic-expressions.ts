@@ -361,6 +361,7 @@ Return JSON: { "filters": [...], "dimensions": [...] }`,
   const allDimensions = [...parsedA.dimensions, ...parsedB.dimensions, ...parsedC.dimensions];
 
   logger.info("Parallel semantic expression generation complete", {
+    endpoint,
     workerA: parsedA.measures.length,
     workerB: parsedB.measures.length,
     workerC: { filters: parsedC.filters.length, dimensions: parsedC.dimensions.length },
