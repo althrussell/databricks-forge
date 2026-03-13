@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { InfoTip, LabelWithTip } from "@/components/ui/info-tip";
 import { CONFIG } from "@/lib/help-text";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,8 @@ export function ConfigForm({
     return loadSettings().assetDiscoveryEnabled;
   });
   const [businessName, setBusinessName] = useState("");
-  const [industry, setIndustry] = useState("");
+  const settingsIndustry = typeof window !== "undefined" ? loadSettings().industry : "";
+  const [industry, setIndustry] = useState(settingsIndustry);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [excludedSources, setExcludedSources] = useState<string[]>([]);
   const [exclusionPatterns, setExclusionPatterns] = useState<string[]>([]);
@@ -115,32 +117,41 @@ export function ConfigForm({
   const [businessDomains, setBusinessDomains] = useState<string[]>([]);
   const [domainInput, setDomainInput] = useState("");
 
-  const { getOptions: getIndustryOptions, getOutcome: getIndustryOutcome } = useIndustryOutcomes();
+  const {
+    getOptions: getIndustryOptions,
+    getOutcome: getIndustryOutcome,
+    loading: industryOutcomesLoading,
+  } = useIndustryOutcomes();
   const industryOptions = getIndustryOptions();
+
+  const applyIndustrySuggestions = (industryId: string) => {
+    const outcome = getIndustryOutcome(industryId);
+    if (!outcome) return;
+    if (businessDomains.length === 0) {
+      setBusinessDomains(outcome.suggestedDomains);
+    }
+    if (selectedPriorities.length <= 1 && selectedPriorities[0] === "Increase Revenue") {
+      const mapped = outcome.suggestedPriorities.filter((p) =>
+        (BUSINESS_PRIORITIES as readonly string[]).includes(p),
+      ) as BusinessPriority[];
+      if (mapped.length > 0) {
+        setSelectedPriorities(mapped);
+      }
+    }
+  };
 
   const handleIndustryChange = (value: string) => {
     const newIndustry = value === "__none__" ? "" : value;
     setIndustry(newIndustry);
-
-    if (newIndustry) {
-      const outcome = getIndustryOutcome(newIndustry);
-      if (outcome) {
-        // Auto-suggest domains from the industry outcome map
-        if (businessDomains.length === 0) {
-          setBusinessDomains(outcome.suggestedDomains);
-        }
-        // Auto-suggest priorities from the industry outcome map
-        if (selectedPriorities.length <= 1 && selectedPriorities[0] === "Increase Revenue") {
-          const mapped = outcome.suggestedPriorities.filter((p) =>
-            (BUSINESS_PRIORITIES as readonly string[]).includes(p),
-          ) as BusinessPriority[];
-          if (mapped.length > 0) {
-            setSelectedPriorities(mapped);
-          }
-        }
-      }
-    }
+    if (newIndustry) applyIndustrySuggestions(newIndustry);
   };
+
+  // When industry is pre-set from global settings, apply suggestions once outcomes load
+  useEffect(() => {
+    if (settingsIndustry && !industryOutcomesLoading) {
+      applyIndustrySuggestions(settingsIndustry);
+    }
+  }, [industryOutcomesLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derive ucMetadata from browser selection or manual input
   const ucMetadata = manualMode ? manualInput.trim() : selectedSources.join(", ");
@@ -401,35 +412,59 @@ export function ConfigForm({
             <Label htmlFor="industry">
               <LabelWithTip label="Industry (optional)" tip={CONFIG.industry} />
             </Label>
-            <Select value={industry || "__none__"} onValueChange={handleIndustryChange}>
-              <SelectTrigger id="industry">
-                <div className="flex items-center gap-2">
+            {settingsIndustry ? (
+              <>
+                <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="Select an industry..." />
+                  <span>
+                    {industryOptions.find((o) => o.id === settingsIndustry)?.name ??
+                      settingsIndustry}
+                  </span>
+                  <Badge variant="secondary" className="ml-auto text-[10px]">
+                    From Settings
+                  </Badge>
                 </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Not specified</SelectItem>
-                {industryOptions.map((opt) => (
-                  <SelectItem key={opt.id} value={opt.id}>
-                    {opt.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {industry ? (
-                <span className="text-primary">
-                  Industry context will be injected into prompts with curated use cases, KPIs, and
-                  strategic context.
-                </span>
-              ) : (
-                <>
-                  If left empty, the system will auto-detect the best matching industry from the
-                  business context generated in Step 1.
-                </>
-              )}
-            </p>
+                <p className="text-xs text-muted-foreground">
+                  Industry is set globally in{" "}
+                  <Link href="/settings" className="underline text-primary hover:text-primary/80">
+                    Settings
+                  </Link>
+                  . All runs will use this industry automatically.
+                </p>
+              </>
+            ) : (
+              <>
+                <Select value={industry || "__none__"} onValueChange={handleIndustryChange}>
+                  <SelectTrigger id="industry">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <SelectValue placeholder="Select an industry..." />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Not specified</SelectItem>
+                    {industryOptions.map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id}>
+                        {opt.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {industry ? (
+                    <span className="text-primary">
+                      Industry context will be injected into prompts with curated use cases, KPIs,
+                      and strategic context.
+                    </span>
+                  ) : (
+                    <>
+                      If left empty, the system will auto-detect the best matching industry from the
+                      business context generated in Step 1.
+                    </>
+                  )}
+                </p>
+              </>
+            )}
           </div>
 
           <div className="space-y-2">

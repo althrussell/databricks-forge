@@ -84,6 +84,10 @@ export function useSettingsState() {
     if (typeof window === "undefined") return DEFAULT_CATALOG_RESOURCE_PREFIX;
     return loadSettings().catalogResourcePrefix;
   });
+  const [industry, setIndustry] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return loadSettings().industry;
+  });
   const [benchmarksServerEnabled, setBenchmarksServerEnabled] = useState<boolean | null>(null);
   const [metricViewsServerEnabled, setMetricViewsServerEnabled] = useState<boolean | null>(null);
   const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
@@ -159,6 +163,8 @@ export function useSettingsState() {
     setQuestionComplexity,
     catalogResourcePrefix,
     setCatalogResourcePrefix,
+    industry,
+    setIndustry,
     benchmarksServerEnabled,
     metricViewsServerEnabled,
     embeddingAvailable,

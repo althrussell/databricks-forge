@@ -38,7 +38,10 @@ import {
   Plus,
   Trash2,
   ArrowLeft,
+  Building2,
 } from "lucide-react";
+import Link from "next/link";
+import { loadSettings } from "@/lib/settings";
 import { CatalogBrowser } from "@/components/pipeline/catalog-browser";
 import { CommentTableNav, type TableSummary } from "@/components/environment/comment-table-nav";
 import { CommentReviewPanel, type Proposal } from "@/components/environment/comment-review-panel";
@@ -78,7 +81,10 @@ export default function AICommentsPage() {
   const [excludedSources, setExcludedSources] = useState<string[]>([]);
   const [exclusionPatterns, setExclusionPatterns] = useState<string[]>([]);
   const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
-  const [selectedIndustry, setSelectedIndustry] = useState<string>("none");
+  const settingsIndustry = typeof window !== "undefined" ? loadSettings().industry : "";
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(
+    settingsIndustry || "none",
+  );
   const [genProgress, setGenProgress] = useState<CommentProgressData | null>(null);
   const [pollTimerRef, setPollTimerRef] = useState<ReturnType<typeof setInterval> | null>(null);
 
@@ -716,19 +722,43 @@ export default function AICommentsPage() {
               <p className="text-xs text-muted-foreground mb-3">
                 Enrich descriptions with domain-specific terminology.
               </p>
-              <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
-                <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="No industry (generic descriptions)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No industry</SelectItem>
-                  {industries.map((ind) => (
-                    <SelectItem key={ind.id} value={ind.id}>
-                      {ind.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {settingsIndustry ? (
+                <>
+                  <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm w-[300px]">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span>
+                      {industries.find((i) => i.id === settingsIndustry)?.name ?? settingsIndustry}
+                    </span>
+                    <Badge variant="secondary" className="ml-auto text-[10px]">
+                      From Settings
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Industry is set globally in{" "}
+                    <Link
+                      href="/settings"
+                      className="underline text-primary hover:text-primary/80"
+                    >
+                      Settings
+                    </Link>
+                    .
+                  </p>
+                </>
+              ) : (
+                <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
+                  <SelectTrigger className="w-[300px]">
+                    <SelectValue placeholder="No industry (generic descriptions)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No industry</SelectItem>
+                    {industries.map((ind) => (
+                      <SelectItem key={ind.id} value={ind.id}>
+                        {ind.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
