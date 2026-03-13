@@ -192,18 +192,19 @@ describe("model-registry", () => {
       expect(names).toContain("databricks-gemini-3-1-flash-lite");
     });
 
-    it("databricks-gemini-3-1-flash-lite supports classification and lightweight tiers", () => {
+    it("databricks-gemini-3-1-flash-lite supports generation, classification, and lightweight tiers", () => {
       process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
 
       const pool = getModelPool();
       const ep = pool.find((e) => e.name === "databricks-gemini-3-1-flash-lite");
       expect(ep).toBeDefined();
+      expect(ep!.tiers).toContain("generation");
       expect(ep!.tiers).toContain("classification");
       expect(ep!.tiers).toContain("lightweight");
       expect(ep!.priority).toBe(0);
     });
 
-    it("databricks-llama-4-maverick supports generation and classification", () => {
+    it("databricks-llama-4-maverick supports generation and classification at priority 1", () => {
       process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-llama-4-maverick";
 
       const pool = getModelPool();
@@ -211,7 +212,8 @@ describe("model-registry", () => {
       expect(ep).toBeDefined();
       expect(ep!.tiers).toContain("generation");
       expect(ep!.tiers).toContain("classification");
-      expect(ep!.priority).toBe(0);
+      expect(ep!.priority).toBe(1);
+      expect(ep!.maxConcurrent).toBe(6);
     });
 
     it("databricks-gemini-3-flash supports generation, classification, and lightweight", () => {
@@ -223,6 +225,16 @@ describe("model-registry", () => {
       expect(ep!.tiers).toContain("generation");
       expect(ep!.tiers).toContain("classification");
       expect(ep!.tiers).toContain("lightweight");
+    });
+
+    it("flash-lite is preferred over maverick for generation tier (lower priority number)", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
+      process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-llama-4-maverick";
+
+      const genEndpoints = getEndpointsForTier("generation" as TaskTier);
+      expect(genEndpoints.length).toBeGreaterThanOrEqual(2);
+      expect(genEndpoints[0].name).toBe("databricks-gemini-3-1-flash-lite");
+      expect(genEndpoints[0].priority).toBeLessThan(genEndpoints[1].priority);
     });
 
     it("full performance bundle populates all 6 known endpoints", () => {

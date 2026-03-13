@@ -20,7 +20,9 @@ const log = createScopedLogger({ origin: "Infra", module: "dbx/rate-limiter" });
 
 const GLOBAL_MAX = Math.max(0, parseInt(process.env.GLOBAL_LLM_MAX_CONCURRENT ?? "0", 10) || 0);
 
-export const DEFAULT_429_BACKOFF_MS = 60_000;
+export const DEFAULT_429_BACKOFF_MS = 10_000;
+
+const BACKOFF_ESCALATION = [10_000, 20_000, 30_000] as const;
 
 // ---------------------------------------------------------------------------
 // Semaphore (unchanged from original, now used per-endpoint)
@@ -67,6 +69,8 @@ class Semaphore {
 interface EndpointLimiter {
   semaphore: Semaphore;
   blockedUntil: number;
+  /** Consecutive 429 hits (resets on success). Drives progressive backoff. */
+  consecutive429s: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +87,7 @@ class PoolRateLimiter {
       this.limiters.set(ep.name, {
         semaphore: new Semaphore(ep.maxConcurrent),
         blockedUntil: 0,
+        consecutive429s: 0,
       });
     }
 
@@ -100,7 +105,7 @@ class PoolRateLimiter {
   private getOrCreate(endpoint: string): EndpointLimiter {
     let lim = this.limiters.get(endpoint);
     if (!lim) {
-      lim = { semaphore: new Semaphore(6), blockedUntil: 0 };
+      lim = { semaphore: new Semaphore(6), blockedUntil: 0, consecutive429s: 0 };
       this.limiters.set(endpoint, lim);
     }
     return lim;
@@ -128,18 +133,29 @@ class PoolRateLimiter {
 
   release(endpoint: string): void {
     const lim = this.limiters.get(endpoint);
-    if (lim) lim.semaphore.release();
+    if (lim) {
+      lim.semaphore.release();
+      // Success clears backoff: reset consecutive counter and lift block early
+      if (lim.consecutive429s > 0) {
+        lim.consecutive429s = 0;
+        lim.blockedUntil = 0;
+      }
+    }
     if (this.globalSemaphore) this.globalSemaphore.release();
   }
 
   backoff(endpoint: string, retryAfterMs: number): void {
     const lim = this.getOrCreate(endpoint);
-    const until = Date.now() + retryAfterMs;
+    lim.consecutive429s++;
+    const tier = Math.min(lim.consecutive429s, BACKOFF_ESCALATION.length) - 1;
+    const escalatedMs = retryAfterMs > 0 ? retryAfterMs : BACKOFF_ESCALATION[tier];
+    const until = Date.now() + escalatedMs;
     if (until > lim.blockedUntil) {
       lim.blockedUntil = until;
       log.warn("Pool rate limiter: 429 circuit breaker activated", {
         endpoint,
-        retryAfterMs,
+        backoffMs: escalatedMs,
+        consecutive429s: lim.consecutive429s,
         inflight: lim.semaphore.inflight,
         pending: lim.semaphore.pending,
         errorCategory: "rate_limit",

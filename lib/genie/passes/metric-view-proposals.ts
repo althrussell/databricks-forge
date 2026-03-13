@@ -390,6 +390,16 @@ function toSnakeCase(name: string): string {
     .replace(/^_|_$/g, "");
 }
 
+/**
+ * Build the DDL wrapper around a metric view YAML body.
+ * The DDL is deterministic -- no need for the LLM to produce it.
+ */
+export function buildMetricViewDdl(scope: string, viewName: string, yamlBody: string): string {
+  const snakeName = toSnakeCase(viewName);
+  const [catalog, schema] = scope.split(".");
+  return `CREATE OR REPLACE VIEW \`${catalog}\`.\`${schema}\`.\`${snakeName}\`\nWITH METRICS\nLANGUAGE YAML\nAS $$\n${yamlBody}\n$$`;
+}
+
 // ---------------------------------------------------------------------------
 // Hierarchical join context builder
 // ---------------------------------------------------------------------------
@@ -484,140 +494,31 @@ export interface MetricViewProposalsOutput {
 const YAML_SPEC_REFERENCE = `
 ## Databricks Metric View YAML v1.1 Specification
 
-A metric view separates measure definitions from dimension groupings.
 Measures are queried via MEASURE(\`name\`) and re-aggregate safely at any granularity.
-
-### Required DDL wrapper:
-\`\`\`sql
-CREATE OR REPLACE VIEW catalog.schema.view_name
-WITH METRICS
-LANGUAGE YAML
-AS $$
-  version: 1.1
-  source: catalog.schema.table
-  -- ... YAML body ...
-$$
-\`\`\`
 
 ### YAML fields:
 - version: "1.1" (required)
-- source: catalog.schema.table (required, the primary fact table)
-- filter: SQL boolean expression (optional, global WHERE)
-- dimensions: list (required, at least one)
-  - name: SQL-friendly snake_case identifier, no spaces (e.g. order_month, customer_segment)
-  - expr: SQL expression (column ref or transformation)
-  - display_name: Human-readable label for dashboards/Genie (optional, e.g. "Order Month")
-  - comment: Description of this dimension (optional)
-  - synonyms: Alternative names for Genie discovery (optional, up to 10)
-- measures: list (required, at least one)
-  - name: SQL-friendly snake_case identifier, no spaces (e.g. total_revenue, order_count). Queried via MEASURE(\`name\`).
-  - expr: aggregate expression (SUM, COUNT, AVG, MIN, MAX)
-  - display_name: Human-readable label for dashboards/Genie (optional, e.g. "Total Revenue")
-  - comment: Description of this measure (optional)
-  - synonyms: Alternative names for Genie discovery (optional, up to 10)
-- joins: list (optional, star/snowflake schema)
-  - name: alias for the joined table
-  - source: catalog.schema.dim_table
-  - on: MUST qualify BOTH sides. Use \`source.\` for the primary table alias and the join name for the dimension table.
-    Example: \`source.customerID = customer.customerID\` (NOT \`customerID = customer.customerID\` which is ambiguous)
-  - joins: nested list (for snowflake schemas — see CRITICAL rule below)
+- source: catalog.schema.table (required, primary fact table)
+- filter: SQL boolean (optional, global WHERE)
+- dimensions: list (required)
+  - name: snake_case identifier (e.g. order_month) | expr: SQL expression | display_name: label | synonyms: list
+- measures: list (required)
+  - name: snake_case identifier (e.g. total_revenue) | expr: aggregate (SUM, COUNT, AVG, MIN, MAX) | display_name: label | synonyms: list
+- joins: list (optional, star/snowflake)
+  - name: alias | source: catalog.schema.dim_table | on: \`source.col = alias.col\` (MUST qualify BOTH sides)
+  - joins: nested list for snowflake schemas
 
-### CRITICAL: Snowflake join nesting and parent-chain column references
-When a join's \`on:\` clause references another join alias (NOT \`source\`), that join MUST be nested under the referenced parent join using a \`joins:\` sub-list. Top-level joins may ONLY reference \`source\` in their \`on:\` clause — referencing a sibling join alias causes an UNRESOLVED_COLUMN error.
+### Join rules:
+- Top-level joins ONLY reference \`source.\` in \`on:\`. If a join references another alias, NEST it under that parent join.
+- Nested join column refs use parent-chain: \`customer.nation.n_name\` NOT \`nation.n_name\`
+- Join alias MUST NOT match a source column name (use \`_dim\` suffix if needed)
+- Dimension name MUST NOT match a join alias (use \`_name\` suffix)
 
-**CRITICAL: Column references to nested join aliases MUST use the parent-chain prefix.** For example, if \`nation\` is nested under \`customer\`, reference its columns as \`customer.nation.n_name\`, NOT \`nation.n_name\`. Direct nested-alias references cause UNRESOLVED_COLUMN errors.
-
-Star schema (all joins reference \`source\` — flat is correct):
-\`\`\`yaml
-joins:
-  - name: customer
-    source: catalog.schema.dim_customer
-    on: source.customer_id = customer.customer_id
-  - name: product
-    source: catalog.schema.dim_product
-    on: source.product_id = product.product_id
-dimensions:
-  - name: customer_name
-    expr: customer.c_name
-\`\`\`
-
-Snowflake schema (nation joins through customer — MUST nest, columns use parent-chain):
-\`\`\`yaml
-joins:
-  - name: customer
-    source: catalog.schema.dim_customer
-    on: source.customer_id = customer.customer_id
-    joins:
-      - name: nation
-        source: catalog.schema.dim_nation
-        on: customer.nation_key = nation.nation_key
-        joins:
-          - name: region
-            source: catalog.schema.dim_region
-            on: nation.region_key = region.region_key
-dimensions:
-  - name: customer_name
-    expr: customer.c_name
-  - name: nation_name
-    expr: customer.nation.n_name
-  - name: region_name
-    expr: customer.nation.region.r_name
-\`\`\`
-
-WRONG (flat — causes UNRESOLVED_COLUMN):
-\`\`\`yaml
-joins:
-  - name: customer
-    source: catalog.schema.dim_customer
-    on: source.customer_id = customer.customer_id
-  - name: nation
-    source: catalog.schema.dim_nation
-    on: customer.nation_key = nation.nation_key
-\`\`\`
-
-WRONG (direct nested-alias reference — causes UNRESOLVED_COLUMN):
-\`\`\`yaml
-dimensions:
-  - name: nation_name
-    expr: nation.n_name
-\`\`\`
-CORRECT: \`expr: customer.nation.n_name\`
-
-### CRITICAL: Join alias must not match a source column name
-If the source table has a column named \`claim_type\`, do NOT name a join alias \`claim_type\` — use \`claim_type_dim\` instead. Matching names cause the SQL engine to interpret \`claim_type.col\` as struct field extraction on the column rather than a join alias reference (INVALID_EXTRACT_BASE_FIELD_TYPE).
-
-### CRITICAL: Dimension name must not match a join alias
-If a join alias is \`claim_type\`, do NOT name a dimension \`claim_type\` — use \`claim_type_name\` or another distinct identifier. When a dimension name matches a join alias, \`alias.column\` expressions resolve the alias as the dimension scalar (a STRING) instead of the join table, causing INVALID_EXTRACT_BASE_FIELD_TYPE. The dimension name shadows the join alias in expression resolution.
-
-### Measure patterns:
-- Basic: \`SUM(amount)\`, \`COUNT(1)\`, \`AVG(price)\`
-- Filtered: \`SUM(amount) FILTER (WHERE status = 'OPEN')\`
-- Ratio: \`SUM(revenue) / COUNT(DISTINCT customer_id)\`
-- Distinct: \`COUNT(DISTINCT customer_id)\`
-
-Do NOT use window: blocks on measures -- this feature is experimental and not supported in production.
-Do NOT use window functions (OVER clause) in measure expressions -- metric views do not support OVER().
-NEVER use MEDIAN() -- use PERCENTILE_APPROX(col, 0.5) instead.
-NEVER use AI functions (ai_analyze_sentiment, ai_classify, ai_extract, ai_gen, ai_query, ai_similarity, ai_forecast, ai_summarize) anywhere in metric view definitions -- not in dimensions, measures, filters, or join conditions. They are non-deterministic and prohibitively expensive per-row. Metric views must use only deterministic SQL expressions over materialized columns.
-
-### CRITICAL: Measure name shadowing
-Measure \`name\` MUST NOT be identical to any source table column name. In metric views, measure names and column names share a namespace — the measure definition takes priority. If they match, the column reference inside the expr resolves to the measure itself, causing a recursive NESTED_AGGREGATE_FUNCTION error. Always differentiate: if the column is \`total_complaints\`, name the measure \`total_complaints_total\` or \`complaint_volume\`.
-
-### Column names with spaces
-When column names contain spaces or special characters (parentheses, hyphens), always backtick-quote them in \`expr:\`, \`on:\`, and \`filter:\` fields: \`\\\`Defaulted Loans\\\`\`, \`source.\\\`Loan Origination Month\\\`\`. Unquoted multi-word names cause parsing errors.
-
-### Materialization (experimental):
-\`\`\`yaml
-materialization:
-  schedule: every 6 hours
-  mode: relaxed
-  materialized_views:
-    - name: daily_summary
-      type: aggregated
-      dimensions: [dim1]
-      measures: [measure1]
-\`\`\`
-CRITICAL: Materialization \`dimensions\` and \`measures\` lists MUST reference declared dimension/measure \`name\` values. Do NOT use join aliases, column names, or table names. For example, if your dimension is \`name: category_name\` with \`expr: complaint_category.category_name\`, use \`category_name\` in the materialization list, NOT \`complaint_category\`.
+### Measure rules:
+- Patterns: \`SUM(amount)\`, \`COUNT(DISTINCT id)\`, \`SUM(amt) FILTER (WHERE status = 'OPEN')\`, \`SUM(revenue) / COUNT(DISTINCT cust_id)\`
+- Measure name MUST NOT match a source column name (causes NESTED_AGGREGATE_FUNCTION)
+- No OVER() / window functions. No MEDIAN() (use PERCENTILE_APPROX). No AI functions.
+- Backtick-quote column names with spaces: \`\\\`Defaulted Loans\\\`\`
 `.trim();
 
 // ---------------------------------------------------------------------------
@@ -1643,7 +1544,7 @@ Fix the YAML and DDL to only reference tables and columns from the SCHEMA CONTEX
       endpoint,
       messages: repairMessages,
       temperature: 0.1,
-      maxTokens: 16384,
+      maxTokens: 6144,
       responseFormat: "json_object",
       signal,
     });
@@ -1761,7 +1662,7 @@ ${YAML_SPEC_REFERENCE}
 
 ## Your Task
 
-Create 1-3 metric view proposals for the "${domain}" domain. Each proposal MUST:
+Create 1-2 metric view proposals for the "${domain}" domain. Each proposal MUST:
 
 1. Follow the YAML v1.1 spec exactly (version, source, dimensions, measures)
 2. Use a central fact table as the source
@@ -1789,17 +1690,15 @@ ${joinSpecs.length === 0 ? "- There are NO join relationships — do NOT create 
       "name": "metric_view_name",
       "description": "What this metric view measures and why it is useful",
       "yaml": "version: 1.1\\nsource: ${scope}.table\\n...",
-      "ddl": "CREATE OR REPLACE VIEW ${scope}.metric_view_name\\nWITH METRICS\\nLANGUAGE YAML\\nAS $$\\n...\\n$$",
       "sourceTables": ["${scope}.table", "${scope}.dim_table"]
     }
   ]
 }
 
-IMPORTANT: Use the REAL catalog and schema from the schema context (${scope}) in all source, DDL, and sourceTables references. Do NOT use placeholder names like "catalog.schema".
-
 IMPORTANT:
-- The "yaml" field must contain the YAML body only (what goes between $$). The "ddl" field must contain the complete CREATE statement including $$ delimiters.
-- Column references in YAML expr fields must use BARE column names (e.g. \`amount\`, \`franchiseID\`) or JOIN ALIAS prefixes (e.g. \`franchise.franchiseID\`). NEVER use fully-qualified table names as column prefixes (e.g. \`catalog.schema.table.column\` is WRONG — the SQL engine cannot resolve 4-part names in metric view expressions).` +
+- Use the REAL catalog and schema (${scope}) in source and sourceTables. Do NOT use placeholders.
+- The "yaml" field contains ONLY the YAML body (version, source, dimensions, measures, joins). Do NOT include DDL wrappers.
+- Column refs in expr fields use BARE column names or JOIN ALIAS prefixes. NEVER use 4-part FQN column prefixes.` +
     formatSystemOverlay(resolveForGeniePass("metricViews").systemOverlay);
 
   const userMessage = `${schemaBlock}
@@ -1834,7 +1733,7 @@ Create metric view proposals for this domain.`;
       endpoint,
       messages,
       temperature: TEMPERATURE,
-      maxTokens: 16384,
+      maxTokens: 6144,
       responseFormat: "json_object",
       signal,
     });
@@ -1850,14 +1749,16 @@ Create metric view proposals for this domain.`;
     const proposals: MetricViewProposal[] = items
       .map((p) => {
         let yamlStr = String(p.yaml ?? "");
-        let ddlStr = String(p.ddl ?? "");
 
         // Replace literal placeholder catalog.schema with real scope
         yamlStr = yamlStr.replace(/\bcatalog\.schema\b/g, scope);
-        ddlStr = ddlStr.replace(/\bcatalog\.schema\b/g, scope);
+
+        // Build DDL from YAML (or use LLM-provided DDL as fallback for backward compat)
+        let ddlStr = p.ddl
+          ? String(p.ddl).replace(/\bcatalog\.schema\b/g, scope)
+          : buildMetricViewDdl(scope, String(p.name ?? ""), yamlStr);
 
         // Safety net: strip FQN column prefixes from YAML expr/on lines in the DDL.
-        // Preserve CREATE VIEW and source: lines (those need FQN).
         ddlStr = ddlStr.replace(
           /^(\s*(?:expr|on):\s*)(.+)$/gm,
           (_match, prefix: string, rest: string) => prefix + stripFqnPrefixes(rest),
