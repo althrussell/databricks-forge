@@ -50,10 +50,10 @@ DEFAULT_ENDPOINT="databricks-claude-opus-4-6"
 DEFAULT_FAST_ENDPOINT="databricks-claude-sonnet-4-6"
 DEFAULT_EMBEDDING_ENDPOINT="databricks-qwen3-embedding-0-6b"
 DEFAULT_REVIEW_ENDPOINT="databricks-gpt-5-4"
-DEFAULT_REASONING_ENDPOINT_2=""
-DEFAULT_GENERATION_ENDPOINT=""
+DEFAULT_REASONING_ENDPOINT_2="databricks-gemini-3-flash"
+DEFAULT_GENERATION_ENDPOINT="databricks-llama-4-maverick"
 DEFAULT_SQL_ENDPOINT=""
-DEFAULT_LIGHTWEIGHT_ENDPOINT=""
+DEFAULT_LIGHTWEIGHT_ENDPOINT="databricks-gemini-3-1-flash-lite"
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
