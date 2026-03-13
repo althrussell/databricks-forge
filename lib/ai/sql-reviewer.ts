@@ -18,12 +18,22 @@ import {
   type ChatCompletionResponse,
 } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
+import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
 import { createScopedLogger } from "@/lib/logger";
 
 const log = createScopedLogger({ origin: "Infra", module: "ai/sql-reviewer" });
 import { DATABRICKS_SQL_RULES, DATABRICKS_SQL_REVIEW_CHECKLIST } from "@/lib/toolkit/sql-rules";
+import { createConcurrencyLimiter } from "@/lib/toolkit/concurrency";
 import "@/lib/skills/content";
 import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/resolver";
+
+// ---------------------------------------------------------------------------
+// Global review concurrency limiter -- prevents bursting the review endpoint
+// when many domains run SQL reviews in parallel (429 pressure reduction).
+// ---------------------------------------------------------------------------
+
+const SQL_REVIEW_CONCURRENCY = 4;
+const reviewLimiter = createConcurrencyLimiter(SQL_REVIEW_CONCURRENCY);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -265,15 +275,10 @@ function parseBatchReviewResponse(
   items: BatchReviewItem[],
   requestFix?: boolean,
 ): BatchReviewResult[] {
-  const cleaned = raw
-    .replace(/^```(?:json)?\s*/m, "")
-    .replace(/\s*```\s*$/m, "")
-    .trim();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let parsed: any;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = parseLLMJson(raw, "sql-reviewer:batch");
   } catch {
     log.warn("Failed to parse batch review response, treating all as warn", {
       errorCategory: "parse_error",
@@ -369,7 +374,7 @@ function reviewChatCompletion(
   opts: ChatCompletionOptions,
   _surface?: string,
 ): Promise<ChatCompletionResponse> {
-  return cachedChatCompletion(opts);
+  return reviewLimiter(() => cachedChatCompletion(opts));
 }
 
 function summariseIssues(issues: ReviewIssue[]): Record<string, number> {
@@ -600,13 +605,14 @@ export async function reviewBatch(
   const endpoint = resolveEndpoint("sql");
   const prompt = buildBatchReviewPrompt(items, schemaContext, requestFix);
 
+  const perItemBudget = requestFix ? 2048 : 1024;
   const callBatchReview = async (ep: string): Promise<BatchReviewResult[]> => {
     const response = await reviewChatCompletion(
       {
         endpoint: ep,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
-        maxTokens: Math.min(items.length * 1024, 16384),
+        maxTokens: Math.min(items.length * perItemBudget, 16384),
         responseFormat: "json_object",
       },
       surface,
