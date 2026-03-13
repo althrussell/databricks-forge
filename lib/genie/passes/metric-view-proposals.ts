@@ -1834,7 +1834,7 @@ Create metric view proposals for this domain.`;
       endpoint,
       messages,
       temperature: TEMPERATURE,
-      maxTokens: 32768,
+      maxTokens: 16384,
       responseFormat: "json_object",
       signal,
     });
@@ -2021,33 +2021,35 @@ Create metric view proposals for this domain.`;
       }
     }
 
-    for (const proposal of proposals) {
-      if (proposal.validationStatus === "error") continue;
-      const dryRunError = await dryRunMetricViewDdl(proposal.ddl);
-      if (dryRunError) {
-        const isPermissionError = PERMISSION_PATTERNS.some((p) => dryRunError.includes(p));
-        if (isPermissionError) {
-          if (proposal.validationStatus !== "warning") {
-            proposal.validationStatus = "warning";
+    await Promise.all(
+      proposals.map(async (proposal) => {
+        if (proposal.validationStatus === "error") return;
+        const dryRunError = await dryRunMetricViewDdl(proposal.ddl);
+        if (dryRunError) {
+          const isPermissionError = PERMISSION_PATTERNS.some((p) => dryRunError.includes(p));
+          if (isPermissionError) {
+            if (proposal.validationStatus !== "warning") {
+              proposal.validationStatus = "warning";
+            }
+            proposal.validationIssues.push(
+              `Could not pre-validate — no CREATE permission on source schema. Deploy to a schema you own.`,
+            );
+            logger.info("Metric view dry-run skipped (permission)", {
+              domain,
+              name: proposal.name,
+            });
+          } else {
+            proposal.validationStatus = "error";
+            proposal.validationIssues.push(`SQL validation failed: ${dryRunError}`);
+            logger.warn("Metric view dry-run failed", {
+              domain,
+              name: proposal.name,
+              error: dryRunError,
+            });
           }
-          proposal.validationIssues.push(
-            `Could not pre-validate — no CREATE permission on source schema. Deploy to a schema you own.`,
-          );
-          logger.info("Metric view dry-run skipped (permission)", {
-            domain,
-            name: proposal.name,
-          });
-        } else {
-          proposal.validationStatus = "error";
-          proposal.validationIssues.push(`SQL validation failed: ${dryRunError}`);
-          logger.warn("Metric view dry-run failed", {
-            domain,
-            name: proposal.name,
-            error: dryRunError,
-          });
         }
-      }
-    }
+      }),
+    );
 
     // Post-dry-run repair: attempt LLM repair for proposals that failed dry-run
     // with repairable errors (e.g. METRIC_VIEW_INVALID_VIEW_DEFINITION)

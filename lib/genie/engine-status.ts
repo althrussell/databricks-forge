@@ -13,6 +13,24 @@ import { upsertJobStatus, getPersistedJobStatus } from "@/lib/lakebase/backgroun
 
 export type EngineErrorType = "auth" | "general" | null;
 
+export type DomainPhase =
+  | "pending"
+  | "expressions"
+  | "joins"
+  | "assets"
+  | "assembly"
+  | "completed"
+  | "failed";
+
+export interface DomainProgress {
+  domain: string;
+  tables: number;
+  phase: DomainPhase;
+  startedAt: number | null;
+  completedAt: number | null;
+  error?: string;
+}
+
 export interface EngineJobStatus {
   runId: string;
   status: "generating" | "completed" | "failed" | "cancelled";
@@ -26,6 +44,7 @@ export interface EngineJobStatus {
   completedDomains: number;
   totalDomains: number;
   completedDomainNames: string[];
+  domainStatuses: DomainProgress[];
 }
 
 const jobs = new Map<string, EngineJobStatus>();
@@ -64,6 +83,7 @@ export async function startJob(runId: string): Promise<void> {
     completedDomains: 0,
     totalDomains: 0,
     completedDomainNames: [],
+    domainStatuses: [],
   });
 
   await upsertJobStatus(runId, "genie", "generating", "Starting Genie Engine...", 0, {
@@ -121,6 +141,49 @@ export function addCompletedDomainName(runId: string, domainName: string): void 
   if (job && job.status === "generating" && !job.completedDomainNames.includes(domainName)) {
     job.completedDomainNames.push(domainName);
   }
+}
+
+/** Populate the domain list after Pass 0 table selection. */
+export function initDomainList(
+  runId: string,
+  domains: Array<{ domain: string; tables: number }>,
+): void {
+  const job = jobs.get(runId);
+  if (job && job.status === "generating") {
+    job.domainStatuses = domains.map((d) => ({
+      domain: d.domain,
+      tables: d.tables,
+      phase: "pending" as const,
+      startedAt: null,
+      completedAt: null,
+    }));
+  }
+}
+
+/** Update the phase for a specific domain. */
+export function updateDomainPhase(runId: string, domain: string, phase: DomainPhase): void {
+  const job = jobs.get(runId);
+  if (!job || job.status !== "generating") return;
+  const entry = job.domainStatuses.find((d) => d.domain === domain);
+  if (!entry) return;
+  entry.phase = phase;
+  if (!entry.startedAt && phase !== "pending") {
+    entry.startedAt = Date.now();
+  }
+  if (phase === "completed" || phase === "failed") {
+    entry.completedAt = Date.now();
+  }
+}
+
+/** Mark a domain as failed with an error message. */
+export function failDomain(runId: string, domain: string, error: string): void {
+  const job = jobs.get(runId);
+  if (!job || job.status !== "generating") return;
+  const entry = job.domainStatuses.find((d) => d.domain === domain);
+  if (!entry) return;
+  entry.phase = "failed";
+  entry.completedAt = Date.now();
+  entry.error = error;
 }
 
 export async function completeJob(runId: string, domainCount: number): Promise<void> {
@@ -184,5 +247,6 @@ export async function getJobStatus(runId: string): Promise<EngineJobStatus | nul
     completedDomains: 0,
     totalDomains: 0,
     completedDomainNames: [],
+    domainStatuses: [],
   };
 }

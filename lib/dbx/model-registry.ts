@@ -48,12 +48,12 @@ interface ModelTemplate {
 
 const KNOWN_MODELS: Record<string, ModelTemplate> = {
   "databricks-claude-opus-4-6": {
-    tiers: ["reasoning", "generation"],
+    tiers: ["reasoning"],
     maxConcurrent: 6,
     priority: 1,
   },
   "databricks-claude-opus-4-5": {
-    tiers: ["reasoning", "generation"],
+    tiers: ["reasoning"],
     maxConcurrent: 6,
     priority: 2,
   },

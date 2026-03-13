@@ -22,7 +22,10 @@ export async function runGenieRecommendations(
     percent: number,
     completedDomains: number,
     totalDomains: number,
+    completedDomainName?: string,
   ) => void,
+  onDomainsReady?: (domains: Array<{ domain: string; tables: number }>) => void,
+  onDomainPhase?: (domain: string, phase: import("@/lib/genie/engine-status").DomainPhase) => void,
 ): Promise<number> {
   const log = ctx.logger ?? fallbackLogger;
   const metadata = ctx.metadata ?? (await loadMetadataForRun(runId));
@@ -56,6 +59,8 @@ export async function runGenieRecommendations(
       sampleData: ctx.sampleData,
       existingSpaces: ctx.discoveryResult?.genieSpaces,
       onProgress,
+      onDomainsReady,
+      onDomainPhase,
     });
 
     await saveGenieRecommendations(runId, result.recommendations, result.passOutputs, version);

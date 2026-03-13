@@ -19,6 +19,7 @@
 import { type ChatMessage } from "@/lib/dbx/model-serving";
 import { cachedChatCompletion } from "@/lib/toolkit/llm-cache";
 import { parseLLMJson } from "@/lib/toolkit/parse-llm-json";
+import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import { logger } from "@/lib/logger";
 import { resolveForGeniePass, formatSystemOverlay } from "@/lib/skills";
 import type { UseCase, MetadataSnapshot, DataDomain } from "@/lib/domain/types";
@@ -60,6 +61,8 @@ export interface MetricViewEngineV2Input {
   industryContext?: string;
   endpoint: string;
   signal?: AbortSignal;
+  /** Skip the LLM planning pre-pass and generate directly per subdomain. */
+  skipPlanning?: boolean;
 }
 
 export interface MetricViewEngineV2Output {
@@ -302,19 +305,22 @@ export async function runMetricViewEngineV2(
     };
   }
 
-  // Step 2: Run planning pre-pass
-  const plan = await runPlanningPrePass(
-    subdomainGroups,
-    existingMetricViews,
-    measures,
-    columnEnrichments,
-    businessContext,
-    industryContext,
-    endpoint,
-    signal,
-  );
-
   const allProposals: MetricViewProposal[] = [];
+  const skipPlanning = input.skipPlanning ?? false;
+
+  // Step 2: Optionally run planning pre-pass (skipping saves 1 LLM call per domain)
+  const plan: PlanningResult = skipPlanning
+    ? { views: [], summary: "Planning skipped (skipPlanning=true)." }
+    : await runPlanningPrePass(
+        subdomainGroups,
+        existingMetricViews,
+        measures,
+        columnEnrichments,
+        businessContext,
+        industryContext,
+        endpoint,
+        signal,
+      );
 
   // Step 3: Handle "reuse" plans (no generation needed)
   for (const planned of plan.views.filter((v) => v.classification === "reuse")) {
@@ -342,12 +348,11 @@ export async function runMetricViewEngineV2(
     }
   }
 
-  // Step 4: Generate "new" and "improve" proposals per subdomain
+  // Step 4: Generate "new" and "improve" proposals per subdomain -- PARALLEL
   const generationPlans = plan.views.filter(
     (v) => v.classification === "new" || v.classification === "improve",
   );
 
-  // Group generation plans by subdomain for batch efficiency
   const plansBySubdomain = new Map<string, PlannedMetricView[]>();
   for (const p of generationPlans) {
     const key = p.subdomain.toLowerCase();
@@ -356,76 +361,26 @@ export async function runMetricViewEngineV2(
     plansBySubdomain.set(key, group);
   }
 
-  for (const [subdomainKey, plans] of plansBySubdomain) {
-    const subGroup = subdomainGroups.find((g) => g.subdomain.toLowerCase() === subdomainKey);
-    if (!subGroup) continue;
+  const SUBDOMAIN_CONCURRENCY = 3;
+  const subdomainEntries = [...plansBySubdomain.entries()];
 
-    const relevantExisting = filterRelevantExistingViews(existingMetricViews, subGroup.tables);
+  const subdomainResults = await mapWithConcurrency(
+    subdomainEntries.map(([subdomainKey, plans]) => async () => {
+      const subGroup = subdomainGroups.find((g) => g.subdomain.toLowerCase() === subdomainKey);
+      if (!subGroup) return [];
 
-    // Build enhanced context to inject into the inner engine's domain label
-    // which becomes part of the LLM prompt
-    const existingCtx =
-      relevantExisting.length > 0
-        ? ` (existing views to consider: ${relevantExisting.map((mv) => mv.name).join(", ")})`
-        : "";
+      const relevantExisting = filterRelevantExistingViews(existingMetricViews, subGroup.tables);
+      const existingCtx =
+        relevantExisting.length > 0
+          ? ` (existing views to consider: ${relevantExisting.map((mv) => mv.name).join(", ")})`
+          : "";
+      const planGuidanceCtx = plans.map((p) => `${p.name} (${p.classification})`).join(", ");
+      const domainLabel = planGuidanceCtx
+        ? `${domain} / ${subGroup.subdomain} [plan: ${planGuidanceCtx}]${existingCtx}`
+        : `${domain} / ${subGroup.subdomain}${existingCtx}`;
 
-    const planGuidanceCtx = plans.map((p) => `${p.name} (${p.classification})`).join(", ");
-
-    const domainLabel = planGuidanceCtx
-      ? `${domain} / ${subGroup.subdomain} [plan: ${planGuidanceCtx}]${existingCtx}`
-      : `${domain} / ${subGroup.subdomain}${existingCtx}`;
-
-    const genInput: MetricViewProposalsInput = {
-      domain: domainLabel,
-      tableFqns: subGroup.tables,
-      metadata,
-      allowlist,
-      useCases: subGroup.useCases,
-      measures:
-        measures.filter((m) =>
-          plans.some(
-            (p) =>
-              p.suggestedMeasures.length === 0 ||
-              p.suggestedMeasures.some((sm) => m.name.toLowerCase().includes(sm.toLowerCase())),
-          ),
-        ).length > 0
-          ? measures
-          : measures,
-      dimensions,
-      joinSpecs,
-      columnEnrichments: columnEnrichments.filter((e) =>
-        subGroup.tables.some((t) => t.toLowerCase() === e.tableFqn.toLowerCase()),
-      ),
-      endpoint,
-      signal,
-    };
-
-    const result = await runMetricViewProposals(genInput);
-
-    for (const proposal of result.proposals) {
-      // Match generated proposal to its plan entry
-      const matchedPlan = plans.find(
-        (p) =>
-          p.name.toLowerCase() === proposal.name.toLowerCase() ||
-          proposal.name.toLowerCase().includes(p.name.toLowerCase().replace(/\s+/g, "_")),
-      );
-
-      allProposals.push({
-        ...proposal,
-        classification: matchedPlan?.classification ?? "new",
-        rationale: matchedPlan?.rationale ?? "Generated for this subdomain.",
-        existingFqn: matchedPlan?.existingFqn,
-        subdomain: subGroup.subdomain,
-      });
-    }
-  }
-
-  // Step 5: If the planning pre-pass returned nothing (fallback), generate at domain level
-  if (plan.views.length === 0) {
-    logger.info("Planning pre-pass returned no views, falling back to per-subdomain generation");
-    for (const subGroup of subdomainGroups.slice(0, 5)) {
-      const result = await runMetricViewProposals({
-        domain: `${domain} / ${subGroup.subdomain}`,
+      const genInput: MetricViewProposalsInput = {
+        domain: domainLabel,
         tableFqns: subGroup.tables,
         metadata,
         allowlist,
@@ -438,16 +393,62 @@ export async function runMetricViewEngineV2(
         ),
         endpoint,
         signal,
-      });
+      };
 
-      for (const proposal of result.proposals) {
-        allProposals.push({
+      const result = await runMetricViewProposals(genInput);
+      return result.proposals.map((proposal) => {
+        const matchedPlan = plans.find(
+          (p) =>
+            p.name.toLowerCase() === proposal.name.toLowerCase() ||
+            proposal.name.toLowerCase().includes(p.name.toLowerCase().replace(/\s+/g, "_")),
+        );
+        return {
           ...proposal,
-          classification: "new",
+          classification: (matchedPlan?.classification ?? "new") as MetricViewClassification,
+          rationale: matchedPlan?.rationale ?? "Generated for this subdomain.",
+          existingFqn: matchedPlan?.existingFqn,
+          subdomain: subGroup.subdomain,
+        };
+      });
+    }),
+    SUBDOMAIN_CONCURRENCY,
+  );
+
+  for (const proposals of subdomainResults) {
+    allProposals.push(...proposals);
+  }
+
+  // Step 5: If no plans (skipped or empty), generate per-subdomain in parallel
+  if (plan.views.length === 0 && allProposals.length === 0) {
+    logger.info("No planned views, falling back to parallel per-subdomain generation");
+    const fallbackResults = await mapWithConcurrency(
+      subdomainGroups.slice(0, 5).map((subGroup) => async () => {
+        const result = await runMetricViewProposals({
+          domain: `${domain} / ${subGroup.subdomain}`,
+          tableFqns: subGroup.tables,
+          metadata,
+          allowlist,
+          useCases: subGroup.useCases,
+          measures,
+          dimensions,
+          joinSpecs,
+          columnEnrichments: columnEnrichments.filter((e) =>
+            subGroup.tables.some((t) => t.toLowerCase() === e.tableFqn.toLowerCase()),
+          ),
+          endpoint,
+          signal,
+        });
+        return result.proposals.map((proposal) => ({
+          ...proposal,
+          classification: "new" as const,
           rationale: "Generated for subdomain (planning pre-pass unavailable).",
           subdomain: subGroup.subdomain,
-        });
-      }
+        }));
+      }),
+      SUBDOMAIN_CONCURRENCY,
+    );
+    for (const proposals of fallbackResults) {
+      allProposals.push(...proposals);
     }
   }
 

@@ -212,7 +212,7 @@ ${industryBlock}${skillBlock}Analyze ALL columns in the tables above and return 
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 32768,
+    maxTokens: 12288,
     responseFormat: "json_object",
     signal,
   });
