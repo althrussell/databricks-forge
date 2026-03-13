@@ -1,6 +1,6 @@
 # Databricks Forge -- User Guide
 
-This guide walks through every feature of Databricks Forge. It assumes the app is already deployed and you can access it in your browser. For deployment instructions, see the [README](../README.md).
+This guide walks through every feature of Databricks Forge. It assumes the app is already deployed and you can access it in your browser. For deployment instructions, see the [Deployment Guide](DEPLOYMENT.md).
 
 ---
 
@@ -1018,4 +1018,4 @@ Shows the current version, application name, and runtime environment.
 - **Monitor Data Maturity** -- the maturity score gives leadership a single number to track improvement over time.
 
 ---
-*For deployment and configuration, see the [README](../README.md). For the value proposition, see [WHY_FORGE](../WHY_FORGE.md).*
+*For deployment and configuration, see the [Deployment Guide](DEPLOYMENT.md). For the value proposition, see the [Home page](index.md).*
