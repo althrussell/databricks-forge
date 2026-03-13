@@ -3,6 +3,7 @@ site_description: Turn Unity Catalog metadata into business value in days, not q
 site_url: https://althrussell.github.io/databricks-forge/
 repo_url: https://github.com/althrussell/databricks-forge
 repo_name: althrussell/databricks-forge
+use_directory_urls: false
 
 theme:
   name: material
