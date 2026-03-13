@@ -7,7 +7,9 @@
  */
 
 import type { QuestionComplexity } from "@/lib/settings";
+import type { QualityPreset } from "@/lib/genie/quality-presets";
 export type { QuestionComplexity } from "@/lib/settings";
+export type { QualityPreset } from "@/lib/genie/quality-presets";
 
 // ---------------------------------------------------------------------------
 // Genie Engine Configuration (customer-editable)
@@ -110,6 +112,9 @@ export interface GenieEngineConfig {
   skipMetricViewPlanning: boolean;
 
   questionComplexity: QuestionComplexity;
+
+  /** Controls speed vs richness trade-off. Determines generation budgets, review surfaces, and domain concurrency. */
+  qualityPreset: QualityPreset;
 }
 
 export function defaultGenieEngineConfig(): GenieEngineConfig {
@@ -138,6 +143,7 @@ export function defaultGenieEngineConfig(): GenieEngineConfig {
     llmRefinement: true,
     skipMetricViewPlanning: true,
     questionComplexity: "simple",
+    qualityPreset: "balanced",
   };
 }
 

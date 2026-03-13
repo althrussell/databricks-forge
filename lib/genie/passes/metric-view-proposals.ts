@@ -1184,7 +1184,7 @@ export async function dryRunMetricViewDdl(
   const originalFqn = fqnMatch[1].replace(/`/g, "");
   const parts = originalFqn.split(".");
   const pfx = resourcePrefix || "forge_";
-  const tempName = `__${pfx}validate_${Date.now()}`;
+  const tempName = `__${pfx}validate_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
   const tempFqn = `${parts[0]}.${parts[1]}.${tempName}`;
   const tempDdl = ddl.replace(VIEW_FQN_RE, (match) =>
     match.replace(fqnMatch[1], `\`${parts[0]}\`.\`${parts[1]}\`.\`${tempName}\``),

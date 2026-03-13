@@ -30,6 +30,7 @@ const ENV_KEYS = [
   "DATABRICKS_SERVING_ENDPOINT_REASONING_2",
   "DATABRICKS_SERVING_ENDPOINT_GENERATION",
   "DATABRICKS_SERVING_ENDPOINT_SQL",
+  "DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT",
   "DATABRICKS_ALLOWED_MODELS",
 ] as const;
 
@@ -177,6 +178,63 @@ describe("model-registry", () => {
       expect(names).toContain("databricks-gpt-5-3-codex");
       expect(names).not.toContain("databricks-claude-opus-4-6");
       expect(names).not.toContain("databricks-claude-sonnet-4-6");
+    });
+  });
+
+  describe("Performance bundle models", () => {
+    it("picks up DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
+
+      const pool = getModelPool();
+      const names = pool.map((ep) => ep.name);
+      expect(names).toContain("databricks-gemini-3-1-flash-lite");
+    });
+
+    it("databricks-gemini-3-1-flash-lite supports classification and lightweight tiers", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
+
+      const pool = getModelPool();
+      const ep = pool.find((e) => e.name === "databricks-gemini-3-1-flash-lite");
+      expect(ep).toBeDefined();
+      expect(ep!.tiers).toContain("classification");
+      expect(ep!.tiers).toContain("lightweight");
+      expect(ep!.priority).toBe(0);
+    });
+
+    it("databricks-llama-4-maverick supports generation and classification", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-llama-4-maverick";
+
+      const pool = getModelPool();
+      const ep = pool.find((e) => e.name === "databricks-llama-4-maverick");
+      expect(ep).toBeDefined();
+      expect(ep!.tiers).toContain("generation");
+      expect(ep!.tiers).toContain("classification");
+      expect(ep!.priority).toBe(0);
+    });
+
+    it("databricks-gemini-3-flash supports generation, classification, and lightweight", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "databricks-gemini-3-flash";
+
+      const pool = getModelPool();
+      const ep = pool.find((e) => e.name === "databricks-gemini-3-flash");
+      expect(ep).toBeDefined();
+      expect(ep!.tiers).toContain("generation");
+      expect(ep!.tiers).toContain("classification");
+      expect(ep!.tiers).toContain("lightweight");
+    });
+
+    it("full performance bundle populates all 7 endpoints", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "databricks-claude-sonnet-4-6";
+      process.env.DATABRICKS_REVIEW_ENDPOINT = "databricks-gpt-5-4";
+      process.env.DATABRICKS_SERVING_ENDPOINT_REASONING_2 = "databricks-gemini-3-flash";
+      process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-llama-4-maverick";
+      process.env.DATABRICKS_SERVING_ENDPOINT_SQL = "databricks-gpt-5-3-codex";
+      process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
+
+      const pool = getModelPool();
+      expect(pool).toHaveLength(7);
     });
   });
 

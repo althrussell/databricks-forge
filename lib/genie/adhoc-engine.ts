@@ -22,6 +22,7 @@ import type {
   EnrichedSqlSnippetFilter,
   EnrichedSqlSnippetDimension,
   QuestionComplexity,
+  QualityPreset,
 } from "./types";
 import { defaultGenieEngineConfig } from "./types";
 import { buildSchemaAllowlist } from "./schema-allowlist";
@@ -82,6 +83,7 @@ export interface AdHocGenieConfig {
   generateMetricViews?: boolean;
   generateTrustedAssets?: boolean;
   questionComplexity?: QuestionComplexity;
+  qualityPreset?: QualityPreset;
   mode?: "fast" | "full";
 }
 
@@ -135,6 +137,7 @@ function buildEngineConfig(adhoc?: AdHocGenieConfig): GenieEngineConfig {
   if (adhoc.generateTrustedAssets !== undefined)
     base.generateTrustedAssets = adhoc.generateTrustedAssets;
   if (adhoc.questionComplexity) base.questionComplexity = adhoc.questionComplexity;
+  if (adhoc.qualityPreset) base.qualityPreset = adhoc.qualityPreset;
   return base;
 }
 

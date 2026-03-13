@@ -36,6 +36,7 @@ function applyGlobalDefaults(cfg: GenieEngineConfig): GenieEngineConfig {
   cfg.generateTrustedAssets = g.generateTrustedAssets;
   cfg.fiscalYearStartMonth = g.fiscalYearStartMonth;
   cfg.entityMatchingMode = g.entityMatchingMode;
+  cfg.qualityPreset = g.qualityPreset;
   cfg.questionComplexity = settings.questionComplexity.genieEngine;
   return cfg;
 }

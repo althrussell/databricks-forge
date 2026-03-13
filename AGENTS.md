@@ -33,7 +33,8 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - SQL Warehouse is bound as an app resource (no hardcoded warehouse IDs).
 - Embedding endpoint (`serving-endpoint-embedding`) defaults to `databricks-qwen3-embedding-0-6b`.
 - Review endpoint (`serving-endpoint-review`) defaults to `databricks-gpt-5-4` for LLM-as-reviewer SQL quality checks.
-- Extended model pool endpoints (`serving-endpoint-reasoning-2`, `serving-endpoint-generation`, `serving-endpoint-sql`) are optional; when configured via deploy.sh, they enable multi-model parallel routing.
+- Extended model pool endpoints (`serving-endpoint-reasoning-2`, `serving-endpoint-generation`, `serving-endpoint-sql`, `serving-endpoint-lightweight`) are optional; when configured via deploy.sh, they enable multi-model parallel routing.
+- `--lightweight-endpoint` binds a fast classification/lightweight model (e.g. `databricks-gemini-3-1-flash-lite` or `databricks-claude-sonnet-4-6`) for high-throughput tasks.
 - `DATABRICKS_ALLOWED_MODELS` restricts the pool to customer-approved models only.
 - Lakebase scale-to-zero is enforced at every startup (default: 300s timeout). Override with `LAKEBASE_SCALE_TO_ZERO_TIMEOUT` or `--lakebase-no-scale-to-zero`.
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
@@ -152,6 +153,7 @@ Key modules:
 - `lib/genie/engine.ts` -- orchestrator (table selection + up to 8 LLM passes)
 - `lib/genie/assembler.ts` -- assembles pass outputs into `SerializedSpace` v2 payload (alias-based join SQL, relationship type encoding)
 - `lib/genie/types.ts` -- all Genie types (`GenieEngineConfig`, `SerializedSpace`, etc.)
+- `lib/genie/quality-presets.ts` -- `QualityPreset` type, `GenerationBudget` interface, Speed/Balanced/Premium budgets, `resolveBudget()`
 - `lib/genie/time-periods.ts` -- auto-generated date filters/dimensions with fiscal year support
 - `lib/genie/entity-extraction.ts` -- sample-data-driven entity matching
 - `lib/genie/schema-allowlist.ts` -- grounded generation (only scraped columns/tables, CREATE DDL exclusion)
@@ -346,7 +348,8 @@ API routes:
 | Security headers   | Via `next.config.ts` `headers()` function                   |
 | Versioning         | `package.json` version in `/api/health`, sidebar, run metadata |
 | Model routing      | `resolveEndpoint(tier)` routes all LLM calls via `lib/dbx/task-router.ts`; 5 tiers (reasoning, generation, classification, sql, lightweight); queue-depth-aware routing across model pool |
-| Model pool         | `lib/dbx/model-registry.ts` -- declares endpoints, capabilities, concurrency caps; auto-discovers from env vars; `DATABRICKS_ALLOWED_MODELS` restricts pool |
+| Model pool         | `lib/dbx/model-registry.ts` -- declares endpoints, capabilities, concurrency caps; auto-discovers from env vars; `DATABRICKS_ALLOWED_MODELS` restricts pool; performance bundle models: `databricks-gemini-3-1-flash-lite` (pri 0, classification+lightweight), `databricks-llama-4-maverick` (pri 0, generation+classification), `databricks-gemini-3-flash` (pri 1, generation+classification+lightweight) |
+| Quality presets    | `lib/genie/quality-presets.ts` -- Speed/Balanced/Premium presets controlling `GenerationBudget` (target counts, domain concurrency, review surfaces, maxTokens); wired into `engine.ts`, `adhoc-engine.ts`, settings UI |
 | SQL review         | `getReviewEndpoint()` routes SQL quality review to dedicated review model (`databricks-gpt-5-4` via `serving-endpoint-review`); `lib/ai/sql-reviewer.ts` provides `reviewSql()`, `reviewAndFixSql()`, `reviewBatch()`; opt-in per surface via `isReviewEnabled()` |
 | Embeddings         | `lib/embeddings/client.ts` -- `databricks-qwen3-embedding-0-6b` (1024-dim) via `getEmbeddingEndpoint()`; batched (16/req) with 429/5xx retry |
 | Vector search      | `lib/embeddings/store.ts` -- pgvector in Lakebase; `forge_embeddings` table with HNSW index; 12 entity kinds covering all estate + pipeline data |
@@ -383,6 +386,7 @@ original paths for backward compatibility.
 - **SQL quality rules** -- all SQL-generating prompts must import rules from `lib/ai/sql-rules.ts` (never inline ad-hoc rules)
 - **Privacy** -- only metadata (schemas, table/column names) is read; no row-level data access
 - **Model pool backward compat** -- if only legacy env vars are set (`DATABRICKS_SERVING_ENDPOINT`, `_FAST`, `_REVIEW`), the app runs with a single-to-three endpoint pool identical to pre-pool behavior
+- **Generation budgets** -- all Genie Engine passes respect the `GenerationBudget` from `lib/genie/quality-presets.ts`; target counts, maxTokens, and review surfaces are never hardcoded in pass code; `config.qualityPreset` (default: `"balanced"`) drives the budget
 - **Genie Conversation API MUST use OBO tokens** -- `startConversation`, `pollMessageCompletion`, `sendFollowUp`, and any new Genie Conversation API call MUST authenticate as the logged-in user via OBO token, NEVER as the service principal (`getAppHeaders()`). The Genie API returns 404 `RESOURCE_DOES_NOT_EXIST` when called with SP credentials because the SP does not own the space. Every API route that calls these functions MUST capture the OBO token from `request.headers.get("x-forwarded-access-token")` and pass it through. Use `resolveHeaders(undefined, oboToken)` or pass `oboToken` as a parameter. If a function runs in a background task (fire-and-forget), capture the OBO token while still in request context and thread it through the entire call chain.
 
 ## New Feature Integration Checklist

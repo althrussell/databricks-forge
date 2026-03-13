@@ -116,6 +116,8 @@ export const SETTINGS = {
   entityMatching:
     "Controls how the engine matches entity names to table data for parameterised queries.",
   maxAutoSpaces: "Maximum number of Genie Spaces to auto-generate. Set to 0 for manual control.",
+  qualityPreset:
+    "Controls the speed vs richness trade-off. Speed produces lean spaces quickly with fewer LLM calls. Balanced is the recommended default. Premium generates the richest output with all review passes enabled.",
 } as const;
 
 // ── Compare page ────────────────────────────────────────────────────

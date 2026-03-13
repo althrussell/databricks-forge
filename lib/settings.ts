@@ -14,6 +14,9 @@ const VALID_AUTH_MODES = new Set<GenieAuthMode>(["obo", "sp"]);
 export type QuestionComplexity = "simple" | "medium" | "complex";
 const VALID_COMPLEXITIES = new Set<QuestionComplexity>(["simple", "medium", "complex"]);
 
+export type QualityPreset = "speed" | "balanced" | "premium";
+const VALID_PRESETS = new Set<QualityPreset>(["speed", "balanced", "premium"]);
+
 export interface QuestionComplexitySettings {
   genieEngine: QuestionComplexity;
   adhocGenie: QuestionComplexity;
@@ -32,6 +35,7 @@ export interface GenieEngineDefaults {
   generateTrustedAssets: boolean;
   fiscalYearStartMonth: number;
   entityMatchingMode: "auto" | "manual" | "off";
+  qualityPreset: QualityPreset;
 }
 
 export interface AppSettings {
@@ -86,6 +90,7 @@ const DEFAULT_GENIE_ENGINE: GenieEngineDefaults = {
   generateTrustedAssets: true,
   fiscalYearStartMonth: 1,
   entityMatchingMode: "auto",
+  qualityPreset: "balanced",
 };
 
 const DEFAULT_QUESTION_COMPLEXITY: QuestionComplexitySettings = {
@@ -210,6 +215,11 @@ function parseGenieEngineDefaults(raw: unknown): GenieEngineDefaults {
     result.fiscalYearStartMonth = obj.fiscalYearStartMonth;
   if (typeof obj.entityMatchingMode === "string" && VALID_ENTITY_MODES.has(obj.entityMatchingMode))
     result.entityMatchingMode = obj.entityMatchingMode as GenieEngineDefaults["entityMatchingMode"];
+  if (
+    typeof obj.qualityPreset === "string" &&
+    VALID_PRESETS.has(obj.qualityPreset as QualityPreset)
+  )
+    result.qualityPreset = obj.qualityPreset as QualityPreset;
   return result;
 }
 

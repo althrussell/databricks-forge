@@ -612,7 +612,7 @@ export async function reviewBatch(
         endpoint: ep,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
-        maxTokens: Math.min(items.length * perItemBudget, 16384),
+        maxTokens: Math.min(items.length * perItemBudget, 32768),
         responseFormat: "json_object",
       },
       surface,

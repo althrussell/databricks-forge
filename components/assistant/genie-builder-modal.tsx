@@ -163,6 +163,7 @@ export function GenieBuilderModal({
         globalInstructions: undefined as string | undefined,
         conversationSummary: conversationSummary || undefined,
         questionComplexity: settings.questionComplexity.adhocGenie,
+        qualityPreset: g.qualityPreset,
         mode,
       };
     },

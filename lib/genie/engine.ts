@@ -47,8 +47,7 @@ import { tableHasSynonymPair } from "./key-synonyms";
 import { normalizeDomainLabel } from "./domain-normalization";
 import { evaluateJoinCandidates } from "./join-diagnostics";
 import { saveMetricViewProposals } from "@/lib/lakebase/metric-view-proposals";
-
-const DOMAIN_CONCURRENCY = 10;
+import { resolveBudget, type GenerationBudget } from "./quality-presets";
 
 export class EngineCancelledError extends Error {
   constructor() {
@@ -118,7 +117,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     run,
     useCases,
     metadata,
-    config = defaultGenieEngineConfig(),
+    config: inputConfig = defaultGenieEngineConfig(),
     sampleData = null,
     piiClassifications,
     existingSpaces = [],
@@ -134,13 +133,19 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     deps?.logger ??
     createScopedLogger({ origin: "GenieEngine", module: "genie/engine", runId: run.runId });
   const allowlist = buildSchemaAllowlist(metadata);
+  const budget = resolveBudget(inputConfig.qualityPreset);
 
-  // Disable low-value SQL reviews by default for faster generation.
-  // Metric views are validated by YAML parser + dry-run; join inference
-  // reviews simple ON conditions. Restore original value on completion.
+  // Apply budget-driven metric view override
+  const config: GenieEngineConfig = budget.enableMetricViews
+    ? inputConfig
+    : { ...inputConfig, generateMetricViews: false };
+
+  // Apply budget-driven review surface disabling. Restore original on exit.
   const _savedReviewSurfaces = process.env.DATABRICKS_REVIEW_DISABLED_SURFACES;
-  if (_savedReviewSurfaces === undefined) {
-    process.env.DATABRICKS_REVIEW_DISABLED_SURFACES = "genie-metric-views,genie-join-inference";
+  if (budget.disabledReviewSurfaces.length > 0) {
+    const existing = _savedReviewSurfaces ? _savedReviewSurfaces.split(",") : [];
+    const merged = [...new Set([...existing, ...budget.disabledReviewSurfaces])];
+    process.env.DATABRICKS_REVIEW_DISABLED_SURFACES = merged.join(",");
   }
 
   const restoreReviewSurfaces = () => {
@@ -157,6 +162,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
       useCaseCount: useCases.length,
       tableCount: metadata.tableCount,
       llmRefinement: config.llmRefinement,
+      qualityPreset: config.qualityPreset,
+      domainConcurrency: budget.domainConcurrency,
       sampleDataAvailable: sampleData ? sampleData.size : 0,
     });
 
@@ -264,6 +271,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
                 totalDomainCount,
               ),
             log,
+            budget,
             onDomainPhase,
           );
 
@@ -352,7 +360,7 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
           return { failed: true as const, domain: group.domain, error: errorMsg };
         }
       }),
-      DOMAIN_CONCURRENCY,
+      budget.domainConcurrency,
     );
 
     const recommendations: GenieSpaceRecommendation[] = [];
@@ -404,6 +412,7 @@ async function processDomain(
   signal: AbortSignal | undefined,
   onProgress: (msg: string) => void,
   log: Logger,
+  budget: GenerationBudget,
   onDomainPhase?: (domain: string, phase: import("./engine-status").DomainPhase) => void,
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
@@ -443,6 +452,7 @@ async function processDomain(
       industryId: run.config.industry || undefined,
       endpoint: resolveEndpoint("classification"),
       signal,
+      budget,
     }),
   ]);
 
@@ -631,6 +641,8 @@ async function processDomain(
           endpoint: resolveEndpoint("generation"),
           questionComplexity: config.questionComplexity,
           signal,
+          useCaseCap: budget.trustedAssetUseCaseCap,
+          maxTokens: budget.maxTokensTrustedAssets,
         })
       : Promise.resolve({ queries: [], functions: [] }),
 
@@ -666,6 +678,9 @@ async function processDomain(
           endpoint: resolveEndpoint("generation"),
           industryId: run.config.industry || undefined,
           signal,
+          useCaseCap: budget.benchmarkUseCaseCap,
+          benchmarksPerBatch: budget.benchmarksPerBatch,
+          maxTokens: budget.maxTokensBenchmarks,
         })
       : Promise.resolve({ benchmarks: [...config.benchmarkQuestions] }),
 
