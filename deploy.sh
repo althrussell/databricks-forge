@@ -366,6 +366,7 @@ prepare_app_yaml() {
   export BENCHMARK_ADMINS
   export ENABLE_METRIC_VIEWS
   export ENABLE_FABRIC
+  export ENABLE_DEMO_MODE
   export REASONING_ENDPOINT_2
   export GENERATION_ENDPOINT
   export SQL_ENDPOINT
@@ -1023,6 +1024,7 @@ print_success() {
   printf "      Seed industry filter: %s\n" "${SEED_BENCHMARK_INDUSTRIES:-none}"
   printf "      Metric views:     %s\n" "$( [ "$ENABLE_METRIC_VIEWS" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Fabric / PBI:    %s\n" "$( [ "$ENABLE_FABRIC" = "true" ] && echo "enabled" || echo "disabled" )"
+  printf "      Demo mode:       %s\n" "$( [ "$ENABLE_DEMO_MODE" = "true" ] && echo "enabled" || echo "disabled" )"
   printf "      Benchmark admins: %s\n" "${BENCHMARK_ADMINS:-all authenticated users}"
   if [ "$GENERATED_NATIVE_PASSWORD" = "true" ] && [ "$PRINT_GENERATED_NATIVE_PASSWORD" = "true" ]; then
     printf "      Generated native password: %s\n" "$LAKEBASE_NATIVE_PASSWORD"
