@@ -20,6 +20,7 @@ import {
   DataManagementSettings,
 } from "@/components/settings";
 import { useSettingsState } from "@/components/settings/use-settings-state";
+import { DemoModeSettings } from "@/components/demo/demo-settings";
 
 export default function SettingsPage() {
   const state = useSettingsState();
@@ -63,6 +64,7 @@ export default function SettingsPage() {
     deleting,
     setDeleting,
     updateDepthParam,
+    demoModeEnabled,
   } = state;
 
   const handleRebuildEmbeddings = async () => {
@@ -250,6 +252,8 @@ export default function SettingsPage() {
       />
 
       <AboutSettings profile={profile} />
+
+      {demoModeEnabled && <DemoModeSettings />}
 
       <DataManagementSettings
         onClearLocalData={handleClearLocalData}

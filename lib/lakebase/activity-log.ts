@@ -30,7 +30,10 @@ export type ActivityAction =
   | "started_auto_improve"
   | "completed_auto_improve"
   | "synced_genie_spaces"
-  | "rerun_business_value";
+  | "rerun_business_value"
+  | "demo_research"
+  | "demo_generate"
+  | "demo_cleanup";
 
 export interface ActivityLogEntry {
   activityId: string;

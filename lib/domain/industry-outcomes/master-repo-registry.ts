@@ -57,9 +57,28 @@ const REGISTRY = new Map<string, MasterRepoEnrichment>([
   ],
 ]);
 
-/** Get Master Repository enrichment data for an industry. */
+/** Get Master Repository enrichment data for an industry (built-in first, then custom). */
 export function getMasterRepoEnrichment(industryId: string): MasterRepoEnrichment | undefined {
   return REGISTRY.get(industryId);
+}
+
+/**
+ * Async version that falls back to custom enrichment stored on ForgeOutcomeMap.
+ * Use this when the caller can await -- it checks built-in first (fast path),
+ * then queries Lakebase for LLM-generated enrichment.
+ */
+export async function getMasterRepoEnrichmentAsync(
+  industryId: string,
+): Promise<MasterRepoEnrichment | undefined> {
+  const builtIn = REGISTRY.get(industryId);
+  if (builtIn) return builtIn;
+
+  try {
+    const { getCustomEnrichment } = await import("@/lib/lakebase/outcome-maps");
+    return await getCustomEnrichment(industryId) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Get all industry IDs that have Master Repository enrichment. */
