@@ -13,38 +13,67 @@ This guide walks through every feature of Databricks Forge. It assumes the app i
 - [5. Run Results](#5-run-results)
   - [5.1 Overview Tab](#51-overview-tab)
   - [5.2 Use Cases Tab](#52-use-cases-tab)
-  - [5.3 Exporting Results](#53-exporting-results)
-- [6. Genie Studio](#6-genie-studio)
-  - [6.1 Creating Genie Spaces](#61-creating-genie-spaces)
-  - [6.2 The Genie Spaces List](#62-the-genie-spaces-list)
-  - [6.3 Health Scoring](#63-health-scoring)
-  - [6.4 Fix All Workflow](#64-fix-all-workflow)
-  - [6.5 Improve with Genie Engine](#65-improve-with-genie-engine)
-  - [6.6 Benchmark Test Runner](#66-benchmark-test-runner)
-  - [6.7 Space Detail View](#67-space-detail-view)
-- [7. AI Observability](#7-ai-observability)
-- [8. Comparing Runs](#8-comparing-runs)
-- [9. Managing Runs](#9-managing-runs)
-- [10. Estate Scanning](#10-estate-scanning)
+  - [5.3 Outcome Map Tab](#53-outcome-map-tab)
+  - [5.4 Genie Spaces Tab](#54-genie-spaces-tab)
+  - [5.5 Dashboards Tab](#55-dashboards-tab)
+  - [5.6 Business Value Tab](#56-business-value-tab)
+  - [5.7 AI Observability Tab](#57-ai-observability-tab)
+  - [5.8 Exporting Results](#58-exporting-results)
+- [6. Business Value](#6-business-value)
+  - [6.1 Portfolio](#61-portfolio)
+  - [6.2 Implementation Roadmap](#62-implementation-roadmap)
+  - [6.3 Stakeholder Intelligence](#63-stakeholder-intelligence)
+  - [6.4 Value Tracking](#64-value-tracking)
+  - [6.5 Strategy Alignment](#65-strategy-alignment)
+  - [6.6 Use Case Voting](#66-use-case-voting)
+  - [6.7 Portfolio Exports](#67-portfolio-exports)
+- [7. Genie Studio](#7-genie-studio)
+  - [7.1 Creating Genie Spaces](#71-creating-genie-spaces)
+  - [7.2 The Genie Studio Hub](#72-the-genie-studio-hub)
+  - [7.3 Space Detail View](#73-space-detail-view)
+  - [7.4 Health Scoring](#74-health-scoring)
+  - [7.5 Fix Workflow](#75-fix-workflow)
+  - [7.6 Improve with Genie Engine](#76-improve-with-genie-engine)
+  - [7.7 Benchmark Test Runner](#77-benchmark-test-runner)
+  - [7.8 Auto-Improve](#78-auto-improve)
+  - [7.9 Workspace Sync](#79-workspace-sync)
+- [8. Ask Forge](#8-ask-forge)
+- [9. AI Comments](#9-ai-comments)
+- [10. Estate Intelligence](#10-estate-intelligence)
 - [11. Industry Outcome Maps](#11-industry-outcome-maps)
-- [12. Settings](#12-settings)
-- [13. Tips and Best Practices](#13-tips-and-best-practices)
+- [12. Knowledge Base](#12-knowledge-base)
+- [13. Comparing Runs](#13-comparing-runs)
+- [14. Managing Runs](#14-managing-runs)
+- [15. Settings](#15-settings)
+- [16. Tips and Best Practices](#16-tips-and-best-practices)
 
 ---
 
 ## 1. Navigation
 
-The sidebar on the left provides access to all areas of the app:
+The sidebar on the left provides access to all areas of the app, organised into sections.
 
-| Menu Item | Purpose |
-| --- | --- |
-| **Dashboard** | Home page with KPIs, charts, and recent activity |
-| **New Discovery** | Configure and launch a discovery pipeline run |
-| **Runs** | View and manage all pipeline runs |
-| **Compare** | Compare two completed runs side by side |
-| **Estate** | Scan and explore your Unity Catalog data estate |
-| **Outcome Maps** | Browse industry outcome maps and reference use cases |
-| **Settings** | Configure data sampling, discovery depth, and export preferences |
+| Section | Menu Item | Purpose |
+| --- | --- | --- |
+| **Explore** | Dashboard | Home page with KPIs, charts, and recent activity |
+| **Explore** | Ask Forge | Conversational AI assistant with RAG-powered context |
+| **Explore** | New Discovery | Configure and launch a discovery pipeline run |
+| **Explore** | Runs | View and manage all pipeline runs |
+| **Genie Studio** | Genie Studio | Create, manage, and improve Genie Spaces |
+| **Genie Studio** | Metadata Genie | Genie Space scoped to your metadata for ad-hoc exploration |
+| **Estate** | Overview | Scan and explore your Unity Catalog data estate |
+| **Estate** | AI Comments | Generate and apply AI-powered catalog descriptions |
+| **Business Value** | Portfolio | Cross-run portfolio with financial estimates and strategy themes |
+| **Business Value** | Roadmap | Delivery phases with effort, dependencies, and timeline |
+| **Business Value** | Stakeholders | Champion identification and department impact mapping |
+| **Business Value** | Value Tracking | Lifecycle tracking from discovery to measured value |
+| **Business Value** | Strategy | Upload strategy documents and align to discovered opportunities |
+| **Business Value** | Outcome Maps | Industry-aligned reference outcome frameworks |
+| **Admin** | Knowledge Base | Upload documents to enrich AI context (RAG) |
+| **Admin** | Settings | Sampling, depth, Genie, export, and data management |
+| **Admin** | Help | Feature overview and getting started guidance |
+
+> Some items are conditionally visible. Ask Forge and Knowledge Base require an embedding endpoint to be configured.
 
 The sidebar also shows the app version at the bottom.
 
@@ -61,9 +90,10 @@ The dashboard is the landing page. It gives you an at-a-glance summary of all di
 **What you see:**
 
 - **KPI cards** -- total runs, total use cases discovered, average overall score, number of business domains, and pipeline success rate.
+- **Business Value summary** -- total estimated value across all runs (links to the Portfolio).
 - **Charts** -- score distribution across all use cases, domain breakdown, and AI vs Statistical type split.
 - **Recent runs** -- the most recent pipeline runs with status, business name, use case count, and score. Click any row to open the run detail.
-- **Activity feed** -- a timeline of recent events (runs started, completed, exports).
+- **Activity feed** -- a timeline of recent events (runs started, completed, exports, Genie deployments).
 
 **Actions:**
 
@@ -165,7 +195,7 @@ The progress bar and status message update every few seconds. You do not need to
 
 ## 5. Run Results
 
-When a pipeline run completes, the run detail page shows the full results across multiple tabs.
+When a pipeline run completes, the run detail page shows the full results across multiple tabs: **Overview**, **Use Cases**, **Outcome Map** (if an industry was selected), **Genie Spaces**, **Dashboards**, **Business Value**, and **AI Observability**.
 
 ### 5.1 Overview Tab
 
@@ -255,134 +285,63 @@ Click **Adjust Scores** to override the system-generated scores with your own ju
 - The **Overall** score updates automatically.
 - Click **Apply** to save, or **Reset to System** to revert to the AI-generated scores.
 
-### 5.3 Exporting Results
+### 5.3 Outcome Map Tab
 
-The export toolbar is available in the Overview tab.
+When you select an industry during configuration, the **Outcome Map** tab appears on the completed run. It shows how your discovered use cases map to the industry's strategic outcomes, highlighting which outcomes are well-covered, partially covered, or have gaps.
 
 <p align="center">
-  <img src="images/guide-14-export-toolbar.png" alt="Export toolbar" width="100%" />
+  <img src="images/guide-40-run-outcome-map.png" alt="Run outcome map alignment" width="100%" />
 </p>
 
-| Export | What you get |
-| --- | --- |
-| **Excel** | Multi-sheet workbook with summary, all use cases (filterable), and domain breakdown |
-| **PowerPoint** | Presentation deck with title slide, executive summary, domain breakdown, and top use cases |
-| **PDF** | Branded A4 landscape report with cover page, executive summary, domain pages, and individual use case pages |
-| **Deploy Notebooks** | One SQL notebook per use case, deployed to your Databricks workspace organised by domain |
-| **Deploy Genie** | Switches to the Genie Spaces tab (see below) |
-| **Environment Report** | Excel export of the linked estate scan (if one was run) |
+### 5.4 Genie Spaces Tab
 
-> Notebook deployment creates folders in your workspace at the configured path (default: `./forge_gen/`). A toast notification with a link to the workspace folder appears on success.
+The **Genie Spaces** tab shows AI-generated Genie Space recommendations for the run, grouped by business domain.
 
----
+<p align="center">
+  <img src="images/guide-15-genie-tab.png" alt="Genie Space recommendations" width="100%" />
+</p>
 
-## 6. Genie Studio
+Each recommendation includes a title, table count, and domain. You can:
 
-**Genie Studio** is the unified hub for creating, managing, and continuously improving [Databricks Genie Spaces](https://docs.databricks.com/en/genie/index.html). It brings together multiple creation paths, health scoring, automated fixes, benchmark testing, and AI Comments integration.
+- **Preview** the space configuration (tables, measures, instructions, trusted assets).
+- **Deploy** individual spaces or select multiple and click **Deploy Selected**.
+- **Edit engine config** to adjust parameters (max tables, benchmarks, metric views) and re-generate.
 
-### 6.1 Creating Genie Spaces
+This tab also acts as the entry point to the Genie Workbench for per-run Genie Engine management.
 
-There are several ways to create a Genie Space:
+### 5.5 Dashboards Tab
 
-**From a pipeline run:** The **Genie Spaces** tab on any completed run shows AI-generated recommendations -- one per business domain. Check the boxes next to the domains you want and click **Deploy Selected**.
+The **Dashboards** tab shows AI/BI (Lakeview) dashboard recommendations generated from your use cases and domain metadata.
 
-**From Ask Forge (Quick Build):** Ask a question in Ask Forge (e.g. "Create a Genie Space for sales analytics"). The assistant proposes a space with tightly scoped tables (up to 6) relevant to your question. Click **Create Genie Space** to open the builder modal, which uses a fast generation pass. An animated progress bar shows status. The result is a functional space in seconds.
+<p align="center">
+  <img src="images/guide-26-dashboards-tab.png" alt="Dashboard recommendations" width="100%" />
+</p>
 
-**Enhance with Full Engine:** After Quick Build, click **Enhance with Full Engine** to run all 7 LLM passes (column intelligence, semantic expressions, join inference, trusted assets, instructions, benchmarks, metric views). This takes 1--3 minutes but produces production-grade output with higher health scores. Hover over the button for a description of what the full engine adds.
+Each recommendation includes a domain, description, and widget summary. You can:
 
-**From Genie Studio entry points:** Navigate to **Genie > Create** for additional options: scan a schema directly, upload requirements documents, import JSON, or start from a pipeline run.
+- **Preview** the dashboard layout and widget details.
+- **Deploy** to your Databricks workspace as a Lakeview dashboard.
+- **Regenerate** a dashboard if you want a different approach.
 
-### 6.2 The Genie Spaces List
+### 5.6 Business Value Tab
 
-Navigate to **Genie > Improve** to see all your Genie Spaces. Each card shows:
+The **Business Value** tab shows per-run financial analysis generated during step 8 of the pipeline.
 
-- **Space name** and table count
-- **Health grade** (A--F) with colour coding
-- **Fixable issues** -- how many health check failures can be auto-fixed
-- **Deployment status** -- Deployed, Not Deployed, or Engine Running
+<p align="center">
+  <img src="images/guide-41-run-bv-tab.png" alt="Per-run business value" width="100%" />
+</p>
 
-Use the **search bar** to filter by name and the **sort control** to order by health score (best or worst first), name, or table count. During initial discovery, a "Scanning..." indicator appears.
+**What you see:**
 
-### 6.3 Health Scoring
+- **Value summary** -- total estimated value for this run, broken down by category (cost savings, revenue uplift, risk reduction, efficiency gain).
+- **Key Findings** -- AI-generated strategic findings from the executive synthesis.
+- **Recommendations** and **Risk Callouts** -- extracted from the synthesis.
+- **Roadmap phases** -- how many use cases fall into Quick Wins, Foundation, and Transformation.
+- **Rerun button** -- re-run the Business Value Analysis step if you have edited or rescored use cases.
 
-Every Genie Space receives a health grade (A--F) computed from approximately 40 checks across 4 categories:
+For the cross-run portfolio view, see [Section 6: Business Value](#6-business-value).
 
-- **Data Sources** -- column configurations, column descriptions, table count within optimal range
-- **Instructions** -- join comments, example SQL usage guidance, text instructions
-- **Semantic Richness** -- measures, filters, and expressions with display names, comments, synonyms, and instructions
-- **Quality Assurance** -- benchmark questions, SQL quality, parameterised queries
-
-The Genie Engine now populates all required fields automatically (display names, comments, instructions, column configs, join comments, usage guidance), so engine-generated spaces typically score A or B.
-
-Click any category in the health report to expand and see individual check results, including the current value versus the required threshold.
-
-**AI Comments link:** If the `tables-have-column-configs` or `columns-have-descriptions` checks fail, a direct link appears to run the AI Comment tool on the affected tables. This is the fastest way to boost data source health.
-
-### 6.4 Fix All Workflow
-
-Click **Fix All** on any space to automatically address fixable health check failures. The fix system applies targeted strategies:
-
-- **trusted_assets** -- enriches measures, filters, and expressions with display names, comments, and synonyms
-- **semantic_expressions** -- generates missing expressions and instructions
-- **join_inference** -- adds comments explaining join relationships
-- **benchmark_generation** -- creates benchmark questions for quality assurance
-
-After fixes are applied, the health score updates automatically. If no improvements can be made (e.g. the space already meets all thresholds), a message explains why.
-
-### 6.5 Improve with Genie Engine
-
-For deeper improvements, click **Improve with Engine** to run the full 7-pass Genie Engine against an existing space. A **progress banner** appears at the top of the page showing:
-
-- Current pass name and progress percentage
-- Status message describing what is happening
-- **Cancel** button to abort the engine run
-
-The banner remains visible even if you switch between tabs (Health, Benchmarks, Detail). If you navigate away and return, the banner reappears showing current progress.
-
-After the engine completes, an **Improvement Review** screen shows the proposed changes with the space name in the header, letting you accept or discard each modification.
-
-### 6.6 Benchmark Test Runner
-
-Navigate to the **Benchmarks** tab on any space to test Genie query accuracy.
-
-**Running tests:**
-
-1. Select individual questions or click **Run All** to test every benchmark.
-2. The button shows real-time progress: "Running 3/12...".
-3. Each test sends the question to the Databricks Genie Conversation API and compares the result.
-
-**Evaluation tiers:**
-
-Tests are evaluated using a 3-tier comparison:
-
-1. **High SQL similarity** (>=90%) -- the generated SQL closely matches the expected SQL
-2. **Result-set comparison** -- column count and row count match expectations
-3. **Basic SQL similarity** (>=60%) -- fallback threshold for structural similarity
-
-**Failure diagnostics:**
-
-Failed tests display rich detail including:
-
-- **Failure category** (e.g. wrong_tables, missing_join, wrong_aggregation)
-- **Comparison method** used (sql_similarity, result_set, basic_similarity)
-- **SQL similarity score** as a percentage
-- **Failure reason** explaining what went wrong
-
-Use these diagnostics to guide manual fixes or re-run the Fix All workflow.
-
-### 6.7 Space Detail View
-
-Click into any space to see the full detail view with tabs:
-
-- **Detail** -- tables, metric views, sample questions, SQL examples, measures, filters, expressions, joins, and instructions
-- **Health** -- the full health report with category breakdowns and fixable issue indicators
-- **Benchmarks** -- the test runner (see above)
-
-The detail view supports **Deploy**, **Open in Databricks**, **Clone**, and **Trash** actions.
-
----
-
-## 7. AI Observability
+### 5.7 AI Observability Tab
 
 The **AI Observability** tab provides transparency into every LLM call made during the pipeline run.
 
@@ -404,60 +363,356 @@ Each row shows a pipeline step, the prompt template used, status (success/error)
 
 > This is useful for debugging unexpected results, understanding why certain use cases were generated, or tuning prompt quality.
 
----
+### 5.8 Exporting Results
 
-## 8. Comparing Runs
-
-Navigate to **Compare** in the sidebar, or click **Compare** from a run's header.
+The export toolbar is available in the run detail header.
 
 <p align="center">
-  <img src="images/guide-18-compare.png" alt="Compare runs" width="100%" />
+  <img src="images/guide-14-export-toolbar.png" alt="Export toolbar" width="100%" />
 </p>
 
-**How to compare:**
+| Export | What you get |
+| --- | --- |
+| **Excel** | Multi-sheet workbook with summary, all use cases (filterable), domain breakdown, and business value sheets |
+| **PowerPoint** | Presentation deck with title slide, executive summary, domain breakdown, top use cases, and optional synthesis slides (findings, recommendations, risks) |
+| **PDF** | Branded A4 landscape report with cover page, executive summary, domain pages, and individual use case pages |
+| **Deploy Notebooks** | One SQL notebook per domain, deployed to your Databricks workspace |
+| **Environment Report** | Excel export of the linked estate scan (if one was run) |
 
-1. Select **Run A** and **Run B** from the dropdowns (only completed runs are shown).
-2. The page shows a side-by-side comparison:
-   - **Metrics** -- use case count, average score, domain count, AI vs Statistical counts, with diff indicators.
-   - **Use case overlap** -- how many use cases are unique to Run A, shared between both, and unique to Run B. Shared use cases are listed by name.
-   - **Configuration differences** -- business name, UC metadata, AI model, priorities, and languages, highlighted when they differ.
+> Notebook deployment creates folders in your workspace at the configured path (default: `./forge_gen/`). A toast notification with a link to the workspace folder appears on success.
 
-> Comparing runs is useful after changing the scope, depth, or model to see what improved.
+For portfolio-level exports (cross-run), see [Section 6.7: Portfolio Exports](#67-portfolio-exports).
 
 ---
 
-## 9. Managing Runs
+## 6. Business Value
 
-Navigate to **Runs** in the sidebar.
+The **Business Value** section provides financially-grounded analysis across all your pipeline runs. Access it from the sidebar under the **Business Value** section.
+
+### 6.1 Portfolio
+
+Navigate to **Portfolio** in the sidebar.
 
 <p align="center">
-  <img src="images/guide-19-runs-list.png" alt="Runs list" width="100%" />
+  <img src="images/guide-30-portfolio.png" alt="Portfolio overview" width="100%" />
 </p>
 
-**Features:**
+The portfolio aggregates business value data from all completed runs into a single view.
 
-- **Search** -- filter runs by business name.
-- **Status filter** -- show All, Completed, Running, Pending, or Failed runs.
-- **Sort** -- by date (newest/oldest) or by name.
-- **Pagination** -- 15 runs per page.
+**What you see:**
+
+- **Hero cards** -- Total Estimated Value, Quick Wins value, Delivered Value, and total Use Case count.
+- **Portfolio Velocity** -- a conversion funnel showing how many use cases have moved from Discovered through to Measured, with conversion and realisation rates.
+- **Strategic Themes** -- the top domains by estimated value.
+- **Phase Distribution** -- breakdown across Quick Wins, Foundation, and Transformation.
+- **Domain Heatmap** -- each domain with average score, feasibility, use case count, and value.
+
+**Drill-down:**
+
+Click any domain or phase card to expand and see the individual use cases within it, including value estimates and phase badges. Vote buttons are available in the drill-down view (see [6.6 Use Case Voting](#66-use-case-voting)).
+
+### 6.2 Implementation Roadmap
+
+Navigate to **Roadmap** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-31-roadmap.png" alt="Implementation Roadmap" width="100%" />
+</p>
+
+The roadmap shows all use cases assigned to delivery phases:
+
+- **Quick Wins** -- achievable in weeks with existing capabilities.
+- **Foundation** -- requires months of work, possibly new data or processes.
+- **Transformation** -- multi-quarter initiatives that reshape how the business operates.
+
+Each phase includes a bar chart, effort estimates, dependencies, and enablers. Click a phase to drill down into its use cases.
+
+### 6.3 Stakeholder Intelligence
+
+Navigate to **Stakeholders** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-32-stakeholders.png" alt="Stakeholder intelligence" width="100%" />
+</p>
+
+**What you see:**
+
+- **Recommended Champions** -- the top 6 stakeholders identified as potential champions based on department alignment and use case coverage.
+- **Department Impact** -- a table showing each department's estimated value, use case count, and complexity.
+- **Skills Assessment** -- the distribution of use case types (AI, statistical, analytical) to inform team capability planning.
+
+Click any stakeholder to expand and see the linked use cases.
+
+### 6.4 Value Tracking
+
+Navigate to **Value Tracking** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-33-tracking.png" alt="Value Tracking" width="100%" />
+</p>
+
+Track every use case through its lifecycle:
+
+- **Scorecard** -- counts of use cases at each stage (Discovered, Planned, In Progress, Delivered, Measured).
+- **Stage pipeline bar** -- a visual representation of the lifecycle funnel.
+- **Tracking table** -- every use case with its current stage, owner, and days since last update.
+
+**Actions in the table:**
+
+- **Change stage** -- use the dropdown on each row to move a use case between stages.
+- **Edit owner** -- click the pencil icon to assign or change ownership.
+- **Stalled indicators** -- use cases with no stage change in 14+ days are highlighted in amber with a "Stalled" badge.
+
+> Use Value Tracking to demonstrate progress from discovery through delivery. The stalled indicators help identify blockers before they become invisible.
+
+### 6.5 Strategy Alignment
+
+Navigate to **Strategy** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-34-strategy.png" alt="Strategy alignment" width="100%" />
+</p>
+
+Upload your organisation's strategy documents and see how discovered use cases align to strategic initiatives.
+
+**Workflow:**
+
+1. Click **Upload Strategy** and paste the text of your strategy document.
+2. The LLM parses it into structured initiatives.
+3. Each initiative shows an alignment badge: **Supported** (discovered use cases directly address it), **Partial** (related but not fully covered), or **Blocked** (no matching use cases found).
+4. Click any initiative to see which use cases support it.
+
+You can upload multiple strategy documents and delete them individually.
+
+### 6.6 Use Case Voting
+
+Workshop-style voting is available in the **Portfolio drill-down** view. Each use case has a vote button that team members can use to signal which opportunities they consider highest priority.
+
+Voting blends data-driven AI scores with human judgement, making it ideal for collaborative prioritisation workshops.
+
+### 6.7 Portfolio Exports
+
+The Portfolio page includes an **Export** dropdown with four formats:
+
+| Export | Description |
+| --- | --- |
+| **Portfolio Excel** | 8-sheet workbook: Executive Summary, Key Findings, Recommendations, Risk Callouts, Domain Performance, Delivery Pipeline, Use Cases with ROI, Stakeholders |
+| **Portfolio PowerPoint** | 8-slide Databricks-branded deck with KPIs, findings, recommendations, risks, pipeline, domains, and stakeholders |
+| **Executive PDF** | 2-page brief: Page 1 has KPIs, findings, and recommendations; Page 2 has pipeline chart, domain heatmap, and risks |
+| **D4B Workshop Pack** | 5-section workshop deck: Case for Change, Executive Findings, Delivery Roadmap, Recommended Genie Spaces, Workshop Agenda |
+
+These exports aggregate data across all runs, making them suitable for executive briefings and steering committees.
+
+---
+
+## 7. Genie Studio
+
+**Genie Studio** is the unified hub for creating, managing, and continuously improving [Databricks Genie Spaces](https://docs.databricks.com/en/genie/index.html). Navigate to **Genie Studio** in the sidebar.
+
+### 7.1 Creating Genie Spaces
+
+Forge provides five ways to create a Genie Space, depending on your starting point.
+
+**Scan Schema:** Navigate to **Genie Studio > Create > Scan Schema**. Select a catalog and schema, optionally provide a business context hint, and click **Scan**. Forge profiles the tables, selects the most relevant ones via the LLM, and builds a production-grade space. You can review and adjust the selected tables before generating.
+
+<p align="center">
+  <img src="images/guide-42-genie-scan-schema.png" alt="Scan Schema creation flow" width="100%" />
+</p>
+
+**Upload Requirements:** Navigate to **Genie Studio > Create > Upload Requirements**. Drop in a PDF, markdown, or text document that describes what you need. Forge extracts tables, questions, SQL patterns, join hints, and instructions, then generates a space that matches your brief.
+
+<p align="center">
+  <img src="images/guide-43-genie-upload-reqs.png" alt="Upload Requirements creation flow" width="100%" />
+</p>
+
+**Describe Your Space:** Click **Describe Your Space** from the Genie Studio hub to open Ask Forge in Genie Builder mode. Describe what you need in plain language. The assistant gathers requirements through conversation and builds the space for you.
+
+**Pipeline Run:** From any completed pipeline run, open the **Genie Spaces** tab. The Genie Engine generates domain-based recommendations automatically. Preview, edit the engine config, and deploy the spaces you want.
+
+**Import JSON:** Click **Import JSON** on the Genie Studio hub and paste the JSON of any existing Genie Space. Forge analyses it, runs a health check, and shows improvement recommendations.
+
+### 7.2 The Genie Studio Hub
+
+The main Genie Studio page shows all your Genie Spaces in a card layout.
+
+<p align="center">
+  <img src="images/guide-44-genie-hub.png" alt="Genie Studio hub" width="100%" />
+</p>
+
+Each card shows:
+
+- **Space name** and domain
+- **Table and measure counts**
+- **Health grade** (A--F) with colour coding
+- **Source** -- whether the space was created from a pipeline, a schema scan, Ask Forge, or synced from the workspace
 
 **Actions:**
 
-- Click any row to open the run detail.
-- Click the **trash icon** to delete a run (with confirmation dialog). This permanently removes the run and all its use cases.
-- Click **New Discovery** to start a new run.
-- Click **Compare Runs** to go to the comparison page (requires at least 2 completed runs).
+- **Search** and **sort** (by health score, name, or table count).
+- **Sync Spaces** -- pull Genie Spaces from your Databricks workspace into Forge for health scoring and improvement.
+- **Create** entry point cards at the top for each creation path.
+- Click any card to open the space detail view.
 
-**Run header actions** (on the run detail page):
+### 7.3 Space Detail View
 
-- **Duplicate Config** -- copies the run's configuration and opens the New Discovery form with all fields pre-filled. Useful for re-running with minor tweaks.
-- **Compare** -- opens the Compare page with this run pre-selected.
+Click into any space to see the full detail view with tabs:
+
+- **Overview** -- title, description, tables, measures, filters, expressions, joins, instructions, sample questions, and trusted assets.
+- **Health** -- the full health report with category breakdowns and fixable issue indicators.
+- **Benchmarks** -- the test runner for evaluating query accuracy.
+
+<p align="center">
+  <img src="images/guide-45-genie-detail.png" alt="Genie Space detail" width="100%" />
+</p>
+
+The detail view header provides **Deploy**, **Open in Databricks**, **Clone**, and **Trash** actions.
+
+### 7.4 Health Scoring
+
+Every Genie Space receives a health grade (A--F) computed from approximately 40 deterministic checks across 4 categories:
+
+- **Data Sources** -- column configurations, column descriptions, table count within optimal range.
+- **Instructions** -- join comments, example SQL usage guidance, text instructions.
+- **Semantic Richness** -- measures, filters, and expressions with display names, comments, synonyms, and instructions.
+- **Quality Assurance** -- benchmark questions, SQL quality, parameterised queries.
+
+<p align="center">
+  <img src="images/guide-46-genie-health.png" alt="Health check report" width="100%" />
+</p>
+
+Click any category to expand and see individual check results, including the current value versus the required threshold.
+
+**Quick wins** are surfaced at the top -- these are the checks with the highest score impact that can be fixed automatically.
+
+### 7.5 Fix Workflow
+
+Click **Fix** on any failing check or **Fix All** on the space to address fixable failures automatically. The fix system runs targeted engine passes:
+
+- **Column intelligence** -- adds display names, comments, and descriptions.
+- **Semantic expressions** -- generates missing measures, filters, and dimensions.
+- **Trusted assets** -- creates parameterised example queries.
+- **Join inference** -- adds comments explaining join relationships.
+- **Benchmark generation** -- creates test questions for quality assurance.
+
+After fixes are generated, an **Optimisation Review** shows the proposed changes in a diff preview. You can accept, discard, or clone the space with changes applied.
+
+### 7.6 Improve with Genie Engine
+
+For deeper improvements, click **Improve with Engine** to run the full multi-pass Genie Engine against an existing space. A progress banner appears showing:
+
+- Current pass name and progress percentage.
+- Status message describing what is happening.
+- **Cancel** button to abort.
+
+The banner remains visible across all tabs. After completion, the Optimisation Review shows all proposed changes for your approval.
+
+### 7.7 Benchmark Test Runner
+
+Navigate to the **Benchmarks** tab on any space to test Genie query accuracy.
+
+<p align="center">
+  <img src="images/guide-47-genie-benchmarks.png" alt="Benchmark test runner" width="100%" />
+</p>
+
+**Running tests:**
+
+1. Select individual questions or click **Run All** to test every benchmark.
+2. The button shows real-time progress (e.g. "Running 3/12...").
+3. Each test sends the question to the Databricks Genie Conversation API and compares the result.
+
+**Evaluation tiers:**
+
+1. **High SQL similarity** (>=90%) -- the generated SQL closely matches the expected SQL.
+2. **Result-set comparison** -- column count and row count match expectations.
+3. **Basic SQL similarity** (>=60%) -- fallback threshold for structural similarity.
+
+**Failure diagnostics:**
+
+Failed tests display the failure category (e.g. wrong_tables, missing_join, wrong_aggregation), comparison method, SQL similarity score, and failure reason. Use these diagnostics to guide fixes.
+
+**Improve from benchmarks:**
+
+After labelling benchmark results as correct or incorrect (with optional feedback), click **Improve** to generate targeted fixes based on the failure patterns. The fixes go through Optimisation Review before applying.
+
+### 7.8 Auto-Improve
+
+Navigate to **Genie Studio > Improve Existing** to see all spaces with health scores and fixable issue counts.
+
+<p align="center">
+  <img src="images/guide-48-genie-auto-improve.png" alt="Auto-improve page" width="100%" />
+</p>
+
+Select a space and click **Auto-Improve** to start an iterative improvement loop:
+
+1. Run benchmarks against the deployed space.
+2. Analyse failures and generate targeted fixes.
+3. Apply fixes and re-run benchmarks.
+4. Repeat until the target score is met (default: 80%) or the maximum iterations are reached (default: 5).
+
+Progress is shown in real time with toast notifications on completion.
+
+### 7.9 Workspace Sync
+
+Click **Sync Spaces** on the Genie Studio hub to pull all Genie Spaces from your Databricks workspace into Forge. Sync runs in the background and updates the space listing with metadata and health scores. This lets you health-check and improve spaces that were created outside of Forge.
 
 ---
 
-## 10. Estate Scanning
+## 8. Ask Forge
 
-Navigate to **Estate** in the sidebar. Estate scanning provides a holistic view of your Unity Catalog data estate, independent of discovery runs.
+Navigate to **Ask Forge** in the sidebar to open the conversational AI assistant.
+
+<p align="center">
+  <img src="images/guide-25-ask-forge.png" alt="Ask Forge" width="100%" />
+</p>
+
+Ask Forge is a RAG-powered assistant with context from your data estate, pipeline results, Knowledge Base documents, and Genie recommendations. It supports streaming responses with rich markdown formatting.
+
+**What you can do:**
+
+- **Ask questions** about your data, discovered use cases, business value, or data estate.
+- **Propose SQL** -- the assistant can generate SQL and validate it with EXPLAIN before suggesting execution.
+- **Create Genie Spaces** -- when you reference tables in conversation, the assistant can propose and build a Genie Space on the spot.
+- **Deploy dashboards and notebooks** -- trigger deployment actions directly from the chat.
+- **Explore findings** -- ask follow-up questions to drill into specific domains, use cases, or strategy alignment.
+
+**Features:**
+
+- **Conversation history** -- a ChatGPT-style sidebar lists previous conversations. You can rename or delete them.
+- **Context panel** -- a slide-out panel shows the tables, sources, and enrichments the assistant used to generate its answer.
+- **Action cards** -- clickable cards in responses let you navigate to relevant pages (e.g. View Portfolio, View Stakeholders, View Roadmap).
+
+> Ask Forge requires an embedding endpoint to be configured (see Settings). It uses your Knowledge Base documents and pipeline data to provide grounded, contextual answers.
+
+---
+
+## 9. AI Comments
+
+Navigate to **AI Comments** under **Estate** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-35-ai-comments.png" alt="AI Comments" width="100%" />
+</p>
+
+AI Comments generates industry-aware table and column descriptions for Unity Catalog, optimised for Genie Space discoverability and general metadata quality.
+
+**Workflow:**
+
+1. **Create a job** -- select the catalog/schema scope and optionally set the industry.
+2. **Generate** -- the engine runs in four phases: schema context analysis, table comments, column comments, and consistency review. Progress streams in real time.
+3. **Review** -- browse tables in the left navigator. For each table, see old-vs-new comments side by side. Accept, reject, or edit individual proposals.
+4. **Apply** -- click **Apply All** (or apply per-table) to execute DDL against Unity Catalog. The original comments are saved so you can **Undo** if needed.
+
+**Pre-flight check:**
+
+Before applying, Forge runs a permissions check (`SHOW GRANTS`) to verify you have the required `MODIFY` privileges on the target schemas.
+
+> Running AI Comments before creating Genie Spaces significantly improves space health scores, because well-documented columns produce better semantic expressions and instructions.
+
+---
+
+## 10. Estate Intelligence
+
+Navigate to **Overview** under **Estate** in the sidebar. Estate Intelligence provides a holistic view of your Unity Catalog data estate, independent of discovery runs.
 
 ### Starting a Scan
 
@@ -479,7 +734,8 @@ The aggregate view merges data from all scans to give you the latest picture of 
   <img src="images/guide-20-estate-summary.png" alt="Estate summary" width="100%" />
 </p>
 
-- **Data Maturity Score** -- a composite score across governance, architecture, operations, and analytics readiness.
+- **Data Maturity Score** -- a composite 0--100 score across four pillars: Governance (documentation, tags, ownership, PII detection), Architecture (medallion tiers, redundancy, data products, lineage), Operations (health, OPTIMIZE/VACUUM, auto-optimize, clustering), and Analytics Readiness (use case density, schema coverage, domain coverage).
+- **Maturity level** -- Foundational, Developing, Established, Advanced, or Leading.
 - **Executive Summary** -- AI-generated business and technical findings about your data estate.
 - **Stats** -- total tables, total size, total rows, domains, average governance score, PII table count.
 - **Scan trends** -- how metrics have changed across scans (when you have 2 or more).
@@ -490,9 +746,7 @@ The aggregate view merges data from all scans to give you the latest picture of 
   <img src="images/guide-21-estate-tables.png" alt="Estate tables" width="100%" />
 </p>
 
-A searchable, sortable list of every table in your estate with:
-
-- Domain, tier (gold/silver/bronze), size, rows, owner, governance score, sensitivity level, last modified date, and discovery source.
+A searchable, sortable list of every table in your estate with domain, tier (gold/silver/bronze), size, rows, owner, governance score, sensitivity level, last modified date, and discovery source.
 
 **ERD tab:**
 
@@ -514,7 +768,7 @@ From a single scan view, click **Download Excel Report** to get a comprehensive 
 
 ## 11. Industry Outcome Maps
 
-Navigate to **Outcome Maps** in the sidebar.
+Navigate to **Outcome Maps** under **Business Value** in the sidebar.
 
 <p align="center">
   <img src="images/guide-24-outcomes-grid.png" alt="Industry Outcome Maps" width="100%" />
@@ -547,9 +801,90 @@ Click **Ingest New Map** to upload a markdown-formatted outcome map. The AI pars
 
 ---
 
-## 12. Settings
+## 12. Knowledge Base
 
-Navigate to **Settings** in the sidebar.
+Navigate to **Knowledge Base** under **Admin** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-27-knowledge-base.png" alt="Knowledge Base" width="100%" />
+</p>
+
+The Knowledge Base lets you upload documents that enrich the AI context used by Ask Forge, the pipeline, and the Genie Engine.
+
+**Supported formats:** PDF, Markdown, and plain text.
+
+**Categories:** Strategy Pack, Data Dictionary, Governance Policy, Architecture Docs, Other.
+
+**Workflow:**
+
+1. Drag and drop files or use the file picker.
+2. Forge chunks the document (512 tokens, 64-token overlap), generates embeddings, and stores them in the vector index.
+3. The document appears in the list with a status badge: **Processing**, **Ready**, or **Failed**.
+4. Once ready, the document's content is available for RAG retrieval across the app.
+
+**Integration:**
+
+- **Ask Forge** retrieves relevant chunks when answering questions.
+- **Pipeline** uses knowledge base context during use case generation and scoring.
+- **Genie Engine** draws on uploaded documents for richer instructions and trusted assets.
+- **Strategy Alignment** can reference uploaded strategy documents.
+
+> The Knowledge Base requires an embedding endpoint to be configured (see Settings).
+
+---
+
+## 13. Comparing Runs
+
+Navigate to **Runs** in the sidebar, then click **Compare Runs** (requires at least 2 completed runs).
+
+<p align="center">
+  <img src="images/guide-18-compare.png" alt="Compare runs" width="100%" />
+</p>
+
+**How to compare:**
+
+1. Select **Run A** and **Run B** from the dropdowns (only completed runs are shown).
+2. The page shows a side-by-side comparison:
+   - **Metrics** -- use case count, average score, domain count, AI vs Statistical counts, with diff indicators.
+   - **Use case overlap** -- how many use cases are unique to Run A, shared between both, and unique to Run B. Shared use cases are listed by name.
+   - **Configuration differences** -- business name, UC metadata, AI model, priorities, and languages, highlighted when they differ.
+
+> Comparing runs is useful after changing the scope, depth, or model to see what improved.
+
+---
+
+## 14. Managing Runs
+
+Navigate to **Runs** in the sidebar.
+
+<p align="center">
+  <img src="images/guide-19-runs-list.png" alt="Runs list" width="100%" />
+</p>
+
+**Features:**
+
+- **Search** -- filter runs by business name.
+- **Status filter** -- show All, Completed, Running, Pending, or Failed runs.
+- **Sort** -- by date (newest/oldest) or by name.
+- **Pagination** -- 15 runs per page.
+
+**Actions:**
+
+- Click any row to open the run detail.
+- Click the **trash icon** to delete a run (with confirmation dialog). This permanently removes the run and all its use cases.
+- Click **New Discovery** to start a new run.
+- Click **Compare Runs** to go to the comparison page (requires at least 2 completed runs).
+
+**Run header actions** (on the run detail page):
+
+- **Duplicate Config** -- copies the run's configuration and opens the New Discovery form with all fields pre-filled. Useful for re-running with minor tweaks.
+- **Compare** -- opens the Compare page with this run pre-selected.
+
+---
+
+## 15. Settings
+
+Navigate to **Settings** under **Admin** in the sidebar.
 
 <p align="center">
   <img src="images/guide-26-settings.png" alt="Settings" width="100%" />
@@ -570,6 +905,24 @@ Configure how many rows per table to sample during discovery and SQL generation.
 
 > When sampling is enabled, row-level data is sent to the AI model but is never persisted. It exists only in memory during the generation step.
 
+### Estate Scan
+
+Configure estate intelligence options:
+
+- **Estate Scan Enabled** -- enable or disable the estate scanning capability.
+- **Asset Discovery Enabled** -- enable discovery of data products and assets during scans.
+- **Benchmarks Server Enabled** -- enable server-side benchmark evaluation for Genie Spaces.
+
+### Semantic Search and RAG
+
+Configure the embedding and vector search capabilities that power Ask Forge and the Knowledge Base:
+
+- **Semantic Search Enabled** -- enable or disable RAG-powered features.
+- **Embedding Count** -- shows the number of embeddings currently stored.
+- **Rebuild Embeddings** -- re-index all pipeline data and knowledge base documents.
+
+> This section only appears when an embedding endpoint is available.
+
 ### Discovery Depth Defaults
 
 Set the default discovery depth and fine-tune per-depth parameters:
@@ -581,18 +934,33 @@ Set the default discovery depth and fine-tune per-depth parameters:
 
 Each depth (Focused, Balanced, Comprehensive) has independent defaults. Click **Reset** to restore factory settings.
 
-### Export Preferences
+### Genie Engine Defaults
+
+Configure default behaviour for Genie Space generation:
+
+- **Genie defaults** -- max tables, benchmark count, metric views, time periods, trusted assets, and other engine parameters.
+- **Deploy auth mode** -- how Genie Spaces authenticate when deployed.
+- **Question complexity** -- the complexity level of auto-generated benchmark questions.
+- **Metric Views server enabled** -- enable metric view generation as part of the Genie Engine.
+
+### Export and Naming
 
 - **Default export format** -- which format is pre-selected when you export (Excel, PDF, PowerPoint, or Notebooks).
 - **Notebook deployment path** -- the workspace folder where SQL notebooks are deployed (default: `./forge_gen/`).
+- **Catalog resource prefix** -- prefix for deployed resources in Unity Catalog.
 
-### Clear Local Settings
+### About
 
-Click **Clear local settings** to reset all preferences to defaults. This only affects browser-local settings -- your Lakebase data (runs, use cases) is not affected.
+Shows the current version, application name, and runtime environment.
+
+### Data Management
+
+- **Clear local settings** -- reset all browser-local preferences to defaults. Your Lakebase data (runs, use cases) is not affected.
+- **Delete all data** -- factory reset that removes all runs, use cases, Genie data, business value data, and estate scans from Lakebase. Use with caution.
 
 ---
 
-## 13. Tips and Best Practices
+## 16. Tips and Best Practices
 
 ### Choosing the Right Scope
 
@@ -618,22 +986,36 @@ Click **Clear local settings** to reset all preferences to defaults. This only a
 - **Adjust scores** -- the AI scores are a starting point. Use the score sliders to reflect your team's priorities and knowledge. User-adjusted scores override the system scores in all exports.
 - **Edit use cases** -- refine names and statements to match your organisation's terminology before exporting.
 - **Compare runs** -- run the same scope with different depths or models, then compare to find the best configuration for your data.
-- **Deploy Genie Spaces** -- Genie Spaces give your business users a natural language interface to the data described by the use cases. Deploy them to make discoveries immediately actionable.
+- **Use voting** -- run a prioritisation workshop with your team using the Portfolio drill-down. Combining AI scores with stakeholder votes produces better alignment.
+
+### Business Value
+
+- **Review per-run first** -- check the Business Value tab on a run to verify findings before looking at the cross-run portfolio.
+- **Upload strategy** -- adding a strategy document makes the alignment analysis much more valuable. Without it, you only get financial estimates and roadmap phasing.
+- **Track progress** -- update the Value Tracking page regularly to show leadership that discovery is translating into delivery.
+- **Export for executives** -- use the Portfolio PowerPoint or Executive PDF for steering committee updates. Use the D4B Workshop Pack for field-led workshops.
 
 ### Genie Studio
 
 - **Run AI Comments first** -- generating column descriptions before creating Genie Spaces dramatically improves health scores and Genie query accuracy.
-- **Use Quick Build for exploration** -- Ask Forge's Quick Build creates a functional space in seconds. Enhance with the full engine when you want production quality.
+- **Start with Scan Schema for ad-hoc needs** -- if you know the schema, Scan Schema is the fastest path to a working space.
+- **Use Ask Forge for exploratory builds** -- describe what you need in conversation and let the assistant build the space for you.
 - **Sort by health score** -- on the Improve page, sort by health score (worst first) to quickly find spaces that need attention.
-- **Use Fix All before manual edits** -- the automated fix strategies handle most common issues (missing display names, comments, instructions). Apply them first, then fine-tune manually.
-- **Run benchmarks after fixes** -- after Fix All or Engine Improve, run the benchmark test suite to verify accuracy improved. Use failure categories to guide further refinements.
-- **Monitor engine progress** -- the progress banner stays visible across all tabs, so you can review health scores or benchmarks while the engine runs.
+- **Use Fix All before manual edits** -- the automated fix strategies handle most common issues. Apply them first, then fine-tune manually.
+- **Run benchmarks after fixes** -- after Fix All or Engine Improve, run the benchmark test suite to verify accuracy improved.
+- **Sync workspace spaces** -- bring in existing Genie Spaces for health scoring to find quick improvement opportunities.
 
-### Estate Scanning
+### Ask Forge
+
+- **Upload context first** -- add relevant documents to the Knowledge Base and run at least one pipeline before using Ask Forge. The more context available, the better the answers.
+- **Use action cards** -- when the assistant suggests actions (View Portfolio, Deploy Notebook), click them to navigate directly.
+- **Build Genie Spaces conversationally** -- reference specific tables in your question and the assistant will offer to create a space.
+
+### Estate Intelligence
 
 - **Run estate scans regularly** -- scanning builds a historical view of your data estate. With 2+ scans, the dashboard shows trends in table counts, governance, and data maturity.
 - **Use Table Coverage** -- after running both an estate scan and a discovery, the Table Coverage tab highlights tables that are not yet covered by any use case -- these are untapped opportunities.
+- **Monitor Data Maturity** -- the maturity score gives leadership a single number to track improvement over time.
 
 ---
-
-*For deployment and configuration, see the [README](../README.md). For technical details on the analysis pipeline, see [FORGE_ANALYSIS.md](../FORGE_ANALYSIS.md).*
+*For deployment and configuration, see the [README](../README.md). For the value proposition, see [WHY_FORGE](../WHY_FORGE.md).*
