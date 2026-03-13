@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Button } from "@/components/ui/button";
 import { Menu, PanelLeftClose, PanelLeft } from "lucide-react";
 import { VersionBadge } from "@/components/version-badge";
+import { useGenieBuild } from "@/components/providers/genie-build-provider";
 
 interface NavItem {
   href: string;
@@ -126,6 +127,7 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
   const embeddingEnabled = useEmbeddingEnabled();
   const benchmarksEnabled = useBenchmarksEnabled();
   const fabricEnabled = useFabricEnabled();
+  const { isAnyActive: hasActiveBuild } = useGenieBuild();
 
   const visibleSections = useMemo(
     () =>
@@ -183,7 +185,12 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
                   {isActive && !collapsed && (
                     <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                   )}
-                  <item.icon className={cn("h-4 w-4 shrink-0", isActive && "text-primary")} />
+                  <span className="relative">
+                    <item.icon className={cn("h-4 w-4 shrink-0", isActive && "text-primary")} />
+                    {hasActiveBuild && item.href === "/genie" && (
+                      <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-violet-500 animate-pulse" />
+                    )}
+                  </span>
                   {!collapsed && <span>{item.label}</span>}
                 </Link>
               );

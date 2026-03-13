@@ -144,7 +144,11 @@ export default function ImproveExistingPage() {
           if (!res.ok) continue;
           const data: Record<
             string,
-            { metadata: { tableCount?: number } | null; healthReport: { grade?: string; overallScore?: number; fixableCount?: number } | null; permissionDenied?: boolean }
+            {
+              metadata: { tableCount?: number } | null;
+              healthReport: { grade?: string; overallScore?: number; fixableCount?: number } | null;
+              permissionDenied?: boolean;
+            }
           > = await res.json();
 
           setSpaces((prev) =>

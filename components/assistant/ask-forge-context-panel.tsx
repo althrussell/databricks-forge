@@ -261,7 +261,10 @@ export function AskForgeContextPanel({
                   onClick={() => setShowRelated((p) => !p)}
                 >
                   <div className="h-px flex-1 bg-border" />
-                  <span>{showRelated ? "Hide" : "Show"} {relatedTables.length} related table{relatedTables.length !== 1 ? "s" : ""}</span>
+                  <span>
+                    {showRelated ? "Hide" : "Show"} {relatedTables.length} related table
+                    {relatedTables.length !== 1 ? "s" : ""}
+                  </span>
                   <div className="h-px flex-1 bg-border" />
                 </button>
               )}

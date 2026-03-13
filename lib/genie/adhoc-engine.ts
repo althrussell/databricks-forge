@@ -288,6 +288,7 @@ async function generateFastLLMExpressions(
   domain: string,
   conversationSummary: string | undefined,
   endpoint: string,
+  signal?: AbortSignal,
 ): Promise<{
   measures: EnrichedSqlSnippetMeasure[];
   filters: EnrichedSqlSnippetFilter[];
@@ -359,6 +360,7 @@ Generate the most useful measures, filters, and dimensions for a Genie space ser
     temperature: 0.2,
     maxTokens: 8192,
     responseFormat: "json_object",
+    signal,
   });
 
   const content = result.content ?? "";
@@ -541,7 +543,7 @@ function buildRuleBasedInstructions(
  * the full engine.
  */
 export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHocEngineResult> {
-  const { tables, config: adhocConfig } = input;
+  const { tables, config: adhocConfig, signal, onProgress } = input;
 
   if (tables.length === 0) {
     throw new Error("At least one table is required");
@@ -554,7 +556,12 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   const premiumEndpoint = resolveEndpoint("generation");
   logger.info("Fast Genie Engine starting", { tableCount: tables.length, domain });
 
+  const checkAborted = () => {
+    if (signal?.aborted) throw new Error("Cancelled");
+  };
+
   // Step 1: Scrape metadata (SQL queries only, no LLM)
+  onProgress?.("Scraping table metadata...", 5);
   const metadata = await scrapeMetadata(tables);
   const validTableFqns = metadata.tables.map((t) => t.fqn);
   const allowlist = buildSchemaAllowlist(metadata);
@@ -597,6 +604,8 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   );
 
   // Step 4: LLM-generated measures, filters, and dimensions (fast endpoint)
+  checkAborted();
+  onProgress?.("Generating measures, filters & dimensions...", 25);
   let llmMeasures: EnrichedSqlSnippetMeasure[] = [];
   let llmFilters: EnrichedSqlSnippetFilter[] = [];
   let llmDimensions: EnrichedSqlSnippetDimension[] = [];
@@ -609,6 +618,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
       domain,
       adhocConfig?.conversationSummary,
       fastEndpoint,
+      signal,
     );
     llmMeasures = llmResult.measures;
     llmFilters = llmResult.filters;
@@ -640,6 +650,8 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   }
 
   // Step 7: Rule-based instructions from comments
+  checkAborted();
+  onProgress?.("Generating instructions...", 50);
   const engineConfig = buildEngineConfig(adhocConfig);
   const instructionResult = await runInstructionGeneration({
     domain,
@@ -654,6 +666,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     metadata,
     tableFqns: validTableFqns,
     conversationSummary: adhocConfig?.conversationSummary,
+    signal,
   });
   const instructions =
     instructionResult.instructions.length > 0
@@ -667,6 +680,8 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
 
   const complexity = engineConfig.questionComplexity ?? "simple";
 
+  checkAborted();
+  onProgress?.("Generating example queries...", 65);
   const exampleQueryResult = await runExampleQueryGeneration({
     domain,
     tableFqns: validTableFqns,
@@ -676,6 +691,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     endpoint: fastEndpoint,
     fallbackEndpoint: premiumEndpoint,
     questionComplexity: complexity,
+    signal,
   });
 
   // Step 8: Sample questions from entity candidates
@@ -704,6 +720,8 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
   };
 
   // Step 9: Assemble via same pipeline as full engine
+  checkAborted();
+  onProgress?.("Assembling space configuration...", 80);
   const seedId = `fast-${Date.now()}`;
   const titleInputBusinessName = adhocConfig?.title || domain;
   const titleResult = adhocConfig?.title
@@ -716,6 +734,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
         conversationSummary: adhocConfig?.conversationSummary,
         endpoint: fastEndpoint,
         fallbackEndpoint: premiumEndpoint,
+        signal,
       });
   const degradedReasons: string[] = [];
   if (validTableFqns.length > 1 && allJoins.length === 0)
@@ -724,6 +743,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     degradedReasons.push("insufficient_sample_sql");
   if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
 
+  checkAborted();
   const space = assembleSerializedSpace(passOutputs, {
     runId: seedId,
     businessName: titleInputBusinessName,
@@ -731,6 +751,7 @@ export async function runFastGenieEngine(input: AdHocEngineInput): Promise<AdHoc
     metadata,
   });
 
+  onProgress?.("Running quality checks...", 92);
   const healthReport = runHealthCheck(space as unknown as Record<string, unknown>);
   const actualScore = Math.round(healthReport.overallScore);
 

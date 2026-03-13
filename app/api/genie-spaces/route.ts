@@ -105,9 +105,7 @@ export async function GET(request: NextRequest) {
       lastDiscoveredAt: c.lastDiscoveredAt,
     }));
 
-    const liveTracked = tracked.filter(
-      (t) => t.status === "trashed" || cachedIds.has(t.spaceId),
-    );
+    const liveTracked = tracked.filter((t) => t.status === "trashed" || cachedIds.has(t.spaceId));
 
     return NextResponse.json({
       spaces: mergedSpaces,

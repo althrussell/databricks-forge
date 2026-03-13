@@ -2,10 +2,12 @@
  * API: /api/genie-spaces/generate
  *
  * POST   -- Start Genie Space generation from a table list.
- *           mode=fast (default): synchronous, returns result immediately.
+ *           mode=fast (default): synchronous unless async=true.
+ *           mode=fast + async=true: fire-and-forget, returns jobId.
  *           mode=full: async, returns jobId; the client polls GET for progress.
- * GET    -- Poll full-mode generation status by jobId.
+ * GET    -- Poll generation status by jobId.
  *           Without jobId: returns all non-evicted generate jobs (for dashboard tiles).
+ * PATCH  -- Update a job (e.g. write deployedSpaceId after deploy).
  * DELETE -- Cancel a running generate job by jobId.
  */
 
@@ -36,6 +38,9 @@ interface AdHocJobStatus {
   title?: string;
   domain?: string;
   tableCount?: number;
+  source?: string;
+  deployedSpaceId?: string;
+  conversationSummary?: string;
   abortController?: AbortController;
 }
 
@@ -74,15 +79,25 @@ function jobToResponse(job: AdHocJobStatus) {
     title: job.title,
     domain: job.domain,
     tableCount: job.tableCount,
+    source: job.source,
+    deployedSpaceId: job.deployedSpaceId,
+    conversationSummary: job.conversationSummary,
   };
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tables: rawTables, config } = body as {
+    const {
+      tables: rawTables,
+      config,
+      source,
+      async: asyncMode,
+    } = body as {
       tables: unknown;
       config?: AdHocGenieConfig;
+      source?: string;
+      async?: boolean;
     };
 
     const tables = validateTables(rawTables);
@@ -96,9 +111,9 @@ export async function POST(request: NextRequest) {
     const mode = config?.mode ?? "fast";
 
     // -----------------------------------------------------------------------
-    // Fast mode: synchronous — no polling needed
+    // Fast mode (synchronous) -- only when async flag is NOT set
     // -----------------------------------------------------------------------
-    if (mode === "fast") {
+    if (mode === "fast" && !asyncMode) {
       try {
         const result = await runFastGenieEngine({ tables, config });
         const quality = result.recommendation.quality;
@@ -117,17 +132,19 @@ export async function POST(request: NextRequest) {
     }
 
     // -----------------------------------------------------------------------
-    // Full mode: async with polling
+    // Async mode: fire-and-forget for both fast+async and full mode
     // -----------------------------------------------------------------------
     const jobId = uuidv4();
     const now = Date.now();
     const abortController = new AbortController();
+    const effectiveMode = mode === "fast" && asyncMode ? "fast" : "full";
 
     jobs.set(jobId, {
       jobId,
       status: "generating",
       currentStep: null,
-      message: "Starting full Genie Engine...",
+      message:
+        effectiveMode === "fast" ? "Starting quick build..." : "Starting full Genie Engine...",
       percent: 0,
       startedAt: now,
       completedAt: null,
@@ -136,10 +153,14 @@ export async function POST(request: NextRequest) {
       title: config?.title ?? undefined,
       domain: config?.domain ?? undefined,
       tableCount: tables.length,
+      source: source ?? undefined,
+      conversationSummary: config?.conversationSummary ?? undefined,
       abortController,
     });
 
-    runAdHocGenieEngine({
+    const engineFn = effectiveMode === "fast" ? runFastGenieEngine : runAdHocGenieEngine;
+
+    engineFn({
       tables,
       config,
       onProgress: (message, percent, step) => {
@@ -167,7 +188,7 @@ export async function POST(request: NextRequest) {
           job.percent = 100;
           job.currentStep = null;
           job.completedAt = Date.now();
-          job.result = { recommendation: result.recommendation, mode: "full" };
+          job.result = { recommendation: result.recommendation, mode: effectiveMode };
         }
       })
       .catch((err) => {
@@ -178,7 +199,7 @@ export async function POST(request: NextRequest) {
             job.status = "cancelled";
             job.message = "Generation cancelled";
           } else {
-            logger.error("Full Genie generation failed", { jobId, error: msg });
+            logger.error("Genie generation failed", { jobId, mode: effectiveMode, error: msg });
             job.status = "failed";
             job.message = "Generation failed";
             job.error = msg;
@@ -187,7 +208,7 @@ export async function POST(request: NextRequest) {
         }
       });
 
-    return NextResponse.json({ jobId, mode: "full" });
+    return NextResponse.json({ jobId, mode: effectiveMode });
   } catch (error) {
     return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
   }
@@ -211,6 +232,33 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json(jobToResponse(job));
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { jobId, deployedSpaceId } = body as {
+      jobId?: string;
+      deployedSpaceId?: string;
+    };
+
+    if (!jobId) {
+      return NextResponse.json({ error: "jobId is required" }, { status: 400 });
+    }
+
+    const job = jobs.get(jobId);
+    if (!job) {
+      return NextResponse.json({ error: "Job not found or expired" }, { status: 404 });
+    }
+
+    if (deployedSpaceId) {
+      job.deployedSpaceId = deployedSpaceId;
+    }
+
+    return NextResponse.json({ success: true, ...jobToResponse(job) });
+  } catch (error) {
+    return NextResponse.json({ error: safeErrorMessage(error) }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: NextRequest) {

@@ -354,9 +354,7 @@ export async function runAssistantEngine(
         if (!spaceId && domain) {
           try {
             const tracked = await listTrackedGenieSpaces();
-            const match = tracked.find(
-              (t) => t.domain === domain && t.status !== "trashed",
-            );
+            const match = tracked.find((t) => t.domain === domain && t.status !== "trashed");
             spaceId = match?.spaceId;
           } catch {
             // best-effort lookup

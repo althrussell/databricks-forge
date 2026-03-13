@@ -534,7 +534,11 @@ async function fetchDirectLakebaseContext(): Promise<DirectContextResult> {
           .catch(() => [] as { spaceId: string; title: string }[]),
       ]);
 
-      if (deployedDashboards.length > 0 || deployedSpaces.length > 0 || cachedWorkspaceSpaces.length > 0) {
+      if (
+        deployedDashboards.length > 0 ||
+        deployedSpaces.length > 0 ||
+        cachedWorkspaceSpaces.length > 0
+      ) {
         const parts = ["## Already Deployed Assets"];
         if (deployedDashboards.length > 0) {
           parts.push(`Dashboards (${deployedDashboards.length}):`);

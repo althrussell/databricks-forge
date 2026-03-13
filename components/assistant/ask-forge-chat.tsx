@@ -39,7 +39,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { GenieBuilderModal } from "./genie-builder-modal";
+import { GenieDeployDialog } from "./genie-deploy-dialog";
+import { showBuildToast } from "./genie-build-toast";
+import { useGenieBuild } from "@/components/providers/genie-build-provider";
 import { ErdModal } from "./erd-modal";
 
 // ---------------------------------------------------------------------------
@@ -195,6 +199,9 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       sqlBlocks?: string[];
     } | null>(null);
     const [erdModalTables, setErdModalTables] = React.useState<string[] | null>(null);
+    const [deployJobId, setDeployJobId] = React.useState<string | null>(null);
+    const [deployDialogOpen, setDeployDialogOpen] = React.useState(false);
+    const genieBuild = useGenieBuild();
     const [pendingAction, setPendingAction] = React.useState<string | null>(null);
     const [preparingMessageId, setPreparingMessageId] = React.useState<string | null>(null);
     const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
@@ -222,11 +229,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       }
       const timer = setInterval(() => {
         const msgId = streamingMsgIdRef.current;
-        if (
-          msgId &&
-          lastChunkTimeRef.current > 0 &&
-          Date.now() - lastChunkTimeRef.current > 800
-        ) {
+        if (msgId && lastChunkTimeRef.current > 0 && Date.now() - lastChunkTimeRef.current > 800) {
           setPreparingMessageId(msgId);
         }
       }, 500);
@@ -426,14 +429,67 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         setErdModalTables((action.payload.tables as string[]) ?? []);
         clearPending();
       } else if (action.type === "create_genie_space") {
+        const buildTables = (action.payload.tables as string[]) ?? [];
+        const buildDomain = (action.payload.domainHint as string) || undefined;
+        const buildSummary = (action.payload.conversationSummary as string) || undefined;
+        const buildSqlBlocks = (action.payload.sqlBlocks as string[]) || undefined;
+
+        // Fire-and-forget: start async build, show progress toast
+        genieBuild
+          .startBuild(
+            buildTables,
+            {
+              mode: "fast",
+              domain: buildDomain,
+              conversationSummary: buildSummary,
+              sqlBlocks: buildSqlBlocks,
+            },
+            "ask-forge",
+          )
+          .then((jobId) => {
+            if (jobId) {
+              showBuildToast(
+                jobId,
+                (jid) => {
+                  setDeployJobId(jid);
+                  setDeployDialogOpen(true);
+                },
+                () => {
+                  // Retry: re-trigger the same build
+                  genieBuild
+                    .startBuild(
+                      buildTables,
+                      {
+                        mode: "fast",
+                        domain: buildDomain,
+                        conversationSummary: buildSummary,
+                        sqlBlocks: buildSqlBlocks,
+                      },
+                      "ask-forge",
+                    )
+                    .then((retryId) => {
+                      if (retryId) {
+                        showBuildToast(retryId, (jid) => {
+                          setDeployJobId(jid);
+                          setDeployDialogOpen(true);
+                        });
+                      }
+                    });
+                },
+              );
+            } else {
+              toast.error("Failed to start Genie Space build");
+            }
+          });
+
+        // Keep modal payload for backward compat (full engine builds)
         setGenieModalPayload({
-          tables: (action.payload.tables as string[]) ?? [],
-          domain: (action.payload.domainHint as string) || undefined,
-          conversationSummary: (action.payload.conversationSummary as string) || undefined,
+          tables: buildTables,
+          domain: buildDomain,
+          conversationSummary: buildSummary,
           tableEnrichments: (action.payload.tableEnrichments as TableEnrichmentData[]) || undefined,
-          sqlBlocks: (action.payload.sqlBlocks as string[]) || undefined,
+          sqlBlocks: buildSqlBlocks,
         });
-        setGenieModalOpen(true);
         clearPending();
       } else if (action.type === "start_discovery") {
         router.push("/configure");
@@ -949,6 +1005,14 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
             conversationSummary={genieModalPayload.conversationSummary}
             tableEnrichments={genieModalPayload.tableEnrichments}
             sqlBlocks={genieModalPayload.sqlBlocks}
+          />
+        )}
+
+        {deployJobId && (
+          <GenieDeployDialog
+            open={deployDialogOpen}
+            onOpenChange={setDeployDialogOpen}
+            jobId={deployJobId}
           />
         )}
 

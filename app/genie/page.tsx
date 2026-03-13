@@ -48,6 +48,8 @@ import { HealthDetailSheet } from "@/components/genie/health-detail-sheet";
 import { ImportSpaceDialog } from "@/components/genie/import-space-dialog";
 import { HealthCheckSettingsDialog } from "@/components/genie/health-check-settings";
 import { parseErrorResponse } from "@/lib/error-utils";
+import { useGenieBuild } from "@/components/providers/genie-build-provider";
+import { Database } from "lucide-react";
 
 interface CachedSpaceData {
   spaceId: string;
@@ -166,21 +168,8 @@ export default function GenieSpacesPage() {
   const spacesRef = useRef(spaces);
   spacesRef.current = spaces;
 
-  // Active generate jobs (Scan Schema / Requirements / Ask Forge full-mode builds)
-  const [generateJobs, setGenerateJobs] = useState<
-    Array<{
-      jobId: string;
-      status: string;
-      message: string;
-      percent: number;
-      title?: string;
-      domain?: string;
-      tableCount?: number;
-      error?: string | null;
-      result?: unknown;
-    }>
-  >([]);
-  const generateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Active generate jobs from shared provider
+  const { jobs: generateJobs, cancelBuild } = useGenieBuild();
 
   // Load spaces from Lakebase cache (fast, no Databricks API calls)
   const loadFromCache = useCallback(async () => {
@@ -228,7 +217,12 @@ export default function GenieSpacesPage() {
       const data: Record<
         string,
         {
-          metadata: { tableCount?: number; measureCount?: number; sampleQuestionCount?: number; filterCount?: number } | null;
+          metadata: {
+            tableCount?: number;
+            measureCount?: number;
+            sampleQuestionCount?: number;
+            filterCount?: number;
+          } | null;
           healthReport: SpaceHealthReport | null;
           permissionDenied?: boolean;
         }
@@ -404,45 +398,9 @@ export default function GenieSpacesPage() {
     };
   }, [router]);
 
-  // Poll for generate jobs (Scan Schema builds) -- includes all non-evicted jobs
-  useEffect(() => {
-    const pollGenerateJobs = async () => {
-      try {
-        const res = await fetch("/api/genie-spaces/generate");
-        if (res.ok) {
-          const data = await res.json();
-          const jobList = data.jobs ?? [];
-          setGenerateJobs(jobList);
-
-          const hasActive = jobList.some((j: { status: string }) => j.status === "generating");
-          if (!hasActive && generateTimerRef.current) {
-            clearInterval(generateTimerRef.current);
-            generateTimerRef.current = null;
-          }
-        }
-      } catch {
-        // Non-critical
-      }
-    };
-
-    pollGenerateJobs();
-    generateTimerRef.current = setInterval(pollGenerateJobs, 3000);
-    return () => {
-      if (generateTimerRef.current) clearInterval(generateTimerRef.current);
-    };
-  }, []);
-
   const handleCancelGenerate = async (jobId: string) => {
-    try {
-      await fetch(`/api/genie-spaces/generate?jobId=${jobId}`, { method: "DELETE" });
-      setGenerateJobs((prev) =>
-        prev.map((j) =>
-          j.jobId === jobId ? { ...j, status: "cancelled", message: "Cancelled" } : j,
-        ),
-      );
-    } catch {
-      toast.error("Failed to cancel generation");
-    }
+    const ok = await cancelBuild(jobId);
+    if (!ok) toast.error("Failed to cancel generation");
   };
 
   const handleTrash = async () => {
@@ -525,9 +483,7 @@ export default function GenieSpacesPage() {
               ) : (
                 <RefreshCw className="mr-2 size-4" />
               )}
-              {syncing && syncProgress
-                ? `${syncProgress.percent}%`
-                : "Sync Spaces"}
+              {syncing && syncProgress ? `${syncProgress.percent}%` : "Sync Spaces"}
             </Button>
           </div>
         }
@@ -641,9 +597,14 @@ export default function GenieSpacesPage() {
                                 <h3 className="text-sm font-semibold">
                                   {job.title || "Building Genie Space..."}
                                 </h3>
-                                {job.domain && (
-                                  <p className="text-xs text-muted-foreground">{job.domain}</p>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {job.domain && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {job.domain}
+                                    </span>
+                                  )}
+                                  <JobSourceBadge source={job.source} />
+                                </div>
                               </div>
                             </div>
                             <Button
@@ -658,10 +619,15 @@ export default function GenieSpacesPage() {
                               Cancel
                             </Button>
                           </div>
+                          {job.conversationSummary && (
+                            <p className="truncate text-[10px] text-muted-foreground/70">
+                              From: {job.conversationSummary}
+                            </p>
+                          )}
                           <div className="mt-3 space-y-1.5">
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{job.message}</span>
-                              <span>{job.percent}%</span>
+                              <span className="truncate">{job.message}</span>
+                              <span className="shrink-0 pl-2">{job.percent}%</span>
                             </div>
                             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                               <div
@@ -698,21 +664,27 @@ export default function GenieSpacesPage() {
                                 <h3 className="text-sm font-semibold">
                                   {job.title || "Genie Space Ready"}
                                 </h3>
-                                {job.domain && (
-                                  <p className="text-xs text-muted-foreground">{job.domain}</p>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {job.domain && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {job.domain}
+                                    </span>
+                                  )}
+                                  <JobSourceBadge source={job.source} />
+                                </div>
                               </div>
                             </div>
                             <Badge
                               variant="outline"
                               className="text-xs text-green-600 border-green-300 dark:text-green-400"
                             >
-                              Ready
+                              {job.deployedSpaceId ? "Deployed" : "Ready"}
                             </Badge>
                           </div>
                           <p className="mt-2 text-xs text-muted-foreground">{job.message}</p>
                           <p className="mt-2 text-xs font-medium text-primary">
-                            Review & Deploy <ArrowRight className="ml-0.5 inline size-3" />
+                            {job.deployedSpaceId ? "View Space" : "Review & Deploy"}{" "}
+                            <ArrowRight className="ml-0.5 inline size-3" />
                           </p>
                         </CardContent>
                       </Card>
@@ -733,9 +705,14 @@ export default function GenieSpacesPage() {
                                 <h3 className="text-sm font-semibold">
                                   {job.title || "Build Failed"}
                                 </h3>
-                                {job.domain && (
-                                  <p className="text-xs text-muted-foreground">{job.domain}</p>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {job.domain && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {job.domain}
+                                    </span>
+                                  )}
+                                  <JobSourceBadge source={job.source} />
+                                </div>
                               </div>
                             </div>
                             <Badge
@@ -1209,6 +1186,23 @@ function SpaceCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function JobSourceBadge({ source }: { source?: string }) {
+  if (!source) return null;
+  const config: Record<string, { label: string; icon: React.ReactNode }> = {
+    "ask-forge": { label: "Ask Forge", icon: <Sparkles className="size-2.5" /> },
+    "schema-scan": { label: "Schema Scan", icon: <Database className="size-2.5" /> },
+    requirements: { label: "Requirements", icon: <FileText className="size-2.5" /> },
+  };
+  const c = config[source];
+  if (!c) return null;
+  return (
+    <Badge variant="outline" className="gap-0.5 text-[10px]">
+      {c.icon}
+      {c.label}
+    </Badge>
   );
 }
 
