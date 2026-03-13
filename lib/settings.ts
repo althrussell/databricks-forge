@@ -65,6 +65,8 @@ export interface AppSettings {
   questionComplexity: QuestionComplexitySettings;
   /** Prefix prepended to Unity Catalog resource names (views, metric views, tables) created by Forge. Must be lowercase alphanumeric + underscores and end with '_'. */
   catalogResourcePrefix: string;
+  /** Global industry outcome map id. When set, kickoff forms skip the per-job industry dropdown and use this value. Empty string = not set. */
+  industry: string;
 }
 
 const STORAGE_KEY = "forge-settings";
@@ -115,6 +117,7 @@ const DEFAULTS: AppSettings = {
   benchmarksEnabled: false,
   questionComplexity: { ...DEFAULT_QUESTION_COMPLEXITY },
   catalogResourcePrefix: DEFAULT_CATALOG_RESOURCE_PREFIX,
+  industry: "",
 };
 
 export function loadSettings(): AppSettings {
@@ -165,6 +168,7 @@ export function loadSettings(): AppSettings {
           : DEFAULTS.benchmarksEnabled,
       questionComplexity: parseQuestionComplexity(parsed.questionComplexity),
       catalogResourcePrefix: parseCatalogResourcePrefix(parsed.catalogResourcePrefix),
+      industry: typeof parsed.industry === "string" ? parsed.industry : DEFAULTS.industry,
     };
   } catch {
     return { ...DEFAULTS };

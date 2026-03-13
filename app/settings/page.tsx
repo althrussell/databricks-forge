@@ -9,6 +9,7 @@ import { DEFAULT_DEPTH_CONFIGS } from "@/lib/domain/types";
 import { PageHeader } from "@/components/page-header";
 import {
   ProfileSettings,
+  IndustrySettings,
   DataSamplingSettings,
   EstateScanSettings,
   SemanticSearchSettings,
@@ -49,6 +50,8 @@ export default function SettingsPage() {
     setQuestionComplexity,
     catalogResourcePrefix,
     setCatalogResourcePrefix,
+    industry,
+    setIndustry,
     benchmarksServerEnabled,
     metricViewsServerEnabled,
     embeddingAvailable,
@@ -99,6 +102,7 @@ export default function SettingsPage() {
       benchmarksEnabled,
       questionComplexity,
       catalogResourcePrefix,
+      industry,
     });
     toast.success("Settings saved");
   };
@@ -135,6 +139,7 @@ export default function SettingsPage() {
         metadataGenie: "simple",
       });
       setCatalogResourcePrefix(DEFAULT_CATALOG_RESOURCE_PREFIX);
+      setIndustry("");
       toast.success("Local settings cleared");
     }
   };
@@ -189,6 +194,8 @@ export default function SettingsPage() {
       />
 
       <ProfileSettings profile={profile} />
+
+      <IndustrySettings industry={industry} onIndustryChange={setIndustry} />
 
       <DataSamplingSettings
         sampleRowsPerTable={sampleRowsPerTable}
