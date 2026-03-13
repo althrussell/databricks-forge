@@ -107,9 +107,7 @@ export async function getCacheSyncTimestamp(): Promise<string | null> {
  * Bulk upsert spaces from a Databricks API sync.
  * Uses batched upserts (100 per transaction) to stay within Lakebase limits.
  */
-export async function upsertCachedSpaces(
-  spaces: SpaceCacheUpsertInput[],
-): Promise<number> {
+export async function upsertCachedSpaces(spaces: SpaceCacheUpsertInput[]): Promise<number> {
   if (spaces.length === 0) return 0;
 
   const BATCH_SIZE = 100;
@@ -183,18 +181,14 @@ export async function deleteCachedSpace(spaceId: string): Promise<void> {
  * Remove cache entries for spaces no longer in the workspace.
  * Called after a sync to prune deleted spaces.
  */
-export async function pruneStaleCacheEntries(
-  liveSpaceIds: Set<string>,
-): Promise<number> {
+export async function pruneStaleCacheEntries(liveSpaceIds: Set<string>): Promise<number> {
   if (liveSpaceIds.size === 0) return 0;
 
   return withPrisma(async (prisma) => {
     const allCached = await prisma.forgeGenieSpaceCache.findMany({
       select: { spaceId: true },
     });
-    const staleIds = allCached
-      .map((r) => r.spaceId)
-      .filter((id) => !liveSpaceIds.has(id));
+    const staleIds = allCached.map((r) => r.spaceId).filter((id) => !liveSpaceIds.has(id));
 
     if (staleIds.length === 0) return 0;
 

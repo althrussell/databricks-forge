@@ -9,6 +9,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SearchBar } from "@/components/search/search-bar";
 import { AskForgePanel } from "@/components/assistant/ask-forge-panel";
+import { GenieBuildProvider } from "@/components/providers/genie-build-provider";
+import { GenieBuildRestore } from "@/components/providers/genie-build-restore";
 
 const sans = localFont({
   src: [
@@ -47,34 +49,37 @@ export default function RootLayout({
       <body className={`${sans.variable} ${mono.variable} h-screen overflow-hidden antialiased`}>
         <ThemeProvider>
           <TooltipProvider>
-            <a
-              href="#main-content"
-              className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
-            >
-              Skip to main content
-            </a>
-            <div className="flex h-screen overflow-hidden">
-              <SidebarNav />
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-4 shadow-[0_1px_2px_0_rgb(0_0_0/0.03)] backdrop-blur-sm dark:shadow-[0_1px_2px_0_rgb(0_0_0/0.15)] md:px-6">
-                  <MobileNav />
-                  <span className="text-sm font-bold tracking-tight md:hidden">Forge</span>
-                  <div className="hidden flex-1 md:block">
-                    <HeaderPageTitle />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <SearchBar />
-                    <AskForgePanel />
-                    <div className="mx-1 h-5 w-px bg-border/60 hidden sm:block" />
-                    <ThemeToggle />
-                  </div>
-                </header>
-                <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden">
-                  <div className="w-full px-4 py-6 sm:px-6 lg:px-8">{children}</div>
-                </main>
+            <GenieBuildProvider>
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none"
+              >
+                Skip to main content
+              </a>
+              <div className="flex h-screen overflow-hidden">
+                <SidebarNav />
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/80 px-4 shadow-[0_1px_2px_0_rgb(0_0_0/0.03)] backdrop-blur-sm dark:shadow-[0_1px_2px_0_rgb(0_0_0/0.15)] md:px-6">
+                    <MobileNav />
+                    <span className="text-sm font-bold tracking-tight md:hidden">Forge</span>
+                    <div className="hidden flex-1 md:block">
+                      <HeaderPageTitle />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <SearchBar />
+                      <AskForgePanel />
+                      <div className="mx-1 h-5 w-px bg-border/60 hidden sm:block" />
+                      <ThemeToggle />
+                    </div>
+                  </header>
+                  <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden">
+                    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+                  </main>
+                </div>
               </div>
-            </div>
-            <Toaster />
+              <GenieBuildRestore />
+              <Toaster />
+            </GenieBuildProvider>
           </TooltipProvider>
         </ThemeProvider>
       </body>

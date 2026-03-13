@@ -99,10 +99,7 @@ export async function DELETE(
 
     const authMode = await getSpaceAuthMode(spaceId);
     await trashGenieSpace(spaceId, authMode);
-    await Promise.all([
-      trackGenieSpaceTrashed(spaceId),
-      deleteCachedSpace(spaceId),
-    ]);
+    await Promise.all([trackGenieSpaceTrashed(spaceId), deleteCachedSpace(spaceId)]);
 
     return NextResponse.json({
       success: true,
