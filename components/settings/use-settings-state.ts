@@ -90,6 +90,7 @@ export function useSettingsState() {
   });
   const [benchmarksServerEnabled, setBenchmarksServerEnabled] = useState<boolean | null>(null);
   const [metricViewsServerEnabled, setMetricViewsServerEnabled] = useState<boolean | null>(null);
+  const [demoModeEnabled, setDemoModeEnabled] = useState<boolean | null>(null);
   const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null);
   const [rebuildingEmbeddings, setRebuildingEmbeddings] = useState(false);
   const [embeddingCount, setEmbeddingCount] = useState<number | null>(null);
@@ -121,10 +122,12 @@ export function useSettingsState() {
       .then((data) => {
         setProfile({ email: data.userEmail ?? null, host: data.host ?? null });
         setMetricViewsServerEnabled(data.metricViewsEnabled ?? false);
+        setDemoModeEnabled(data.demoModeEnabled ?? false);
       })
       .catch(() => {
         setProfile({ email: null, host: null });
         setMetricViewsServerEnabled(false);
+        setDemoModeEnabled(false);
       });
   }, []);
 
@@ -167,6 +170,7 @@ export function useSettingsState() {
     setIndustry,
     benchmarksServerEnabled,
     metricViewsServerEnabled,
+    demoModeEnabled,
     embeddingAvailable,
     rebuildingEmbeddings,
     setRebuildingEmbeddings,

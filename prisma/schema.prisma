@@ -195,15 +195,16 @@ model ForgeMetadataCache {
 // ---------------------------------------------------------------------------
 
 model ForgeOutcomeMap {
-  id           String   @id @map("outcome_map_id")
-  industryId   String   @unique @map("industry_id")
-  name         String
-  rawMarkdown  String   @map("raw_markdown")
-  parsedJson   String   @map("parsed_json")
-  useCaseCount Int      @default(0) @map("use_case_count")
-  createdBy    String?  @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  id             String   @id @map("outcome_map_id")
+  industryId     String   @unique @map("industry_id")
+  name           String
+  rawMarkdown    String   @map("raw_markdown")
+  parsedJson     String   @map("parsed_json")
+  enrichmentJson String?  @map("enrichment_json")
+  useCaseCount   Int      @default(0) @map("use_case_count")
+  createdBy      String?  @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@index([createdAt])
   @@map("forge_outcome_maps")
@@ -1273,4 +1274,37 @@ model ForgeCommentProposal {
   @@index([tableFqn])
   @@index([status])
   @@map("forge_comment_proposals")
+}
+
+// ---------------------------------------------------------------------------
+// Demo Mode: Demo Generation Sessions
+// ---------------------------------------------------------------------------
+
+model ForgeDemoSession {
+  id               String    @id @default(uuid()) @map("session_id")
+  customerName     String    @map("customer_name")
+  industryId       String    @map("industry_id")
+  researchPreset   String    @default("balanced") @map("research_preset")
+  websiteUrl       String?   @map("website_url")
+  catalogName      String    @map("catalog_name")
+  schemaName       String    @map("schema_name")
+  catalogCreated   Boolean   @default(false) @map("catalog_created")
+  scopeJson        String?   @map("scope_json")
+  researchJson     String?   @map("research_json")
+  dataModelJson    String?   @map("data_model_json")
+  tablesJson       String?   @map("tables_json")
+  sourceDocsJson   String?   @map("source_docs_json")
+  status           String    @default("draft") // draft | researching | designing | generating | completed | failed
+  tablesCreated    Int       @default(0) @map("tables_created")
+  totalRows        Int       @default(0) @map("total_rows")
+  durationMs       Int       @default(0) @map("duration_ms")
+  errorMessage     String?   @map("error_message")
+  createdBy        String?   @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  completedAt      DateTime? @map("completed_at")
+
+  @@index([customerName])
+  @@index([status])
+  @@index([createdAt])
+  @@map("forge_demo_sessions")
 }

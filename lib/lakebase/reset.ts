@@ -52,6 +52,7 @@ export async function deleteAllData(): Promise<void> {
       prisma.forgeBenchmarkRecord.deleteMany(),
       prisma.forgeMetadataGenieSpace.deleteMany(),
       prisma.forgeGenieSpaceCache.deleteMany(),
+      prisma.forgeDemoSession.deleteMany(),
     ]);
   });
 }

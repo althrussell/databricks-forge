@@ -37,6 +37,7 @@ This app runs as a **Databricks App**. Authentication is automatic:
 - `--lightweight-endpoint` binds a fast classification/lightweight model (e.g. `databricks-gemini-3-1-flash-lite` or `databricks-claude-sonnet-4-6`) for high-throughput tasks.
 - `DATABRICKS_ALLOWED_MODELS` restricts the pool to customer-approved models only.
 - Lakebase scale-to-zero is enforced at every startup (default: 300s timeout). Override with `LAKEBASE_SCALE_TO_ZERO_TIMEOUT` or `--lakebase-no-scale-to-zero`.
+- `FORGE_DEMO_MODE_ENABLED` activates Demo Mode for Field Engineering/Sales (deploy with `--enable-demo-mode`).
 - Local dev uses `DATABRICKS_TOKEN` (PAT) in `.env.local`.
 
 ## Folder Contract
@@ -55,6 +56,7 @@ This app runs as a **Databricks App**. Authentication is automatic:
   /ai         Prompt template building + Model Serving execution
     /comment-engine  Multi-pass Comment Engine (table + column + consistency)
   /metadata   Shared schema context layer (reusable across features)
+  /demo       Demo Mode: research engine, data engine, config, cleanup
   /pipeline   Pipeline engine + step modules
   /lakebase   Lakebase table schema + CRUD operations
   /embeddings Embedding client, pgvector store, text composition, RAG retriever
@@ -93,6 +95,9 @@ These are the core TypeScript types used throughout the app:
 | `EnrichedColumn`   | Column with inferred role (pk, fk, timestamp, flag, measure, code) and FK target |
 | `InferredRelationship` | Cross-table relationship from naming patterns, FK constraints, or LLM inference |
 | `CommentEngineResult` | Output of the Comment Engine: table + column comments, schema context, consistency fixes, stats |
+| `ForgeDemoSession` | A demo data generation run (customer, industry, scope, catalog, research result, status) |
+| `ResearchEngineResult` | Company research output: priorities, assets, nomenclature, narratives |
+| `DemoScope` | Division/department/objective filter narrowing demo to a business unit |
 
 ## Pipeline Steps (Discover Usecases)
 
@@ -335,6 +340,77 @@ API routes:
 - `GET /api/assistant/conversations/[id]` -- load conversation with messages
 - `PATCH /api/assistant/conversations/[id]` -- rename conversation
 - `DELETE /api/assistant/conversations/[id]` -- delete conversation and logs
+
+## Demo Mode (Synthetic Data Generator)
+
+Demo Mode (`lib/demo/`) is an internal Field Engineering and Sales tool that
+generates custom synthetic demo datasets for customer-specific demonstrations.
+See `docs/DEMO_MODE.md` for the full team guide.
+
+Architecture: two independent engines run sequentially via a 6-step wizard.
+
+### Research Engine
+
+`lib/demo/research-engine/engine.ts` -- LLM-powered company research with
+configurable depth (Quick / Balanced / Full presets).
+
+Key modules:
+- `lib/demo/research-engine/engine.ts` -- `runResearchEngine()` orchestrator
+- `lib/demo/research-engine/engine-status.ts` -- in-memory + Lakebase job status
+- `lib/demo/research-engine/prompts.ts` -- prompt templates for all passes
+- `lib/demo/research-engine/types.ts` -- `ResearchEngineInput`, `ResearchEngineResult`
+- `lib/demo/research-engine/passes/` -- individual pass modules (website-scrape, ir-crawler, doc-parser, industry-classification, outcome-map-generation, quick-synthesis, industry-landscape, company-deep-dive, data-strategy-mapping, demo-narrative)
+
+Passes (vary by preset): source collection → industry classification → outcome map
+generation (if needed) → analysis passes (1 pass for Quick, 2 for Balanced, 4 for Full).
+
+### Data Engine
+
+`lib/demo/data-engine/engine.ts` -- generates and writes synthetic Delta tables
+directly to Unity Catalog using SQL-first approach (no Python/Faker dependencies).
+
+Key modules:
+- `lib/demo/data-engine/engine.ts` -- `runDataEngine()` orchestrator
+- `lib/demo/data-engine/engine-status.ts` -- per-table phase tracking + Lakebase persistence
+- `lib/demo/data-engine/prompts.ts` -- prompt templates for schema/SQL generation
+- `lib/demo/data-engine/types.ts` -- `DataEngineInput`, `DataEngineResult`, `TableResult`
+- `lib/demo/data-engine/passes/` -- individual pass modules (narrative-design, schema-design, seed-generation, fact-generation, validation)
+
+Passes: narrative design → schema design → seed generation (dimensions) → fact generation
+(CTAS with EXPLODE/SEQUENCE) → validation (row counts, FK integrity).
+
+### Shared Demo Modules
+
+- `lib/demo/config.ts` -- `isDemoModeEnabled()` feature gate (`FORGE_DEMO_MODE_ENABLED`)
+- `lib/demo/types.ts` -- shared types (`ResearchPreset`, `DemoScope`, `TableDesign`, etc.)
+- `lib/demo/scope.ts` -- department-to-asset-family resolution, schema name builder
+- `lib/demo/cleanup.ts` -- `cleanupDemoSession()` (DROP TABLE/SCHEMA + Lakebase delete)
+
+### Persistence
+
+Data model: `ForgeDemoSession` (Prisma schema), `ForgeOutcomeMap.enrichmentJson`
+for custom LLM-generated industry outcome maps.
+
+- `lib/lakebase/demo-sessions.ts` -- CRUD for `ForgeDemoSession`
+- `lib/lakebase/outcome-maps.ts` -- `getCustomEnrichment()`, `setCustomEnrichment()`
+
+### UI
+
+- `components/demo/demo-wizard.tsx` -- 6-step wizard modal (root component)
+- `components/demo/demo-settings.tsx` -- settings card with session list + launch button
+- `components/demo/steps/` -- step components (company-info, research-results, catalog-selection, schema-review, generation-progress, complete)
+
+### API Routes
+
+- `POST /api/demo/research` -- start research engine (fire-and-forget)
+- `GET /api/demo/research/status` -- poll research job status
+- `POST /api/demo/generate` -- start data engine (fire-and-forget)
+- `GET /api/demo/generate/status` -- poll generation job status
+- `POST /api/demo/validate-catalog` -- pre-check UC permissions
+- `POST /api/demo/upload` -- upload PDF/text for research context
+- `GET /api/demo/sessions` -- list all demo sessions
+- `GET /api/demo/sessions/:id` -- session detail + research result
+- `DELETE /api/demo/sessions/:id` -- cleanup: DROP UC objects + delete session
 
 ## Infrastructure
 

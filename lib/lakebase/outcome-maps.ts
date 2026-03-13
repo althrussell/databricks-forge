@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { withPrisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
+import type { MasterRepoEnrichment } from "@/lib/domain/industry-outcomes/master-repo-types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -147,6 +148,47 @@ export async function loadAllCustomOutcomes(): Promise<IndustryOutcome[]> {
       }
     }
     return outcomes;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Custom Enrichment (LLM-generated data assets + use cases)
+// ---------------------------------------------------------------------------
+
+/**
+ * Get custom enrichment data for an industry from an LLM-generated outcome map.
+ * Returns null if no custom map exists or it has no enrichment.
+ */
+export async function getCustomEnrichment(
+  industryId: string,
+): Promise<MasterRepoEnrichment | null> {
+  return withPrisma(async (prisma) => {
+    const row = await prisma.forgeOutcomeMap.findUnique({
+      where: { industryId },
+      select: { enrichmentJson: true },
+    });
+    if (!row?.enrichmentJson) return null;
+    try {
+      return JSON.parse(row.enrichmentJson) as MasterRepoEnrichment;
+    } catch {
+      logger.warn("[outcome-maps] Corrupt enrichment JSON", { industryId });
+      return null;
+    }
+  });
+}
+
+/**
+ * Store enrichment data on an existing custom outcome map.
+ */
+export async function setCustomEnrichment(
+  industryId: string,
+  enrichment: MasterRepoEnrichment,
+): Promise<void> {
+  await withPrisma(async (prisma) => {
+    await prisma.forgeOutcomeMap.update({
+      where: { industryId },
+      data: { enrichmentJson: JSON.stringify(enrichment) },
+    });
   });
 }
 

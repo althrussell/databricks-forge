@@ -15,6 +15,7 @@ import { getDatabaseAuthRuntimeState, getPrisma } from "@/lib/prisma";
 import { executeSQL } from "@/lib/dbx/sql";
 import { getCurrentUserEmail, getConfig } from "@/lib/dbx/client";
 import { isMetricViewsEnabled } from "@/lib/genie/metric-views-config";
+import { isDemoModeEnabled } from "@/lib/demo/config";
 import packageJson from "@/package.json";
 
 interface HealthCheck {
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
     userEmail?: string | null;
     host?: string | null;
     metricViewsEnabled?: boolean;
+    demoModeEnabled?: boolean;
   } = {
     ...base,
     checks: { database, warehouse },
@@ -111,6 +113,7 @@ export async function GET(request: Request) {
     userEmail,
     host,
     metricViewsEnabled: isMetricViewsEnabled(),
+    demoModeEnabled: isDemoModeEnabled(),
   };
 
   return NextResponse.json(health, { status: httpStatus, headers: cacheHeaders });

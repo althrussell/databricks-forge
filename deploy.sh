@@ -37,6 +37,8 @@
 #   ./deploy.sh --enable-metric-views
 # Optional Fabric / Power BI features (disabled by default):
 #   ./deploy.sh --enable-fabric
+# Optional Demo Mode for Field Engineering / Sales (disabled by default):
+#   ./deploy.sh --enable-demo-mode
 # =========================================================================
 
 set -euo pipefail
@@ -95,6 +97,7 @@ ARG_SEED_BENCHMARK_INDUSTRIES=""
 ARG_BENCHMARK_ADMINS=""
 ARG_ENABLE_METRIC_VIEWS=false
 ARG_ENABLE_FABRIC=false
+ARG_ENABLE_DEMO_MODE=false
 ARG_PREBUILT=false
 ARG_FULL_SYNC=false
 ARG_DESTROY=false
@@ -159,6 +162,7 @@ Options:
                              If unset, all authenticated users can manage them.
   --enable-metric-views      Enable metric view generation (off by default)
   --enable-fabric            Enable Fabric / Power BI features (off by default)
+  --enable-demo-mode         Enable Demo Mode for FE/Sales (off by default)
   --prebuilt                  Build locally and deploy pre-compiled standalone bundle.
                              Eliminates remote npm install + npm run build (~3x faster).
   --full                      Full sync: upload all files (slower, but guarantees clean state).
@@ -202,6 +206,7 @@ while [[ $# -gt 0 ]]; do
     --benchmark-admins) ARG_BENCHMARK_ADMINS="$2"; shift 2 ;;
     --enable-metric-views) ARG_ENABLE_METRIC_VIEWS=true; shift ;;
     --enable-fabric)       ARG_ENABLE_FABRIC=true; shift ;;
+    --enable-demo-mode)    ARG_ENABLE_DEMO_MODE=true; shift ;;
     --prebuilt)            ARG_PREBUILT=true; shift ;;
     --full)                ARG_FULL_SYNC=true; shift ;;
     --destroy)             ARG_DESTROY=true; shift ;;
@@ -244,6 +249,7 @@ SEED_BENCHMARK_INDUSTRIES="${ARG_SEED_BENCHMARK_INDUSTRIES:-}"
 BENCHMARK_ADMINS="${ARG_BENCHMARK_ADMINS:-}"
 ENABLE_METRIC_VIEWS="${ARG_ENABLE_METRIC_VIEWS}"
 ENABLE_FABRIC="${ARG_ENABLE_FABRIC}"
+ENABLE_DEMO_MODE="${ARG_ENABLE_DEMO_MODE}"
 
 if [[ "$SEED_BENCHMARKS_ALL_INDUSTRIES" = "true" && "$SEED_BENCHMARKS" != "true" ]]; then
   SEED_BENCHMARKS=true
@@ -384,6 +390,7 @@ seed_benchmark_industries = os.environ.get("SEED_BENCHMARK_INDUSTRIES", "").stri
 benchmark_admins = os.environ.get("BENCHMARK_ADMINS", "").strip()
 enable_metric_views = os.environ.get("ENABLE_METRIC_VIEWS", "").strip().lower() == "true"
 enable_fabric = os.environ.get("ENABLE_FABRIC", "").strip().lower() == "true"
+enable_demo_mode = os.environ.get("ENABLE_DEMO_MODE", "").strip().lower() == "true"
 reasoning_endpoint_2 = os.environ.get("REASONING_ENDPOINT_2", "").strip()
 generation_endpoint = os.environ.get("GENERATION_ENDPOINT", "").strip()
 sql_endpoint = os.environ.get("SQL_ENDPOINT", "").strip()
@@ -414,6 +421,7 @@ def is_managed_name_line(s: str) -> bool:
         or "FORGE_BENCHMARK_ADMINS" in t
         or "FORGE_METRIC_VIEWS_ENABLED" in t
         or "FORGE_FABRIC_ENABLED" in t
+        or "FORGE_DEMO_MODE_ENABLED" in t
         or "DATABRICKS_SERVING_ENDPOINT_REASONING_2" in t
         or "DATABRICKS_SERVING_ENDPOINT_GENERATION" in t
         or "DATABRICKS_SERVING_ENDPOINT_SQL" in t
@@ -475,6 +483,9 @@ if enable_metric_views:
     out.append('    value: "true"')
 if enable_fabric:
     out.append("  - name: FORGE_FABRIC_ENABLED")
+    out.append('    value: "true"')
+if enable_demo_mode:
+    out.append("  - name: FORGE_DEMO_MODE_ENABLED")
     out.append('    value: "true"')
 if reasoning_endpoint_2:
     out.append("  - name: DATABRICKS_SERVING_ENDPOINT_REASONING_2")
