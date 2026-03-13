@@ -415,277 +415,278 @@ export function GenieBuilderModal({
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Generating phase */}
-        {phase === "generating" && (
-          <div className="space-y-4 py-4">
-            <Progress value={genPercent} className="h-2" />
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {genMessage}
-            </div>
-          </div>
-        )}
-
-        {/* Error phase */}
-        {phase === "error" && (
-          <div className="space-y-4 py-4">
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                <AlertTriangle className="size-4" />
-                {genError || "An error occurred"}
+          {/* Generating phase */}
+          {phase === "generating" && (
+            <div className="space-y-4 py-4">
+              <Progress value={genPercent} className="h-2" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                {genMessage}
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={runFastGeneration}>
-                <RefreshCw className="mr-2 size-3.5" />
-                Retry Quick Build
-              </Button>
-              <Button variant="outline" size="sm" onClick={runFullGeneration}>
-                <Sparkles className="mr-2 size-3.5" />
-                Try Full Engine
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Ready phase -- space summary */}
-        {phase === "ready" && recommendation && parsedSpace && (
-          <div className="space-y-4 py-2">
-            {/* Mode badge */}
-            <div className="flex items-center gap-2">
-              {resultMode === "fast" ? (
-                <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-400">
-                  <Zap className="size-3" />
-                  Quick Build
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="gap-1 text-green-600 dark:text-green-400">
-                  <Sparkles className="size-3" />
-                  Full Engine
-                </Badge>
-              )}
-              {recommendation.quality && (
-                <Badge variant="secondary" className="text-xs">
-                  Quality: {recommendation.quality.score}
-                </Badge>
-              )}
-            </div>
-
-            {/* Title + description */}
-            <div>
-              <h3 className="text-sm font-semibold">{recommendation.title}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">{recommendation.description}</p>
-            </div>
-
-            {/* Stat row */}
-            <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-              <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
-              <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
-              <StatItem icon={Link2} label="Filters" value={recommendation.filterCount} />
-              <StatItem
-                icon={MessageSquare}
-                label="Dimensions"
-                value={recommendation.dimensionCount}
-              />
-              <StatItem
-                icon={FileText}
-                label="Instructions"
-                value={recommendation.instructionCount}
-              />
-              <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
-              <StatItem
-                icon={MessageSquare}
-                label="Questions"
-                value={recommendation.sampleQuestionCount}
-              />
-            </div>
-
-            {/* Quality warnings */}
-            {recommendation.quality && recommendation.quality.degradedReasons.length > 0 && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
-                <div className="flex items-center gap-2 text-xs font-medium">
-                  <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
-                  Quality warnings
+          {/* Error phase */}
+          {phase === "error" && (
+            <div className="space-y-4 py-4">
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+                  <AlertTriangle className="size-4" />
+                  {genError || "An error occurred"}
                 </div>
-                <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                  {recommendation.quality.degradedReasons.map((reason) => (
-                    <li key={reason}>- {reason.replace(/_/g, " ")}</li>
-                  ))}
-                </ul>
               </div>
-            )}
-
-            {/* Collapsible details */}
-            <button
-              onClick={() => setShowDetails(!showDetails)}
-              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              {showDetails ? (
-                <ChevronDown className="size-3.5" />
-              ) : (
-                <ChevronRight className="size-3.5" />
-              )}
-              Details
-            </button>
-            {showDetails && (
-              <div className="space-y-3 rounded-md border bg-muted/30 p-3 text-xs">
-                {/* Tables */}
-                {parsedSpace.data_sources.tables.length > 0 && (
-                  <div>
-                    <p className="mb-1 font-medium">
-                      Tables ({parsedSpace.data_sources.tables.length})
-                    </p>
-                    <div className="space-y-0.5">
-                      {parsedSpace.data_sources.tables.map((t) => (
-                        <div
-                          key={t.identifier}
-                          className="flex items-center gap-1.5 font-mono text-[11px]"
-                        >
-                          <Table2 className="size-3 text-muted-foreground" />
-                          {t.identifier}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Joins */}
-                {parsedSpace.instructions.join_specs.length > 0 && (
-                  <div>
-                    <p className="mb-1 font-medium">
-                      Joins ({parsedSpace.instructions.join_specs.length})
-                    </p>
-                    <div className="space-y-0.5">
-                      {parsedSpace.instructions.join_specs.map((j) => (
-                        <div key={j.id} className="font-mono text-[11px]">
-                          {j.left.identifier} ↔ {j.right.identifier}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sample questions */}
-                {parsedSpace.config.sample_questions.length > 0 && (
-                  <div>
-                    <p className="mb-1 font-medium">
-                      Sample Questions ({parsedSpace.config.sample_questions.length})
-                    </p>
-                    <ul className="space-y-0.5 text-muted-foreground">
-                      {parsedSpace.config.sample_questions.map((q) => (
-                        <li key={q.id}>{q.question.join(" ")}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Example SQL */}
-                {parsedSpace.instructions.example_question_sqls.length > 0 && (
-                  <div>
-                    <p className="mb-1 font-medium">
-                      Example SQL ({parsedSpace.instructions.example_question_sqls.length})
-                    </p>
-                    <div className="space-y-1.5">
-                      {parsedSpace.instructions.example_question_sqls.slice(0, 4).map((q) => (
-                        <div key={q.id} className="rounded border bg-muted/50 p-1.5">
-                          <div className="font-medium">{q.question.join(" ")}</div>
-                          <code className="mt-0.5 block whitespace-pre-wrap text-[10px] text-muted-foreground">
-                            {q.sql.join("\n")}
-                          </code>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Metric view schema selector */}
-            {metricViewsServerEnabled &&
-              hasMetricViews &&
-              loadSettings().genieEngineDefaults.generateMetricViews && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium">
-                          Metric Views (
-                          {mvProposals.filter((m) => m.validationStatus !== "error").length})
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Choose a target schema for metric view deployment.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setShowSchemaSelector(!showSchemaSelector)}
-                      >
-                        {targetSchema[0] || defaultSchema || "Select schema"}
-                      </Button>
-                    </div>
-                    {showSchemaSelector && (
-                      <div className="max-h-48 overflow-y-auto rounded-md border">
-                        <CatalogBrowser
-                          selectedSources={targetSchema}
-                          onSelectionChange={handleSchemaChange}
-                          selectionMode="schema"
-                          defaultExpandPath={defaultSchema}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-          </div>
-        )}
-
-        {/* Deploying phase */}
-        {phase === "deploying" && (
-          <div className="flex items-center gap-3 py-8">
-            <Loader2 className="size-5 animate-spin text-primary" />
-            <span className="text-sm text-muted-foreground">
-              Creating Genie Space in Databricks...
-            </span>
-          </div>
-        )}
-
-        {/* Deployed phase */}
-        {phase === "deployed" && deployedSpaceId && (
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <Check className="size-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {recommendation?.title ?? "Genie Space"} is live
-                </p>
-                <p className="text-xs text-muted-foreground">Ready for natural language queries.</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {databricksHost && (
-                <Button asChild className="flex-1">
-                  <a
-                    href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink className="mr-2 size-4" />
-                    Open in Databricks
-                  </a>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={runFastGeneration}>
+                  <RefreshCw className="mr-2 size-3.5" />
+                  Retry Quick Build
                 </Button>
-              )}
-              <Button variant="outline" className="flex-1" asChild>
-                <a href={`/genie/${deployedSpaceId}`}>View in Genie Studio</a>
-              </Button>
+                <Button variant="outline" size="sm" onClick={runFullGeneration}>
+                  <Sparkles className="mr-2 size-3.5" />
+                  Try Full Engine
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
+          {/* Ready phase -- space summary */}
+          {phase === "ready" && recommendation && parsedSpace && (
+            <div className="space-y-4 py-2">
+              {/* Mode badge */}
+              <div className="flex items-center gap-2">
+                {resultMode === "fast" ? (
+                  <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-400">
+                    <Zap className="size-3" />
+                    Quick Build
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1 text-green-600 dark:text-green-400">
+                    <Sparkles className="size-3" />
+                    Full Engine
+                  </Badge>
+                )}
+                {recommendation.quality && (
+                  <Badge variant="secondary" className="text-xs">
+                    Quality: {recommendation.quality.score}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Title + description */}
+              <div>
+                <h3 className="text-sm font-semibold">{recommendation.title}</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">{recommendation.description}</p>
+              </div>
+
+              {/* Stat row */}
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+                <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
+                <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
+                <StatItem icon={Link2} label="Filters" value={recommendation.filterCount} />
+                <StatItem
+                  icon={MessageSquare}
+                  label="Dimensions"
+                  value={recommendation.dimensionCount}
+                />
+                <StatItem
+                  icon={FileText}
+                  label="Instructions"
+                  value={recommendation.instructionCount}
+                />
+                <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
+                <StatItem
+                  icon={MessageSquare}
+                  label="Questions"
+                  value={recommendation.sampleQuestionCount}
+                />
+              </div>
+
+              {/* Quality warnings */}
+              {recommendation.quality && recommendation.quality.degradedReasons.length > 0 && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-2 text-xs font-medium">
+                    <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
+                    Quality warnings
+                  </div>
+                  <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                    {recommendation.quality.degradedReasons.map((reason) => (
+                      <li key={reason}>- {reason.replace(/_/g, " ")}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Collapsible details */}
+              <button
+                onClick={() => setShowDetails(!showDetails)}
+                className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {showDetails ? (
+                  <ChevronDown className="size-3.5" />
+                ) : (
+                  <ChevronRight className="size-3.5" />
+                )}
+                Details
+              </button>
+              {showDetails && (
+                <div className="space-y-3 rounded-md border bg-muted/30 p-3 text-xs">
+                  {/* Tables */}
+                  {parsedSpace.data_sources.tables.length > 0 && (
+                    <div>
+                      <p className="mb-1 font-medium">
+                        Tables ({parsedSpace.data_sources.tables.length})
+                      </p>
+                      <div className="space-y-0.5">
+                        {parsedSpace.data_sources.tables.map((t) => (
+                          <div
+                            key={t.identifier}
+                            className="flex items-center gap-1.5 font-mono text-[11px]"
+                          >
+                            <Table2 className="size-3 text-muted-foreground" />
+                            {t.identifier}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Joins */}
+                  {parsedSpace.instructions.join_specs.length > 0 && (
+                    <div>
+                      <p className="mb-1 font-medium">
+                        Joins ({parsedSpace.instructions.join_specs.length})
+                      </p>
+                      <div className="space-y-0.5">
+                        {parsedSpace.instructions.join_specs.map((j) => (
+                          <div key={j.id} className="font-mono text-[11px]">
+                            {j.left.identifier} ↔ {j.right.identifier}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sample questions */}
+                  {parsedSpace.config.sample_questions.length > 0 && (
+                    <div>
+                      <p className="mb-1 font-medium">
+                        Sample Questions ({parsedSpace.config.sample_questions.length})
+                      </p>
+                      <ul className="space-y-0.5 text-muted-foreground">
+                        {parsedSpace.config.sample_questions.map((q) => (
+                          <li key={q.id}>{q.question.join(" ")}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Example SQL */}
+                  {parsedSpace.instructions.example_question_sqls.length > 0 && (
+                    <div>
+                      <p className="mb-1 font-medium">
+                        Example SQL ({parsedSpace.instructions.example_question_sqls.length})
+                      </p>
+                      <div className="space-y-1.5">
+                        {parsedSpace.instructions.example_question_sqls.slice(0, 4).map((q) => (
+                          <div key={q.id} className="rounded border bg-muted/50 p-1.5">
+                            <div className="font-medium">{q.question.join(" ")}</div>
+                            <code className="mt-0.5 block whitespace-pre-wrap text-[10px] text-muted-foreground">
+                              {q.sql.join("\n")}
+                            </code>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Metric view schema selector */}
+              {metricViewsServerEnabled &&
+                hasMetricViews &&
+                loadSettings().genieEngineDefaults.generateMetricViews && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium">
+                            Metric Views (
+                            {mvProposals.filter((m) => m.validationStatus !== "error").length})
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Choose a target schema for metric view deployment.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setShowSchemaSelector(!showSchemaSelector)}
+                        >
+                          {targetSchema[0] || defaultSchema || "Select schema"}
+                        </Button>
+                      </div>
+                      {showSchemaSelector && (
+                        <div className="max-h-48 overflow-y-auto rounded-md border">
+                          <CatalogBrowser
+                            selectedSources={targetSchema}
+                            onSelectionChange={handleSchemaChange}
+                            selectionMode="schema"
+                            defaultExpandPath={defaultSchema}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+            </div>
+          )}
+
+          {/* Deploying phase */}
+          {phase === "deploying" && (
+            <div className="flex items-center gap-3 py-8">
+              <Loader2 className="size-5 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">
+                Creating Genie Space in Databricks...
+              </span>
+            </div>
+          )}
+
+          {/* Deployed phase */}
+          {phase === "deployed" && deployedSpaceId && (
+            <div className="space-y-4 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <Check className="size-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">
+                    {recommendation?.title ?? "Genie Space"} is live
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Ready for natural language queries.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {databricksHost && (
+                  <Button asChild className="flex-1">
+                    <a
+                      href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-2 size-4" />
+                      Open in Databricks
+                    </a>
+                  </Button>
+                )}
+                <Button variant="outline" className="flex-1" asChild>
+                  <a href={`/genie/${deployedSpaceId}`}>View in Genie Studio</a>
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer actions */}

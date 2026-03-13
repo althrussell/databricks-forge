@@ -736,7 +736,9 @@ export default function EstatePage() {
                   {filteredTables.slice(0, 100).map((t) => (
                     <TableRow key={t.tableFqn}>
                       <TableCell className="font-mono text-xs">
-                        <div className="truncate max-w-[300px]" title={t.tableFqn}>{t.tableFqn}</div>
+                        <div className="truncate max-w-[300px]" title={t.tableFqn}>
+                          {t.tableFqn}
+                        </div>
                         {(t.comment || t.generatedDescription) && (
                           <div className="text-muted-foreground font-sans mt-0.5 truncate max-w-[300px]">
                             {t.comment || t.generatedDescription}
@@ -744,7 +746,13 @@ export default function EstatePage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {t.dataDomain ? <Badge variant="secondary" className="max-w-full" title={t.dataDomain}>{t.dataDomain}</Badge> : "—"}
+                        {t.dataDomain ? (
+                          <Badge variant="secondary" className="max-w-full" title={t.dataDomain}>
+                            {t.dataDomain}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell>
                         {t.dataTier ? (
@@ -792,9 +800,21 @@ export default function EstatePage() {
                       <TableCell>
                         {t.sensitivityLevel === "confidential" ||
                         t.sensitivityLevel === "restricted" ? (
-                          <Badge variant="destructive" className="max-w-full" title={t.sensitivityLevel}>{t.sensitivityLevel}</Badge>
+                          <Badge
+                            variant="destructive"
+                            className="max-w-full"
+                            title={t.sensitivityLevel}
+                          >
+                            {t.sensitivityLevel}
+                          </Badge>
                         ) : t.sensitivityLevel ? (
-                          <Badge variant="secondary" className="max-w-full" title={t.sensitivityLevel}>{t.sensitivityLevel}</Badge>
+                          <Badge
+                            variant="secondary"
+                            className="max-w-full"
+                            title={t.sensitivityLevel}
+                          >
+                            {t.sensitivityLevel}
+                          </Badge>
                         ) : (
                           "—"
                         )}

@@ -321,7 +321,9 @@ export function UseCaseTable({
                         <TableCell className="max-w-[300px]">
                           <div className="flex items-center gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium" title={uc.name}>{uc.name}</p>
+                              <p className="truncate font-medium" title={uc.name}>
+                                {uc.name}
+                              </p>
                               {!isExpanded && (
                                 <p className="line-clamp-1 text-xs text-muted-foreground">
                                   {uc.statement}
@@ -339,9 +341,14 @@ export function UseCaseTable({
                         <TableCell>
                           <div className="flex min-w-0 items-center gap-1.5">
                             <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate text-sm" title={uc.domain}>{uc.domain}</span>
+                            <span className="truncate text-sm" title={uc.domain}>
+                              {uc.domain}
+                            </span>
                             {uc.subdomain && (
-                              <span className="truncate text-xs text-muted-foreground" title={uc.subdomain}>
+                              <span
+                                className="truncate text-xs text-muted-foreground"
+                                title={uc.subdomain}
+                              >
                                 / {uc.subdomain}
                               </span>
                             )}
@@ -506,12 +513,20 @@ export function UseCaseTable({
               {/* Tags row */}
               <div className="mt-3 flex flex-wrap gap-2">
                 <TypeBadge type={selectedUseCase.type} />
-                <Badge variant="secondary" className="max-w-full gap-1" title={selectedUseCase.domain}>
+                <Badge
+                  variant="secondary"
+                  className="max-w-full gap-1"
+                  title={selectedUseCase.domain}
+                >
                   <Layers className="h-3 w-3" />
                   {selectedUseCase.domain}
                 </Badge>
                 {selectedUseCase.subdomain && (
-                  <Badge variant="secondary" className="max-w-full gap-1" title={selectedUseCase.subdomain}>
+                  <Badge
+                    variant="secondary"
+                    className="max-w-full gap-1"
+                    title={selectedUseCase.subdomain}
+                  >
                     <Tag className="h-3 w-3" />
                     {selectedUseCase.subdomain}
                   </Badge>

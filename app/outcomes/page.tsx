@@ -314,7 +314,9 @@ function IndustryCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
             <Building2 className={`h-5 w-5 shrink-0 ${iconColor}`} />
-            <CardTitle className="truncate text-base" title={industry.name}>{industry.name}</CardTitle>
+            <CardTitle className="truncate text-base" title={industry.name}>
+              {industry.name}
+            </CardTitle>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
@@ -327,7 +329,12 @@ function IndustryCard({
       <CardContent className="flex flex-1 flex-col justify-between space-y-3">
         <div className="flex flex-wrap gap-1">
           {industry.objectives.map((obj) => (
-            <Badge key={obj.name} variant="secondary" className="max-w-full text-xs" title={obj.name}>
+            <Badge
+              key={obj.name}
+              variant="secondary"
+              className="max-w-full text-xs"
+              title={obj.name}
+            >
               {obj.name}
             </Badge>
           ))}

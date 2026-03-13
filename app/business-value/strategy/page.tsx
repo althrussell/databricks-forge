@@ -334,12 +334,18 @@ export default function StrategyAlignmentPage() {
                                 {init.description}
                               </TableCell>
                               <TableCell className="max-w-xs">
-                                <span className="line-clamp-2 block" title={init.expectedOutcomes?.join(", ") || undefined}>
+                                <span
+                                  className="line-clamp-2 block"
+                                  title={init.expectedOutcomes?.join(", ") || undefined}
+                                >
                                   {init.expectedOutcomes?.join(", ") || "-"}
                                 </span>
                               </TableCell>
                               <TableCell className="max-w-xs">
-                                <span className="line-clamp-2 block" title={init.dataRequirements?.join(", ") || undefined}>
+                                <span
+                                  className="line-clamp-2 block"
+                                  title={init.dataRequirements?.join(", ") || undefined}
+                                >
                                   {init.dataRequirements?.join(", ") || "-"}
                                 </span>
                               </TableCell>

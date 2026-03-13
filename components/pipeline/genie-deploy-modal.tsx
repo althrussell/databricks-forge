@@ -834,7 +834,9 @@ function SelectAssetsStep({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono truncate" title={asset.name}>{asset.name}</code>
+                    <code className="text-xs font-mono truncate" title={asset.name}>
+                      {asset.name}
+                    </code>
                     <Badge
                       variant="outline"
                       className={`text-[9px] shrink-0 ${
@@ -1039,7 +1041,9 @@ function DeployStep({
                         >
                           {ar.type === "metric_view" ? "MV" : "Fn"}
                         </Badge>
-                        <span className="font-mono truncate" title={ar.name}>{ar.name}</span>
+                        <span className="font-mono truncate" title={ar.name}>
+                          {ar.name}
+                        </span>
                         {ar.autoFixed && (
                           <Badge
                             variant="outline"
@@ -1049,7 +1053,9 @@ function DeployStep({
                           </Badge>
                         )}
                         {ar.error && (
-                          <span className="text-[10px] text-destructive truncate" title={ar.error}>{ar.error}</span>
+                          <span className="text-[10px] text-destructive truncate" title={ar.error}>
+                            {ar.error}
+                          </span>
                         )}
                       </div>
                     ))}
@@ -1061,7 +1067,10 @@ function DeployStep({
                     {dr.strippedRefs!.map((sr, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs text-amber-600">
                         <Info className="h-3 w-3 shrink-0" />
-                        <span className="truncate" title={`Removed metric view ${sr.identifier} — ${sr.reason}`}>
+                        <span
+                          className="truncate"
+                          title={`Removed metric view ${sr.identifier} — ${sr.reason}`}
+                        >
                           Removed metric view{" "}
                           <code className="font-mono text-[10px]">{sr.identifier}</code> &mdash;{" "}
                           {sr.reason}

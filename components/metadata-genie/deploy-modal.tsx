@@ -130,53 +130,54 @@ export function MetadataGenieDeployModal({
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Schema selection */}
-        {step === "schema" && (
-          <div className="space-y-4">
-            <div className="rounded-md border">
-              <CatalogBrowser
-                selectedSources={targetSchema}
-                onSelectionChange={handleSchemaChange}
-                selectionMode="schema"
-              />
+          {/* Schema selection */}
+          {step === "schema" && (
+            <div className="space-y-4">
+              <div className="rounded-md border">
+                <CatalogBrowser
+                  selectedSources={targetSchema}
+                  onSelectionChange={handleSchemaChange}
+                  selectionMode="schema"
+                />
+              </div>
+              {targetSchema.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Views will be created as{" "}
+                  <code className="text-xs font-medium">
+                    {targetSchema[0]}.{loadSettings().catalogResourcePrefix}mdg_*
+                  </code>
+                </p>
+              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
-            {targetSchema.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                Views will be created as{" "}
-                <code className="text-xs font-medium">
-                  {targetSchema[0]}.{loadSettings().catalogResourcePrefix}mdg_*
-                </code>
+          )}
+
+          {/* Deploying */}
+          {step === "deploying" && (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="mt-4 text-sm text-muted-foreground">
+                Creating 10 curated views and deploying the Genie Space...
               </p>
-            )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-        )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                This typically takes 10-15 seconds
+              </p>
+            </div>
+          )}
 
-        {/* Deploying */}
-        {step === "deploying" && (
-          <div className="flex flex-col items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Creating 10 curated views and deploying the Genie Space...
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">This typically takes 10-15 seconds</p>
-          </div>
-        )}
-
-        {/* Done */}
-        {step === "done" && deployResult && (
-          <div className="flex flex-col items-center py-6">
-            <CheckCircle2 className="h-12 w-12 text-green-500" />
-            <p className="mt-4 text-sm font-medium">{spaceTitle} is live</p>
-            <Button asChild className="mt-4">
-              <a href={deployResult.spaceUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Open Genie Space
-              </a>
-            </Button>
-          </div>
-        )}
-
+          {/* Done */}
+          {step === "done" && deployResult && (
+            <div className="flex flex-col items-center py-6">
+              <CheckCircle2 className="h-12 w-12 text-green-500" />
+              <p className="mt-4 text-sm font-medium">{spaceTitle} is live</p>
+              <Button asChild className="mt-4">
+                <a href={deployResult.spaceUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Open Genie Space
+                </a>
+              </Button>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

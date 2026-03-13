@@ -180,7 +180,9 @@ function SpaceRow({ space, host }: { space: DiscoveredSpace; host: string | null
                 <ChevronRight
                   className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
                 />
-                <p className="text-sm font-medium truncate" title={space.title}>{space.title}</p>
+                <p className="text-sm font-medium truncate" title={space.title}>
+                  {space.title}
+                </p>
               </div>
               <div className="ml-5.5 mt-1 flex flex-wrap gap-1.5">
                 <Badge variant="secondary" className="text-[10px]">
@@ -277,7 +279,9 @@ function DashboardRow({ dashboard, host }: { dashboard: DiscoveredDash; host: st
                 <ChevronRight
                   className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
                 />
-                <p className="text-sm font-medium truncate" title={dashboard.displayName}>{dashboard.displayName}</p>
+                <p className="text-sm font-medium truncate" title={dashboard.displayName}>
+                  {dashboard.displayName}
+                </p>
                 {dashboard.isPublished && (
                   <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
                     Published

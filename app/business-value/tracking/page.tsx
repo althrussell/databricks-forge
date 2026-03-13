@@ -391,7 +391,10 @@ export default function ValueTrackingPage() {
                                 setOwnerDraft(entry.assignedOwner ?? "");
                               }}
                             >
-                              <span className="block max-w-[140px] truncate" title={entry.assignedOwner ?? undefined}>
+                              <span
+                                className="block max-w-[140px] truncate"
+                                title={entry.assignedOwner ?? undefined}
+                              >
                                 {entry.assignedOwner || "—"}
                               </span>
                               <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />

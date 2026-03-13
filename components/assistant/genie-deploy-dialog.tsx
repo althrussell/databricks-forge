@@ -187,193 +187,194 @@ export function GenieDeployDialog({ open, onOpenChange, jobId }: GenieDeployDial
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Deploying phase */}
-        {phase === "deploying" && (
-          <div className="flex items-center gap-3 py-8">
-            <Loader2 className="size-5 animate-spin text-primary" />
-            <span className="text-sm text-muted-foreground">
-              Creating Genie Space in Databricks...
-            </span>
-          </div>
-        )}
-
-        {/* Error phase */}
-        {phase === "error" && error && (
-          <div className="space-y-4 py-4">
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                <AlertTriangle className="size-4" />
-                {error}
-              </div>
+          {/* Deploying phase */}
+          {phase === "deploying" && (
+            <div className="flex items-center gap-3 py-8">
+              <Loader2 className="size-5 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">
+                Creating Genie Space in Databricks...
+              </span>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Deployed phase */}
-        {phase === "deployed" && deployedSpaceId && (
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <Check className="size-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {recommendation.title ?? "Genie Space"} is live
-                </p>
-                <p className="text-xs text-muted-foreground">Ready for natural language queries.</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {databricksHost && (
-                <Button asChild className="flex-1">
-                  <a
-                    href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink className="mr-2 size-4" />
-                    Open in Databricks
-                  </a>
-                </Button>
-              )}
-              <Button variant="outline" className="flex-1" asChild>
-                <a href={`/genie/${deployedSpaceId}`}>View in Genie Studio</a>
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Review phase (idle or error retry) */}
-        {(phase === "idle" || (phase === "error" && !deployedSpaceId)) && (
-          <div className="space-y-4 py-2">
-            {/* Mode + quality badge */}
-            <div className="flex items-center gap-2">
-              {resultMode === "fast" ? (
-                <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-400">
-                  <Zap className="size-3" />
-                  Quick Build
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="gap-1 text-green-600 dark:text-green-400">
-                  <Sparkles className="size-3" />
-                  Full Engine
-                </Badge>
-              )}
-              {recommendation.quality && (
-                <Badge variant="secondary" className="text-xs">
-                  Quality: {recommendation.quality.score}
-                </Badge>
-              )}
-            </div>
-
-            {/* Title + description */}
-            <div>
-              <h3 className="text-sm font-semibold">{recommendation.title}</h3>
-              <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">
-                {recommendation.description}
-              </p>
-            </div>
-
-            {/* Stat row */}
-            <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-              <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
-              <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
-              <StatItem icon={Link2} label="Filters" value={recommendation.filterCount} />
-              <StatItem
-                icon={MessageSquare}
-                label="Dimensions"
-                value={recommendation.dimensionCount}
-              />
-              <StatItem
-                icon={FileText}
-                label="Instructions"
-                value={recommendation.instructionCount}
-              />
-              <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
-              <StatItem
-                icon={MessageSquare}
-                label="Questions"
-                value={recommendation.sampleQuestionCount}
-              />
-            </div>
-
-            {/* Quality gate: blocked */}
-            {isBlocked && (
+          {/* Error phase */}
+          {phase === "error" && error && (
+            <div className="space-y-4 py-4">
               <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-destructive">
                   <AlertTriangle className="size-4" />
-                  Deployment blocked by quality gate
+                  {error}
                 </div>
-                {recommendation.quality?.degradedReasons &&
-                  recommendation.quality.degradedReasons.length > 0 && (
+              </div>
+            </div>
+          )}
+
+          {/* Deployed phase */}
+          {phase === "deployed" && deployedSpaceId && (
+            <div className="space-y-4 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <Check className="size-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">
+                    {recommendation.title ?? "Genie Space"} is live
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Ready for natural language queries.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {databricksHost && (
+                  <Button asChild className="flex-1">
+                    <a
+                      href={`${databricksHost}/genie/rooms/${deployedSpaceId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-2 size-4" />
+                      Open in Databricks
+                    </a>
+                  </Button>
+                )}
+                <Button variant="outline" className="flex-1" asChild>
+                  <a href={`/genie/${deployedSpaceId}`}>View in Genie Studio</a>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Review phase (idle or error retry) */}
+          {(phase === "idle" || (phase === "error" && !deployedSpaceId)) && (
+            <div className="space-y-4 py-2">
+              {/* Mode + quality badge */}
+              <div className="flex items-center gap-2">
+                {resultMode === "fast" ? (
+                  <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-400">
+                    <Zap className="size-3" />
+                    Quick Build
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1 text-green-600 dark:text-green-400">
+                    <Sparkles className="size-3" />
+                    Full Engine
+                  </Badge>
+                )}
+                {recommendation.quality && (
+                  <Badge variant="secondary" className="text-xs">
+                    Quality: {recommendation.quality.score}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Title + description */}
+              <div>
+                <h3 className="text-sm font-semibold">{recommendation.title}</h3>
+                <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">
+                  {recommendation.description}
+                </p>
+              </div>
+
+              {/* Stat row */}
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+                <StatItem icon={Table2} label="Tables" value={recommendation.tableCount} />
+                <StatItem icon={BarChart3} label="Measures" value={recommendation.measureCount} />
+                <StatItem icon={Link2} label="Filters" value={recommendation.filterCount} />
+                <StatItem
+                  icon={MessageSquare}
+                  label="Dimensions"
+                  value={recommendation.dimensionCount}
+                />
+                <StatItem
+                  icon={FileText}
+                  label="Instructions"
+                  value={recommendation.instructionCount}
+                />
+                <StatItem icon={Link2} label="Joins" value={recommendation.joinCount} />
+                <StatItem
+                  icon={MessageSquare}
+                  label="Questions"
+                  value={recommendation.sampleQuestionCount}
+                />
+              </div>
+
+              {/* Quality gate: blocked */}
+              {isBlocked && (
+                <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <AlertTriangle className="size-4" />
+                    Deployment blocked by quality gate
+                  </div>
+                  {recommendation.quality?.degradedReasons &&
+                    recommendation.quality.degradedReasons.length > 0 && (
+                      <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                        {recommendation.quality.degradedReasons.map((reason) => (
+                          <li key={reason}>- {reason.replace(/_/g, " ")}</li>
+                        ))}
+                      </ul>
+                    )}
+                </div>
+              )}
+
+              {/* Quality warnings */}
+              {!isBlocked &&
+                recommendation.quality &&
+                recommendation.quality.degradedReasons.length > 0 && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
+                      Quality warnings
+                    </div>
                     <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
                       {recommendation.quality.degradedReasons.map((reason) => (
                         <li key={reason}>- {reason.replace(/_/g, " ")}</li>
                       ))}
                     </ul>
-                  )}
-              </div>
-            )}
-
-            {/* Quality warnings */}
-            {!isBlocked &&
-              recommendation.quality &&
-              recommendation.quality.degradedReasons.length > 0 && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/30">
-                  <div className="flex items-center gap-2 text-xs font-medium">
-                    <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
-                    Quality warnings
                   </div>
-                  <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                    {recommendation.quality.degradedReasons.map((reason) => (
-                      <li key={reason}>- {reason.replace(/_/g, " ")}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                )}
 
-            {/* Metric view schema selector */}
-            {metricViewsServerEnabled &&
-              hasMetricViews &&
-              loadSettings().genieEngineDefaults.generateMetricViews && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium">
-                          Metric Views (
-                          {mvProposals.filter((m) => m.validationStatus !== "error").length})
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Choose a target schema for metric view deployment.
-                        </p>
+              {/* Metric view schema selector */}
+              {metricViewsServerEnabled &&
+                hasMetricViews &&
+                loadSettings().genieEngineDefaults.generateMetricViews && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium">
+                            Metric Views (
+                            {mvProposals.filter((m) => m.validationStatus !== "error").length})
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Choose a target schema for metric view deployment.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setShowSchemaSelector(!showSchemaSelector)}
+                        >
+                          {targetSchema[0] || defaultSchema || "Select schema"}
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setShowSchemaSelector(!showSchemaSelector)}
-                      >
-                        {targetSchema[0] || defaultSchema || "Select schema"}
-                      </Button>
+                      {showSchemaSelector && (
+                        <div className="max-h-48 overflow-y-auto rounded-md border">
+                          <CatalogBrowser
+                            selectedSources={targetSchema}
+                            onSelectionChange={handleSchemaChange}
+                            selectionMode="schema"
+                            defaultExpandPath={defaultSchema}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {showSchemaSelector && (
-                      <div className="max-h-48 overflow-y-auto rounded-md border">
-                        <CatalogBrowser
-                          selectedSources={targetSchema}
-                          onSelectionChange={handleSchemaChange}
-                          selectionMode="schema"
-                          defaultExpandPath={defaultSchema}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-          </div>
-        )}
-
+                  </>
+                )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

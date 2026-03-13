@@ -64,7 +64,9 @@ export function GenieRecommendationRow({
       </td>
       <td className="px-3 py-2.5 font-medium">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate min-w-0" title={rec.domain}>{rec.domain}</span>
+          <span className="truncate min-w-0" title={rec.domain}>
+            {rec.domain}
+          </span>
           {engineGenerating && completedDomainNames.includes(rec.domain) && (
             <BrainCircuit
               className="h-3.5 w-3.5 text-violet-500"

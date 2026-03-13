@@ -73,7 +73,10 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <BrainCircuit className="size-4 shrink-0 animate-pulse text-violet-500" />
-            <span className="truncate text-sm font-semibold" title={job.title || "Building Genie Space..."}>
+            <span
+              className="truncate text-sm font-semibold"
+              title={job.title || "Building Genie Space..."}
+            >
               {job.title || "Building Genie Space..."}
             </span>
           </div>
@@ -89,7 +92,9 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="truncate" title={job.message}>{job.message}</span>
+            <span className="truncate" title={job.message}>
+              {job.message}
+            </span>
             <span className="shrink-0 pl-2">{job.percent}%</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -99,7 +104,11 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
             />
           </div>
         </div>
-        {job.domain && <p className="truncate text-[10px] text-muted-foreground" title={job.domain}>{job.domain}</p>}
+        {job.domain && (
+          <p className="truncate text-[10px] text-muted-foreground" title={job.domain}>
+            {job.domain}
+          </p>
+        )}
       </ToastShell>
     );
   }
@@ -122,7 +131,9 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
             <X className="size-3" />
           </Button>
         </div>
-        <p className="truncate text-xs text-muted-foreground" title={job.title || "Genie Space"}>{job.title || "Genie Space"}</p>
+        <p className="truncate text-xs text-muted-foreground" title={job.title || "Genie Space"}>
+          {job.title || "Genie Space"}
+        </p>
         <div className="flex gap-2">
           <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleDeploy}>
             <Rocket className="size-3" />
@@ -150,7 +161,10 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
           <Sparkles className="size-4 shrink-0 text-green-500" />
           <span className="truncate text-sm font-semibold">Deployed</span>
         </div>
-        <p className="truncate text-xs text-muted-foreground" title={job.title ? `${job.title} is live` : "Genie Space is live"}>
+        <p
+          className="truncate text-xs text-muted-foreground"
+          title={job.title ? `${job.title} is live` : "Genie Space is live"}
+        >
           {job.title || "Genie Space"} is live
         </p>
         <Button
