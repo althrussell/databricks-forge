@@ -112,6 +112,7 @@ export async function runColumnIntelligence(
         );
       } catch (err) {
         logger.warn("Column intelligence batch failed, using basic enrichments", {
+          endpoint,
           batch,
           error: err instanceof Error ? err.message : String(err),
         });

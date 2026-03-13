@@ -94,6 +94,7 @@ export async function runTrustedAssetAuthoring(
     }
 
     logger.info("Trusted asset authoring: batching use cases", {
+      endpoint,
       totalUseCases: topUseCases.length,
       batchCount: batches.length,
       batchSize: BATCH_SIZE,

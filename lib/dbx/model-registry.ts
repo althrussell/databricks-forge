@@ -34,6 +34,10 @@ export interface ModelEndpoint {
   maxConcurrent: number;
   /** Priority within a tier (lower = preferred). */
   priority: number;
+  /** Whether the model supports response_format: json_object on Databricks FMAPI. */
+  supportsJsonMode: boolean;
+  /** Maximum output tokens the model can generate per request. */
+  maxOutputTokens: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,67 +48,91 @@ interface ModelTemplate {
   tiers: TaskTier[];
   maxConcurrent: number;
   priority: number;
+  supportsJsonMode: boolean;
+  maxOutputTokens: number;
 }
 
+/**
+ * Verified model capabilities from Databricks documentation.
+ *
+ * Sources:
+ *   - https://docs.databricks.com/en/machine-learning/foundation-model-apis/supported-models.html
+ *   - https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/limits
+ *   - https://docs.databricks.com/aws/en/machine-learning/model-serving/query-reason-models
+ *
+ * Only models listed here are admitted to the pool. Unknown models are
+ * rejected at startup with a warning log. To onboard a new model, add its
+ * verified config here first.
+ *
+ * NOTE: Codex models (GPT-5.1 Codex Mini, GPT-5.2 Codex, GPT-5.3 Codex)
+ * require the Responses API (/serving-endpoints/responses) which is only
+ * available via AI Gateway (beta). They are intentionally excluded.
+ */
 const KNOWN_MODELS: Record<string, ModelTemplate> = {
   "databricks-claude-opus-4-6": {
     tiers: ["reasoning"],
     maxConcurrent: 6,
     priority: 1,
+    supportsJsonMode: false,
+    maxOutputTokens: 32_000,
   },
   "databricks-claude-opus-4-5": {
     tiers: ["reasoning"],
     maxConcurrent: 6,
     priority: 2,
+    supportsJsonMode: false,
+    maxOutputTokens: 32_000,
   },
   "databricks-claude-sonnet-4-6": {
     tiers: ["generation", "classification"],
     maxConcurrent: 8,
     priority: 1,
+    supportsJsonMode: false,
+    maxOutputTokens: 32_000,
   },
   "databricks-claude-sonnet-4-5": {
     tiers: ["classification", "lightweight"],
     maxConcurrent: 8,
     priority: 2,
+    supportsJsonMode: false,
+    maxOutputTokens: 32_000,
   },
   "databricks-gpt-5-4": {
     tiers: ["sql", "generation", "reasoning"],
     maxConcurrent: 6,
     priority: 1,
-  },
-  "databricks-gpt-5-3-codex": {
-    tiers: ["sql", "classification"],
-    maxConcurrent: 8,
-    priority: 1,
+    supportsJsonMode: true,
+    maxOutputTokens: 128_000,
   },
   "databricks-gemini-3-1-flash-lite": {
     tiers: ["classification", "lightweight"],
     maxConcurrent: 12,
     priority: 0,
+    supportsJsonMode: false,
+    maxOutputTokens: 8_192,
   },
   "databricks-llama-4-maverick": {
     tiers: ["generation", "classification"],
     maxConcurrent: 10,
     priority: 0,
+    supportsJsonMode: false,
+    maxOutputTokens: 8_192,
   },
   "databricks-gemini-3-flash": {
     tiers: ["generation", "classification", "lightweight"],
     maxConcurrent: 10,
     priority: 1,
+    supportsJsonMode: false,
+    maxOutputTokens: 8_192,
   },
 };
 
-function templateFor(name: string): ModelTemplate {
+function templateFor(name: string): ModelTemplate | null {
   const lower = name.toLowerCase();
   for (const [key, tmpl] of Object.entries(KNOWN_MODELS)) {
     if (lower === key || lower.includes(key)) return tmpl;
   }
-  // Unknown model -- conservative defaults, supports all tiers at low priority
-  return {
-    tiers: ["generation", "classification", "sql", "lightweight"],
-    maxConcurrent: 6,
-    priority: 10,
-  };
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,8 +160,14 @@ function buildPool(): ModelEndpoint[] {
     if (!name) return;
     const key = name.toLowerCase();
     if (seen.has(key)) return;
-    seen.add(key);
     const tmpl = templateFor(name);
+    if (!tmpl) {
+      logger.warn("Skipping unknown model — add to KNOWN_MODELS before use", {
+        endpoint: name,
+      });
+      return;
+    }
+    seen.add(key);
     pool.push({ name, ...tmpl });
   };
 
@@ -148,11 +182,9 @@ function buildPool(): ModelEndpoint[] {
   add(process.env.DATABRICKS_SERVING_ENDPOINT_SQL);
   add(process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT);
 
-  // Fallback: if nothing is configured, add the hardcoded default
   if (pool.length === 0) {
     const def = "databricks-claude-opus-4-6";
-    const tmpl = KNOWN_MODELS[def]!;
-    pool.push({ name: def, ...tmpl });
+    pool.push({ name: def, ...KNOWN_MODELS[def]! });
   }
 
   return applyAllowlist(pool);
@@ -224,6 +256,31 @@ export function resetModelPool(): void {
   _pool = null;
 }
 
+/** Safe defaults for models not in the pool (unknown endpoint fallback). */
+const UNKNOWN_CAPS = { supportsJsonMode: false, maxOutputTokens: 8_192 } as const;
+
+/**
+ * Look up capability metadata for an endpoint.
+ *
+ * Checks the active pool first (already resolved), then falls back to
+ * KNOWN_MODELS for endpoints not in the pool. Returns conservative
+ * defaults for completely unknown endpoints.
+ */
+export function getModelCapabilities(endpoint: string): {
+  supportsJsonMode: boolean;
+  maxOutputTokens: number;
+} {
+  const pool = getModelPool();
+  const ep = pool.find((e) => e.name.toLowerCase() === endpoint.toLowerCase());
+  if (ep) return { supportsJsonMode: ep.supportsJsonMode, maxOutputTokens: ep.maxOutputTokens };
+
+  const tmpl = templateFor(endpoint);
+  if (tmpl)
+    return { supportsJsonMode: tmpl.supportsJsonMode, maxOutputTokens: tmpl.maxOutputTokens };
+
+  return UNKNOWN_CAPS;
+}
+
 // ---------------------------------------------------------------------------
 // Startup log
 // ---------------------------------------------------------------------------
@@ -239,6 +296,8 @@ function logPoolSummary(pool: ModelEndpoint[]): void {
         name: ep.name,
         tiers: ep.tiers.join(", "),
         maxConcurrent: ep.maxConcurrent,
+        jsonMode: ep.supportsJsonMode,
+        maxOutput: ep.maxOutputTokens,
       })),
       effectiveMaxConcurrent: totalConcurrent,
     },

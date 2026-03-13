@@ -21,6 +21,7 @@
 import { getConfig, getAppHeaders } from "./client";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 import { getPoolRateLimiter, DEFAULT_429_BACKOFF_MS } from "./rate-limiter";
+import { getModelCapabilities } from "./model-registry";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
@@ -79,13 +80,14 @@ export type StreamCallback = (chunk: string) => void;
 // ---------------------------------------------------------------------------
 
 /**
- * Claude/Anthropic models on Databricks FMAPI do not support
- * response_format: { type: "json_object" } (only json_schema is supported).
- * GPT, Llama, and other models do support it.
+ * Whether the endpoint supports response_format: json_object.
+ *
+ * Only models with verified json_object support in KNOWN_MODELS are
+ * allowed. Currently only GPT-5.x models work reliably; Claude returns
+ * errors, Gemini and Llama return 400 on Databricks pay-per-token.
  */
 function supportsJsonResponseFormat(endpoint: string): boolean {
-  const lower = endpoint.toLowerCase();
-  return !lower.includes("claude") && !lower.includes("anthropic");
+  return getModelCapabilities(endpoint).supportsJsonMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,8 +151,27 @@ export async function chatCompletion(
     temperature: options.temperature ?? 0.3,
   };
 
+  const caps = getModelCapabilities(options.endpoint);
+
+  logger.info("LLM call", {
+    fn: "chatCompletion",
+    endpoint: options.endpoint,
+    maxTokens: options.maxTokens,
+    jsonMode: options.responseFormat === "json_object",
+    supportsJson: caps.supportsJsonMode,
+    maxOutputTokens: caps.maxOutputTokens,
+  });
+
   if (options.maxTokens !== undefined) {
-    body.max_tokens = options.maxTokens;
+    const clamped = Math.min(options.maxTokens, caps.maxOutputTokens);
+    if (clamped < options.maxTokens) {
+      logger.info("Clamped maxTokens to model limit", {
+        endpoint: options.endpoint,
+        requested: options.maxTokens,
+        clamped,
+      });
+    }
+    body.max_tokens = clamped;
   }
 
   if (options.responseFormat === "json_object" && supportsJsonResponseFormat(options.endpoint)) {
@@ -230,8 +251,10 @@ export async function chatCompletionStream(
     stream: true,
   };
 
+  const caps = getModelCapabilities(options.endpoint);
+
   if (options.maxTokens !== undefined) {
-    body.max_tokens = options.maxTokens;
+    body.max_tokens = Math.min(options.maxTokens, caps.maxOutputTokens);
   }
 
   if (options.responseFormat === "json_object" && supportsJsonResponseFormat(options.endpoint)) {
@@ -352,13 +375,48 @@ async function parseSSEStream(
 // Response parsing
 // ---------------------------------------------------------------------------
 
+/**
+ * Extract text from a content value that may be a string (normal) or an
+ * array of content blocks (reasoning models like Gemini 3 return
+ * [{type:"reasoning",...},{type:"text",text:"answer"}]).
+ *
+ * The reasoning_effort parameter is NOT available on pay-per-token
+ * endpoints, so we must always handle both shapes here.
+ */
+export function extractContentText(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+
+  if (Array.isArray(raw)) {
+    // Prefer explicit {type:"text"} blocks, skip reasoning blocks
+    const textBlocks = raw.filter(
+      (p: Record<string, unknown>) => p?.type === "text" || typeof p === "string",
+    );
+    const joined = textBlocks
+      .map((p: unknown) =>
+        typeof p === "string" ? p : (((p as Record<string, unknown>)?.text as string) ?? ""),
+      )
+      .join("");
+
+    if (joined) return joined;
+
+    // Fallback: extract .text from any block that has one
+    return raw
+      .map((p: unknown) =>
+        typeof p === "string" ? p : (((p as Record<string, unknown>)?.text as string) ?? ""),
+      )
+      .join("");
+  }
+
+  return raw != null ? String(raw) : "";
+}
+
 function parseCompletionResponse(data: Record<string, unknown>): ChatCompletionResponse {
   const choices = data.choices as Array<{
-    message?: { content?: string };
+    message?: { content?: unknown };
     finish_reason?: string;
   }>;
 
-  const content = choices?.[0]?.message?.content ?? "";
+  const content = extractContentText(choices?.[0]?.message?.content);
   const finishReason = choices?.[0]?.finish_reason ?? null;
   const model = (data.model as string) ?? "";
 

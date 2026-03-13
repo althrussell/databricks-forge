@@ -123,6 +123,7 @@ export async function runBenchmarkGeneration(
   }
 
   logger.info("Benchmark generation: batching use cases", {
+    endpoint,
     totalUseCases: useCasesWithSql.length,
     referenceSqlCount: referenceSql?.length ?? 0,
     batchCount: batches.length,

@@ -4,6 +4,7 @@ import {
   getEndpointsForTier,
   isMultiEndpointPool,
   resetModelPool,
+  getModelCapabilities,
   type TaskTier,
 } from "@/lib/dbx/model-registry";
 
@@ -102,7 +103,7 @@ describe("model-registry", () => {
       process.env.DATABRICKS_REVIEW_ENDPOINT = "databricks-gpt-5-4";
       process.env.DATABRICKS_SERVING_ENDPOINT_REASONING_2 = "databricks-claude-opus-4-5";
       process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-claude-sonnet-4-5";
-      process.env.DATABRICKS_SERVING_ENDPOINT_SQL = "databricks-gpt-5-3-codex";
+      process.env.DATABRICKS_SERVING_ENDPOINT_SQL = "databricks-gemini-3-flash";
 
       const pool = getModelPool();
       expect(pool.length).toBeGreaterThanOrEqual(3);
@@ -113,7 +114,7 @@ describe("model-registry", () => {
       expect(names).toContain("databricks-gpt-5-4");
       expect(names).toContain("databricks-claude-opus-4-5");
       expect(names).toContain("databricks-claude-sonnet-4-5");
-      expect(names).toContain("databricks-gpt-5-3-codex");
+      expect(names).toContain("databricks-gemini-3-flash");
     });
   });
 
@@ -171,11 +172,11 @@ describe("model-registry", () => {
     it("returns only endpoints that support the tier", () => {
       process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
       process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "databricks-claude-sonnet-4-6";
-      process.env.DATABRICKS_REVIEW_ENDPOINT = "databricks-gpt-5-3-codex";
+      process.env.DATABRICKS_REVIEW_ENDPOINT = "databricks-gpt-5-4";
 
       const sqlEndpoints = getEndpointsForTier("sql" as TaskTier);
       const names = sqlEndpoints.map((ep) => ep.name);
-      expect(names).toContain("databricks-gpt-5-3-codex");
+      expect(names).toContain("databricks-gpt-5-4");
       expect(names).not.toContain("databricks-claude-opus-4-6");
       expect(names).not.toContain("databricks-claude-sonnet-4-6");
     });
@@ -224,17 +225,16 @@ describe("model-registry", () => {
       expect(ep!.tiers).toContain("lightweight");
     });
 
-    it("full performance bundle populates all 7 endpoints", () => {
+    it("full performance bundle populates all 6 known endpoints", () => {
       process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
       process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "databricks-claude-sonnet-4-6";
       process.env.DATABRICKS_REVIEW_ENDPOINT = "databricks-gpt-5-4";
       process.env.DATABRICKS_SERVING_ENDPOINT_REASONING_2 = "databricks-gemini-3-flash";
       process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-llama-4-maverick";
-      process.env.DATABRICKS_SERVING_ENDPOINT_SQL = "databricks-gpt-5-3-codex";
       process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
 
       const pool = getModelPool();
-      expect(pool).toHaveLength(7);
+      expect(pool).toHaveLength(6);
     });
   });
 
@@ -248,6 +248,75 @@ describe("model-registry", () => {
       process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
       process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "databricks-claude-sonnet-4-6";
       expect(isMultiEndpointPool()).toBe(true);
+    });
+  });
+
+  describe("Unknown model rejection", () => {
+    it("rejects unknown models from pool with a warning", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "totally-unknown-model";
+
+      const pool = getModelPool();
+      const names = pool.map((ep) => ep.name);
+      expect(names).toContain("databricks-claude-opus-4-6");
+      expect(names).not.toContain("totally-unknown-model");
+    });
+
+    it("Codex models are not in KNOWN_MODELS and are rejected", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      process.env.DATABRICKS_SERVING_ENDPOINT_SQL = "databricks-gpt-5-3-codex";
+
+      const pool = getModelPool();
+      const names = pool.map((ep) => ep.name);
+      expect(names).not.toContain("databricks-gpt-5-3-codex");
+    });
+  });
+
+  describe("getModelCapabilities", () => {
+    it("returns correct capabilities for GPT-5.4 (supportsJsonMode: true, 128K output)", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-gpt-5-4";
+      const caps = getModelCapabilities("databricks-gpt-5-4");
+      expect(caps.supportsJsonMode).toBe(true);
+      expect(caps.maxOutputTokens).toBe(128_000);
+    });
+
+    it("returns correct capabilities for Claude models (supportsJsonMode: false)", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-claude-opus-4-6";
+      const caps = getModelCapabilities("databricks-claude-opus-4-6");
+      expect(caps.supportsJsonMode).toBe(false);
+      expect(caps.maxOutputTokens).toBe(32_000);
+    });
+
+    it("returns correct capabilities for Gemini Flash Lite (8192 output)", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT = "databricks-gemini-3-1-flash-lite";
+      const caps = getModelCapabilities("databricks-gemini-3-1-flash-lite");
+      expect(caps.supportsJsonMode).toBe(false);
+      expect(caps.maxOutputTokens).toBe(8_192);
+    });
+
+    it("returns correct capabilities for Llama 4 Maverick (8192 output)", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION = "databricks-llama-4-maverick";
+      const caps = getModelCapabilities("databricks-llama-4-maverick");
+      expect(caps.supportsJsonMode).toBe(false);
+      expect(caps.maxOutputTokens).toBe(8_192);
+    });
+
+    it("returns conservative defaults for unknown endpoints", () => {
+      const caps = getModelCapabilities("totally-unknown-model");
+      expect(caps.supportsJsonMode).toBe(false);
+      expect(caps.maxOutputTokens).toBe(8_192);
+    });
+
+    it("pool endpoints include supportsJsonMode and maxOutputTokens fields", () => {
+      process.env.DATABRICKS_SERVING_ENDPOINT = "databricks-gpt-5-4";
+      process.env.DATABRICKS_SERVING_ENDPOINT_FAST = "databricks-claude-sonnet-4-6";
+
+      const pool = getModelPool();
+      for (const ep of pool) {
+        expect(typeof ep.supportsJsonMode).toBe("boolean");
+        expect(typeof ep.maxOutputTokens).toBe("number");
+        expect(ep.maxOutputTokens).toBeGreaterThan(0);
+      }
     });
   });
 });
