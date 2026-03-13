@@ -1,6 +1,6 @@
 {
   "name": "databricks-forge",
-  "version": "0.29.0",
+  "version": "0.29.1",
   "description": "AI-powered use case discovery from Unity Catalog metadata -- turn your data estate into actionable insights",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
