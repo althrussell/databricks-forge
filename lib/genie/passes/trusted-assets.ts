@@ -246,7 +246,7 @@ Create parameterized queries from these examples.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 32768,
+    maxTokens: 12288,
     responseFormat: "json_object",
     signal,
   });
@@ -378,7 +378,7 @@ Create new parameterized queries based on these reference patterns.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 32768,
+    maxTokens: 12288,
     responseFormat: "json_object",
     signal,
   });

@@ -206,7 +206,21 @@ async function chatCompletionWithRetry(
         }
       }
 
-      return await chatCompletion(options);
+      const result = await chatCompletion(options);
+      if (!result.content) {
+        log.warn("Empty LLM response content, treating as transient failure", {
+          attempt: attempt + 1,
+          endpoint: options.endpoint,
+          finishReason: result.finishReason,
+          model: result.model,
+        });
+        lastError = new Error(
+          `Empty LLM response content from ${options.endpoint} (finishReason=${result.finishReason})`,
+        );
+        if (attempt >= MAX_RETRIES) throw lastError;
+        continue;
+      }
+      return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -252,7 +266,16 @@ async function chatCompletionWithRetry(
           if (fa > 0) {
             await new Promise((resolve) => setTimeout(resolve, addJitter(FALLBACK_BACKOFF_MS)));
           }
-          return await chatCompletion(fallbackOptions);
+          const fbResult = await chatCompletion(fallbackOptions);
+          if (!fbResult.content) {
+            log.warn("Empty LLM response from fallback endpoint", {
+              endpoint: alt,
+              finishReason: fbResult.finishReason,
+            });
+            lastError = new Error(`Empty LLM response from fallback ${alt}`);
+            continue;
+          }
+          return fbResult;
         } catch (fbError) {
           lastError = fbError instanceof Error ? fbError : new Error(String(fbError));
           if (isRateLimitError(fbError)) {
@@ -298,6 +321,11 @@ export async function cachedChatCompletion(
 
   _stats.misses++;
   const response = await chatCompletionWithRetry(options);
+
+  // Never cache empty responses -- they'd poison subsequent calls
+  if (!response.content) {
+    throw new Error(`Empty LLM response content from ${options.endpoint} after all retries`);
+  }
 
   cache.set(key, {
     response,

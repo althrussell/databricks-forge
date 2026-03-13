@@ -314,8 +314,7 @@ export const CONSTRUCTION_INFRASTRUCTURE: IndustryOutcome = {
               name: "Defect Prediction & Rework Prevention",
               description:
                 "Predict defect likelihood by analysing inspection data, material test results, trade crew performance, and environmental conditions. Trigger targeted quality holds before defective work is covered up or built upon.",
-              businessValue:
-                "30-50% reduction in rework costs through early defect interception.",
+              businessValue: "30-50% reduction in rework costs through early defect interception.",
               typicalDataEntities: [
                 "Inspection Results",
                 "Material Test Certificates",
@@ -965,18 +964,8 @@ export const CONSTRUCTION_INFRASTRUCTURE: IndustryOutcome = {
               name: "Unified Site Data Platform",
               description:
                 "Integrate data from BIM, scheduling, cost management, safety, quality, IoT sensors, drones, and survey systems into a single project data lakehouse. Enable cross-domain analytics that are impossible in siloed systems.",
-              typicalDataEntities: [
-                "BIM Data",
-                "Schedule Data",
-                "Cost Data",
-                "IoT Sensor Data",
-              ],
-              typicalSourceSystems: [
-                "BIM Platform",
-                "Scheduling System",
-                "ERP",
-                "IoT Platform",
-              ],
+              typicalDataEntities: ["BIM Data", "Schedule Data", "Cost Data", "IoT Sensor Data"],
+              typicalSourceSystems: ["BIM Platform", "Scheduling System", "ERP", "IoT Platform"],
             },
             {
               name: "Drone-Based Progress Monitoring",

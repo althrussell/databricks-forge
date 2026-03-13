@@ -88,6 +88,10 @@ export interface GenieEngineInput {
     totalDomains: number,
     completedDomainName?: string,
   ) => void;
+  /** Called once after Pass 0 with the full domain list. */
+  onDomainsReady?: (domains: Array<{ domain: string; tables: number }>) => void;
+  /** Called when a domain transitions between phases. */
+  onDomainPhase?: (domain: string, phase: import("./engine-status").DomainPhase) => void;
   /** Injectable dependencies for portability and testing. */
   deps?: GenieEngineDeps;
 }
@@ -121,6 +125,8 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     domainFilter,
     signal,
     onProgress,
+    onDomainsReady,
+    onDomainPhase,
     deps,
   } = input;
 
@@ -129,236 +135,262 @@ export async function runGenieEngine(input: GenieEngineInput): Promise<GenieEngi
     createScopedLogger({ origin: "GenieEngine", module: "genie/engine", runId: run.runId });
   const allowlist = buildSchemaAllowlist(metadata);
 
-  log.info("Genie Engine starting", {
-    runId: run.runId,
-    useCaseCount: useCases.length,
-    tableCount: metadata.tableCount,
-    llmRefinement: config.llmRefinement,
-    sampleDataAvailable: sampleData ? sampleData.size : 0,
-  });
+  // Disable low-value SQL reviews by default for faster generation.
+  // Metric views are validated by YAML parser + dry-run; join inference
+  // reviews simple ON conditions. Restore original value on completion.
+  const _savedReviewSurfaces = process.env.DATABRICKS_REVIEW_DISABLED_SURFACES;
+  if (_savedReviewSurfaces === undefined) {
+    process.env.DATABRICKS_REVIEW_DISABLED_SURFACES = "genie-metric-views,genie-join-inference";
+  }
 
-  // Pass 0: Table Selection + Grouping
-  onProgress?.("Grouping tables into domains...", 5, 0, 0);
-  const allDomainGroups = runTableSelection(useCases, metadata, config);
+  const restoreReviewSurfaces = () => {
+    if (_savedReviewSurfaces === undefined) {
+      delete process.env.DATABRICKS_REVIEW_DISABLED_SURFACES;
+    } else {
+      process.env.DATABRICKS_REVIEW_DISABLED_SURFACES = _savedReviewSurfaces;
+    }
+  };
 
-  // Apply domain filter for partial regeneration
-  const filteredGroups = domainFilter?.length
-    ? allDomainGroups.filter((g) => domainFilter.includes(g.domain))
-    : allDomainGroups;
-
-  // Apply maxAutoSpaces cap (0 = unlimited)
-  const domainGroups =
-    config.maxAutoSpaces > 0 ? filteredGroups.slice(0, config.maxAutoSpaces) : filteredGroups;
-
-  if (domainGroups.length === 0) {
-    log.warn("No domain groups produced", {
-      fn: "runGenieEngine",
-      errorCategory: "data",
+  try {
+    log.info("Genie Engine starting", {
       runId: run.runId,
-      domainFilter,
+      useCaseCount: useCases.length,
+      tableCount: metadata.tableCount,
+      llmRefinement: config.llmRefinement,
+      sampleDataAvailable: sampleData ? sampleData.size : 0,
     });
-    return { recommendations: [], passOutputs: [], failedDomains: [] };
-  }
 
-  if (domainGroups.length < filteredGroups.length) {
-    log.info("Domain count capped by maxAutoSpaces", {
-      maxAutoSpaces: config.maxAutoSpaces,
-      totalAvailable: filteredGroups.length,
-      processing: domainGroups.length,
-    });
-  }
+    // Pass 0: Table Selection + Grouping
+    onProgress?.("Grouping tables into domains...", 5, 0, 0);
+    const allDomainGroups = runTableSelection(useCases, metadata, config);
 
-  // Build existing-space-to-domain mapping for enhancement detection
-  const existingSpaceByDomain = new Map<string, DiscoveredGenieSpace>();
-  if (existingSpaces.length > 0) {
-    for (const group of domainGroups) {
-      const domainTableSet = new Set(group.tables.map((t) => t.toLowerCase()));
-      let bestMatch: { space: DiscoveredGenieSpace; overlap: number } | null = null;
-      for (const space of existingSpaces) {
-        const overlap = space.tables.filter((t) => domainTableSet.has(t.toLowerCase())).length;
-        if (overlap > 0 && (!bestMatch || overlap > bestMatch.overlap)) {
-          bestMatch = { space, overlap };
+    // Apply domain filter for partial regeneration
+    const filteredGroups = domainFilter?.length
+      ? allDomainGroups.filter((g) => domainFilter.includes(g.domain))
+      : allDomainGroups;
+
+    // Apply maxAutoSpaces cap (0 = unlimited)
+    const domainGroups =
+      config.maxAutoSpaces > 0 ? filteredGroups.slice(0, config.maxAutoSpaces) : filteredGroups;
+
+    if (domainGroups.length === 0) {
+      log.warn("No domain groups produced", {
+        fn: "runGenieEngine",
+        errorCategory: "data",
+        runId: run.runId,
+        domainFilter,
+      });
+      return { recommendations: [], passOutputs: [], failedDomains: [] };
+    }
+
+    if (domainGroups.length < filteredGroups.length) {
+      log.info("Domain count capped by maxAutoSpaces", {
+        maxAutoSpaces: config.maxAutoSpaces,
+        totalAvailable: filteredGroups.length,
+        processing: domainGroups.length,
+      });
+    }
+
+    // Build existing-space-to-domain mapping for enhancement detection
+    const existingSpaceByDomain = new Map<string, DiscoveredGenieSpace>();
+    if (existingSpaces.length > 0) {
+      for (const group of domainGroups) {
+        const domainTableSet = new Set(group.tables.map((t) => t.toLowerCase()));
+        let bestMatch: { space: DiscoveredGenieSpace; overlap: number } | null = null;
+        for (const space of existingSpaces) {
+          const overlap = space.tables.filter((t) => domainTableSet.has(t.toLowerCase())).length;
+          if (overlap > 0 && (!bestMatch || overlap > bestMatch.overlap)) {
+            bestMatch = { space, overlap };
+          }
+        }
+        if (bestMatch && bestMatch.overlap >= 2) {
+          existingSpaceByDomain.set(group.domain, bestMatch.space);
         }
       }
-      if (bestMatch && bestMatch.overlap >= 2) {
-        existingSpaceByDomain.set(group.domain, bestMatch.space);
+      log.info("Existing space mapping", {
+        totalExisting: existingSpaces.length,
+        domainsWithExisting: existingSpaceByDomain.size,
+        mapped: Array.from(existingSpaceByDomain.entries()).map(
+          ([d, s]) => `${d} -> ${s.title} (${s.spaceId})`,
+        ),
+      });
+    }
+
+    log.info("Pass 0 complete: table selection", {
+      domainCount: domainGroups.length,
+      totalDomains: allDomainGroups.length,
+      filtered: !!domainFilter?.length,
+      capped: domainGroups.length < filteredGroups.length,
+      domains: domainGroups.map((g) => `${g.domain} (${g.tables.length} tables)`),
+    });
+
+    onDomainsReady?.(domainGroups.map((g) => ({ domain: g.domain, tables: g.tables.length })));
+
+    // Process domains with bounded concurrency
+    const totalDomainCount = domainGroups.length;
+    let completedDomainCount = 0;
+
+    onProgress?.("Processing domains...", 10, 0, totalDomainCount);
+
+    const domainResults = await mapWithConcurrency(
+      domainGroups.map((group) => async () => {
+        if (signal?.aborted) {
+          throw new EngineCancelledError();
+        }
+
+        if (group.tables.length === 0) {
+          log.info("Skipping domain with no tables", { domain: group.domain });
+          completedDomainCount++;
+          return null;
+        }
+
+        const domainPct = Math.round(10 + (completedDomainCount / totalDomainCount) * 85);
+
+        try {
+          const outputs = await processDomain(
+            group,
+            run,
+            metadata,
+            allowlist,
+            config,
+            sampleData,
+            piiClassifications,
+            signal,
+            (msg) =>
+              onProgress?.(
+                `[${group.domain}] ${msg}`,
+                domainPct,
+                completedDomainCount,
+                totalDomainCount,
+              ),
+            log,
+            onDomainPhase,
+          );
+
+          onDomainPhase?.(group.domain, "assembly");
+          const space = assembleSerializedSpace(outputs, {
+            runId: run.runId,
+            businessName: run.config.businessName,
+            allowlist,
+            metadata,
+          });
+
+          const titleResult = await runTitleGeneration({
+            businessName: run.config.businessName,
+            domain: normalizeDomainLabel(outputs.domain),
+            subdomains: outputs.subdomains,
+            tableFqns: outputs.tables,
+            conversationSummary: run.businessContext?.strategicGoals || "",
+            endpoint: resolveEndpoint("lightweight"),
+            fallbackEndpoint: resolveEndpoint("generation"),
+            signal,
+          });
+          const degradedReasons: string[] = [];
+          if (outputs.tables.length > 1 && space.instructions.join_specs.length === 0)
+            degradedReasons.push("no_validated_joins");
+          if (
+            space.instructions.join_specs.length > 0 &&
+            space.instructions.example_question_sqls.length < 2
+          ) {
+            degradedReasons.push("insufficient_sample_sql");
+          }
+          if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
+
+          const healthReport = runHealthCheck(space as unknown as Record<string, unknown>);
+          const actualScore = Math.round(healthReport.overallScore);
+
+          const rec = buildRecommendation(outputs, space, run.config.businessName, {
+            titleOverride: titleResult.title,
+            titleSource: titleResult.source,
+            degradedReasons,
+            qualityScore: actualScore,
+            joinDiagnostics: outputs.joinDiagnostics ?? [],
+            promptVersion: "genie-v2-phase2",
+          });
+          rec.useCaseCount = group.useCases.length;
+
+          // Tag with recommendation type based on existing space mapping
+          const existingSpace = existingSpaceByDomain.get(group.domain);
+          if (existingSpace) {
+            rec.recommendationType = "enhancement";
+            rec.existingAssetId = existingSpace.spaceId;
+            rec.changeSummary = buildChangeSummary(existingSpace, rec);
+          }
+
+          completedDomainCount++;
+          onDomainPhase?.(group.domain, "completed");
+          onProgress?.(
+            `[${group.domain}] Complete`,
+            domainPct,
+            completedDomainCount,
+            totalDomainCount,
+            group.domain,
+          );
+
+          log.info("Domain processed", {
+            domain: group.domain,
+            tables: outputs.tables.length,
+            measures: outputs.measures.length,
+            filters: outputs.filters.length,
+            dimensions: outputs.dimensions.length,
+            benchmarks: outputs.benchmarkQuestions.length,
+            metricViews: outputs.metricViewProposals.length,
+          });
+
+          return { rec, outputs };
+        } catch (err) {
+          if (err instanceof EngineCancelledError) throw err;
+          completedDomainCount++;
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          onDomainPhase?.(group.domain, "failed");
+          log.error("Failed to process domain", {
+            fn: "runGenieEngine",
+            errorCategory: "domain_processing",
+            domain: group.domain,
+            error: errorMsg,
+          });
+          return { failed: true as const, domain: group.domain, error: errorMsg };
+        }
+      }),
+      DOMAIN_CONCURRENCY,
+    );
+
+    const recommendations: GenieSpaceRecommendation[] = [];
+    const allPassOutputs: GenieEnginePassOutputs[] = [];
+    const failedDomains: Array<{ domain: string; error: string }> = [];
+    for (const result of domainResults) {
+      if (!result) continue;
+      if ("failed" in result && result.failed) {
+        failedDomains.push({ domain: result.domain as string, error: result.error as string });
+      } else if ("rec" in result) {
+        recommendations.push(result.rec);
+        allPassOutputs.push(result.outputs);
       }
     }
-    log.info("Existing space mapping", {
-      totalExisting: existingSpaces.length,
-      domainsWithExisting: existingSpaceByDomain.size,
-      mapped: Array.from(existingSpaceByDomain.entries()).map(
-        ([d, s]) => `${d} -> ${s.title} (${s.spaceId})`,
-      ),
-    });
-  }
 
-  log.info("Pass 0 complete: table selection", {
-    domainCount: domainGroups.length,
-    totalDomains: allDomainGroups.length,
-    filtered: !!domainFilter?.length,
-    capped: domainGroups.length < filteredGroups.length,
-    domains: domainGroups.map((g) => `${g.domain} (${g.tables.length} tables)`),
-  });
+    onProgress?.("Genie Engine complete", 100, totalDomainCount, totalDomainCount);
 
-  // Process domains with bounded concurrency
-  const totalDomainCount = domainGroups.length;
-  let completedDomainCount = 0;
+    recommendations.sort((a, b) => b.useCaseCount - a.useCaseCount);
 
-  onProgress?.("Processing domains...", 10, 0, totalDomainCount);
-
-  const domainResults = await mapWithConcurrency(
-    domainGroups.map((group) => async () => {
-      if (signal?.aborted) {
-        throw new EngineCancelledError();
-      }
-
-      if (group.tables.length === 0) {
-        log.info("Skipping domain with no tables", { domain: group.domain });
-        completedDomainCount++;
-        return null;
-      }
-
-      const domainPct = Math.round(10 + (completedDomainCount / totalDomainCount) * 85);
-
-      try {
-        const outputs = await processDomain(
-          group,
-          run,
-          metadata,
-          allowlist,
-          config,
-          sampleData,
-          piiClassifications,
-          signal,
-          (msg) =>
-            onProgress?.(
-              `[${group.domain}] ${msg}`,
-              domainPct,
-              completedDomainCount,
-              totalDomainCount,
-            ),
-          log,
-        );
-
-        const space = assembleSerializedSpace(outputs, {
-          runId: run.runId,
-          businessName: run.config.businessName,
-          allowlist,
-          metadata,
-        });
-
-        const titleResult = await runTitleGeneration({
-          businessName: run.config.businessName,
-          domain: normalizeDomainLabel(outputs.domain),
-          subdomains: outputs.subdomains,
-          tableFqns: outputs.tables,
-          conversationSummary: run.businessContext?.strategicGoals || "",
-          endpoint: resolveEndpoint("lightweight"),
-          fallbackEndpoint: resolveEndpoint("generation"),
-          signal,
-        });
-        const degradedReasons: string[] = [];
-        if (outputs.tables.length > 1 && space.instructions.join_specs.length === 0)
-          degradedReasons.push("no_validated_joins");
-        if (
-          space.instructions.join_specs.length > 0 &&
-          space.instructions.example_question_sqls.length < 2
-        ) {
-          degradedReasons.push("insufficient_sample_sql");
-        }
-        if (titleResult.source === "fallback") degradedReasons.push("title_fallback_used");
-
-        const healthReport = runHealthCheck(space as unknown as Record<string, unknown>);
-        const actualScore = Math.round(healthReport.overallScore);
-
-        const rec = buildRecommendation(outputs, space, run.config.businessName, {
-          titleOverride: titleResult.title,
-          titleSource: titleResult.source,
-          degradedReasons,
-          qualityScore: actualScore,
-          joinDiagnostics: outputs.joinDiagnostics ?? [],
-          promptVersion: "genie-v2-phase2",
-        });
-        rec.useCaseCount = group.useCases.length;
-
-        // Tag with recommendation type based on existing space mapping
-        const existingSpace = existingSpaceByDomain.get(group.domain);
-        if (existingSpace) {
-          rec.recommendationType = "enhancement";
-          rec.existingAssetId = existingSpace.spaceId;
-          rec.changeSummary = buildChangeSummary(existingSpace, rec);
-        }
-
-        completedDomainCount++;
-        onProgress?.(
-          `[${group.domain}] Complete`,
-          domainPct,
-          completedDomainCount,
-          totalDomainCount,
-          group.domain,
-        );
-
-        log.info("Domain processed", {
-          domain: group.domain,
-          tables: outputs.tables.length,
-          measures: outputs.measures.length,
-          filters: outputs.filters.length,
-          dimensions: outputs.dimensions.length,
-          benchmarks: outputs.benchmarkQuestions.length,
-          metricViews: outputs.metricViewProposals.length,
-        });
-
-        return { rec, outputs };
-      } catch (err) {
-        if (err instanceof EngineCancelledError) throw err;
-        completedDomainCount++;
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        log.error("Failed to process domain", {
-          fn: "runGenieEngine",
-          errorCategory: "domain_processing",
-          domain: group.domain,
-          error: errorMsg,
-        });
-        return { failed: true as const, domain: group.domain, error: errorMsg };
-      }
-    }),
-    DOMAIN_CONCURRENCY,
-  );
-
-  const recommendations: GenieSpaceRecommendation[] = [];
-  const allPassOutputs: GenieEnginePassOutputs[] = [];
-  const failedDomains: Array<{ domain: string; error: string }> = [];
-  for (const result of domainResults) {
-    if (!result) continue;
-    if ("failed" in result && result.failed) {
-      failedDomains.push({ domain: result.domain as string, error: result.error as string });
-    } else if ("rec" in result) {
-      recommendations.push(result.rec);
-      allPassOutputs.push(result.outputs);
+    if (failedDomains.length > 0) {
+      log.warn("Some domains failed during Genie Engine run", {
+        fn: "runGenieEngine",
+        errorCategory: "domain_processing",
+        runId: run.runId,
+        failedDomains,
+      });
     }
-  }
 
-  onProgress?.("Genie Engine complete", 100, totalDomainCount, totalDomainCount);
-
-  recommendations.sort((a, b) => b.useCaseCount - a.useCaseCount);
-
-  if (failedDomains.length > 0) {
-    log.warn("Some domains failed during Genie Engine run", {
-      fn: "runGenieEngine",
-      errorCategory: "domain_processing",
+    log.info("Genie Engine complete", {
       runId: run.runId,
-      failedDomains,
+      recommendationCount: recommendations.length,
+      failedDomainCount: failedDomains.length,
     });
+
+    return { recommendations, passOutputs: allPassOutputs, failedDomains };
+  } finally {
+    restoreReviewSurfaces();
   }
-
-  log.info("Genie Engine complete", {
-    runId: run.runId,
-    recommendationCount: recommendations.length,
-    failedDomainCount: failedDomains.length,
-  });
-
-  return { recommendations, passOutputs: allPassOutputs, failedDomains };
 }
 
 async function processDomain(
@@ -372,6 +404,7 @@ async function processDomain(
   signal: AbortSignal | undefined,
   onProgress: (msg: string) => void,
   log: Logger,
+  onDomainPhase?: (domain: string, phase: import("./engine-status").DomainPhase) => void,
 ): Promise<GenieEnginePassOutputs> {
   const { domain, subdomains, tables, metricViews, useCases } = group;
   const normalizedDomain = normalizeDomainLabel(domain);
@@ -386,6 +419,7 @@ async function processDomain(
   );
 
   // Pass 1 (fast) + Pass 2 (premium) run in parallel -- no shared dependencies
+  onDomainPhase?.(domain, "expressions");
   onProgress("Analyzing columns & generating SQL expressions...");
   const [columnResult, exprResult] = await Promise.all([
     runColumnIntelligence({
@@ -407,7 +441,7 @@ async function processDomain(
       businessContext: run.businessContext,
       config,
       industryId: run.config.industry || undefined,
-      endpoint: resolveEndpoint("generation"),
+      endpoint: resolveEndpoint("classification"),
       signal,
     }),
   ]);
@@ -474,6 +508,7 @@ async function processDomain(
   }> = [];
   if (config.llmRefinement && fkAndOverrideJoins.length + sqlInferredJoins.length < 3) {
     try {
+      onDomainPhase?.(domain, "joins");
       onProgress("Inferring table relationships...");
       const allExistingKeys = new Set([
         ...existingJoinKeys,
@@ -532,7 +567,9 @@ async function processDomain(
     total: allJoins.length,
   });
 
-  // Phase B: Metric views + Passes 3-5 run in parallel -- all depend on
+  // Phase B: Metric views + Passes 3-5 run in parallel
+  onDomainPhase?.(domain, "assets");
+  // All depend on
   // Phase 1 + Phase 2 + joins but are independent of each other.
   onProgress("Creating trusted assets, instructions, benchmarks & metric views...");
 
@@ -563,6 +600,7 @@ async function processDomain(
       businessContext: run.businessContext?.strategicGoals,
       endpoint: resolveEndpoint("generation"),
       signal,
+      skipPlanning: config.skipMetricViewPlanning,
     });
 
     // Persist metric view proposals to standalone table (best-effort)

@@ -170,8 +170,10 @@ export function AggregateSummary({
                     {stats.coverageByScope.map((c) => (
                       <TableRow key={c.scanId}>
                         <TableCell className="font-mono text-xs">
-                        <span className="block truncate max-w-[300px]" title={c.ucPath}>{c.ucPath}</span>
-                      </TableCell>
+                          <span className="block truncate max-w-[300px]" title={c.ucPath}>
+                            {c.ucPath}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={c.runId ? "default" : "secondary"} className="text-xs">
                             {c.runId ? `Run ${c.runId.slice(0, 8)}` : "Standalone"}

@@ -302,7 +302,11 @@ async function PortfolioContent() {
                       </span>
                     </div>
                     {f.domain && (
-                      <Badge variant="secondary" className="max-w-full shrink-0 text-[10px]" title={f.domain}>
+                      <Badge
+                        variant="secondary"
+                        className="max-w-full shrink-0 text-[10px]"
+                        title={f.domain}
+                      >
                         {f.domain}
                       </Badge>
                     )}

@@ -20,6 +20,8 @@ import {
   updateJob,
   updateJobDomainProgress,
   addCompletedDomainName,
+  initDomainList,
+  updateDomainPhase,
   completeJob,
   failJob,
   getJobStatus,
@@ -121,6 +123,8 @@ export async function POST(
           addCompletedDomainName(runId, completedDomainName);
         }
       },
+      onDomainsReady: (domains) => initDomainList(runId, domains),
+      onDomainPhase: (domain, phase) => updateDomainPhase(runId, domain, phase),
     })
       .then(async (result) => {
         const job = await getJobStatus(runId);

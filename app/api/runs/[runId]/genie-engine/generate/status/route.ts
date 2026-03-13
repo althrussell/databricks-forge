@@ -38,6 +38,7 @@ export async function GET(
       completedDomains: job.completedDomains,
       totalDomains: job.totalDomains,
       completedDomainNames: job.completedDomainNames,
+      domainStatuses: job.domainStatuses,
       error: job.error,
       errorType: job.errorType,
       elapsedMs: job.completedAt ? job.completedAt - job.startedAt : Date.now() - job.startedAt,

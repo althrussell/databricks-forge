@@ -280,7 +280,10 @@ export function RunsContent({
                         {run.config.businessName}
                       </span>
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate font-mono text-xs" title={run.config.ucMetadata}>
+                    <TableCell
+                      className="max-w-[200px] truncate font-mono text-xs"
+                      title={run.config.ucMetadata}
+                    >
                       {run.config.ucMetadata}
                     </TableCell>
                     <TableCell>
@@ -308,7 +311,10 @@ export function RunsContent({
                         <span className="text-xs text-muted-foreground">{run.progressPct}%</span>
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground" title={run.statusMessage ?? "\u2014"}>
+                    <TableCell
+                      className="max-w-[220px] truncate text-xs text-muted-foreground"
+                      title={run.statusMessage ?? "\u2014"}
+                    >
                       {run.statusMessage ?? "\u2014"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

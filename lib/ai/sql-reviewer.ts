@@ -32,7 +32,7 @@ import { resolveForPipelineStep, formatContextSections } from "@/lib/skills/reso
 // when many domains run SQL reviews in parallel (429 pressure reduction).
 // ---------------------------------------------------------------------------
 
-const SQL_REVIEW_CONCURRENCY = 4;
+const SQL_REVIEW_CONCURRENCY = 6;
 const reviewLimiter = createConcurrencyLimiter(SQL_REVIEW_CONCURRENCY);
 
 // ---------------------------------------------------------------------------
@@ -617,6 +617,15 @@ export async function reviewBatch(
       },
       surface,
     );
+    if (!response.content) {
+      log.warn("Empty batch review response from LLM, returning default warn verdicts", {
+        surface,
+        endpoint: ep,
+        finishReason: response.finishReason,
+        model: response.model,
+        rawLength: 0,
+      });
+    }
     return parseBatchReviewResponse(response.content, items, requestFix);
   };
 

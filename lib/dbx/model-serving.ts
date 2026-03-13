@@ -185,7 +185,19 @@ export async function chatCompletion(
     }
 
     const data = await resp.json();
-    return parseCompletionResponse(data);
+    const result = parseCompletionResponse(data);
+
+    if (!result.content && result.finishReason !== "stop") {
+      logger.warn("Empty LLM response content from Model Serving", {
+        fn: "chatCompletion",
+        endpoint: options.endpoint,
+        finishReason: result.finishReason,
+        model: result.model,
+        usage: result.usage,
+      });
+    }
+
+    return result;
   } finally {
     limiter.release(options.endpoint);
   }

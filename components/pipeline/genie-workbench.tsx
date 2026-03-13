@@ -13,6 +13,7 @@ import { GenieSpacesTab } from "./genie-spaces-tab";
 import { GenieConfigEditor } from "./genie-config-editor";
 import { GenieSpacePreview } from "./genie-space-preview";
 import { ExistingAssetsTab } from "./existing-assets-tab";
+import { GenieEngineProgressDetail, type DomainStatusEntry } from "./genie-engine-progress-detail";
 import type { GenieEngineConfig } from "@/lib/genie/types";
 import { defaultGenieEngineConfig } from "@/lib/genie/types";
 import { loadSettings } from "@/lib/settings";
@@ -58,6 +59,9 @@ export function GenieWorkbench({ runId, initialDomain }: GenieWorkbenchProps) {
   const [domains, setDomains] = useState<string[]>([]);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [completedDomainNames, setCompletedDomainNames] = useState<string[]>([]);
+  const [domainStatuses, setDomainStatuses] = useState<DomainStatusEntry[]>([]);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [pollTs, setPollTs] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastErrorType, setLastErrorType] = useState<"auth" | "general" | null>(null);
@@ -97,12 +101,17 @@ export function GenieWorkbench({ runId, initialDomain }: GenieWorkbenchProps) {
         const res = await fetch(`/api/runs/${runId}/genie-engine/generate/status`);
         const data = await res.json();
         if (res.ok) {
+          setPollTs(Date.now());
           setGenProgress(data.percent ?? 0);
           setGenMessage(data.message ?? "");
           setCompletedDomains(data.completedDomains ?? 0);
           setTotalDomains(data.totalDomains ?? 0);
+          setElapsedMs(data.elapsedMs ?? 0);
           if (Array.isArray(data.completedDomainNames)) {
             setCompletedDomainNames(data.completedDomainNames);
+          }
+          if (Array.isArray(data.domainStatuses)) {
+            setDomainStatuses(data.domainStatuses);
           }
           if (data.status === "completed") {
             stopPolling();
@@ -159,8 +168,12 @@ export function GenieWorkbench({ runId, initialDomain }: GenieWorkbenchProps) {
             setGenMessage(data.message ?? "");
             setCompletedDomains(data.completedDomains ?? 0);
             setTotalDomains(data.totalDomains ?? 0);
+            setElapsedMs(data.elapsedMs ?? 0);
             if (Array.isArray(data.completedDomainNames)) {
               setCompletedDomainNames(data.completedDomainNames);
+            }
+            if (Array.isArray(data.domainStatuses)) {
+              setDomainStatuses(data.domainStatuses);
             }
             startPolling();
           } else if (data.status === "failed") {
@@ -378,7 +391,7 @@ export function GenieWorkbench({ runId, initialDomain }: GenieWorkbenchProps) {
         )}
 
         {generating && (
-          <div className="space-y-1" aria-live="polite">
+          <div className="space-y-1.5" aria-live="polite">
             <div className="flex items-center gap-2">
               <Progress value={genProgress} className="h-2 flex-1" />
               <Button
@@ -391,14 +404,22 @@ export function GenieWorkbench({ runId, initialDomain }: GenieWorkbenchProps) {
                 <Square className="h-3 w-3" />
               </Button>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              {totalDomains > 0 && (
-                <span className="font-medium">
-                  [{completedDomains} of {totalDomains} complete]{" "}
-                </span>
-              )}
-              {genMessage}
-            </p>
+            {domainStatuses.length > 0 ? (
+              <GenieEngineProgressDetail
+                domainStatuses={domainStatuses}
+                elapsedMs={elapsedMs}
+                now={pollTs}
+              />
+            ) : (
+              <p className="text-[10px] text-muted-foreground">
+                {totalDomains > 0 && (
+                  <span className="font-medium">
+                    [{completedDomains} of {totalDomains} complete]{" "}
+                  </span>
+                )}
+                {genMessage}
+              </p>
+            )}
           </div>
         )}
 

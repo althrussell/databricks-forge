@@ -106,6 +106,8 @@ export interface GenieEngineConfig {
   generateTrustedAssets: boolean;
   generateBenchmarks: boolean;
   llmRefinement: boolean;
+  /** Skip the LLM planning pre-pass for metric views (faster, less precise). */
+  skipMetricViewPlanning: boolean;
 
   questionComplexity: QuestionComplexity;
 }
@@ -134,6 +136,7 @@ export function defaultGenieEngineConfig(): GenieEngineConfig {
     generateTrustedAssets: true,
     generateBenchmarks: true,
     llmRefinement: true,
+    skipMetricViewPlanning: true,
     questionComplexity: "simple",
   };
 }

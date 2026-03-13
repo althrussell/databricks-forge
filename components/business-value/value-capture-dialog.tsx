@@ -87,7 +87,9 @@ export function ValueCaptureDialog({
     <Card className="border-primary/20 shadow-lg">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold truncate max-w-[200px]" title={useCaseName}>{useCaseName}</h4>
+          <h4 className="text-sm font-semibold truncate max-w-[200px]" title={useCaseName}>
+            {useCaseName}
+          </h4>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(false)}>
             <X className="h-3 w-3" />
           </Button>

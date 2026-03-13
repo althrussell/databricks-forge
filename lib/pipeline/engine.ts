@@ -40,6 +40,9 @@ import {
   startJob,
   updateJob,
   updateJobDomainProgress,
+  addCompletedDomainName,
+  initDomainList,
+  updateDomainPhase,
   completeJob,
   failJob,
 } from "@/lib/genie/engine-status";
@@ -1353,10 +1356,15 @@ function startBackgroundEngines(
       const genieCount = await runGenieRecommendations(
         ctx,
         runId,
-        (message, percent, completedDomains, totalDomains) => {
+        (message, percent, completedDomains, totalDomains, completedDomainName) => {
           updateJob(runId, message, percent);
           updateJobDomainProgress(runId, completedDomains, totalDomains);
+          if (completedDomainName) {
+            addCompletedDomainName(runId, completedDomainName);
+          }
         },
+        (domains) => initDomainList(runId, domains),
+        (domain, phase) => updateDomainPhase(runId, domain, phase),
       );
       await completeJob(runId, genieCount);
       genieLog.info("Background Genie Engine completed", { phase: "end", genieCount });
