@@ -44,6 +44,10 @@ export interface TrustedAssetsInput {
   /** Validated SQL from the existing space, used when useCases is empty. */
   referenceSql?: ReferenceSqlExample[];
   signal?: AbortSignal;
+  /** Max use cases to feed into trusted asset authoring (budget-driven). */
+  useCaseCap?: number;
+  /** Max tokens for the LLM call (budget-driven). */
+  maxTokens?: number;
 }
 
 export interface TrustedAssetsOutput {
@@ -64,11 +68,14 @@ export async function runTrustedAssetAuthoring(
     questionComplexity,
     referenceSql,
     signal,
+    useCaseCap,
+    maxTokens: maxTokensOverride,
   } = input;
 
+  const cap = useCaseCap ?? 12;
   const topUseCases = useCases
     .filter((uc) => uc.sqlCode && uc.sqlStatus === "generated")
-    .slice(0, 12);
+    .slice(0, cap);
 
   const hasReferenceSql = referenceSql && referenceSql.length > 0;
 
@@ -104,6 +111,7 @@ export async function runTrustedAssetAuthoring(
             endpoint,
             questionComplexity,
             signal,
+            maxTokensOverride,
           );
         } catch (err) {
           logger.warn("Trusted asset batch failed, continuing with remaining batches", {
@@ -177,6 +185,7 @@ async function processTrustedAssetBatch(
   endpoint: string,
   questionComplexity?: QuestionComplexity,
   signal?: AbortSignal,
+  maxTokensOverride?: number,
 ): Promise<TrustedAssetsOutput> {
   const MAX_SQL_CHARS = 3000;
   const sqlExamples = batch
@@ -246,7 +255,7 @@ Create parameterized queries from these examples.`;
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 12288,
+    maxTokens: maxTokensOverride ?? 12288,
     responseFormat: "json_object",
     signal,
   });

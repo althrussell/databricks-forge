@@ -51,6 +51,12 @@ export interface BenchmarkGenerationInput {
   /** Industry ID for domain-specific question patterns. */
   industryId?: string;
   signal?: AbortSignal;
+  /** Max use cases to feed into benchmark generation (budget-driven). */
+  useCaseCap?: number;
+  /** Benchmarks to request per LLM batch call (budget-driven). */
+  benchmarksPerBatch?: number;
+  /** Max tokens for the LLM call (budget-driven). */
+  maxTokens?: number;
 }
 
 export interface BenchmarkGenerationDiagnostics {
@@ -79,7 +85,13 @@ export async function runBenchmarkGeneration(
     industryId,
     endpoint,
     signal,
+    useCaseCap: useCaseCapOverride,
+    benchmarksPerBatch: benchmarksPerBatchOverride,
+    maxTokens: maxTokensOverride,
   } = input;
+
+  const effectiveBenchmarksPerBatch = benchmarksPerBatchOverride ?? BENCHMARKS_PER_BATCH;
+  const effectiveMaxTokens = maxTokensOverride ?? 8192;
 
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
@@ -98,7 +110,8 @@ export async function runBenchmarkGeneration(
 
   const refSqlBlock = buildReferenceSqlBlock(referenceSql);
 
-  const useCasesWithSql = useCases.filter((uc) => uc.sqlCode).slice(0, 10);
+  const ucCap = useCaseCapOverride ?? 10;
+  const useCasesWithSql = useCases.filter((uc) => uc.sqlCode).slice(0, ucCap);
 
   const batches: UseCase[][] = [];
   for (let i = 0; i < useCasesWithSql.length; i += BATCH_SIZE) {
@@ -114,7 +127,7 @@ export async function runBenchmarkGeneration(
     referenceSqlCount: referenceSql?.length ?? 0,
     batchCount: batches.length,
     batchSize: BATCH_SIZE,
-    benchmarksPerBatch: BENCHMARKS_PER_BATCH,
+    benchmarksPerBatch: effectiveBenchmarksPerBatch,
   });
 
   const batchResults = await mapWithConcurrency(
@@ -130,6 +143,8 @@ export async function runBenchmarkGeneration(
           endpoint,
           industryId,
           signal,
+          effectiveBenchmarksPerBatch,
+          effectiveMaxTokens,
         );
       } catch (err) {
         logger.warn("Benchmark batch failed, continuing with remaining batches", {
@@ -163,7 +178,7 @@ export async function runBenchmarkGeneration(
     );
     fallbackUsed = true;
     allBenchmarks = allRejected
-      .slice(0, BENCHMARKS_PER_BATCH)
+      .slice(0, effectiveBenchmarksPerBatch)
       .map((b) => ({ ...b, expectedSql: "" }));
   }
 
@@ -210,6 +225,8 @@ async function processBenchmarkBatch(
   endpoint: string,
   industryId?: string,
   signal?: AbortSignal,
+  benchmarksPerBatch: number = BENCHMARKS_PER_BATCH,
+  maxTokensLimit: number = 8192,
 ): Promise<BatchResult> {
   const MAX_SQL_CHARS = 3000;
   const useCaseContext = batch
@@ -232,7 +249,7 @@ async function processBenchmarkBatch(
 
 You MUST only use table and column identifiers from the SCHEMA CONTEXT below. Do NOT invent identifiers.
 
-Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL answers. These benchmarks teach Genie what correct answers look like, so accuracy and simplicity are critical.
+Generate ${benchmarksPerBatch} benchmark questions with expected SQL answers. These benchmarks teach Genie what correct answers look like, so accuracy and simplicity are critical.
 
 IMPORTANT — Benchmark SQL must be SIMPLE and VERIFIABLE:
 - Use straightforward SELECT ... FROM ... WHERE ... GROUP BY ... ORDER BY patterns
@@ -274,7 +291,7 @@ ${joinBlock ? `${joinBlock}\n` : ""}
 ${sqlContextSection}
 ${domainPatterns ? `### DOMAIN QUESTION PATTERNS\n${domainPatterns}\n` : ""}
 ${skillBlock}
-Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alternate phrasings.`;
+Generate ${benchmarksPerBatch} benchmark questions with expected SQL and alternate phrasings.`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemMessage },
@@ -285,7 +302,7 @@ Generate ${BENCHMARKS_PER_BATCH} benchmark questions with expected SQL and alter
     endpoint,
     messages,
     temperature: TEMPERATURE,
-    maxTokens: 8192,
+    maxTokens: maxTokensLimit,
     responseFormat: "json_object",
     signal,
   });

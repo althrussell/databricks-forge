@@ -17,6 +17,7 @@ import { SETTINGS } from "@/lib/help-text";
 import type {
   GenieEngineDefaults,
   GenieAuthMode,
+  QualityPreset,
   QuestionComplexity,
   QuestionComplexitySettings,
 } from "@/lib/settings";
@@ -138,6 +139,55 @@ export function GenieDefaultsSettings({
         </div>
 
         <div className={genieDefaults.engineEnabled ? "" : "pointer-events-none opacity-50"}>
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Label>Quality Preset</Label>
+              <InfoTip tip={SETTINGS.qualityPreset} />
+            </div>
+            <div className="flex gap-2">
+              {(
+                [
+                  {
+                    value: "speed" as QualityPreset,
+                    label: "Speed",
+                    desc: "Fastest generation with lean output",
+                  },
+                  {
+                    value: "balanced" as QualityPreset,
+                    label: "Balanced",
+                    desc: "Good quality at reasonable speed",
+                  },
+                  {
+                    value: "premium" as QualityPreset,
+                    label: "Premium",
+                    desc: "Maximum richness, longest generation",
+                  },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    onGenieDefaultsChange((prev) => ({
+                      ...prev,
+                      qualityPreset: opt.value,
+                    }))
+                  }
+                  className={`flex-1 rounded-lg border-2 p-3 text-left transition-colors ${
+                    genieDefaults.qualityPreset === opt.value
+                      ? "border-violet-500/50 bg-violet-500/5"
+                      : "border-muted text-muted-foreground hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <span className="text-sm font-medium">{opt.label}</span>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Separator className="my-4" />
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">

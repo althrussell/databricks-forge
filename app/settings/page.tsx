@@ -123,6 +123,7 @@ export default function SettingsPage() {
         generateTrustedAssets: true,
         fiscalYearStartMonth: 1,
         entityMatchingMode: "auto",
+        qualityPreset: "balanced",
       });
       setEstateScanEnabled(false);
       setAssetDiscoveryEnabled(false);

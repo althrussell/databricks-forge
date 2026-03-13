@@ -49,6 +49,7 @@ export function useSettingsState() {
         generateTrustedAssets: true,
         fiscalYearStartMonth: 1,
         entityMatchingMode: "auto",
+        qualityPreset: "balanced",
       };
     }
     return loadSettings().genieEngineDefaults;

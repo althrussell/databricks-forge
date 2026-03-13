@@ -77,6 +77,21 @@ const KNOWN_MODELS: Record<string, ModelTemplate> = {
     maxConcurrent: 8,
     priority: 1,
   },
+  "databricks-gemini-3-1-flash-lite": {
+    tiers: ["classification", "lightweight"],
+    maxConcurrent: 12,
+    priority: 0,
+  },
+  "databricks-llama-4-maverick": {
+    tiers: ["generation", "classification"],
+    maxConcurrent: 10,
+    priority: 0,
+  },
+  "databricks-gemini-3-flash": {
+    tiers: ["generation", "classification", "lightweight"],
+    maxConcurrent: 10,
+    priority: 1,
+  },
 };
 
 function templateFor(name: string): ModelTemplate {
@@ -131,6 +146,7 @@ function buildPool(): ModelEndpoint[] {
   add(process.env.DATABRICKS_SERVING_ENDPOINT_REASONING_2);
   add(process.env.DATABRICKS_SERVING_ENDPOINT_GENERATION);
   add(process.env.DATABRICKS_SERVING_ENDPOINT_SQL);
+  add(process.env.DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT);
 
   // Fallback: if nothing is configured, add the hardcoded default
   if (pool.length === 0) {

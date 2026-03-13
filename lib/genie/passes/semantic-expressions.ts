@@ -33,6 +33,7 @@ import {
   formatContextSections,
   buildIndustrySkillSections,
 } from "@/lib/skills";
+import type { GenerationBudget } from "../quality-presets";
 
 const TEMPERATURE = 0.2;
 
@@ -47,6 +48,8 @@ export interface SemanticExpressionsInput {
   industryId?: string;
   endpoint: string;
   signal?: AbortSignal;
+  /** Generation budget controlling target counts and maxTokens. */
+  budget?: GenerationBudget;
 }
 
 export interface SemanticExpressionsOutput {
@@ -68,7 +71,14 @@ export async function runSemanticExpressions(
     industryId,
     endpoint,
     signal,
+    budget,
   } = input;
+
+  const targetWorkerA = budget?.measuresWorkerA ?? 15;
+  const targetWorkerB = budget?.measuresWorkerB ?? 10;
+  const targetFilters = budget?.filters ?? 12;
+  const targetDimensions = budget?.dimensions ?? 12;
+  const maxTokens = budget?.maxTokensExpressions ?? 4096;
 
   // Phase A: auto-generate time periods
   let timeFilters: EnrichedSqlSnippetFilter[] = [];
@@ -100,6 +110,7 @@ export async function runSemanticExpressions(
         endpoint,
         industryId,
         signal,
+        { targetWorkerA, targetWorkerB, targetFilters, targetDimensions, maxTokens },
       );
       llmMeasures = llmResult.measures
         .filter((m) => !isSnippetTooComplex(m.sql, m.name))
@@ -207,6 +218,14 @@ For each expression provide:
 - synonyms: Array of alternative terms users might say
 - instructions: When and how to use this expression`;
 
+interface ExpressionBudgetParams {
+  targetWorkerA: number;
+  targetWorkerB: number;
+  targetFilters: number;
+  targetDimensions: number;
+  maxTokens: number;
+}
+
 async function generateLLMExpressions(
   tableFqns: string[],
   metadata: MetadataSnapshot,
@@ -216,11 +235,20 @@ async function generateLLMExpressions(
   endpoint: string,
   industryId?: string,
   signal?: AbortSignal,
+  budgetParams?: ExpressionBudgetParams,
 ): Promise<{
   measures: EnrichedSqlSnippetMeasure[];
   filters: EnrichedSqlSnippetFilter[];
   dimensions: EnrichedSqlSnippetDimension[];
 }> {
+  const {
+    targetWorkerA = 15,
+    targetWorkerB = 10,
+    targetFilters = 12,
+    targetDimensions = 12,
+    maxTokens = 4096,
+  } = budgetParams ?? {};
+
   const schemaBlock = buildSchemaContextBlock(metadata, tableFqns);
 
   const sqlExamples = useCases
@@ -248,7 +276,7 @@ async function generateLLMExpressions(
         role: "system",
         content: `You are a SQL analytics expert. Generate foundation aggregate measures for a Databricks Genie space.
 
-Focus on standard aggregate KPIs: SUM, COUNT, COUNT DISTINCT, AVG, MIN, MAX for the most business-relevant numeric and key columns. Generate 8-15 measures.
+Focus on standard aggregate KPIs: SUM, COUNT, COUNT DISTINCT, AVG, MIN, MAX for the most business-relevant numeric and key columns. Generate ${targetWorkerA} measures.
 
 ${SHARED_RULES}
 ${DATABRICKS_SQL_RULES_COMPACT}
@@ -258,7 +286,7 @@ Return JSON: { "measures": [...] }`,
       { role: "user", content: `${contextBlock}\n\nGenerate foundation aggregate measures.` },
     ],
     temperature: TEMPERATURE,
-    maxTokens: 4096,
+    maxTokens,
     responseFormat: "json_object",
     signal,
   });
@@ -277,7 +305,7 @@ Focus on:
 - Business-specific derived KPIs (e.g., customer lifetime value, basket size)
 - Rate calculations using try_divide() to avoid division by zero
 
-Generate 5-10 measures. These should be MORE insightful than simple aggregates.
+Generate ${targetWorkerB} measures. These should be MORE insightful than simple aggregates.
 
 ${SHARED_RULES}
 ${DATABRICKS_SQL_RULES_COMPACT}
@@ -290,7 +318,7 @@ Return JSON: { "measures": [...] }`,
       },
     ],
     temperature: TEMPERATURE,
-    maxTokens: 4096,
+    maxTokens,
     responseFormat: "json_object",
     signal,
   });
@@ -303,8 +331,8 @@ Return JSON: { "measures": [...] }`,
         role: "system",
         content: `You are a SQL analytics expert. Generate filters (WHERE conditions) and dimensions (GROUP BY expressions) for a Databricks Genie space.
 
-**Filters** (8-12): Common business conditions users ask about (status values, date ranges, categorical splits, active/inactive flags).
-**Dimensions** (8-12): Useful analytical breakdowns (categorical groupings, date parts, bucketed ranges).
+**Filters** (${targetFilters}): Common business conditions users ask about (status values, date ranges, categorical splits, active/inactive flags).
+**Dimensions** (${targetDimensions}): Useful analytical breakdowns (categorical groupings, date parts, bucketed ranges).
 
 ${SHARED_RULES}
 ${DATABRICKS_SQL_RULES_COMPACT}
@@ -317,7 +345,7 @@ Return JSON: { "filters": [...], "dimensions": [...] }`,
       },
     ],
     temperature: TEMPERATURE,
-    maxTokens: 4096,
+    maxTokens,
     responseFormat: "json_object",
     signal,
   });

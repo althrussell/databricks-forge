@@ -53,6 +53,7 @@ DEFAULT_REVIEW_ENDPOINT="databricks-gpt-5-4"
 DEFAULT_REASONING_ENDPOINT_2=""
 DEFAULT_GENERATION_ENDPOINT=""
 DEFAULT_SQL_ENDPOINT=""
+DEFAULT_LIGHTWEIGHT_ENDPOINT=""
 
 # -------------------------------------------------------------------------
 # State (populated during execution)
@@ -76,6 +77,7 @@ ARG_REVIEW_ENDPOINT=""
 ARG_REASONING_ENDPOINT_2=""
 ARG_GENERATION_ENDPOINT=""
 ARG_SQL_ENDPOINT=""
+ARG_LIGHTWEIGHT_ENDPOINT=""
 ARG_ALLOWED_MODELS=""
 ARG_LAKEBASE_BOOTSTRAP_USER=""
 ARG_LAKEBASE_AUTH_MODE=""
@@ -120,6 +122,7 @@ Options:
   --reasoning-endpoint-2 NAME Optional second reasoning model for parallel routing
   --generation-endpoint NAME  Optional generation model endpoint
   --sql-endpoint NAME         Optional SQL/codex model endpoint
+  --lightweight-endpoint NAME Optional lightweight/fast-classification model endpoint
   --allowed-models CSV        Comma-separated list of models the app may use
   --lakebase-bootstrap-user EMAIL
                              Optional Databricks user email to bootstrap
@@ -181,6 +184,7 @@ while [[ $# -gt 0 ]]; do
     --reasoning-endpoint-2) ARG_REASONING_ENDPOINT_2="$2"; shift 2 ;;
     --generation-endpoint) ARG_GENERATION_ENDPOINT="$2"; shift 2 ;;
     --sql-endpoint)        ARG_SQL_ENDPOINT="$2"; shift 2 ;;
+    --lightweight-endpoint) ARG_LIGHTWEIGHT_ENDPOINT="$2"; shift 2 ;;
     --allowed-models)      ARG_ALLOWED_MODELS="$2"; shift 2 ;;
     --lakebase-bootstrap-user) ARG_LAKEBASE_BOOTSTRAP_USER="$2"; shift 2 ;;
     --lakebase-auth-mode) ARG_LAKEBASE_AUTH_MODE="$2"; shift 2 ;;
@@ -221,6 +225,7 @@ REVIEW_ENDPOINT="${ARG_REVIEW_ENDPOINT:-$DEFAULT_REVIEW_ENDPOINT}"
 REASONING_ENDPOINT_2="${ARG_REASONING_ENDPOINT_2:-$DEFAULT_REASONING_ENDPOINT_2}"
 GENERATION_ENDPOINT="${ARG_GENERATION_ENDPOINT:-$DEFAULT_GENERATION_ENDPOINT}"
 SQL_ENDPOINT="${ARG_SQL_ENDPOINT:-$DEFAULT_SQL_ENDPOINT}"
+LIGHTWEIGHT_ENDPOINT="${ARG_LIGHTWEIGHT_ENDPOINT:-$DEFAULT_LIGHTWEIGHT_ENDPOINT}"
 ALLOWED_MODELS="${ARG_ALLOWED_MODELS:-}"
 LAKEBASE_BOOTSTRAP_USER="${ARG_LAKEBASE_BOOTSTRAP_USER:-}"
 LAKEBASE_AUTH_MODE="${ARG_LAKEBASE_AUTH_MODE:-}"
@@ -358,6 +363,7 @@ prepare_app_yaml() {
   export REASONING_ENDPOINT_2
   export GENERATION_ENDPOINT
   export SQL_ENDPOINT
+  export LIGHTWEIGHT_ENDPOINT
   export ALLOWED_MODELS
   python3 - <<'PY'
 import os
@@ -381,6 +387,7 @@ enable_fabric = os.environ.get("ENABLE_FABRIC", "").strip().lower() == "true"
 reasoning_endpoint_2 = os.environ.get("REASONING_ENDPOINT_2", "").strip()
 generation_endpoint = os.environ.get("GENERATION_ENDPOINT", "").strip()
 sql_endpoint = os.environ.get("SQL_ENDPOINT", "").strip()
+lightweight_endpoint = os.environ.get("LIGHTWEIGHT_ENDPOINT", "").strip()
 allowed_models = os.environ.get("ALLOWED_MODELS", "").strip()
 
 path = Path("app.yaml")
@@ -410,6 +417,7 @@ def is_managed_name_line(s: str) -> bool:
         or "DATABRICKS_SERVING_ENDPOINT_REASONING_2" in t
         or "DATABRICKS_SERVING_ENDPOINT_GENERATION" in t
         or "DATABRICKS_SERVING_ENDPOINT_SQL" in t
+        or "DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT" in t
         or "DATABRICKS_ALLOWED_MODELS" in t
     )
 
@@ -477,6 +485,9 @@ if generation_endpoint:
 if sql_endpoint:
     out.append("  - name: DATABRICKS_SERVING_ENDPOINT_SQL")
     out.append("    valueFrom: serving-endpoint-sql")
+if lightweight_endpoint:
+    out.append("  - name: DATABRICKS_SERVING_ENDPOINT_LIGHTWEIGHT")
+    out.append("    valueFrom: serving-endpoint-lightweight")
 if allowed_models:
     out.append("  - name: DATABRICKS_ALLOWED_MODELS")
     out.append(f'    value: "{allowed_models}"')
@@ -831,6 +842,8 @@ if '$GENERATION_ENDPOINT':
     resources.append({'name': 'serving-endpoint-generation', 'serving_endpoint': {'name': '$GENERATION_ENDPOINT', 'permission': 'CAN_QUERY'}})
 if '$SQL_ENDPOINT':
     resources.append({'name': 'serving-endpoint-sql', 'serving_endpoint': {'name': '$SQL_ENDPOINT', 'permission': 'CAN_QUERY'}})
+if '$LIGHTWEIGHT_ENDPOINT':
+    resources.append({'name': 'serving-endpoint-lightweight', 'serving_endpoint': {'name': '$LIGHTWEIGHT_ENDPOINT', 'permission': 'CAN_QUERY'}})
 print(json.dumps({'resources': resources, 'user_api_scopes': ['sql','catalog.tables:read','catalog.schemas:read','catalog.catalogs:read','files.files','dashboards.genie']}))
 ")
 
@@ -975,6 +988,9 @@ print_success() {
   fi
   if [ -n "$SQL_ENDPOINT" ]; then
     printf "      SQL/Codex:        %s\n" "$SQL_ENDPOINT"
+  fi
+  if [ -n "$LIGHTWEIGHT_ENDPOINT" ]; then
+    printf "      Lightweight:      %s\n" "$LIGHTWEIGHT_ENDPOINT"
   fi
   if [ -n "$ALLOWED_MODELS" ]; then
     printf "      Allowed models:   %s\n" "$ALLOWED_MODELS"
