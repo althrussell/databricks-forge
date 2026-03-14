@@ -224,11 +224,10 @@ async function ensureScaleToZero(epName) {
   }
 
   log(`Enabling scale-to-zero (timeout: ${desiredDuration})...`);
-  const patchResp = await api(
-    "PATCH",
-    `${epName}?update_mask=spec.suspend_timeout_duration,spec.no_suspension`,
-    { name: epName, spec: { suspend_timeout_duration: desiredDuration, no_suspension: false } },
-  );
+  const patchResp = await api("PATCH", `${epName}?update_mask=spec.no_suspension`, {
+    name: epName,
+    spec: { no_suspension: false },
+  });
   if (!patchResp.ok) {
     const text = await patchResp.text();
     log(`WARNING: Failed to enable scale-to-zero (${patchResp.status}): ${text}`);
@@ -236,6 +235,21 @@ async function ensureScaleToZero(epName) {
   }
   const op = await patchResp.json();
   if (op.name && !op.done) await pollOp(op.name);
+
+  const timeoutResp = await api(
+    "PATCH",
+    `${epName}?update_mask=spec.suspend_timeout_duration`,
+    { name: epName, spec: { suspend_timeout_duration: desiredDuration } },
+  );
+  if (!timeoutResp.ok) {
+    log(
+      `WARNING: Scale-to-zero enabled but could not set custom timeout ` +
+        `(${timeoutResp.status}); using API default (300s).`,
+    );
+  } else {
+    const top = await timeoutResp.json();
+    if (top.name && !top.done) await pollOp(top.name);
+  }
   log(`Scale-to-zero enabled (timeout: ${desiredDuration}).`);
 }
 
