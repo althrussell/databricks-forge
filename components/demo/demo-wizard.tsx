@@ -238,6 +238,8 @@ export function DemoWizard({ open, onOpenChange }: DemoWizardProps) {
               sessionId={sessionId}
               catalog={catalog}
               schema={schema}
+              customerName={customerName}
+              industryId={industryId}
             />
           )}
         </div>

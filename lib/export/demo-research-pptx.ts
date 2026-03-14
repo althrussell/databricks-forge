@@ -29,7 +29,7 @@ export async function generateDemoResearchPptx(
   if (companyProfile) {
     const slide = addSectionSlide(pptx, "Company Overview");
     const items: PptxGenJS.TextProps[] = [];
-    if (companyProfile.statedPriorities.length > 0) {
+    if (companyProfile.statedPriorities?.length) {
       items.push(
         {
           text: "Stated Priorities",
@@ -41,7 +41,7 @@ export async function generateDemoResearchPptx(
             paraSpaceAfter: 4,
           } as PptxGenJS.TextPropsOptions,
         },
-        ...companyProfile.statedPriorities.flatMap((p) => [
+        ...(companyProfile.statedPriorities ?? []).flatMap((p) => [
           {
             text: `• ${p.priority} (${p.source})`,
             options: {
@@ -56,7 +56,7 @@ export async function generateDemoResearchPptx(
         ]),
       );
     }
-    if (companyProfile.inferredPriorities.length > 0) {
+    if (companyProfile.inferredPriorities?.length) {
       items.push(
         {
           text: "Inferred Priorities",
@@ -68,7 +68,7 @@ export async function generateDemoResearchPptx(
             paraSpaceAfter: 4,
           } as PptxGenJS.TextPropsOptions,
         },
-        ...companyProfile.inferredPriorities.flatMap((p) => [
+        ...(companyProfile.inferredPriorities ?? []).flatMap((p) => [
           {
             text: `• ${p.priority}: ${p.evidence}`,
             options: {
@@ -83,7 +83,7 @@ export async function generateDemoResearchPptx(
         ]),
       );
     }
-    if (companyProfile.urgencySignals.length > 0) {
+    if (companyProfile.urgencySignals?.length) {
       items.push(
         {
           text: "Urgency Signals",
@@ -95,7 +95,7 @@ export async function generateDemoResearchPptx(
             paraSpaceAfter: 4,
           } as PptxGenJS.TextPropsOptions,
         },
-        ...companyProfile.urgencySignals.flatMap((s) => [
+        ...(companyProfile.urgencySignals ?? []).flatMap((s) => [
           {
             text: `• ${s.signal} (${s.type}${s.date ? `, ${s.date}` : ""})`,
             options: {
@@ -127,10 +127,10 @@ export async function generateDemoResearchPptx(
     const swot = companyProfile.swotSummary;
     const slide = addSectionSlide(pptx, "SWOT Analysis");
     const positions: Array<{ x: number; y: number; label: string; items: string[] }> = [
-      { x: 0.5, y: 1.5, label: "Strengths", items: swot.strengths },
-      { x: 5.2, y: 1.5, label: "Weaknesses", items: swot.weaknesses },
-      { x: 0.5, y: 4, label: "Opportunities", items: swot.opportunities },
-      { x: 5.2, y: 4, label: "Threats", items: swot.threats },
+      { x: 0.5, y: 1.5, label: "Strengths", items: swot.strengths ?? [] },
+      { x: 5.2, y: 1.5, label: "Weaknesses", items: swot.weaknesses ?? [] },
+      { x: 0.5, y: 4, label: "Opportunities", items: swot.opportunities ?? [] },
+      { x: 5.2, y: 4, label: "Threats", items: swot.threats ?? [] },
     ];
     const boxW = 4.4;
     const boxH = 2.2;
@@ -173,10 +173,10 @@ export async function generateDemoResearchPptx(
   const industryLandscape = research.industryLandscape;
   if (industryLandscape) {
     const slide = addSectionSlide(pptx, "Industry Landscape");
-    if (industryLandscape.marketForces.length > 0) {
+    if (industryLandscape.marketForces?.length) {
       const forceData: PptxGenJS.TableRow[] = [
         [headerCell("Force"), headerCell("Description"), headerCell("Urgency")],
-        ...industryLandscape.marketForces.map(
+        ...(industryLandscape.marketForces ?? []).map(
           (f): PptxGenJS.TableRow => [
             bodyCell(f.force, { bold: true }),
             bodyCell(f.description),
@@ -219,11 +219,11 @@ export async function generateDemoResearchPptx(
     addFooter(slide);
   }
 
-  if (industryLandscape?.keyBenchmarks && industryLandscape.keyBenchmarks.length > 0) {
+  if (industryLandscape?.keyBenchmarks?.length) {
     const slide = addSectionSlide(pptx, "Key Benchmarks");
     const benchData: PptxGenJS.TableRow[] = [
       [headerCell("Metric"), headerCell("Impact"), headerCell("Source")],
-      ...industryLandscape.keyBenchmarks.map(
+      ...(industryLandscape.keyBenchmarks ?? []).map(
         (b): PptxGenJS.TableRow => [
           bodyCell(b.metric, { bold: true }),
           bodyCell(b.impact),
@@ -243,11 +243,11 @@ export async function generateDemoResearchPptx(
   }
 
   const dataStrategy = research.dataStrategy;
-  if (dataStrategy && dataStrategy.assetDetails.length > 0) {
+  if (dataStrategy?.assetDetails?.length) {
     const slide = addSectionSlide(pptx, "Data Strategy");
     const assetData: PptxGenJS.TableRow[] = [
       [headerCell("ID"), headerCell("Relevance"), headerCell("Rationale"), headerCell("Quick Win")],
-      ...dataStrategy.assetDetails.map(
+      ...(dataStrategy.assetDetails ?? []).map(
         (a): PptxGenJS.TableRow => [
           bodyCell(a.id, { bold: true }),
           bodyCell(String(a.relevance), { align: "center" }),

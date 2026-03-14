@@ -17,6 +17,45 @@ import { FACT_TABLE_PROMPT } from "../prompts";
 const MAX_RETRIES = 2;
 const DATE_RANGE_DAYS = 180;
 
+function buildFactPrompt(
+  table: TableDesign,
+  catalog: string,
+  schema: string,
+  dims: TableDesign[],
+  narratives: DataNarrative[],
+  research: { customerName: string; industryId: string; nomenclature: Record<string, string> },
+  extraConstraints?: string,
+): string {
+  const relatedNarratives = narratives.filter((n) =>
+    n.affectedTables.includes(table.name),
+  );
+  const dimensionContext = dims
+    .map((d) => `${d.name}: ${d.columns.map((c) => `${c.name} ${c.dataType}`).join(", ")}`)
+    .join("\n");
+
+  let prompt = FACT_TABLE_PROMPT
+    .replace("{catalog}", catalog)
+    .replace("{schema}", schema)
+    .replace("{table_name}", table.name)
+    .replace("{description}", table.description)
+    .replace("{columns_json}", JSON.stringify(table.columns))
+    .replace(/{row_target}/g, String(table.rowTarget))
+    .replace("{dimension_tables_context}", dimensionContext)
+    .replace("{narrative_context}", JSON.stringify(relatedNarratives))
+    .replace("{customer_name}", research.customerName)
+    .replace("{industry_name}", research.industryId)
+    .replace("{nomenclature}", JSON.stringify(research.nomenclature))
+    .replace("{date_range}", String(DATE_RANGE_DAYS));
+
+  if (extraConstraints) prompt += `\n\n${extraConstraints}`;
+  return prompt;
+}
+
+function extractMissingTable(error: string): string | null {
+  const m = error.match(/`([^`]+)`\.`([^`]+)`\.`([^`]+)`\s+cannot be found/);
+  return m ? m[3] : null;
+}
+
 export async function runFactGeneration(
   table: TableDesign,
   catalog: string,
@@ -37,28 +76,7 @@ export async function runFactGeneration(
 
   onPhase?.("generating-sql");
 
-  const relatedNarratives = narratives.filter((n) =>
-    n.affectedTables.includes(table.name),
-  );
-
-  const dimensionContext = dimensionTables
-    .map((d) => `${d.name}: ${d.columns.map((c) => `${c.name} ${c.dataType}`).join(", ")}`)
-    .join("\n");
-
-  const prompt = FACT_TABLE_PROMPT
-    .replace("{catalog}", catalog)
-    .replace("{schema}", schema)
-    .replace("{table_name}", table.name)
-    .replace("{description}", table.description)
-    .replace("{columns_json}", JSON.stringify(table.columns))
-    .replace(/{row_target}/g, String(table.rowTarget))
-    .replace("{dimension_tables_context}", dimensionContext)
-    .replace("{narrative_context}", JSON.stringify(relatedNarratives))
-    .replace("{customer_name}", research.customerName)
-    .replace("{industry_name}", research.industryId)
-    .replace("{nomenclature}", JSON.stringify(research.nomenclature))
-    .replace("{date_range}", String(DATE_RANGE_DAYS));
-
+  const prompt = buildFactPrompt(table, catalog, schema, dimensionTables, narratives, research);
   const endpoint = resolveEndpoint("sql");
 
   const response = await llm.chat({
@@ -76,6 +94,7 @@ export async function runFactGeneration(
 
   let retries = 0;
   let currentSql = sqlText;
+  const excludedTables = new Set<string>();
 
   while (retries <= MAX_RETRIES) {
     try {
@@ -94,10 +113,23 @@ export async function runFactGeneration(
       retries++;
 
       if (error.includes("TABLE_OR_VIEW_NOT_FOUND")) {
-        log.info("Re-generating SQL from scratch due to missing table", { table: table.name });
+        const missingTable = extractMissingTable(error);
+        if (missingTable) excludedTables.add(missingTable);
+
+        const filteredDims = dimensionTables.filter((d) => !excludedTables.has(d.name));
+        const constraint = excludedTables.size > 0
+          ? `IMPORTANT: These tables do NOT exist -- do NOT reference them: ${[...excludedTables].join(", ")}. Generate all date/time values inline using DATE_ADD(CURRENT_DATE(), ...) and built-in functions.`
+          : undefined;
+
+        log.info("Re-generating SQL excluding missing tables", {
+          table: table.name,
+          excluded: [...excludedTables],
+        });
+
+        const retryPrompt = buildFactPrompt(table, catalog, schema, filteredDims, narratives, research, constraint);
         const retryResponse = await llm.chat({
           endpoint,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: retryPrompt }],
           temperature: 0.2,
           maxTokens: 16_384,
           signal,

@@ -89,6 +89,7 @@ Timestamps and intervals:
 - Prefer TIMESTAMP_NTZ over TIMESTAMP for timezone-independent values (audit dates, created_at).
 - Use standard interval syntax: INTERVAL '30' DAY, INTERVAL '1' MONTH, INTERVAL '2' HOUR.
 - Use DATE_ADD / DATE_SUB for simple date arithmetic; use INTERVAL for timestamp arithmetic.
+- DATE_FORMAT() patterns: ONLY use Spark-supported letters: y, M, d, H, m, s, S, E, a, G, Q, F. NEVER use 'u' (ISO day-of-week), 'e', 'c', or 'L' -- they throw DATETIME_PATTERN_RECOGNITION errors. Prefer built-in functions (DAYOFWEEK, MONTH, QUARTER, WEEKOFYEAR) over DATE_FORMAT for extracting numeric date parts.
 
 DDL patterns:
 - Prefer CREATE OR REPLACE TABLE/VIEW over DROP IF EXISTS + CREATE.
@@ -131,6 +132,7 @@ DATABRICKS SQL RULES:
 - Access STRUCT fields with dot notation; use EXPLODE for arrays. NEVER use LATERAL VIEW EXPLODE (deprecated Hive syntax).
 - Prefer TIMESTAMP_NTZ for timezone-independent timestamps.
 - Use INTERVAL '30' DAY syntax for interval literals.
+- DATE_FORMAT(): ONLY use y, M, d, H, m, s, S, E, a, G, Q, F. NEVER use 'u', 'e', 'c', 'L' -- they throw DATETIME_PATTERN_RECOGNITION. Prefer DAYOFWEEK()/MONTH()/QUARTER() for numeric date parts.
 - Prefer CREATE OR REPLACE over DROP + CREATE.
 - Specify explicit window frames (ROWS BETWEEN ...) for cumulative calculations.
 - NEVER extend a named window with a frame spec -- OVER (w ROWS BETWEEN ...) is a syntax error. Inline the full spec or define separate named windows per frame.
