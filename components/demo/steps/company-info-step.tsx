@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, Globe, Building2, Zap, Scale, Flame } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,7 +71,15 @@ export function CompanyInfoStep({
   onPastedContextChange,
 }: CompanyInfoStepProps) {
   const [uploading, setUploading] = useState(false);
+  const [industries, setIndustries] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/industries")
+      .then((r) => r.json())
+      .then((data) => setIndustries(data.industries ?? []))
+      .catch(() => {});
+  }, []);
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -129,13 +137,20 @@ export function CompanyInfoStep({
 
       {/* Industry (optional) */}
       <div className="space-y-2">
-        <Label htmlFor="industry">Industry (optional -- auto-detected if blank)</Label>
-        <Input
-          id="industry"
-          placeholder="Leave blank to auto-detect from website"
-          value={industryId}
-          onChange={(e) => onIndustryIdChange(e.target.value)}
-        />
+        <Label>Industry (optional -- auto-detected if blank)</Label>
+        <Select value={industryId || "__auto__"} onValueChange={(v) => onIndustryIdChange(v === "__auto__" ? "" : v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Auto-detect from website" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__auto__">Auto-detect from website</SelectItem>
+            {industries.map((ind) => (
+              <SelectItem key={ind.id} value={ind.id}>
+                {ind.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Research Preset */}

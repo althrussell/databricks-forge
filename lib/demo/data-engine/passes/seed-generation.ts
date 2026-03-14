@@ -6,6 +6,7 @@
  */
 
 import { resolveEndpoint } from "@/lib/dbx/client";
+import { buildTableCommentDDL, buildColumnCommentDDL } from "@/lib/ai/comment-applier";
 import type { LLMClient } from "@/lib/ports/llm-client";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
 import type { Logger } from "@/lib/ports/logger";
@@ -44,7 +45,7 @@ export async function runSeedGeneration(
     .replace("{nomenclature}", JSON.stringify(research.nomenclature))
     .replace("{row_target}", String(table.rowTarget));
 
-  const endpoint = resolveEndpoint("generation");
+  const endpoint = resolveEndpoint("sql");
 
   const response = await llm.chat({
     endpoint,
@@ -92,6 +93,9 @@ export async function runSeedGeneration(
     }
   }
 
+  // Apply table and column comments
+  await applyComments(table, catalog, schema, sql, log);
+
   // Verify row count
   try {
     const countResult = await sql.executeScalar<string>(
@@ -103,6 +107,31 @@ export async function runSeedGeneration(
   } catch {
     onPhase?.("completed");
     return { rowCount: table.rowTarget };
+  }
+}
+
+async function applyComments(
+  table: TableDesign,
+  catalog: string,
+  schema: string,
+  sql: SqlExecutor,
+  log: Logger,
+): Promise<void> {
+  const fqn = `${catalog}.${schema}.${table.name}`;
+  try {
+    if (table.description) {
+      await sql.execute(buildTableCommentDDL(fqn, table.description));
+    }
+    for (const col of table.columns) {
+      if (col.description) {
+        await sql.execute(buildColumnCommentDDL(fqn, col.name, col.description));
+      }
+    }
+  } catch (err) {
+    log.warn("Failed to apply comments (non-fatal)", {
+      table: table.name,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

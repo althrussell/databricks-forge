@@ -81,6 +81,7 @@ export async function GET(request: Request) {
     version: packageJson.version,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     timestamp: new Date().toISOString(),
+    demoModeEnabled: isDemoModeEnabled(),
   };
 
   const httpStatus = overallStatus === "unhealthy" ? 503 : 200;

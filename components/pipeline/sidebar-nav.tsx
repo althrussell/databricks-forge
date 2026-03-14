@@ -22,6 +22,7 @@ interface NavItem {
   requiresEmbedding?: boolean;
   requiresBenchmarks?: boolean;
   requiresFabric?: boolean;
+  requiresDemoMode?: boolean;
 }
 
 interface NavSection {
@@ -64,6 +65,10 @@ const navSections: NavSection[] = [
       { href: "/outcomes", label: "Outcome Maps", icon: OutcomeMapIcon },
       { href: "/benchmarks", label: "Benchmarks", icon: BenchmarkIcon, requiresBenchmarks: true },
     ],
+  },
+  {
+    label: "Demo",
+    items: [{ href: "/demo", label: "Demo Sessions", icon: DemoIcon, requiresDemoMode: true }],
   },
   {
     label: "Migrate",
@@ -111,6 +116,17 @@ function useBenchmarksEnabled(): boolean {
   return enabled;
 }
 
+function useDemoModeEnabled(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((data) => setEnabled(data.demoModeEnabled ?? false))
+      .catch(() => setEnabled(false));
+  }, []);
+  return enabled;
+}
+
 function useFabricEnabled(): boolean {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
@@ -127,6 +143,7 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
   const embeddingEnabled = useEmbeddingEnabled();
   const benchmarksEnabled = useBenchmarksEnabled();
   const fabricEnabled = useFabricEnabled();
+  const demoModeEnabled = useDemoModeEnabled();
   const { isAnyActive: hasActiveBuild } = useGenieBuild();
 
   const visibleSections = useMemo(
@@ -138,11 +155,12 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
             if (item.requiresEmbedding && !embeddingEnabled) return false;
             if (item.requiresBenchmarks && !benchmarksEnabled) return false;
             if (item.requiresFabric && !fabricEnabled) return false;
+            if (item.requiresDemoMode && !demoModeEnabled) return false;
             return true;
           }),
         }))
         .filter((section) => section.items.length > 0),
-    [embeddingEnabled, benchmarksEnabled, fabricEnabled],
+    [embeddingEnabled, benchmarksEnabled, fabricEnabled, demoModeEnabled],
   );
 
   return (
@@ -519,6 +537,25 @@ function KnowledgeBaseIcon({ className }: { className?: string }) {
     >
       <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
       <path d="m9 10 2 2 4-4" />
+    </svg>
+  );
+}
+
+function DemoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
     </svg>
   );
 }

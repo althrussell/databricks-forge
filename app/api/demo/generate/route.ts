@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       sessionId,
       catalog,
       schema,
-      catalogCreated = false,
+      catalogCreated: _catalogCreated = false,
       targetRowCount = { min: 2000, max: 10000 },
     } = body as {
       sessionId: string;

@@ -4,13 +4,11 @@
 
 import { randomUUID } from "crypto";
 import { withPrisma } from "@/lib/prisma";
-import { logger } from "@/lib/logger";
 import type {
   DemoSessionStatus,
   DemoSessionSummary,
   ResearchPreset,
   DemoScope,
-  TableDesign,
 } from "@/lib/demo/types";
 import type { ResearchEngineResult } from "@/lib/demo/research-engine/types";
 

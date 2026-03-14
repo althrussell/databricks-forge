@@ -52,7 +52,7 @@ interface JobData {
 
 export default function GenieBuildDetailPage({ params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = use(params);
-  const router = useRouter();
+  const _router = useRouter();
 
   const [phase, setPhase] = useState<PagePhase>("building");
   const [job, setJob] = useState<JobData | null>(null);

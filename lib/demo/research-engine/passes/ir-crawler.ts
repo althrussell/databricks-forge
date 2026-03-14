@@ -164,8 +164,8 @@ function extractPdfLinks(html: string, pageUrl: string): PdfLink[] {
 }
 
 async function trySecEdgar(
-  websiteUrl: string,
-  opts: { fetchFn?: typeof fetch; logger: Logger; signal?: AbortSignal; onSourceReady?: (source: ResearchSource) => void },
+  _websiteUrl: string,
+  _opts: { fetchFn?: typeof fetch; logger: Logger; signal?: AbortSignal; onSourceReady?: (source: ResearchSource) => void },
 ): Promise<{ text: string; sources: ResearchSource[] }> {
   // SEC EDGAR is US public companies only -- best-effort
   return { text: "", sources: [] };

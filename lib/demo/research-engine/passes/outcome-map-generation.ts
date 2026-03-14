@@ -13,7 +13,7 @@ import type { LLMClient } from "@/lib/ports/llm-client";
 import type { Logger } from "@/lib/ports/logger";
 import type { IndustryOutcome } from "@/lib/domain/industry-outcomes";
 import type { MasterRepoEnrichment } from "@/lib/domain/industry-outcomes/master-repo-types";
-import { OUTCOME_MAP_GENERATION_PROMPT } from "../prompts";
+import { OUTCOME_MAP_GENERATION_PROMPT, ENRICHMENT_ONLY_GENERATION_PROMPT } from "../prompts";
 
 interface GenerationResult {
   outcomeMap: IndustryOutcome;
@@ -110,4 +110,57 @@ export async function runOutcomeMapGeneration(
   }
 
   return result;
+}
+
+/**
+ * Generate enrichment only when the outcome map exists but has no
+ * Master Repository enrichment. Uses the `generation` tier (faster).
+ */
+export async function runEnrichmentOnlyGeneration(
+  industryId: string,
+  industryName: string,
+  existingOutcome: IndustryOutcome,
+  sourceContext: string,
+  opts: {
+    llm: LLMClient;
+    logger: Logger;
+    signal?: AbortSignal;
+  },
+): Promise<MasterRepoEnrichment> {
+  const { llm, logger: log, signal } = opts;
+
+  const prompt = ENRICHMENT_ONLY_GENERATION_PROMPT
+    .replace(/{industry_name}/g, industryName)
+    .replace("{outcome_map_json}", JSON.stringify(existingOutcome, null, 2).slice(0, 15_000))
+    .replace("{source_context}", sourceContext.slice(0, 15_000) || "(No source material available)");
+
+  const endpoint = resolveEndpoint("generation");
+
+  log.info("Generating enrichment only", { industryId, industryName });
+
+  const response = await llm.chat({
+    endpoint,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.3,
+    maxTokens: 16_384,
+    responseFormat: "json_object",
+    signal,
+  });
+
+  const enrichment = parseLLMJson(response.content, "enrichment-only-generation") as MasterRepoEnrichment;
+
+  try {
+    await setCustomEnrichment(industryId, enrichment);
+    log.info("Enrichment persisted", {
+      industryId,
+      dataAssets: enrichment.dataAssets?.length ?? 0,
+      useCases: enrichment.useCases?.length ?? 0,
+    });
+  } catch (err) {
+    log.warn("Failed to persist enrichment (non-fatal)", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return enrichment;
 }

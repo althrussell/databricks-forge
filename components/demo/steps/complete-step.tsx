@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Copy, Database } from "lucide-react";
+import { CheckCircle2, Copy, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { DemoSessionSummary } from "@/lib/demo/types";
 
