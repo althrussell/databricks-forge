@@ -1,12 +1,11 @@
 /**
- * In-memory status tracker for Research Engine jobs,
- * with write-through persistence to Lakebase.
+ * In-memory status tracker for Research Engine jobs.
  *
- * Same pattern as lib/genie/engine-status.ts.
+ * Demo jobs do NOT persist to ForgeBackgroundJob (which has an FK to
+ * ForgeRun). Final status is written to ForgeDemoSession instead.
  */
 
 import { isAuthErrorMessage } from "@/lib/lakebase/auth-errors";
-import { upsertJobStatus, getPersistedJobStatus } from "@/lib/lakebase/background-jobs";
 import type { ResearchPhase } from "./types";
 
 export interface ResearchJobStatus {
@@ -37,27 +36,22 @@ function evictStaleJobs(): void {
   }
 }
 
-export async function startResearchJob(sessionId: string): Promise<AbortController> {
+export function startResearchJob(sessionId: string): AbortController {
   controllers.get(sessionId)?.abort();
 
   const controller = new AbortController();
   controllers.set(sessionId, controller);
 
-  const now = Date.now();
   jobs.set(sessionId, {
     sessionId,
     status: "researching",
     phase: "source-collection",
     message: "Starting research...",
     percent: 0,
-    startedAt: now,
+    startedAt: Date.now(),
     completedAt: null,
     error: null,
     errorType: null,
-  });
-
-  await upsertJobStatus(sessionId, "demo-research", "generating", "Starting research...", 0, {
-    startedAt: new Date(now),
   });
 
   return controller;
@@ -81,7 +75,7 @@ export function updateResearchJob(
   }
 }
 
-export async function completeResearchJob(sessionId: string): Promise<void> {
+export function completeResearchJob(sessionId: string): void {
   const job = jobs.get(sessionId);
   if (job && job.status === "researching") {
     job.status = "completed";
@@ -89,15 +83,11 @@ export async function completeResearchJob(sessionId: string): Promise<void> {
     job.message = "Research complete";
     job.percent = 100;
     job.completedAt = Date.now();
-
-    await upsertJobStatus(sessionId, "demo-research", "completed", job.message, 100, {
-      completedAt: new Date(job.completedAt),
-    });
   }
   controllers.delete(sessionId);
 }
 
-export async function failResearchJob(sessionId: string, error: string): Promise<void> {
+export function failResearchJob(sessionId: string, error: string): void {
   const job = jobs.get(sessionId);
   if (job && job.status === "researching") {
     job.status = "failed";
@@ -105,16 +95,11 @@ export async function failResearchJob(sessionId: string, error: string): Promise
     job.completedAt = Date.now();
     job.error = error;
     job.errorType = isAuthErrorMessage(error) ? "auth" : "general";
-
-    await upsertJobStatus(sessionId, "demo-research", "failed", job.message, job.percent, {
-      completedAt: new Date(job.completedAt),
-      error,
-    });
   }
   controllers.delete(sessionId);
 }
 
-export async function cancelResearchJob(sessionId: string): Promise<boolean> {
+export function cancelResearchJob(sessionId: string): boolean {
   const job = jobs.get(sessionId);
   if (!job || job.status !== "researching") return false;
 
@@ -123,33 +108,12 @@ export async function cancelResearchJob(sessionId: string): Promise<boolean> {
   job.message = "Research cancelled";
   job.completedAt = Date.now();
 
-  await upsertJobStatus(sessionId, "demo-research", "cancelled", job.message, job.percent, {
-    completedAt: new Date(job.completedAt),
-  });
-
   return true;
 }
 
-export async function getResearchJobStatus(
+export function getResearchJobStatus(
   sessionId: string,
-): Promise<ResearchJobStatus | null> {
+): ResearchJobStatus | null {
   evictStaleJobs();
-
-  const memJob = jobs.get(sessionId);
-  if (memJob) return memJob;
-
-  const persisted = await getPersistedJobStatus(sessionId, "demo-research");
-  if (!persisted) return null;
-
-  return {
-    sessionId: persisted.runId,
-    status: persisted.status as ResearchJobStatus["status"],
-    phase: "complete",
-    message: persisted.message,
-    percent: persisted.percent,
-    startedAt: persisted.startedAt.getTime(),
-    completedAt: persisted.completedAt?.getTime() ?? null,
-    error: persisted.error,
-    errorType: persisted.error ? (isAuthErrorMessage(persisted.error) ? "auth" : "general") : null,
-  };
+  return jobs.get(sessionId) ?? null;
 }

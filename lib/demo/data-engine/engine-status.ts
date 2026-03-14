@@ -1,13 +1,13 @@
 /**
- * In-memory status tracker for Data Engine jobs,
- * with write-through persistence to Lakebase.
+ * In-memory status tracker for Data Engine jobs.
  *
- * Extends the Genie Engine pattern with per-table phase tracking.
+ * Demo jobs do NOT persist to ForgeBackgroundJob (which has an FK to
+ * ForgeRun). Final status is written to ForgeDemoSession instead.
+ *
+ * Extends the base pattern with per-table phase tracking.
  */
 
-import { isAuthErrorMessage } from "@/lib/lakebase/auth-errors";
-import { upsertJobStatus, getPersistedJobStatus } from "@/lib/lakebase/background-jobs";
-import type { TablePhase, TableGenerationStatus } from "../types";
+import type { TablePhase } from "../types";
 import type { DataJobStatus } from "./types";
 
 const jobs = new Map<string, DataJobStatus>();
@@ -18,14 +18,14 @@ function evictStaleJobs(): void {
   const now = Date.now();
   for (const [id, job] of jobs) {
     const completedAt =
-      job.status === "completed" || job.status === "failed" ? Date.now() : null;
-    if (completedAt && Date.now() - completedAt > JOB_TTL_MS) {
+      job.status === "completed" || job.status === "failed" ? now : null;
+    if (completedAt && now - completedAt > JOB_TTL_MS) {
       jobs.delete(id);
     }
   }
 }
 
-export async function startDataJob(sessionId: string): Promise<AbortController> {
+export function startDataJob(sessionId: string): AbortController {
   controllers.get(sessionId)?.abort();
 
   const controller = new AbortController();
@@ -40,10 +40,6 @@ export async function startDataJob(sessionId: string): Promise<AbortController> 
     completedTables: 0,
     tableStatuses: [],
     error: undefined,
-  });
-
-  await upsertJobStatus(sessionId, "demo-data", "generating", "Starting data generation...", 0, {
-    startedAt: new Date(),
   });
 
   return controller;
@@ -95,36 +91,27 @@ export function updateDataJob(sessionId: string, message: string, percent: numbe
   }
 }
 
-export async function completeDataJob(sessionId: string): Promise<void> {
+export function completeDataJob(sessionId: string): void {
   const job = jobs.get(sessionId);
   if (job && job.status === "generating") {
     job.status = "completed";
     job.message = `Complete: ${job.completedTables} tables generated`;
     job.percent = 100;
-
-    await upsertJobStatus(sessionId, "demo-data", "completed", job.message, 100, {
-      completedAt: new Date(),
-    });
   }
   controllers.delete(sessionId);
 }
 
-export async function failDataJob(sessionId: string, error: string): Promise<void> {
+export function failDataJob(sessionId: string, error: string): void {
   const job = jobs.get(sessionId);
   if (job && job.status === "generating") {
     job.status = "failed";
     job.message = "Data generation failed";
     job.error = error;
-
-    await upsertJobStatus(sessionId, "demo-data", "failed", job.message, job.percent, {
-      completedAt: new Date(),
-      error,
-    });
   }
   controllers.delete(sessionId);
 }
 
-export async function cancelDataJob(sessionId: string): Promise<boolean> {
+export function cancelDataJob(sessionId: string): boolean {
   const job = jobs.get(sessionId);
   if (!job || job.status !== "generating") return false;
 
@@ -132,30 +119,10 @@ export async function cancelDataJob(sessionId: string): Promise<boolean> {
   job.status = "cancelled";
   job.message = "Data generation cancelled";
 
-  await upsertJobStatus(sessionId, "demo-data", "cancelled", job.message, job.percent, {
-    completedAt: new Date(),
-  });
-
   return true;
 }
 
-export async function getDataJobStatus(sessionId: string): Promise<DataJobStatus | null> {
+export function getDataJobStatus(sessionId: string): DataJobStatus | null {
   evictStaleJobs();
-
-  const memJob = jobs.get(sessionId);
-  if (memJob) return memJob;
-
-  const persisted = await getPersistedJobStatus(sessionId, "demo-data");
-  if (!persisted) return null;
-
-  return {
-    sessionId: persisted.runId,
-    status: persisted.status as DataJobStatus["status"],
-    message: persisted.message,
-    percent: persisted.percent,
-    totalTables: 0,
-    completedTables: 0,
-    tableStatuses: [],
-    error: persisted.error ?? undefined,
-  };
+  return jobs.get(sessionId) ?? null;
 }

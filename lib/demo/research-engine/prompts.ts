@@ -83,6 +83,43 @@ Return a single JSON object with exactly these keys:
 }`;
 
 // ---------------------------------------------------------------------------
+// Pass 3.5b: Enrichment-Only Generation (when outcome map exists but no enrichment)
+// ---------------------------------------------------------------------------
+
+export const ENRICHMENT_ONLY_GENERATION_PROMPT = `# PERSONA
+You are a senior industry data architect specialising in {industry_name}.
+
+# TASK
+Generate the Master Repository enrichment (data assets + use cases) for the {industry_name} industry.
+The industry outcome map already exists (provided below) -- you only need to generate the data asset and use case layer.
+
+# EXISTING OUTCOME MAP
+{outcome_map_json}
+
+# ADDITIONAL CONTEXT
+{source_context}
+
+# REQUIREMENTS
+1. Generate 15-25 Reference Data Assets with:
+   - Unique id (e.g. "A01"), name, description, systemLocation, assetFamily
+   - easeOfAccess rating, lakeflowConnect/ucFederation/lakebridgeMigrate (High/Low)
+2. Generate 10-20 use cases with:
+   - name, description, rationale, modelType
+   - kpiTarget, benchmarkImpact (realistic industry-typical ranges)
+   - strategicImperative, strategicPillar
+   - dataAssetIds linking to the data assets above
+   - dataAssetCriticality mapping (MC = Mission Critical, VA = Value Add)
+
+IMPORTANT: Align data assets and use cases with the objectives and priorities from the outcome map above.
+
+# OUTPUT FORMAT
+Return a single JSON object:
+{
+  "dataAssets": [ ReferenceDataAsset[] ],
+  "useCases": [ MasterRepoUseCase[] ]
+}`;
+
+// ---------------------------------------------------------------------------
 // Pass 4Q: Quick Synthesis (Quick preset only)
 // ---------------------------------------------------------------------------
 

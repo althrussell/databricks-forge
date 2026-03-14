@@ -10,7 +10,6 @@ import { createScopedLogger } from "@/lib/logger";
 import { getDemoSession, getDemoSessionTables, deleteDemoSession } from "@/lib/lakebase/demo-sessions";
 import { logActivity } from "@/lib/lakebase/activity-log";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
-import { validateIdentifier } from "@/lib/validation";
 
 const log = createScopedLogger({ origin: "DemoCleanup", module: "demo/cleanup" });
 
@@ -79,10 +78,8 @@ export async function cleanupDemoSession(
 
   // Step 3: Optionally drop catalog (if we created it and it's empty)
   try {
-    const sessionFull = await getDemoSession(sessionId);
-    // catalogCreated is tracked in the raw row -- check via a direct query
-    // For now, skip catalog drops (conservative default)
-    // TODO: read catalogCreated from session and check SHOW SCHEMAS
+    // catalogCreated is tracked in the raw row -- check via a direct query.
+    // For now, skip catalog drops (conservative default).
   } catch {
     // best-effort
   }

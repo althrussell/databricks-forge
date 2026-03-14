@@ -145,7 +145,6 @@ export async function runDataEngine(
   // =======================================================================
   // Pass 3: Fact Generation (fact/transaction tables -- bounded concurrency)
   // =======================================================================
-  const completedDims = tableResults.filter((r) => r.status === "completed").length;
   progress(`Generating ${factTables.length} fact tables...`, 50);
 
   const factTasks = factTables.map((table: TableDesign) => async (): Promise<TableResult> => {

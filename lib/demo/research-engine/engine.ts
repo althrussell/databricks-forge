@@ -13,7 +13,6 @@ import { getMasterRepoEnrichmentAsync } from "@/lib/domain/industry-outcomes/mas
 import { getAllIndustryOutcomes } from "@/lib/domain/industry-outcomes-server";
 import { resolveResearchBudget } from "../types";
 import { resolveScope } from "../scope";
-import { mapWithConcurrency } from "@/lib/toolkit/concurrency";
 import type {
   ResearchEngineInput,
   ResearchEngineResult,
@@ -29,7 +28,7 @@ import { runWebsiteScrape } from "./passes/website-scrape";
 import { runIRDiscovery } from "./passes/ir-crawler";
 import { runDocParsing } from "./passes/doc-parser";
 import { runIndustryClassification } from "./passes/industry-classification";
-import { runOutcomeMapGeneration } from "./passes/outcome-map-generation";
+import { runOutcomeMapGeneration, runEnrichmentOnlyGeneration } from "./passes/outcome-map-generation";
 import { runQuickSynthesis } from "./passes/quick-synthesis";
 import { runIndustryLandscape } from "./passes/industry-landscape";
 import { runStrategyAndNarrative } from "./passes/strategy-and-narrative";
@@ -42,6 +41,48 @@ export class ResearchCancelledError extends Error {
     super("Research was cancelled");
     this.name = "ResearchCancelledError";
   }
+}
+
+/**
+ * Normalize a free-form industry string to a known industry outcome ID.
+ * Tries: exact match -> kebab-case -> starts-with -> name match -> no match.
+ */
+function normalizeIndustryId(
+  raw: string,
+  allOutcomes: Array<{ id: string; name: string }>,
+): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+
+  // 1. Exact match
+  if (allOutcomes.some((o) => o.id === trimmed)) return trimmed;
+
+  // 2. Kebab-case normalize
+  const kebab = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+  const exactKebab = allOutcomes.find((o) => o.id === kebab);
+  if (exactKebab) return exactKebab.id;
+
+  // 3. Starts-with / contains match (kebab vs kebab)
+  const startsWith = allOutcomes.find(
+    (o) => o.id.startsWith(kebab) || kebab.startsWith(o.id),
+  );
+  if (startsWith) return startsWith.id;
+
+  // 4. Case-insensitive name match
+  const lowerName = trimmed.toLowerCase();
+  const nameMatch = allOutcomes.find(
+    (o) =>
+      o.name.toLowerCase() === lowerName ||
+      o.name.toLowerCase().includes(lowerName) ||
+      lowerName.includes(o.name.toLowerCase()),
+  );
+  if (nameMatch) return nameMatch.id;
+
+  return null;
 }
 
 export async function runResearchEngine(
@@ -126,14 +167,23 @@ export async function runResearchEngine(
   let industryName = "";
   let generatedOutcomeMap = false;
 
+  const allOutcomes = await getAllIndustryOutcomes();
+  const allOutcomeSummaries = allOutcomes.map((o) => ({ id: o.id, name: o.name }));
+
+  // Normalize any user-provided industry ID against known outcomes
+  if (industryId) {
+    const normalized = normalizeIndustryId(industryId, allOutcomeSummaries);
+    if (normalized && normalized !== industryId) {
+      log.info("Normalized industry ID", { original: industryId, normalized });
+      industryId = normalized;
+    }
+  }
+
   if (!industryId) {
-    progress("industry-classification", 18, "Classifying industry...");
+    progress("industry-classification", 17, `Classifying industry from ${allSources.filter((s) => s.status === "ready").length} sources...`);
     t0 = Date.now();
 
-    const allOutcomes = await getAllIndustryOutcomes();
-    const existingIndustries = allOutcomes.map((o) => ({ id: o.id, name: o.name }));
-
-    const classification = await runIndustryClassification(combinedSourceText, existingIndustries, {
+    const classification = await runIndustryClassification(combinedSourceText, allOutcomeSummaries, {
       llm,
       logger: log,
       signal,
@@ -141,10 +191,19 @@ export async function runResearchEngine(
 
     industryId = classification.industryId;
     industryName = classification.industryName;
+
+    // Normalize the classification result too
+    const normalized = normalizeIndustryId(industryId, allOutcomeSummaries);
+    if (normalized) {
+      industryId = normalized;
+      const match = allOutcomeSummaries.find((o) => o.id === normalized);
+      if (match) industryName = match.name;
+    }
+
+    progress("industry-classification", 19, `Classified as ${industryName} (${Math.round(classification.confidence * 100)}% confidence)`);
     passTimings["industry-classification"] = Date.now() - t0;
   }
 
-  // Resolve industry name if we have an id but not a name
   if (!industryName) {
     const outcome = await getIndustryOutcomeAsync(industryId);
     industryName = outcome?.name ?? industryId;
@@ -153,23 +212,45 @@ export async function runResearchEngine(
   checkCancelled(signal);
 
   // =======================================================================
-  // Phase 3.5: Outcome Map Generation (if needed)
+  // Phase 3.5: Outcome Map + Enrichment (3-case logic)
   // =======================================================================
+  progress("outcome-map-generation", 20, "Checking existing industry knowledge...");
+
   const existingOutcome = await getIndustryOutcomeAsync(industryId);
   const existingEnrichment = await getMasterRepoEnrichmentAsync(industryId);
 
-  if (!existingOutcome || !existingEnrichment) {
-    progress("outcome-map-generation", 22, "Generating industry outcome map...");
+  if (existingOutcome && existingEnrichment) {
+    // Case 1: Both exist -- skip entirely
+    progress("outcome-map-generation", 28, `Using existing outcome map + enrichment for ${industryName}`);
+    log.info("Outcome map + enrichment both exist, skipping generation", { industryId });
+  } else if (existingOutcome && !existingEnrichment) {
+    // Case 2: Outcome exists, enrichment missing -- generate enrichment only (lighter)
+    progress("outcome-map-generation", 21, `Generating data asset enrichment for ${industryName}...`);
     t0 = Date.now();
 
-    const genResult = await runOutcomeMapGeneration(
-      industryId,
-      industryName,
-      combinedSourceText,
-      { llm, logger: log, signal },
-    );
+    await runEnrichmentOnlyGeneration(industryId, industryName, existingOutcome, combinedSourceText, {
+      llm,
+      logger: log,
+      signal,
+    });
 
     generatedOutcomeMap = true;
+    const reloadedEnrichment = await getMasterRepoEnrichmentAsync(industryId);
+    progress("outcome-map-generation", 28, `Generated ${reloadedEnrichment?.dataAssets?.length ?? 0} data assets`);
+    passTimings["outcome-map-generation"] = Date.now() - t0;
+  } else {
+    // Case 3: Neither exists -- full generation
+    progress("outcome-map-generation", 21, `No existing outcome map -- generating for ${industryName}...`);
+    t0 = Date.now();
+
+    const genResult = await runOutcomeMapGeneration(industryId, industryName, combinedSourceText, {
+      llm,
+      logger: log,
+      signal,
+    });
+
+    generatedOutcomeMap = true;
+    progress("outcome-map-generation", 28, `Generated ${genResult.enrichment.dataAssets.length} data assets and ${genResult.enrichment.useCases.length} use cases`);
     passTimings["outcome-map-generation"] = Date.now() - t0;
   }
 
@@ -217,7 +298,7 @@ export async function runResearchEngine(
 
   if (preset === "quick") {
     // ----- QUICK: Single combined synthesis -----
-    progress("quick-synthesis", 30, "Running quick synthesis...");
+    progress("quick-synthesis", 30, `Running quick synthesis for ${input.customerName}...`);
     t0 = Date.now();
 
     const quickResult = await runQuickSynthesis(
@@ -238,7 +319,7 @@ export async function runResearchEngine(
 
   } else if (preset === "balanced") {
     // ----- BALANCED: 2-pass (landscape + combined strategy-narrative) -----
-    progress("industry-landscape", 30, "Analysing industry landscape...");
+    progress("industry-landscape", 30, `Analysing ${industryName} market forces and benchmarks...`);
     t0 = Date.now();
 
     industryLandscape = await runIndustryLandscape(
@@ -249,9 +330,10 @@ export async function runResearchEngine(
       { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
     );
     passTimings["industry-landscape"] = Date.now() - t0;
+    progress("industry-landscape", 45, `Identified ${industryLandscape.marketForces?.length ?? 0} market forces, ${industryLandscape.keyBenchmarks?.length ?? 0} benchmarks`);
 
     checkCancelled(signal);
-    progress("strategy-and-narrative", 55, "Building strategy & demo narrative...");
+    progress("strategy-and-narrative", 50, `Building strategy & demo narrative for ${input.customerName}...`);
     t0 = Date.now();
 
     const combined = await runStrategyAndNarrative(
@@ -271,10 +353,11 @@ export async function runResearchEngine(
     nomenclature = dataStrategy?.nomenclature ?? {};
     dataNarratives = demoNarrative?.dataNarratives ?? [];
     passTimings["strategy-and-narrative"] = Date.now() - t0;
+    progress("strategy-and-narrative", 92, `Matched ${matchedDataAssetIds.length} data assets, designed ${demoNarrative?.killerMoments?.length ?? 0} killer moments`);
 
   } else {
     // ----- FULL: 4-pass McKinsey team -----
-    progress("industry-landscape", 25, "Pass 4: Industry landscape analysis...");
+    progress("industry-landscape", 25, `Analysing ${industryName} market forces and benchmarks...`);
     t0 = Date.now();
 
     industryLandscape = await runIndustryLandscape(
@@ -285,9 +368,10 @@ export async function runResearchEngine(
       { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
     );
     passTimings["industry-landscape"] = Date.now() - t0;
+    progress("industry-landscape", 35, `Identified ${industryLandscape.marketForces?.length ?? 0} market forces, ${industryLandscape.keyBenchmarks?.length ?? 0} benchmarks`);
 
     checkCancelled(signal);
-    progress("company-deep-dive", 40, "Pass 5: Company strategic deep-dive...");
+    progress("company-deep-dive", 40, `Deep-diving ${input.customerName} strategic profile...`);
     t0 = Date.now();
 
     companyProfile = await runCompanyDeepDive(
@@ -299,9 +383,10 @@ export async function runResearchEngine(
       { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
     );
     passTimings["company-deep-dive"] = Date.now() - t0;
+    progress("company-deep-dive", 52, `Found ${companyProfile.statedPriorities?.length ?? 0} stated priorities, ${companyProfile.urgencySignals?.length ?? 0} urgency signals`);
 
     checkCancelled(signal);
-    progress("data-strategy-mapping", 60, "Pass 6: Data strategy mapping...");
+    progress("data-strategy-mapping", 55, `Mapping ${input.customerName} priorities to data assets...`);
     t0 = Date.now();
 
     dataStrategy = await runDataStrategyMapping(
@@ -313,9 +398,10 @@ export async function runResearchEngine(
       { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
     );
     passTimings["data-strategy-mapping"] = Date.now() - t0;
+    progress("data-strategy-mapping", 72, `Mapped ${dataStrategy.matchedDataAssetIds?.length ?? 0} assets, maturity: ${dataStrategy.dataMaturityAssessment ?? "unknown"}`);
 
     checkCancelled(signal);
-    progress("demo-narrative", 80, "Pass 7: Demo narrative design...");
+    progress("demo-narrative", 75, `Designing demo flow and killer moments for ${input.customerName}...`);
     t0 = Date.now();
 
     demoNarrative = await runDemoNarrative(
@@ -328,6 +414,7 @@ export async function runResearchEngine(
       { llm, logger: log, signal, maxTokens: budget.maxTokensPerPass },
     );
     passTimings["demo-narrative"] = Date.now() - t0;
+    progress("demo-narrative", 95, `Designed ${demoNarrative.killerMoments?.length ?? 0} killer moments, ${demoNarrative.demoFlow?.length ?? 0}-step demo flow`);
 
     matchedDataAssetIds = dataStrategy?.matchedDataAssetIds ?? [];
     nomenclature = dataStrategy?.nomenclature ?? {};
