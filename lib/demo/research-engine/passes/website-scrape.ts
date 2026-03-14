@@ -3,11 +3,16 @@
  *
  * Fetches the company website URL (and optional division-specific pages),
  * converts HTML to markdown via turndown, truncates to 15K chars.
+ *
+ * For strategic-crawl mode, use runDeepWebsiteScrape which delegates to
+ * runStrategicCrawl first, then falls back to homepage-only scrape.
  */
 
 import TurndownService from "turndown";
 import type { Logger } from "@/lib/ports/logger";
+import type { LLMClient } from "@/lib/ports/llm-client";
 import type { ResearchSource, DemoScope } from "../../types";
+import { runStrategicCrawl } from "./strategic-crawl";
 
 const MAX_CHARS = 15_000;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -89,6 +94,42 @@ export async function runWebsiteScrape(
   }
 
   return { text: texts.join("\n\n---\n\n"), sources };
+}
+
+/**
+ * Deep website scrape for strategic-crawl mode.
+ * Tries strategic crawl (sitemap + strategic paths + LLM classification) first,
+ * then falls back to homepage-only scrape if no content is found.
+ */
+export async function runDeepWebsiteScrape(
+  websiteUrl: string | undefined,
+  scope: DemoScope | undefined,
+  opts: {
+    fetchFn?: typeof fetch;
+    llm: LLMClient;
+    logger: Logger;
+    signal?: AbortSignal;
+    onSourceReady?: (source: ResearchSource) => void;
+    onProgress?: (detail: string) => void;
+  },
+): Promise<{ text: string; sources: ResearchSource[] }> {
+  if (!websiteUrl) return { text: "", sources: [] };
+
+  // Try strategic crawl first (sitemap + strategic paths + LLM classification)
+  const result = await runStrategicCrawl(websiteUrl, scope, opts);
+
+  // If strategic crawl found content, use it; otherwise fall back to homepage-only
+  if (result.sources.some((s) => s.status === "ready")) {
+    return result;
+  }
+
+  opts.logger.info("Strategic crawl returned no content, falling back to homepage scrape");
+  return runWebsiteScrape(websiteUrl, scope, {
+    fetchFn: opts.fetchFn,
+    logger: opts.logger,
+    signal: opts.signal,
+    onSourceReady: opts.onSourceReady,
+  });
 }
 
 function htmlToMarkdown(html: string): string {

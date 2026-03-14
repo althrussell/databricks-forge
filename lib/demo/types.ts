@@ -14,7 +14,7 @@ export type ResearchPreset = "quick" | "balanced" | "full";
 
 export interface ResearchBudget {
   /** Which source-gathering passes to run. */
-  sources: ("website" | "ir-discovery" | "user-docs")[];
+  sources: ("website" | "strategic-crawl" | "ir-discovery" | "sec-edgar" | "user-docs")[];
   /** Which analytical passes to run (empty for quick -- uses quick-synthesis instead). */
   analyticalPasses: (
     | "industry-landscape"
@@ -38,14 +38,14 @@ const QUICK_BUDGET: ResearchBudget = {
 };
 
 const BALANCED_BUDGET: ResearchBudget = {
-  sources: ["website", "ir-discovery"],
+  sources: ["strategic-crawl", "ir-discovery"],
   analyticalPasses: ["industry-landscape", "strategy-and-narrative"],
   maxTokensPerPass: 32_000,
   estimatedSeconds: { min: 60, max: 90 },
 };
 
 const FULL_BUDGET: ResearchBudget = {
-  sources: ["website", "ir-discovery", "user-docs"],
+  sources: ["strategic-crawl", "ir-discovery", "sec-edgar", "user-docs"],
   analyticalPasses: [
     "industry-landscape",
     "company-deep-dive",
@@ -94,7 +94,7 @@ export interface ResolvedDemoScope extends DemoScope {
 // Source & Document Types
 // ---------------------------------------------------------------------------
 
-export type ResearchSourceType = "website" | "investor-doc" | "upload" | "paste";
+export type ResearchSourceType = "website" | "investor-doc" | "sec-filing" | "upload" | "paste";
 
 export interface ResearchSource {
   type: ResearchSourceType;

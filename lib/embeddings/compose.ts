@@ -735,6 +735,27 @@ export function composeExecutiveSynthesis(syn: ExecutiveSynthesisInput): string 
 }
 
 // ---------------------------------------------------------------------------
+// company_research
+// ---------------------------------------------------------------------------
+
+interface CompanyResearchInput {
+  customerName: string;
+  sourceType: string;
+  sourceTitle: string;
+  chunkIndex: number;
+  text: string;
+}
+
+export function composeCompanyResearch(r: CompanyResearchInput): string {
+  return lines([
+    `Company: ${r.customerName}`,
+    `Source: ${r.sourceType} -- ${r.sourceTitle}`,
+    `Chunk ${r.chunkIndex}`,
+    r.text,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

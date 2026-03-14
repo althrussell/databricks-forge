@@ -9,6 +9,7 @@
 import { createScopedLogger } from "@/lib/logger";
 import { getDemoSession, getDemoSessionTables, deleteDemoSession } from "@/lib/lakebase/demo-sessions";
 import { logActivity } from "@/lib/lakebase/activity-log";
+import { deleteEmbeddingsBySource } from "@/lib/embeddings/store";
 import type { SqlExecutor } from "@/lib/ports/sql-executor";
 
 const log = createScopedLogger({ origin: "DemoCleanup", module: "demo/cleanup" });
@@ -84,10 +85,21 @@ export async function cleanupDemoSession(
     // best-effort
   }
 
-  // Step 4: Delete Lakebase record
+  // Step 4: Delete research embeddings
+  try {
+    await deleteEmbeddingsBySource(sessionId);
+    log.info("Deleted research embeddings", { sessionId });
+  } catch (err) {
+    log.warn("Failed to delete research embeddings (non-fatal)", {
+      sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Step 5: Delete Lakebase record
   result.lakebaseDeleted = await deleteDemoSession(sessionId);
 
-  // Step 5: Audit log
+  // Step 6: Audit log
   await logActivity("demo_cleanup", {
     resourceId: sessionId,
     metadata: {

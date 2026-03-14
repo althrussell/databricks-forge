@@ -16,6 +16,17 @@ const IR_PATHS = [
   "/about/investor-relations",
 ];
 
+const IR_SUB_PATHS = [
+  "/presentations",
+  "/annual-reports",
+  "/governance",
+  "/filings",
+  "/proxy",
+  "/sec-filings",
+  "/financial-reports",
+  "/sustainability",
+];
+
 const PDF_PATTERNS = [
   /annual[-_]?report/i,
   /10-K/i,
@@ -23,12 +34,20 @@ const PDF_PATTERNS = [
   /earnings/i,
   /shareholder[-_]?letter/i,
   /strategy[-_]?update/i,
+  /proxy[-_]?statement/i,
+  /DEF[-_]?14A/i,
+  /sustainability[-_]?report/i,
+  /ESG[-_]?report/i,
+  /capital[-_]?markets[-_]?day/i,
+  /CMD/i,
+  /corporate[-_]?governance/i,
+  /half[-_]?year/i,
+  /interim[-_]?report/i,
 ];
 
 const MAX_PDF_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_TEXT_PER_DOC = 50_000;
-const MAX_PDFS = 3;
-const FETCH_TIMEOUT_MS = 15_000;
+const MAX_PDFS = 5;
 
 export async function runIRDiscovery(
   websiteUrl: string | undefined,
@@ -75,15 +94,48 @@ export async function runIRDiscovery(
     return edgarResult;
   }
 
-  // Step 2: Extract PDF links
-  const pdfLinks = extractPdfLinks(irPageHtml, irPageUrl);
-  log.info("PDF links found on IR page", { count: pdfLinks.length });
+  // Step 1.5: Crawl IR sub-pages for more PDF links
+  const irBase = irPageUrl.replace(/\/$/, "");
+  const allIRPages: { url: string; html: string }[] = [{ url: irPageUrl, html: irPageHtml }];
+  const maxSubPages = 5;
+  let subPagesCrawled = 0;
+
+  for (const subPath of IR_SUB_PATHS) {
+    if (subPagesCrawled >= maxSubPages || signal?.aborted) break;
+    try {
+      const subUrl = `${irBase}${subPath}`;
+      const subResp = await timedFetch(fetchFn, subUrl, signal);
+      if (subResp?.ok) {
+        const subHtml = await subResp.text();
+        allIRPages.push({ url: subUrl, html: subHtml });
+        subPagesCrawled++;
+        log.info("IR sub-page found", { url: subUrl });
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  // Step 2: Extract PDF links from ALL IR pages
+  const pdfLinks: PdfLink[] = [];
+  for (const page of allIRPages) {
+    pdfLinks.push(...extractPdfLinks(page.html, page.url));
+  }
+  // Deduplicate by URL
+  const seen = new Set<string>();
+  const uniqueLinks = pdfLinks.filter((l) => {
+    if (seen.has(l.url)) return false;
+    seen.add(l.url);
+    return true;
+  });
+  uniqueLinks.sort((a, b) => b.score - a.score);
+  log.info("PDF links found across IR pages", { count: uniqueLinks.length, pagesScanned: allIRPages.length });
 
   // Step 3: Download and parse top PDFs
   const parsePdf = opts.parsePdf ?? defaultParsePdf;
   let downloaded = 0;
 
-  for (const link of pdfLinks) {
+  for (const link of uniqueLinks) {
     if (downloaded >= MAX_PDFS || signal?.aborted) break;
 
     const source: ResearchSource = {
@@ -164,21 +216,131 @@ function extractPdfLinks(html: string, pageUrl: string): PdfLink[] {
 }
 
 async function trySecEdgar(
-  _websiteUrl: string,
-  _opts: { fetchFn?: typeof fetch; logger: Logger; signal?: AbortSignal; onSourceReady?: (source: ResearchSource) => void },
+  websiteUrl: string,
+  opts: { fetchFn?: typeof fetch; logger: Logger; signal?: AbortSignal; onSourceReady?: (source: ResearchSource) => void },
 ): Promise<{ text: string; sources: ResearchSource[] }> {
-  // SEC EDGAR is US public companies only -- best-effort
-  return { text: "", sources: [] };
+  const { fetchFn = fetch, logger: log, signal, onSourceReady } = opts;
+  const sources: ResearchSource[] = [];
+
+  try {
+    // Extract company domain for search
+    const domain = new URL(websiteUrl).hostname.replace(/^www\./, "");
+    const companyName = domain.split(".")[0];
+
+    // Search EDGAR for the company
+    const searchUrl = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(companyName)}%22&dateRange=custom&startdt=${getOneYearAgo()}&forms=10-K&hits.hits.total.value=1`;
+    const searchResp = await timedFetch(fetchFn, searchUrl, signal);
+    if (!searchResp?.ok) return { text: "", sources };
+
+    const searchText = await searchResp.text();
+
+    // Try the simpler EDGAR full-text search API
+    const ftSearchUrl = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(companyName)}%22&forms=10-K`;
+    const ftResp = await timedFetch(fetchFn, ftSearchUrl, signal);
+    if (!ftResp?.ok) {
+      log.debug("SEC EDGAR search returned no results", { companyName });
+      return { text: "", sources };
+    }
+
+    // Try company tickers endpoint for CIK lookup
+    const tickerResp = await timedFetch(fetchFn, "https://www.sec.gov/files/company_tickers.json", signal);
+    if (!tickerResp?.ok) return { text: "", sources };
+
+    const tickerData = (await tickerResp.json()) as Record<
+      string,
+      { cik_str: number; ticker: string; title: string }
+    >;
+
+    // Find matching company by name
+    const entries = Object.values(tickerData);
+    const match = entries.find(
+      (e) =>
+        e.title.toLowerCase().includes(companyName.toLowerCase()) ||
+        companyName.toLowerCase().includes(e.title.toLowerCase().split(" ")[0]),
+    );
+
+    if (!match) {
+      log.debug("No SEC EDGAR match found", { companyName });
+      return { text: "", sources };
+    }
+
+    const cik = String(match.cik_str).padStart(10, "0");
+    log.info("SEC EDGAR CIK found", { companyName: match.title, cik, ticker: match.ticker });
+
+    // Fetch filing index
+    const submissionsUrl = `https://data.sec.gov/submissions/CIK${cik}.json`;
+    const subResp = await timedFetch(fetchFn, submissionsUrl, signal);
+    if (!subResp?.ok) return { text: "", sources };
+
+    const submissions = (await subResp.json()) as {
+      filings: {
+        recent: { form: string[]; accessionNumber: string[]; primaryDocument: string[] };
+      };
+    };
+
+    // Find most recent 10-K
+    const forms = submissions.filings.recent.form;
+    const tenKIdx = forms.findIndex((f) => f === "10-K");
+    if (tenKIdx === -1) {
+      log.debug("No 10-K filing found", { cik });
+      return { text: "", sources };
+    }
+
+    const accession = submissions.filings.recent.accessionNumber[tenKIdx].replace(/-/g, "");
+    const primaryDoc = submissions.filings.recent.primaryDocument[tenKIdx];
+    const filingUrl = `https://www.sec.gov/Archives/edgar/data/${match.cik_str}/${accession}/${primaryDoc}`;
+
+    const source: ResearchSource = {
+      type: "sec-filing",
+      title: `10-K: ${match.title}`,
+      charCount: 0,
+      status: "fetching",
+    };
+    sources.push(source);
+
+    const filingResp = await timedFetch(fetchFn, filingUrl, signal, 30_000);
+    if (!filingResp?.ok) {
+      source.status = "failed";
+      source.error = `HTTP ${filingResp?.status}`;
+      return { text: "", sources };
+    }
+
+    const html = await filingResp.text();
+    // Strip HTML tags for plain text extraction
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const truncated = text.slice(0, 80_000);
+
+    source.charCount = truncated.length;
+    source.status = "ready";
+    onSourceReady?.(source);
+
+    log.info("SEC EDGAR 10-K retrieved", { company: match.title, chars: truncated.length });
+
+    return {
+      text: `[SEC FILING: 10-K ${match.title}]\n${truncated}`,
+      sources,
+    };
+  } catch (err) {
+    log.debug("SEC EDGAR lookup failed (non-fatal)", { error: String(err) });
+    return { text: "", sources };
+  }
+}
+
+function getOneYearAgo(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString().split("T")[0];
 }
 
 async function timedFetch(
   fetchFn: typeof fetch,
   url: string,
   signal?: AbortSignal,
+  timeoutMs = 15_000,
 ): Promise<Response | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const combined = signal
       ? AbortSignal.any([signal, controller.signal])
       : controller.signal;
