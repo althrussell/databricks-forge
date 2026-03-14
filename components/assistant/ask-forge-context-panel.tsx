@@ -764,6 +764,27 @@ function isFabricKind(kind: string): boolean {
   return kind.startsWith("fabric_");
 }
 
+function getSourceHref(kind: string, sourceId: string): string | null {
+  switch (kind) {
+    case "table_detail":
+    case "column_profile":
+    case "table_health":
+      return `/environment/tables/${encodeURIComponent(sourceId)}`;
+    case "use_case":
+      return "/use-cases";
+    case "genie_recommendation":
+    case "genie_question":
+      return "/genie";
+    case "environment_insight":
+    case "data_product":
+      return "/environment";
+    case "lineage_context":
+      return `/environment/tables/${encodeURIComponent(sourceId)}`;
+    default:
+      return null;
+  }
+}
+
 function SourceRow({ source }: { source: SourceData }) {
   const [expanded, setExpanded] = React.useState(false);
   const kindLabel = SOURCE_KIND_LABELS[source.kind] ?? source.kind;
@@ -771,6 +792,7 @@ function SourceRow({ source }: { source: SourceData }) {
   const scorePercent = (source.score * 100).toFixed(0);
   const metadata = source.metadata;
   const offPlatform = isFabricKind(source.kind);
+  const href = getSourceHref(source.kind, source.sourceId);
 
   return (
     <button
@@ -794,6 +816,16 @@ function SourceRow({ source }: { source: SourceData }) {
           </span>
         )}
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{source.sourceId}</span>
+        {href && (
+          <Link
+            href={href}
+            className="shrink-0 text-primary hover:text-primary/80"
+            title="Open"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="size-3" />
+          </Link>
+        )}
         <span className="shrink-0 text-[10px] text-muted-foreground">{scorePercent}%</span>
         <ChevronDown
           className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}

@@ -26,7 +26,7 @@ import { type AssistantPersona, VALID_PERSONAS } from "@/lib/assistant/prompts";
 import { PanelRightClose, PanelRight } from "lucide-react";
 
 export default function AskForgeContent() {
-  const _searchParams = useSearchParams();
+  const searchParams = useSearchParams();
   const [activeSql, setActiveSql] = React.useState<{ blocks: string[]; index: number } | null>(
     null,
   );
@@ -86,6 +86,24 @@ export default function AskForgeContent() {
       })
       .catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    const urlPersona = searchParams.get("persona");
+    if (
+      urlPersona &&
+      VALID_PERSONAS.has(urlPersona as AssistantPersona) &&
+      urlPersona !== persona
+    ) {
+      setPersona(urlPersona as AssistantPersona);
+      setActiveConversationId(null);
+      setChatSessionId(crypto.randomUUID());
+      setInitialMessages(undefined);
+      setTableEnrichments([]);
+      setTableDetails(new Map());
+      setReferencedTables([]);
+      setSources([]);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const abortRef = React.useRef<AbortController | null>(null);
 
@@ -296,36 +314,38 @@ export default function AskForgeContent() {
         </div>
 
         {/* Context panel toggle + panel */}
-        <div className="hidden shrink-0 lg:flex">
-          <div className="flex flex-col">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="m-1 h-8 w-8 p-0"
-              onClick={() => setContextCollapsed((p) => !p)}
-              title={contextCollapsed ? "Show context panel" : "Hide context panel"}
-            >
-              {contextCollapsed ? (
-                <PanelRight className="size-4" />
-              ) : (
-                <PanelRightClose className="size-4" />
-              )}
-            </Button>
-          </div>
-          {!contextCollapsed && (
-            <div className="w-[400px] min-w-0 overflow-hidden">
-              <AskForgeContextPanel
-                enrichments={tableEnrichments}
-                tableDetails={tableDetails}
-                referencedTables={referencedTables}
-                chatMentionedTables={chatMentionedTables}
-                sources={sources}
-                loadingTables={loadingTables}
-                onAskAboutTable={handleAskAboutTable}
-              />
+        {persona !== "genie-builder" && (
+          <div className="hidden shrink-0 lg:flex">
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="m-1 h-8 w-8 p-0"
+                onClick={() => setContextCollapsed((p) => !p)}
+                title={contextCollapsed ? "Show context panel" : "Hide context panel"}
+              >
+                {contextCollapsed ? (
+                  <PanelRight className="size-4" />
+                ) : (
+                  <PanelRightClose className="size-4" />
+                )}
+              </Button>
             </div>
-          )}
-        </div>
+            {!contextCollapsed && (
+              <div className="w-[400px] min-w-0 overflow-hidden">
+                <AskForgeContextPanel
+                  enrichments={tableEnrichments}
+                  tableDetails={tableDetails}
+                  referencedTables={referencedTables}
+                  chatMentionedTables={chatMentionedTables}
+                  sources={sources}
+                  loadingTables={loadingTables}
+                  onAskAboutTable={handleAskAboutTable}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <SqlDialog

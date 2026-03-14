@@ -1,6 +1,6 @@
 # Release Notes -- 2026-03-14
 
-**Databricks Forge v0.32.0 → v0.37.1**
+**Databricks Forge v0.32.0 → v0.37.2**
 
 ---
 
@@ -429,6 +429,33 @@ focused components. Desktop layout uses max-w-[1440px] with main content +
 
 - **Dead EDGAR search API calls** -- Removed two unused `efts.sec.gov` search
   index fetches that were executed but whose responses were never consumed.
+
+---
+
+## v0.37.2 -- Genie Studio Workflow Fixes
+
+### Bug Fixes
+
+- **Persona not defaulting on navigation** -- Navigating from Genie Studio "Describe Your Space" to Ask Forge now correctly sets the genie-builder persona via a useEffect that syncs from URL params, resetting the conversation state for a fresh chat.
+- **Aggressive genie-builder guardrail** -- Softened the GENIE_BUILDER_PERSONA_OVERLAY prompt so it treats all user messages as input for building a Genie Space instead of refusing with "Let's stay focused on building your Genie Space."
+- **Inline sources removed from chat** -- SourceCardList has been removed from the chat for all personas. Sources remain in the right-hand context panel with clickable navigation links for table, use case, genie, and environment sources.
+- **Missing build mode prompt** -- The "Create Genie Space" action in Ask Forge now opens the GenieBuilderModal (Fast vs Full Engine choice) instead of silently starting a fast build.
+- **Build cards invisible with no spaces** -- Build progress cards now render when no synced spaces exist by including job count in the empty-state condition.
+- **Text overflow on build cards** -- Added min-w-0, truncate, and shrink-0 to card flex containers and text elements to prevent content from bleeding out of card boundaries.
+- **Deployed card still visible** -- Build job cards are now filtered by `deployedSpaceId` to prevent duplicate cards after deployment.
+- **Build toast persists forever** -- Deployed toast now auto-dismisses after 10 seconds and includes an X close button.
+- **Misleading "Run AI Comments" advice** -- Removed the hardcoded link from health check UI. Made `tables-have-column-configs` and `format-assistance-configured` fixable with `column_intelligence` strategy. Extended the fixer to enable `enable_format_assistance` and `enable_entity_matching` on existing columns.
+- **Fix strategy metadata retrieval broken** -- `buildMetadataForSpace` used `Array.isArray(result)` on the SqlResult object (always false) and named property access on positional arrays. Fixed to iterate `result.rows` with positional indexing, unblocking all SQL-generating fix strategies (benchmarks, trusted assets, semantic expressions).
+- **Health check categories always expanded** -- Accordion now defaults to expanding only categories with failing checks. Added status icons (green check, red X, amber warning) to category triggers.
+- **Targeted improve crash** -- The "Improve with Genie Engine" targeted path now includes `updatedSerializedSpace` in the result. The UI safely falls back through `recommendation?.serializedSpace`, `updatedSerializedSpace`, and `originalSerializedSpace`.
+
+### Improvements
+
+#### Benchmark Test Runner Redesign
+Replaced the cramped 3-column step tile grid with a horizontal flow layout featuring numbered step badges, connecting arrows, staggered entrance animations, and a single CTA button.
+
+#### Context Panel Source Navigation
+Sources in the right-hand context panel now include clickable external-link icons that navigate to the relevant page (table detail, use cases, genie, environment) based on source kind.
 
 ---
 

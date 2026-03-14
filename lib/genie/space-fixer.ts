@@ -285,17 +285,15 @@ export async function buildMetadataForSpace(tableFqns: string[]): Promise<Metada
         ORDER BY ordinal_position
       `;
       const result = await executeSQL(sql);
-      if (Array.isArray(result)) {
-        for (const row of result) {
-          columns.push({
-            tableFqn: fqn,
-            columnName: String(row.column_name ?? row[0] ?? ""),
-            dataType: String(row.data_type ?? row[1] ?? "STRING"),
-            ordinalPosition: Number(row.ordinal_position ?? row[2] ?? 0),
-            isNullable: String(row.is_nullable ?? row[3] ?? "YES") === "YES",
-            comment: row.comment ?? row[4] ?? null,
-          });
-        }
+      for (const row of result.rows) {
+        columns.push({
+          tableFqn: fqn,
+          columnName: String(row[0] ?? ""),
+          dataType: String(row[1] ?? "STRING"),
+          ordinalPosition: Number(row[2] ?? 0),
+          isNullable: String(row[3] ?? "YES") === "YES",
+          comment: row[4] ?? null,
+        });
       }
     } catch (err) {
       logger.warn("Failed to query columns for off-platform space table", {
@@ -618,6 +616,8 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
           let descriptionsAdded = 0;
           let synonymsAdded = 0;
           let tableDescriptionsAdded = 0;
+          let formatAssistanceEnabled = 0;
+          let entityMatchingEnabled = 0;
           const tables = (space.data_sources?.tables ?? []) as SpaceJson[];
 
           // --- Table-level descriptions ---
@@ -698,15 +698,34 @@ export async function runFixes(request: FixRequest): Promise<FixResult> {
               col.synonyms = enrichment.synonyms;
               synonymsAdded++;
             }
+
+            if (!col.enable_format_assistance) {
+              col.enable_format_assistance = true;
+              formatAssistanceEnabled++;
+            }
+            if (enrichment.entityMatchingCandidate && !col.enable_entity_matching) {
+              col.enable_entity_matching = true;
+              entityMatchingEnabled++;
+            }
           }
 
           const totalAdded = descriptionsAdded + synonymsAdded + tableDescriptionsAdded;
-          if (totalAdded > 0) {
+          const totalFlags = formatAssistanceEnabled + entityMatchingEnabled;
+          if (totalAdded > 0 || totalFlags > 0) {
+            const parts: string[] = [];
+            if (descriptionsAdded > 0) parts.push(`${descriptionsAdded} descriptions`);
+            if (synonymsAdded > 0) parts.push(`${synonymsAdded} synonyms`);
+            if (tableDescriptionsAdded > 0)
+              parts.push(`${tableDescriptionsAdded} table descriptions`);
+            if (formatAssistanceEnabled > 0)
+              parts.push(`format assistance on ${formatAssistanceEnabled} columns`);
+            if (entityMatchingEnabled > 0)
+              parts.push(`entity matching on ${entityMatchingEnabled} columns`);
             changes.push({
               section: "data_sources.tables.column_configs",
-              description: `Column intelligence: added ${descriptionsAdded} descriptions, ${synonymsAdded} synonyms, ${tableDescriptionsAdded} table descriptions`,
+              description: `Column intelligence: added ${parts.join(", ")}`,
               added: totalAdded,
-              modified: 0,
+              modified: totalFlags,
             });
           }
           strategiesRun.push(strategy);

@@ -211,7 +211,13 @@ export function SpaceHealthTab({ report, spaceId, onFix, fixing }: SpaceHealthTa
       {/* ── All Checks (collapsible by category) ── */}
       <motion.div variants={staggerItem} className="space-y-3">
         <h3 className="text-sm font-medium">All Checks</h3>
-        <Accordion type="multiple" defaultValue={Object.keys(report.categories)} className="w-full">
+        <Accordion
+          type="multiple"
+          defaultValue={Object.entries(report.categories)
+            .filter(([catId]) => report.checks.some((c) => c.category === catId && !c.passed))
+            .map(([catId]) => catId)}
+          className="w-full"
+        >
           {Object.entries(report.categories).map(([catId, cat]) => {
             const catChecks = report.checks.filter((c) => c.category === catId);
             if (catChecks.length === 0) return null;
@@ -226,6 +232,13 @@ export function SpaceHealthTab({ report, spaceId, onFix, fixing }: SpaceHealthTa
                     <Badge variant="secondary" className="ml-1 text-[10px]">
                       {cat.passed}/{cat.total}
                     </Badge>
+                    {cat.passed === cat.total ? (
+                      <CheckCircle2 className="size-3.5 text-green-500" />
+                    ) : catChecks.some((c) => !c.passed && c.severity === "critical") ? (
+                      <XCircle className="size-3.5 text-destructive" />
+                    ) : (
+                      <AlertTriangle className="size-3.5 text-amber-500" />
+                    )}
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -252,17 +265,6 @@ export function SpaceHealthTab({ report, spaceId, onFix, fixing }: SpaceHealthTa
                               {check.detail}
                             </div>
                           )}
-                          {!check.passed &&
-                            (check.id === "tables-have-column-configs" ||
-                              check.id === "columns-have-descriptions") && (
-                              <Link
-                                href="/environment/comments"
-                                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                              >
-                                <Sparkles className="size-3" />
-                                Run AI Comments to generate descriptions
-                              </Link>
-                            )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                           {!check.passed && check.fixable && (

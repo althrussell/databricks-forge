@@ -106,7 +106,8 @@ checks:
     category: data_sources
     description: "Some columns have format assistance enabled"
     severity: info
-    fixable: false
+    fixable: true
+    fix_strategy: column_intelligence
     evaluator: nested_ratio
     path: "data_sources.tables[*].column_configs"
     field: "enable_format_assistance"
@@ -117,13 +118,14 @@ checks:
     category: data_sources
     description: "Tables have column configurations defined"
     severity: warning
-    fixable: false
+    fixable: true
+    fix_strategy: column_intelligence
     evaluator: ratio
     path: "data_sources.tables"
     field: "column_configs"
     params:
       min_ratio: 0.8
-    quick_win: "Add column configs to your tables to control descriptions, synonyms, and entity matching."
+    quick_win: "Use Fix or regenerate with Full Engine to add column descriptions, synonyms, and entity matching."
 
   - id: metric-views-have-descriptions
     category: data_sources

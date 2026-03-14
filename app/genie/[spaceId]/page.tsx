@@ -61,11 +61,13 @@ interface FixResult {
 }
 
 interface ImproveResult {
-  recommendation: { serializedSpace: string; title: string; description: string };
+  recommendation?: { serializedSpace: string; title: string; description: string };
+  updatedSerializedSpace?: string;
   originalSerializedSpace: string;
   changes: ImproveChange[];
   statsBefore: ImproveStats;
   statsAfter: ImproveStats;
+  diagnostics?: { strategiesRun: string[]; mode: string };
 }
 
 interface ImproveProgress {
@@ -561,9 +563,13 @@ export default function SpaceDetailPage() {
 
         <OptimizationReview
           changes={improveResult.changes}
-          strategiesRun={["Genie Engine Full Analysis"]}
+          strategiesRun={improveResult.diagnostics?.strategiesRun ?? ["Genie Engine Full Analysis"]}
           currentSerializedSpace={improveResult.originalSerializedSpace}
-          updatedSerializedSpace={improveResult.recommendation.serializedSpace}
+          updatedSerializedSpace={
+            improveResult.recommendation?.serializedSpace ??
+            improveResult.updatedSerializedSpace ??
+            improveResult.originalSerializedSpace
+          }
           onApply={handleApplyImprove}
           onCloneAndApply={handleCloneAndApply}
           onCreateNew={handleCreateNewFromImprove}

@@ -180,8 +180,12 @@ function runTargetedImprove(
       };
 
       completeImproveJob(spaceId, {
+        updatedSerializedSpace: newSerializedSpace,
         originalSerializedSpace: serializedSpace,
-        changes: [...fixResult.changes, ...changes.filter((c) => !fixResult.changes.some((fc) => fc.section === c.section))],
+        changes: [
+          ...fixResult.changes,
+          ...changes.filter((c) => !fixResult.changes.some((fc) => fc.section === c.section)),
+        ],
         statsBefore,
         statsAfter,
         diagnostics,
@@ -257,7 +261,13 @@ function runFullImprove(
         changes,
         statsBefore,
         statsAfter,
-        diagnostics: { healthScore: 0, grade: "?", failedChecks: [], strategiesRun: [], mode: "full" },
+        diagnostics: {
+          healthScore: 0,
+          grade: "?",
+          failedChecks: [],
+          strategiesRun: [],
+          mode: "full",
+        },
       });
 
       logger.info("Genie Engine full improvement completed", {
