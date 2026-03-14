@@ -17,6 +17,7 @@ export interface ImproveHealthDiagnostics {
 
 export interface ImproveJobResult {
   recommendation?: GenieSpaceRecommendation;
+  updatedSerializedSpace?: string;
   originalSerializedSpace: string;
   changes: ImproveChange[];
   statsBefore: ImproveStats;

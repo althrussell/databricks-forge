@@ -430,6 +430,7 @@ export default function GenieSpacesPage() {
     (s) => s.status !== "trashed" && inaccessibleIds.has(s.spaceId),
   );
   const trashedSpaces = spaces.filter((s) => s.status === "trashed");
+  const visibleJobs = generateJobs.filter((j) => !j.deployedSpaceId);
 
   const PAGE_SIZE = 12;
   const totalPages = Math.max(1, Math.ceil(activeSpaces.length / PAGE_SIZE));
@@ -541,7 +542,7 @@ export default function GenieSpacesPage() {
             <Skeleton key={i} className="h-48" />
           ))}
         </div>
-      ) : spaces.length === 0 ? (
+      ) : spaces.length === 0 && visibleJobs.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Sparkles className="mb-4 size-12 text-muted-foreground/50" />
@@ -579,9 +580,9 @@ export default function GenieSpacesPage() {
 
           <TabsContent value="active" className="mt-4">
             {/* Generate job tiles -- building, completed (ready to deploy), and failed */}
-            {generateJobs.length > 0 && (
+            {visibleJobs.length > 0 && (
               <div className="mb-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {generateJobs.map((job) => {
+                {visibleJobs.map((job) => {
                   if (job.status === "generating") {
                     return (
                       <Card
@@ -590,11 +591,11 @@ export default function GenieSpacesPage() {
                         onClick={() => router.push(`/genie/build/${job.jobId}`)}
                       >
                         <CardContent className="p-5">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2">
-                              <BrainCircuit className="size-5 animate-pulse text-violet-500" />
-                              <div>
-                                <h3 className="text-sm font-semibold">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <BrainCircuit className="size-5 shrink-0 animate-pulse text-violet-500" />
+                              <div className="min-w-0">
+                                <h3 className="truncate text-sm font-semibold">
                                   {job.title || "Building Genie Space..."}
                                 </h3>
                                 <div className="flex items-center gap-1.5">
@@ -610,7 +611,7 @@ export default function GenieSpacesPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                              className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleCancelGenerate(job.jobId);
@@ -658,10 +659,10 @@ export default function GenieSpacesPage() {
                       >
                         <CardContent className="p-5">
                           <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2">
-                              <Sparkles className="size-5 text-green-500" />
-                              <div>
-                                <h3 className="text-sm font-semibold">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Sparkles className="size-5 shrink-0 text-green-500" />
+                              <div className="min-w-0">
+                                <h3 className="truncate text-sm font-semibold">
                                   {job.title || "Genie Space Ready"}
                                 </h3>
                                 <div className="flex items-center gap-1.5">
@@ -699,10 +700,10 @@ export default function GenieSpacesPage() {
                       >
                         <CardContent className="p-5">
                           <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2">
-                              <BrainCircuit className="size-5 text-destructive" />
-                              <div>
-                                <h3 className="text-sm font-semibold">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <BrainCircuit className="size-5 shrink-0 text-destructive" />
+                              <div className="min-w-0">
+                                <h3 className="truncate text-sm font-semibold">
                                   {job.title || "Build Failed"}
                                 </h3>
                                 <div className="flex items-center gap-1.5">
@@ -735,7 +736,7 @@ export default function GenieSpacesPage() {
             )}
 
             {activeSpaces.length === 0 &&
-            generateJobs.filter((j) => j.status === "generating").length === 0 ? (
+            visibleJobs.filter((j) => j.status === "generating").length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No active spaces. Choose an entry point above to get started.
               </p>

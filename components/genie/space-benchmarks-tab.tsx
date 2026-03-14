@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { fadeInUp } from "@/lib/motion";
+import { staggerContainer, staggerItem, fadeInUp } from "@/lib/motion";
 import { ArrowRight, ClipboardCheck, FlaskConical, ListChecks, Play } from "lucide-react";
 
 interface SpaceBenchmarksTabProps {
@@ -12,32 +12,26 @@ interface SpaceBenchmarksTabProps {
   benchmarkCount: number;
 }
 
-function StepTile({
-  step,
-  title,
-  description,
-  icon: Icon,
-}: {
-  step: number;
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <div className="relative flex items-start gap-3 rounded-xl border bg-card p-4">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-        {step}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 shrink-0 text-muted-foreground" />
-          <p className="text-sm font-semibold">{title}</p>
-        </div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  );
-}
+const STEPS = [
+  {
+    step: 1,
+    icon: ListChecks,
+    title: "Add Questions",
+    description: "Define test questions with expected answers in your Space.",
+  },
+  {
+    step: 2,
+    icon: Play,
+    title: "Run Benchmarks",
+    description: "Execute questions against Genie and compare responses.",
+  },
+  {
+    step: 3,
+    icon: ClipboardCheck,
+    title: "Review Accuracy",
+    description: "Analyse pass rates, identify weak spots, and iterate.",
+  },
+] as const;
 
 export function SpaceBenchmarksTab({ spaceId, benchmarkCount }: SpaceBenchmarksTabProps) {
   const hasBenchmarks = benchmarkCount > 0;
@@ -45,14 +39,14 @@ export function SpaceBenchmarksTab({ spaceId, benchmarkCount }: SpaceBenchmarksT
   return (
     <motion.div variants={fadeInUp} initial="hidden" animate="visible" className="space-y-6">
       <Card>
-        <CardContent className="py-10">
-          <div className="mx-auto max-w-xl space-y-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-              <FlaskConical className="size-8 text-primary" />
+        <CardContent className="py-12">
+          <div className="mx-auto max-w-2xl space-y-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <FlaskConical className="size-7 text-primary" />
             </div>
             <div>
               <h2 className="text-xl font-semibold tracking-tight">Benchmark Test Runner</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
                 {hasBenchmarks
                   ? `${benchmarkCount} benchmark question${benchmarkCount !== 1 ? "s" : ""} configured. Run them against Genie to measure accuracy, then iterate to improve results.`
                   : "Add benchmark questions to your Space, run them against Genie, and track accuracy over time."}
@@ -60,26 +54,34 @@ export function SpaceBenchmarksTab({ spaceId, benchmarkCount }: SpaceBenchmarksT
             </div>
 
             {!hasBenchmarks && (
-              <div className="grid gap-3 text-left md:grid-cols-3">
-                <StepTile
-                  step={1}
-                  icon={ListChecks}
-                  title="Add Questions"
-                  description="Define test questions with expected answers in your Space configuration."
-                />
-                <StepTile
-                  step={2}
-                  icon={Play}
-                  title="Run Benchmarks"
-                  description="Execute questions against Genie and compare responses to expected answers."
-                />
-                <StepTile
-                  step={3}
-                  icon={ClipboardCheck}
-                  title="Review Accuracy"
-                  description="Analyse pass rates, identify weak spots, and refine your Space to improve results."
-                />
-              </div>
+              <motion.div
+                variants={staggerContainer}
+                initial="hidden"
+                animate="visible"
+                className="relative flex items-start justify-center gap-0"
+              >
+                {STEPS.map(({ step, icon: Icon, title, description }, idx) => (
+                  <motion.div key={step} variants={staggerItem} className="flex items-start">
+                    {idx > 0 && (
+                      <div className="mt-5 flex w-8 items-center justify-center text-muted-foreground/40 sm:w-12">
+                        <ArrowRight className="size-4" />
+                      </div>
+                    )}
+                    <div className="flex w-36 flex-col items-center text-center sm:w-44">
+                      <div className="relative flex size-10 items-center justify-center rounded-xl border bg-card shadow-sm">
+                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                          {step}
+                        </span>
+                        <Icon className="size-4 text-muted-foreground" />
+                      </div>
+                      <p className="mt-3 text-sm font-semibold leading-tight">{title}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                        {description}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
             )}
 
             <Button size="lg" asChild>

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AnswerStream } from "./answer-stream";
-import { SourceCardList } from "./source-card";
 import { ActionCardList, type ActionCardData } from "./action-card";
 import { SqlRunner } from "./sql-runner";
 import { DeployOptions } from "./deploy-options";
@@ -40,11 +39,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { GenieBuilderModal } from "./genie-builder-modal";
 import { GenieDeployDialog } from "./genie-deploy-dialog";
-import { showBuildToast } from "./genie-build-toast";
-import { useGenieBuild } from "@/components/providers/genie-build-provider";
 import { ErdModal } from "./erd-modal";
 
 // ---------------------------------------------------------------------------
@@ -193,9 +189,8 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
       sqlBlocks?: string[];
     } | null>(null);
     const [erdModalTables, setErdModalTables] = React.useState<string[] | null>(null);
-    const [deployJobId, setDeployJobId] = React.useState<string | null>(null);
+    const [deployJobId, _setDeployJobId] = React.useState<string | null>(null);
     const [deployDialogOpen, setDeployDialogOpen] = React.useState(false);
-    const genieBuild = useGenieBuild();
     const [pendingAction, setPendingAction] = React.useState<string | null>(null);
     const [preparingMessageId, setPreparingMessageId] = React.useState<string | null>(null);
     const [fallbackSessionId] = React.useState(() => crypto.randomUUID());
@@ -428,55 +423,6 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
         const buildSummary = (action.payload.conversationSummary as string) || undefined;
         const buildSqlBlocks = (action.payload.sqlBlocks as string[]) || undefined;
 
-        // Fire-and-forget: start async build, show progress toast
-        genieBuild
-          .startBuild(
-            buildTables,
-            {
-              mode: "fast",
-              domain: buildDomain,
-              conversationSummary: buildSummary,
-              sqlBlocks: buildSqlBlocks,
-            },
-            "ask-forge",
-          )
-          .then((jobId) => {
-            if (jobId) {
-              showBuildToast(
-                jobId,
-                (jid) => {
-                  setDeployJobId(jid);
-                  setDeployDialogOpen(true);
-                },
-                () => {
-                  // Retry: re-trigger the same build
-                  genieBuild
-                    .startBuild(
-                      buildTables,
-                      {
-                        mode: "fast",
-                        domain: buildDomain,
-                        conversationSummary: buildSummary,
-                        sqlBlocks: buildSqlBlocks,
-                      },
-                      "ask-forge",
-                    )
-                    .then((retryId) => {
-                      if (retryId) {
-                        showBuildToast(retryId, (jid) => {
-                          setDeployJobId(jid);
-                          setDeployDialogOpen(true);
-                        });
-                      }
-                    });
-                },
-              );
-            } else {
-              toast.error("Failed to start Genie Space build");
-            }
-          });
-
-        // Keep modal payload for backward compat (full engine builds)
         setGenieModalPayload({
           tables: buildTables,
           domain: buildDomain,
@@ -484,6 +430,7 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
           tableEnrichments: (action.payload.tableEnrichments as TableEnrichmentData[]) || undefined,
           sqlBlocks: buildSqlBlocks,
         });
+        setGenieModalOpen(true);
         clearPending();
       } else if (action.type === "start_discovery") {
         router.push("/configure");
@@ -883,16 +830,6 @@ export const AskForgeChat = React.forwardRef<AskForgeChatHandle, AskForgeChatPro
                         onAction={(a) => handleAction(a, msg.sqlBlocks)}
                         pendingAction={pendingAction}
                       />
-                    </div>
-                  )}
-
-                {msg.role === "assistant" &&
-                  !msg.isStreaming &&
-                  persona !== "business" &&
-                  msg.sources &&
-                  msg.sources.length > 0 && (
-                    <div className="ml-10">
-                      <SourceCardList sources={msg.sources} />
                     </div>
                   )}
 

@@ -42,6 +42,13 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
     return () => clearTimeout(t);
   }, [jobStatus, toastId]);
 
+  // Auto-dismiss after deploy confirmed
+  useEffect(() => {
+    if (jobStatus !== "completed" || !job?.deployedSpaceId) return undefined;
+    const t = setTimeout(() => toast.dismiss(toastId), 10_000);
+    return () => clearTimeout(t);
+  }, [jobStatus, job?.deployedSpaceId, toastId]);
+
   if (!job) {
     return null;
   }
@@ -157,9 +164,19 @@ function BuildToastContent({ jobId, toastId, onDeploy, onRetry }: BuildToastCont
   if (job.status === "completed" && job.deployedSpaceId) {
     return (
       <ToastShell borderClass="border-green-500/30">
-        <div className="flex min-w-0 items-center gap-2">
-          <Sparkles className="size-4 shrink-0 text-green-500" />
-          <span className="truncate text-sm font-semibold">Deployed</span>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Sparkles className="size-4 shrink-0 text-green-500" />
+            <span className="truncate text-sm font-semibold">Deployed</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 shrink-0 px-1.5 text-[10px] text-muted-foreground"
+            onClick={() => toast.dismiss(toastId)}
+          >
+            <X className="size-3" />
+          </Button>
         </div>
         <p
           className="truncate text-xs text-muted-foreground"
